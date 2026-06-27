@@ -171,7 +171,6 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "forecast_today_kwh": {"sem_energy", "sem_solar", "sem_daily", "sem_primary"},
     "forecast_tomorrow_kwh": {"sem_energy", "sem_solar", "sem_daily", "sem_primary"},
     "forecast_remaining_today_kwh": {"sem_energy", "sem_solar", "sem_daily", "sem_primary", "sem_mobile"},
-    "forecast_power_now_w": {"sem_power", "sem_solar", "sem_realtime", "sem_secondary"},
     "charging_recommendation": {"sem_status", "sem_ev", "sem_primary"},
 
     # Tariff (Phase 1)

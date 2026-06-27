@@ -317,6 +317,25 @@ class BatteryIntent(Enum):
     (``huawei_solar.stop_forcible_charge``) instead of just
     setting back to default."""
 
+    FORCE_DISCHARGE = "force_discharge"
+    """#523 Tier 3 — proactive battery → GRID discharge (arbitrage).
+    Sell stored energy when the dynamic export price is high and the
+    sale beats the cost of recharging later. Hardware-gated: only
+    adapters with ``supports_forced_discharge`` actuate it."""
+
+    STOP_FORCE_DISCHARGE = "stop_force_discharge"
+    """End a forced discharge — export no longer profitable or SOC
+    hit the reserve floor. Restores the brand default."""
+
+    OFF = "off"
+    """#523 (RienduPre) — SEM is fully hands-off this battery. On the
+    transition INTO off the adapter does a one-time clean handoff (clear
+    any SEM force command, release the strategy, un-limit the discharge)
+    so the battery isn't stranded in a SEM-imposed state, then stays
+    completely silent — no protection, no scheduler, no arbitrage. The
+    inverter runs the battery on its own. Bypasses every other branch in
+    ``decide_battery`` (highest precedence)."""
+
 
 @dataclass(frozen=True)
 class BatteryDecision:
@@ -332,6 +351,11 @@ class BatteryDecision:
     """Used iff intent == FORCE_CHARGE."""
     charge_power_w: float = 0.0
     duration_min: int = 0
+    discharge_power_w: float = 0.0
+    """Used iff intent == FORCE_DISCHARGE (#523) — battery→grid power."""
+    floor_soc: float = 0.0
+    """Used iff intent == FORCE_DISCHARGE (#523) — stop discharging at
+    this reserve SOC."""
     reason: str = ""
 
 
@@ -351,12 +375,20 @@ class BatteryView:
     """Current SEM ChargingState (string form). Drives the
     LIMIT_DISCHARGE gate (active iff NIGHT_CHARGING_ACTIVE)."""
     ev_charging: bool
-    """Whether any charger in the fleet is currently drawing.
-    Combined with ``charging_state == NIGHT_CHARGING_ACTIVE`` for
-    the protection gate."""
+    """Whether any charger in the fleet is currently *drawing* power.
+    This flag flaps with bursty cars (e.g. a Renault Zoe that pulses
+    on/off), so it is NOT used alone to gate the discharge protection
+    — see ``ev_connected``."""
     home_consumption_w: float
     """Used as the discharge limit when LIMIT_DISCHARGE fires
     (the 1:1 protection)."""
+    ev_connected: bool = False
+    """Whether any charger in the fleet has a vehicle plugged in
+    (cable connected), regardless of whether it is drawing right now.
+    The discharge-protection gate keys off this so the clamp HOLDS
+    steady through a bursty car's on/off pulses instead of flickering
+    with ``ev_charging`` — which would let the battery drain between
+    bursts and then feed the next pull. See decide_battery."""
     scheduler_decision: "Any" = None
     """The output of today's ``BatteryChargeScheduler.evaluate()``.
     Typed as ``Any`` so importing scheduler types in this module
@@ -437,6 +469,21 @@ class ChargerDecision:
     'off mode — explicit user disable', 'night mode + min_plus_solar
     floor, deadline 06:00'."""
 
+    bridgeable: bool = True
+    """For an IDLE decision: is this a TRANSIENT dip worth holding the
+    contactor through (a passing cloud while real surplus / battery
+    assist exists) — or a STRUCTURAL stop (sun gone, battery below
+    buffer with no real surplus, or a not-cheap tariff window) that the
+    stability layer must NOT bridge by importing grid?
+
+    Single source of truth (computed in ``decide`` where the SoC /
+    surplus / tariff data already lives) so ``charge_stability`` does NOT
+    re-derive it. ``True`` for CHARGE decisions and transient idles (the
+    bridge holds for the full disable delay); ``False`` for structural
+    idles (the bridge stops on the short grace). Honours the dataclass
+    contract: 'All fields are computed once in decide … no re-derivation
+    downstream.'"""
+
 
 # ─────────────────────────────────────────────────────────────────
 # Per-charger view (the input to decide())
@@ -473,6 +520,12 @@ class FleetContext:
     surplus-only chargers; above ``auto_start_soc`` enables
     battery-assist."""
 
+    battery_count: int = 1
+    """How many batteries SEM controls. #531: a per-battery
+    LIMIT_DISCHARGE must split the home-consumption budget across the
+    fleet — otherwise each of N batteries is told to inject the FULL
+    home load (N× over-injection, defeating EV-night protection)."""
+
     grid_import_w: float = 0.0
     grid_export_w: float = 0.0
 
@@ -505,14 +558,33 @@ class FleetContext:
     auto_start_soc: float = 90.0
     buffer_soc: float = 70.0
     priority_soc: float = 30.0
-    battery_floor_soc: float = 60.0
     battery_capacity_kwh: float = 15.0
 
-    min_solar_w: float = 200.0
-    """Solar below this is treated as "no meaningful solar" — the
-    threshold for skipping the surplus calculation entirely.
-    Same constant as ``_zone_based_strategy`` uses at
-    ``coordinator.py:2709``."""
+    battery_assist_max_power_w: float = 4500.0
+    """User-configured discharge cap when the battery assists the EV
+    (``battery_assist_max_power``). #501: the Zone 3/4 day budget in
+    ``decide.battery_assist_budget_w`` is capped by this — pre-#501 it
+    added the battery's TOTAL measured discharge (including the share
+    serving the house), which both ignored this cap and created a
+    positive-feedback ratchet (home-load spike → more discharge →
+    bigger EV budget → higher commanded amps → more discharge)."""
+
+    battery_assist_min_surplus_w: float = 1200.0
+    """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
+    Battery assist only SUPPLEMENTS real solar — below this much pure
+    solar surplus the battery is off-limits to the EV, so a sunless
+    evening/overnight ``min_plus_solar`` session never drains the home
+    battery into the car. Enforced in ``decide.battery_assist_budget_w``
+    and ``FlowCalculator.calculate_canonical_ev_budget`` (the two layers
+    must agree — the #282 class)."""
+
+    min_solar_w: float = 1000.0
+    """Raw PV below this is treated as "no meaningful solar / sun not
+    up" — the floor that gates solar_only entry and the deep-deficit
+    darkness detector. Default matches DEFAULT_MIN_SOLAR_POWER (1000 W)
+    so the dataclass default agrees with the seeded config default.
+    Distinct from ``battery_assist_min_surplus_w`` (an export-surplus
+    floor, solar − home); this one is raw production."""
 
     forecast_remaining_kwh: float = 0.0
     """Solar forecast remaining today (kWh), dampened by the
@@ -613,6 +685,27 @@ class ChargerView:
     deadline_amps: int = 0
     """The peak-aware required current to reach Min by the per-
     charger ``ev_target_time`` (#246). ``0`` when no deadline."""
+
+    night_deliverable_kwh: float = float("inf")
+    """How much energy tonight's window (night start → this charger's
+    deadline) can deliver at the charger's max current (#501). The
+    daytime ``min_plus_solar`` floor only engages when
+    ``target_kwh > night_deliverable_kwh`` — i.e. when waiting for the
+    night top-up would genuinely risk the Min-by-deadline guarantee.
+    Default ``inf`` (floor never engages) so call sites that don't
+    compute it get the self-consumption-maximizing behaviour rather
+    than silent grid pull."""
+
+    soc_ceiling_reached: bool = False
+    """The car has reached its configured MAX target (SOC % ceiling, or
+    the max-kWh ceiling) — stop charging in EVERY mode, including solar
+    surplus (#548). Computed upstream as ``_calculate_remaining_need(
+    bound="max") <= 0.1``. This is the surplus-charging stop that used to
+    live only in the retired ChargingStateMachine (``soc_limit_active →
+    SOLAR_TARGET_REACHED``); that state was clobbered by the per-charger
+    decision, so the EV charged past the max SOC. ``decide()`` now reads
+    this directly. Default ``False`` (kWh-mode default max is effectively
+    unlimited, so surplus charging stays 'free' for kWh users)."""
 
 
 # ─────────────────────────────────────────────────────────────────

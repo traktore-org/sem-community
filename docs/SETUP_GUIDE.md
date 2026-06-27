@@ -297,11 +297,13 @@ The options flow is organized into these pages:
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
-| Daily EV target (kWh) — **Min** | 10 kWh | The *guaranteed* overnight amount: night/grid charging tops up to at least this. The default covers roughly 50–60 km of range. When a vehicle SOC sensor is configured, the SOC target is used instead. |
+| Daily EV target (kWh) — **Min** | 10 kWh | The *guaranteed* overnight amount: night/grid charging tops up to at least this. The default covers roughly 50–60 km of range. Switch to **Vehicle SOC %** (v1.7.3) by configuring a `vehicle_soc_entity` for per-charger SOC-based targets. |
 | EV solar max (kWh) — **Max** | 100 kWh | The *solar ceiling*: surplus charges up to this, then stops. Defaults to full (charge freely from sun); lower it to cap surplus. Must be ≥ Min. |
+| Vehicle SOC entity (v1.7.3) | None | *(Per charger)* Binary sensor reporting the vehicle's battery SOC (e.g. `sensor.tesla_battery_soc`). When set, the **Charge Target** block on the EV card switches from kWh to SOC %, and SEM calculates remaining need from SOC gap. Optional. |
 | EV target SOC (%) — **Min** | 80% | Guaranteed SOC (50–100%), reached via night/grid. Only used when a vehicle SOC sensor is configured. Per-charger configurable. |
 | EV solar max SOC (%) — **Max** | 100% | Solar SOC ceiling. Defaults to 100% (charge to full from sun); set to e.g. 80% to cap solar charging for battery longevity while still guaranteeing the Min via grid. |
-| EV battery capacity (kWh) | 40 kWh | Your EV's battery size (10–120 kWh). Used to convert SOC percentage to kWh remaining. Per-charger configurable. |
+| EV battery capacity (kWh) | 40 kWh | Your EV's battery size (10–120 kWh). Used to convert SOC percentage to kWh remaining. Per-charger configurable. Also used for SOC→kWh calculation when a vehicle SOC sensor is configured. |
+| Solar Gate (v1.7.3) | 1200 W | Battery assist threshold — battery only helps EV when real solar surplus ≥ this value (0–5000 W). Set to 0 W to allow battery support everywhere, including night. Prevents overnight battery drain. |
 | Min solar power to start EV charging (W) | 500 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
 | Max grid import for Min+PV mode (W) | 1380 W | In Min+PV mode the EV runs at minimum current and uses grid to fill the gap. This cap limits how much grid power is used. Lower it to keep Min+PV fully solar; raise it if you want the charger to run continuously even when solar is weak. |
 | Night charging | **Off** | **Opt-in** (#256). When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily-target floor. Off by default so a fresh install charges on **solar surplus only** — turn it on if you want grid-assisted overnight charging. Existing installs keep their previous setting on upgrade. |
@@ -317,7 +319,8 @@ The options flow is organized into these pages:
 | Assist floor SOC (%) | 60% | Once battery assist starts, it stays on until SOC drops here. This prevents rapid on/off cycling. Raise it if the battery cycles too often. |
 | Battery capacity (kWh) | 10 kWh | Your battery's usable capacity. Used for SOC target calculations and cost attribution. |
 | Max assist power (W) | 4500 W | Maximum battery discharge power allowed for EV charging. Set it to the lower of your battery's rated discharge power and your charger's maximum input. |
-| Invert grid sign | Off | Manual override for grid power polarity. SEM expects `negative = import, positive = export`. Enphase and a handful of other inverters report the opposite. Turn this on **only** if your "Daily Grid Import" stays at 0 while you are clearly drawing from the grid, or if the system diagram shows export when you are importing — see #352. When this is on the auto-detect path is bypassed. |
+| Assist gate / Solar Gate (v1.7.3) (W) | 1200 W | **Battery assist threshold** — battery only supplements EV charging when real solar surplus is at least this value (0–5000 W). Set to 0 to allow battery assist everywhere, including overnight. Prevents battery draining into the car at dusk/dawn. |
+| Grid sign flip | Off | Manual override for grid power polarity (v1.7.3). SEM auto-detects at startup whether `positive = import` or `positive = export`. Flip this on only if import/export are inverted in your system diagram. Use the **Fix grid sign** button on the Control tab (simpler). When enabled, auto-detect is bypassed. |
 
 ### Tariff and Pricing settings
 
@@ -463,9 +466,11 @@ The battery is nearly full. Full battery assist is active. EV charging starts
 even without solar surplus — a nearly full battery has little additional value
 and the energy is better used in the car.
 
-**Hysteresis**: Once battery assist activates, it stays on until SOC drops
-below `battery_assist_floor_soc` (default 60%). This prevents rapid on/off
-cycling that would stress both the battery and the charger.
+**Assist floor**: Battery assist only engages while SOC is above
+`battery_buffer_soc` (default 70%) — below the buffer the battery is
+off-limits to the EV. (The buffer is the single assist floor; the
+former separate `battery_assist_floor_soc` knob was redundant and has
+been removed.)
 
 ### When to adjust zone thresholds
 
@@ -474,7 +479,7 @@ cycling that would stress both the battery and the charger.
 | Protect the battery more aggressively | Raise `battery_priority_soc` (e.g. 30% to 40%) |
 | Start EV charging sooner from the battery | Lower `battery_buffer_soc` (e.g. 70% to 60%) |
 | Battery rarely reaches auto-start threshold | Lower `battery_auto_start_soc` (e.g. 90% to 80%) |
-| Too much on/off cycling of battery assist | Raise `battery_assist_floor_soc` (e.g. 60% to 70%) |
+| Too much on/off cycling of battery assist | Raise `battery_buffer_soc` (e.g. 70% to 75%) |
 | Battery is small and you want EV to get more priority | Lower all three zone thresholds by 5–10% |
 
 ---
@@ -1012,6 +1017,15 @@ Yes. Set the tariff mode to Dynamic in the options flow and point SEM at a
 HA sensor that reports the current electricity price (e.g. Tibber or Octopus
 Energy integrations). SEM uses this data to pick the cheapest hours for
 overnight EV and battery charging.
+
+**Tibber Pulse note:** some Tibber accounts never get the standard
+`electricity_price` forecast sensor from the core Tibber integration
+(upstream issue — the Pulse real-time sensor carries no price arrays). If
+that's you, install the HACS *Tibber Grid Reward* integration and set
+**Dynamic tariff entity** to its `sensor.current_price` — SEM parses its
+`today_raw`/`tomorrow_raw` arrays directly (v1.7.3-beta.10+). Verify with
+the `solar_energy_management.diagnose` action (section `tariff`):
+`tariff_parsed_attribute` should report `today_raw`.
 
 **My dashboard shows white tabs or "Custom element doesn't exist".**
 

@@ -99,10 +99,26 @@ class SEMBatteryCard extends SEMLitBase {
         // sensor value changes. No-op on single-battery installs
         // (``_batteries`` is empty).
         if (this._batteries.length) {
-            key += '|' + this._batteries.map(bid => [
-                `battery_${bid}_power`, `battery_${bid}_soc`,
-                `battery_${bid}_status`, `battery_${bid}_capacity_kwh`,
-            ].map(s => hass?.states[`${this._prefix}${s}`]?.state || '').join(':')).join('|');
+            key += '|' + this._batteries.map(bid => {
+                const sensors = [
+                    `battery_${bid}_power`, `battery_${bid}_soc`,
+                    `battery_${bid}_status`, `battery_${bid}_capacity_kwh`,
+                ].map(s => hass?.states[`${this._prefix}${s}`]?.state || '').join(':');
+                // Per-battery control entities (#523) — re-render when the
+                // mode / reserve change so the dropdown + stepper stay live.
+                const ctrl = [
+                    `select.sem_battery_${bid}_mode`,
+                    `number.sem_battery_${bid}_reserve_soc`,
+                ].map(e => hass?.states[e]?.state || '').join(':');
+                return sensors + ':' + ctrl;
+            }).join('|');
+        } else {
+            // Single-battery (#523): track the global mode + reserve so the
+            // hero control stays live.
+            key += '|' + [
+                'select.sem_battery_mode',
+                'number.sem_battery_reserve_soc',
+            ].map(e => hass?.states[e]?.state || '').join(':');
         }
 
         if (key === this._lastBattKey && !localeChanged) return;
@@ -180,19 +196,123 @@ class SEMBatteryCard extends SEMLitBase {
         `;
     }
 
+    // Vertical filled-battery glyph — the same visual language as the EV
+    // card's SOC gauge (``_renderSocGauge``) so the two tabs read alike.
+    // Fill colour follows the live flow (charge pink / discharge teal /
+    // selling gold / idle grey) and gently pulses while power moves.
+    _renderBatteryGlyph(soc, color, active) {
+        const socVal = soc != null ? Math.max(0, Math.min(100, soc)) : 0;
+        const socFill = Math.max(2, (socVal / 100) * 52);
+        const anim = active ? 'socPulse 2s ease-in-out infinite' : 'none';
+        return html`
+            <svg viewBox="0 0 44 76" width="40" height="69">
+                <rect x="14" y="0" width="16" height="5" rx="2" fill="rgba(255,255,255,0.15)"/>
+                <rect x="6" y="4" width="32" height="60" rx="4"
+                    fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+                <rect x="9" y="${(7 + (52 - socFill)).toFixed(1)}" width="26"
+                    height="${socFill.toFixed(1)}" rx="2"
+                    fill="${color}" opacity="0.78" style="animation:${anim}"/>
+                <text x="22" y="40" text-anchor="middle"
+                    fill="white" font-size="13" font-weight="700"
+                    font-family="'Segoe UI','Roboto',sans-serif" opacity="0.95">
+                    ${soc != null ? Math.round(socVal) + '%' : '—'}
+                </text>
+            </svg>
+        `;
+    }
+
+    _fmtHours(h) {
+        if (h == null || !isFinite(h) || h <= 0) return '—';
+        if (h < 1) return `${Math.round(h * 60)} min`;
+        const hh = Math.floor(h);
+        const mm = Math.round((h - hh) * 60);
+        return mm === 0 ? `${hh} h` : `${hh} h ${mm} min`;
+    }
+
+    // Derived ETA — no per-battery energy sensor needed: charge time to
+    // 100% or discharge time to empty from SOC × capacity ÷ current power.
+    _batteryEta(soc, capacity, power) {
+        if (soc == null || capacity <= 0 || Math.abs(power) < 50) return null;
+        if (power > 50) {
+            const kwhToFull = (100 - soc) / 100 * capacity;
+            return { key: 'until_full', text: this._fmtHours(kwhToFull / (power / 1000)) };
+        }
+        const kwhToEmpty = soc / 100 * capacity;
+        return { key: 'until_empty', text: this._fmtHours(kwhToEmpty / (Math.abs(power) / 1000)) };
+    }
+
+    // Mode dropdown + reserve stepper for a battery (#523). Shared by the
+    // per-battery sections (multi-battery) and the fleet hero (single battery).
+    // Renders nothing when the backend mode entity doesn't exist.
+    _renderModeControls(modeEntityId, reserveEntityId) {
+        const modeState = this._hass?.states[modeEntityId];
+        if (!modeState) return nothing;
+        const reserveState = this._hass?.states[reserveEntityId];
+        const modeVal = modeState.state;
+        const showReserve = reserveState
+            && (modeVal === 'allow_arbitrage' || modeVal === 'force_discharge');
+        // Decision-explanation line — what this mode makes SEM do (mirrors the
+        // EV charger card's charge-mode hints). Translated per mode; falls back
+        // to empty so an unknown/stale mode just hides the hint.
+        const modeHint = this._t('battery_mode_hint_' + modeVal) || '';
+        return html`
+            <div class="battery-section-controls">
+                <div class="bsc-row">
+                    <span class="bsc-label">${this._t('mode')}</span>
+                    <select class="bsc-select" .value=${modeVal}
+                            @click=${(e) => e.stopPropagation()}
+                            @change=${(e) => this._selectOption(modeEntityId, e.target.value)}>
+                        ${(modeState.attributes.options || []).map(o => html`
+                            <option value=${o} ?selected=${o === modeVal}>
+                                ${this._t('battery_mode_' + o) || o}
+                            </option>`)}
+                    </select>
+                </div>
+                ${modeHint ? html`
+                    <div class="bsc-hint">
+                        <ha-icon icon="mdi:information-outline"></ha-icon>
+                        <span>${modeHint}</span>
+                    </div>
+                ` : nothing}
+                ${showReserve ? html`
+                    <div class="bsc-row">
+                        <span class="bsc-label">${this._t('reserve_soc')}</span>
+                        <span class="bsc-stepper">
+                            <button class="bsc-btn"
+                                @click=${() => this._stepNumber(reserveEntityId, -1)}>−</button>
+                            <span class="bsc-stepval">${Math.round(parseFloat(reserveState.state) || 0)}%</span>
+                            <button class="bsc-btn"
+                                @click=${() => this._stepNumber(reserveEntityId, 1)}>+</button>
+                        </span>
+                    </div>
+                ` : nothing}
+            </div>
+        `;
+    }
+
     _renderBatterySection(bid, idx) {
         const color = BATTERY_COLORS[idx % BATTERY_COLORS.length];
         const power = this._val(`battery_${bid}_power`, 0);
         const soc = this._val(`battery_${bid}_soc`, null);
-        const status = this._valStr(`battery_${bid}_status`) || 'idle';
+        const statusRaw = (this._valStr(`battery_${bid}_status`) || 'idle').toLowerCase();
         const capacity = this._val(`battery_${bid}_capacity_kwh`, 0);
         const name = this._batteryName(bid);
 
-        const statusKey = status === 'charging'
-            ? 'charging'
-            : status === 'discharging' ? 'discharging' : 'idle';
-        const statusColor = status === 'charging' ? '#f06292'
-            : status === 'discharging' ? '#4db6ac' : '#999';
+        const isSelling = statusRaw === 'selling';
+        const isCharging = !isSelling && (statusRaw === 'charging' || power > 50);
+        const isDischarging = !isSelling && (statusRaw === 'discharging' || power < -50);
+        const active = isCharging || isDischarging || isSelling;
+
+        const statusKey = isSelling ? 'selling_to_grid'
+            : isCharging ? 'charging'
+            : isDischarging ? 'discharging' : 'idle';
+        const flowColor = isSelling ? '#FCD170'
+            : isCharging ? '#f06292'
+            : isDischarging ? '#4db6ac' : '#999';
+
+        // Derived metrics (no extra backend sensors): stored energy and ETA.
+        const stored = (soc != null && capacity > 0) ? (soc / 100) * capacity : null;
+        const eta = this._batteryEta(soc, capacity, power);
 
         return html`
             <div class="battery-section">
@@ -200,31 +320,47 @@ class SEMBatteryCard extends SEMLitBase {
                     <div class="battery-dot" style="background:${color}"></div>
                     <span class="battery-section-name">${name}</span>
                     <span class="battery-section-status"
-                          style="color:${statusColor}">
+                          style="color:${flowColor}">
                         ${this._t(statusKey)}
                     </span>
                 </div>
                 <div class="battery-section-body">
-                    <div class="battery-section-ring">
-                        ${this._renderMiniSocRing(soc, color)}
+                    <div class="battery-section-glyph">
+                        ${this._renderBatteryGlyph(soc, flowColor, active)}
                         <span class="battery-section-soc-label">SOC</span>
                     </div>
                     <div class="battery-section-metrics">
                         <div class="bs-row">
                             <span class="bs-label">${this._t('power')}</span>
                             <span class="bs-val"
-                                  style="color:${power > 50 || power < -50 ? color : ''}">
+                                  style="color:${power > 50 || power < -50 ? flowColor : ''}">
                                 ${semFormatPower(power)}
                             </span>
                         </div>
+                        ${stored != null ? html`
+                            <div class="bs-row">
+                                <span class="bs-label">${this._t('stored')}</span>
+                                <span class="bs-val">${this._fmt(stored, 1)} kWh</span>
+                            </div>
+                        ` : nothing}
                         ${capacity > 0 ? html`
                             <div class="bs-row">
                                 <span class="bs-label">${this._t('capacity')}</span>
                                 <span class="bs-val">${this._fmt(capacity, 1)} kWh</span>
                             </div>
                         ` : nothing}
+                        ${eta ? html`
+                            <div class="bs-row">
+                                <span class="bs-label">${this._t(eta.key)}</span>
+                                <span class="bs-val">${eta.text}</span>
+                            </div>
+                        ` : nothing}
                     </div>
                 </div>
+                ${this._renderModeControls(
+                    `select.sem_battery_${bid}_mode`,
+                    `number.sem_battery_${bid}_reserve_soc`,
+                )}
             </div>
         `;
     }
@@ -242,7 +378,9 @@ class SEMBatteryCard extends SEMLitBase {
         const power = this._val('battery_power', 0);
         const chargePower = this._val('battery_charge_power', 0);
         const dischargePower = this._val('battery_discharge_power', 0);
-        const statusRaw = this._valStr('battery_status');
+        // Lowercase — the sensor publishes title-cased values ("Selling",
+        // "Charging"); the string comparisons below expect lowercase.
+        const statusRaw = (this._valStr('battery_status') || '').toLowerCase();
         const health = this._val('battery_health_score', 0);
         const cycles = this._val('battery_cycles_estimated', 0);
         const dailyCharge = this._val('daily_battery_charge_energy', 0);
@@ -258,16 +396,24 @@ class SEMBatteryCard extends SEMLitBase {
         const temp = (tempEntity && tempEntity.state !== 'unavailable' && tempEntity.state !== 'unknown')
             ? parseFloat(tempEntity.state) : null;
 
-        // Charge state
-        const isCharging = statusRaw === 'charging' || chargePower > 10;
-        const isDischarging = statusRaw === 'discharging' || dischargePower > 10;
-        const statusText = isCharging ? this._t('charging')
+        // Charge state. #523: "selling" = the scheduler is exporting the
+        // battery to the grid for arbitrage — a distinct gold state.
+        const isSelling = statusRaw === 'selling';
+        const isCharging = !isSelling && (statusRaw === 'charging' || chargePower > 10);
+        const isDischarging = !isSelling && (statusRaw === 'discharging' || dischargePower > 10);
+        const exportEnt = this._hass?.states['sensor.sem_tariff_current_export_rate'];
+        const exportRate = (exportEnt && exportEnt.state !== 'unavailable' && exportEnt.state !== 'unknown')
+            ? parseFloat(exportEnt.state) : null;
+        const SELL = '#FCD170';
+        const statusText = isSelling ? this._t('selling_to_grid')
+            : isCharging ? this._t('charging')
             : isDischarging ? this._t('discharging')
             : this._t('idle');
-        const arcColor = isCharging ? '#f06292' : '#4db6ac';
-        const statusColor = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : (T.textSec || '#888');
-        const glowOpacity = (isCharging || isDischarging) ? '0.5' : '0.2';
-        const arcAnim = (isCharging || isDischarging) ? 'socPulse 2s ease-in-out infinite' : 'none';
+        const arcColor = isSelling ? SELL : (isCharging ? '#f06292' : '#4db6ac');
+        const statusColor = isSelling ? SELL
+            : isCharging ? '#f06292' : isDischarging ? '#4db6ac' : (T.textSec || '#888');
+        const glowOpacity = (isCharging || isDischarging || isSelling) ? '0.5' : '0.2';
+        const arcAnim = (isCharging || isDischarging || isSelling) ? 'socPulse 2s ease-in-out infinite' : 'none';
 
         // SOC arc
         const pct = Math.min(Math.max(soc / 100, 0), 1);
@@ -351,14 +497,14 @@ class SEMBatteryCard extends SEMLitBase {
                 }
                 .chip:hover { border-color: var(--divider-color, ${surfHover}); }
                 .chip-label {
-                    font-size: 10px; color: var(--secondary-text-color, ${chipLblCol});
+                    font-size: 11px; color: var(--secondary-text-color, ${chipLblCol});
                     font-weight: 500; letter-spacing: 0.3px; margin-bottom: 3px;
                 }
                 .chip-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
                 .c-charge { color: #f06292; }
                 .c-discharge { color: #4db6ac; }
                 .c-savings { color: #8DC892; }
-                .chip-src { font-size: 9px; color: var(--secondary-text-color, ${chipLblCol}); margin-top: 1px; }
+                .chip-src { font-size: 10px; color: var(--secondary-text-color, ${chipLblCol}); margin-top: 1px; }
                 .session-section {
                     margin-top: 14px; padding: 10px 12px;
                     background: var(--secondary-background-color, ${surfaceCol});
@@ -371,7 +517,7 @@ class SEMBatteryCard extends SEMLitBase {
                     text-transform: uppercase; letter-spacing: 0.5px;
                 }
                 .sess-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
-                .sess-item-label { font-size: 10px; color: var(--secondary-text-color, ${chipLblCol}); }
+                .sess-item-label { font-size: 11px; color: var(--secondary-text-color, ${chipLblCol}); }
                 .sess-item-value {
                     font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
@@ -407,7 +553,7 @@ class SEMBatteryCard extends SEMLitBase {
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                 }
                 .battery-section-status {
-                    font-size: 0.75em; font-weight: 500;
+                    font-size: 0.8em; font-weight: 500;
                     text-transform: uppercase; letter-spacing: 0.05em;
                 }
                 .battery-section-body {
@@ -416,9 +562,12 @@ class SEMBatteryCard extends SEMLitBase {
                 .battery-section-ring {
                     flex-shrink: 0; width: 56px; text-align: center;
                 }
+                .battery-section-glyph {
+                    flex-shrink: 0; width: 44px; text-align: center;
+                }
                 .battery-section-soc-label {
                     display: block;
-                    font-size: 9px; color: ${textSecCol};
+                    font-size: 10px; color: ${textSecCol};
                     margin-top: 2px;
                     text-transform: uppercase; letter-spacing: 0.05em;
                 }
@@ -428,16 +577,60 @@ class SEMBatteryCard extends SEMLitBase {
                 }
                 .bs-row {
                     display: flex; justify-content: space-between; align-items: baseline;
-                    padding: 1px 0;
+                    padding: 2px 0;
                 }
                 .bs-label {
-                    font-size: 10px; color: ${textSecCol};
+                    font-size: 11px; color: ${textSecCol};
                     font-weight: 500;
                 }
                 .bs-val {
-                    font-size: 11px; font-weight: 600;
+                    font-size: 12px; font-weight: 600;
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                     font-variant-numeric: tabular-nums;
+                }
+                /* Per-battery controls (#523) — mode select + reserve stepper */
+                .battery-section-controls {
+                    margin-top: 10px; padding-top: 10px;
+                    border-top: 1px solid ${surfBorder};
+                    display: flex; flex-direction: column; gap: 8px;
+                }
+                .bsc-row {
+                    display: flex; align-items: center; justify-content: space-between;
+                    gap: 8px;
+                }
+                .bsc-hint {
+                    display: flex; align-items: flex-start; gap: 5px;
+                    font-size: 11px; line-height: 1.35;
+                    color: ${textSecCol};
+                    margin: -2px 0 1px 0;
+                    opacity: 0.92;
+                }
+                .bsc-hint ha-icon {
+                    --mdc-icon-size: 13px;
+                    flex: 0 0 auto; margin-top: 1px; opacity: 0.8;
+                }
+                .bsc-label {
+                    font-size: 12px; color: ${textSecCol}; font-weight: 500;
+                }
+                .bsc-select {
+                    background: ${surfaceCol};
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
+                    border: 1px solid ${surfBorder};
+                    border-radius: 8px; padding: 5px 8px; font-size: 12px;
+                    font-weight: 600; cursor: pointer; min-width: 150px;
+                }
+                .bsc-stepper { display: flex; align-items: center; gap: 8px; }
+                .bsc-btn {
+                    width: 24px; height: 24px; border-radius: 6px;
+                    background: ${surfaceCol}; border: 1px solid ${surfBorder};
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
+                    font-size: 15px; font-weight: 700; cursor: pointer; line-height: 1;
+                }
+                .bsc-btn:hover { border-color: ${surfHover}; }
+                .bsc-stepval {
+                    min-width: 38px; text-align: center; font-size: 13px;
+                    font-weight: 700; font-variant-numeric: tabular-nums;
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                 }
                 /* Phase B mobile breakpoint — single column from the
                    ring + metrics layout collapses to stacked at
@@ -448,6 +641,7 @@ class SEMBatteryCard extends SEMLitBase {
                         align-items: stretch;
                     }
                     .battery-section-ring { margin: 0 auto; }
+                    .battery-section-glyph { margin: 0 auto; }
                 }
                 .month-chip {
                     flex: 1; text-align: center; padding: 6px 8px;
@@ -485,11 +679,22 @@ class SEMBatteryCard extends SEMLitBase {
                                     style="stroke-dashoffset:${arcOffset};stroke:${arcColor};animation:${arcAnim}"/>
                             </svg>
                             <div class="ring-center">
-                                <svg class="battery-icon" width="16" height="22" viewBox="0 0 20 30"
-                                    fill="none" stroke="#4db6ac" stroke-width="1.8" opacity="0.7">
-                                    <rect x="2" y="4" width="16" height="26" rx="3"/>
-                                    <rect x="6" y="0" width="8" height="5" rx="2"
-                                        fill="#4db6ac" opacity="0.5" stroke="none"/>
+                                <!-- #523/#524 follow-up: filled SOC-level
+                                     battery glyph matching the system card
+                                     (was a flat outline). Fills bottom-up to
+                                     SOC, tints with the arc colour, and shows a
+                                     charging bolt. -->
+                                <svg class="battery-icon" width="18" height="26" viewBox="0 0 20 30">
+                                    <rect x="6" y="0" width="8" height="4" rx="1.5"
+                                        fill="${arcColor}" opacity="0.7"/>
+                                    <rect x="2" y="4" width="16" height="26" rx="3"
+                                        fill="rgba(0,0,0,0.30)" stroke="${arcColor}"
+                                        stroke-width="1.6" opacity="0.9"/>
+                                    <rect x="4" y="${(28 - 22 * pct).toFixed(1)}" width="12"
+                                        height="${(22 * pct).toFixed(1)}" rx="1.5"
+                                        fill="${arcColor}" opacity="0.55"/>
+                                    <path d="M11,9.5 L6.5,18.5 L9.5,18.5 L8.5,24.5 L13.5,15 L10.5,15 Z"
+                                        fill="#FCD170" opacity="${isCharging ? 0.95 : 0}"/>
                                 </svg>
                                 <div class="soc-value" style="color:${arcColor}">
                                     ${soc.toFixed(0)}%
@@ -510,6 +715,12 @@ class SEMBatteryCard extends SEMLitBase {
                                 <span class="metric-label">${this._t('status')}</span>
                                 <span class="metric-val" style="color:${statusColor}">${statusText}</span>
                             </div>
+                            ${isSelling && exportRate != null ? html`
+                            <div class="metric-row">
+                                <span class="metric-label">${this._t('export_rate')}</span>
+                                <span class="metric-val" style="color:${SELL}">${this._fmt(exportRate, 3)} ${currency}/kWh</span>
+                            </div>
+                            ` : nothing}
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('health')}</span>
                                 <span class="metric-val">${this._fmt(health, 1)}%</span>
@@ -541,7 +752,14 @@ class SEMBatteryCard extends SEMLitBase {
                                 (bid, idx) => this._renderBatterySection(bid, idx),
                             )}
                         </div>
-                    ` : nothing}
+                    ` : html`
+                        <!-- Single-battery install (#523): global mode control
+                             on the hero, no per-battery section. -->
+                        ${this._renderModeControls(
+                            'select.sem_battery_mode',
+                            'number.sem_battery_reserve_soc',
+                        )}
+                    `}
 
                     <div class="session-section">
                         <div class="sess-header">

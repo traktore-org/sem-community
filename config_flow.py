@@ -16,19 +16,13 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
-    DEFAULT_POWER_DELTA,
-    DEFAULT_CURRENT_DELTA,
-    DEFAULT_SOC_DELTA,
     DEFAULT_BATTERY_PRIORITY_SOC,
-    DEFAULT_BATTERY_MINIMUM_SOC,
-    DEFAULT_BATTERY_RESUME_SOC,
     DEFAULT_BATTERY_BUFFER_SOC,
     DEFAULT_BATTERY_AUTO_START_SOC,
-    DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
     DEFAULT_MIN_SOLAR_POWER,
-    DEFAULT_MAX_GRID_IMPORT,
     DEFAULT_DAILY_EV_TARGET,
     DEFAULT_BATTERY_ASSIST_MAX_POWER,
+    DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
     DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
@@ -41,7 +35,6 @@ from .const import (
     DEFAULT_WARNING_PEAK_LEVEL,
     DEFAULT_EMERGENCY_PEAK_LEVEL,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
-    DEFAULT_CRITICAL_DEVICE_PROTECTION,
     DEFAULT_OBSERVER_MODE,
 )
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -153,7 +146,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     ``initial_current`` (decouples from the misleading "night"
     #     prefix — the value is the session-start ramp current, applied
     #     whenever a session begins). Display: "Vehicle Start Amps".
-    VERSION = 12
+    VERSION = 14
 
     @staticmethod
     @callback
@@ -471,27 +464,18 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         keys are editable post-install.
         """
         return {
-            # Coordinator deltas / loop
+            # Coordinator loop
             "update_interval": DEFAULT_UPDATE_INTERVAL,
-            "power_delta": DEFAULT_POWER_DELTA,
-            "current_delta": DEFAULT_CURRENT_DELTA,
-            "soc_delta": DEFAULT_SOC_DELTA,
             # 4-zone SOC strategy thresholds (see docs/ARCHITECTURE.md)
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
             "battery_buffer_soc": DEFAULT_BATTERY_BUFFER_SOC,
             "battery_auto_start_soc": DEFAULT_BATTERY_AUTO_START_SOC,
-            "battery_assist_floor_soc": DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
-            # Legacy 3-zone hard-stop / resume — kept for the safety gates
-            # in coordinator.py that haven't been migrated to the 4-zone
-            # strategy yet (battery_too_low check, hysteresis resume).
-            "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
-            "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,
             # Solar / power gates
-            "min_solar_power": DEFAULT_MIN_SOLAR_POWER,
-            "max_grid_import": DEFAULT_MAX_GRID_IMPORT,
+            "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
             # Daily target & battery assist
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
+            "battery_assist_min_surplus": DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
             # Battery discharge protection (entity is auto-detected separately)
             "battery_discharge_protection_enabled": DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
             "battery_max_discharge_power": DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
@@ -509,7 +493,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "load_management_enabled": DEFAULT_LOAD_MANAGEMENT_ENABLED,
             "warning_peak_level": DEFAULT_WARNING_PEAK_LEVEL,
             "emergency_peak_level": DEFAULT_EMERGENCY_PEAK_LEVEL,
-            "critical_device_protection": DEFAULT_CRITICAL_DEVICE_PROTECTION,
             # #442 slim install: explicit empty EV chargers list so
             # downstream code reading ``config["ev_chargers"]`` always
             # finds a list (even though ``.get("ev_chargers") or []``
@@ -570,6 +553,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ev_start_service", "ev_start_service_data",
                         "ev_stop_service", "ev_stop_service_data",
                         "ev_charger_needs_cycle", "ev_surplus_priority",
+                        "ev_shed_priority",
                         # Wallbox-style control path (#384 Part 2 kept). The
                         # other 8 per-charger fields from #390 reverted to
                         # OptionsFlow-only in #397 — they were tunables with
@@ -1046,6 +1030,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),
+                # #470: independent shed order under peak; defaults to the
+                # surplus priority above.
+                vol.Optional(
+                    "ev_shed_priority",
+                    default=5,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
+                ),
                 # Per-charger night charging settings (#193)
                 vol.Optional(
                     "daily_ev_target",
@@ -1206,6 +1198,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_surplus_priority",
                     default=charger.get("ev_surplus_priority", 5),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
+                ),
+                # #470: shed order under peak — independent of the surplus
+                # order above. Lower number = charges first on surplus;
+                # higher number = shed first under peak. Defaults to the
+                # surplus priority so they coincide until deliberately split.
+                vol.Optional(
+                    "ev_shed_priority",
+                    default=charger.get(
+                        "ev_shed_priority", charger.get("ev_surplus_priority", 5),
+                    ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),
@@ -1386,12 +1390,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(min=70, max=100, step=5, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
-                    "battery_assist_floor_soc",
-                    default=_c("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=30, max=80, step=5, unit_of_measurement="%", mode="slider")
-                ),
-                vol.Optional(
                     "battery_capacity_kwh",
                     default=_c("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH),
                 ): selector.NumberSelector(
@@ -1402,6 +1400,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("battery_assist_max_power", _c("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1000, max=10000, step=500, unit_of_measurement="W", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_assist_min_surplus",
+                    default=_c("battery_assist_min_surplus", DEFAULT_BATTERY_ASSIST_MIN_SURPLUS),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, max=5000, step=100, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "battery_discharge_protection_enabled",
@@ -1465,16 +1469,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(min=0, max=100, step=0.5, unit_of_measurement="kWh", mode="slider")
                 ),
                 vol.Optional(
-                    "min_solar_power",
-                    default=_c("min_solar_power", DEFAULT_MIN_SOLAR_POWER),
+                    "minimum_solar_power",
+                    default=_c("minimum_solar_power", DEFAULT_MIN_SOLAR_POWER),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0, max=5000, step=100, unit_of_measurement="W", mode="slider")
-                ),
-                vol.Optional(
-                    "max_grid_import",
-                    default=_c("max_grid_import", DEFAULT_MAX_GRID_IMPORT),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0, max=2000, step=100, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "observer_mode",
@@ -1497,10 +1495,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             # Auto-detect dynamic tariff provider entity if mode=dynamic
             if user_input.get("tariff_mode") == "dynamic" and not user_input.get("dynamic_tariff_entity"):
-                # Try to find Tibber/Nordpool/aWATTar entity automatically
+                # Shared candidate matcher (#485 K5): the flow used to
+                # keep its own pattern subset, which drifted from the
+                # runtime provider's detection (it missed Octopus and
+                # Amber despite the dropdown label promising them).
+                from .tariff.tariff_provider import DynamicTariffProvider
                 for state in self.hass.states.async_all("sensor"):
                     eid = state.entity_id
-                    if any(p in eid for p in ("electricity_price", "nordpool", "awattar")):
+                    if DynamicTariffProvider.is_price_entity_candidate(eid):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
                         break
@@ -1562,23 +1564,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                # #417: max raised 1.0 -> 5.0 (and export 0.5 -> 5.0) for
+                # high-unit currencies (SEK/NOK/CZK/PLN ~1-5 per kWh) --
+                # same fix the cheap/expensive threshold number entities
+                # got in v1.7.0-beta.21. The import rate doubles as the
+                # dynamic-tariff fallback price, so capping it at 1.0
+                # forced a wrong fallback on those markets.
                 vol.Optional(
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
                     default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_export_rate",
                     default=_c("electricity_export_rate", 0.075),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=0.50, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "demand_charge_rate",
@@ -1591,24 +1599,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("update_interval", DEFAULT_UPDATE_INTERVAL),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="s", mode="slider")
-                ),
-                vol.Optional(
-                    "power_delta",
-                    default=_c("power_delta", DEFAULT_POWER_DELTA),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=50, max=3000, step=10, unit_of_measurement="W", mode="slider")
-                ),
-                vol.Optional(
-                    "current_delta",
-                    default=_c("current_delta", DEFAULT_CURRENT_DELTA),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=10, step=1, unit_of_measurement="A", mode="slider")
-                ),
-                vol.Optional(
-                    "soc_delta",
-                    default=_c("soc_delta", DEFAULT_SOC_DELTA),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=20, step=1, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
                     "grid_import_power_entity",
@@ -1643,7 +1633,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "target_peak_limit": _c("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
             "warning_peak_level": _c("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
             "emergency_peak_level": _c("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
-            "critical_device_protection": _c("critical_device_protection", DEFAULT_CRITICAL_DEVICE_PROTECTION),
         }
 
         return self.async_show_form(
@@ -1677,10 +1666,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=1.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
                     )
                 ),
-                vol.Required(
-                    "critical_device_protection",
-                    default=data_defaults["critical_device_protection"],
-                ): selector.BooleanSelector(),
             }),
             errors=errors
         )
@@ -1750,6 +1735,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="switch")
                 ),
+                vol.Optional(
+                    "heat_pump_invert_sg_ready",
+                    default=_c("heat_pump_invert_sg_ready", False),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "heat_pump_climate_entity",
                     description={"suggested_value": _opt("heat_pump_climate_entity")},
@@ -1841,7 +1830,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "battery_cycle_cost",
-                    default=_c("battery_cycle_cost", 0.0),
+                    default=_c("battery_cycle_cost", 0.02),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=0.50, step=0.001,
@@ -1858,6 +1847,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.SLIDER,
                     )
                 ),
+                vol.Optional(
+                    "battery_replan_interval_min",
+                    default=_c("battery_replan_interval_min", 30),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=120, step=5,
+                        unit_of_measurement="min",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    "battery_prefer_consecutive_window",
+                    default=_c("battery_prefer_consecutive_window", True),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "battery_max_target_soc",
                     default=_c("battery_max_target_soc", 95.0),

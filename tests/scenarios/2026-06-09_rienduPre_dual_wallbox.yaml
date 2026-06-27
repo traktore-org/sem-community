@@ -1,0 +1,163 @@
+name: "2026-06-09 RienduPre dual-Wallbox replay — mixed-mode priority cascade"
+
+coverage:
+  - mode: multi_charger
+    regime: priority_cascade_mixed_modes
+    issue: "#462 / #464 — per-charger isolation under mixed-mode + mixed-priority cascade"
+
+description: |
+  Replay of @RienduPre's real-world config from his v1.7.3-beta.1
+  diagnose dump on #462 / #464 (seed-of-truth fixture mirror of
+  ``sem_multi_wallbox_config_entry`` in conftest). Locks the
+  cascade behaviour against his actual setup so any future regression
+  reaches him before he reaches us.
+
+  Setup:
+    * Charger 1 (id=ev_charger, "Laadpaal Links") — Wallbox Pulsar,
+      Audi e-tron, 95 kWh battery, priority 5, mode ``always_max``,
+      target 50 % SoC.
+    * Charger 2 (id=ev_charger_1, "Laadpaal Rechts") — Wallbox Pulsar,
+      Mini Cooper Electric, 29 kWh battery, priority 8, mode
+      ``solar_plus_cheap``, target 100 % SoC.
+
+  Daytime regime (this scenario): generous solar surplus, no cheap-
+  tariff window active. Distribution contract is:
+
+    1. ``charger 1`` (always_max, priority 5) services first — wants
+       its full nameplate regardless of strategy.
+    2. ``charger 2`` (solar_plus_cheap, priority 8) gets whatever's
+       left of the surplus. Outside the cheap window the
+       ``solar_plus_cheap`` mode behaves like ``solar_only`` — only
+       takes from solar, never from grid.
+
+  Catches a class of bugs where:
+    * One charger's settings change cross-talks into the other
+      (the original #464 symptom).
+    * Per-charger budget bookkeeping double-counts a higher-
+      priority charger's commit and starves the lower-priority one.
+    * ``solar_plus_cheap`` outside the cheap window takes from grid
+      (the mode would degrade silently if the cheap-window gate
+      regressed).
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_max_power: 4500
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 10
+
+  ev_chargers:
+    - id: ev_charger
+      name: "Laadpaal Links"
+      priority: 5
+      min_current: 6
+      max_current: 16
+      vehicle_min_current: 6
+      phases: 3
+      voltage: 230
+      charge_mode: "always_max"
+      ev_battery_capacity_kwh: 95
+      ev_kwh_per_100km: 25
+      ev_target_soc: 50
+      ev_target_soc_max: 100
+      ev_target_type: "soc"
+      daily_ev_target: 10
+      daily_ev_target_max: 95
+
+    - id: ev_charger_1
+      name: "Laadpaal Rechts"
+      priority: 8
+      min_current: 6
+      max_current: 16
+      vehicle_min_current: null
+      phases: 3
+      voltage: 230
+      charge_mode: "solar_plus_cheap"
+      ev_battery_capacity_kwh: 29
+      ev_kwh_per_100km: 18
+      ev_target_soc: 100
+      ev_target_soc_max: 100
+      ev_target_type: "soc"
+      daily_ev_target: 10
+      daily_ev_target_max: 29
+
+cycle_seconds: 30
+
+# Big-surplus daytime regime. Solar 14 kW, battery already full at 92 %,
+# both cars plugged in, no cheap-tariff window. Cascade should:
+#   * charger 1 commits its always_max nameplate (3-phase × 16 A × 230 V
+#     ≈ 11 040 W) first.
+#   * charger 2 gets the residual surplus on solar_plus_cheap (acts as
+#     solar_only outside cheap window) — receives whatever's left of
+#     ~3 kW after the home + battery + charger 1.
+timeline:
+  - t: 0
+    solar_power: 14000
+    grid_power: 2400        # +ve = export
+    battery_power: 200      # slight trickle into battery (already nearly full)
+    battery_soc: 92
+    ev_power: 0
+    ev_connected: true
+    ev_connected_per_charger:
+      ev_charger: true
+      ev_charger_1: true
+    ev_charging_per_charger:
+      ev_charger: false
+      ev_charger_1: false
+
+  # ── charger 1 spins up to always_max (nameplate ~11 kW). Combined with
+  #   home + battery the export drops; charger 2's surplus shrinks too.
+  - t: 30
+    ev_power: 11000
+    ev_power_per_charger:
+      ev_charger: 11000
+      ev_charger_1: 0
+    grid_power: -8000       # +ve = export; now importing as always_max
+                            # outruns solar
+    ev_charging_per_charger:
+      ev_charger: true
+      ev_charger_1: false
+
+  # ── Hold a few cycles. charger 2 should NOT come online because
+  #   solar_plus_cheap (outside the cheap window) is solar-only and there
+  #   is no surplus left for it after the always_max commit.
+  - t: 60
+  - t: 90
+  - t: 120
+  - t: 150
+
+expect:
+  # always_max + solar_plus_cheap mix: canonical strategy is
+  # always_max from the priority-1 charger. The harness reports the
+  # legacy strategy name; per ``MODE_TO_LEGACY_CHARGING_MODE`` in
+  # ``consts/ev_charge_modes.py`` that's ``"now"``.
+  strategy_substring: "now"
+
+  multi_charger:
+    # Phase B.5 invariant: per-charger budgets sum to the canonical
+    # total. Catches budget double-counting in the cascade.
+    total_equals_canonical: true
+    tolerance_w: 1.0
+    at_least_one_charger_gets_positive: true
+    # Priority cascade: charger 1 (priority 5) must receive budget
+    # before charger 2 (priority 8) in the priority-sorted ordering.
+    # Catches regressions where the cascade leaks budget to a lower-
+    # priority charger before the higher-priority one is satisfied.
+    priority_order: true
+    # Mode isolation: charger 2 is in ``solar_plus_cheap`` mode. With
+    # no cheap-tariff window active in this scenario it behaves like
+    # ``solar_only`` — must NEVER take from grid. Charger 1 in
+    # always_max may. Lock the contract per-charger so a regression
+    # in the cheap-window gate gets caught immediately.
+    per_charger_flow_max:
+      ev_charger_1:
+        # solar_plus_cheap outside cheap window: 0 W from grid + 0 W
+        # from battery. Tolerance of 50 W absorbs flow-attribution
+        # rounding from sub-watt power readings.
+        grid_to_ev: 50
+        battery_to_ev: 50

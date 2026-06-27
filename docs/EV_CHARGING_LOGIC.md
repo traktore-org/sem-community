@@ -13,13 +13,25 @@
 > |---|---|---|
 > | **Solar only** | Pure surplus, never grid | Solar maximalist |
 > | **Solar + cheapest hours** | Surplus by day, grid only in the cheapest tariff windows (hidden if no dynamic tariff configured) | Dynamic-tariff users |
-> | **Min + Solar** (default) | Guarantee Min from grid/night top-up, solar adds up to Max. Zone-adaptive during the day — Min comes from night charging, not forced grid pull at noon. | Daily commuter needing a baseline |
+> | **Min + Solar** (default) | Guarantee Min from grid/night top-up, solar adds up to Max. Zone-adaptive during the day — Min comes from night charging, not forced grid pull at noon. Self-consumption-maximizing: solar surplus first, then (#545) the battery assists by discharging **into the car down to the Buffer SoC** when there's real surplus past the Solar Gate — emptying a near-full battery into the car rather than leaving it idle — and grid only when the remaining Min could no longer be delivered by tonight's window. | Daily commuter needing a baseline |
 > | **Always (max)** | Charge at maximum regardless of source | "Just charge the car" / strict legacy-``minpv`` behaviour |
 > | **Off** | No charging | Disabled |
 >
 > Plus the existing **Charge Target range** (Min / Max), **Charge by HH:MM** deadline, and **Set as default** button as the per-mode detail. The old standalone switches (``night_charging``, ``smart_night_charging``, ``tariff_optimized``, ``ev_charging_mode``) are **removed** — automations that read them must read the new ``select.sem_charger_<id>_charge_mode`` instead.
 >
 > The behavioural-priority cascade below (Min ▷ Charge by ▷ Cheapest hours ▷ Smart night ▷ Mode ▷ Surplus) still applies — the **intent** moved into the mode selector. A full rewrite of this guide tracking the new model is tracked separately; the historical detail below remains accurate for the pre-v1.6.3 toggle layout but the entity names have changed.
+
+> **Updated for v1.7.3** — two reliability changes on top of the model above:
+> - **Charger state reconciler** (#392): SEM no longer re-issues a hardware command
+>   every cycle. A desired-vs-observed reconciler (`coordinator/charger_reconciler.py`)
+>   issues the minimum commands to converge and then leaves the charger alone — this
+>   ends the KEBA "drops to 6 A" / `keba.disable` spam and adds enable-switch
+>   reconciliation + backoff for switch-driven chargers (Wallbox, #536).
+> - **Solar Gate** (#537): in **every** mode, the home battery only assists EV
+>   charging when the *real* solar surplus is at least `battery_assist_min_surplus`
+>   (default 1200 W; set 0 W to allow battery support everywhere, incl. overnight).
+>   Below the gate the battery is reserved for the house and the car draws from
+>   grid + solar. Distinct from *Min solar power* (the total-PV noise floor).
 
 ---
 
@@ -101,12 +113,26 @@ Layer A and Layer B are **independent**: turn them on or off in any combination.
 
 The home battery can feed the EV when solar isn't enough.
 
+Since **#545 ("max out till self-consumption")**, when the battery is in the
+assist band (SoC ≥ the **Buffer SoC**) and there's real solar surplus past the
+**Solar Gate**, SEM offers the **full** assist potential — it raises the offered
+amps so the car draws more and the inverter discharges the battery **into the
+car, down to the Buffer SoC** (the self-consumption floor). Below the Buffer the
+battery is off-limits to the EV, and the assist tapers as SoC falls toward it, so
+the battery is never drained past the floor. This replaces the older behaviour
+(#501) that only topped the car up to the charger minimum and left a full battery
+idle while the EV grid-charged.
+
 | Setting | Effect |
 |---|---|
-| **Battery assist floor SoC** (e.g. 60 %) | Battery only assists EV above this SoC |
-| **Battery assist max power** | Discharge cap when assisting |
+| **Battery buffer SoC** (e.g. 70 %) | Floor of the assist band — the battery only assists the EV above this, and discharge into the car stops here (self-consumption reserve). |
+| **Battery assist min surplus** (Solar Gate, #537) | Real solar surplus (solar − home) required before the battery assists, in every mode. |
+| **Battery assist max power** | Discharge cap when assisting. |
 
-Active in **Auto** and **PV** modes. Not in **Self-consumption** (by design) or **Now** (which takes everything).
+> The separate *Battery assist floor SoC* knob was removed (folded into the
+> Buffer SoC) — see CHANGELOG v1.7.3-beta.59.
+
+Active in **Auto / Min+Solar** and **PV** modes. Not in **Self-consumption** (by design) or **Now** (which takes everything). Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
 
 ### Cheapest hours (tariff)
 
@@ -132,8 +158,8 @@ The complete decision space, in one table. Use this as the lookup when reasoning
 | 1 | Day | Auto | — | — | Surplus available | Charge from surplus; current ramps with PV | `solar_only` |
 | 2 | Day | Auto | — | — | Sunny tomorrow forecast | Skip today — wait for tomorrow | `idle` |
 | 3 | Day | Auto | — | — | Cloudy forecast, surplus low | Fall through to Min+PV (grid Min + PV bonus) | `min_pv` |
-| 4 | Day | PV | — | — | Battery SoC > floor, solar < EV need | Battery assists, tops up to EV minimum | `battery_assist` |
-| 5 | Day | PV | — | — | Battery SoC < floor | Idle (no grid, battery off-limits) | `idle` |
+| 4 | Day | PV | — | — | Battery SoC ≥ buffer, solar < EV need | Battery assists at **full potential** — discharges into the car down to the buffer (#545) | `battery_assist` |
+| 5 | Day | PV | — | — | Battery SoC < buffer | Idle (no grid, battery off-limits) | `idle` |
 | 6 | Day | Self-consumption | — | — | Surplus available | Surplus only; battery untouched | `solar_only` |
 | 7 | Day | Min+PV | — | OFF | any price | Min current + PV bonus, always | `min_pv` |
 | 8 | Day | Min+PV | — | ON | Price = normal/cheap | Min current + PV bonus | `min_pv` |
@@ -296,7 +322,7 @@ SEM never knows or cares that it's Modbus underneath. It sees two switches and t
 
 ### Why this design?
 
-evcc and similar tools bundle vendor-specific Modbus templates (e.g. evcc's `nibe-s-series` template writes directly to register 3032). SEM intentionally takes a different shape — it stays in HA's entity-and-services world so it doesn't have to ship a protocol library for every brand, doesn't have to track every firmware revision, and doesn't replace HA integrations the user already trusts. See [ARCHITECTURE.md](ARCHITECTURE.md#architectural-principle--sem-is-not-an-integration) for the full principle.
+Some HEMS tools bundle vendor-specific Modbus templates that write directly to inverter/charger registers. SEM intentionally takes a different shape — it stays in HA's entity-and-services world so it doesn't have to ship a protocol library for every brand, doesn't have to track every firmware revision, and doesn't replace HA integrations the user already trusts. See [ARCHITECTURE.md](ARCHITECTURE.md#architectural-principle--sem-is-not-an-integration) for the full principle.
 
 ### How to tell which path you're on
 

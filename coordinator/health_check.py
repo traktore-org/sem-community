@@ -8,12 +8,33 @@ _LOGGER = logging.getLogger(__name__)
 class HealthCheck:
     """Validates energy balance and calculation integrity each cycle."""
 
+    # After this many consecutive violating cycles the per-cycle WARNING
+    # drops to debug until the violations clear (#487 triage logs: 413
+    # near-identical lines drowned the log + diagnose ring buffer).
+    _WARN_CYCLES = 6
+
     def __init__(self) -> None:
         self._violation_count: int = 0
         self._last_violations: list[str] = []
+        self._violation_streak: int = 0
 
-    def check_power_balance(self, power: PowerReadings) -> list[str]:
-        """Verify energy balance: solar + import + discharge ≈ home + ev + export + charge."""
+    def check_power_balance(
+        self, power: PowerReadings, home_hold_active: bool = False,
+    ) -> list[str]:
+        """Verify energy balance: solar + import + discharge ≈ home + ev + export + charge.
+
+        ``home_consumption_power`` is derived as the residual of the
+        other readings (``calculate_derived``), so the balance is an
+        identity unless the residual went negative — inputs sampled
+        at different instants (stale solar/EV/grid sensor) — and got
+        clamped to 0 and/or replaced by the coordinator's home-hold
+        (``_smooth_home_consumption``). While that hold is active the
+        gap is a KNOWN, already-handled input inconsistency: report
+        it at debug only, not as a violation. RienduPre's #461 dump
+        showed 69 "violations" that were all the hold bridging a
+        Growatt solar sensor frozen for ~5 min. Once the hold window
+        is exhausted the gap is a genuinely stuck sensor and warns.
+        """
         violations: list[str] = []
 
         supply = power.solar_power + power.grid_import_power + power.battery_discharge_power
@@ -28,9 +49,19 @@ class HealthCheck:
         imbalance = abs(supply - demand)
 
         if imbalance > 50:  # Allow 50 W tolerance for rounding
-            violations.append(
-                f"Energy balance: supply={supply:.0f}W, demand={demand:.0f}W, imbalance={imbalance:.0f}W"
-            )
+            if home_hold_active:
+                _LOGGER.debug(
+                    "Energy balance gap %.0fW (supply=%.0fW, demand=%.0fW) "
+                    "bridged by the home-consumption hold — input sensors "
+                    "momentarily inconsistent, not counted as a violation",
+                    imbalance, supply, demand,
+                )
+            else:
+                violations.append(
+                    f"Energy balance: supply={supply:.0f}W, demand={demand:.0f}W, "
+                    f"imbalance={imbalance:.0f}W (inputs inconsistent — a power "
+                    f"sensor is likely stale)"
+                )
 
         # Non-negative checks
         non_negative_fields = [
@@ -114,9 +145,10 @@ class HealthCheck:
         autarky: float = 0,
         self_consumption: float = 0,
         costs: CostData | None = None,
+        home_hold_active: bool = False,
     ) -> list[str]:
         """Run all health checks and return violations list."""
-        violations = self.check_power_balance(power)
+        violations = self.check_power_balance(power, home_hold_active)
         if flows is not None:
             violations += self.check_flows(power, flows)
         violations += self.check_metrics(autarky, self_consumption)
@@ -126,8 +158,24 @@ class HealthCheck:
         if violations:
             self._violation_count += len(violations)
             self._last_violations = violations
-            for v in violations:
-                _LOGGER.warning("Health check violation: %s", v)
+            self._violation_streak += 1
+            if self._violation_streak <= self._WARN_CYCLES:
+                for v in violations:
+                    _LOGGER.warning("Health check violation: %s", v)
+                if self._violation_streak == self._WARN_CYCLES:
+                    _LOGGER.warning(
+                        "Health check violations persist — further "
+                        "occurrences drop to debug until they clear "
+                        "(diag: sem health sensors keep counting)",
+                    )
+            else:
+                for v in violations:
+                    _LOGGER.debug("Health check violation: %s", v)
+        else:
+            if self._violation_streak > self._WARN_CYCLES:
+                _LOGGER.info("Health check violations cleared")
+            self._violation_streak = 0
+            self._last_violations = []
 
         return violations
 

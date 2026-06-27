@@ -12,9 +12,6 @@ DEFAULT_UPDATE_INTERVAL: Final = 10  # seconds - 10 seconds for highly accurate 
 # update cycles while they're still unresolved (source integration not yet registered),
 # then give up. ~40 cycles ≈ 7-20 min depending on update_interval.
 ED_RESOLVE_MAX_ATTEMPTS: Final = 40
-DEFAULT_POWER_DELTA: Final = 1000  # Watts - only major changes
-DEFAULT_CURRENT_DELTA: Final = 5  # Amps - significant current changes only
-DEFAULT_SOC_DELTA: Final = 10  # Percent - battery changes slowly anyway
 
 # Database protection levels
 DATABASE_PROTECTION_MINIMAL: Final = 1   # All sensors enabled, normal updates
@@ -25,13 +22,10 @@ DATABASE_PROTECTION_AGGRESSIVE: Final = 3  # Essential sensors only, max delays
 # BATTERY MANAGEMENT DEFAULTS
 # ============================================
 DEFAULT_BATTERY_PRIORITY_SOC: Final = 30  # % - SOC zone floor: below this, all solar → battery, EV blocked
-DEFAULT_BATTERY_MINIMUM_SOC: Final = 20  # % - Hard stop: SOC below this halts EV charging entirely
-DEFAULT_BATTERY_RESUME_SOC: Final = 50  # % - Hysteresis: resume EV charging once SOC recovers above this
 DEFAULT_BATTERY_SAFETY_SOC: Final = 60  # % - Safety threshold for discharge calculations
 # 4-zone SOC strategy thresholds (see docs/ARCHITECTURE.md "SOC Zone Strategy")
 DEFAULT_BATTERY_BUFFER_SOC: Final = 70  # % - Above: battery can discharge to help the EV (Zone 3 begins)
 DEFAULT_BATTERY_AUTO_START_SOC: Final = 90  # % - Above: EV starts even without solar surplus (Zone 4)
-DEFAULT_BATTERY_ASSIST_FLOOR_SOC: Final = 60  # % - Hysteresis floor for battery assist (drop-out below this)
 
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
@@ -48,31 +42,21 @@ DEFAULT_EV_RAMP_RATE_AMPS: Final = 2  # Max ±2A per 10s cycle during solar/nigh
 DEFAULT_EV_CHARGING_MODE: Final = "auto"  # "auto" (forecast-aware), "pv" (solar+battery), "self_consumption" (true surplus only), "minpv" (min+PV), "now" (max), "off" (disabled)
 DEFAULT_EV_INITIAL_CURRENT: Final = 10  # Amps - starting current for night charging
 DEFAULT_EV_MIN_CURRENT: Final = 6  # Amps - IEC 61851 minimum (increase for sensitive cars)
-DEFAULT_EV_STALL_COOLDOWN: Final = 120  # Seconds between KEBA re-enable attempts
 
-# Solar-path stability layer (v1.7.1-beta.14 — bulletproof EV oscillation fix).
-# The night path already had a delta guard at ev_control.py:440. The solar path
-# at :519 did not — every 10 s cycle re-issued set_current with whatever the
-# Huawei modbus jitter produced this tick. Layered guards stop that:
-#
-#   Layer 1: smooth budget_w with a rolling median so a single-cycle inverter
-#            flicker (e.g. 8 kW -> 0 W -> 8 kW) does not propagate.
-#   Layer 2: delta guard — do not re-issue set_current unless |target - last|
-#            is at least DEFAULT_EV_MIN_CHANGE_AMPS.
-#   Layer 3: time debounce — do not re-issue set_current within
-#            DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC of the last call.
-#   Layer 5: heartbeat — after DEFAULT_EV_STATE_REFRESH_SEC with no command,
-#            re-send the current target so a lost command on a transient
-#            network blip can never strand the charger.
-#
-# Layer 4 (threshold-time-windows on enable/disable transitions) is the
-# pre-existing ev_enable_delay_seconds (60 s) and ev_disable_delay_seconds
-# (300 s) at ev_control.py:495-496 — kept as-is. Defaults below match evcc's
-# guardduration discipline.
-DEFAULT_EV_MIN_CHANGE_AMPS: Final = 1  # Amps - suppress sub-1A noise (matches night-path L440)
-DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC: Final = 30  # Seconds between set_current calls
-DEFAULT_EV_SURPLUS_SMOOTH_WINDOW: Final = 3  # Cycles in the rolling median (~30 s)
-DEFAULT_EV_STATE_REFRESH_SEC: Final = 300  # Seconds — heartbeat re-send floor
+# Solar-path EV current-stability guards. The per-cycle set_current churn
+# guards (median smooth, delta, debounce, enable/disable delays) live in
+# coordinator/charge_stability.py with their own defaults. The
+# v1.7.1-beta.14 ev_control.py copy and its
+# DEFAULT_EV_MIN_CHANGE_AMPS / _MIN_CHANGE_INTERVAL_SEC /
+# _SURPLUS_SMOOTH_WINDOW / _STATE_REFRESH_SEC constants were orphaned by
+# the v1.7 arch rewrite (#461) and have been removed. The matching ev_*
+# config KEYS (ev_min_change_amps, ev_min_change_interval_sec,
+# ev_surplus_smooth_window, ev_ramp_rate_amps, ev_enable_delay_seconds,
+# ev_disable_delay_seconds, ev_deep_deficit_grace_sec) are still honoured —
+# read in coordinator._charge_stability_kwargs() and passed to
+# ChargeStability.filter().
+DEFAULT_EV_ENABLE_DELAY_SEC: Final = 60   # Seconds surplus must persist before a charge starts (evcc enable.delay = 1 min)
+DEFAULT_EV_DISABLE_DELAY_SEC: Final = 180  # Seconds deficit must persist before a charge stops (evcc disable.delay = 3 min; was 300)
 DEFAULT_EV_CHARGER_NEEDS_CYCLE: Final = False  # True = disable/enable cycle for session start (sensitive cars)
 DEFAULT_EV_BATTERY_CAPACITY_KWH: Final = 40  # kWh — usable EV battery capacity
 DEFAULT_EV_TARGET_SOC: Final = 80  # % — target SOC for night charging
@@ -118,8 +102,8 @@ DEFAULT_ENERGY_SOURCE_AUTO: Final = True  # Auto-select best available energy so
 # ============================================
 DEFAULT_MIN_SOLAR_POWER: Final = 1000  # Watts
 DEFAULT_MIN_EXCESS_POWER: Final = 500  # Watts
-DEFAULT_MAX_GRID_IMPORT: Final = 0  # Watts during solar charging — 0 = pure-solar mode
 DEFAULT_BATTERY_ASSIST_MAX_POWER: Final = 4500  # Watts — max battery discharge for EV assist
+DEFAULT_BATTERY_ASSIST_MIN_SURPLUS: Final = 1200  # Watts — solar surplus required before battery assists the EV (below this, battery is off-limits to the car)
 DEFAULT_BATTERY_CAPACITY_KWH: Final = 15  # kWh — total usable battery capacity
 
 # ============================================
@@ -250,9 +234,12 @@ DEFAULT_INVERTER_MAX_POWER_W: Final = 10000
 # ENTITY ID REFERENCES
 # ============================================
 # Used for internal state lookups — avoids magic strings scattered across modules.
-ENTITY_OBSERVER_MODE_SWITCH: Final = f"{DOMAIN}.observer_mode"  # switch.sem_observer_mode
-ENTITY_SOLAR_POWER: Final = f"{DOMAIN}.solar_power"  # sensor.sem_solar_power
-ENTITY_SMART_NIGHT_CHARGING: Final = f"{DOMAIN}.smart_night_charging"  # switch.sem_smart_night_charging
+# Full entity_ids — match the ids the entities force in their __init__
+# (``switch.sem_<key>`` / ``sensor.sem_<key>``). These are looked up verbatim
+# via ``hass.states.get(...)`` — do NOT prepend a platform prefix at the call
+# site (that produced a dead three-segment id and silently broke the lookup).
+ENTITY_OBSERVER_MODE_SWITCH: Final = "switch.sem_observer_mode"
+ENTITY_SOLAR_POWER: Final = "sensor.sem_solar_power"
 
 # HA state constants (avoid magic strings)
 STATE_UNKNOWN: Final = "unknown"

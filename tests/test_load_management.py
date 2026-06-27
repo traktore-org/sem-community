@@ -596,3 +596,66 @@ class TestRestoreLoads:
             await lm._restore_loads()
             # Device should still be shed (delay not elapsed)
             assert "dev_a" in lm._devices_shed
+
+
+class TestEvNotShedByLoadManager:
+    """#461-peak — EV chargers are peak-managed by decide()/the night planner
+    (single reconciler writer). Daytime EV charging is solar/surplus-driven (no
+    grid peak); the night grid top-up is peak-managed by the night planner. So
+    load_management must NOT shed/restore the EV via its side-channel (which
+    fought the reconciler on KEBA and mis-read number-entity Wallbox chargers).
+    The charger stays registered for display; it is just never actuated here,
+    nor counted as sheddable."""
+
+    def _devices(self):
+        return {
+            "load_device_wb": {
+                "device_type": "ev_charger", "control_type": "current",
+                "switch_entity": "number.wb_current", "is_controllable": True,
+                "is_critical": False, "is_available": True, "priority": 9,
+            },
+            "load_device_heater": {
+                "device_type": "switch", "switch_entity": "switch.heater",
+                "is_controllable": True, "is_critical": False,
+                "is_available": True, "priority": 5,
+            },
+        }
+
+    def test_ev_excluded_from_shed_selection(self, lm):
+        lm._devices = self._devices()
+        lm._device_discovery.get_device_current_state = MagicMock(
+            return_value={"is_on": True, "current_power": 4000}
+        )
+        ids = [d for d, _ in lm._get_devices_for_shedding()]
+        assert "load_device_wb" not in ids       # EV skipped
+        assert "load_device_heater" in ids        # non-EV still sheddable
+
+    async def test_emergency_shedding_skips_ev(self, lm):
+        lm._devices = self._devices()
+        lm._device_discovery.get_device_current_state = MagicMock(
+            return_value={"is_on": True, "current_power": 4000}
+        )
+        shed = []
+        lm._shed_device = AsyncMock(side_effect=lambda did, r: shed.append(did))
+        await lm._emergency_load_shedding()
+        assert "load_device_wb" not in shed       # EV not emergency-shed
+        assert "load_device_heater" in shed
+
+    async def test_shed_device_noops_for_ev(self, lm):
+        # Belt-and-braces: even a direct call must not actuate an EV charger.
+        lm._devices = self._devices()
+        await lm._shed_device("load_device_wb", "TEST")
+        lm.hass.services.async_call.assert_not_called()
+        assert "load_device_wb" not in lm._devices_shed
+
+    def test_ev_excluded_from_available_reduction_and_count(self, lm):
+        # The EV's draw must NOT inflate available_load_reduction / the
+        # controllable count (it can't be reduced from here).
+        lm._devices = self._devices()
+        lm._device_discovery.get_device_current_state = MagicMock(
+            return_value={"is_on": True, "current_power": 7000}  # 7 kW each
+        )
+        data = lm.get_load_management_data()
+        # Only the heater (7 kW) counts, not the EV → 7.0 kW, count 1.
+        assert data["available_load_reduction"] == pytest.approx(7.0)
+        assert data["controllable_devices"] == 1

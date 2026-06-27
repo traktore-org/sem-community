@@ -244,9 +244,6 @@
       "forecast_remaining_today_kwh": {
         "default": "mdi:sun-clock"
       },
-      "forecast_power_now_w": {
-        "default": "mdi:sun-wireless"
-      },
       "forecast_source": {
         "default": "mdi:cloud-search"
       },
@@ -364,23 +361,17 @@
       "battery_priority_soc": {
         "default": "mdi:battery-high"
       },
-      "battery_minimum_soc": {
-        "default": "mdi:battery-low"
-      },
-      "battery_resume_soc": {
-        "default": "mdi:battery-medium"
-      },
       "minimum_solar_power": {
         "default": "mdi:solar-panel"
-      },
-      "maximum_grid_import": {
-        "default": "mdi:transmission-tower"
       },
       "daily_ev_target": {
         "default": "mdi:target"
       },
       "battery_assist_max_power": {
         "default": "mdi:battery-heart-variant"
+      },
+      "battery_assist_min_surplus": {
+        "default": "mdi:white-balance-sunny"
       },
       "regulation_offset": {
         "default": "mdi:tune-vertical"

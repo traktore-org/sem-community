@@ -30,12 +30,29 @@ class SGReadyState(IntEnum):
     FORCE_ON = 4     # 11 - Forced maximum consumption
 
 
-# Relay mapping: (relay1, relay2) for each SG-Ready state
+# Relay mapping: (relay1, relay2) for each SG-Ready state.
+#
+# This is the SG-Ready standard truth table (BWP "SG Ready" label, also what
+# Nibe/most heat pumps expect), where ``True`` = contact closed/active and the
+# pair is (input1 : input2):
+#   1 EVU-Sperre (blocked):        1:0
+#   2 Normalbetrieb (normal):      0:0
+#   3 verstärkter Betrieb (boost): 0:1
+#   4 Anlaufbefehl (forced on):    1:1
+#
+# #523 (RienduPre, Nibe SG-Ready): the previous map was a plain 2-bit count
+# (00/01/10/11) that did NOT match this standard — so SEM's BOOST drove
+# (1,0), which a standard pump reads as EVU-block, turning the pump OFF on
+# surplus instead of on ("the heat pump never got turned on"). Corrected to
+# the standard below (confirmed against alpha innotec / gridX / SMA /
+# SolarEdge — it is universal across EMS vendors). Installs whose contacts
+# are wired normally-closed (NC) instead of normally-open use the per-pump
+# ``invert_sg_ready`` toggle, which flips both contacts.
 SG_READY_RELAY_MAP = {
-    SGReadyState.BLOCKED:  (False, False),  # 00
-    SGReadyState.NORMAL:   (False, True),   # 01
-    SGReadyState.BOOST:    (True, False),    # 10
-    SGReadyState.FORCE_ON: (True, True),     # 11
+    SGReadyState.BLOCKED:  (True,  False),  # 1:0
+    SGReadyState.NORMAL:   (False, False),  # 0:0
+    SGReadyState.BOOST:    (False, True),   # 0:1
+    SGReadyState.FORCE_ON: (True,  True),   # 1:1
 }
 
 
@@ -79,6 +96,7 @@ class HeatPumpController(SetpointDevice):
         force_on_threshold: float = 5000.0,
         min_power_change_interval: float = 300.0,
         daily_min_runtime_sec: int = 0,
+        invert_sg_ready: bool = False,
     ):
         super().__init__(
             hass=hass,
@@ -97,6 +115,11 @@ class HeatPumpController(SetpointDevice):
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.relay1_entity_id = relay1_entity_id
         self.relay2_entity_id = relay2_entity_id
+        # #523: opt-in for installs whose SG-Ready contacts are wired
+        # normally-closed (NC) instead of normally-open — flips both relays
+        # so the SG-Ready standard map drives the physical contacts the right
+        # way. Default off (NO wiring, the common case).
+        self.invert_sg_ready = bool(invert_sg_ready)
         self.temperature_entity_id = temperature_entity_id
         self.force_on_threshold = force_on_threshold
         self._hp_status = HeatPumpStatus()
@@ -111,6 +134,20 @@ class HeatPumpController(SetpointDevice):
         self._last_relay_path: str = "uninitialized"
         self._last_temperature_reading_path: str = "uninitialized"
         self._last_offpeak_path: str = "uninitialized"
+
+        # #508 — the heat pump exists to soak up solar surplus, so it
+        # must be a SURPLUS-mode device. The base default is PEAK_ONLY,
+        # and SurplusController.update() never proactively activates a
+        # non-SURPLUS device — so without this the controller registered
+        # but never turned on. A user can still override to peak_only/off
+        # via set_device_control_mapping.
+        from .base import DeviceControlMode
+        self.control_mode = DeviceControlMode.SURPLUS
+        # #508 W1 — compressor anti-cycling. On a 10 s coordinator cycle
+        # the activate→deactivate path could otherwise short-cycle the
+        # compressor. can_activate()/can_deactivate() enforce these.
+        self.min_on_seconds = 600   # 10 min minimum run
+        self.min_off_seconds = 300  # 5 min compressor rest
 
     @property
     def sg_ready_state(self) -> SGReadyState:
@@ -152,12 +189,24 @@ class HeatPumpController(SetpointDevice):
             target_state = SGReadyState.BOOST
             self._last_activation_path = "boost"
 
-        await self._set_sg_ready_state(target_state)
+        relay_ok = await self._set_sg_ready_state(target_state)
+        if not relay_ok:
+            # #508 C3: a relay write failed — the pump is NOT in the
+            # requested SG-Ready state. Do not mark ACTIVE and do not
+            # credit rated_power to the surplus pool (that power isn't
+            # being drawn). Surface ERROR so the diagnostics show it.
+            self._status.state = DeviceState.ERROR
+            self._last_activation_path += "+relay_failed"
+            _LOGGER.warning(
+                "Heat pump activation aborted: SG-Ready relay write failed "
+                "(%s) — not crediting %.0fW to surplus",
+                self._last_relay_path, self.rated_power,
+            )
+            return 0.0
+
         if self.climate_entity_id:
             self._last_activation_path += "+climate"
-
-        # Also boost temperature setpoint if climate entity configured
-        if self.climate_entity_id:
+            # Also boost temperature setpoint if climate entity configured
             await super().activate(available_watts)
 
         self._status.state = DeviceState.ACTIVE
@@ -216,17 +265,32 @@ class HeatPumpController(SetpointDevice):
         self._last_deactivation_path = "unblocked"
         _LOGGER.info("Heat pump unblocked")
 
-    async def _set_sg_ready_state(self, state: SGReadyState) -> None:
+    def _relays_for(self, state: SGReadyState) -> tuple[bool, bool]:
+        """(relay1_on, relay2_on) for an SG-Ready state, applying the
+        per-pump NC-wiring inversion (#523) when configured."""
+        r1, r2 = SG_READY_RELAY_MAP[state]
+        if self.invert_sg_ready:
+            return (not r1, not r2)
+        return (r1, r2)
+
+    async def _set_sg_ready_state(self, state: SGReadyState) -> bool:
         """Set SG-Ready state via relay entities.
+
+        Returns ``True`` when the requested state was applied (or there
+        are no relays to apply — climate-only installs), ``False`` when a
+        physical relay write FAILED. #508 C3: the caller must not credit
+        ``rated_power`` to the surplus pool when this returns False — the
+        pump did not enter the requested state.
 
         Records the relay branch on ``self._last_relay_path`` (#421):
         ``both_relays`` / ``relay1_only`` / ``relay2_only`` /
         ``no_relays_configured`` / ``relay1_failed`` / ``relay2_failed``.
-        The ``no_relays_configured`` path is the silent-failure surface
-        — SG-Ready state mutates internally but no physical relay
-        actuates. The audit's biggest finding.
+        ``no_relays_configured`` is the climate-only path (#437) — a
+        valid success, the climate setpoint is the actuation.
         """
-        relay1_on, relay2_on = SG_READY_RELAY_MAP[state]
+        relay1_on, relay2_on = self._relays_for(state)
+        # Prior relay1 value (for restore on a partial relay2 failure, I3).
+        prev_relay1_on, _ = self._relays_for(self._hp_status.sg_ready_state)
         relay1_called = False
 
         if self.relay1_entity_id:
@@ -241,7 +305,7 @@ class HeatPumpController(SetpointDevice):
             except Exception as e:
                 _LOGGER.error("Failed to set SG-Ready relay 1: %s", e)
                 self._last_relay_path = "relay1_failed"
-                return
+                return False
 
         if self.relay2_entity_id:
             service = "turn_on" if relay2_on else "turn_off"
@@ -258,7 +322,21 @@ class HeatPumpController(SetpointDevice):
             except Exception as e:
                 _LOGGER.error("Failed to set SG-Ready relay 2: %s", e)
                 self._last_relay_path = "relay2_failed"
-                return
+                # I3: relay1 already moved but relay2 didn't — the (r1,r2)
+                # pair is now inconsistent (e.g. could read as BLOCKED).
+                # Best-effort restore relay1 to its prior value so we
+                # leave a coherent prior state, not a curtail signal.
+                if relay1_called and relay1_on != prev_relay1_on:
+                    try:
+                        restore = "turn_on" if prev_relay1_on else "turn_off"
+                        await self.hass.services.async_call(
+                            "homeassistant", restore,
+                            {"entity_id": self.relay1_entity_id},
+                            blocking=True,
+                        )
+                    except Exception:  # noqa: BLE001 — best effort
+                        pass
+                return False
         elif relay1_called:
             self._last_relay_path = "relay1_only"
         else:
@@ -266,6 +344,7 @@ class HeatPumpController(SetpointDevice):
 
         self._hp_status.sg_ready_state = state
         _LOGGER.debug("SG-Ready state set to %s", state.name)
+        return True
 
     def get_current_temperature(self) -> Optional[float]:
         """Read current temperature from sensor.

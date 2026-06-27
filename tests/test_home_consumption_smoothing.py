@@ -162,3 +162,44 @@ def test_inconsistency_tier_recovers_when_balance_returns_to_zero():
     coord._smooth_home_consumption(_p(home=600.0, solar=5000.0, grid_export=4400.0))
     assert coord._home_hold_count == 0
     assert coord._last_home_consumption == 600.0
+
+
+# ── Tier 3: upward-spike guard (EV/grid sensor lag, PROD 2026-06-26) ──
+
+def test_upward_spike_holds_last_value():
+    # always_max ramp: grid meter leads ev_power → home inflates by ~the EV
+    # draw for a cycle. Must hold the last good value (not feed the inflated
+    # figure into the battery discharge-protection limit).
+    coord = _coord()
+    coord._smooth_home_consumption(_p(700.0))     # establish last
+    spike = _p(9213.0, grid_import=9500.0)        # the PROD spike value
+    coord._smooth_home_consumption(spike)
+    assert spike.home_consumption_power == 700.0   # held, not 9213
+    assert coord._home_hold_active is True
+    assert coord._last_home_consumption == 700.0   # last NOT updated to the spike
+
+
+def test_modest_rise_below_threshold_passes_through():
+    # A real appliance jump under the spike threshold is accepted immediately.
+    coord = _coord()
+    coord._smooth_home_consumption(_p(700.0))
+    p = _p(700.0 + 1500.0)                          # +1.5 kW < 2 kW threshold
+    coord._smooth_home_consumption(p)
+    assert p.home_consumption_power == 2200.0
+    assert coord._last_home_consumption == 2200.0
+
+
+def test_persistent_spike_accepted_after_hold_window():
+    # A genuinely persistent high value (big appliance) is held only for the
+    # short spike window, then accepted as real.
+    coord = _coord()
+    coord._smooth_home_consumption(_p(700.0))
+    vals = []
+    for _ in range(SEMCoordinator.HOME_HOLD_SPIKE_MAX + 1):
+        p = _p(9000.0)
+        coord._smooth_home_consumption(p)
+        vals.append(p.home_consumption_power)
+    n = SEMCoordinator.HOME_HOLD_SPIKE_MAX
+    assert vals[:n] == [700.0] * n                 # held during the window
+    assert vals[-1] == 9000.0                        # then accepted
+    assert coord._last_home_consumption == 9000.0

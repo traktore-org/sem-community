@@ -35,6 +35,22 @@ export function semFormatEnergy(kwh) {
     return kwh.toFixed(kwh < 10 ? 2 : 1) + ' kWh';
 }
 
+/* ── Time formatting — locale-aware HH:MM (#485 K6) ──
+   One formatter for every card's time labels: a 12-hour-locale user
+   used to see "9:33 PM" on the today-plan card next to a hard-coded
+   24h "21:33" on the system diagram's sunrise/sunset. */
+export function semFormatTime(iso, tz) {
+    if (!iso) return '—';
+    try {
+        // ``tz`` should be ``hass.config.time_zone`` — render the home's
+        // timezone (DST-aware via the IANA zone name), not the viewer's
+        // browser tz. Falls back to browser-local when omitted.
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz || undefined });
+    } catch (e) {
+        return '—';
+    }
+}
+
 /* ── Animation duration from power (higher power = faster animation) ── */
 export function semCalcDuration(watts) {
     const abs = Math.abs(watts);
@@ -252,7 +268,7 @@ export const semPVStringsCSS = `
     }
     .pv-chip:hover { background: rgba(255, 152, 0, 0.18); }
     .pv-chip-label {
-        font-size: 10px;
+        font-size: 11px;
         letter-spacing: 0.5px;
         text-transform: uppercase;
         opacity: 0.7;

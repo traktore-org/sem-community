@@ -47,6 +47,15 @@ class SEMDiagnoseButton extends SEMLitBase {
         this._payload = null;
         this._error = null;
         this._copied = false;
+        this._copiedTimer = null;
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._copiedTimer) {
+            clearTimeout(this._copiedTimer);
+            this._copiedTimer = null;
+        }
     }
 
     // No HA-state subscription needed — purely on-demand modal.
@@ -83,15 +92,55 @@ class SEMDiagnoseButton extends SEMLitBase {
     async _copy() {
         if (!this._payload) return;
         const text = JSON.stringify(this._payload, null, 2);
-        try {
-            await navigator.clipboard.writeText(text);
+        const succeed = () => {
             this._copied = true;
-            setTimeout(() => { this._copied = false; }, 1500);
-        } catch (err) {
-            console.error('[sem-diagnose-button] clipboard failed', err);
-            // Fallback — surface a textarea the user can select manually
-            this._error = this._t('config_diagnose_clipboard_failed');
+            this._error = null;
+            if (this._copiedTimer) clearTimeout(this._copiedTimer);
+            this._copiedTimer = setTimeout(() => {
+                this._copiedTimer = null;
+                this._copied = false;
+            }, 1500);
+        };
+
+        // Modern path — only works in secure contexts (HTTPS / localhost).
+        // Most HA installs are accessed at http://<local-ip>:8123, which
+        // is an insecure context per #460, so this falls through there.
+        // Pattern mirrors sem-system-card._writeClipboard (#285).
+        if (navigator?.clipboard?.writeText && window.isSecureContext !== false) {
+            try {
+                await navigator.clipboard.writeText(text);
+                succeed();
+                return;
+            } catch (err) {
+                console.warn('[sem-diagnose-button] modern clipboard refused, '
+                    + 'falling back to execCommand', err);
+            }
         }
+        // Legacy execCommand path — works on plain HTTP. Textarea must be
+        // in-DOM and visible-ish (1×1 zero-opacity) for iOS Safari to
+        // honour the selection across the shadow boundary.
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.left = '0';
+            ta.style.width = '1px';
+            ta.style.height = '1px';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) { succeed(); return; }
+            console.error('[sem-diagnose-button] execCommand("copy") returned false');
+        } catch (err) {
+            console.error('[sem-diagnose-button] legacy clipboard fallback threw', err);
+        }
+        // Both paths exhausted — surface the manual-select hint.
+        this._error = this._t('config_diagnose_clipboard_failed');
     }
 
     render() {

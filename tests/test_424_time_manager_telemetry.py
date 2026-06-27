@@ -16,7 +16,7 @@ The silent-failure surfaces this captures:
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from homeassistant.util import dt as dt_util
 
@@ -110,16 +110,20 @@ def test_sunrise_correction_next_rising_was_tomorrow():
 
 def test_sunrise_correction_none():
     """sun.sun returns today's sunrise (still in the future) → no correction."""
-    hass = MagicMock()
-    now = dt_util.now()
+    # Anchor "now" to local noon and pin dt_util.now so today+1h can't cross
+    # midnight — the test was flaky when the suite ran near 23:00 local
+    # (today_later rolled into tomorrow → spurious "next_rising_was_tomorrow").
+    now = dt_util.now().replace(hour=12, minute=0, second=0, microsecond=0)
     today_later = now + timedelta(hours=1)
+    hass = MagicMock()
     hass.states.get = MagicMock(return_value=_sun_state(
         today_later.isoformat(),
-        (now + timedelta(hours=12)).isoformat(),
+        (now + timedelta(hours=8)).isoformat(),
     ))
     tm = _make(hass=hass)
-    tm.get_sunrise_datetime()
-    assert tm.get_diagnostics()["sunrise_correction"] == "none"
+    with patch.object(dt_util, "now", return_value=now):
+        tm.get_sunrise_datetime()
+        assert tm.get_diagnostics()["sunrise_correction"] == "none"
 
 
 def test_sunrise_correction_fallback():

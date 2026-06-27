@@ -46,7 +46,6 @@ config:
   battery_buffer_soc: 70
   battery_auto_start_soc: 90
   battery_priority_soc: 30
-  battery_assist_floor_soc: 60
   battery_assist_max_power: 4500
   # Solar_only on the primary so the fleet strategy is solar_only; that
   # in turn makes the harness lift fleet ``charging_state`` to

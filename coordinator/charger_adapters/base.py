@@ -35,53 +35,11 @@ class ChargerAdapter(ABC):
     (stop_session brand dispatch).
     """
 
-    # ─── Idle debounce — solar-flicker resilience ──────────────
-    #
-    # Per-charger consecutive-idle counter. Incremented each time
-    # the actuator sees ``intent=IDLE`` for this charger, reset on
-    # any non-IDLE intent. The actuator skips ``command_idle()``
-    # while the counter is below ``IDLE_DEBOUNCE_THRESHOLD``,
-    # holding the previous setpoint (which keeps KEBA's contactor
-    # closed + authorization valid).
-    #
-    # Live-confirmed PROD 2026-06-02 15:08+: a single 10-second
-    # solar-sensor flicker drove SEM to ``intent=idle`` for one
-    # cycle, triggering ``keba.disable`` → KEBA stuck in
-    # "authorization rejected" → contactor refused subsequent
-    # ``set_current`` until physical replug. Debouncing for 1 cycle
-    # absorbs the flicker; a real cloud (5-30 minutes) crosses
-    # the threshold on cycle 2 and idle is applied normally.
-    #
-    # The cost during the debounce window: KEBA continues to draw
-    # its prior setpoint (e.g. 6900 W at 10 A) for up to one cycle
-    # while surplus is below 6 A worth of solar — i.e. ~10 s of
-    # grid import. ~0.014 kWh / cycle. Cheap insurance against the
-    # auth-rejected cascade.
-    IDLE_DEBOUNCE_THRESHOLD: int = 4
-
-    def __init__(self) -> None:
-        # Subclasses MUST call ``super().__init__()`` to initialise
-        # the debounce counter. Tracked centrally so the actuator's
-        # ``attempt_idle`` / ``reset_idle_debounce`` dispatch sees
-        # consistent state regardless of brand.
-        self._consecutive_idle_count: int = 0
-
-    def attempt_idle(self) -> bool:
-        """Record an IDLE intent; return True if the actuator should
-        execute ``command_idle()`` this cycle, False to debounce
-        (keep the previous setpoint, contactor closed).
-
-        Default threshold: execute on the 2nd consecutive idle
-        (skip the 1st). Brands without a self-resume / auth-stick
-        quirk can override to return True immediately.
-        """
-        self._consecutive_idle_count += 1
-        return self._consecutive_idle_count >= self.IDLE_DEBOUNCE_THRESHOLD
-
-    def reset_idle_debounce(self) -> None:
-        """Reset the consecutive-idle counter. Called by the actuator
-        on any non-IDLE intent."""
-        self._consecutive_idle_count = 0
+    # Idle flicker-hold (solar-sensor flicker → spurious IDLE) is now
+    # owned by ``ChargerReconciler`` (its own consecutive-idle counter
+    # + ``DEFAULT_IDLE_DISABLE_THRESHOLD``). The adapter no longer
+    # carries idle-debounce state — the legacy actuate() body that
+    # drove it was retired in Task 11.
 
     # ─── Capability properties ────────────────────────────────
 
@@ -199,6 +157,61 @@ class ChargerAdapter(ABC):
         read this method, not ``power.charging``."""
 
     # ─── Helpers ───────────────────────────────────────────────
+
+    async def arm_failsafe(self) -> None:
+        """Arm the device-side failsafe benignly. Default: no-op (most
+        brands have no failsafe). KEBA overrides."""
+        return None
+
+    # ─── Enable-switch reconciliation (#536) ───────────────────
+    #
+    # Switch-controlled chargers (Wallbox, Heidelberg, …) need an enable
+    # switch ON in addition to the current setpoint. SEM used to assert it
+    # once via start_session (gated by a latched ``_session_active``) and
+    # never re-check it, so a switch that went off (auto-pause / lock /
+    # eco-smart / external toggle) left the charger commanded-but-0 W
+    # (#536). The reconciler now reads the ACTUAL switch state each cycle
+    # and re-asserts it. These defaults work for any brand whose start/stop
+    # is a ``switch.``/``input_boolean.`` entity; brands without a readable
+    # enable switch (KEBA service control, button start) return N/A.
+
+    def enable_state(self):
+        """Return ``(enabled, controllable)`` for the start/stop switch.
+
+        - ``(None, True)``  — no readable enable switch (N/A): KEBA,
+          service control, or a ``button.`` start entity.
+        - ``(None, False)`` — switch present but ``unavailable``/``unknown``
+          (Wallbox locked / eco-smart): SEM cannot drive it → surface.
+        - ``(True/False, True)`` — switch on / off.
+        """
+        dev = self._device
+        ent = getattr(dev, "start_stop_entity", None)
+        if not ent or not str(ent).startswith(("switch.", "input_boolean.")):
+            return (None, True)
+        st = dev.hass.states.get(ent)
+        if st is None or st.state in ("unavailable", "unknown"):
+            return (None, False)
+        return (st.state == "on", True)
+
+    async def ensure_enabled(self) -> None:
+        """Idempotently turn the start/stop switch ON. No-op for chargers
+        without a ``switch.``/``input_boolean.`` enable entity."""
+        dev = self._device
+        ent = getattr(dev, "start_stop_entity", None)
+        if not ent or not str(ent).startswith(("switch.", "input_boolean.")):
+            return
+        await dev.hass.services.async_call(
+            ent.split(".")[0], "turn_on", {"entity_id": ent}, blocking=True,
+        )
+        # Keep SEM's session view consistent with the contactor we just closed.
+        dev._session_active = True
+
+    async def report_enable_blocked(self) -> None:
+        """Surface an uncontrollable enable switch as an actuation failure
+        so the existing repair flow raises it (debounced by the device)."""
+        rec = getattr(self._device, "_record_actuation_failure", None)
+        if rec is not None:
+            rec(RuntimeError("enable switch unavailable/locked — cannot start charging"))
 
     def watts_for_amps(self, amps: int) -> float:
         """How much power ``amps`` corresponds to at this charger's

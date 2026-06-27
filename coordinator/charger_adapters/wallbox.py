@@ -86,6 +86,20 @@ class WallboxAdapter(GenericAdapter):
             return self._pause_switch_entity
         self._pause_switch_searched = True
 
+        # #487/#475: an explicitly configured switch wins — the WARNING
+        # below has been telling users to set ev_start_stop_entity as
+        # the workaround, but the adapter never actually read it
+        # (RienduPre's "#462: adapter ignores ev_start_stop_entity").
+        configured = getattr(self._device, "start_stop_entity", None) or ""
+        if str(configured).startswith("switch."):
+            self._pause_switch_entity = str(configured)
+            _LOGGER.info(
+                "Wallbox %s: using configured ev_start_stop_entity %s "
+                "as the pause/resume switch",
+                self._device.name, configured,
+            )
+            return self._pause_switch_entity
+
         hass = getattr(self._device, "hass", None)
         if hass is None:
             return None
@@ -128,6 +142,23 @@ class WallboxAdapter(GenericAdapter):
                 )
                 return entry.entity_id
 
+        # No pause switch found — command_disable falls back to generic
+        # set_current(0) + stop_session, which some Wallbox firmware
+        # latches at the last non-zero setpoint (#357). Silent failure
+        # pre-#462 makes the user think their off-mode setting is
+        # ignored. Logging at WARNING surfaces the gap in any
+        # diagnostics dump. Workaround: pass the pause switch id
+        # manually as ``ev_start_stop_entity``.
+        _LOGGER.warning(
+            "Wallbox %s: no pause_resume switch discovered on device %s "
+            "— SEM will fall back to generic set_current(0), which some "
+            "Wallbox firmware latches at the last setpoint. If off mode "
+            "does not actually stop charging, the Wallbox HA integration "
+            "may have renamed the switch in a recent version. Search HA "
+            "for switch.wallbox_*_pause_resume and set it as "
+            "ev_start_stop_entity in this charger's config. (#462)",
+            self._device.name, device_id,
+        )
         return None
 
     async def _toggle_pause_switch(self, turn_on: bool) -> None:

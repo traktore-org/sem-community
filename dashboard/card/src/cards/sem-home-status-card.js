@@ -118,13 +118,8 @@ class SEMHomeStatusCard extends SEMLitBase {
         // showing the raw id with an underscore. Falls back to the raw
         // string for any future source we haven't mapped yet.
         const rawProvider = this._valStr('forecast_source');
-        const PROVIDER_LABELS = {
-            'solcast': 'Solcast',
-            'forecast_solar': 'Forecast.Solar',
-            'custom': this._t('custom') || 'Custom',
-        };
         const provider = rawProvider
-            ? (PROVIDER_LABELS[rawProvider] || rawProvider)
+            ? this._forecastProviderLabel(rawProvider)
             : '—';
 
         const co2Today = this._val('daily_co2_avoided').toFixed(2);
@@ -222,7 +217,7 @@ class SEMHomeStatusCard extends SEMLitBase {
             :host { display: block; }
 
             .wrap {
-                padding: 16px;
+                padding: 16px 20px;
                 position: relative;
                 font-family: 'Segoe UI','Roboto',sans-serif;
                 color: var(--primary-text-color, #e0e0e0);
@@ -234,7 +229,7 @@ class SEMHomeStatusCard extends SEMLitBase {
 
             /* ── Section label ── */
             .section-label {
-                font-size: 10px;
+                font-size: 11px;
                 font-weight: 600;
                 text-transform: uppercase;
                 letter-spacing: 0.6px;
@@ -320,7 +315,7 @@ class SEMHomeStatusCard extends SEMLitBase {
             }
             .peak-status-badge {
                 display: inline-block;
-                font-size: 10px; font-weight: 600;
+                font-size: 11px; font-weight: 600;
                 text-transform: uppercase; letter-spacing: 0.4px;
                 padding: 2px 7px;
                 border-radius: 8px;
@@ -395,7 +390,7 @@ class SEMHomeStatusCard extends SEMLitBase {
                 font-variant-numeric: tabular-nums;
             }
             .env-chip-label {
-                font-size: 10px;
+                font-size: 11px;
                 color: var(--secondary-text-color, #999);
                 text-transform: uppercase; letter-spacing: 0.3px;
             }

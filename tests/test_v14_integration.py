@@ -365,6 +365,7 @@ class TestMultiInverterSumming:
             "sensor.growatt_2_power": 2000,
         })
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.growatt_1_power", "sensor.growatt_2_power"], "solar"
         )
@@ -379,6 +380,7 @@ class TestMultiInverterSumming:
             "sensor.bat_3_power": -200,  # One discharging
         })
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.bat_1_power", "sensor.bat_2_power", "sensor.bat_3_power"], "battery"
         )
@@ -392,6 +394,7 @@ class TestMultiInverterSumming:
             # sensor.inv_2_power not in states (unavailable)
         })
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.inv_1_power", "sensor.inv_2_power"], "solar"
         )
@@ -402,6 +405,7 @@ class TestMultiInverterSumming:
         from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
         hass = self._make_hass({"sensor.inverter_power": 4500})
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.inverter_power"], "solar"
         )
@@ -450,13 +454,18 @@ class TestHeatPumpSGReadyIntegration:
     """Verify heat pump registration and surplus activation."""
 
     def test_relay_state_mapping(self):
-        """SG-Ready relay mapping: BLOCKED=00, NORMAL=01, BOOST=10, FORCE_ON=11."""
+        """#523: SG-Ready standard truth table (input1:input2, True=closed).
+
+        BLOCKED=1:0, NORMAL=0:0, BOOST=0:1, FORCE_ON=1:1.
+        (Was a non-standard 2-bit count; SEM's BOOST used to drive the
+        EVU-block pattern and turned standard pumps off on surplus.)
+        """
         from custom_components.solar_energy_management.devices.heat_pump_controller import (
             SGReadyState, SG_READY_RELAY_MAP,
         )
-        assert SG_READY_RELAY_MAP[SGReadyState.BLOCKED] == (False, False)
-        assert SG_READY_RELAY_MAP[SGReadyState.NORMAL] == (False, True)
-        assert SG_READY_RELAY_MAP[SGReadyState.BOOST] == (True, False)
+        assert SG_READY_RELAY_MAP[SGReadyState.BLOCKED] == (True, False)
+        assert SG_READY_RELAY_MAP[SGReadyState.NORMAL] == (False, False)
+        assert SG_READY_RELAY_MAP[SGReadyState.BOOST] == (False, True)
         assert SG_READY_RELAY_MAP[SGReadyState.FORCE_ON] == (True, True)
 
     def test_boost_vs_force_on_threshold(self):

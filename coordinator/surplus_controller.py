@@ -293,22 +293,74 @@ class SurplusController:
             key=lambda d: d.priority,
         )
 
+    def active_surplus_draw_w(self) -> float:
+        """Sum the current draw of the surplus devices this controller
+        has activated (#508 W7).
+
+        The coordinator builds a *feedback-free* true house surplus as
+        ``grid_export + active_surplus_draw_w()``. Without the addback,
+        every device the controller turns on shrinks the grid export it
+        reads next cycle, so the surplus signal would chase its own tail
+        and the device would oscillate. Adding back the controller's own
+        active draw makes the input the surplus that WOULD exist if its
+        devices were off — the stable quantity to allocate from.
+
+        Externally-managed devices (the EV, driven by the decide/actuate
+        path) are excluded — their draw is already reflected in grid
+        export and must not be re-credited here.
+        """
+        return sum(
+            d.get_current_consumption()
+            for d in self.get_devices_sorted()
+            if d.is_active
+        )
+
     async def update(
         self,
         available_power_w: float,
         price_level: Optional[str] = None,
+        peak_state: Optional[str] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
         This is called every coordinator update cycle (~10s).
 
         Args:
-            available_power_w: Total available surplus power (from FlowCalculator).
+            available_power_w: Total available surplus power. Since #508 W7
+                the coordinator passes the feedback-free TRUE house surplus
+                (grid export + this controller's own active draw), not the
+                EV charging budget — heat pump / hot water boost on what the
+                house is actually exporting after the EV and battery take
+                their share.
             price_level: Current price level (cheap/normal/expensive) for price-responsive mode.
+            peak_state: Current ``LoadManagementState`` (#508 W2). When the
+                grid-import peak is at risk (WARNING / SHEDDING / EMERGENCY)
+                the controller stops ADDING discretionary load, and on
+                SHEDDING / EMERGENCY proactively backs its own active
+                devices off by reverse priority — so it complements the
+                load manager instead of re-activating, next cycle, whatever
+                the load manager just shed. ``None`` = no peak awareness
+                (legacy behaviour).
 
         Returns:
             SurplusAllocationData with allocation results.
         """
+        # #508 W2 — peak posture. WARNING freezes new activation (don't add
+        # load while the peak is climbing); SHEDDING/EMERGENCY additionally
+        # sheds the controller's own discretionary devices. EMERGENCY sheds
+        # all of them at once; SHEDDING sheds gently (one per cycle) so the
+        # combined load-manager + surplus back-off doesn't overshoot.
+        from ..const import LoadManagementState
+        peak_freeze = peak_state in (
+            LoadManagementState.WARNING,
+            LoadManagementState.SHEDDING,
+            LoadManagementState.EMERGENCY,
+        )
+        peak_shed = peak_state in (
+            LoadManagementState.SHEDDING,
+            LoadManagementState.EMERGENCY,
+        )
+        peak_shed_all = peak_state == LoadManagementState.EMERGENCY
         # EMA smoothing to reduce oscillation from cloud transients
         if self._smoothed_surplus is None:
             self._smoothed_surplus = available_power_w
@@ -366,6 +418,8 @@ class SurplusController:
                 # Only activate if device is in "surplus" mode
                 if device.control_mode != DeviceControlMode.SURPLUS:
                     continue  # peak_only: never proactively turn on
+                if peak_freeze:
+                    continue  # #508 W2: don't add load while peak is at risk
                 if device.can_activate():
                     consumed = await device.activate(remaining_surplus)
                     if consumed > 0:
@@ -437,7 +491,46 @@ class SurplusController:
                             device.name,
                         )
 
-        # Check for scheduled devices that must start (deadline approaching)
+        # #508 W2 — peak shed pass. On SHEDDING/EMERGENCY, back the
+        # controller's own active discretionary (SURPLUS-mode) devices off
+        # by reverse priority. EMERGENCY sheds every one this cycle;
+        # SHEDDING sheds one per cycle so the load-manager + surplus
+        # back-off don't overshoot together. Externally-managed devices
+        # (the EV) are already excluded by ``get_devices_sorted``; the load
+        # manager owns the EV's peak shedding via ``shed_priority`` (#470).
+        if peak_shed:
+            for device in reversed(devices):
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue
+                if not device.is_active or not device.can_deactivate():
+                    continue
+                consumption = device.get_current_consumption()
+                await device.deactivate()
+                if not device.is_active:
+                    device.record_deactivated()
+                    active_count = max(0, active_count - 1)
+                    remaining_surplus += consumption
+                    _LOGGER.info(
+                        "Peak %s: shed %s (priority %d) to relieve %.0fW",
+                        peak_state, device.name, device.priority, consumption,
+                    )
+                    for a in allocations:
+                        if a.device_id == device.device_id:
+                            a.allocated_watts = 0.0
+                            a.actual_consumption_watts = 0.0
+                            a.state = DeviceState.IDLE.value
+                    if not peak_shed_all:
+                        break  # SHEDDING: gentle, one device per cycle
+                else:
+                    _LOGGER.debug(
+                        "Peak shed of %s blocked by anti-flicker", device.name,
+                    )
+
+        # Check for scheduled devices that must start (deadline approaching).
+        # #508 W2: deliberately NOT gated on peak_freeze — a deadline is a
+        # hard commitment that must run regardless of peak posture (like a
+        # critical device), and the one-cycle import is bounded by
+        # rated_power. Do not add a peak gate here.
         from ..devices.base import ScheduleDevice
         for device in devices:
             if isinstance(device, ScheduleDevice) and device.is_deadline_approaching and not device.is_active:
@@ -456,8 +549,10 @@ class SurplusController:
                 )
 
         # Off-peak activation pass: force-activate devices with runtime deficit
-        # Only for "surplus" mode devices — off-peak is a form of proactive activation (#49)
-        if price_level in ("cheap", "very_cheap", "negative"):
+        # Only for "surplus" mode devices — off-peak is a form of proactive activation (#49).
+        # #508 W2: suppressed while the peak is at risk — a cheap-tariff
+        # runtime deficit must not push grid import over the limit.
+        if price_level in ("cheap", "very_cheap", "negative") and not peak_freeze:
             for device in devices:
                 if device.control_mode != DeviceControlMode.SURPLUS:
                     continue

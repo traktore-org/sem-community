@@ -103,7 +103,7 @@ class TestDashboardTemplate:
         expected_cards = [
             "dist/sem-cards.js",            # Lit bundle — every dashboard card
             "sem-system-diagram-card.js",   # registered standalone (not in the bundle's registration)
-            "sem-localize.js",              # translations, loaded via add_extra_js_url
+            "sem-localize.js",              # translations, registered as a Lovelace resource (single channel, #453)
         ]
         for card in expected_cards:
             assert os.path.exists(os.path.join(card_dir, card)), f"Missing: {card}"
@@ -280,6 +280,27 @@ class TestWeatherSubstitution:
 
         generator._substitute_weather_entity(template)
         assert template["views"][0]["cards"][0]["entity"] == "weather.openweathermap"
+
+    def test_prefers_entity_with_current_data(self, mock_hass, generator):
+        """#516: a weather entity that is unavailable or carries no current
+        temperature is skipped in favour of one that actually has data —
+        even when the broken one is listed first. RienduPre's tile showed
+        "?" / "—°C" because the generator picked a data-less entity."""
+        broken = MagicMock()
+        broken.entity_id = "weather.broken"
+        broken.state = "unavailable"
+        broken.attributes = {}
+        good = MagicMock()
+        good.entity_id = "weather.knmi"
+        good.state = "cloudy"
+        good.attributes = {"temperature": 14}
+        mock_hass.states.async_all.return_value = [broken, good]  # broken first
+
+        template = {"views": [{"cards": [
+            {"type": "custom:sem-weather-card", "entity": "weather.home"},
+        ]}]}
+        generator._substitute_weather_entity(template)
+        assert template["views"][0]["cards"][0]["entity"] == "weather.knmi"
 
 
 def _make_device(power_entity, priority=5, is_ev=False, device_type="switch",

@@ -99,10 +99,11 @@ Battery state and configuration.
 
 | Card | Description |
 |------|-------------|
-| **SOC Gauge** | Radial gauge showing current battery state of charge |
+| **SOC Gauge** | Radial gauge showing current battery state of charge. Turns **gold with a "Selling to grid" status + live export price** when SEM is exporting the battery for arbitrage (see [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md) — note: arbitrage is **off by default in v1.7.3 stable**, so this state only appears once it is re-enabled) |
 | **Power Status** | Current charge/discharge power and daily energy totals |
 | **24h Battery Chart** | Charge/discharge power + SOC line over 24 hours |
-| **SOC Zone Config** | Sliders for priority, buffer, auto-start, and assist floor SOC levels |
+| **SOC Zone Config** | Steppers for priority, buffer, auto-start, and assist-floor SOC levels, plus **Solar Gate** (`battery_assist_min_surplus`) and **Assist Max** — the solar surplus required before the battery helps charge the EV, and the cap on that assist |
+| **Per-battery mode** | For multi-battery setups: a mode selector per battery (auto / self-consumption / force-charge / force-discharge / off) |
 
 ### EV
 
@@ -135,21 +136,26 @@ A help line under the selector explains what the currently-selected mode does. F
 
 ### Control
 
-All settings and device management in one place.
+Live operations and device management. Since #492 this tab is a
+**monitoring view** — every writable setting lives on the
+[Configuration](#configuration) tab instead (both tabs read the same HA
+entities, so changes made there are reflected here immediately). The
+EV section moved to per-charger cards on the EV tab in v1.6.3.
 
 ![Control Tab](images/sem_control_tab.png)
 
 | Card | Description |
 |------|-------------|
-| **EV Charging** | Per-charger [Charge mode](#charging-mode-selector-v163) selector, target range, current settings (the standalone `night_charging` and `smart_night_charging` toggles were removed in v1.6.3 — their intent is now carried by the mode) |
-| **Surplus Control** | Surplus available indicator, regulation offset |
-| **Battery Management** | Priority/minimum/resume SOC, capacity |
-| **Heat Pump & Hot Water** | Boost offset, hot water max temperature |
-| **Solar & Power** | Min solar power, max grid import |
-| **Tariff & Pricing** | Current rates, cheap/expensive thresholds |
+| **Surplus Control** | Live surplus: available/distributable and allocated/free watts |
+| **Battery Management** | SOC + status (subtitle), capacity |
+| **Hot Water** | Legionella disinfection target + regulatory info (the solar-boost target is set on Configuration) |
+| **Heat Pump** | Active mode and SG-Ready state (auto-hidden when no heat pump is configured) |
+| **Tariff & Pricing** | Provider, price level, current import rate |
+| **Peak & Load Management** | Live % of peak limit, peak margin, sheddable devices |
 | **Load Priority** | Drag-and-drop device ordering with real-time power, controllable/critical toggles, per-device control mode (Off / Peak Only / Surplus), and a per-device **Configure** button (see below). EV chargers have no mode dropdown here — their charge target is set in the **Charge Target** block on the EV card |
-| **Peak & Load Management** | Target peak limit, peak margin, sheddable devices |
-| **Observer Mode** | Read-only toggle for safe monitoring |
+
+A red observer-mode banner appears at the top whenever Observer Mode
+(read-only monitoring) is enabled on the Configuration tab.
 
 #### Configure a device's control (manual mapping)
 
@@ -163,6 +169,19 @@ When SEM can't auto-detect how to control a load (e.g. a Shelly Pro3EM meter who
 | **Service call** | service-driven chargers (KEBA, Easee) | the service (e.g. `keba.set_current`), parameter, and reduce/restore values |
 
 Entity types use a searchable entity picker filtered to the right domain. **Reset to auto-detect** removes a manual mapping and reverts the device to auto-discovery (for an auto-discoverable device this re-populates the same entity; to stop SEM controlling a device entirely, set its control mode to **Off**).
+
+### Configuration
+
+The single home for **every changeable setting** (`sem-config-card`),
+organized in collapsible sections: Setup overview, EV chargers, Battery
+zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load
+management, Solar forecast, Notifications, and Advanced (update
+interval, deltas, min solar power, regulation offset, Observer Mode).
+Each section header has a **Diagnose** button that dumps that section's
+live config + state via the `solar_energy_management.diagnose` action —
+attach its output to bug reports. Settings written here apply
+immediately; structural changes (e.g. tariff mode) reload the
+integration automatically.
 
 ### Costs
 
@@ -241,6 +260,44 @@ SEM includes a built-in illustrated system diagram on the Home tab. Users who pr
 | K-Flow Card | `kflow` | Third-party K-Flow card (must be installed via HACS) with PV string details, cell temps, BMS data |
 
 To switch: Settings → Integrations → SEM → Configure → set `diagram_style` to `kflow`. The dashboard will regenerate with the K-Flow card on the Home tab.
+
+### Pointing the flow / diagram cards at non-SEM entities
+
+Both `sem-flow-card` and `sem-system-diagram-card` (#455) accept an explicit `entities:` map instead of the default `entity_prefix: sensor.sem_`, so they can visualize any Home Assistant install:
+
+```yaml
+type: custom:sem-system-diagram-card
+entities:
+  solar:
+    entity: sensor.inverter_pv_power        # W; reverse: true to flip sign
+    daily_energy: sensor.daily_yield
+    forecast_remaining: sensor.solcast_remaining_today   # diagram card only
+  battery:
+    entity: sensor.battery_power            # +charge / −discharge (SEM convention)
+    # OR split sensors instead of a combined one:
+    # charge: sensor.batt_charge_w
+    # discharge: sensor.batt_discharge_w
+    state_of_charge: sensor.battery_soc
+    daily_charge_energy: sensor.batt_in_today     # diagram card only
+    daily_discharge_energy: sensor.batt_out_today # diagram card only
+  grid:
+    consumption: sensor.grid_import_w       # split sensors…
+    production: sensor.grid_export_w
+    # …or a single signed sensor (+import / −export; reverse: true flips):
+    # entity: sensor.grid_power
+    daily_import_energy: sensor.grid_in_today
+    daily_export_energy: sensor.grid_out_today
+  ev:
+    entity: sensor.wallbox_charging_power   # invert: true to flip sign
+    daily_energy: sensor.ev_today
+  home:
+    entity: sensor.home_consumption         # optional — derived from the balance when omitted
+    daily_energy: sensor.home_today
+    autarky: sensor.autarky_rate
+    self_consumption: sensor.self_consumption_rate       # diagram card only
+```
+
+Keys you omit simply render as 0 / empty — an install without an EV just leaves `ev:` out (no "sensor unavailable" warning in entities mode). `entity_prefix` remains the default and takes precedence if both are set.
 
 ### Cards Removed in v1.2.0+ (replaced by SEM cards)
 

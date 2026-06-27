@@ -2,6 +2,26 @@
 
 This document covers the internal architecture of Solar Energy Management (SEM) for developers and contributors.
 
+> **v1.7.3 additions** (see [CHANGELOG](../CHANGELOG.md) `[1.7.3]`):
+> - **EV charger state reconciler** — `coordinator/charger_reconciler.py` is now the
+>   sole actuation path. A pure desired-vs-observed decision table (DesiredState
+>   OFF/IDLE/CHARGE → ActionKind) drives an observe/apply layer that issues the
+>   minimum commands to converge, then leaves the charger alone (idempotent idle,
+>   heartbeat re-writes, failsafe armed once, enable-switch reconciliation + backoff
+>   #392/#536). It replaces the legacy per-cycle imperative `actuate()`.
+> - **Pure battery decision** — `coordinator/decide_battery.py`
+>   (`decide_battery(view) → BatteryDecision`, precedence FORCE_CHARGE →
+>   STOP_FORCE_CHARGE → LIMIT_DISCHARGE → NORMAL). The LIMIT_DISCHARGE clamp now
+>   fires on a unified **Solar Gate**: `ev_charging AND max(0, solar−home) <
+>   battery_assist_min_surplus_w` → clamp discharge to `home / battery_count`. This
+>   replaces the old night-only / `hold_solar` triggers (#537).
+> - **Solar Gate budget path** — `decide.battery_assist_budget_w` +
+>   `flow_calculator.calculate_canonical_ev_budget` gate battery-assist on real solar
+>   surplus; config key `battery_assist_min_surplus` (default 1200 W) is plumbed via
+>   `FleetContext.battery_assist_min_surplus_w`.
+> - Hysteresis stability (`coordinator/charge_stability.py`) sits between `decide()`
+>   and the reconciler; per-battery views/decisions feed the canonical EV budget.
+
 ---
 
 ## Architectural principle — SEM is not an integration
@@ -16,7 +36,7 @@ Call services like `switch.turn_on`, `number.set_value`, `climate.set_temperatur
 Express its logic in terms of HA entities | Replace HA's `nibe`, `keba`, `huawei_solar`, `wallbox`, etc. integrations
 Add OptionsFlow fields like `heat_pump_relay1_entity` (entity pickers) | Add OptionsFlow fields like `nibe_modbus_host` / `keba_ip`
 
-**Why this matters:** evcc and similar tools have built-in device drivers for specific brands (e.g. evcc has a `nibe-s-series` template that speaks Modbus directly to a Nibe S-Series). SEM intentionally takes a different shape — it stays in HA's entity-and-services world. The user runs HA's `nibe` / `modbus` / `keba` integration (which owns the protocol), then plugs the resulting entities into SEM via entity pickers.
+**Why this matters:** some HEMS tools ship built-in device drivers for specific brands (e.g. a Modbus template that talks directly to a Nibe S-Series heat pump). SEM intentionally takes a different shape — it stays in HA's entity-and-services world. The user runs HA's `nibe` / `modbus` / `keba` integration (which owns the protocol), then plugs the resulting entities into SEM via entity pickers.
 
 **Practical consequence for Nibe-with-Modbus-SG-Ready:**
 1. User installs HA's `nibe` integration → it exposes the heat pump's Modbus registers as entities.
@@ -270,7 +290,7 @@ The surplus controller is always-on and runs every coordinator update (~10s). Pr
 
 ## SOC Zone Strategy
 
-SEM uses a four-zone model (inspired by [evcc](https://evcc.io)) to decide how the battery and EV share solar energy:
+SEM uses a four-zone SOC model to decide how the battery and EV share solar energy:
 
 ```
 SOC 100% ─────────────────────────────
@@ -288,20 +308,21 @@ SOC  0%  ───────────────────────�
 
 **Zone 2 — Surplus Only** (SOC 30-70%): EV gets only pure solar surplus (power that would be exported). Battery is not discharged.
 
-**Zone 3 — Discharge Assist** (SOC 70-90%): Battery supplements solar for EV. Assist ramps from 50% at SOC 70% to 100% at SOC 90%.
+**Zone 3 — Discharge Assist** (SOC 70-90%): Battery supplements solar for EV. The assist **potential** ramps from 50% at SOC 70% to 100% at SOC 90%.
 
 **Zone 4 — Full Assist** (SOC >= 90%): Full battery assist (default 4500W). EV starts even without surplus.
 
-**Hysteresis**: Once battery-assist activates (Zone 3/4), it stays active down to `battery_assist_floor_soc` (default 60%) to prevent cycling.
+**Assist offered (#545 — "max out till self-consumption"):** in the assist band (Zone 3/4, with real surplus past the Solar Gate) SEM offers the **full** potential — it raises the offered amps so the inverter discharges the battery **into the car down to the buffer SoC** (the self-consumption reserve floor), emptying a near-full battery into the car rather than leaving it idle. The potential ramp (above) self-tapers the discharge toward the buffer. This supersedes the older #501 cap that only topped the car up to the charger minimum. SEM commands no battery directly — it's pure offered amps; the inverter's self-consumption does the discharge.
+
+**Assist floor**: Battery assist is off-limits below `battery_buffer_soc` (default 70%) — the buffer is the single assist floor and the discharge-into-car stops here. (A separate `battery_assist_floor_soc` knob was redundant — assist potential is already 0 below the buffer — and has been removed.)
 
 ### SOC Zone Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `battery_priority_soc` | 30% | Below: all solar to battery, EV blocked |
-| `battery_buffer_soc` | 70% | Above: battery can discharge for EV |
+| `battery_buffer_soc` | 70% | Above: battery can discharge for EV (assist floor) |
 | `battery_auto_start_soc` | 90% | Above: start EV without surplus |
-| `battery_assist_floor_soc` | 60% | Hysteresis floor for battery assist |
 | `battery_assist_max_power` | 4500W | Max battery discharge for EV |
 
 ---
@@ -338,16 +359,30 @@ patches `ChargingContext.soc_limit_active` / `night_target_kwh` per charger befo
 
 Forecast-aware grid-to-battery charging during cheap night hours. **Disabled by default** — enable via config flow.
 
-### Decision Pipeline (runs daily at configurable trigger hour, default 21:00)
+### Decision Pipeline (rolling horizon)
+
+The first evaluation of the night runs when the planning window opens
+(trigger hour, default 21:00); the scheduler then re-evaluates every
+`battery_replan_interval_min` (default 30 min) until the window closes
+(`battery_planning_window_hours` later, default 06:00), picking up price
+updates, forecast refreshes and SOC drift MPC-style.
 
 1. **Forecast resolve** — 3-tier fallback: fresh Solcast → stale (doubled pessimism) → offline (conservative)
 2. **Deficit calculation** — `expected_consumption - corrected_forecast × confidence × (1 - pessimism)`
 3. **Negative tariff override** — force-charge to max SOC during negative prices regardless of forecast
 4. **Threshold check** — skip if deficit < `min_deficit_kwh` (default 2 kWh)
 5. **Break-even check** — `(off_peak_rate / efficiency) + (2 × cycle_cost) < peak_rate` — includes battery degradation
-6. **Target SOC** — `current_soc + (deficit / usable_capacity × 100)`, capped at `max_target_soc`
-7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints
+6. **Target SOC** — `anchor_soc + (deficit / usable_capacity × 100)`, capped at `max_target_soc`.
+   The anchor is the SOC at the **first** evaluation of the night's window (#485):
+   re-evaluations recompute the plan against fresh prices/forecasts but never stack
+   the deficit on top of charging progress — anchoring on the live SOC would ratchet
+   the target toward `max_target_soc` every profitable night.
+7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints;
+   slot length comes from the tariff provider's detected market interval (15/30/60 min)
 8. **Cheapest hours** — dynamic tariff: `find_cheapest_hours(N, 12h)` | static: full NT window
+
+A mid-charge re-evaluation that lands on NOT_NEEDED / NOT_PROFITABLE stops the
+active forced charge instead of leaving the inverter charging unsupervised.
 
 ### Night Charge Schedule
 
@@ -360,6 +395,9 @@ The schedule adapts at runtime when actual EV power differs from planned.
 
 ### Re-plan Triggers
 
+- Day-ahead price series updated (`price_series_fingerprint` changed) — fires
+  **once per series update** (#485); the next evaluation runs when the planning
+  window is open
 - SOC deviation > 5% from evaluation time
 - EV connects/disconnects
 
@@ -380,8 +418,11 @@ The schedule adapts at runtime when actual EV power differs from planned.
 | `battery_capacity_kwh` | 10.0 | Usable battery capacity |
 | `battery_max_charge_power_w` | 5000 | Inverter max charge rate |
 | `battery_roundtrip_efficiency` | 0.92 | Round-trip efficiency |
-| `battery_cycle_cost` | 0.0 | Degradation cost per kWh throughput |
-| `battery_precharge_trigger_hour` | 21 | Daily evaluation hour |
+| `battery_cycle_cost` | 0.0 | Degradation cost per kWh throughput (0 = check disabled; the config form suggests 0.02 for new setups) |
+| `battery_precharge_trigger_hour` | 21 | Planning window opens (first evaluation) |
+| `battery_replan_interval_min` | 30 | Rolling re-evaluation cadence inside the window |
+| `battery_planning_window_hours` | 9 | Window length (21:00 → 06:00 by default) |
+| `battery_prefer_consecutive_window` | `true` | Charge in one contiguous block vs scattered cheapest slots |
 | `battery_max_target_soc` | 95% | Never plan above this |
 | `battery_min_deficit_kwh` | 2.0 | Minimum deficit to bother charging |
 | `battery_pessimism_weight` | 0.3 | Forecast pessimism (0=trust, 1=worst case) |
@@ -415,7 +456,7 @@ The coordinator owns all EV control (`ev.managed_externally = True`). The EV is 
 
 ### Solar Charging
 - Sets current with ramp limiting (+-2A/cycle)
-- evcc-style enable/disable delays
+- Hysteresis enable/disable delays (persistence timers)
 - Budget from `FlowCalculator.calculate_ev_budget()` + optional battery assist
 
 ### Min+PV Mode
@@ -528,7 +569,7 @@ discharge. The assist component uses the measured discharge if the
 battery is already discharging ≥ 100 W, otherwise estimates a
 proportional ramp `(battery_soc − battery_buffer_soc) / (auto_start_soc
 − battery_buffer_soc) × battery_assist_max_power_w` scaled to 50–100 %
-of max. Below `battery_assist_floor_soc` (default 60 %) the assist is
+of max. Below `battery_buffer_soc` (default 70 %) the assist is
 zero. **Note**: proportional flow attribution may transiently show a
 small `flow_grid_to_ev_power` during the battery's discharge ramp-up
 window (LFP BMSes take seconds to ramp). That's the physics of the

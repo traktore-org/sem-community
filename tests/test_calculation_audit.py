@@ -533,6 +533,11 @@ class TestForecastSunriseSunsetFromSunEntity:
             "custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util"
         ) as mock_dt:
             mock_dt.DEFAULT_TIME_ZONE = timezone.utc
+            # #416 sub#3 — _get_sun_hours reads now().date() to roll
+            # tomorrow-dated next_* events back to today.
+            mock_dt.now.return_value = datetime(
+                2026, 5, 15, 4, 0, tzinfo=timezone.utc
+            )
             tracker.set_hass(hass)
             rise, sett = tracker._get_sun_hours()
 
@@ -581,6 +586,9 @@ class TestForecastSunriseSunsetFromSunEntity:
             "custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util"
         ) as mock_dt:
             mock_dt.DEFAULT_TIME_ZONE = timezone.utc
+            mock_dt.now.return_value = datetime(
+                2026, 1, 15, 4, 0, tzinfo=timezone.utc
+            )
             tracker.set_hass(hass)
             rise, sett = tracker._get_sun_hours()
 

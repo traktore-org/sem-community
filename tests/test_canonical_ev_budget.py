@@ -180,24 +180,58 @@ class TestSolarOnly:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# BATTERY_ASSIST — Zone 4. Surplus + redirect + actual discharge.
+# BATTERY_ASSIST — Zone 3/4. Surplus + redirect + capped SOC potential
+# (#501: never the measured discharge).
 # ──────────────────────────────────────────────────────────────────────
 
 class TestBatteryAssist:
-    def test_uses_measured_discharge_when_battery_already_discharging(self):
+    def test_measured_discharge_is_ignored_501(self):
+        """#501: the assist is the SOC-based POTENTIAL, never the
+        measured total discharge. Pre-#501 this returned the raw
+        3000 W discharge — which included the house's share and
+        ratcheted the EV budget on home-load spikes, bypassing the
+        battery_assist_max_power cap."""
         fc = FlowCalculator()
+        # Solar 2000/home 500 → surplus 1500 clears the 1200 W solar gate
+        # so the assist (SOC potential, not measured discharge) applies.
         b = fc.calculate_canonical_ev_budget(
-            _power(solar=1000, home=500, batt_discharge=3000, batt_soc=75),
+            _power(solar=2000, home=500, batt_discharge=3000, batt_soc=75),
             strategy=EVBudgetStrategy.BATTERY_ASSIST,
             battery_soc=75,
         )
-        # raw_surplus = max(0, 1000 - 500 - 0) = 500
+        # raw_surplus = max(0, 2000 - 500 - 0) = 1500
         # redirect = 0 (battery not charging)
-        # assist = measured discharge = 3000
-        assert b.solar_surplus == 500
+        # assist = SOC potential: 4500 * (0.5 + 0.5*(75-70)/20) = 2812.5
+        # (no min_power_floor_w passed → full potential, legacy callers)
+        assert b.solar_surplus == 1500
         assert b.battery_redirect == 0
-        assert b.battery_assist == 3000
-        assert b.net_w == 3500
+        assert b.battery_assist == pytest.approx(2812.5, abs=1)
+        assert b.net_w == pytest.approx(4312.5, abs=1)
+
+    def test_assist_offers_full_potential_545(self):
+        """#545 (supersedes the #501 cap): the assist offers the FULL
+        SOC-based potential — the battery empties into the car down to
+        the buffer — not just enough to reach the min floor. The
+        min_power_floor_w is no longer consumed by BATTERY_ASSIST."""
+        fc = FlowCalculator()
+        # Sunny: surplus 7500; SOC 95 (>= auto_start) → full potential 4500.
+        b = fc.calculate_canonical_ev_budget(
+            _power(solar=8000, home=500, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+        )
+        assert b.battery_assist == pytest.approx(4500, abs=1)
+        assert b.net_w == pytest.approx(12000, abs=1)  # 7500 surplus + 4500
+        # Partly cloudy: surplus 1800 (≥ gate) → still full potential 4500.
+        b2 = fc.calculate_canonical_ev_budget(
+            _power(solar=2300, home=500, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+        )
+        assert b2.battery_assist == pytest.approx(4500, abs=1)
+        assert b2.net_w == pytest.approx(6300, abs=1)  # 1800 + 4500
 
     def test_estimates_assist_proportionally_in_zone3_band(self):
         """SOC = 80, buffer=70, auto_start=90.
@@ -205,27 +239,99 @@ class TestBatteryAssist:
         assist = 4500 * (0.5 + 0.5 * 0.5) = 4500 * 0.75 = 3375
         """
         fc = FlowCalculator()
+        # Solar 2000/home 500 → surplus 1500 clears the 1200 W gate.
         b = fc.calculate_canonical_ev_budget(
-            _power(solar=800, home=500, batt_soc=80),
+            _power(solar=2000, home=500, batt_soc=80),
             strategy=EVBudgetStrategy.BATTERY_ASSIST,
             battery_soc=80,
             battery_auto_start_soc=90,
             battery_buffer_soc=70,
-            battery_assist_floor_soc=60,
             battery_assist_max_power_w=4500,
         )
         assert b.battery_assist == 3375
 
-    def test_no_assist_below_assist_floor(self):
-        """SOC below the assist floor → no assist contribution."""
+    def test_no_assist_below_buffer_soc(self):
+        """SOC below the buffer floor → no assist contribution.
+
+        ``buffer_soc`` is the single assist floor (the redundant
+        ``battery_assist_floor_soc`` knob was removed)."""
         fc = FlowCalculator()
         b = fc.calculate_canonical_ev_budget(
             _power(solar=800, home=500, batt_soc=50),
             strategy=EVBudgetStrategy.BATTERY_ASSIST,
             battery_soc=50,
-            battery_assist_floor_soc=60,
+            battery_buffer_soc=70,
         )
         assert b.battery_assist == 0
+
+
+class TestBatteryAssistSolarGate:
+    """Battery assist only SUPPLEMENTS real solar — never funds an EV
+    charge on its own. Below the configured surplus threshold (default
+    1200 W) the battery is off-limits to the EV, so a sunless evening or
+    overnight session never drains the home battery into the car.
+
+    Root cause: ``min_plus_solar`` ran its day/battery-assist path on a
+    sunset+earliest_start clock, and the assist budget filled the WHOLE
+    minimum from the battery when solar surplus was zero — exactly the
+    "cycle the battery for no self-consumption gain" the assist was
+    documented never to do.
+    """
+
+    def test_no_assist_when_surplus_below_threshold(self):
+        """Zone 4 (SOC 95) but no solar surplus → assist is 0, net 0."""
+        fc = FlowCalculator()
+        b = fc.calculate_canonical_ev_budget(
+            _power(solar=300, home=800, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+            battery_assist_min_surplus_w=1200.0,
+        )
+        assert b.solar_surplus == 0
+        assert b.battery_assist == 0
+        assert b.net_w == 0
+
+    def test_assist_active_when_surplus_above_threshold(self):
+        """Surplus 1500 ≥ 1200 gate, Zone 4 → assist offers full potential (#545)."""
+        fc = FlowCalculator()
+        b = fc.calculate_canonical_ev_budget(
+            _power(solar=2000, home=500, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+            battery_assist_min_surplus_w=1200.0,
+        )
+        # #545: raw_surplus 1500; SOC 95 → full potential 4500 (not the gap).
+        assert b.solar_surplus == 1500
+        assert b.battery_assist == pytest.approx(4500, abs=1)
+        assert b.net_w == pytest.approx(6000, abs=1)  # 1500 + 4500
+
+    def test_threshold_defaults_to_1200(self):
+        """Without the kwarg, surplus 1000 < default 1200 → no assist."""
+        fc = FlowCalculator()
+        b = fc.calculate_canonical_ev_budget(
+            _power(solar=1500, home=500, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+        )
+        assert b.solar_surplus == 1000
+        assert b.battery_assist == 0
+
+    def test_threshold_boundary_inclusive(self):
+        """Surplus exactly at the threshold is allowed to assist."""
+        fc = FlowCalculator()
+        b = fc.calculate_canonical_ev_budget(
+            _power(solar=1700, home=500, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+            battery_assist_min_surplus_w=1200.0,
+        )
+        # raw_surplus = 1200 == gate → assist allowed; #545 → full potential.
+        assert b.solar_surplus == 1200
+        assert b.battery_assist == pytest.approx(4500, abs=1)
 
 
 # ──────────────────────────────────────────────────────────────────────

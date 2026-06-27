@@ -26,7 +26,56 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
     setConfig(config) {
         this.config = config;
+        // #455 — parity with sem-flow-card: explicit ``entities:`` config
+        // points the card at arbitrary HA entities; ``entity_prefix``
+        // stays the default/fallback. Same precedence as sem-flow-card:
+        // an explicit entity_prefix wins when both are present.
+        if (config.entities && !config.entity_prefix) {
+            this._mode = 'entities';
+            this._entities = config.entities;
+        } else {
+            this._mode = 'prefix';
+            this._entities = null;
+        }
         this.entityPrefix = config.entity_prefix || 'sensor.sem_';
+    }
+
+    /** Resolve a logical key to an entity id (#455).
+     *
+     * Prefix mode: ``<entity_prefix><key>`` (pre-#455 behaviour).
+     * Entities mode: looked up in the ``entities:`` map — same schema
+     * as sem-flow-card. Unmapped keys return null and read as 0 /
+     * empty, which degrades the matching diagram element gracefully.
+     */
+    _entityId(key) {
+        if (this._mode !== 'entities') return `${this.entityPrefix}${key}`;
+        const e = this._entities;
+        if (!e) return null;
+        const map = {
+            solar_power: e.solar?.entity,
+            battery_power: e.battery?.entity,
+            battery_charge_power: e.battery?.charge,
+            battery_discharge_power: e.battery?.discharge,
+            grid_power: e.grid?.entity,
+            grid_import_power: e.grid?.consumption,
+            grid_export_power: e.grid?.production,
+            ev_power: e.ev?.entity || e.individual?.[0]?.entity,
+            battery_soc: e.battery?.state_of_charge,
+            home_consumption_power: e.home?.entity,
+            charging_state: e.inverter?.entity,
+            daily_solar_energy: e.solar?.daily_energy,
+            daily_ev_energy: e.ev?.daily_energy || e.individual?.[0]?.daily_energy,
+            daily_grid_import_energy: e.grid?.daily_import_energy,
+            daily_grid_export_energy: e.grid?.daily_export_energy,
+            daily_battery_charge_energy: e.battery?.daily_charge_energy,
+            daily_battery_discharge_energy: e.battery?.daily_discharge_energy,
+            daily_home_energy: e.home?.daily_energy,
+            autarky_rate: e.home?.autarky,
+            self_consumption_rate: e.home?.self_consumption,
+            forecast_remaining_today_kwh: e.solar?.forecast_remaining,
+            controllable_devices_count: e.devices?.count_entity,
+        };
+        return map[key] || null;
     }
 
     connectedCallback() {
@@ -98,7 +147,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
     _getState(suffix) {
         if (!this._hass) return 0;
-        const entity = this._hass.states[`${this.entityPrefix}${suffix}`];
+        const eid = this._entityId(suffix);
+        const entity = eid ? this._hass.states[eid] : null;
         if (!entity) return 0;
         const val = parseFloat(entity.state);
         return isNaN(val) ? 0 : val;
@@ -106,7 +156,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
     _getStateStr(suffix) {
         if (!this._hass) return '';
-        const entity = this._hass.states[`${this.entityPrefix}${suffix}`];
+        const eid = this._entityId(suffix);
+        const entity = eid ? this._hass.states[eid] : null;
         return entity ? entity.state : '';
     }
 
@@ -166,29 +217,76 @@ class SEMSystemDiagramCard extends SEMBaseCard {
     }
 
     _updateFlows() {
-        const solar = this._getState('solar_power');
-        const battery = this._getState('battery_power');
-        const gridImport = this._getState('grid_import_power');
-        const gridExport = this._getState('grid_export_power');
-        const ev = this._getState('ev_power');
+        // #455 — entities-mode value handling mirrors sem-flow-card:
+        // optional split battery (charge/discharge entities), combined
+        // grid entity with reverse flag, and reverse/invert flags on
+        // solar/battery/ev. Prefix mode is byte-identical to pre-#455.
+        let solar = this._getState('solar_power');
+        if (this._entities?.solar?.reverse) solar = -solar;
+
+        let battery;
+        if (this._mode === 'entities' && (this._entities?.battery?.charge || this._entities?.battery?.discharge)) {
+            battery = this._getState('battery_charge_power') - this._getState('battery_discharge_power');
+        } else {
+            const raw = this._getState('battery_power');
+            battery = this._entities?.battery?.reverse ? -raw : raw;
+        }
+
+        let gridImport, gridExport;
+        if (this._mode === 'entities' && this._entities?.grid?.entity) {
+            const gp = this._getState('grid_power');
+            const rev = this._entities.grid.reverse;
+            gridImport = Math.max(0, rev ? -gp : gp);
+            gridExport = Math.max(0, rev ? gp : -gp);
+        } else {
+            gridImport = this._getState('grid_import_power');
+            gridExport = this._getState('grid_export_power');
+        }
+
+        let ev = this._getState('ev_power');
+        if (this._entities?.ev?.invert) ev = -ev;
         const soc = this._getState('battery_soc');
 
         const battCharge = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
-        const home = Math.max(
-            0,
-            solar + gridImport + battDischarge - gridExport - battCharge - ev
-        );
+        // Prefer the published, hold-protected home sensor over a
+        // client-side residual (both modes): the coordinator's #237/#444
+        // hold rides out the Huawei-modbus (~17-30s) vs KEBA (~2s)
+        // update-cadence skew so the sensor doesn't flicker to 0 while
+        // the EV charges; a raw recompute here did. Fall back to the
+        // residual only when the sensor is unavailable.
+        const homeEid = this._entityId('home_consumption_power');
+        const homeSt = homeEid ? this._hass?.states[homeEid] : null;
+        let home;
+        if (homeSt && homeSt.state !== 'unavailable' && homeSt.state !== 'unknown'
+            && !isNaN(parseFloat(homeSt.state))) {
+            home = this._getState('home_consumption_power');
+            if (this._entities?.home?.invert) home = -home;
+            home = Math.max(0, home);
+        } else {
+            home = Math.max(
+                0,
+                solar + gridImport + battDischarge - gridExport - battCharge - ev
+            );
+        }
 
         const vals = { solar, battery, gridImport, gridExport, home, ev, soc };
         const key = JSON.stringify(vals);
         if (this._lastKey === key) return;
         this._lastKey = key;
 
-        // Track entity availability for visual feedback (#38)
+        // Track entity availability for visual feedback (#38).
+        // #455: in entities mode only configured keys count — an
+        // intentionally unmapped node (e.g. no EV) must not show as a
+        // permanent "sensor unavailable" warning.
         const unavailable = [];
         for (const suffix of ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'ev_power', 'battery_soc']) {
-            const entity = this._hass.states[`${this.entityPrefix}${suffix}`];
+            const eid = this._entityId(suffix);
+            if (!eid) {
+                if (this._mode === 'prefix') unavailable.push(suffix);
+                continue;
+            }
+            const entity = this._hass.states[eid];
             if (!entity || entity.state === 'unavailable' || entity.state === 'unknown') {
                 unavailable.push(suffix);
             }
@@ -372,7 +470,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const container = this.shadowRoot.getElementById('device-labels');
         if (!container) return;
 
-        const devicesEntity = this._hass.states[`${this.entityPrefix}controllable_devices_count`];
+        const devicesEid = this._entityId('controllable_devices_count');
+        const devicesEntity = devicesEid ? this._hass.states[devicesEid] : null;
         if (!devicesEntity || !devicesEntity.attributes || !devicesEntity.attributes.devices) {
             container.innerHTML = '';
             return;
@@ -735,7 +834,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
                     <!-- Entity status indicator (#38) -->
                     <foreignObject x="10" y="${this._compact ? 1030 : 750}" width="200" height="20">
-                        <div xmlns="http://www.w3.org/1999/xhtml" id="entity-status" style="display:none;font-family:'Segoe UI','Roboto',sans-serif;font-size:10px;color:#ef5350;opacity:0.7"></div>
+                        <div xmlns="http://www.w3.org/1999/xhtml" id="entity-status" style="display:none;font-family:'Segoe UI','Roboto',sans-serif;font-size:11px;color:#ef5350;opacity:0.7"></div>
                     </foreignObject>
 
                     <!-- SEM watermark -->

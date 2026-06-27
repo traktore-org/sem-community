@@ -308,8 +308,9 @@ class TestForecastDataSerialization:
         assert d["forecast_today_kwh"] == 25.5
         assert d["forecast_tomorrow_kwh"] == 20.0
         assert d["forecast_remaining_today_kwh"] == 15.0
-        assert d["forecast_power_now_w"] == 5200.0
-        assert d["forecast_power_next_hour_w"] == 6000.0
+        # (#544) forecast_power_now_w / forecast_power_next_hour_w removed from
+        # to_dict — dead sensors. The dataclass fields stay for internal use.
+        assert "forecast_power_now_w" not in d
         assert d["forecast_peak_power_today_w"] == 8500.0
         assert d["forecast_peak_time_today"] == "13:30"
         assert d["forecast_source"] == "solcast"

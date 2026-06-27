@@ -48,6 +48,7 @@ def _build_reader(plug_state="off", charging_state="off", charging_power_w=0):
         "ev_charging_sensor": "binary_sensor.fake_charging",
     }
     reader = SensorReader(hass, config)
+    reader._sign_vote_warmup = 0
     return reader
 
 

@@ -36,6 +36,8 @@ def build_charger_view(
     deadline_amps: int = 0,
     tariff_wait: bool = False,
     solar_committed_w: float = 0.0,
+    night_deliverable_kwh: float = float("inf"),
+    soc_ceiling_reached: bool = False,
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -78,9 +80,19 @@ def build_charger_view(
     power_reading = fleet_state.power
     config = fleet_state.config
 
-    # Per-charger power slice
+    # Per-charger power slice. ``ev_power_per_charger`` is only populated for
+    # MULTI-charger fleets (sensor_reader.py only splits when len > 1). For a
+    # single charger it's empty, so fall back to the fleet ``ev_power`` — which
+    # IS this charger's draw, in watts. Without this fallback ``this_charger_w``
+    # was always 0 on single-charger setups, so ``actual_charging`` never saw
+    # the car drawing and the start escalation never settled (#536).
     ev_power_per_charger = getattr(power_reading, "ev_power_per_charger", None) or {}
-    this_charger_w = float(ev_power_per_charger.get(charger_id, 0.0))
+    if charger_id in ev_power_per_charger:
+        this_charger_w = float(ev_power_per_charger[charger_id])
+    else:
+        # FLEET-READ: single-charger fallback — the fleet sum is this one
+        # charger's draw (W). Multi-charger always has a per-charger entry above.
+        this_charger_w = float(getattr(power_reading, "ev_power", 0.0) or 0.0)
 
     # Per-charger connected state — when no per-charger sensor is
     # configured, fall back to the fleet OR (the legacy behaviour).
@@ -128,10 +140,27 @@ def build_charger_view(
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),
-        battery_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
         battery_capacity_kwh=float(config.get("battery_capacity_kwh", 15)),
+        battery_assist_max_power_w=float(config.get(
+            "battery_assist_max_power",
+            config.get("super_charger_power", 4500),
+        )),
+        battery_assist_min_surplus_w=float(config.get(
+            "battery_assist_min_surplus", 1200,
+        )),
         solar_committed_w=float(solar_committed_w),
         forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
+        # The user's "Minimum Solar Power" slider (number entity key
+        # ``minimum_solar_power``) — the floor below which solar_only won't
+        # charge and the deep-deficit guard treats solar as "none". The
+        # fallback matches the seeded default (DEFAULT_MIN_SOLAR_POWER =
+        # 1000 W) so a legacy config missing the key gates the same as a
+        # fresh install — fixes the old 200-vs-1000 inconsistency where a
+        # keyless config silently used 200 W.
+        min_solar_w=float(
+            config.get("minimum_solar_power",
+                       config.get("min_solar_power", 1000))
+        ),
     )
 
     # Merge per-charger config with the tariff_wait flag so
@@ -149,4 +178,6 @@ def build_charger_view(
         target_kwh=target_kwh,
         target_soc=target_soc,
         deadline_amps=deadline_amps,
+        night_deliverable_kwh=night_deliverable_kwh,
+        soc_ceiling_reached=soc_ceiling_reached,
     )

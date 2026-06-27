@@ -3,28 +3,30 @@ name: "2026-06-02 min_plus_solar day Zone 3 — battery-assist enters"
 coverage:
   - mode: min_plus_solar
     regime: zone3_day_battery_assist
-    issue: "#282 Phase B/D — battery_assist regime"
+    issue: "#282 Phase B/D — battery_assist regime; #501 capped assist"
 
 description: |
   Zone 3 (SOC between buffer=70 and auto_start=90) + day mode is
   the BATTERY_ASSIST regime for min_plus_solar / solar_plus_cheap /
-  always_max. The budget is ``surplus + battery_discharge`` so the
-  battery can bridge the gap between modest surplus and EV demand.
+  always_max. Since #501 the budget is ``surplus + the capped
+  SOC-based assist POTENTIAL`` (ramp 0.5→1.0 × battery_assist_max
+  across the [buffer, auto_start] band) — NOT the battery's measured
+  total discharge, which included the house's share and ratcheted
+  the commanded current on home-load spikes.
 
-  Pre-#358 the Zone 3 transition was guarded by a forecast check
-  (legacy ``_zone_based_strategy`` line 2742-2750). Post-#358
-  decide.py's ``battery_assist_budget_w`` treats Zone 3 and Zone 4
-  the same way (the "deferred to Step 5" TODO in decide.py:109).
-  This scenario pins the current behaviour so a future Step 5
-  re-introduction of the forecast gate doesn't silently change it
-  without notice.
+  With real surplus (2.5 kW) plus the Zone-3 potential
+  (0.625 × 4500 ≈ 2.8 kW) the budget clears the 6 A charger min and
+  the EV charges — pinning that the capped formula still engages the
+  regime when there is genuinely spare energy. (The pre-#501 variant
+  of this scenario had ZERO surplus — home ate all solar — and relied
+  on the unconditional min floor; post-#501 that correctly idles, see
+  2026-06-11_min_plus_solar_cloudy_no_grid.yaml.)
 
 config:
   battery_capacity_kwh: 15.0
   battery_buffer_soc: 70
   battery_auto_start_soc: 90
   battery_priority_soc: 30
-  battery_assist_floor_soc: 60
   battery_assist_max_power: 4500
   ev_min_current: 6
   ev_max_current: 16
@@ -38,14 +40,14 @@ config:
 
 cycle_seconds: 30
 
-# Zone 3 SOC (75), modest solar surplus, battery actively
-# discharging at 5 kW. battery_assist_budget_w should compute
-# surplus + battery_discharge >= charger min → CHARGE.
+# Zone 3 SOC (75), real surplus: solar 6 kW, home 3.5 kW (derived
+# from 2.5 kW export), battery idle. surplus 2500 W + Zone-3 assist
+# potential 2812 W = 5312 W ≥ charger min (4140 W) → CHARGE.
 timeline:
   - t: 0
-    solar_power: 2000
-    grid_power: 2000         # +ve = export
-    battery_power: -5000     # -ve = discharging at 5 kW
+    solar_power: 6000
+    grid_power: 2500         # +ve = export
+    battery_power: 0
     battery_soc: 75
     ev_power: 0              # not yet drawing
     ev_connected: true

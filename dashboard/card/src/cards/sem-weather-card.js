@@ -99,16 +99,19 @@ class SEMWeatherCard extends SEMLitBase {
     _updateClock() {
         const now = new Date();
         const locale = this._hass?.language || navigator.language || 'en';
-        this._clockTime = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-        this._clockDate = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        // Show the home's local time (HA tz, DST-aware), not the viewer's browser tz.
+        const tz = this._hass?.config?.time_zone || undefined;
+        this._clockTime = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+        this._clockDate = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: tz });
         this.requestUpdate();
     }
 
     _renderForecastRows(forecast, forecastRows) {
         const locale = this._hass?.language || navigator.language || 'en';
+        const tz = this._hass?.config?.time_zone || undefined;
         return forecast.slice(0, forecastRows).map(f => {
             const dt = new Date(f.datetime);
-            const day = dt.toLocaleDateString(locale, { weekday: 'short' });
+            const day = dt.toLocaleDateString(locale, { weekday: 'short', timeZone: tz });
             const fIcon = WEATHER_ICONS[f.condition]?.icon || '❓';
             const low = f.templow != null ? Math.round(f.templow) : '—';
             const high = f.temperature != null ? Math.round(f.temperature) : '—';
@@ -134,12 +137,44 @@ class SEMWeatherCard extends SEMLitBase {
         });
     }
 
+    // #516: find a weather.* entity that actually carries usable current
+    // data (a numeric ``temperature``, not unavailable/unknown). Prefer
+    // real entities over the auto-generated ``weather.forecast_*`` subentity.
+    _findUsableWeatherEntity() {
+        const states = this._hass?.states;
+        if (!states) return null;
+        const usable = Object.keys(states).filter((id) => {
+            if (!id.startsWith('weather.')) return false;
+            const s = states[id];
+            return s && s.state !== 'unavailable' && s.state !== 'unknown'
+                && s.attributes && s.attributes.temperature != null;
+        });
+        const nonForecast = usable.filter((id) => !id.startsWith('weather.forecast_'));
+        return nonForecast[0] || usable[0] || null;
+    }
+
     render() {
         if (!this._config) return nothing;
 
-        const entityId = this._config.entity;
+        let entityId = this._config.entity;
         const forecastRows = this._config.forecast_rows || 5;
-        const entity = this._hass?.states[entityId];
+        let entity = this._hass?.states[entityId];
+
+        // #516: the configured entity can be missing, ``unavailable``, or a
+        // ``weather.forecast_*`` subentity that carries no ``temperature``
+        // (RienduPre saw a "?" + "—°C" tile). The dashboard generator picks
+        // one weather entity at build time; if it was reloading then, or the
+        // user only has forecast subentities, that pick is useless. Fall back
+        // at render time to any weather.* entity that actually has a
+        // temperature — preferring non-forecast — so the tile self-heals.
+        if (!entity || entity.state === 'unavailable'
+                || entity.attributes?.temperature == null) {
+            const fallbackId = this._findUsableWeatherEntity();
+            if (fallbackId) {
+                entityId = fallbackId;
+                entity = this._hass.states[fallbackId];
+            }
+        }
 
         if (!entity) {
             return html`

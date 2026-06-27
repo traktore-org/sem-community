@@ -86,6 +86,36 @@ async def test_diagnostics_returns_data(mock_hass, entry, coordinator):
     assert "energy_daily" in result
     assert "energy_yearly" in result
     assert "performance" in result
+    # #523 — battery control + surplus observability sections.
+    assert "battery_control" in result
+    assert "surplus" in result
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_battery_control_section(mock_hass, entry, coordinator):
+    """#523: battery_control surfaces adapter controllability + last decision."""
+    class _FakeAdapter:
+        supports_forced_charge = True
+        supports_forced_discharge = False
+        _force_discharge_entity = ""
+        _discharge_control_entity = "number.batteries_maximale_entladeleistung"
+        _inverter_device_id = ""
+    coordinator._battery_adapters = {"primary": _FakeAdapter()}
+    coordinator._last_battery_decisions = {
+        "primary": {"intent": "limit_discharge",
+                    "reason": "ev_charging → limit 1200W", "mode": "auto"},
+    }
+    entry.options = {**entry.options, "battery_mode": "self_consumption",
+                     "battery_discharge_protection_enabled": True}
+    entry.runtime_data = coordinator
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
+
+    bc = result["battery_control"]
+    assert bc["adapters"]["primary"]["supports_forced_discharge"] is False
+    assert bc["adapters"]["primary"]["inverter_device_id_set"] is False
+    assert bc["last_decisions"]["primary"]["intent"] == "limit_discharge"
+    assert "ev_charging" in bc["last_decisions"]["primary"]["reason"]
+    assert bc["config"]["battery_mode"] == "self_consumption"
 
 
 @pytest.mark.asyncio

@@ -11,6 +11,1362 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3] — 27.06.2026
+
+> **Stable release.** Consolidates the 1.7.3 beta line (beta.1 → beta.65, detailed
+> below) plus the final hardening below. Headline: a big EV-charging reliability
+> pass (steady offer, clean stops, max-SOC ceiling, battery-assist), the
+> single-source EV decision architecture, multi-battery + per-battery modes,
+> grid-sign auto-detection, the audit-telemetry program, and a large census /
+> dead-code cleanup. Battery→grid arbitrage remains **deactivated** (tracked for
+> v1.7.4 in #533).
+
+### 🔌 EV — single-source stability bridge (#461)
+- 🐛 **The EV could grid-hold at low battery SoC and never settle.** The anti-flap
+  "disable bridge" re-derived solar/surplus/SoC/tariff and held minimum current
+  after `decide()` had already structurally idled, then re-engaged in a loop —
+  importing grid indefinitely (PROD-confirmed via the strategy-sensor history).
+  `decide()` is now the single source of truth: it classifies each IDLE as
+  transient (hold) vs structural (stop) on `ChargerDecision.bridgeable`, and the
+  stability layer simply honours the flag — no re-derivation — plus a durable
+  stop and a post-stop settle so a winding-down car can't re-open the hold.
+  (by @guidoeberle in #461)
+
+### ⚙️ Config — knobs apply without a reload (#547)
+- ✨ **Changing a setting now takes effect live.** Scalars cached on a controller
+  at construction (regulation offset, heat-pump / hot-water tunables, per-charger
+  EV priority + min/max current + shed priority, tariff rates) used to need a full
+  integration reload. `refresh_runtime_config()` now pushes them into the live
+  controllers on every config change — a refresh, not a rebuild, so timers, cost
+  accumulators and smoothing windows are preserved. (by @guidoeberle in #547)
+
+### 🔌 EV / Load management — single-writer peak control (#461)
+- 🐛 **Load management could fight the EV controller (or silently fail to shed it).**
+  The EV is now removed from load-management's per-cycle device shedding entirely:
+  daytime EV charging is solar-driven (no grid peak) and the night grid top-up is
+  already peak-managed by the night planner — both through the single
+  `decide()`/reconciler writer. The old side-channel (`number.set_value 0` /
+  `keba.set_current 0`) fought the reconciler heartbeat on KEBA and mis-read
+  number-entity Wallbox chargers, so it could only flap or fail. (by @guidoeberle in #461)
+
+# [1.7.3-beta.65] — 26.06.2026
+
+> Hardens the battery-protection limit against an EV-ramp sensor-lag spike.
+
+### 🔋 Battery — spike-proof the discharge-protection limit (#536)
+- 🐛 **A fast EV load ramp could briefly over-allow battery discharge.** When the car ramps hard (e.g. `always_max` to 10 kW), the grid meter registers the import a cycle before the KEBA `ev_power` sensor reports the draw, so the energy-balance `home_consumption_power` transiently inflates by ~the car's draw (seen on PROD: spiked to 9213 W). Since the discharge-protection clamp limits the battery to the home load, that spike briefly raised the limit and let the inverter feed a little battery into the car below the buffer. `_smooth_home_consumption` now has a **symmetric upward-spike guard** (it already held the *dip* direction): a one-cycle jump above the last value + 2 kW is treated as the EV/grid sensor lag and the last good value is held for up to 2 cycles; a genuine, persistent rise (an appliance) is accepted once the short window expires. (by @guidoeberle in #536)
+
+# [1.7.3-beta.64] — 26.06.2026
+
+> The battery now stops feeding the EV at the buffer SoC floor — cleanly.
+
+### 🔋 Battery — enforce the buffer SoC floor (#536 follow-up to #545)
+- 🐛 **The battery drained into the EV below the buffer SoC.** With #545's aggressive assist, a high house load kept surplus just above the gate while SoC fell below the buffer (PROD: 83% with an 85% buffer), and the discharge clamp — which keyed only on `surplus < gate`, never on SoC — let the inverter keep feeding the car well below the user's reserve. The clamp now also fires when **`SoC < buffer_soc`**, so below the buffer the battery is reserved for the house **in every zone, regardless of surplus**. Above the buffer the #545 assist is unchanged. (A zone-by-zone audit confirmed the EV engine was already correct in all four zones — the gap was isolated to the battery clamp.) (by @guidoeberle in #536)
+- 🐛 **The EV stop-bridge never fired with a bursty car.** The disable-bridge stop timer only accumulated while the car drew continuously, and the draw-latch was wiped every deficit cycle — so a Renault Zoe blipping between pulses reset the timer each cycle (170→99→20 s, never reaching 180 s) and the contactor never opened. The latch now persists through the bridge (refreshed on each real draw, cleared only on a genuine stop), so the car stops cleanly instead of grid-charging indefinitely. (by @guidoeberle in #536)
+
+# [1.7.3-beta.63] — 26.06.2026
+
+> Cleanup: retire the EV-charging diagnostic instrumentation now that #545/#546 are fixed.
+
+### 🧹 Instrumentation retired (#545 / #546)
+- 🧹 The `EV-OFFER-PROBE` reconciler log is **downgraded to DEBUG** (and gated on DEBUG, so it does no per-cycle work on a normal INFO PROD) — it served its purpose pinning the KEBA 6↔9 A flap (#546, fixed). Re-enable with debug logging if a future flap needs re-diagnosing.
+- 🗑️ Removed the observe-only **`sensor.sem_diag_ev_assist_headroom`** diagnostic and its per-cycle computation — instrumentation for the #545 chicken-and-egg, now fixed and closed. (Swept the sensor description + population + strings/15 translations.)
+
+# [1.7.3-beta.62] — 26.06.2026
+
+> The home battery now empties into the EV at high SoC instead of sitting idle.
+
+### 🔋 EV — max out the battery into the car (#545)
+- ⚡ **"Max out till self-consumption":** when the home battery is in the assist band (SoC ≥ the Buffer SoC) and there's real solar surplus past the Solar Gate, SEM now offers the **full** battery-assist potential — it raises the offered amps so the inverter discharges the battery **into the car, down to the Buffer SoC** (the self-consumption reserve floor), instead of only topping the car up to the charger minimum. This fixes the chicken-and-egg where a **full battery sat idle while the EV grid-charged** (observed live: at 100% SoC, SEM offered only ~8 A, the car drew ~3 kW from solar, the battery never assisted, and a grid night-charge was still needed). The assist self-tapers as SoC falls toward the Buffer and is off-limits below it, so the battery is never drained past the floor. Solar-gated; pure amps — SEM commands no battery directly, the inverter's self-consumption does the discharge. Aligned across both budget layers (`decide.battery_assist_budget_w` + the canonical `calculate_canonical_ev_budget`) so they agree (#282). Docs updated (EV_CHARGING_LOGIC, ARCHITECTURE). (by @guidoeberle in #545)
+
+# [1.7.3-beta.61] — 26.06.2026
+
+> Fixes EV charging running past the configured max SOC during solar charging.
+
+### 🔌 EV — stop at max SOC (#548)
+- 🐛 **The EV charged past its configured max SOC** in solar/surplus charging (reported by @RienduPre, Wallbox Pulsar Plus). The max-SOC ceiling (`soc_limit_active`) only reached the retired ChargingStateMachine (→ `SOLAR_TARGET_REACHED`), and that state was then **overwritten by the per-charger decision** — while the `decide()` day path has no max-SOC check of its own, charging whenever surplus ≥ min. So nothing actually stopped the charge at the ceiling. Now the ceiling is plumbed into `ChargerView.soc_ceiling_reached` (from the value the coordinator already computes) and **guarded in `decide()` before mode dispatch**, so **every** mode (`solar_only`/`min_plus_solar`/`always_max`/`solar_plus_cheap`) stops at the max SOC. kWh-target users are unaffected (their max is effectively unlimited). The stop now reads as **"Target reached"**. (by @guidoeberle in #548)
+
+# [1.7.3-beta.60] — 26.06.2026
+
+> Census cleanup, continued: removed dead published sensors and added a CI guard
+> so the dead-surface class can't regrow. Each removal re-verified live (3 of 19
+> candidates turned out to have a consumer and were kept).
+
+### 🧹 Dead sensors removed (#544)
+- 🗑️ **Removed 16 orphan sensors** — published, enabled-by-default, but read by no card, generator, or decision (pure entity clutter): the fleet EV-intelligence cluster (`ev_taper_ratio`, `ev_taper_minutes_to_full`, `ev_estimated_soc`, `ev_last_full_charge`, `ev_energy_since_full`, `ev_predicted_daily_consumption`, `ev_battery_health`), the forecast-accuracy cluster (`forecast_accuracy_today`, `forecast_accuracy_7d`, `forecast_deviation_kwh`, `forecast_corrected_tomorrow`, `forecast_power_now_w`, `forecast_power_next_hour_w`), and the predictor outputs (`predicted_consumption_next_hour`, `predicted_consumption_today_kwh`, `predicted_solar_next_hour`). Swept descriptions + population + metadata across `strings.json`/`icons.json`/15 translations. **Breaking** for any custom dashboard/automation that referenced these. Kept (verified live): `ev_taper_trend` (diagnostic), `forecast_correction_factor` & `forecast_history_days` (read by the dampening/correction sensor attributes). (by @guidoeberle in #544)
+
+### 🔒 Census cleanup closed (#543)
+- ✅ With #544 done, the census cleanup (#543) is complete — the knob-reader contract lint (`tests/test_knob_wiring.py`) was already in place from the 2026-06-25 chunk and confirms all 26 NUMBER knobs are wired. The one remaining item (knobs read only at controller construction don't apply until reload) is a behavioral fix, split to #547.
+
+# [1.7.3-beta.59] — 26.06.2026
+
+> EV-decision coherence: the overnight battery-drain root cause is fixed, and a
+> verify-first audit retired/clarified the confusing knobs around it. Live-confirmed
+> on PROD (KEBA P30 + Renault Zoe) across all four charging modes.
+
+### 🔋 Battery — overnight drain root cause (#536)
+- 🐛 **The home battery drained overnight to feed the EV** (PROD 93→41 %). The discharge-protection clamp gated on the *instantaneous* draw flag (`ev_charging`), which a bursty car (Renault Zoe) toggles on/off every few seconds — so the clamp dropped in the gaps, the battery discharged freely, and that energy fed the next pull. The clamp now gates on **`ev_connected`** (vehicle plugged in), so it **holds steady** through the car's pulses. Live-verified: `battery→ev = 0 W` in every solar mode all afternoon. (by @guidoeberle in #536)
+
+### 🧹 Config — verify-first knob cleanup (#536)
+- 🧹 **Removed three dead/redundant battery knobs** after auditing each live (two of the original four turned out to be live and were handled, not blindly cut): `battery_minimum_soc` (labelled "hard stop" but never gated discharge — its only live use, the empty-ETA, now references the real floor `battery_priority_soc`), `battery_assist_floor_soc` (shadowed by `buffer_soc` — folded in as the single assist floor), and the comment-only `battery_hold_solar_ev`. (by @guidoeberle in #536)
+- 🐛 **Fixed the `minimum_solar_power` default inconsistency** — a legacy config missing the key silently used 200 W while a fresh install seeded 1000 W; the fallback now matches the seeded default. (by @guidoeberle in #536)
+- 📝 **Corrected the misleading "Surplus floor" help text** — `minimum_solar_power` gates **raw PV production** ("is the sun up"), distinct from `battery_assist_min_surplus` (export surplus); clarified in English + 15 translations. The two were *not* collapsed — they measure different quantities and both feed the #461 deep-deficit logic. (by @guidoeberle in #536)
+
+### 🗑️ Internal — legacy retirement, stage 1 (#536)
+- 🗑️ Removed the deprecated proportional `FlowCalculator.calculate_energy_flows` (zero production callers since #282; the timing-aware `integrate_energy_flows` is canonical). (by @guidoeberle in #536)
+
+**Thanks** to @guidoeberle for the PROD live-testing across all four charging modes.
+
+# [1.7.3-beta.58] — 26.06.2026
+
+> Steady EV charging — live-confirmed on a real KEBA P30 + Renault Zoe: the
+> offered current went from **366 changes/evening** (6↔9 A sawtooth, car in
+> standby) to **0 changes in 25 min** (rock-steady 8 A, car drawing ~3.1 kW).
+
+### 🔌 EV charging — steady offer (neutralize the failsafe, then track like evcc)
+- 🐛 **The offered current flapped 6↔9 A every few seconds**, so a steady-needing car (Renault Zoe) sat in standby. Root cause: the KEBA reverts to its built-in **6 A failsafe** between SEM's writes and SEM re-wrote 9 A every 5 s — a sawtooth the car can't charge through. Live testing on a real P30 showed the failsafe **can't be disabled** over UDP (the box keeps it — likely a safety design). So SEM now **neutralizes** it: it arms a **long (10-min) non-tripping, persisted** failsafe with the fallback at your **charging floor** — it overwrites the box's short built-in one, the per-cycle writes keep it from ever tripping, and a genuine controller-death lands the car on the floor (not 6 A). No more flap. (#546)
+- ⚡ With the offer steady, the current tracks surplus **evcc-style** — a ≈30 s cadence with a 2 A deadband (not a multi-minute freeze), with evcc-aligned **1 min start / 3 min stop** delays (disable delay 300→180 s). (#546)
+- ⚙️ `keba_arm_failsafe` (default **on** = managed-neutralize). Set it **off** for boxes that *can* disable the failsafe at the charger (evcc-style); SEM then leaves it alone and raises a **Repair** (Settings → Repairs) guiding you to disable it, with a step-by-step link. (#546)
+- 🔭 The `EV-OFFER-PROBE` diagnostic now reads the **live** offered-current sensor (`ev_current_sensor`) instead of the static config cap, so it can actually show hardware drift. (#546)
+
+### 🛡️ Observer mode / wiring
+- 🐛 **The observer-mode switch was a silent no-op.** Its entity-id constant held the `domain.object` form and the coordinator re-prefixed it (`f"switch.{…}"`) into a dead three-segment id, so the lookup always returned `None` and toggling the switch never made SEM hands-off. On a test bench that shares the *same physical* inverter/battery as production, this meant the test instance kept driving the real hardware while the switch showed "on". Fixed the lookup, made the switch push its state straight onto the coordinator, and guarded the per-cycle pull so a transient `unavailable` switch state can't clobber it back on. Two follow-on bugs surfaced once the switch finally engaged — most notably the read-only setpoint-zeroing iterated the multi-charger **dict keys** (crashing the whole update cycle) — and are fixed. Contract tests lock the class: every entity-id constant must be a valid 2-segment id, the coordinator must not re-prefix one, and observer mode must hold across transient unavailability. (#542)
+
+### 💰 Costs
+- 🐛 **Monthly and Yearly costs were identical.** The yearly seeding backfilled the year's *energy* from the recorder but never the *cost* accumulators, so yearly cost only held the live (this-month) portion and equalled the monthly figure. Now the yearly cost is seeded from the seeded yearly energy × the average rate — and an already-seeded install (where only the cost was missing) is backfilled too. The pre-tracking backfill is an **estimate** on a dynamic tariff (the recorder has historical energy, not historical hourly prices); the live portion stays exact. Confirmed the live per-cycle cost is already tariff-correct (static/dynamic/calendar all priced at the current rate each cycle). (#536)
+
+# [1.7.3-beta.57] — 25.06.2026
+
+> Stable (1.7.3) stays **on hold** — the EV-charging rework below needs PROD soak.
+
+### 🔌 EV charging — steady, unified, honest
+- 🚗 **Rock-steady charging.** A Renault Zoe R that oscillated 5 kW↔0 now holds a flat 5 kW. Four root causes: single-charger **draw-detection** bug (`build_view` now falls back to the fleet `ev_power`, so SEM actually sees the car drawing); **latch hysteresis** (hold the current through transient 0 W dips instead of re-starting); **steadier guards** (90 s change interval / 2 A deadband / 5-cycle median); and the config insight that this Zoe's *sustain* floor is **~10 A, not 6** (it drops at 6 A). The oscillation was SEM *changing* the current, not the level. (#536)
+- ☀️🌙 **Day + night unified.** One charging behaviour (latch → hold → auto-escalate) across solar and night, with a **bounded** start-escalation (caps at `max(target, 10 A)`, gives up after 90 s on a refusing car — no more climbing to 32 A). (#536)
+- 🔢 **Night-target counter fix.** The planner over-charged past the target after restarts (it used a restart-volatile per-charger integrator); it now uses the persisted `daily_ev` — the figure the dashboard shows. (#536)
+- 🛑 **Observer mode now hands-off for the EV too.** Zeroes the published commanded current so an external bridge automation or a second SEM instance can't drive the charger while observing. (#536)
+
+### 📊 Dashboard
+- ⚡ EV card shows the **commanded current** next to CHARGING (e.g. `CHARGING (8 A)`) — what SEM transmitted vs the car's real draw. (#536)
+- 🩹 Header and EV-card power/state no longer contradict (both derive from the same per-charger power). (#536)
+
+### 🧹 Cleanup
+- Removed dead Advanced settings `current_delta` / `power_delta` / `soc_delta` and the dead `ev_stall_cooldown` entity, plus the orphaned solar-stability layer. (#536)
+
+> **Known / open:** a self-starting KEBA still auto-tops a not-full car past the kWh target (proper fix: `keba.set_energy` so the box enforces its own stop); a test instance must never point at production hardware.
+
+# [1.7.3] — STABLE
+
+> Rolls up the 1.7.3 beta line (beta.2 → beta.56 + stable prep). The dated
+> `beta.*` sections below are the detailed per-build history; this is the headline
+> summary of what changed since **1.7.2**. The biggest themes: EV charging is
+> reliable in every mode, the home battery is protected from feeding the car
+> without sun, and multi-battery + grid-sign + dashboard all got a major pass.
+
+## ⚡ EV charging — rock-solid in every mode
+- **Charger state reconciler (#392).** The per-cycle imperative actuator (which
+  spammed `keba.disable` 391× and dropped KEBA to 6 A) is replaced by a
+  desired-vs-observed reconciler: it issues the *minimum* commands to converge and
+  then leaves the charger alone. Idempotent idle, heartbeat re-writes, failsafe
+  armed once per session.
+- **Enable-switch reconciliation + backoff (#536).** For switch-driven chargers
+  (Wallbox etc.) SEM reconciles the enable switch and backs off (stops fighting +
+  surfaces a repair) if something keeps toggling it.
+- **No more expensive-grid / dead-solar charging (#461, #524).** The EV no longer
+  drains the battery to hold a dead solar session, and stops pulling from grid after
+  a cheap window ends.
+- **Charge modes:** `solar_only`, `min_plus_solar`, `solar_plus_cheap`,
+  `always_max`, `off` — each with a one-line dashboard hint.
+- **EV target type:** daily **kWh** target or **vehicle SOC %** (when a vehicle SOC
+  sensor is configured). Per-vehicle minimum current (#440), independent **surplus
+  vs shed** priority per charger (#470).
+
+## 🔋 Battery protection & control
+- **Solar Gate (#537).** The home battery only assists the EV when there's real
+  solar surplus ≥ a configurable gate (default **1200 W**) — in *any* mode. Set it
+  to **0 W** to allow battery support everywhere, including overnight. Fixes the
+  overnight battery-drain-into-the-car class of bug.
+- **Multi-battery control + per-battery modes (#523).** Per-battery control entities
+  and five modes — `auto`, `self-consumption`, `force-charge`, `force-discharge`,
+  `off` — plus zero-config Huawei forcible discharge and a corrected SG-Ready relay
+  map for heat pumps.
+- **Idempotent Huawei discharge-limit write (#538).** Stopped re-writing the
+  unchanged discharge limit every cycle, which had been flooding the serial Modbus.
+- **Battery → grid export arbitrage (#523)** shipped in beta but is **deactivated in
+  this stable** pending more soak (#533, re-enable targeted v1.7.4).
+
+## 🧭 Grid sign, heat pump, tariffs
+- **Robust grid-sign autodetection + one-tap fix (#461).** Solar-anchored detector
+  with a `Fix grid sign` / `Reset` button and a `flip_grid_sign` service; locks
+  survive restarts (#476).
+- **Heat pump / hot water (#508).** Surplus activation fires, boosts on the *true*
+  house surplus, stands down under peak; relay-failure safety.
+- **Tibber Grid Reward price arrays (#491)** + forecast dampening with the correct
+  sun window (#416).
+
+## 🖥️ Dashboard & i18n
+- **Solar Gate** stepper, per-charger **plan strip**, price card, config-card
+  cleanups; system-diagram and 7-day-chart fixes.
+- **Time labels render in HA's home timezone**, DST-aware, not the viewer's browser
+  (#539).
+- **Time charts roll the day boundary** (#541) — a long-open app no longer shows
+  *yesterday's* data in *today's* chart; the relative window auto-refreshes on a
+  timer and on app resume / tab focus.
+- **EV Power chart no longer magnifies standby noise** (#541) — a plugged-in idle
+  car's ~130 W standby used to auto-scale to fill the whole chart and read like a
+  real charge; the axis now has a 2 kW floor so standby renders flat near zero while
+  real charges still scale up.
+- **Full 15-locale dashboard translations** — every runtime card string is now
+  translated (previously ~35 keys fell back to English outside en/de/nl), guarded by
+  a new parity test.
+
+## 🔍 Stability & review
+- Pre-stable review batches (#485, #531, #535) — forced-charge restored, per-battery
+  edge cases, robustness; cold-start/restart hardening (#532). Final ruflo pass:
+  today-plan HA-tz day classification, chart tz try/catch, `decide_battery` /
+  `#538` comments, and a default-gate test.
+
+# [1.7.3-beta.56] - 23.06.2026
+
+## 🕐 Time labels show HA's timezone, not the browser's (#539)
+
+Every time label on the dashboard rendered in the **viewer's browser timezone**.
+A browser/OS stuck on standard time (CET) showed summer-time data **one hour
+early** (a 12:00 CEST chart bucket displayed as 11:00). Fixed across the board —
+all now format via HA's configured home timezone (`hass.config.time_zone`, IANA
+zone → DST-aware), correct regardless of the viewing device. Display-only; the
+underlying data timestamps were already right.
+
+- **Time-series charts** (`sem-chart-card`: EV power, solar, battery, flows…) —
+  x-axis labels **and** tooltip times.
+- **Shared `semFormatTime`** helper → fixes the today-plan times and the system
+  diagram's sunrise/sunset.
+- **Price card** tariff-window times, **EV status card** (axis ticks + next-cheap
+  window), **weather card** clock + forecast days.
+
+# [1.7.3-beta.55] - 23.06.2026
+
+## ⚡ Idempotent Huawei discharge-limit write (#538)
+
+PROD modbus was throwing read **timeouts and out-of-order responses** because
+SEM rewrote the Huawei battery discharge limit (`5000 W`, the unclamped NORMAL
+default) **every coordinator cycle** even though it never changed — a redundant
+write that collided with the huawei_solar read coordinators on the single serial
+connection and ballooned cycle times to 13–28 s.
+
+- `HuaweiBatteryAdapter._apply_discharge_limit` now **skips the write when the
+  control entity is already at the target** (compared against the live entity
+  state, so an external change is still re-asserted; writes when the state is
+  unknown/unavailable). The per-cycle NORMAL spam is gone.
+
+*(PROD-side, separate from the release: the `Huawei … Abfrage` polling
+automation was slowed 10 s → 15 s to further cut modbus read pressure — the
+native huawei_solar update interval is hardcoded at 30 s and not configurable.)*
+
+# [1.7.3-beta.54] - 23.06.2026
+
+## 🧹 UI polish
+
+- **Removed all `evcc` references** from the dashboard help texts and the code —
+  the surplus enable/disable delays are now described in plain terms (hysteresis
+  enable/disable timers, deficit-persistence) without the external project name.
+- **Added the missing help text** for **Regulation Offset** in the Advanced section
+  (a small power buffer kept as grid export so SEM doesn't risk importing while
+  regulating surplus charging).
+
+# [1.7.3-beta.53] - 23.06.2026
+
+## 🔋 Battery only assists the EV when the sun is out (#537)
+
+The home battery was draining into the car overnight in `min_plus_solar` (PROD,
+~6.5 kWh in one evening) — and in `always_max` — because battery-assist ran on a
+sunset clock, not on actual solar. A single **Solar Gate** now governs it, in
+**every** charging mode:
+
+- **New "Solar Gate" knob** (`battery_assist_min_surplus`, default **1200 W**) on
+  the Control tab and in the integration options. Below this much real solar
+  surplus the battery is reserved for the house and the car draws from grid + solar.
+- **Set it to 0 W** to let the battery support the EV everywhere, including
+  overnight (opt-in — the previous behaviour).
+- Enforced in two places so it can't leak: the EV budget (`min_plus_solar` /
+  canonical battery-assist) and the battery discharge clamp (`decide_battery`),
+  which now protects the battery in **any** mode incl. `always_max` and replaces
+  the old night-only / `hold_solar` protection (gate = 0 restores it everywhere).
+
+Verified on HA-TEST (deployed decision table correct incl. `always_max`); full
+suite 3797 green.
+
+# [1.7.3-beta.52] - 22.06.2026
+
+## 🔌 EV charger reliability hardening (#536) — verified live on HA-TEST
+
+A focused pass on the EV charger control, all confirmed live against a KEBA and a
+switch-controlled Wallbox sim on HA-TEST:
+
+- **Enable-switch backoff.** When a charger keeps flipping its *own* enable switch
+  back off (Wallbox Eco-Smart / Autostart, or a conflicting integration), SEM no
+  longer fights it forever — it re-asserts a few times, then **stops and surfaces a
+  repair** ("charger auto-pausing — disable Autostart/eco-smart"), probing again
+  periodically. This kills the start/stop oscillation.
+- **`input_boolean` start/stop entities** are now driven like `switch.*` ones, so
+  `off`/`idle` reliably open the contactor (previously enable worked but disable
+  didn't).
+- **No more `CHARGE_MAX` clamp-drift.** `always_max` resolves to the charger's
+  *effective* max (config max clamped to the control entity's max) instead of the
+  hardware max, so it stops spamming `WRITE 32A` + `clamping 32 A → 16 A` every
+  cycle and converges cleanly.
+- **Honest charger state.** When SEM is commanding a charge but the car isn't
+  actually drawing (full / not ready), the dashboard now reads **"ready"** instead
+  of "charging at 0 W" (power-based, debounced — never changes the command).
+
+KEBA is unaffected by all of the above (no enable switch). The #392 idempotency
+(no `keba.disable` spam) and the battery "discharge clamped to home load during EV
+charging" protection were both re-verified live.
+
+## 🧹 Internal: charger reconciler is now the sole actuation path
+
+Removed the dead legacy EV-control code (`_execute_ev_control`, the legacy
+`actuate()` body, the unused adapter idle-debounce) now that the desired-vs-observed
+**reconciler** owns all charger actuation — net **−1073 lines**, with the self-resume
+behavior moved to reconciler-native test coverage. No behavior change.
+
+# [1.7.3-beta.51] - 22.06.2026
+
+## 🔌 Wallbox "commanded but 0 W" — SEM now reconciles the enable switch (#536)
+
+A Wallbox (and any charger controlled by a current **number** + a separate
+**enable switch**) could sit at *Connected, Always-max, commanded 16 A, **0 W***
+and never start, in any mode. Cause: SEM turned the enable switch on **once** at
+session start and then never checked it again — if the switch later went off
+(Wallbox auto-pause, locked, eco-smart mode, or an external toggle), SEM kept
+writing the current to a charger whose contactor was open.
+
+The charger reconciler (from beta.50) now treats the **enable switch as observed
+state**: every cycle it reads the switch's *actual* state and re-asserts it when
+charging is wanted and it's off — idempotent, and keyed on the switch state (not
+power) so a full-but-plugged car never causes switch churn. A switch that's
+**unavailable/locked** (e.g. eco-smart mode) is now surfaced as a repair instead
+of silently swallowing every charge command.
+
+> This was **not** the `ev_charger_service: "0"` value some configs show — that's
+> been harmless since beta.43 (it's normalised to "use the number entity"). The
+> real gap was the un-reconciled enable switch.
+
+# [1.7.3-beta.50] - 21.06.2026
+
+## ⚡ EV charging is now rock-solid in every mode — charger state reconciler
+
+The KEBA kept dropping to 6 A / pausing, and we'd shipped five separate patches
+chasing it. They all treated symptoms of one root cause: **SEM re-issued a
+hardware command to the charger every ~10 s cycle**, whether or not anything had
+changed. PROD logs caught it doing `keba.disable` **391 times in a row** on an
+already-open contactor.
+
+This replaces the per-cycle imperative actuator with a **desired-vs-observed
+reconciler** that issues the *minimum* commands needed to converge, then leaves
+the charger alone:
+
+- **Idle / off issue zero redundant commands** — the contactor is opened once,
+  not re-disabled every cycle (the 391× spam is gone).
+- **Holds your commanded current** like a fixed-current charge, but solar-aware.
+- **Drift correction** — if the box silently reverts to its 6 A failsafe floor,
+  SEM re-asserts your target on the next cycle.
+- **Failsafe armed once per charge episode** (not re-armed every cycle), kept fed
+  by the per-cycle write heartbeat.
+- **Same convergence path for all modes** (off / always_max / min_plus_solar /
+  solar / solar_plus_cheap) — no mode-specific surprises.
+
+Live-verified on HA-TEST across charge and off; full suite 3791 green. (#392)
+
+> Note: a fixed-3-phase KEBA P30 still can't physically charge below ~4.1 kW, so
+> in solar modes it will still *pause* when surplus is genuinely below the
+> 3-phase floor — but now it pauses cleanly and predictably instead of bouncing.
+
+# [1.7.3-beta.49] - 21.06.2026
+
+## 📊 EV charging-power chart: no more phantom 11 kW peaks
+
+The "EV Charging Power" chart (solar + battery + grid → EV, stacked) showed
+impossible peaks — an ~11 kW "grid" spike while the EV only ever drew ~4.4 kW.
+Cause: the chart plotted each source's per-hour **maximum** and then stacked
+them. The three sources are complementary (when solar peaks, grid is 0), so
+their maxes occur at different moments and stacking them triple-counts — the
+stacked maxes far exceed the real instantaneous total. (There was never a real
+11 kW; the grid genuinely peaked at ~4.9 kW, so peak management was unaffected.)
+
+Stacked power charts now plot the per-bucket **mean**, so the components sum to
+the real total and the area integrates to real energy. Non-stacked charts keep
+the max so peaks stay visible.
+
+
+# [1.7.3-beta.48] - 21.06.2026
+
+## 🔧 Restore the second EV minimum + fix the solar-power config key
+
+- **"Vehicle Min Amps" is back as a tile** (beta.47 hid it when equal to "Min
+  Amps"). A charger legitimately has TWO minimums and both should be visible:
+  **Min Amps** is your own floor (lowest current SEM bothers charging at);
+  **Vehicle Min Amps** is your car's floor (some cars won't charge below ~8–9 A).
+  The effective floor is the higher of the two. Only the genuinely-dead "Vehicle
+  Start Amps" tile stays hidden.
+- **Solar-power config key aligned.** The setup/options flow wrote `min_solar_power`
+  while the runtime slider and the decision read `minimum_solar_power` — so a value
+  set during setup never reached the runtime. The flow now writes the same key;
+  existing `min_solar_power` values are still honoured.
+
+
+# [1.7.3-beta.47] - 21.06.2026
+
+## 🧹 EV current knobs cleaned up + two correctness fixes
+
+Following the KEBA failsafe fix, a review of the EV current path (the user's
+"three values, such a mess") and two confirmed bugs:
+
+- **Removed the dead "Vehicle Start Amps" tile.** `initial_current` (10 A) is
+  not read by the live charging path — the start ramp uses the Min Amps floor —
+  so it was a settable tile that did nothing but confuse. Hidden from the card.
+- **"Vehicle Min Amps" only shows when it differs from "Min Amps."** It defaults
+  equal to the min, so it was a redundant second 9 A; now it only appears once
+  you actually raise it to override a car that ignores the min (or in help mode).
+- **The "Minimum Solar Power" slider now works.** Its value (`minimum_solar_power`)
+  was never wired into the decision — the solar floor / deep-deficit guard always
+  saw the 200 W default regardless of the slider. Now honoured (200 W fallback
+  when unset).
+- **1-phase chargers: amps↔watts floor fixed.** The MIN_PV / BATTERY_ASSIST / NOW
+  power floors hardcoded 3 phases × 230 V, so a 1-phase charger's floor was 3× too
+  high. Now uses the configured `ev_phases` / `ev_voltage` (3-phase unchanged).
+
+Plus a recorded `min_plus_solar` steady-hold scenario pinning that the commanded
+current doesn't flicker on steady surplus.
+
+
+# [1.7.3-beta.46] - 21.06.2026
+
+## ⚡ The real fix: KEBA stops reverting to 6 A (failsafe was misconfigured by SEM)
+
+Root cause of the 6 A drops (car pausing to ~120 W mid-charge): on session start
+SEM called `keba.set_failsafe(timeout=0, fallback=6)` to "disable" the failsafe —
+but the HA service rejects `timeout=0` (its minimum is 1), so the call **failed
+silently** and the box kept an active failsafe with a **6 A fallback** that
+tripped during charging. SEM was, in effect, arming the gun it thought it had
+unloaded (confirmed against evcc's KEBA handling — evcc never sets a 6 A
+fallback).
+
+SEM now sets a **benign** failsafe instead: a valid 30 s timeout that the
+per-cycle `curr` writes keep resetting (so it never trips in normal operation),
+and a fallback at the **charging floor** (your configured min, not 6 A) — so even
+a genuine controller-death trip keeps the car charging at the floor instead of
+pausing. Combined with the per-cycle refresh (beta.45), the offered current now
+holds at the commanded value.
+
+
+# [1.7.3-beta.45] - 21.06.2026
+
+## ⚡ KEBA watchdog refresh — now per-cycle (beta.44 follow-up)
+
+beta.44 cut the KEBA refresh to 30 s, but a PROD box still reverted to its 6 A
+failsafe in under 30 s (offered current oscillating 6↔9 A, pausing the car to
+~120 W). The KEBA refresh interval is now set **below the ~10 s coordinator
+cycle**, so a steady command is re-asserted **every cycle** — outrunning any
+failsafe with a timeout of at least one cycle. A box that reverts sub-cycle is a
+device-side failsafe-config problem (disable failsafe or lengthen its timeout in
+the KEBA app) that no write rate can out-run.
+
+# [1.7.3-beta.44] - 21.06.2026
+
+## ⚡ KEBA stops dropping to 6 A mid-solar-charge (watchdog refresh)
+
+On a steady solar surplus a KEBA could oscillate its offered current between
+~6 A and the commanded value about once a minute — charging at ~3.5 kW while
+several kW exported to the grid. Cause: SEM holds a steady command and refreshes
+the charger every **60 s**, but a KEBA's failsafe watchdog can trip near 60 s, so
+the refresh *raced* the watchdog — the box kept falling back to its failsafe
+current between refreshes.
+
+The refresh interval is now a **per-charger device capability** instead of a
+single global constant: a KEBA refreshes every **30 s** (comfortably under its
+failsafe), while chargers without a short failsafe keep the 60 s default. An
+explicit `_watchdog_refresh_override_s` wins for unusual failsafe settings. SEM's
+command logic is unchanged — only the keep-alive cadence — so a steady command
+now actually holds and the full surplus goes to the car.
+
+# [1.7.3-beta.43] - 20.06.2026
+
+## 🔋 Battery modes now map to the right Sessy strategy (#523)
+
+RienduPre's beta.42 testing showed that on a Sessy (AC-coupled) every non-force
+mode left the battery in `eco` — which isn't self-consumption — so `Auto` /
+`Self-consumption` "didn't charge or discharge" and `Off` sat in `eco` too.
+Each per-battery mode now drives the correct power strategy:
+
+- **Auto / Self-consumption** → `nom` (zero-on-meter self-consumption), so the
+  battery actually charges from surplus and powers the house — not `eco`.
+- **Off** → `idle` (battery does nothing), with the setpoint zeroed.
+- **Force charge / Force discharge** → `api` (SEM setpoint control) — unchanged.
+
+After a force op ends (or the battery hits its reserve), it returns to `nom`
+self-consumption instead of `eco`. The strategy values are configurable for
+other AC-coupled brands (`battery_strategy_self_consume_value` /
+`battery_strategy_off_value`). Huawei/DC batteries are unaffected (no strategy
+select).
+
+# [1.7.3-beta.42] - 20.06.2026
+
+## 🐛 Pre-stable review fixes — forced charge restored (#535)
+
+A full ruflo-core review of the battery subsystem ahead of stable 1.7.3 found a
+blocker and three high-severity issues, all confirmed from code and now fixed:
+
+- **Forced charging was silently broken on every brand.** The battery adapters
+  built the internal charge command with the wrong field names
+  (`charge_power_w`/`duration_min` vs the dataclass's
+  `max_power_w`/`duration_minutes`), which raised a `TypeError` that the outer
+  handler swallowed — so the **`Force charge` mode and the night-charge
+  scheduler did nothing**. Fixed on Huawei, GoodWe, and the generic adapter, and
+  the scheduler now carries a real charge power (it would otherwise have charged
+  at 0 W). **(BLOCKER)**
+- **Scheduled charging no longer fires at the wrong time.** A planned night
+  charge used to start at *evaluation* time (e.g. 21:00) instead of inside the
+  cheapest slot, because the schedule had no "is it active now?" check. It now
+  respects the real slot boundaries.
+- **Restart orphan-stop hardening (#532):** if the cancel command doesn't land
+  (flaky Modbus) SEM now retries instead of giving up, and a multi-battery
+  fleet sharing one inverter issues a single stop per device instead of two
+  back-to-back (which the inverter would block).
+
+# [1.7.3-beta.41] - 20.06.2026
+
+## ⏸️ "Allow arbitrage" mode removed from the selector for stable 1.7.3 (#533)
+
+- Automatic battery→grid arbitrage is fully deactivated for the stable release.
+  On top of the global toggle being off (beta.40), the **`Allow arbitrage`
+  per-battery mode is removed from the mode selector**, and the coordinator no
+  longer evaluates arbitrage for a per-battery `allow_arbitrage` opt-in — a
+  stale config goes dormant (behaves like `Auto`, no selling) instead of
+  quietly selling to grid.
+- **Kept** (tested, safe): `Auto`, `Self-consumption only`, `Force charge`,
+  `Force discharge`, `Off`. Automatic arbitrage returns in **v1.7.4** after
+  review + soak (#533).
+
+# [1.7.3-beta.40] - 20.06.2026
+
+## ⏸️ Battery→grid arbitrage deactivated for the stable release (#533)
+
+- After the incident below, the **selling-to-grid feature is held back** for a
+  stable release. The global arbitrage toggle is **forced off on upgrade**
+  (config migration v13→v14) and its **section is hidden from the dashboard
+  config card**, so it can't be enabled from the UI. The decision code and the
+  per-battery modes stay intact — arbitrage returns in a later release once it
+  has been reviewed and soaked (tracked in #533).
+
+## 🛡️ A SEM restart no longer strands a Huawei battery force-discharge (#532)
+
+- **Critical fix.** Huawei battery→grid arbitrage uses the
+  `huawei_solar.forcible_discharge_soc` service, which the inverter then runs
+  **autonomously until its target SOC**. A SEM restart or config reload while a
+  discharge was in flight gave the fresh adapter no record of it, so SEM never
+  sent the stop — the inverter kept discharging the battery to the reserve floor
+  **unsupervised** (a dev/observer test drained a real LUNA2000 from 80% to 20%,
+  exporting to the grid for ~1h40m before it self-terminated at the floor).
+- SEM now detects an active forcible op via the integration's status sensor on
+  the first cycle after startup and issues one `stop_forcible_charge` to cancel
+  anything it didn't start — waiting for the integration to load and for the
+  sensor to report a real value (no false stops, no missed ops). Resuming
+  arbitrage after a restart re-asserts the sell instead of stopping it.
+
+# [1.7.3-beta.39] - 19.06.2026
+
+## 🔋 New battery mode: "Off (SEM hands-off)" (#523)
+
+- **A sixth per-battery mode, `Off`, that tells SEM to leave a battery completely
+  alone.** Requested by @RienduPre. On the transition into `Off`, SEM does a
+  one-time clean handoff (clears any force command, releases the power strategy
+  it took, un-limits the discharge) so the battery isn't stranded in a
+  SEM-imposed state — then issues **nothing** further: no protection, no
+  scheduler, no arbitrage. The inverter runs the battery on its own. Highest
+  precedence, so it overrides every other decision branch. Available in the
+  per-battery mode selector and translated in all 15 languages.
+
+# [1.7.3-beta.38] - 19.06.2026
+
+## 🔋 Battery arbitrage / per-battery review batch (#531)
+
+A holistic review of the arbitrage / per-battery / AC-coupled (Sessy) subsystem
+after a string of reactive #523 fixes. Three independent reviewers, every finding
+confirmed from code, fixed and tested as **one batch**.
+
+- **Charge-first: never sell stored energy while free solar surplus could charge
+  the battery.** Storing surplus avoids a future import (~full retail price),
+  worth far more than the export price — SEM now suppresses the sell verdict
+  while storable surplus exists and the battery isn't full. (#531)
+- **Arbitrage break-even now uses the all-in import rate, not raw spot.** The
+  upcoming-price curve is raw spot for Nord Pool / ENTSO-E but all-in for Tibber;
+  selling against raw spot lost money for spot-tariff users. SEM scales the
+  forecast minimum up to the live all-in rate (no-op for all-in providers). (#531)
+- **SOC unavailable → SEM holds instead of selling blind.** A setpoint battery
+  (Sessy) has no hardware reserve-stop, so an unavailable SOC could drain it past
+  the backup reserve. When in doubt, hold — the live SOC self-heals next cycle. (#531)
+- **A stale global battery mode no longer bleeds into a multi-battery fleet.**
+  After a single→multi upgrade the UI showed `auto` while a leftover global
+  `force_discharge` drove every battery; multi-battery slots now default to
+  `auto` and only the single-battery selector reads the global key. (#531)
+- **EV-night protection splits the home budget across the fleet.** Two batteries
+  each told to inject the *full* home load over-injected 2× and leaked surplus to
+  the EV — each now gets `home / N`. (#531)
+- **Strategy no longer stranded in API after a reload.** If SEM restarts
+  mid-episode with the strategy already in API, the fresh adapter adopts control
+  so the next idle cycle hands it back instead of leaving the battery
+  setpoint-controlled forever. (#531)
+- **Mixed-brand fleets: an AC-coupled battery stays on the generic adapter.** A
+  Sessy in a Huawei fleet is no longer promoted to the Huawei adapter (whose
+  service calls would never reach it) just because the Huawei integration is
+  loaded for a sibling. (#531)
+- **Arbitrage exit is explicit.** A non-firing arbitrage verdict now propagates a
+  clean STOP rather than falling back to a possibly-stale night-charge decision —
+  without ever overriding an active or planned charge. (#531)
+
+## 🛟 Robustness (#531)
+
+- The discharge-limit write is domain-aware (`input_number` helpers work, not
+  just `number`), matching the force-discharge path.
+- A setpoint clamped to the control entity's range now logs a WARNING instead of
+  silently capping — surfacing a fleet-power-vs-unit-rating mismatch.
+- Two batteries accidentally sharing one control entity now log a collision
+  warning instead of silently fighting over the setpoint.
+
+# [1.7.3-beta.37] - 19.06.2026
+
+## 🔋 Battery charges from surplus again — SEM stops clobbering the power strategy (#523)
+
+- **The battery no longer sits idle while solar surplus is exported.** SEM's
+  strategy-release path forced the configured idle value (`eco`) onto the
+  battery's power-strategy select **even when SEM had never taken control** —
+  clobbering the user's self-consumption mode (e.g. Sessy `nom` = zero-on-meter)
+  and stopping the battery charging from surplus (RienduPre: battery idle at
+  20 % SOC while ~1 kW of surplus exported to grid). SEM now **only restores a
+  strategy it actually changed**; if it never switched to API it leaves the
+  user's mode alone. When it *did* take control it restores the captured prior
+  mode (or the idle fallback if unreadable — never stranded in API).
+
+## 💶 Battery arbitrage holds without an import-price forecast (#523)
+
+- **No more selling on the export floor alone.** When there's no upcoming
+  import-price forecast, SEM can't prove that selling now beats buying back
+  later, so it **no longer fires** (the break-even check was previously skipped,
+  making it sell too eagerly). Conservative default; pairs with the export floor.
+
+## 🔧 A repair when a %-SOC charge cap can't be enforced (#526)
+
+- **No more silent overshoot past the SOC limit.** A `%` charge target needs a
+  readable vehicle SOC to stop at the cap; when the car isn't reporting SOC
+  (asleep / no real sensor), SEM keeps charging until the car tapers — which
+  surprised users ("car went past 80 %"). SEM now files a **repair**
+  (Settings → Repairs) explaining the cap can't be enforced and how to fix it
+  (wire a real vehicle SOC sensor); the dashboard's *estimated* SOC is
+  deliberately ignored for the hard limit. Clears automatically when a real SOC
+  reading returns.
+
+# [1.7.3-beta.36] - 19.06.2026
+
+## 🔋 Battery setpoint is clamped to the control entity's range (#523)
+
+- **Force-charge / force-discharge no longer get rejected for being
+  out-of-range.** SEM wrote the raw charge/discharge power to the setpoint
+  number — but a Sessy unit's setpoint maxes at ~±2200 W, so a fleet
+  `battery_max_charge_power_w` of 4400 W written to a single 2200 W unit was
+  **−4400 W**, which Home Assistant rejects as out of range. The write failed
+  silently and the setpoint stayed at **0**, so the battery never charged
+  (RienduPre: strategy flipped to API, setpoint stuck at 0). SEM now **clamps
+  the setpoint to the entity's `min`/`max`** before writing (mirrors the EV
+  #487 fix) — −4400 → −2200, and it charges.
+
+# [1.7.3-beta.35] - 19.06.2026
+
+## 🔋 Battery control config is reachable without enabling arbitrage (#523)
+
+- **The force-discharge entity, power-strategy entity, and "Bidirectional
+  setpoint" toggle now appear in a "Battery control" section whenever a battery
+  exists** — previously they were hidden behind the *battery arbitrage* toggle
+  (itself only on a dynamic tariff). A user who wants `force_charge` or
+  per-battery modes (not arbitrage) couldn't find them, so `supports_forced_charge`
+  stayed False and the decision was dropped every cycle (RienduPre). Now they're
+  always available, and a **new power-strategy entity picker** lets you wire the
+  Sessy `select.*_power_strategy` from the UI (was config-only before).
+- **Battery SOC autodetect also matches by signature** (`device_class: battery`
+  + `%`), so a localized name like the Dutch `sensor.*_batterijpercentage` is
+  found even without an English SOC keyword (#529, DavidVM1982).
+
+# [1.7.3-beta.34] - 18.06.2026
+
+## 🔋 Battery SOC: reachable when it lives off the power sensor's device (#529)
+
+- **A battery SOC sensor that autodetect couldn't reach is now found.** Some
+  installs (e.g. a Huawei Luna with a generic `sensor.battery_state_of_charge`,
+  or a template helper) expose the SOC on a *different* device than the battery
+  power sensor — so neither the name-prefix nor the same-device scan could find
+  it, and SEM showed no SOC even though the HA Energy Dashboard read it fine. A
+  **guarded global last-resort scan** now finds the lone home-battery SOC sensor
+  (a SOC-keyword name + `%` unit, excluding EV/phone batteries) — only when
+  **exactly one** unambiguous candidate exists, never a guess (#529).
+- **Manual override:** `battery_soc_sensor` is now a settable option (structural
+  → reloads), so when autodetect still can't decide, you can point SEM at the
+  right sensor explicitly via the `set_option` service.
+
+# [1.7.3-beta.33] - 18.06.2026
+
+## 🔋 AC-coupled batteries (Sessy) can now force-CHARGE (#523)
+
+- **SEM can now force-charge a Sessy-style battery.** These batteries have no
+  charge *switch* — they charge by writing a **negative** value to the same
+  bidirectional power setpoint that discharge writes a positive value to. SEM's
+  switch-based charge path couldn't drive them, so `force_charge` (and scheduled
+  night charging) silently did nothing. New opt-in **"Bidirectional setpoint"**
+  toggle (Configuration → Battery, next to the forcible-discharge entity): when
+  on, force-charge writes `-power` to the setpoint, gated by the power-strategy
+  → API switch. Verified live on HA-TEST (force_charge → −2200 W setpoint +
+  strategy `api`; release → 0 W).
+- **SEM restores the battery's prior power-strategy instead of forcing `eco`.**
+  Researching the ha-sessy integration showed the real strategy options are
+  lowercase `api`/`nom`/`roi`/`idle`/`eco`. SEM now **captures** the user's
+  strategy (e.g. `nom`/`roi` self-consumption) before taking control and
+  **restores** it on release — so it no longer clobbers their normal mode.
+- **Fixed force-charge commanding 0 W** when `battery_max_charge_power_w` is
+  present-as-`None` (a `.get(key, default)` returns `None`, not the default).
+  The charge power now falls through `battery_max_charge_power_w` →
+  `battery_max_charge_power` → 5000 W. Harmless before (the charge switch
+  ignored power); surfaced by the new bidirectional setpoint path.
+
+# [1.7.3-beta.32] - 18.06.2026
+
+## 🔥 Heat pump: restore the SG-Ready invert toggle (#523)
+
+- **Brought back the opt-in "Invert SG-Ready contacts" toggle** (Configuration →
+  Heat Pump) that beta.31 removed. It's inert by default and costs nothing, but
+  it's the one-click safety net for an install wired normally-closed (NC) — so a
+  pump that boosts-as-block can be corrected without a second release round-trip.
+  The corrected standard map remains the default.
+
+# [1.7.3-beta.31] - 17.06.2026
+
+## 🔥 Heat pump: drop the speculative invert toggle (#523)
+
+- The SG-Ready truth table is **universal across EMS vendors** (verified against
+  alpha innotec / gridX / SMA / SolarEdge), so the corrected map from beta.30 is
+  right for everyone. The opt-in "Invert SG-Ready contacts" toggle was a
+  speculative knob for a normally-closed-wiring case no one has actually
+  reported — removed to keep the config surface lean. It can come back later if
+  a real inverted-wiring install turns up. The corrected standard map stays.
+
+# [1.7.3-beta.30] - 17.06.2026
+
+## 🔥 Heat pump: SG-Ready relay map corrected to the standard (#523)
+
+- **Fixes "the heat pump never got turned on" on SG-Ready pumps (RienduPre,
+  Nibe).** SEM's `SG_READY_RELAY_MAP` was a plain 2-bit count, not the SG-Ready
+  standard truth table — so when SEM wanted to **boost** the pump on surplus it
+  drove `(relay1=on, relay2=off)`, which a standard pump (Nibe et al.) reads as
+  **EVU-block** and turns *off* instead of on. Corrected to the SG-Ready
+  standard: BLOCKED `1:0`, NORMAL `0:0`, BOOST `0:1`, FORCE_ON `1:1`.
+- **New opt-in "Invert SG-Ready contacts" toggle** (Configuration → Heat Pump)
+  for installs whose contacts are wired **normally-closed (NC)** — it flips both
+  relays so the standard map still drives the right physical state. Default off
+  (NO wiring, the common case).
+- The Control-tab "not configured" label for a correctly-registered heat pump
+  was already fixed in beta.19 — update past beta.19 to clear it.
+
+# [1.7.3-beta.29] - 17.06.2026
+
+## 🩹 Wallbox: a junk `charger_service` no longer blocks current control (#523)
+
+- **Fixes "Failed to set current … not enough values to unpack" spamming
+  every 10 s on both Wallboxes (RienduPre).** A leftover `charger_service='0'`
+  (no `domain.service` shape — and it even propagated to a sibling charger whose
+  own config was empty) hit the service branch and crashed the
+  `charger_service.split(".", 1)` unpack, so SEM could never set the charge
+  current — even though both chargers had a valid
+  `number.wallbox_*_max_charging_current` control entity. SEM now **treats any
+  `charger_service` that isn't a real `domain.service` as absent** and falls
+  through to the number entity. Guards all three actuation paths (set-current /
+  start / stop) at once.
+
+# [1.7.3-beta.28] - 17.06.2026
+
+## 🔋 AC-coupled batteries (Sessy) honour the power setpoint (#523)
+
+- **A generic AC-coupled battery (e.g. Sessy) now actually force-discharges and
+  sells.** These batteries ignore their power setpoint unless their *power
+  strategy* select (`select.sessy_*_power_strategy`) is in the API/active mode —
+  in eco/NOM they just self-consume. SEM now **switches the strategy to the
+  active value before writing a force/arbitrage setpoint** and **back to the idle
+  (self-consumption) value** when returning to NORMAL / limit / stop. Configure
+  it per battery via the new `battery_strategy_entities` (or the single-battery
+  `battery_strategy_control_entity`); active/idle values default to `api`/`eco`
+  and are overridable. Inert on batteries without a strategy select (Huawei,
+  GoodWe) — no behaviour change there.
+
+## 🔌 Huawei battery: zero-config forcible discharge (#523)
+
+- **A Huawei battery's force / arbitrage modes now work with no manual
+  config.** The `huawei_solar.forcible_discharge_soc` service targets the
+  battery *device*; previously you had to set `inverter_device_id` by hand or
+  the command was dropped. SEM now **auto-detects the Huawei battery device**
+  from the device registry (the `connected_energy_storage` device), so
+  `supports_forced_discharge` is true out of the box. A manually-set
+  `inverter_device_id` still wins.
+
+# [1.7.3-beta.26] - 17.06.2026
+
+## 🔧 Battery adapter self-heals a startup race (#523)
+
+- **A Huawei/GoodWe battery no longer gets stuck on the Generic adapter.** If
+  the brand integration (e.g. `huawei_solar`) finishes loading *after* SEM's
+  first battery cycle on boot, SEM used to cache a Generic fallback for the
+  whole session — so brand-specific control (Huawei forcible discharge) silently
+  never engaged. SEM now **re-detects once the brand integration is loaded** and
+  upgrades the adapter in place. Surfaced by the new beta.25 `battery_control`
+  diagnostics, which showed a real Huawei battery reporting `GenericBatteryAdapter`.
+
+# [1.7.3-beta.25] - 17.06.2026
+
+## 🩺 Battery + surplus observability in diagnostics (#523)
+
+The one-click **Download Diagnostics** now answers the two questions that
+previously needed a back-and-forth (or a DB dump):
+
+- **`battery_control`** — is the battery controllable at all (adapter class,
+  `supports_forced_charge` / `supports_forced_discharge`, the wired control
+  entities + whether an inverter device is set), what **mode + reserve** it's
+  in, and the **last per-battery decision + reason** — so *"is the EV draining
+  the battery?"* is a single readable line (`LIMIT_DISCHARGE — ev_charging →
+  1200 W`).
+- **`surplus`** — the live surplus allocation snapshot (distributable surplus,
+  who won it, active vs total devices) — which, with the existing `heat_pump`
+  block, explains *"why didn't the heat pump turn on?"* (not enough surplus,
+  lost priority, or not wired).
+
+No new data collection or DB dump needed — it's all in the existing
+diagnostics payload.
+
+# [1.7.3-beta.24] - 17.06.2026
+
+## 🔋 Battery mode selector on single-battery installs (#523)
+
+- **The Battery card mode selector now appears on single-battery installs too.**
+  beta.23 only created the per-battery Mode + Reserve-SOC controls for
+  multi-battery setups, so a single-battery install (the common case) had no way
+  to pick **Auto / Self-consumption / Allow arbitrage / Force charge / Force
+  discharge**. There's now a global `select.sem_battery_mode` +
+  `number.sem_battery_reserve_soc`, shown on the battery hero card.
+
+# [1.7.3-beta.23] - 16.06.2026
+
+## 🔋🎛️ Per-battery control + Huawei forcible-discharge fix (#523)
+
+Multi-battery installs (e.g. Growatt + Sessy, or two LUNA2000s) can now be
+controlled **per battery**, and battery → grid arbitrage actually works on a
+real Huawei battery — verified live on a Huawei SUN2000 + LUNA2000.
+
+- **Per-battery Mode selector on the Battery card** — each battery gets its
+  own mode: **Auto** (today's behaviour), **Self-consumption only** (never
+  sells to grid), **Allow arbitrage** (sell when export beats recharge cost,
+  even with the global toggle off), **Force charge**, **Force discharge**
+  (manual sell to grid). Plus a per-battery **Reserve SOC** floor — a battery
+  never discharges below it, on every mode. One battery can sell while its
+  sibling holds, gated purely by mode. (`select.sem_battery_<id>_mode` +
+  `number.sem_battery_<id>_reserve_soc`, live — no reload.)
+- **EV-card-style battery tiles** — each battery now shows the filled battery
+  glyph with SOC %, a flow-coloured status badge, power, and (when capacity is
+  known) stored energy + time-to-full/empty, matching the EV charger card.
+- **Per-battery force-discharge entity pickers** in Configuration → Tariff, so
+  each battery's sell setpoint is wired from the dashboard, not YAML.
+- **Huawei forcible discharge now actually works.** Huawei has no
+  forcible-discharge *number* entity — it's the `huawei_solar.forcible_discharge_soc`
+  *service*. SEM previously wrote to a non-existent number, so battery → grid
+  selling silently did nothing on every real Huawei (including the beta.22
+  arbitrage feature). It now drives the service (discharge to the reserve SOC,
+  which self-terminates there as a safety floor). Force-discharge writes are
+  also domain-aware (real `number.*` setpoints **and** `input_number.*` helpers).
+- **Anti-block hardening.** The LUNA2000 locks up if it gets `stop_forcible_charge`
+  plus another Modbus write back-to-back in one cycle. The Huawei adapter is now
+  a clean state machine — exactly one command per transition, the rest deferred
+  to the next cycle — and a dropped stop self-heals by re-issuing on the next
+  cycles. Battery-brand detection also no longer misses a modern `huawei_solar`
+  install (config-entry check, not just `hass.data`).
+- **Per-battery SOC fix** — on multi-battery installs the per-battery tiles
+  could read 0 % because SOC auto-detect only matched 2-part sensor names; it
+  now matches indexed devices (e.g. `…battery_2_soc`).
+- Removed the dead legacy `BatteryChargeScheduler.update()` path.
+
+# [1.7.3-beta.22] - 16.06.2026
+
+## 🔋💶 Dynamic export-price optimisation — sell the battery when export is high (#523)
+
+- **Signed export price.** On an EPEX/Tibber/Nord Pool dynamic contract the export price *is* the spot price and is regularly negative (you pay to export). SEM no longer `abs()`-es the feed-in price, so a negative export is correctly a cost — fixing export revenue/ROI and unlocking export-aware decisions. (Auto-detected Amber keeps its sign-inverted convention.)
+- **Battery → grid arbitrage, built into the charge scheduler.** Discharge-to-grid is the mirror of the scheduler's charge-on-cheap logic, so it lives **inside `BatteryChargeScheduler`** and reuses the same economics (round-trip efficiency + cycle cost): SEM sells stored energy to the grid only when the export price beats the cost of recharging it later (cheapest upcoming import ÷ efficiency + degradation). Opt-in (**default off**), never sells below a configurable reserve SOC, and never runs while a charge is planned. Flip the toggle off mid-sale and the next cycle stops it cleanly.
+- **Works across battery brands.** The forcible-discharge command is brand-agnostic (base adapter), driven by a configurable discharge-power entity — Huawei LUNA, GoodWe, and the generic catch-all (Victron / SolaX / Growatt / Sessy / Powerwall / …). A battery without a discharge-power entity safely has the decision dropped.
+- **"Selling to grid" on the Battery card** — a distinct gold state with the live export price while SEM is exporting the battery.
+- **New Configuration → Tariff settings** (dynamic mode): *Sell battery to grid on high export*, *Min export price to sell*, *Arbitrage reserve SOC*, and the *Forcible-discharge power entity*.
+
+# [1.7.3-beta.21] - 16.06.2026
+
+## 🎨 Dashboard polish — battery glyph + EV status spacing
+
+- **System diagram: the charging bolt no longer sits on top of the SOC number** — when the battery was charging, the ⚡ was drawn centred over the "58%", making it hard to read. The bolt now sits in the upper part of the battery and the percentage drops just below it, so both are clearly legible.
+- **Battery card now shows the filled battery glyph** — the small icon in the SOC ring was a flat outline; it is now a filled, SOC-level battery (tinted with the charge/discharge colour, with a charging bolt) matching the system diagram.
+- **EV card: "Status" label and value no longer touch** — in the centred hero the row shrink-wrapped so it read "StatusDisconnected"; a minimum gap keeps the label and value apart.
+
+# [1.7.3-beta.20] - 15.06.2026
+
+## 🔌 EV no longer keeps charging from expensive grid after the cheap window (#524)
+
+- **Tariff awareness restored to the EV decision layer** — the fleet cycle read a non-existent `provider.current_level` attribute, so `tariff_level` was *always* `None`. Every tariff-aware EV decision was silently dead: `solar_plus_cheap` / `min_plus_solar` never saw their expensive windows, so the daytime "pause on expensive tariff" never engaged. Now read via `provider.get_price_level()` (by @RienduPre in #524)
+- **The charge-stability bridge no longer imports expensive grid** — when solar surplus dips below the minimum, the layer holds minimum current for up to 5 minutes to ride out a passing cloud. In a **not-cheap** tariff window that meant importing expensive grid for the whole bridge. It now stops on the short (~45 s) grace during normal/expensive/very-expensive windows, while cheap / very-cheap (and static tariffs) keep the full cloud-bridge (by @RienduPre in #524)
+
+## 💶 Clearer export-rate / feed-in help for dynamic tariffs (#523)
+
+- Export-rate and Feed-in-entity help text now explains how to value exports on a dynamic/spot contract (a flat average, or a live feed-in sensor) — so export revenue and ROI populate instead of staying at 0 (by @RienduPre in #523)
+
+# [1.7.3-beta.19] - 15.06.2026
+
+## 🔧 Control-tab heat-pump card + Home 7-day chart fixes (#523)
+
+- **Heat pump no longer shows "not configured" while clearly configured** — the Control-tab Heat Pump section read the `heat_pump_registered` *binary* sensor through a helper that only resolves `sensor.sem_*` entities, so it always evaluated false and showed the "not configured" notice, while the section header still rendered "normal · 2" (sg-ready state defaults to 2). Both the body and the header now read the binary sensor correctly, so the card is consistent (by @RienduPre in #523)
+- **Home "Last 7 days" chart no longer collapses to a single bar on Mondays** — the energy summary used a "this week" (Monday→now) window, which on Mondays is a single day and rendered as one stray bar, contradicting the card's "Last 7 days" title. It now uses a rolling 7-day window (always 7 day-buckets) (by @RienduPre in #523)
+
+# [1.7.3-beta.18] - 14.06.2026
+
+## 🏷️ Deterministic grid-sign by meter brand (#461)
+
+- **Known meter integrations now seed the grid sign instantly** — for well-tested brands (Huawei, SMA, Fronius, Enphase, SolarEdge, Kostal, Powerwall, GoodWe, SolaX) SEM reads the grid-power sensor's own integration and applies that brand's known import/export convention immediately, so a fresh install is correct from the first cycle without waiting for solar swings or counter deltas. A separate P1/CT meter (unknown integration) simply falls through to the solar/counter detectors, and the solar co-movement signal can still override a brand seed if it ever disagrees (#461)
+
+# [1.7.3-beta.17] - 14.06.2026
+
+## 🧭 Robust grid-sign autodetection + one-tap fix (#461)
+
+- **Solar-anchored detection is now the authoritative primary** — solar production has no sign ambiguity, so SEM now learns the grid import/export convention from how the raw grid reading *co-moves with solar* (grid rises with solar → `+export` meter; grid falls as solar rises → `+import` meter). This is completely independent of the Energy-Dashboard import/export counters, so a mis-mapped or swapped counter (the root cause of the Sessy-P1 wrong lock) can no longer corrupt the result. It can also self-heal a wrong existing lock once it is highly confident and sustained — and because a correctly-signed install computes the *same* sign it already has, a working install is never disturbed (#461)
+- **Counter-correlation hardened** — the fallback path (grid-only installs, no solar) replaced the old "3 consecutive votes" lock, which a mixed/transient counter burst could slip through, with magnitude-weighted evidence scored by *confidence*: it only locks when the dominant direction holds ≥75% of all accumulated evidence, so an inconsistent meter stays in passthrough instead of locking the wrong sign (#461)
+- **One-tap "Fix grid sign" button in Configuration → Advanced** — flips the convention instantly (via the new `flip_grid_sign` service) and copies a ready-to-paste diagnostics report (raw meter value, configured counters, both correlation streams) to the clipboard for a GitHub issue. The neighbouring "Reset sign detection" re-learns from scratch and now also clears a prior manual flip so the re-learn starts clean (#461)
+
+# [1.7.3-beta.16] - 14.06.2026
+
+## 🌍 More Dutch translations on the diagnostic dashboard (#515)
+
+- Expanded `nl` coverage across the diagnostic dashboard (by @RienduPre in #515)
+
+## 💶 A configured dynamic price sensor no longer silently flips to Nord Pool (#518)
+
+- **Your chosen price entity stays the source, even on a momentary blip** — when a user configures a dynamic price sensor (`dynamic_tariff_entity`, e.g. a Tibber sensor with VAT/fees), SEM used to *fall through* to auto-detecting another integration whenever that sensor read `unavailable`/`unknown` for a cycle. With the Nord Pool integration also installed, the provider silently switched to `nordpool_official` — a different source with different (tax-free spot) prices and percentile levels, so the schedules/price-levels appeared to flip back and forth (RienduPre, #518). A user-configured price entity is now authoritative: the provider stays `custom` and the cached curve / fallback price covers a transient gap. Auto-detection only runs when no price entity is configured (#518)
+
+## 🌤️ Weather tile no longer shows "?" / "—°C" when the picked entity has no data (#516)
+
+- **The weather tile now finds a weather entity that actually has current data** — RienduPre's tile showed a "?" condition and "—°C / — % / — km/h" because the dashboard generator picked a `weather.*` entity that carried no `temperature` (a `weather.forecast_*` subentity, or one that was unavailable when the dashboard was generated). The generator now prefers a non-forecast entity that actually has a current temperature, and the card falls back at render time to any usable `weather.*` entity if its configured one is missing / unavailable / data-less — so the tile self-heals without regenerating the dashboard (#516)
+
+## 🔢 Per-charger "today" energy now resets at midnight even when idle (#517)
+
+- **A charger that didn't draw power all day no longer carries yesterday's energy forward** — RienduPre (dual Wallbox) saw "Vandaag" (today) = 81.5 kWh on a charger that wasn't even connected, while the fleet total correctly showed 0. The per-charger daily *rollover/reset* was nested inside the `if charger_power > 0` accumulation guard, so an idle/unplugged charger never executed it and its counter grew across idle days. The reset now runs every cycle for every charger (only the increment stays gated on power); a stored stale value self-heals on the next cycle after update. Single-charger installs were unaffected (they report the correctly-resetting fleet total) (#517)
+
+# [1.7.3-beta.15] - 14.06.2026
+
+## 🏷️ Config-tab label audit + clearer forecast/EV-priority controls (#514)
+
+- **The EV charger "Min Amps" stepper was mislabelled "Minimum SOC"** — the Config tab's per-charger minimum-current control (in Amps) showed the battery-SOC label. Fixed to "Min Amps". The battery section's legitimate "Minimum SOC" is untouched (#514)
+- **Surplus Priority + Shed Priority steppers now appear on each EV charger** in the Config tab, alongside Min Amps / Start current / Capacity (matching how Hot water and Heat pump show "Priority"). The #470 entities existed but weren't surfaced on the card (#514)
+- **Raw translation keys no longer leak onto the dashboard** — Hot water's "Max temperature" row and the Max-Grid-Import help text rendered their raw keys (`hot_water_max_temperature`, `tile_help_max_grid_import`); both now show proper labels (#514)
+- **Forecast source shows its brand name** — the Config tab showed the raw id (`forecast_solar` / `FORECAST_SOLAR`) while the Home hero already showed "Forecast.Solar". Both now share one base helper so they agree and can't drift (#514)
+
+## 📊 EV "Today's plan" strip no longer renders empty when the next charge is >12h away (#512)
+
+- **The 12h plan strip now shows a full "nothing scheduled" idle bar instead of blanking** — when the next EV charging event was beyond the strip's 12h window (e.g. a morning view with night charging set for 21:35), the segment builder advanced its cursor past the window end and skipped the idle-fill, producing zero segments and an empty strip (title/axis/legend showed, but no timeline). Each transition is now clamped to the horizon so the visible time is always painted. Not mobile-specific — desktop blanked in the same state too (#512)
+
+## ☀️ Heat pump / hot water boost on the TRUE house surplus, and stand down under peak (#508 phase 2)
+
+- **They now see real spare solar, not the EV's budget (W7)** — the surplus controller was fed the EV charging *budget*, so heat pump / hot water effectively competed for the EV's allocation. It now receives the true house surplus: `grid_export + its own active device draw`. The add-back is what makes it stable — without it, every device the controller switches on shrinks the grid export it reads next cycle, so the signal would chase its own tail and the device would flap. With it, the input is the surplus that *would* exist if its devices were off — the right quantity to allocate from. Net effect: discretionary loads boost only on genuine spare solar, after the EV and battery have taken their share (#508)
+- **They back off when the grid-import peak is at risk (W2)** — the load manager and the surplus controller used to fight: the load manager would shed a heat pump to protect the 15-minute peak, then the surplus controller (running later in the same cycle) would see surplus and switch it straight back on. The surplus controller now receives the load manager's peak posture — on `WARNING` it stops *adding* discretionary load; on `SHEDDING` it backs its own devices off one per cycle (gentlest first by reverse priority); on `EMERGENCY` it sheds them all at once. The EV stays owned by the load manager's shed path (#508)
+
+## 🔀 Independent surplus vs shed priority per EV charger (#470)
+
+- **`ev_shed_priority` splits off from `ev_surplus_priority`** — a single number used to drive two unrelated decisions: who gets solar surplus first (cooperative, every cycle) and who gets throttled first when grid import nears the peak limit (emergency). A mixed fleet can't express both — e.g. a long-range EV should charge *first* on surplus (big battery soaks watts) yet shed *first* under peak (range cushion absorbs a throttle). Surplus order stays on `ev_surplus_priority`; shed order moves to the new per-charger `ev_shed_priority`, exposed in the options flow, the setup flow, and as a per-charger number entity. A v12→v13 migration seeds `ev_shed_priority = ev_surplus_priority` for every existing charger, so the decoupling is behaviour-neutral until you deliberately diverge them (#470)
+## 🔌 EV no longer drains the battery to hold a dead solar session (#461)
+
+- **The disable hold now distinguishes a transient dip from genuine darkness** — the 300 s disable delay exists to BRIDGE a passing cloud (solar drops 8 kW → 3 kW for a minute while the car wants 4) by holding minimum current instead of cycling the contactor. But when solar is genuinely ~0 W — dusk, heavy overcast, or the `is_night` flag not yet flipped — there is nothing to bridge *to*: that held minimum current is pulled entirely from the home battery and the grid. RienduPre's PROD logs caught it live: solar = 0 W, the hold commanding 9 A, the car flapping 4.35 kW ↔ 0.12 kW while the battery drained at 5 kW and the grid imported 1.7 kW — every 300 s window. A deficit while solar is below `min_solar_w` (the same "no meaningful solar" threshold `solar_only` idles on) is now a **deep deficit** and stops after a short grace (`ev_deep_deficit_grace_sec`, default 45 s) instead of the full window. A genuine transient dip — solar still meaningful — keeps the full bridge unchanged. The grace rides out a single-cycle inverter flicker to 0 W so a momentary zero never ends a real daytime session (#461)
+
+## 🔥 Heat pump / hot water: surplus activation actually fires + relay-failure safety (#508)
+
+First phase of wiring the dedicated heat-pump and hot-water controllers into the surplus pipeline they were bypassing.
+
+- **They actually activate on solar surplus now** — both controllers defaulted to `PEAK_ONLY`, and the surplus controller never proactively turns on a non-`SURPLUS` device, so surplus boosting was silently inert. Both now default to `SURPLUS` (still overridable via `set_device_control_mapping`) (#508)
+- **A failed SG-Ready relay write no longer credits phantom power** — the heat pump used to mark itself `ACTIVE` and deduct `rated_power` from the surplus pool even when the relay call failed, starving the EV/battery of watts that weren't being drawn. It now returns 0 W and reports `ERROR`; a partial (relay2) failure restores relay1 to its prior state instead of leaving a stray curtail signal (#508)
+- **Legionella prevention runs** — `check_legionella_cycle()` had no production caller (the disinfection cycle never ran, `hours_since_legionella` was pinned at 999). It's now driven every cycle, and the last-cycle timestamp persists across restarts so a reboot doesn't force a disinfection run (#508)
+- **Heat-pump compressor anti-cycling** — `min_on`/`min_off` guards (10 min run / 5 min rest) so a 10 s coordinator cycle can't short-cycle the compressor (#508)
+- Follow-up phase (tracked in #508): route them through the load-manager dual-sync for peak shedding, and feed the true house surplus rather than the EV budget
+
+# [1.7.3-beta.14] - 13.06.2026
+
+## 🏠 System-diagram Home no longer flickers to 0 W while the EV charges (#506)
+
+- **The diagram card reads the published `home_consumption_power` sensor instead of re-deriving it client-side** — Home was recomputed from the raw source sensors, which update on wildly different cadences (Huawei inverter ~17–30 s modbus vs KEBA EV ~2 s). With the EV charging hard, a fresh EV reading paired with a stale solar reading drove the residual briefly negative → clamped Home to 0, on and off. The coordinator's #237/#444 hold already rides out that skew (the sensor itself never flickers); the card now uses it, with the residual kept only as a fallback when the sensor is unavailable (#506)
+
+
+# [1.7.3-beta.13] - 13.06.2026
+
+## 🔮 Forecast dampening: morning jitter smoothed + correct sun window (#416)
+
+Closes the two remaining sub-findings of the #416 forecast-correction audit (the other three — shrinkage naming, telemetry surface, write-time weather snapshot — shipped earlier and are soak-verified on PROD).
+
+- **The live dampening signal is EMA-smoothed (τ ≈ 5 min)** — at 7–9 AM the expected-production fraction is tiny, so the normalized live ratio amplified the actual-sensor noise floor (cloud transits, inverter sampling) into large cycle-to-cycle swings of `forecast_dampening_factor`. The blend now consumes a time-based EMA of the ratio; genuine weather trends still pass with little lag. Raw and smoothed values are both on the sensor's diagnostic attributes (`normalized_ratio` / `smoothed_ratio`) (#416)
+- **`_get_sun_hours` no longer mixes tomorrow's sunrise with today's sunset** — `next_rising`/`next_setting` are NEXT events; tomorrow-dated ones now roll back a day, fixing the skewed daylight window (~1 min average, worse near solstices/high latitudes) (#416)
+
+## 🧭 Sign-detection locks survive restarts (#476)
+
+The grid/battery sign autodetect locks were RAM-only — every reload re-learned the sign from possibly ambiguous low-power samples, and three bad votes right after a reboot could lock the WRONG sign until the next reload (the 2026-06-11 PROD flip).
+
+- **Locked signs now persist** in SEM's storage and restore at setup — the warmup/vote machinery runs once per install, not once per restart; only LOCKED state persists (votes and half-learned guesses never do), and a restored lock survives the Energy Dashboard being reconfigured away (#476)
+- **Manual `grid_sign_invert` still wins** — it short-circuits before the autodetect, so a restored lock can never fight a manual override
+- **New `solar_energy_management.reset_sign_detection` service** — the escape hatch: forgets all sign locks (RAM + storage) and re-learns from scratch, since a wrong lock no longer clears itself on restart
+- Closes the last open item of the #476 robustness batch — items 1–4 and 6–9 already landed across the #485/#486/#487 review batches
+
+
+## 🖼️ System diagram card: explicit `entities:` config (#455)
+
+- **`sem-system-diagram-card` now accepts the same `entities:` map as `sem-flow-card`** — point the illustrated diagram at any HA install's sensors (combined or split battery/grid sensors, `reverse`/`invert` flags, optional explicit home sensor instead of the derived balance). `entity_prefix` stays the default and wins when both are set, so existing dashboards are untouched (#455)
+- In entities mode, intentionally unmapped nodes (e.g. no EV) no longer count toward the "sensor unavailable" warning
+- Schema documented for both cards in `DASHBOARD_GUIDE.md`
+
+## ☀️ `min_plus_solar` daytime is self-consumption-maximizing again (#501)
+
+Daytime `min_plus_solar` in battery Zone 3/4 was draining the home battery into the EV and importing from the grid when it should maximize self-consumption — a cloudy afternoon at 70–90% SOC got ground into the car.
+
+- **The daytime min-current floor is now need-gated** — it engages only when the remaining daily Min can no longer be delivered by tonight's charging window (new per-charger `night_deliverable_kwh`). Otherwise daytime is pure surplus + capped battery assist, and idles below the charger minimum. Restores the documented "Min comes from the night top-up, not a forced grid pull at noon" promise; `always_max` stays the "just charge" escape hatch (#501)
+- **One shared, capped battery-assist formula** — `decide` and `flow_calculator` had diverged (ADR 0002 regression); both now use the same SOC-based *potential* (capped by `battery_assist_max_power`, zeroed below the assist-floor SOC, bounded to the surplus→min gap). No more measured-discharge branch, so a home-load spike can't ratchet the EV current upward, and #439's chicken-and-egg stays structurally fixed (#501)
+- Amends ADR 0010 pattern 1; `EV_CHARGING_LOGIC.md` mode table corrected
+
+## 🙏 Contributors
+
+Backlog sweep after the beta.12 retest round — four audited issues (#416, #455, #476, #501) closed end-to-end. Thanks to @RienduPre for the reports and reviews that surfaced the charging and dashboard gaps.
+
+# [1.7.3-beta.12] - 12.06.2026
+
+## 🎨 Plan-strip legend always-visible + tariff colours (#464 follow-up)
+
+- **The full plan-strip legend is now always shown** — no need to open the `?` help. The four bar states (idle / waiting / charging / done) plus the two tariff-window colours (cheap / peak), which previously were only explained behind `?`, are all labelled inline; swatches enlarged and text contrast raised (reported by @RienduPre in #464)
+- **Cheap-tariff colour split from the charging green** — the cheap-tariff overlay used the same `#8DC892` as the "charging" segment; it's now a distinct deeper green and the tariff entries render as thin lines, mirroring how they appear on the strip's top edge (reported by @RienduPre in #464)
+
+# [1.7.3-beta.11] - 12.06.2026
+
+## ⚡ Surplus start/stop flapping: enable/disable delays reconnected (#461)
+
+The v1.7 `decide() → actuate()` rewrite silently orphaned the v1.7.1-beta.14 stability layer: `ev_enable_delay_seconds` / `ev_disable_delay_seconds` still existed as config keys but were only read by the legacy `_execute_ev_control` path the new pipeline no longer calls. Result in RienduPre's beta.10 logs: solar hovering around the 6 A minimum cycled the contactor every ~20 s (±4.5 kW demand swings between consecutive health-check lines).
+
+- **The delays are enforced again** — a new `charge_stability` filter sits between `decide()` and `actuate()` in both pipeline branches: a surplus charge only **starts** after the surplus has held for `ev_enable_delay_seconds` (default 60 s), and only **stops** after the deficit has persisted `ev_disable_delay_seconds` (default 300 s), holding minimum current meanwhile. Applied before state display, so the strategy sensor names the active hold instead of contradicting the measured power
+- **Stop semantics upgraded to evcc's deficit-persistence** ([evcc-io/evcc](https://github.com/evcc-io/evcc) `enable.delay`/`disable.delay`) — the legacy implementation measured from session start (a minimum-run-time), so a session older than the window still died on a single-cycle cloud dip. The deficit timer protects the contactor for the whole session
+- **Night floors, `always_max`, OFF/DISABLE and unplugs are never delayed** — safety and user-intent transitions bypass the filter; timers are independent per charger
+- **Both settings are now real entities** (`number.sem_ev_enable_delay_seconds` / `number.sem_ev_disable_delay_seconds`) on the Config tab's **Advanced** section with ?-help texts — previously they were raw config keys with no UI surface
+- **Mid-session setpoint smoothing restored too** — the same rewrite orphaned Layers 1-3 + the ramp limiter, so the commanded current bounced cycle-by-cycle until some cars declared the supply unreliable and ended the session themselves. The filter now median-smooths the target stream (`ev_surplus_smooth_window`, 3 cycles — a 1-cycle inverter flicker never reaches the car), moves at most `ev_ramp_rate_amps` (2 A) per change, suppresses sub-`ev_min_change_amps` changes, allows one change per `ev_min_change_interval_sec` (30 s), starts sessions gently at minimum current (the 2026-05-31 grid-overshoot fix), and ramps down to minimum instead of jumping during the disable hold
+
+## 🗓️ Per-charger plan strip + help text (#464)
+
+RienduPre's follow-up: "why is this bar the same for both chargers, and what is it for?" The bar is the 12-hour plan strip (#282) — and it was identical because only one fleet-level plan existed, composed from the primary charger's night plan/target/deadline, then rendered inside every charger section.
+
+- **Each charger now gets its own plan** — `today_plan` is composed per charger from ITS night plan, target, deadline, charge mode and live-session ETA; surfaced as `per_charger_plans` on `sensor.sem_charging_state` (fleet `today_plan` stays the primary's plan for the Today-plan card and as the card-side fallback) (reported by @RienduPre in #464)
+- **Stale night plans can no longer leak into day plans** — the per-charger night-plan map was write-only and never cleared; it now resets every cycle
+- **The strip explains itself** — it has a title ("Today's plan · next 12 h") and, with the card's ?-help toggle on, a legend explanation (grey = idle, purple = waiting for a cheaper hour, green = charging, teal = target reached; the thin top line marks cheap/expensive tariff windows). Translated in all 15 languages; bar slightly taller and the legend more legible
+- **Waiting-for-cheap is read per charger** — the strip derives the wait state from its own charger's plan rows instead of the primary-scoped `ev_tariff_waiting` attribute
+
+## 🧪 Health-check & strategy-label triage from the #461 beta.10 dump
+
+RienduPre's 2026-06-12 dump showed the flows finally coherent, but 69 "Energy balance" violations and a `charging_strategy` claiming `solar_only` on chargers configured `solar_plus_cheap`.
+
+- **Energy-balance "violations" during the home-consumption hold are demoted to debug** — `home_consumption_power` is derived as the residual of the other readings, so supply≈demand is an identity; a gap can only appear when the residual went negative (one input sensor stale, e.g. a Growatt solar reading frozen for ~5 min) and the #237/#444 hold bridged it. Those cycles re-reported a known, already-handled inconsistency every 10 s and inflated `diag_health_violations`. A gap that *outlives* the hold window still warns, now naming the likely cause (stale power sensor) (reported by @RienduPre in #461)
+- **Delegated day strategies keep their configured mode label** — `solar_plus_cheap` (day, normal/cheap tariff) and `min_plus_solar` (day, Zone 2) delegate to the solar_only math but no longer report `mode="solar_only"`/`"solar_only: …"` verbatim; the strategy string now reads `solar_plus_cheap day: tariff=normal — solar_only: …`, so the Config card's mode and the live strategy can't appear to contradict each other (reported by @RienduPre in #461)
+
+## 🎨 Dashboard typography, spacing & mobile fixes (#498)
+
+- **Minimum text size raised across all cards** — 11px floor for regular text, 10px for uppercase micro-labels (was down to 9px); fractional sizes normalized; em-based charger labels 0.7/0.75em → 0.8em, hierarchy preserved (by @traktore-org in #500)
+- **Hero card padding aligned** — system, home-status and solar-summary now share the same `16px 20px` container padding as the other hero cards; cramped metric-row paddings normalized (by @traktore-org in #500)
+- **Mobile fixes from viewport testing** — `sem-tab-header` wraps instead of crushing the title to zero width on phones; `sem-battery-zones-card` clamps zone markers to 0–100% so an out-of-range sensor can't stretch the card; `sem-schedule-card` SVG labels bumped for legibility (by @traktore-org in #500)
+
+## 💶 Cost/ROI: battery savings + volume-weighted tariff history (#499)
+
+- **Battery discharge savings now count toward lifetime ROI** — the midnight snapshot accumulates `cost_batt_savings` into a persisted `_accumulated_battery_savings` folded into `lifetime_total_savings`; the pre-SEM solar-through-battery share already inside `lifetime_self_consumed` is deliberately not re-estimated (no double-count, pinned by a regression test) (by @traktore-org in #500)
+- **Dynamic-tariff rate history is volume-weighted** — snapshots store the day's `cost ÷ kWh` instead of the midnight rate (systematically among the cheapest spot hours), removing the low bias in the 7-day average used for the pre-SEM ROI estimate; falls back to the current rate on days without positive cost data (by @traktore-org in #500)
+- **Negative-price consistency** — battery savings clamped `max(0, …)` at daily/monthly/yearly read, matching solar savings (by @traktore-org in #500)
+
+---
+
+# [1.7.3-beta.10] - 11.06.2026
+
+## 💶 Tibber Grid Reward price arrays (#491)
+
+Tibber Pulse accounts where the core Tibber integration provisions no `electricity_price` forecast sensor (upstream core#153312) get their only day-ahead curve from the HACS [tibber_grid_reward](https://github.com/JohNan/homeassistant-tibber_grid_rewards) `sensor.current_price`.
+
+- **`today_raw` / `tomorrow_raw` price arrays are now parsed** — the `{time, price}` item keys were already known; only the two attribute names were missing. Configure the sensor via *Tariff settings → Dynamic tariff entity*; its id is too generic to auto-detect (reported by @RienduPre in #491, fixed in #495)
+- The Grid Reward sensor's `today`/`tomorrow` attributes are comma-joined *strings* — skipped by the list guard, so the curve is never double-counted
+
+## 🔋 Battery scheduler crash with saved options (#493)
+
+- **Scheduler evaluation no longer dies on every cycle for users who ever saved the battery-scheduler options page** — the options-flow slider stores the trigger hour as a float (`21.0`) and `datetime.replace(hour=21.0)` raised `TypeError`, killing nightly planning entirely; trigger hour/minute are now coerced (`int(float(...))`, surviving string-shaped storage too). Untouched configs keep the int default, which is why soaks missed it (reported by @RienduPre on #487, fixed in #496)
+
+---
+
+# [1.7.3-beta.9] - 11.06.2026
+
+## 🔌 Wallbox actuation: entity-range bounds + working stop path (#487)
+
+RienduPre's error log exposed the real "keeps charging in off mode" mechanism: SEM wrote 0 A (stop) and >entity-max amps to the Wallbox max-current number entity — HA core rejects both with `out_of_range` **before anything reaches the charger** (167× per charger in the log).
+
+- **Current writes are bounded into the target entity's own min/max** — a charger whose entity allows 6–16 A gets 16 A when SEM wants 32, instead of a rejected command (by @traktore-org in #490)
+- **0 A stop intents skip the structurally impossible number write** — the stop goes through the adapter's pause-switch / stop_session path (Wallbox min=6 A, IEC 61851)
+- **`ev_start_stop_entity` is now actually honored** as the Wallbox pause/resume switch — the adapter's own WARNING recommended it as the workaround but never read the field (RienduPre's #462 finding)
+- **Health-check violation WARNINGs are rate-limited** — after 6 consecutive violating cycles they drop to debug until they clear (413 identical lines flooded the log + the diagnose ring buffer)
+
+## 🧭 Grid-sign restart hardening (live PROD flip, #487 follow-up)
+
+A restart locked `grid_sign_inverted=True` on a Huawei install whose convention needs NO correction — 3 sign votes cast while HA's recorder was still replaying counter states (#476 items 5/6 gap, observed live 2026-06-11).
+
+- **Sign votes are ignored for the first 12 cycles after startup** (~2 min) — baselines stay fresh, nothing locks
+- **The sign-lock log line now names the voting counter entities**, so a wrong lock is diagnosable after the fact
+
+## 🖼️ Diagram card blank on Home tab (#488)
+
+- **Backticks inside a lit-template HTML comment terminated the template literal** — the remainder re-parsed as a tagged-template chain: syntactically valid JS (rollup/CI green) that threw at render time, blanking the system diagram. Fixed + a lint test forbidding backticks in card-template comments (by @traktore-org in #489)
+
+## 🔍 Pre-stable review batch (#485)
+
+A full 7-angle review of everything on develop since v1.7.2 surfaced 23 verified findings — two of them stable-release blockers in this release's headline features. All fixed in one batch.
+
+### 🚨 Blockers
+
+- **Rolling-horizon scheduler no longer ratchets the charge target** — `evaluate()` re-anchored the target on the live SOC every 30-min re-plan, stacking the deficit on top of charging progress until the battery grid-charged to ~95% every profitable night. The target is now anchored on the SOC at the first evaluation of the night's window, and a mid-charge re-evaluation that lands on NOT_NEEDED/NOT_PROFITABLE stops the active forced charge (by @traktore-org in #485)
+- **`set_option` on construction-time keys reloads again** — keys like `tariff_mode` and the `battery_*` scheduler params persisted + mirrored into a config dict nothing re-reads, so the live Config-card select "succeeded" while the constructed provider/scheduler kept the old value until restart (the #462 silent-no-op class) (by @traktore-org in #485)
+
+### 🛠️ Fixes
+
+- **Re-plan trigger fires once per price update** — day-ahead prices publishing ~13:00 used to log two INFO lines every ~10 s cycle until the 21:00 window opened (thousands/day), evicting everything useful from the 300-line diagnose ring buffer built for #461/#462 triage
+- **15-min markets: slot length comes from the provider** — gap inference over *selected* slots booked 2–4× oversized slots for scattered selections, corrupting the night plan's energy accounting
+- **`battery_cycle_cost` runtime default back to 0.0** — the silent 0.0→0.02 flip tightened the break-even on upgrade and stopped thin-margin night charging with no config change; 0.02 stays as the *visible* form default for new configs
+- **Nord Pool fetch failure backoff** — an API outage used to trigger two blocking service calls every cycle (~17k/day); failures now back off 5 minutes
+- **`_merge_ev_chargers_by_id` preserves charger order** — a partial submit (or the setup heal) could reorder the fleet, silently swapping the index-0 primary and default surplus priorities
+- **set_option mixed payloads are atomic** — tunables route through entities first, then ONE direct write + ONE reload (the structural write used to fire a listener reload racing the still-running tunable calls, dropping values mid-payload)
+- **set_option switch routing coerces YAML strings** — `"off"`/`"false"`/`"0"` were truthy and turned the switch ON
+- **Split-grid: a late-loading export sensor now completes a one-sided pick** — including the same-device case that blocked re-discovery until restart; the held import side is never re-rolled
+- **Dual-tariff auto sign vote** — `_detect_grid_sign` sums the NL DSMR tarief-1/2 counter lists (beta.8 fixed only the manual-audit path)
+- **Deterministic split-grid discovery** — candidates scan sorted by entity_id, so import/export roles can't re-roll across restarts
+- **Stale actuation Repair clears after a reload** — the persistent ERROR Repair raised before a config fix stayed in the UI forever because the new device instance's flags started fresh
+- **Canonical primary-charger id** — the fleet-strategy gate's `"ev_charger"` fallback disagreed with registration's `"ev_charger_0"` for id-less chargers, freezing the strategy sensor on exactly the corrupted configs this release hardens against
+- **Entity-domain charger services generalized** — `input_number.set_value` / `select.select_option` configured as the charger service bounced off their schemas exactly like the beta.8 `number.set_value` case
+- **Configured 0.0 electricity rates are respected** — `config.get(...) or 0.30` treated a real zero rate as missing
+- **Reload-skip snapshots expire after 60 s** — a lingering snapshot could swallow a legitimate reload on a future data/title-only entry update
+
+### ⚡ Performance
+
+- **Price curve parse memoized** — the full parse (isoformat + classify + sort + dedupe) ran 3–5× per coordinator cycle; now keyed on entity-state identity + service-fetch timestamp + percentile slot epoch
+- **Split-grid sensor scan throttled** — with healthy two-sided picks held, the full `hass.states` scan runs every 30 cycles instead of per cycle with the result discarded; the per-cycle INFO log only fires when the result changes
+
+### 🧹 Cleanup
+
+- `persist_per_charger_option()` — single write path replaces the ~30-line copies in select/number/time (the time.py copy was the writer #469 missed); `_saveChargerField` dedups the config-card's nested editors; `semFormatTime` unifies the dashboard's two clashing time formats; tariff auto-detect shares the provider's candidate matcher (the flow missed Octopus/Amber); dead `_set_option_needs_reload` helper removed; shared `_counter_deltas` reset guard for the three sign voters
+
+### 🧪 Tests
+
+- ~60 new tests: target-SOC anchor + mid-charge stop, replan one-shot, slot-hours hint, fetch backoff, parse memo, falsy-zero rates, merge order contract, switch coercion, unrouted-key reload (real-hass), late-export adoption, scan throttle, dual-tariff vote, deterministic discovery, entity-domain service routing, stale-Repair clear, primary-charger id contract
+
+---
+
+# [1.7.3-beta.8] - 10.06.2026
+
+## 🔌 Actuation hardening + triage surfaces (#462 follow-up batch)
+
+RienduPre's attached error log revealed the final #462 mechanism: with `ev_charger_service: number.set_value`, SEM sent `{current: X}` through the service path — `number.set_value` only accepts `value`, so **every current command on both chargers failed** (`extra keys not allowed @ data['current']`), including the 0 A for off-mode, with the evidence buried in per-cycle ERROR log lines.
+
+### 🛠️ Fixes
+
+- **`number.set_value` as charger service is now mapped to the number-entity write it was meant to be** (`value` + entity_id) — the misconfigured-but-recoverable shape can no longer leave a charger silently uncontrollable
+- **Repair issue on repeated actuation failure**: 3 consecutive rejected set-current commands raise a user-visible Repair naming the charger and the error (severity ERROR, translated EN/NL/DE + EN fallback for the rest); clears automatically on the next successful write
+- **Registration WARNING** when `ev_charger_service=number.set_value` has no `number.*` target entity
+- **Fleet `charging_strategy` / `charging_strategy_reason` are now consistent** — the per-charger loop let the *last* charger overwrite `charging_strategy` while `charging_strategy_reason` kept the primary's value ("always_max …" next to "off mode …" in the same dump); only the primary charger writes both now (per-charger detail lives in `charger_<id>_charging_state`)
+
+### 🔍 Triage surfaces
+
+- **In-memory SEM log ring buffer** — the diagnose payload's `recent_logs` now carries the last ~300 INFO+ SEM log lines on EVERY install type; Supervisor installs (journald, no flat log file) previously got a "please run `ha core logs`" placeholder, which left the whole #461/#462 triage blind
+- **Manual-grid audit is dual-tariff aware** — the sign cross-check sums the import/export counter *lists*, so NL DSMR tarief-1/2 splits no longer blind it during one tariff's hours
+- **Blocking `open()` calls removed from the event loop** ("Detected blocking call" in RienduPre's log): translations and the manifest version are warmed off-loop at setup and cached (`diag_version` no longer re-opens manifest.json every cycle)
+- TROUBLESHOOTING: manual grid entity checklist (import vs export roles, power-not-energy, both-or-neither) + Dutch dual-tariff Energy-Dashboard guidance
+
+### 🧪 Tests
+
+- New framework tier `tests/test_actuation_real.py`: real-HA schema-strict `number.set_value` shape test + the failure → Repair → recovery → clear cycle through the real issue registry
+- `test_services_real.py`: diagnose `recent_logs` served from the ring buffer (Supervisor parity) + cached version
+- Unit: actuation routing/param contracts, Repair threshold/idempotence/intermittent-flap behavior, log-buffer capture/capacity/idempotence, dual-tariff audit summing
+
+---
+
+# [1.7.3-beta.7] - 10.06.2026
+
+## 🔎 Manual grid override validation + sign audit (#461 follow-up)
+
+v1.7.3-beta.6's pick-stability fix addressed the auto-discovery path — but an install with `grid_import_power_entity` / `grid_export_power_entity` set explicitly bypasses ALL sign machinery, so a swapped, one-sided, or wrong-kind (energy counter as power sensor) configuration produces a statically inverted grid with zero feedback. Exactly the verified #461 shape: explicit entities configured, no discovery log lines, grid shows export while importing, house consumption 0, surplus invisible to every controller.
+
+### 🛠️ Fixes
+
+- **Manual grid config validation** (warn-once): an ENERGY counter (kWh) configured in a POWER field; only one side configured while the Energy Dashboard tracks both flows (the missing side reads a hard 0 W — "always exporting")
+- **Observe-only sign audit**: the manual-computed grid sign is cross-checked against the Energy Dashboard import/export counters every cycle; 5 consecutive contradictions log a WARNING naming both configured entities ("most likely SWAPPED") and set `diag_grid_manual_mismatch` in the diagnostics — SEM never silently overrides manual config, it makes the misconfiguration loud
+- Counter-reset and ambiguous-delta cycles are excluded from the audit (same guards as the autodetect path)
+
+## 🧰 Robustness batch (#476, part 1)
+
+Soundness/stability items from the 2026-06-10 review. No behavior changes on the happy path.
+
+### 🛠️ Fixes
+
+- **Back-to-back runtime writes no longer trigger a spurious reload** — the options-update listener consumed the `_skip_options_reload` snapshot on first match, so the second of two quick entity writes found no snapshot and reloaded the integration. Snapshot is now kept on match and cleared on mismatch — provably leak-free (HA only fires the listener when options actually change)
+- **Energy-counter reset guard** — Growatt-style daily counters can reset at midnight in *different* update cycles; the surviving side's increment could cast a wrong grid/battery sign vote. Negative delta on either side now re-baselines and skips the vote (grid + per-battery variants)
+- **`set_option` mixed payloads** — the skip snapshot is no longer armed when structural keys force a reload anyway (stale state on a discarded coordinator)
+- **Charger-id sanity at registration** — WARNING on id-less entries (positional fallback can collide with a real sibling) and on duplicate ids (writes target only the first match)
+- **Config card**: per-charger rows with no resolvable id are skipped instead of rendering `…_undefined_…` entity lookups; save-status timers cancelled on disconnect (same for the diagnose button's copy timer)
+
+### 📝 Notes
+
+- Heal-vs-auto-discovery ordering documented as intentionally heal-first (prevents the reseed from firing on heal-able installs)
+- Deliberately deferred from #476: sign-state persistence (persisting a wrongly-locked sign would make bad locks permanent — needs a validation design first) and vote-threshold changes (3-vote lock-in is pinned as contract by the #352 test suite; the dominant reset windows are already closed)
+
+---
+
+# [1.7.3-beta.6] - 10.06.2026
+
+## 🩹 2026-06-10 review fixes — P1 batch
+
+Top findings from the full-codebase review (the unfixed remainder is tracked in #475 / #476):
+
+### 🛠️ Bug fixes
+
+- **#461 root cause: split-grid pick stability** — any-device split-grid discovery re-ran every cycle and adopted the result unconditionally, so a flicker in HA's state-list iteration order could swap which sensor plays import vs export, inverting the computed `grid_power` sign ("sometimes works, sometimes inverted", Growatt). New adoption gate: held picks win unless there's no pick yet, the new match is a same-device upgrade, or a held pick went unavailable. Late-loading DSMR discovery (#166) preserved
+- **`time.py` per-charger writer hardened** — the deadline writer was missed by the #469 patch round: it still clobbered `ev_chargers` to `[]` when options lacked the key, and silently no-op'd on a partial list. Now identical to the select.py / number.py contract (data fallback + recovery-append + WARNING)
+- **`sem-chart-card` empty-state crash (second instance of the #457 class)** — the card lit-bound `${this._t('loading')}` AND overwrote the same node via `.textContent` in `_showEmpty()`, destroying lit's text part so the next `requestUpdate()` threw and froze the card. Empty-state and canvas visibility are now fully lit-rendered (bundle rebuilt)
+
+### 🧪 Tests
+
+- `TestSplitGridPickStability` (4 tests): flipped re-discovery is not adopted; same-device upgrade is; unavailable pick reopens adoption; late-loading meter still discovered
+- `time.py` recovery + data-fallback contract tests in `test_ev_chargers_storage_heal.py`
+
+---
+
+# [1.7.3-beta.5] - 10.06.2026
+
+## 🩹 Storage heal for poisoned `options.ev_chargers` (#462/#464 follow-up #3)
+
+The writer fixes shipped in beta.1–beta.4 (#467/#468/#469 + the smart-merge
+fall-through) stopped **new** corruption of the options-side charger list, but
+none of them repaired storage that the v1.7.2 .. v1.7.3-beta.3 builds had
+already corrupted. Once `entry.options.ev_chargers` is a *partial* list
+(e.g. charger 1 only — the auto-discovery reseed plants exactly that shape
+after a `[]` clobber), the `{**data, **options}` merge hides the data-side
+sibling forever and every per-charger write targeting the missing id
+silently no-ops: the persistent "changing charger 2 does nothing at all"
+report on #462/#464 that survived all three betas. The #469 `or`-fallback
+only fires for missing/empty lists, not partial ones.
+
+### 🛠️ Bug fixes
+
+- **Setup-time storage heal** — `async_setup_entry` reconciles a poisoned `options.ev_chargers` against `entry.data` by id-union (options fields win per charger, data-only siblings restored, id-less ghost entries dropped). Idempotent: one healing write, then quiet. Logs a WARNING naming the before/after ids so support can see it happened
+- **Per-charger writers never silently no-op** — `SEMPerChargerSelect.async_select_option` / `SEMPerChargerNumber.async_set_native_value` recover a charger missing from the stored list out of `entry.data` (full dict, or a minimal `{"id": ...}` stub) and append it, with a WARNING — instead of dropping the write on the floor
+- **`_merge_ev_chargers_by_id` drops id-less entries** — they're untargetable by every write path and at registration get assigned a positional `ev_charger_<idx>` id that can collide with a real sibling (ghost charger)
+- **Config card stamps the charger `id`** — the nested per-charger editors (`sem-config-card.js`) now always carry `id` on the entries they submit, so a partial submit can never produce an id-less ghost
+
+### 🔍 Diagnostics
+
+- `diagnose` payload for the `ev_chargers` (and `all`) section now includes `ev_chargers_storage_split` — the per-side `entry.data` vs `entry.options` charger lists (id / name / charge_mode). The merged `config` block hid exactly the fact that mattered during the #462/#464 triage
+
+### 🧪 Tests
+
+- `tests/test_ev_chargers_storage_heal.py` — heal contract, writer recovery (select + number), ghost-drop contract
+- `tests/test_services_real.py::test_setup_heals_poisoned_options_ev_chargers` — real-HA boot with RienduPre-shaped poisoned storage: asserts the options list heals, charger 2 registers, and a charger-2 mode flip lands
+
+---
+
+# [1.7.3-beta.4] - 09.06.2026
+
+## 🧪 Framework tests + caught third instance of #469 fall-through
+
+While writing the real-HA integration tests for the `set_option` service path, the test against `sem_multi_wallbox_config_entry` (a fresh-install fixture with chargers only in `entry.data`) caught the **same `entry.options.get("ev_chargers", [])` fall-through pattern** PR #469 fixed for the per-charger setters — but this time in the `__init__.py` smart-merge itself. A fresh-install multi-charger user opening the Config card for the first time and editing one charger's field would hit it: the merge appends the partial submit as a stray entry (no matching id in the empty existing list) and the next reload clobbers `entry.data.ev_chargers` with the partial-options-side list. Same symptom as #464 but on the fresh-install path — patched in the same PR as the test that caught it.
+
+### 🛠️ Bug fix
+
+- **#464 follow-up #2** `set_option` smart-merge falls back to `entry.data.ev_chargers` when `entry.options` doesn't have the key. Latent since v1.7.2-beta.2 (`set_option` rework). Affected: fresh-install multi-charger users editing per-charger fields via the Config card before any prior write had populated `entry.options.ev_chargers` (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+
+### 🧪 Test infrastructure
+
+- `tests/test_services_real.py` — four real-HA integration tests that drive `solar_energy_management.set_option` through the service registry and assert on `hass.states.get(...).state`. The test layer that would have caught the v1.7.3-beta.1 number-entity staleness regression (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `sem_multi_wallbox_config_entry` fixture — seeded from RienduPre's diagnose dump, reusable for any multi-charger contract test (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `sem_config_entry` fixture bumped from schema v7 → v12.1 (stale since the #135 v11→v12 migration) (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `tests/scenarios/2026-06-09_rienduPre_dual_wallbox.yaml` — YAML scenario replay of RienduPre's dual-Wallbox setup running through the existing scenario harness; locks the `solar_plus_cheap`-outside-cheap-window mode-isolation contract (by @traktore-org in [#472](https://github.com/traktore-org/sem-community/pull/472))
+
+### 🩹 Process retirement
+
+The `[live-test-before-deploy]` policy memo from earlier today is now backed by a mechanical CI gate via `test_services_real.py`. Future PRs touching `__init__.py` / `select.py` / `number.py` set_option paths have the same green-or-red signal pytest already gives for pure-helper bugs.
+
+---
+
+# [1.7.3-beta.3] - 09.06.2026
+
+## 🛠️ Per-charger options-fallback fix (#464 follow-up)
+
+Follow-up to v1.7.3-beta.2 for the **asymmetric multi-charger symptom** RienduPre reported under #464 — *"change on charger 1 works, change on charger 2 does nothing"*. Investigation of his diagnostic dump traced the asymmetry to a latent bug in **both** per-charger setters:
+
+```python
+# select.py:async_select_option  and  number.py:async_set_native_value
+new_options = {**self._entry.options}
+ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]   # ← [] when missing
+for charger in ev_chargers:                                            # ← iterates nothing
+    if charger.get("id") == self._charger_id:
+        charger[self._config_key] = value
+        break
+new_options["ev_chargers"] = ev_chargers                               # ← writes [] back
+```
+
+When `entry.options.ev_chargers` doesn't exist (fresh install where the user has never opened the Config card), the setter writes `entry.options["ev_chargers"] = []`. On the next reload, the merge `{**entry.data, **entry.options}` overrides the data-side chargers with the empty options-side list — **every charger disappears**, all per-charger entities go unavailable. Latent since the multi-charger arc landed.
+
+### 🛠️ Bug fix
+
+- **#464 follow-up** Per-charger select + number setters now fall back to `entry.data.ev_chargers` when `entry.options` doesn't have the key (by @traktore-org in [#469](https://github.com/traktore-org/sem-community/pull/469))
+
+### 🙏 Thanks
+
+- **@RienduPre** for the full diagnose dump on v1.7.3-beta.1 — without it the asymmetric pattern would have stayed buried.
+
+---
+
+# [1.7.3-beta.2] - 09.06.2026
+
+## 🩺 RienduPre v1.7.2 bug-response release
+
+> v1.7.3-beta.1 was tagged and immediately retracted today — live HA-TEST verification (post-merge, pre-soak) caught that the skip-reload optimization left number entities stale at their old value after `set_option`. The full pytest suite was green but mocks don't model HA's entity lifecycle. Hotfix in [#468](https://github.com/traktore-org/sem-community/pull/468) routes tunable changes through each entity's own write path, which updates `_attr_native_value` + writes state synchronously. The post-incident `[live-test-before-deploy]` memory was added so backend changes touching HA's config-entry / entity-state pipeline now require live entity-state verification BEFORE merge, not just pytest.
+
+Four bug reports landed on v1.7.2 within five hours this morning ([#460](https://github.com/traktore-org/sem-community/issues/460), [#461](https://github.com/traktore-org/sem-community/issues/461), [#462](https://github.com/traktore-org/sem-community/issues/462), [#464](https://github.com/traktore-org/sem-community/issues/464)) — all from the same reporter on the same install. Root-cause analysis traced the three logic bugs to a single change in v1.7.2-beta.2: the `set_option` service was switched to always-reload the integration so heat-pump entity rewires (#448) would take effect. Side effect was that every Config-card tunable tweak destroyed the SensorReader's split-grid discovery state and the per-charger context across the multi-charger loop — the candidate root cause for all three logic bugs. The fix scopes the reload to structural keys only, routes tunables through their matching entity's write path, and adds smart-merge for `ev_chargers` to prevent partial submits from dropping sibling chargers.
+
+Also unblocks #453 by structurally fixing #457 in the same release: the diagram card was the one card in the bundle that mixed Lit declarative bindings with imperative DOM mutation on the same node, crashing `requestUpdate()` whenever late translations triggered a re-render. Pure-reactive rewrite brings it in line with the other 21 bundled cards.
+
+### 🛠️ Bug fixes
+
+- **#457** Diagram card pure-reactive rewrite — eliminates the lit-html `TypeError: Cannot set properties of null` crash on `requestUpdate()`. Source -202 LOC, zero imperative writes on lit-bound nodes (by @traktore-org in [#459](https://github.com/traktore-org/sem-community/pull/459))
+- **#453** Single-channel sem-localize delivery — drops the dual-channel `add_extra_js_url` hack that masked #457 (by @traktore-org in [#463](https://github.com/traktore-org/sem-community/pull/463))
+- **#460** Clipboard copy works on plain-HTTP installs — execCommand fallback for `navigator.clipboard` (which requires HTTPS / localhost), pattern mirrors `sem-system-card._writeClipboard` from #285 (by @traktore-org in [#465](https://github.com/traktore-org/sem-community/pull/465))
+- **#462 / #464** `set_option` service: smart-merge `ev_chargers` by id (so a partial Config-card submit can never drop sibling chargers) + scope reload to structural entity-wiring keys only + route tunable changes through each entity's own write path (`number.set_value` / `switch.turn_on/off` / `select.select_option`), so the entity state refreshes synchronously without reloading the integration. Pure-function helpers extracted to module scope with 20 contract tests. Strong candidate fix for #461 too (eliminates the reload-driven split-grid re-discovery) (by @traktore-org in [#467](https://github.com/traktore-org/sem-community/pull/467) + hotfix [#468](https://github.com/traktore-org/sem-community/pull/468))
+
+### 🩺 Defensive instrumentation
+
+- Charger entity-id validation at registration — logs WARNING when configured `ev_charging_power_sensor` / `ev_current_control_entity` / `ev_charger_service_entity_id` / `ev_start_stop_entity` / `ev_charge_mode_entity` no longer exist in HA's state registry. Catches the historical bug class (#315 KEBA, #357 Wallbox) where HA-integration upgrades silently rename entities (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+- Wallbox pause-switch discovery surfaces a WARNING when no `switch.*pause_resume` is found on the device — explains the exact consequence (generic `set_current(0)` fallback, which some Wallbox firmware latches per #357) and the workaround (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+- Split-grid sensor change-detection logs WARNING with before→after IDs when the discovered import/export sensors change between cycles. Surfaces the "any-device" confidence flip behind #461 (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+
+### 🌐 i18n
+
+- Dutch translation update for the new configuration strings, contributed by the affected reporter (by @RienduPre in [#458](https://github.com/traktore-org/sem-community/pull/458))
+
+### 🙏 Thanks
+
+- **@RienduPre** for the four detailed bug reports with video evidence and for the Dutch translation contribution while we were debugging his install.
+
+---
+
 # [1.7.2] - 08.06.2026
 
 ## 🎉 Stable Release

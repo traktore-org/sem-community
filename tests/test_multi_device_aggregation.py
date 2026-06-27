@@ -26,6 +26,7 @@ def _make_state(value, unit="W"):
 def _make_reader(mock_hass, config=None):
     """Create a SensorReader with mocked hass."""
     reader = SensorReader(mock_hass, config or {})
+    reader._sign_vote_warmup = 0
     return reader
 
 

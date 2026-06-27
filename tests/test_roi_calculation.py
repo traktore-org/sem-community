@@ -456,6 +456,168 @@ class TestAccumulatedSavings:
 
 
 # ════════════════════════════════════════════
+# Battery savings in ROI (#499)
+# ════════════════════════════════════════════
+
+class TestBatterySavingsROI:
+    """Battery discharge savings must flow into lifetime ROI (#499)."""
+
+    def test_snapshot_accumulates_battery_savings(self):
+        """Midnight snapshot adds cost_batt_savings to the running total."""
+        calc = _make_calculator()
+        yesterday = date.today() - timedelta(days=1)
+
+        calc._daily_accumulators = {
+            f"solar_{yesterday}": 15.0,
+            f"grid_import_{yesterday}": 4.0,
+            f"grid_export_{yesterday}": 6.0,
+        }
+        calc._daily_cost_accumulators = {
+            f"cost_import_{yesterday}": 4.0 * 0.30,
+            f"cost_export_{yesterday}": 6.0 * 0.08,
+            f"cost_savings_{yesterday}": 6.0 * 0.30,
+            f"cost_batt_savings_{yesterday}": 3.0 * 0.30,
+        }
+
+        calc._snapshot_daily_costs(yesterday)
+
+        assert abs(calc._accumulated_battery_savings - 0.90) < 0.01
+        # Solar savings unchanged by the new accumulator
+        assert abs(calc._accumulated_savings - 1.80) < 0.01
+
+    def test_battery_savings_included_in_lifetime_total(self):
+        """Accumulated battery savings count toward lifetime_total_savings."""
+        calc = _make_calculator()
+        calc._lifetime_accumulators = {
+            "lifetime_solar": 1000.0,
+            "lifetime_grid_import": 300.0,
+            "lifetime_grid_export": 200.0,
+            "lifetime_battery_discharge": 400.0,
+        }
+        calc._accumulated_savings = 60.0
+        calc._accumulated_battery_savings = 45.0
+        calc._accumulated_export_revenue = 4.0
+        calc._accumulated_self_consumed_kwh = 200.0
+        calc._accumulated_export_kwh = 50.0
+        calc._accumulated_grid_import_kwh = 100.0
+
+        energy = _make_energy()
+        costs = calc.calculate_costs(energy)
+
+        # Pre-SEM: self_consumed = 800-200 = 600 × 0.30 = 180
+        #          export = 150 × 0.08 = 12
+        # Accumulated: 60 (solar) + 45 (battery) + 4 (export) = 109
+        # Total = 180 + 12 + 109 = 301
+        assert abs(costs.lifetime_total_savings - 301.0) < 0.5
+
+    def test_pre_sem_battery_discharge_not_estimated(self):
+        """Lifetime battery discharge alone must NOT inflate the estimate.
+
+        The solar-charged share of pre-SEM discharge is already inside
+        lifetime_self_consumed (solar - export), so estimating it again
+        would double count (#499 design decision).
+        """
+        calc = _make_calculator()
+        base = {
+            "lifetime_solar": 5000.0,
+            "lifetime_grid_import": 2000.0,
+            "lifetime_grid_export": 1500.0,
+            "lifetime_battery_discharge": 0.0,
+        }
+        calc._lifetime_accumulators = dict(base)
+        energy = _make_energy()
+        without_batt = calc.calculate_costs(energy).lifetime_total_savings
+
+        calc._lifetime_accumulators = dict(base, lifetime_battery_discharge=800.0)
+        with_batt = calc.calculate_costs(energy).lifetime_total_savings
+
+        assert without_batt == with_batt
+
+    def test_battery_savings_persisted(self):
+        """accumulated_battery_savings survives a save/restore cycle."""
+        calc = _make_calculator()
+        calc._accumulated_battery_savings = 123.45
+
+        state = calc.get_state()
+        assert state["accumulated_battery_savings"] == 123.45
+
+        calc2 = _make_calculator()
+        calc2.restore_state(state)
+        assert calc2._accumulated_battery_savings == 123.45
+
+    def test_restore_legacy_state_without_battery_savings(self):
+        """Pre-#499 persisted state (no battery key) restores to 0.0."""
+        calc = _make_calculator()
+        state = calc.get_state()
+        del state["accumulated_battery_savings"]
+
+        calc2 = _make_calculator()
+        calc2.restore_state(state)
+        assert calc2._accumulated_battery_savings == 0.0
+
+    def test_negative_battery_savings_clamped(self):
+        """Negative accumulators (negative spot prices) clamp to 0 at read."""
+        calc = _make_calculator()
+        today = date.today()
+        month_key = f"{today.year}_{today.month}"
+        year_key = str(today.year)
+        calc._daily_cost_accumulators = {f"cost_batt_savings_{today}": -0.42}
+        calc._monthly_cost_accumulators = {f"cost_batt_savings_{month_key}": -0.42}
+        calc._yearly_cost_accumulators = {f"cost_batt_savings_{year_key}": -0.42}
+
+        energy = _make_energy()
+        costs = calc.calculate_costs(energy)
+
+        assert costs.daily_battery_savings == 0
+        assert costs.monthly_battery_savings == 0
+        assert costs.yearly_battery_savings == 0
+        assert costs.daily_total_savings >= 0
+
+
+# ════════════════════════════════════════════
+# Volume-weighted rate history (#499)
+# ════════════════════════════════════════════
+
+class TestVolumeWeightedRateHistory:
+    """Rate history must store the day's cost ÷ kWh, not the midnight rate."""
+
+    def test_snapshot_stores_volume_weighted_rate(self):
+        """Day average (cost/kWh) recorded even when midnight spot is cheap."""
+        calc = _make_calculator()
+        yesterday = date.today() - timedelta(days=1)
+
+        calc._daily_accumulators = {
+            f"solar_{yesterday}": 10.0,
+            f"grid_import_{yesterday}": 10.0,
+            f"grid_export_{yesterday}": 4.0,
+        }
+        # Day's import really cost 2.50 → volume-weighted 0.25/kWh
+        calc._daily_cost_accumulators = {
+            f"cost_import_{yesterday}": 2.50,
+            f"cost_export_{yesterday}": 4.0 * 0.10,
+        }
+        # Midnight spot price is much cheaper — must NOT be what we store
+        calc._import_rate = 0.05
+        calc._export_rate = 0.02
+
+        calc._snapshot_daily_costs(yesterday)
+
+        assert abs(calc._rate_history[0]["import_rate"] - 0.25) < 0.001
+        assert abs(calc._rate_history[0]["export_rate"] - 0.10) < 0.001
+
+    def test_snapshot_falls_back_to_current_rate_without_data(self):
+        """Days without import/cost data fall back to the current rate."""
+        calc = _make_calculator()
+        yesterday = date.today() - timedelta(days=1)
+        calc._daily_accumulators = {f"solar_{yesterday}": 10.0}
+
+        calc._snapshot_daily_costs(yesterday)
+
+        assert calc._rate_history[0]["import_rate"] == 0.30
+        assert calc._rate_history[0]["export_rate"] == 0.08
+
+
+# ════════════════════════════════════════════
 # Energy balance
 # ════════════════════════════════════════════
 

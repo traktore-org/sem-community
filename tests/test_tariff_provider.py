@@ -176,6 +176,60 @@ class TestDynamicTariffProvider:
         result = provider.detect_provider()
         assert result == "nordpool"
 
+    def test_user_price_stays_custom_when_unavailable(self, mock_hass):
+        """#518: a user-configured price entity must keep provider='custom'
+        even when it momentarily reads unavailable — it must NOT fall through
+        to auto-detect a different integration. RienduPre's Tibber sensor
+        intermittently flipped to 'nordpool_official' (different prices) on a
+        transient blip."""
+        unavail = MagicMock()
+        unavail.state = "unavailable"
+        mock_hass.states.get = MagicMock(return_value=unavail)
+        # A Nord Pool entity IS present — the tempting (wrong) fallback.
+        nordpool = MagicMock()
+        nordpool.entity_id = "sensor.nord_pool_nl_current_price"
+        nordpool.attributes = {}
+        mock_hass.states.async_all = MagicMock(return_value=[nordpool])
+
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.my_tibber")
+        assert provider.detect_provider() == "custom"
+        assert provider._provider_name == "custom"
+
+    def test_no_user_price_autodetects_nordpool_official(self, mock_hass):
+        """The #518 fix must NOT break auto-detection — without a configured
+        price entity, the official Nord Pool core integration is still
+        detected as 'nordpool_official'."""
+        nordpool = MagicMock()
+        nordpool.entity_id = "sensor.nord_pool_nl_current_price"
+        nordpool.attributes = {}
+        other = MagicMock(); other.entity_id = "sensor.x"; other.attributes = {}
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(
+            side_effect=lambda d: {"sensor": [other, nordpool]}.get(d, []))
+
+        provider = DynamicTariffProvider(mock_hass)  # no price_entity
+        assert provider.detect_provider() == "nordpool_official"
+
+    def test_provider_name_custom_from_init(self, mock_hass):
+        """#518: a user-configured price entity makes _provider_name 'custom'
+        from construction, so the Nord Pool service fetch (which only
+        relabels when name=='unknown') can't override it."""
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.my_tibber")
+        assert provider._provider_name == "custom"
+        provider2 = DynamicTariffProvider(mock_hass)  # auto-detect path
+        assert provider2._provider_name == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_service_fetch_skipped_when_user_configured(self, mock_hass):
+        """#518: don't pull the Nord Pool day-ahead curve when the user
+        configured their own price entity, even if Nord Pool is installed —
+        that mixed sources and relabelled the provider."""
+        mock_hass.services = MagicMock()
+        mock_hass.services.has_service = MagicMock(return_value=True)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.my_tibber")
+        assert await provider.async_refresh_service_prices() is False
+        mock_hass.services.has_service.assert_not_called()  # returned before the nordpool check
+
     def test_classify_price_negative(self, mock_hass):
         provider = DynamicTariffProvider(mock_hass)
         assert provider._classify_price(-0.05) == PriceLevel.NEGATIVE
@@ -374,8 +428,8 @@ class TestAmberElectricProvider:
 
     # ── Dynamic export rate from feed-in sensor ──
 
-    def test_dynamic_export_rate_from_feedin(self, mock_hass):
-        """Export rate read from feed-in entity (abs of negative value)."""
+    def test_dynamic_export_rate_amber_abs(self, mock_hass):
+        """Auto-detected Amber keeps its sign-inverted abs() (#523)."""
         def mock_get(entity_id):
             if entity_id == "sensor.amber_general_price":
                 return self._amber_price_state(0.28)
@@ -386,7 +440,22 @@ class TestAmberElectricProvider:
         mock_hass.states.get = MagicMock(side_effect=mock_get)
         provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         provider._feedin_entity = "sensor.amber_feed_in_price"
+        provider._provider_name = "amber"  # auto-detected Amber
         assert provider.get_current_export_rate() == pytest.approx(0.08)
+
+    def test_dynamic_export_rate_signed_for_spot(self, mock_hass):
+        """#523: a non-Amber (Tibber/EPEX) feed-in price stays SIGNED — a
+        negative spot export price is a cost, not abs()'d into a credit."""
+        def mock_get(entity_id):
+            if "feed_in" in entity_id:
+                return _make_price_state(-0.15)
+            return self._amber_price_state(0.28)
+
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.tibber_price")
+        provider._feedin_entity = "sensor.tibber_feed_in_price"
+        # configured price entity → provider stays "custom" (not amber)
+        assert provider.get_current_export_rate() == pytest.approx(-0.15)
 
     def test_dynamic_export_rate_positive_feedin(self, mock_hass):
         """Feed-in price that's already positive."""
@@ -599,7 +668,12 @@ class TestAmberElectricProvider:
             assert d["tariff_current_export_rate"] == pytest.approx(0.06)
 
     def test_amber_find_cheapest_hours(self, mock_hass):
-        """find_cheapest_hours works with 30-minute Amber intervals."""
+        """find_cheapest_hours works with 30-minute Amber intervals.
+
+        ``hours_needed`` is charging *time*: 1 hour of 30-min slots is
+        2 slots, 2 hours is 4 — treating it as a raw slot count would
+        cover half the requested charge time (#274/H2).
+        """
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
             {"start_time": (now + timedelta(minutes=30 * i)).isoformat(), "per_kwh": price}
@@ -611,12 +685,14 @@ class TestAmberElectricProvider:
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
             provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
-            cheapest = provider.find_cheapest_hours(2, within_hours=6)
+            cheapest = provider.find_cheapest_hours(1, within_hours=6)
+            # 2 hours on a 30-min market = 4 slots
+            four_slots = provider.find_cheapest_hours(2, within_hours=6)
 
         assert len(cheapest) == 2
-        # Two cheapest are 0.02 and 0.05
-        prices_found = sorted([p.price for p in cheapest])
-        assert prices_found == [0.02, 0.05]
+        assert sorted(p.price for p in cheapest) == [0.02, 0.05]
+        assert len(four_slots) == 4
+        assert sorted(p.price for p in four_slots) == [0.02, 0.05, 0.08, 0.25]
 
     # ── Edge cases ──
 
@@ -1266,6 +1342,94 @@ class TestExpandedParserShapes:
             assert provider._last_parsed_attribute is None
             assert provider._last_parsed_count == 0
             assert provider._last_parsed_gap_seconds is None
+
+    def test_tibber_grid_reward_today_raw_shape(self, mock_hass):
+        """Tibber Grid Reward (HACS) shape, #491 (RienduPre, Growatt NL).
+
+        Tibber Pulse accounts where core Tibber provisions no
+        ``electricity_price`` forecast sensor (core#153312) get their
+        only price arrays from the Grid Reward integration's
+        ``sensor.current_price``:
+
+        * ``today_raw`` / ``tomorrow_raw``: ``[{"time": iso,
+          "price": total, "rating": ...}, ...]``
+        * ``today`` / ``tomorrow``: comma-joined *strings* of the same
+          totals — must be skipped by the list guard, NOT parsed and
+          NOT double-counted against the raw arrays.
+
+        Users point ``dynamic_tariff_entity`` at the sensor (the
+        entity id is too generic to auto-detect).
+        """
+        now = datetime(2026, 6, 11, 0, 0, 0)
+        today_raw = []
+        for h in range(24):
+            ts = now + timedelta(hours=h)
+            today_raw.append({
+                "time": ts.isoformat(),
+                "price": 0.18 + 0.01 * h,
+                "rating": "NORMAL",
+            })
+        tomorrow_raw = []
+        for h in range(24):
+            ts = now + timedelta(hours=24 + h)
+            tomorrow_raw.append({
+                "time": ts.isoformat(),
+                "price": 0.15 + 0.01 * h,
+                "rating": "NORMAL",
+            })
+
+        state = _make_price_state(0.18, attributes={
+            "today": ", ".join(str(p["price"]) for p in today_raw),
+            "today_raw": today_raw,
+            "tomorrow": ", ".join(str(p["price"]) for p in tomorrow_raw),
+            "tomorrow_raw": tomorrow_raw,
+        })
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(
+                mock_hass, price_entity="sensor.current_price"
+            )
+            parsed = provider._read_prices_list()
+
+        # 24 today + 24 tomorrow, no double-counting from the
+        # comma-joined string attributes
+        assert len(parsed) == 48
+        assert provider._last_parsed_count == 48
+        assert provider._last_parsed_attribute == "today_raw"
+        assert provider._last_parsed_gap_seconds == 3600.0
+        assert parsed[0].price == 0.18
+        assert parsed[-1].price == pytest.approx(0.15 + 0.01 * 23)
+
+    def test_tibber_grid_reward_no_tomorrow_yet(self, mock_hass):
+        """Before ~13:00 Tibber publishes no tomorrow prices — Grid
+        Reward emits ``tomorrow: None`` + ``tomorrow_raw: []``. The
+        parser must still return today's 24 points."""
+        now = datetime(2026, 6, 11, 8, 0, 0)
+        midnight = now.replace(hour=0)
+        today_raw = [
+            {"time": (midnight + timedelta(hours=h)).isoformat(),
+             "price": 0.20, "rating": "NORMAL"}
+            for h in range(24)
+        ]
+        state = _make_price_state(0.20, attributes={
+            "today": ", ".join("0.2" for _ in range(24)),
+            "today_raw": today_raw,
+            "tomorrow": None,
+            "tomorrow_raw": [],
+        })
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(
+                mock_hass, price_entity="sensor.current_price"
+            )
+            parsed = provider._read_prices_list()
+
+        assert len(parsed) == 24
+        assert provider._last_parsed_attribute == "today_raw"
 
 
 class TestScheduleAfter15MinParse:

@@ -71,7 +71,10 @@ const PRESETS = {
         ],
     },
     energy: {
-        title: 'energy_balance', y_label: 'kWh', stacked: false,
+        // #523: rolling last-7-days, not "this week" (Mon→now). On Mondays
+        // "this week" collapses to a single day-bucket, which renders as
+        // one stray bar and contradicts the "Last 7 days" card title.
+        title: 'energy_balance', y_label: 'kWh', stacked: false, defaultPeriod: '7d',
         daily:   [
             { suffix: 'daily_solar_energy',        name: 'solar',       color: C.solar,      type: 'bar' },
             { suffix: 'daily_home_energy',         name: 'home',        color: C.home,       type: 'bar' },
@@ -106,6 +109,12 @@ const PRESETS = {
         // 24h includes yesterday-evening charges as a "phantom second
         // charge" in the morning view.
         title: 'ev_charging', y_label: 'W', stacked: true, defaultPeriod: 'today',
+        // Anchor the EV power axis at 0 with a 2 kW floor: a plugged-in idle car
+        // draws ~130 W of standby/handshake, which auto-scaling would otherwise
+        // blow up to fill the whole chart and read like a real charge. With a
+        // 2 kW suggestedMax that standby renders flat near zero, while a real
+        // charge (≥ a few kW) still extends the axis normally.
+        y_min: 0, y_suggested_max: 2000,
         hourly:  [
             { suffix: 'flow_solar_to_ev_power',   name: 'solar',   color: C.solar,      type: 'area' },
             { suffix: 'flow_battery_to_ev_power',  name: 'battery', color: C.batteryOut, type: 'area' },
@@ -126,6 +135,7 @@ class SEMChartCard extends SEMLitBase {
         this._boundPeriodHandler = (e) => this._onPeriodChange(e.detail);
         this._prefix = 'sensor.sem_';
         this._preset = null;
+        this._emptyMsg = '';
     }
 
     setConfig(config) {
@@ -155,13 +165,35 @@ class SEMChartCard extends SEMLitBase {
     connectedCallback() {
         super.connectedCallback();
         document.addEventListener('sem-period-change', this._boundPeriodHandler);
+        // #541: a relative window ('today'/'24h'/'7d'/'week') is computed once
+        // and would otherwise freeze on the day it first rendered — a long-open
+        // app then shows yesterday's data this morning. Re-roll it on a timer
+        // and on app resume / tab focus so the window tracks "now".
+        this._rollInterval = setInterval(() => this._rollRelativePeriod(), 5 * 60 * 1000);
+        this._boundVisibility = () => { if (!document.hidden) this._rollRelativePeriod(); };
+        document.addEventListener('visibilitychange', this._boundVisibility);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
         document.removeEventListener('sem-period-change', this._boundPeriodHandler);
+        if (this._boundVisibility) document.removeEventListener('visibilitychange', this._boundVisibility);
+        clearInterval(this._rollInterval);
         if (this._chart) { this._chart.destroy(); this._chart = null; }
         clearTimeout(this._fetchTimer);
+    }
+
+    /** #541: recompute the card's default relative window from "now" and
+     *  re-fetch, so a long-open app rolls the day boundary instead of showing
+     *  a stale day. Only acts when the card is still showing its OWN default
+     *  window — a user-changed/custom range is left untouched. */
+    _rollRelativePeriod() {
+        if (!this._period || !this._hass) return;
+        const dp = this._config?.default_period || this._preset?.defaultPeriod;
+        const defaultKey = dp === '24h' ? '24h' : dp === '7d' ? '7d'
+            : dp === 'today' ? 'today' : 'week';
+        if (this._period.key !== defaultKey) return;
+        this._setDefaultPeriod();   // recomputes start/end from now + re-fetches
     }
 
     firstUpdated() {
@@ -226,8 +258,8 @@ class SEMChartCard extends SEMLitBase {
                         <div class="chart-subtitle">${subtitle}</div>
                     </div>
                     <div class="chart-container">
-                        <canvas></canvas>
-                        <div class="empty-msg">${this._t('loading')}</div>
+                        <canvas style="display:${this._emptyMsg ? 'none' : 'block'}"></canvas>
+                        <div class="empty-msg ${this._emptyMsg ? 'visible' : ''}">${this._emptyMsg}</div>
                     </div>
                 </div>
             </ha-card>
@@ -249,10 +281,12 @@ class SEMChartCard extends SEMLitBase {
     _setDefaultPeriod() {
         const now = new Date();
         const p = this._preset;
+        // A per-card ``default_period`` config wins over the preset's own.
+        const defaultPeriod = this._config?.default_period || (p && p.defaultPeriod);
         // Presets with defaultPeriod 'today' (since-midnight) or '24h'
         // (rolling) or hourly-only presets default to an hourly view.
-        const wantToday = p && p.defaultPeriod === 'today';
-        const isHourly = p && (wantToday || p.defaultPeriod === '24h' || (p.hourly && !p.daily));
+        const wantToday = defaultPeriod === 'today';
+        const isHourly = p && (wantToday || defaultPeriod === '24h' || (p.hourly && !p.daily));
         if (isHourly) {
             const start = wantToday
                 ? this._startOfDayInHaTz(now)
@@ -260,6 +294,12 @@ class SEMChartCard extends SEMLitBase {
             const labelKey = wantToday ? 'period_today' : 'last_24h';
             const key = wantToday ? 'today' : '24h';
             this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey, key });
+        } else if (defaultPeriod === '7d') {
+            // Rolling last-7-days (#523): always 7 day-buckets, no Monday
+            // single-bar collapse, matching the "Last 7 days" title.
+            const start = this._startOfDayInHaTz(now);
+            start.setDate(start.getDate() - 6);
+            this._onPeriodChange({ start, end: now, granularity: 'day', labelKey: 'last_7_days', key: '7d' });
         } else {
             const dow = now.getDay() || 7;
             const mon = this._startOfDayInHaTz(now);
@@ -273,7 +313,7 @@ class SEMChartCard extends SEMLitBase {
         const KEY_TO_LABEL = {
             today: 'period_today', yesterday: 'period_yesterday',
             week: 'period_this_week', month: 'period_this_month',
-            year: 'period_this_year', '24h': 'last_24h',
+            year: 'period_this_year', '24h': 'last_24h', '7d': 'last_7_days',
         };
         this._period = { ...detail, labelKey: detail.labelKey || KEY_TO_LABEL[detail.key] };
         this.requestUpdate();
@@ -364,6 +404,9 @@ class SEMChartCard extends SEMLitBase {
         }
 
         this._hideEmpty();
+        // Canvas visibility is lit-bound to _emptyMsg now — wait for the
+        // update to land so Chart.js sizes against a visible canvas.
+        await this.updateComplete;
         await this._renderChart(datasets, series);
     }
 
@@ -384,10 +427,23 @@ class SEMChartCard extends SEMLitBase {
                 statistic_ids: statIds, period,
             });
         }
+        // On a STACKED power chart (e.g. EV charging power = solar+battery+grid
+        // → EV) the series are COMPONENTS that must sum to a total. Plotting the
+        // per-bucket MAX and stacking triple-counts: each component's max occurs
+        // at a different instant (when solar peaks, grid is 0), so the stacked
+        // maxes far exceed the real instantaneous total — a KEBA charging at
+        // 4.4 kW showed an 11 kW "grid" peak that never happened. Use the MEAN
+        // for stacked power charts so the parts sum correctly (mean of the sum =
+        // sum of the means) and the area integrates to real energy. Non-stacked
+        // charts keep MAX so peaks stay visible.
+        const stacked = this._config?.stacked ?? this._preset?.stacked ?? false;
+        const stackedPower = stacked && period === 'hour';
         return series.map(s => ({
             data: (stats[s.entity] || []).map(p => ({
                 x: new Date(p.start),
-                y: p.max ?? p.state ?? p.mean ?? 0,
+                y: stackedPower
+                    ? (p.mean ?? p.state ?? 0)
+                    : (p.max ?? p.state ?? p.mean ?? 0),
             })),
         }));
     }
@@ -510,6 +566,23 @@ class SEMChartCard extends SEMLitBase {
                         borderWidth: 1, cornerRadius: 10, padding: { top: 10, bottom: 10, left: 14, right: 14 },
                         bodySpacing: 6, displayColors: true, boxPadding: 4,
                         callbacks: {
+                            // Tooltip time in HA's home timezone (DST-aware), not the
+                            // viewer's browser tz — matches the axis labels.
+                            title: (items) => {
+                                if (!items || !items.length) return '';
+                                const d = new Date(items[0].parsed.x);
+                                if (isNaN(d)) return '';
+                                const lang = this._hass?.language || 'en';
+                                const tz = this._hass?.config?.time_zone || undefined;
+                                try {
+                                    if (gran === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+                                    if (gran === 'month') return d.toLocaleDateString(lang, { month: 'short', year: 'numeric', timeZone: tz });
+                                    return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
+                                } catch (e) {
+                                    // Bad tz string → fall back to browser-local rather than blank the chart.
+                                    return gran === 'hour' ? d.toLocaleTimeString(lang) : d.toLocaleDateString(lang);
+                                }
+                            },
                             label: (item) => {
                                 const val = item.parsed.y;
                                 const unit = item.dataset.yAxisID === 'y1' ? '%' : yLabel;
@@ -541,9 +614,19 @@ class SEMChartCard extends SEMLitBase {
                                 const d = new Date(tick.value);
                                 if (isNaN(d)) return val;
                                 const lang = this._hass?.language || 'en';
-                                if (timeUnit === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
-                                if (timeUnit === 'month') return d.toLocaleDateString(lang, { month: 'short' });
-                                return d.toLocaleDateString(lang, { day: 'numeric', month: 'short' });
+                                // Render in HA's configured home timezone, not the
+                                // viewer's browser tz — and via the IANA zone name so
+                                // it is DST-aware (a browser stuck on CET would otherwise
+                                // show summer times 1 h early).
+                                const tz = this._hass?.config?.time_zone || undefined;
+                                try {
+                                    if (timeUnit === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+                                    if (timeUnit === 'month') return d.toLocaleDateString(lang, { month: 'short', timeZone: tz });
+                                    return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
+                                } catch (e) {
+                                    // Bad tz string → fall back to browser-local rather than blank the axis.
+                                    return timeUnit === 'hour' ? d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString(lang, { day: 'numeric', month: 'short' });
+                                }
                             },
                         },
                         stacked,
@@ -564,7 +647,10 @@ class SEMChartCard extends SEMLitBase {
                         },
                         title: { display: !!yLabel, text: yLabel, color: T.textSec || '#757575', font: { size: 11, family: "'Segoe UI','Roboto',sans-serif" } },
                         stacked,
-                        beginAtZero: yLabel !== 'W',
+                        beginAtZero: yLabel !== 'W' || this._preset?.y_min === 0,
+                        // Per-preset axis floor (e.g. EV: don't zoom into standby noise).
+                        ...(this._preset?.y_min != null ? { min: this._preset.y_min } : {}),
+                        ...(this._preset?.y_suggested_max != null ? { suggestedMax: this._preset.y_suggested_max } : {}),
                     },
                 },
             },
@@ -587,18 +673,20 @@ class SEMChartCard extends SEMLitBase {
         this._chart = new Chart(ctx2d, config);
     }
 
+    // Empty-state is fully lit-rendered via _emptyMsg. The previous version
+    // imperatively overwrote .textContent on a node that ALSO had a lit text
+    // binding — destroying lit's text part so the next requestUpdate() threw
+    // "Cannot set properties of null" and froze the card (the #457 bug
+    // class; this was its second instance, after the system diagram card).
     _showEmpty(msg) {
-        const el = this.renderRoot.querySelector('.empty-msg');
-        if (el) { el.textContent = msg; el.classList.add('visible'); }
-        const c = this.renderRoot.querySelector('canvas');
-        if (c) c.style.display = 'none';
+        this._emptyMsg = msg;
+        this.requestUpdate();
     }
 
     _hideEmpty() {
-        const el = this.renderRoot.querySelector('.empty-msg');
-        if (el) el.classList.remove('visible');
-        const c = this.renderRoot.querySelector('canvas');
-        if (c) c.style.display = 'block';
+        if (!this._emptyMsg) return;
+        this._emptyMsg = '';
+        this.requestUpdate();
     }
 
     getCardSize() { return 5; }

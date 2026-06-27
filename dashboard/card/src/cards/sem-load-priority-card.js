@@ -152,7 +152,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .badge.priority { background:#ff9800; color:#fff; min-width:14px; text-align:center; }
             .toggle-label { display:flex; align-items:center; gap:4px; }
             .arrows { display:flex; flex-direction:column; gap:1px; }
-            .arrow-btn { border:none; background:none; cursor:pointer; font-size:10px; padding:0 4px; opacity:0.35; line-height:1; color:var(--primary-text-color,inherit); }
+            .arrow-btn { border:none; background:none; cursor:pointer; font-size:11px; padding:0 4px; opacity:0.35; line-height:1; color:var(--primary-text-color,inherit); }
             .arrow-btn:hover { opacity:0.8; }
             .mode-select { background:var(--card-background-color,rgba(40,40,55,0.7)); color:var(--primary-text-color); border:1px solid var(--divider-color,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px; font-size:13px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
             .mode-select:focus { outline:none; border-color:rgba(255,152,0,0.5); }

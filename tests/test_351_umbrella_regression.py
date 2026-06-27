@@ -496,43 +496,20 @@ class TestM1_CostAccumulatorsRoundTrip:
 
 
 # ---------------------------------------------------------------------------
-# M10 — SOLAR_PAUSE_STATES clear _ev_charge_started_at
+# M10 — pause-then-resume must not fire a spurious stop_session
 # ---------------------------------------------------------------------------
-
-
-class TestM10_PauseClearsChargeStartedTimer:
-    """Sanity guard: when the actuator enters one of the
-    ``SOLAR_PAUSE_STATES`` (low-battery, waiting-for-battery-priority),
-    the ``_ev_charge_started_at`` timer must be cleared. Pre-fix the
-    timer kept counting during the pause and the 300 s disable-delay
-    budget was exhausted by the time the pause cleared — the next
-    cycle then fired ``stop_session`` even though charging was just
-    resuming.
-
-    Source-level check: the pause branch in ``_execute_ev_control``
-    contains ``_ev_charge_started_at = None``.
-    """
-
-    def test_pause_branch_sets_started_at_to_none(self) -> None:
-        from pathlib import Path
-        ev_ctrl = Path(__file__).parent.parent / "coordinator" / "ev_control.py"
-        body = ev_ctrl.read_text()
-        # Find the SOLAR_PAUSE_STATES branch + assert the clear happens
-        # inside it.
-        pause_idx = body.find("if state in self.SOLAR_PAUSE_STATES")
-        assert pause_idx > 0, (
-            "M10 anchor — SOLAR_PAUSE_STATES branch not found in "
-            "ev_control.py. Either fixed differently or relocated."
-        )
-        # Next 800 chars should contain the clear (the branch body
-        # is short — well within this window).
-        window = body[pause_idx:pause_idx + 800]
-        assert "_ev_charge_started_at = None" in window, (
-            "M10 regression — SOLAR_PAUSE_STATES branch does NOT clear "
-            "_ev_charge_started_at. Disable-delay countdown will consume "
-            "its budget during the pause and fire stop_session on "
-            "resume."
-        )
+# The original M10 guard was a source-level grep asserting the
+# ``SOLAR_PAUSE_STATES`` branch inside the legacy ``_execute_ev_control``
+# cleared ``_ev_charge_started_at`` (so the 300 s disable-delay budget
+# wasn't exhausted while paused, firing stop_session on resume).
+#
+# ``_execute_ev_control`` was removed in Task 11 B. The disable-delay /
+# pause-resume timing is now owned by ``ChargerReconciler``, which resets
+# its ``_consecutive_idle_count`` to 0 whenever desired returns to CHARGE
+# (charger_reconciler.py) — structurally preventing the exhausted-budget
+# spurious-stop. Covered by ``test_charger_reconciler.py``
+# (``test_idle_self_charging_flicker_then_disable`` = hold-then-confirm;
+# ``test_charge_self_charging_does_not_disable_first`` = reset-on-CHARGE).
 
 
 # ---------------------------------------------------------------------------
@@ -789,13 +766,16 @@ class TestUmbrellaStructure:
             "missing in coordinator.py."
         )
 
-    def test_l2_anchor_present_in_flow_calculator(self) -> None:
+    def test_l2_legacy_calculate_energy_flows_is_removed(self) -> None:
+        # Acceptable fix shape #2 (legacy retirement #536): the deprecated
+        # proportional ``calculate_energy_flows`` was removed entirely. The
+        # method must NOT come back — production must use the timing-aware
+        # ``integrate_energy_flows``.
         from pathlib import Path
         fc_path = Path(__file__).parent.parent / "coordinator" / "flow_calculator.py"
         body = fc_path.read_text()
-        # L2 anchors at the legacy method.
-        assert "def calculate_energy_flows" in body, (
-            "Umbrella L2 anchor `calculate_energy_flows` is gone — "
-            "update the test to acknowledge the removal (acceptable "
-            "fix shape #2)."
+        assert "def calculate_energy_flows" not in body, (
+            "Legacy proportional `calculate_energy_flows` reappeared in "
+            "flow_calculator.py — it was removed in #536 (misleading "
+            "attribution). Use `integrate_energy_flows` instead."
         )

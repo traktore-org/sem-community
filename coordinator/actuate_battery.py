@@ -33,6 +33,14 @@ async def actuate_battery(
         decision: The output of ``decide_battery(view)`` this cycle.
         adapter: The brand-specific adapter wrapping this battery.
     """
+    if decision.intent is BatteryIntent.OFF:
+        await adapter.command_off()
+        _LOGGER.debug(
+            "actuate_battery(%s): OFF (hands-off) — %s",
+            decision.battery_id, decision.reason,
+        )
+        return
+
     if decision.intent is BatteryIntent.NORMAL:
         await adapter.command_normal()
         _LOGGER.debug(
@@ -75,6 +83,32 @@ async def actuate_battery(
         await adapter.command_stop_force_charge()
         _LOGGER.debug(
             "actuate_battery(%s): STOP_FORCE_CHARGE — %s",
+            decision.battery_id, decision.reason,
+        )
+        return
+
+    if decision.intent is BatteryIntent.FORCE_DISCHARGE:
+        if not adapter.supports_forced_discharge:
+            _LOGGER.warning(
+                "actuate_battery(%s): adapter does not support forced "
+                "discharge — arbitrage decision dropped (%s)",
+                decision.battery_id, decision.reason,
+            )
+            return
+        await adapter.command_force_discharge(
+            decision.discharge_power_w, decision.floor_soc,
+        )
+        _LOGGER.info(
+            "actuate_battery(%s): FORCE_DISCHARGE %.0f W (floor %.0f%%) — %s",
+            decision.battery_id, decision.discharge_power_w,
+            decision.floor_soc, decision.reason,
+        )
+        return
+
+    if decision.intent is BatteryIntent.STOP_FORCE_DISCHARGE:
+        await adapter.command_stop_force_discharge()
+        _LOGGER.debug(
+            "actuate_battery(%s): STOP_FORCE_DISCHARGE — %s",
             decision.battery_id, decision.reason,
         )
         return

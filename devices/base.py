@@ -23,9 +23,36 @@ from typing import Any, Dict, Optional
 # count. SEM's _set_current dedup used to suppress writes when the
 # commanded value hadn't changed, which silently starved the watchdog
 # during steady-state charging until the device dropped to fallback and
-# charging halted. Heartbeat at half KEBA's default 300 s timeout.
-# Confirmed by KEBA Energy Automation support in evcc-io/evcc#21093.
-WRITE_HEARTBEAT_INTERVAL_S = 60.0
+# charging halted. A same-value re-write at the refresh interval keeps it fed.
+#
+# The interval is a DEVICE capability, not a global constant: the failsafe
+# timeout varies per brand and per user config. The generic default below
+# assumed a 300 s KEBA failsafe (heartbeat at 1/5 of it). PROD showed a KEBA
+# P30 whose failsafe trips near ~60 s — so a 60 s heartbeat RACES it
+# (max_current oscillating 6↔12 A every ~60 s while SEM held 12 A, exporting
+# the unused surplus). ``watchdog_refresh_interval_s`` resolves the real
+# interval per charger, set comfortably under the shortest common failsafe.
+DEFAULT_WRITE_HEARTBEAT_INTERVAL_S = 60.0
+# Back-compat alias (older imports / tests reference this name).
+WRITE_HEARTBEAT_INTERVAL_S = DEFAULT_WRITE_HEARTBEAT_INTERVAL_S
+# Brands whose device-side failsafe can trip under the generic 60 s heartbeat.
+# Refresh below the shortest common failsafe timeout so a steady-state command
+# can't starve it. KEBA is set BELOW the ~10 s coordinator cycle so a steady
+# command is re-asserted EVERY cycle — PROD showed a KEBA P30 reverting to its
+# 6 A failsafe current in well under 30 s (offered current oscillating 6↔9/12 A,
+# pausing the car to ~120 W), so 30 s still raced it. Per-cycle re-writes outrun
+# any failsafe with a timeout ≥ ~1 cycle; a box that reverts sub-cycle is a
+# device-side failsafe-config problem SEM cannot out-write.
+_BRAND_WATCHDOG_REFRESH_S = {
+    "keba": 5.0,
+}
+
+# #546 — managed-neutralize failsafe timeout. Long enough that the per-cycle
+# current writes never let it trip during normal charging (vs the old 30 s that
+# the box out-reverted to 6 A → the 6↔9 A flap), short enough that a genuine
+# controller-death still lands the car on the charging floor within 10 min.
+# Persisted so it overwrites the box's short built-in failsafe.
+FAILSAFE_TIMEOUT_S = 600
 
 from homeassistant.core import HomeAssistant
 
@@ -149,6 +176,48 @@ class ControllableDevice(ABC):
     def is_active(self) -> bool:
         """Return True if device is currently consuming power."""
         return self._status.state == DeviceState.ACTIVE
+
+    def _brand_key(self) -> str:
+        """Best-effort charger brand token from the configured service /
+        entities (e.g. ``keba`` from ``keba.set_current``). Empty when
+        unknown."""
+        svc = (getattr(self, "charger_service", "") or "").strip().lower()
+        if "." in svc:
+            brand = svc.split(".", 1)[0]
+            if brand:
+                return brand
+        # Fallback: sniff entity ids / device name for a known brand token.
+        blob = " ".join(
+            x for x in (
+                (getattr(self, "current_entity_id", "") or "").lower(),
+                (getattr(self, "charger_service_entity_id", "") or "").lower(),
+                (getattr(self, "name", "") or "").lower(),
+            ) if x
+        )
+        for token in _BRAND_WATCHDOG_REFRESH_S:
+            if token in blob:
+                return token
+        return ""
+
+    @property
+    def watchdog_refresh_interval_s(self) -> float:
+        """Max seconds between identical writes before the charger's
+        device-side failsafe watchdog may trip. ``_set_current`` re-writes the
+        same value at this cadence to keep the watchdog fed (#392). Brand-aware:
+        KEBA's failsafe needs a faster refresh than the generic default.
+        ``_watchdog_refresh_override_s`` (set from config when present) wins, for
+        unusual failsafe settings."""
+        override = getattr(self, "_watchdog_refresh_override_s", None)
+        if override:
+            try:
+                val = float(override)
+                if val > 0:
+                    return val
+            except (TypeError, ValueError):
+                pass
+        return _BRAND_WATCHDOG_REFRESH_S.get(
+            self._brand_key(), DEFAULT_WRITE_HEARTBEAT_INTERVAL_S,
+        )
 
     @property
     def is_enabled(self) -> bool:
@@ -506,8 +575,40 @@ class CurrentControlDevice(ControllableDevice):
         self.phases = phases
         self.voltage = voltage
         self.current_entity_id = current_entity_id
+        # #523 (RienduPre): a valid HA service is always ``domain.service``.
+        # A junk value with no dot (his Wallbox config carried a stray
+        # ``charger_service='0'`` — a leftover that even propagated to a
+        # sibling whose own config was None) used to reach the service
+        # branch and crash ``domain, service = charger_service.split('.', 1)``
+        # with "not enough values to unpack" on EVERY 10 s cycle, blocking
+        # current control even though a perfectly good ``current_entity_id``
+        # number was configured. Treat a dot-less service as absent so
+        # control correctly falls through to the number entity. Guards all
+        # three split sites (set_current / start / stop) at once.
+        if isinstance(charger_service, str) and "." not in charger_service:
+            if charger_service.strip():
+                _LOGGER.warning(
+                    "%s: ignoring invalid charger_service %r (not a "
+                    "'domain.service') — using entity control instead",
+                    name, charger_service,
+                )
+            charger_service = None
         self.charger_service = charger_service
         self.charger_service_entity_id = charger_service_entity_id
+        # #546 — failsafe handling (managed-neutralize, default). SEM arms a
+        # LONG non-tripping failsafe that overwrites the box's short built-in one
+        # (which can't be disabled over UDP on a real P30). Set False
+        # (``keba_arm_failsafe``) for boxes that CAN disable it at the charger
+        # (evcc-style) — then a Repair guides the user. ``steady_failsafe``
+        # (default on) controls persistence of the managed failsafe.
+        self.arm_failsafe_enabled: bool = True
+        self.steady_failsafe: bool = True
+        # #546 — HA entity reporting the LIVE offered current (e.g.
+        # sensor.keba_p30_max_current). Service-controlled chargers (KEBA) have
+        # no in-SEM live-offer value — ``max_current`` is the static config cap.
+        # Plumbed from the ``ev_current_sensor`` config; read by the
+        # EV-OFFER-PROBE (observe-only). "" = no live source (probe shows "?").
+        self.current_sensor_entity_id: str = ""
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
@@ -535,6 +636,13 @@ class CurrentControlDevice(ControllableDevice):
         # whether to skip a same-value write (recent) or force a heartbeat
         # refresh (interval elapsed).
         self._last_write_at: float = 0.0
+        # #462 follow-up: consecutive set-current failures → Repair issue
+        # at 3 (cleared on the next successful write).
+        self._actuation_failures: int = 0
+        self._actuation_repair_raised: bool = False
+        # #485 H5: whether this instance has cleared a possible STALE
+        # persistent Repair left by a previous device instance.
+        self._stale_repair_checked: bool = False
         self._session_active: bool = False
         self._min_power_change_interval = min_power_change_interval
 
@@ -627,6 +735,74 @@ class CurrentControlDevice(ControllableDevice):
         )
         return await self._set_current(target_current)
 
+    def _bound_to_entity_range(
+        self, entity_id: str, current: float,
+    ) -> tuple:
+        """Bound a current command to the target number entity's range.
+
+        Returns ``(bounded_current, skip_write)``. ``skip_write`` is
+        True for a stop intent (``current <= 0``) on an entity whose
+        minimum is above 0 — the write would be rejected by HA core's
+        range validation before reaching the charger (#487), so the
+        caller must rely on the adapter's stop mechanism instead.
+        Unreadable entities/attributes leave the command untouched.
+        """
+        state = self.hass.states.get(entity_id) if entity_id else None
+        attrs = getattr(state, "attributes", None)
+        if not isinstance(attrs, dict):
+            return current, False
+
+        def _as_float(value):
+            # Real numerics/strings only — duck-typed mocks support
+            # __float__ and would fabricate bounds.
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except ValueError:
+                    return None
+            return None
+
+        ent_min = _as_float(attrs.get("min"))
+        ent_max = _as_float(attrs.get("max"))
+
+        if current <= 0:
+            return current, bool(ent_min is not None and ent_min > 0)
+        if ent_max is not None and current > ent_max:
+            current = ent_max
+        if ent_min is not None and current < ent_min:
+            current = ent_min
+        return current, False
+
+    def effective_max_current(self) -> float:
+        """Highest current SEM can ACTUALLY command — the configured
+        ``max_current`` clamped to the control number entity's own max.
+
+        A charger configured at 32 A whose ``number.*_max_charging_current``
+        entity caps at 16 A can only be driven to 16 A. Resolving CHARGE_MAX
+        to the hardware 32 A made the reconciler command 32, the device clamp
+        to 16, and the two never converge → a perpetual false 'drift' that
+        spammed ``WRITE 32A`` + ``clamping 32 A → 16 A`` every cycle (#536
+        logs). Service-controlled chargers (KEBA) have no current entity, so
+        this returns the configured max unchanged.
+        """
+        eff = float(self.max_current)
+        ent = self.current_entity_id
+        if not ent:
+            return eff
+        attrs = getattr(self.hass.states.get(ent), "attributes", None)
+        if isinstance(attrs, dict):
+            ent_max = attrs.get("max")
+            if ent_max is not None and not isinstance(ent_max, bool):
+                try:
+                    eff = min(eff, float(ent_max))
+                except (TypeError, ValueError):
+                    pass
+        return eff
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
@@ -643,12 +819,73 @@ class CurrentControlDevice(ControllableDevice):
         if (
             abs(current - self._current_setpoint) < 1.0
             and self.is_active
-            and (now - self._last_write_at) < WRITE_HEARTBEAT_INTERVAL_S
+            and (now - self._last_write_at) < self.watchdog_refresh_interval_s
         ):
             return self._status.current_consumption_w
 
+        # Entity-platform services have strict schemas — sending the
+        # per-integration param name produced "extra keys not allowed"
+        # on EVERY command (#462, RienduPre, for number.set_value).
+        # Generalized to the whole misconfigured-but-recoverable shape
+        # (#485 K1): input_number.set_value and select.select_option
+        # configured as the charger service bounced identically.
+        _svc = (self.charger_service or "").strip().lower()
+        _entity_svc_domain = _svc.split(".", 1)[0] if "." in _svc else ""
+
+        # #487: HA core validates number writes against the ENTITY's
+        # min/max BEFORE anything reaches the charger. Wallbox exposes
+        # min=6 (IEC 61851), so writing 0 A to stop is structurally
+        # impossible — it raised out_of_range every idle cycle (167×
+        # in RienduPre's log) and, since the actuation Repair landed,
+        # would false-trip it. Likewise a configured max above the
+        # entity's max (Links: 6-16 A) bounced every ramp-up command.
+        # Bound the write to the entity's range; a 0 A stop intent
+        # skips the write entirely — the actual stop is the adapter's
+        # job (pause switch / stop_session), and the number entity
+        # cannot express it.
+        _entity_target = None
+        if _entity_svc_domain in ("number", "input_number"):
+            _entity_target = self.current_entity_id or self.charger_service_entity_id
+        elif not self.charger_service and self.current_entity_id:
+            _entity_target = self.current_entity_id
+        skip_entity_write = False
+        if _entity_target:
+            bounded, skip_entity_write = self._bound_to_entity_range(
+                _entity_target, current,
+            )
+            if not skip_entity_write and bounded != current:
+                _LOGGER.debug(
+                    "%s: clamping commanded %.0f A into %s's range → %.0f A",
+                    self.name, current, _entity_target, bounded,
+                )
+                current = bounded
+
         try:
-            if self.charger_service:
+            if skip_entity_write:
+                # Stop intent on a number entity that can't express 0 A.
+                _LOGGER.debug(
+                    "%s: 0 A stop not writable to %s (entity min > 0) — "
+                    "relying on the adapter stop path (pause switch / "
+                    "stop_session) (#487)",
+                    self.name, _entity_target,
+                )
+            elif _entity_svc_domain in ("number", "input_number"):
+                # Map it to the entity write it was meant to be.
+                target = self.current_entity_id or self.charger_service_entity_id
+                await self.hass.services.async_call(
+                    _entity_svc_domain, "set_value",
+                    {"entity_id": target, "value": current},
+                    blocking=True,
+                )
+            elif _entity_svc_domain == "select":
+                # Amps exposed as a select: options are amp strings.
+                target = self.current_entity_id or self.charger_service_entity_id
+                await self.hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": target, "option": str(int(current))},
+                    blocking=True,
+                )
+            elif self.charger_service:
                 # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)
                 service_data = {self.service_param_name: current}
@@ -671,6 +908,8 @@ class CurrentControlDevice(ControllableDevice):
                     blocking=True,
                 )
 
+            self._clear_actuation_failure()
+
             self._current_setpoint = current
             self._last_write_at = now  # #392: heartbeat tracker
             self._record_power_change()
@@ -691,7 +930,102 @@ class CurrentControlDevice(ControllableDevice):
             _LOGGER.error("Failed to set current on %s: %s", self.name, e)
             self._status.state = DeviceState.ERROR
             self._status.error_message = str(e)
+            self._record_actuation_failure(e)
             return self._status.current_consumption_w
+
+    def _record_actuation_failure(self, error: Exception) -> None:
+        """Track consecutive set-current failures; raise a Repair at 3.
+
+        RienduPre's #462 install failed EVERY current command for days
+        with the evidence buried in per-cycle ERROR log lines — the user
+        saw "SEM doesn't react" with no actionable surface. Three
+        consecutive failures now raise a user-visible Repair naming the
+        device and the error; it clears on the next successful write.
+        """
+        self._actuation_failures += 1
+        if self._actuation_failures < 3 or self._actuation_repair_raised:
+            return
+        self._actuation_repair_raised = True
+        try:
+            from ..coordinator import repair_issues as _ri
+            _ri.raise_charger_actuation_failed(
+                self.hass, self.device_id,
+                name=self.name, error=str(error),
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the cycle over a repair
+            _LOGGER.debug("actuation-failure repair raise failed: %s", exc)
+
+    def _clear_actuation_failure(self) -> None:
+        """Reset the failure streak; clear the Repair after a good write."""
+        if self._actuation_failures == 0 and not self._actuation_repair_raised:
+            # #485 H5: the Repair is persistent (survives restart) but
+            # these flags are instance state. After the reload that
+            # fixing the config causes, the new instance's successful
+            # writes hit this early-return and the stale ERROR Repair
+            # stayed in the UI forever. Delete it once per instance —
+            # async_delete_issue is a no-op when no issue exists.
+            if not self._stale_repair_checked:
+                self._stale_repair_checked = True
+                try:
+                    from ..coordinator import repair_issues as _ri
+                    _ri.clear_charger_actuation_failed(self.hass, self.device_id)
+                except Exception as exc:  # noqa: BLE001
+                    _LOGGER.debug("stale actuation-repair clear failed: %s", exc)
+            return
+        self._actuation_failures = 0
+        if not self._actuation_repair_raised:
+            return
+        self._actuation_repair_raised = False
+        try:
+            from ..coordinator import repair_issues as _ri
+            _ri.clear_charger_actuation_failed(self.hass, self.device_id)
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("actuation-failure repair clear failed: %s", exc)
+
+    async def arm_failsafe(self) -> None:
+        """Arm a NON-TRIPPING managed failsafe (#546 — managed-neutralize).
+
+        Background: SEM's old failsafe (30 s, persist=0) left the box reverting
+        to its built-in 6 A floor mid-charge → the 6↔9 A flap (Guido PROD
+        2026-06-24). evcc avoids this by DISABLING the KEBA failsafe — but live
+        testing on a real P30 showed the failsafe can't be disabled over UDP
+        (``timeout=0`` is accepted but the box keeps it on; likely a safety
+        design — you can't switch off the watchdog that guards UDP control). So
+        SEM NEUTRALISES it instead: a **long** timeout (``FAILSAFE_TIMEOUT_S``,
+        600 s) the per-cycle current writes keep feeding, **persisted** so it
+        OVERWRITES the box's short built-in failsafe, with the fallback at the
+        charging FLOOR (not 6 A). It can't trip during normal charging, and a
+        genuine 10-min controller-death lands the car on the floor, not 6 A.
+
+        ``arm_failsafe_enabled`` (config ``keba_arm_failsafe``, default True)
+        can be set False for boxes that CAN disable the failsafe at the charger
+        (evcc-style); then SEM doesn't touch it and a Repair guides the user to
+        disable it. ``steady_failsafe`` (default on) controls persistence."""
+        if not bool(getattr(self, "arm_failsafe_enabled", True)):
+            _LOGGER.debug(
+                "%s: not arming the charger failsafe (keba_arm_failsafe off) — "
+                "a Repair guides disabling the box's own failsafe", self.name,
+            )
+            return
+        domain = (self.charger_service or "").split(".", 1)[0]
+        if not domain or not self.hass.services.has_service(domain, "set_failsafe"):
+            return
+        try:
+            fallback_a = max(6, int(round(self.min_current)))
+            steady = bool(getattr(self, "steady_failsafe", True))
+            persist = 1 if steady else 0
+            await self.hass.services.async_call(
+                domain, "set_failsafe",
+                {"failsafe_timeout": FAILSAFE_TIMEOUT_S,
+                 "failsafe_fallback": fallback_a, "failsafe_persist": persist},
+                blocking=True,
+            )
+            _LOGGER.info(
+                "%s: KEBA failsafe set non-tripping (timeout=%ds, fallback=%dA, "
+                "persist=%d)", self.name, FAILSAFE_TIMEOUT_S, fallback_a, persist,
+            )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning("Failed to set charger failsafe: %s", e)
 
     async def start_session(self, energy_target_kwh: float = 0) -> None:
         """Start a charging session.
@@ -720,9 +1054,9 @@ class CurrentControlDevice(ControllableDevice):
                 )
             elif self.start_stop_entity:
                 domain = self.start_stop_entity.split(".")[0]
-                if domain == "switch":
+                if domain in ("switch", "input_boolean"):
                     await self.hass.services.async_call(
-                        "switch", "turn_on",
+                        domain, "turn_on",
                         {"entity_id": self.start_stop_entity}, blocking=True,
                     )
                 elif domain == "button":
@@ -734,16 +1068,10 @@ class CurrentControlDevice(ControllableDevice):
                 # 2. KEBA-style fallback: probe for enable/disable services
                 domain = self.charger_service.split(".", 1)[0]
 
-                # KEBA-specific: disable failsafe mode
-                if self.hass.services.has_service(domain, "set_failsafe"):
-                    try:
-                        await self.hass.services.async_call(
-                            domain, "set_failsafe",
-                            {"failsafe_timeout": 0, "failsafe_fallback": 6, "failsafe_persist": False},
-                            blocking=True,
-                        )
-                    except Exception as e:
-                        _LOGGER.warning("Failed to disable charger failsafe: %s", e)
+                # Failsafe: a no-op by default now (#546, evcc-style — SEM
+                # doesn't arm the KEBA failsafe; a Repair guides disabling it at
+                # the box). Only arms when opted in via ``keba_arm_failsafe``.
+                await self.arm_failsafe()
 
                 # Set energy target if supported (KEBA)
                 if energy_target_kwh > 0 and self.hass.services.has_service(domain, "set_energy"):
@@ -804,12 +1132,12 @@ class CurrentControlDevice(ControllableDevice):
                 stop_method = f"charge_mode={self.charge_mode_stop}"
             elif self.start_stop_entity:
                 domain = self.start_stop_entity.split(".")[0]
-                if domain == "switch":
+                if domain in ("switch", "input_boolean"):
                     await self.hass.services.async_call(
-                        "switch", "turn_off",
+                        domain, "turn_off",
                         {"entity_id": self.start_stop_entity}, blocking=True,
                     )
-                    stop_method = f"switch.turn_off={self.start_stop_entity}"
+                    stop_method = f"{domain}.turn_off={self.start_stop_entity}"
                 elif domain == "button":
                     # Stop buttons have different entity_ids than start buttons
                     # The stop entity is typically named *_stop_charging*

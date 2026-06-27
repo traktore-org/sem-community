@@ -70,6 +70,19 @@ power before SEM catches the self-resume; if you observe sustained
 draw beyond that, file an issue with the SEM log line and the KEBA
 `max_current` setpoint reported at the moment of the resume.
 
+**Cause (entity service configured as charger service, v1.7.3+):** If
+`ev_charger_service` is set to an entity service like `number.set_value`,
+`input_number.set_value` or `select.select_option`, SEM maps the command
+to the matching entity write automatically (v1.7.3-beta.8 for
+`number.set_value`, generalized in beta.9). It needs a matching target:
+set `ev_current_control_entity` to the charger's max-current
+`number.*` / `input_number.*` / `select.*` entity. A wrong-domain target
+logs a registration WARNING naming the charger. After 3 consecutive
+rejected commands SEM raises a Repair ("EV charger not accepting
+commands") — it clears automatically on the next successful write, and
+since beta.9 a stale Repair left over from before a config fix is also
+cleared on the first good write after the reload.
+
 ---
 
 ## Car charged overnight when I only wanted solar surplus
@@ -198,6 +211,14 @@ read-only by design — SEM can't suppress it), but the cards will load.
 | Fronius | + = import, - = export | Auto-negated |
 | Template sensor (HA convention) | + = import, - = export | Auto-negated |
 
+**If you configured the grid entities manually** (`grid_import_power_entity` / `grid_export_power_entity` in the SEM options): SEM uses exactly what you configured and does NOT auto-correct the sign — manual config is treated as explicit intent. Since v1.7.3-beta.7 SEM cross-checks your manual entities against the Energy Dashboard counters and logs a WARNING (`Manual grid power entities CONTRADICT…`) plus sets `diag_grid_manual_mismatch: true` in the diagnose dump when the two fields appear swapped. Checklist for the manual fields:
+
+- The **import** field takes the sensor that is non-zero while you draw from the grid; the **export** field the one that is non-zero while you feed in. When unsure, watch both in Developer Tools → States at a moment of known heavy import (e.g. EV charging at night).
+- Both fields must be **power** sensors (W/kW) — an energy counter (kWh) in either field is flagged with a WARNING and produces garbage values.
+- Configure **both** fields or neither. With only one side set, the other reads a hard 0 W and that flow direction can never show ("always exporting").
+
+**Dutch dual-tariff (DSMR) meters:** your meter splits each direction into *tarief 1* and *tarief 2* counters (`…verbruik_tarief_1/2`, `…productie_tarief_1/2`). Configure **all four** in the HA Energy Dashboard (Settings → Dashboards → Energy → Grid — you can add multiple flows per direction). With only one tariff's counters configured, SEM's grid energy statistics undercount during the other tariff's hours and the sign cross-check is blind in those windows.
+
 ---
 
 ## Battery charge/discharge values are swapped
@@ -251,6 +272,19 @@ read-only by design — SEM can't suppress it), but the cards will load.
 2. For dynamic tariffs (Tibber/Nordpool/aWATTar): verify the price sensor entity exists and has a numeric state
 3. Currency is read from HA settings: **Settings > General > Currency**
 4. Cost sensors reset daily at sunrise — partial-day values are expected
+
+---
+
+## Dynamic tariff: prices parse as empty / classification stuck on "normal"
+
+**Cause:** The configured price sensor doesn't expose a price array in a shape SEM recognises. SEM parses `prices_today`/`prices_tomorrow`, `today`/`tomorrow` (Tibber core), `prices`, `today_raw`/`tomorrow_raw` (Tibber Grid Reward), `raw_today`/`raw_tomorrow` (Nordpool), and `forecasts`/`rates` (Amber/Octopus).
+
+**Diagnose:** Run the `solar_energy_management.diagnose` action with `section: tariff`. `tariff_parsed_attribute` names the attribute that matched (or `null` if none), `tariff_parsed_count` the number of price points, and `tariff_parsed_interval_seconds` the detected granularity (3600 hourly / 900 for 15-min markets).
+
+**Fix:**
+1. Point **Dynamic tariff entity** at the provider's *native* sensor that carries the arrays — not a template/derivative sensor that only mirrors the current price
+2. **Tibber Pulse without a forecast sensor**: the core Tibber integration sometimes provisions no `electricity_price` sensor (upstream issue). Install the HACS *Tibber Grid Reward* integration and use its `sensor.current_price` (supported since v1.7.3-beta.10)
+3. If your provider's shape isn't listed, pass the array through a template sensor attribute named `prices_today`, or open an issue with the sensor's attribute dump
 
 ---
 

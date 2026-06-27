@@ -428,7 +428,7 @@ class SEMSystemCard extends SEMLitBase {
             <style>
                 :host { display: block; contain: layout style paint; }
                 .wrap {
-                    padding: 16px;
+                    padding: 16px 20px;
                     position: relative;
                     background: ${semCardSurfaceCSS(T, SEM_COLORS.inverter)};
                     background-size: 100% 100%, 50px 50px;

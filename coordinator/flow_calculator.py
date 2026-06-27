@@ -195,6 +195,46 @@ def battery_redirect_w(
         return 0
 
 
+def battery_assist_potential_w(
+    battery_soc: float,
+    battery_buffer_soc: float,
+    battery_auto_start_soc: float,
+    battery_assist_max_power_w: float,
+) -> float:
+    """SOC-based POTENTIAL battery-assist power for the EV (#501).
+
+    The one assist formula. Used by BOTH the strategy decision
+    (``decide.battery_assist_budget_w``) and the canonical budget
+    (``FlowCalculator._calculate_battery_assist_w``) so the two layers
+    cannot disagree (the #282 class).
+
+    Deliberately has NO measured-discharge input:
+
+    * Not gated on "is the battery currently discharging" — that was
+      the #439 chicken-and-egg (EV never starts because the battery
+      hasn't started covering a draw that doesn't exist yet).
+    * Not raised to the measured discharge either — total discharge
+      includes the share serving the HOUSE; attributing it to the EV
+      budget created a positive-feedback ratchet (home-load spike →
+      more discharge → bigger EV budget → higher amps) and silently
+      bypassed the user's ``battery_assist_max_power`` cap (#501).
+
+    Shape (``battery_buffer_soc`` is the single floor — the separate
+    ``battery_assist_floor_soc`` knob was redundant since any SOC below
+    buffer already returns 0, so it was removed and folded into buffer):
+      * SOC ≥ auto_start (Zone 4)   → full ``battery_assist_max_power_w``
+      * buffer ≤ SOC < auto_start   → ramp 0.5 → 1.0 × cap across the band
+      * SOC < buffer (Zone 1/2)     → 0 (battery off-limits)
+    """
+    if battery_soc >= battery_auto_start_soc:
+        return battery_assist_max_power_w
+    if battery_soc >= battery_buffer_soc:
+        band = max(1.0, battery_auto_start_soc - battery_buffer_soc)
+        ratio = (battery_soc - battery_buffer_soc) / band
+        return battery_assist_max_power_w * (0.5 + 0.5 * ratio)
+    return 0.0
+
+
 class FlowCalculator:
     """Calculates power and energy flows using proportional allocation."""
 
@@ -606,93 +646,12 @@ class FlowCalculator:
                     if isinstance(v, (int, float)):
                         target[k] = float(v)
 
-    def calculate_energy_flows(self, energy: EnergyTotals) -> EnergyFlows:
-        """Legacy proportional-allocation energy flows (kept for tests).
-
-        ⚠️  Misleading attribution — use ``integrate_energy_flows`` instead.
-        Spreads daily totals proportionally to demand without regard to
-        timing, so a sunny morning with no EV charging still credits solar
-        to a brief afternoon EV plug-in.
-
-        Retained because some tests pin the old behaviour and because the
-        function is mathematically valid as a Sankey-style aggregate when
-        timing doesn't matter (full-day overviews). Not wired into the
-        coordinator update cycle anymore (#282).
-        """
-        import warnings
-        warnings.warn(
-            "FlowCalculator.calculate_energy_flows is deprecated — "
-            "proportional allocation produces misleading attribution. "
-            "Use integrate_energy_flows() for the canonical, "
-            "timing-aware energy flows. #351 L2.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        flows = EnergyFlows()
-
-        # Get source energies
-        solar = energy.daily_solar
-        grid_import = energy.daily_grid_import
-        battery_discharge = energy.daily_battery_discharge
-
-        # Get destination energies
-        home = energy.daily_home
-        ev = energy.daily_ev
-        battery_charge = energy.daily_battery_charge
-        grid_export = energy.daily_grid_export
-
-        # Calculate total demand
-        total_demand = home + ev + battery_charge + grid_export
-
-        if total_demand < 0.001:  # Less than 1Wh
-            return flows
-
-        # Calculate demand percentages
-        home_pct = home / total_demand
-        ev_pct = ev / total_demand
-        battery_charge_pct = battery_charge / total_demand
-        grid_export_pct = grid_export / total_demand
-
-        # Distribute solar energy proportionally
-        flows.solar_to_home = round(solar * home_pct, 3)
-        flows.solar_to_ev = round(solar * ev_pct, 3)
-        flows.solar_to_battery = round(solar * battery_charge_pct, 3)
-        flows.solar_to_grid = round(solar * grid_export_pct, 3)
-
-        # Grid import to destinations (excluding grid export)
-        demand_without_export = home + ev + battery_charge
-        if demand_without_export > 0.001:
-            home_pct_no_export = home / demand_without_export
-            ev_pct_no_export = ev / demand_without_export
-            battery_pct_no_export = battery_charge / demand_without_export
-
-            flows.grid_to_home = round(grid_import * home_pct_no_export, 3)
-            flows.grid_to_ev = round(grid_import * ev_pct_no_export, 3)
-            flows.grid_to_battery = round(grid_import * battery_pct_no_export, 3)
-
-        # Battery discharge to home and EV
-        demand_for_battery = home + ev
-        if demand_for_battery > 0.001:
-            home_pct_battery = home / demand_for_battery
-            ev_pct_battery = ev / demand_for_battery
-
-            flows.battery_to_home = round(battery_discharge * home_pct_battery, 3)
-            flows.battery_to_ev = round(battery_discharge * ev_pct_battery, 3)
-
-        # Verify energy balance and adjust if needed
-        home_received = flows.solar_to_home + flows.grid_to_home + flows.battery_to_home
-        if abs(home - home_received) > 0.001:
-            # Absorb rounding difference into solar_to_home
-            flows.solar_to_home = round(flows.solar_to_home + (home - home_received), 3)
-
-        _LOGGER.debug(
-            f"Energy flows calculated: "
-            f"Solar→Home: {flows.solar_to_home:.3f}, "
-            f"Solar→Grid: {flows.solar_to_grid:.3f}, "
-            f"Grid→Home: {flows.grid_to_home:.3f}"
-        )
-
-        return flows
+    # ``calculate_energy_flows`` removed in the legacy retirement (#536).
+    # It was the deprecated proportional-allocation aggregate (#351 L2):
+    # spread daily totals by demand ratio with no timing, so a sunny
+    # morning credited solar to an unrelated afternoon EV plug-in. Zero
+    # production callers since #282 — the coordinator integrates
+    # ``integrate_energy_flows`` (timing-aware) every cycle instead.
 
     # ``calculate_ev_budget`` removed in Phase D.2 (#282). Pre-D.2 it lived
     # alongside ``calculate_canonical_ev_budget`` and the two diverged on
@@ -743,8 +702,8 @@ class FlowCalculator:
         forecast_remaining_kwh: float = 0.0,
         battery_auto_start_soc: float = 90.0,
         battery_buffer_soc: float = 70.0,
-        battery_assist_floor_soc: float = 60.0,
         battery_assist_max_power_w: float = 4500.0,
+        battery_assist_min_surplus_w: float = 1200.0,
         min_power_floor_w: float = 0.0,
         override_max_w: Optional[float] = None,
         voltage: float = 230.0,
@@ -765,7 +724,7 @@ class FlowCalculator:
             battery_soc, battery_capacity_kwh, forecast_remaining_kwh:
                 Inputs to the redirect/assist sub-calculations.
             battery_auto_start_soc, battery_buffer_soc,
-                battery_assist_floor_soc, battery_assist_max_power_w:
+                battery_assist_max_power_w:
                 Strategy thresholds, normally read from config. Defaults
                 match the SEM-wide defaults so calls without overrides
                 still produce sensible numbers.
@@ -868,7 +827,16 @@ class FlowCalculator:
             )
 
         # ─── BATTERY_ASSIST ─────────────────────────────────────────
-        # Surplus + redirect + active battery discharge to EV.
+        # Surplus + redirect + battery assist. #545 / "max out till
+        # self-consumption": the assist is the full SOC-based POTENTIAL
+        # (``_calculate_battery_assist_w`` → ramps with SOC, zero below the
+        # buffer), so the battery empties into the car down to the buffer
+        # (self-consumption floor) rather than only topping up to the EV
+        # minimum (the #501 cap, which left a full battery idle while the
+        # EV grid-charged — the #545 chicken-and-egg). Kept in lock-step
+        # with ``decide.battery_assist_budget_w`` so the two layers agree
+        # (#282). Solar-gated below. ``min_power_floor_w`` is no longer
+        # consumed here (it stays the MIN_PV floor).
         if strategy == EVBudgetStrategy.BATTERY_ASSIST:
             redirect = self._calculate_battery_redirect(
                 power.battery_charge_power, battery_soc,
@@ -877,8 +845,14 @@ class FlowCalculator:
             assist = self._calculate_battery_assist_w(
                 power, battery_soc,
                 battery_auto_start_soc, battery_buffer_soc,
-                battery_assist_floor_soc, battery_assist_max_power_w,
+                battery_assist_max_power_w,
             )
+            # Solar gate: assist only SUPPLEMENTS real solar. Below the
+            # configured surplus threshold (default 1200 W) the battery
+            # is off-limits to the EV — a sunless evening/overnight
+            # session must never drain the home battery into the car.
+            if raw_surplus < battery_assist_min_surplus_w:
+                assist = 0.0
             net_w = raw_surplus + redirect + assist
             return EVBudget(
                 strategy=strategy,
@@ -934,36 +908,24 @@ class FlowCalculator:
         battery_soc: float,
         battery_auto_start_soc: float,
         battery_buffer_soc: float,
-        battery_assist_floor_soc: float,
         battery_assist_max_power_w: float,
     ) -> float:
-        """How much battery discharge to attribute to EV in battery_assist mode.
+        """How much battery power to attribute to EV in battery_assist mode.
 
-        Mirrors the legacy formula from `_calculate_solar_ev_budget` in
-        ev_control.py (the only place this lived before unification):
-
-        - SOC below assist floor: 0 (the battery shouldn't assist).
-        - Battery already discharging (>= 100 W): use measured value.
-        - Battery not yet discharging:
-            - Zone 4 (SOC >= auto_start_soc): full assist.
-            - Zone 3 (SOC >= buffer_soc):
-                proportional ramp 0.5 → 1.0 across the [buffer, auto_start]
-                band.
-            - Zone 2 (SOC < buffer_soc): 0 (shouldn't reach here — the
-                strategy decision should have chosen solar_only — but
-                guard anyway).
+        #501: delegates to the shared module-level
+        :func:`battery_assist_potential_w` — the SOC-based POTENTIAL,
+        capped by the user's ``battery_assist_max_power``. The legacy
+        ``measured discharge ≥ 100 W → return measured`` branch is
+        gone: it returned the battery's TOTAL discharge (including the
+        house's share) uncapped, which misattributed home consumption
+        to the EV budget and ratcheted the commanded current upward on
+        every home-load spike. ``power`` stays in the signature for
+        call-site compatibility (and future per-battery splits).
         """
-        if battery_soc <= battery_assist_floor_soc:
-            return 0.0
-
-        measured_discharge = max(0.0, power.battery_discharge_power)
-        if measured_discharge >= 100:
-            return measured_discharge
-
-        if battery_soc >= battery_auto_start_soc:
-            return battery_assist_max_power_w
-        if battery_soc >= battery_buffer_soc:
-            band = max(1.0, battery_auto_start_soc - battery_buffer_soc)
-            ratio = (battery_soc - battery_buffer_soc) / band
-            return battery_assist_max_power_w * (0.5 + 0.5 * ratio)
-        return 0.0
+        del power  # #501 — measured discharge intentionally unused
+        return battery_assist_potential_w(
+            battery_soc,
+            battery_buffer_soc,
+            battery_auto_start_soc,
+            battery_assist_max_power_w,
+        )

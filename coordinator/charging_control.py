@@ -139,9 +139,6 @@ class ChargingStateMachine:
         self._battery_initial_check_done = False
         self._ev_session_allowed = False
 
-        # Delta for current changes (avoid flapping)
-        self.current_delta = config.get("current_delta", 1)
-
         # Night-charging-enabled debounce state (#290). The raw vote (sum-of-
         # per-charger-switches) can transiently flip during HA-internal races
         # right after a config entry update — observed live on PROD 2026-05-29

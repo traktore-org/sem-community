@@ -26,13 +26,33 @@ def _make(hass_reload, options, snapshot):
 
 @pytest.mark.asyncio
 async def test_skips_reload_when_snapshot_matches():
-    """Runtime tweak: persisted options == snapshot → no reload."""
+    """Runtime tweak: persisted options == snapshot → no reload.
+
+    Post-#476 the snapshot is KEPT on a match (it's cleared on mismatch):
+    back-to-back runtime writes fire one listener invocation each, all
+    seeing the final merged options — consuming on the first match made
+    the second invocation reload spuriously.
+    """
     reload = AsyncMock()
     opts = {"daily_ev_target": 12}
     hass, entry, coord = _make(reload, opts, dict(opts))
     await async_update_options(hass, entry)
     reload.assert_not_called()
-    assert coord._skip_options_reload is None  # consumed
+    assert coord._skip_options_reload == opts  # kept for sibling invocations
+
+
+@pytest.mark.asyncio
+async def test_back_to_back_runtime_writes_skip_both_invocations():
+    """#476: two quick entity writes → two listener invocations, both
+    seeing the final options. Neither may reload."""
+    reload = AsyncMock()
+    # Writer A persisted {t:12}, writer B persisted {t:12, soc:80} and
+    # overwrote the snapshot. Both listener invocations observe B's options.
+    final = {"daily_ev_target": 12, "ev_target_soc": 80}
+    hass, entry, coord = _make(reload, final, dict(final))
+    await async_update_options(hass, entry)  # invocation for write A
+    await async_update_options(hass, entry)  # invocation for write B
+    reload.assert_not_called()
 
 
 @pytest.mark.asyncio

@@ -109,6 +109,21 @@ export class SEMLitBase extends LitElement {
             : key;
     }
 
+    // Map a raw forecast source id (sensor.sem_forecast_source) to its
+    // brand name. Shared so the Home hero and the Config tab agree —
+    // the Config tab used to show the raw 'forecast_solar' / 'FORECAST_SOLAR'
+    // while Home showed 'Forecast.Solar' (#514). Falls back to the raw
+    // string for any source we haven't mapped yet.
+    _forecastProviderLabel(raw) {
+        if (!raw) return '';
+        const LABELS = {
+            solcast: 'Solcast',
+            forecast_solar: 'Forecast.Solar',
+            custom: this._t('custom') || 'Custom',
+        };
+        return LABELS[raw] || raw;
+    }
+
     // ── Entity state readers ──
     _state(entityId, fallback = 0) {
         const frozen = this._frozenEntities[entityId];

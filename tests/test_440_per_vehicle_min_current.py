@@ -1,7 +1,7 @@
 """#440 — per-vehicle minimum current (ADR 0010 pattern 3).
 
 Effective per-charger floor is ``max(ev_min_current, vehicle_min_current)``.
-The third leg of evcc's three-way max (the EVSE hardware minimum)
+The third leg of the three-way max (the EVSE hardware minimum)
 is enforced in the adapter and does NOT appear at the decide layer.
 
 Tested:
@@ -105,8 +105,15 @@ class TestEffectiveMinAmpsHelper:
 
 
 def _view(*, is_night=False, connected=True, soc=95, target_kwh=14.0,
-          ev_min=6, vehicle_min=None):
-    """Build a minimal ChargerView for the night/day branches."""
+          ev_min=6, vehicle_min=None, night_deliverable_kwh=float("inf")):
+    """Build a minimal ChargerView for the night/day branches.
+
+    ``night_deliverable_kwh`` defaults to ``inf`` (matching the
+    ChargerView default = "the night window can cover any Min").
+    Post-#501 the daytime Zone 3/4 floor is need-gated, so day-branch
+    tests that want the floor to engage must pass a value below
+    ``target_kwh``.
+    """
     from custom_components.solar_energy_management.coordinator.charger_types import (
         FleetContext, ChargerView, ChargerPower, ChargerEnergy,
     )
@@ -130,6 +137,7 @@ def _view(*, is_night=False, connected=True, soc=95, target_kwh=14.0,
         power=power, energy=energy, mode="min_plus_solar",
         config=cfg, fleet=fleet,
         target_kwh=target_kwh, deadline_amps=0,
+        night_deliverable_kwh=night_deliverable_kwh,
     )
 
 
@@ -157,11 +165,35 @@ def test_min_plus_solar_night_uses_loadpoint_min_when_no_vehicle_override():
 
 
 def test_min_plus_solar_day_zone4_uses_vehicle_min():
-    """Daytime Zone 4 commit-then-measure (#439) — same effective floor
-    applies on the day branch."""
+    """Daytime Zone 4 — when the need-gated floor engages (#501: the
+    night window can no longer cover the remaining Min), it commits at
+    the effective per-vehicle floor (10 A), not the loadpoint min (6 A).
+    The #440 invariant (vehicle_min wins) is preserved under #501's
+    gating; the gate is exercised by ``night_deliverable_kwh < target``.
+    """
     from custom_components.solar_energy_management.coordinator.decide import (
         MinPlusSolarMode,
     )
-    view = _view(is_night=False, soc=95, ev_min=6, vehicle_min=10)
+    view = _view(is_night=False, soc=95, ev_min=6, vehicle_min=10,
+                 target_kwh=14.0, night_deliverable_kwh=0.0)
     decision = MinPlusSolarMode().decide(view)
     assert decision.commanded_amps == 10
+
+
+def test_min_plus_solar_day_zone4_idles_when_min_covered_by_night():
+    """#501 — with the Min covered by the night window
+    (``night_deliverable_kwh >= target``), daytime Zone 4 does NOT
+    force the floor: zero solar surplus → idle, not a grid-backfilled
+    6/10 A floor. Pins the self-consumption-maximizing behavior."""
+    from custom_components.solar_energy_management.coordinator.decide import (
+        MinPlusSolarMode,
+    )
+    from custom_components.solar_energy_management.coordinator.charger_types import (
+        ChargerIntent,
+    )
+    view = _view(is_night=False, soc=95, ev_min=6, vehicle_min=10,
+                 target_kwh=14.0)  # night_deliverable defaults to inf
+    decision = MinPlusSolarMode().decide(view)
+    assert decision.intent is ChargerIntent.IDLE, (
+        f"Min covered by night → must idle, not floor; got {decision.intent}"
+    )

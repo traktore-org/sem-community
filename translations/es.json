@@ -146,14 +146,8 @@
         "description": "Update your SEM optimization parameters",
         "data": {
           "update_interval": "Update Interval (seconds)",
-          "power_delta": "Power Delta Threshold (W)",
-          "current_delta": "Current Delta Threshold (A)",
-          "soc_delta": "Battery SOC Delta Threshold (%)",
           "battery_priority_soc": "Battery Priority SOC (%)",
-          "battery_minimum_soc": "Battery Minimum SOC (%)",
-          "battery_resume_soc": "Battery Resume SOC (%)",
-          "min_solar_power": "Minimum Solar Power (W)",
-          "max_grid_import": "Maximum Grid Import (W)",
+          "min_solar_power": "Potencia solar mínima — producción FV bruta (W)",
           "daily_ev_target": "Daily EV Target (kWh)",
           "battery_assist_max_power": "Battery Assist Max Power (W)",
           "battery_capacity_kwh": "Battery Capacity (kWh)",
@@ -170,7 +164,6 @@
           "ev_target_soc": "EV Target SOC (%)",
           "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
-          "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
           "battery_discharge_control_entity": "Battery discharge control entity (optional)",
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
@@ -179,15 +172,10 @@
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "power_delta": "Change-detection threshold for power sensors. Lower = more updates (more sensitive but heavier on the recorder). Default 1000 W is fine for most installs; tune down to 100–200 W for finer control.",
-          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger. Higher = less ramping.",
-          "soc_delta": "Minimum battery SOC change (%) before SEM reacts. Battery SOC moves slowly so 10 % is usually fine.",
           "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
-          "battery_assist_floor_soc": "Hysteresis floor — once battery assist is active, it stays active until SOC drops below this value. Default 60 %.",
-          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
-          "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
+          "min_solar_power": "Umbral de producción FV bruta — la potencia de los paneles por debajo de la cual «el sol está activo» es falso: solar_only no arranca y la protección de déficit profundo lo trata como oscuridad (la carga se detiene rápidamente en lugar de compensar con la red). Esto es producción BRUTA, NO excedente — a diferencia de «Asistencia batería – mín. excedente solar» (solar − casa), que decide cuándo puede ayudar la batería doméstica. Por defecto 1000 W; manténgalo por debajo del mínimo de hardware del cargador VE (~4140 W trifásico, ~1380 W monofásico).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
@@ -212,14 +200,12 @@
         "data": {
           "daily_ev_target": "Objetivo de carga nocturna (kWh)",
           "min_solar_power": "Potencia solar mínima para iniciar carga VE (W)",
-          "max_grid_import": "Importación máxima de red durante carga solar (W, 0 = solo solar)",
           "observer_mode": "Modo observador (solo lectura, sin control de hardware)",
           "smart_night_charging": "Reducir objetivo nocturno según previsión de mañana"
         },
         "data_description": {
           "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
           "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "max_grid_import": "Maximum grid power (W) SEM may use during solar charging. Set to 0 for pure-solar mode.",
           "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
           "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
         }
@@ -233,9 +219,6 @@
           "electricity_export_rate": "Tarifa de exportación",
           "demand_charge_rate": "Tarifa por demanda de potencia",
           "update_interval": "Intervalo de actualización (s)",
-          "power_delta": "Umbral de cambio de potencia (W)",
-          "current_delta": "Umbral de cambio de corriente (A)",
-          "soc_delta": "Umbral de cambio de SOC (%)",
           "tariff_mode": "Tariff mode",
           "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
           "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
@@ -249,9 +232,6 @@
           "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
           "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
           "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "power_delta": "Minimum power change (W) before SEM reacts. Lower = more responsive but heavier on the recorder.",
-          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger.",
-          "soc_delta": "Minimum battery SOC change (%) before SEM reacts to battery state changes.",
           "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
           "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
           "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
@@ -268,7 +248,6 @@
           "target_peak_limit": "Target Peak Limit (kW)",
           "warning_peak_level": "Warning Peak Level (kW)",
           "emergency_peak_level": "Emergency Peak Level (kW)",
-          "critical_device_protection": "Protect Critical Devices",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "EV Target SOC (%)"
@@ -278,7 +257,6 @@
           "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
           "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
           "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "critical_device_protection": "When enabled, devices marked as critical are never shed regardless of peak level.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
@@ -653,23 +631,11 @@
       "roi_annual_savings": {
         "name": "ROI Ahorro Anual"
       },
-      "forecast_accuracy_today": {
-        "name": "Precisión Previsión Hoy"
-      },
-      "forecast_accuracy_7d": {
-        "name": "Precisión Previsión 7d"
-      },
       "forecast_correction_factor": {
         "name": "Factor Corrección Previsión"
       },
-      "forecast_deviation_kwh": {
-        "name": "Desviación Previsión"
-      },
       "forecast_corrected_today": {
         "name": "Previsión Corregida Hoy"
-      },
-      "forecast_corrected_tomorrow": {
-        "name": "Previsión Corregida Mañana"
       },
       "forecast_history_days": {
         "name": "Historial Previsión Días"
@@ -749,9 +715,6 @@
       "forecast_remaining_today_kwh": {
         "name": "Previsión Restante Hoy"
       },
-      "forecast_power_now_w": {
-        "name": "Potencia Prevista Ahora"
-      },
       "forecast_source": {
         "name": "Fuente Previsión"
       },
@@ -815,15 +778,6 @@
       "predictor_model_accuracy": {
         "name": "Precisión Predictor"
       },
-      "predicted_consumption_next_hour": {
-        "name": "Consumo Previsto (Próx. Hora)"
-      },
-      "predicted_consumption_today_kwh": {
-        "name": "Consumo Previsto Hoy"
-      },
-      "predicted_solar_next_hour": {
-        "name": "Solar Previsto (Próx. Hora)"
-      },
       "predicted_surplus_window": {
         "name": "Ventana Excedente Prevista"
       },
@@ -878,9 +832,6 @@
       "forecast_peak_time_today": {
         "name": "Hora Pico Prevista Hoy"
       },
-      "forecast_power_next_hour_w": {
-        "name": "Potencia Prevista Próx. Hora"
-      },
       "forecast_surplus_kwh": {
         "name": "Excedente Previsto"
       },
@@ -899,32 +850,11 @@
       "battery_scheduler_reason": {
         "name": "Razón planificador"
       },
-      "ev_estimated_soc": {
-        "name": "SOC estimado VE"
-      },
-      "ev_last_full_charge": {
-        "name": "Última carga completa VE"
-      },
-      "ev_energy_since_full": {
-        "name": "Energía desde carga completa"
-      },
-      "ev_predicted_daily_consumption": {
-        "name": "Consumo diario previsto"
-      },
-      "ev_battery_health": {
-        "name": "Salud batería VE"
-      },
       "ev_charger_count": {
         "name": "EV Charger Count"
       },
       "ev_taper_trend": {
         "name": "EV Taper Trend"
-      },
-      "ev_taper_ratio": {
-        "name": "EV Taper Ratio"
-      },
-      "ev_taper_minutes_to_full": {
-        "name": "EV Minutes to Full"
       },
       "diag_version": {
         "name": "Versión SEM"
@@ -1025,38 +955,20 @@
       "update_interval": {
         "name": "Intervalo Actualización"
       },
-      "power_delta": {
-        "name": "Delta Potencia"
-      },
-      "current_delta": {
-        "name": "Delta Corriente"
-      },
-      "soc_delta": {
-        "name": "Delta SOC"
-      },
       "battery_priority_soc": {
         "name": "SOC Prioridad Batería"
-      },
-      "battery_minimum_soc": {
-        "name": "SOC Mínimo Batería"
-      },
-      "battery_resume_soc": {
-        "name": "SOC Reanudación Batería"
       },
       "minimum_solar_power": {
         "name": "Potencia Solar Mínima"
       },
-      "maximum_grid_import": {
-        "name": "Importación Red Máxima"
-      },
       "daily_ev_target": {
         "name": "Objetivo VE Diario"
       },
-      "public_charging_rate": {
-        "name": "Tarifa Carga Pública"
-      },
       "battery_assist_max_power": {
         "name": "Potencia Máx Asistencia Batería"
+      },
+      "battery_assist_min_surplus": {
+        "name": "Asistencia batería – mín. excedente solar"
       },
       "regulation_offset": {
         "name": "Offset Regulación"
@@ -1082,17 +994,17 @@
       "ev_min_current": {
         "name": "Corriente Mínima VE"
       },
-      "ev_stall_cooldown": {
-        "name": "Enfriamiento Parada VE"
+      "ev_enable_delay_seconds": {
+        "name": "Retardo de inicio VE (excedente)"
+      },
+      "ev_disable_delay_seconds": {
+        "name": "Retardo de parada VE (déficit)"
       },
       "battery_buffer_soc": {
         "name": "SOC Buffer Batería"
       },
       "battery_auto_start_soc": {
         "name": "SOC Auto-Inicio Batería"
-      },
-      "battery_assist_floor_soc": {
-        "name": "SOC Mínimo Asistencia Batería"
       },
       "battery_capacity_kwh": {
         "name": "Capacidad Batería"
@@ -1204,6 +1116,10 @@
       "title": "Sensor unavailable",
       "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
     },
+    "charger_actuation_failed": {
+      "title": "EV charger not accepting commands: {name}",
+      "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+    },
     "no_forecast_integration": {
       "title": "No solar forecast integration detected",
       "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
@@ -1227,6 +1143,10 @@
     "hot_water_temperature_sensor_unavailable": {
       "title": "Hot water temperature sensor unavailable",
       "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+    },
+    "keba_failsafe_active": {
+      "title": "KEBA failsafe is enabled — disable it for steady charging",
+      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
     }
   }
 }

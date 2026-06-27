@@ -264,7 +264,7 @@ class SEMEvProgressCard extends SEMLitBase {
                 }
 
                 .stat-label {
-                    font-size: 10px;
+                    font-size: 11px;
                     color: ${T.textSec};
                     letter-spacing: 0.3px;
                     line-height: 1.2;

@@ -35,6 +35,21 @@ _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
+# Entity keys that differ from the config/option key they persist to. Single
+# source of truth for both the read (init) and write (async_set_native_value)
+# paths — and asserted by tests/test_knob_wiring.py so every user-facing knob
+# resolves to a key some decision actually reads (no more dead steppers).
+CONFIG_KEY_MAP = {
+    "battery_capacity": "battery_capacity_kwh",
+    "ev_minimum_current": "ev_min_current",
+    # The HotWaterController reads the hot_water_-prefixed config keys
+    # (__init__.py); the sliders persisted the bare names, so the values never
+    # reached the controller (#542 census). Map them so read+write use the
+    # canonical key.
+    "legionella_target_temp": "hot_water_legionella_target",
+    "legionella_interval_hours": "hot_water_legionella_interval_hours",
+}
+
 NUMBER_TYPES = [
     # Delta Thresholds
     NumberEntityDescription(
@@ -45,30 +60,9 @@ NUMBER_TYPES = [
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="power_delta",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        native_min_value=50,
-        native_max_value=3000,
-        native_step=50,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="current_delta",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        native_min_value=1,
-        native_max_value=10,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="soc_delta",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=1,
-        native_max_value=20,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
+    # power_delta / current_delta / soc_delta removed — dead knobs: the
+    # values were never read by any control logic (current_delta was only
+    # assigned to self.current_delta and never used).
     # Battery Management
     NumberEntityDescription(
         # 4-zone Zone 1 floor: below this, all solar → battery, EV blocked.
@@ -78,23 +72,6 @@ NUMBER_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         native_min_value=5,
         native_max_value=60,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        # Hard stop: SOC below this halts EV charging entirely (safety).
-        key="battery_minimum_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=5,
-        native_max_value=50,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="battery_resume_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=30,
-        native_max_value=80,
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
@@ -112,14 +89,6 @@ NUMBER_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         native_min_value=70,
         native_max_value=100,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="battery_assist_floor_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=30,
-        native_max_value=80,
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
@@ -148,28 +117,11 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="maximum_grid_import",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        native_min_value=0,
-        native_max_value=2000,
-        native_step=100,
-        mode=NumberMode.SLIDER,
-    ),
     # EV charge-target / consumption settings (daily_ev_target[_max], ev_target_soc[_max],
     # ev_kwh_per_100km) are PER-CHARGER only (#255) — global duplicates removed; see the
     # per-charger descriptions in async_setup_entry. Stale registry entities are
     # auto-removed by _cleanup_stale_entities; values were seeded per-charger by the v3→v4
     # migration so nothing resets.
-    NumberEntityDescription(
-        key="public_charging_rate",
-        native_unit_of_measurement="CHF/kWh",
-        native_min_value=0,
-        native_max_value=2,
-        native_step=0.01,
-        mode=NumberMode.BOX,
-        entity_category=EntityCategory.CONFIG,
-    ),
     NumberEntityDescription(
         key="battery_assist_max_power",
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -178,14 +130,40 @@ NUMBER_TYPES = [
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
-    # EV Charging Parameters — global night_initial_current + minimum_current removed as
-    # per-charger duplicates (#255); ev_stall_cooldown stays a global tuning constant.
+    # Solar gate for battery assist: minimum pure solar surplus before
+    # the home battery may help charge the EV. 0 = battery supports the
+    # EV everywhere (incl. overnight); higher = battery protected below
+    # this surplus. Enforced in decide.battery_assist_budget_w +
+    # FlowCalculator + decide_battery's unified discharge clamp.
     NumberEntityDescription(
-        key="ev_stall_cooldown",
+        key="battery_assist_min_surplus",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=0,
+        native_max_value=5000,
+        native_step=100,
+        mode=NumberMode.SLIDER,
+    ),
+    # EV Charging Parameters — global night_initial_current + minimum_current
+    # removed as per-charger duplicates (#255). ev_stall_cooldown removed
+    # (dead: the entity value was never read; the stall detector uses a
+    # hardcoded grace + ev_max_reenable_attempts).
+    # Surplus stability delays (#461) — hysteresis enable/disable timers
+    # enforced by coordinator/charge_stability.py. Global: contactor-wear
+    # protection policy, not a per-charger hardware property.
+    NumberEntityDescription(
+        key="ev_enable_delay_seconds",
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        native_min_value=30,
-        native_max_value=300,
+        native_min_value=0,
+        native_max_value=600,
         native_step=10,
+        mode=NumberMode.SLIDER,
+    ),
+    NumberEntityDescription(
+        key="ev_disable_delay_seconds",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0,
+        native_max_value=1800,
+        native_step=30,
         mode=NumberMode.SLIDER,
     ),
     # ev_phases is PER-CHARGER only (#255) — it's a charger hardware property. Global
@@ -455,6 +433,30 @@ async def async_setup_entry(
                     entity_category=EntityCategory.CONFIG,
                 ), "ev_phases",
                     charger_cfg.get("ev_phases", full_config.get("ev_phases", 3))),
+                # Surplus-allocation order (#470) — lower = charges first
+                # when solar surplus is distributed across the fleet.
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_surplus_priority",
+                    name=f"{cname} Surplus Priority",
+                    native_min_value=1, native_max_value=10, native_step=1,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:sort-numeric-ascending",
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_surplus_priority",
+                    charger_cfg.get("ev_surplus_priority", 5)),
+                # Load-shed order under peak (#470) — independent of surplus
+                # order; higher = shed first when grid import nears the peak
+                # limit. Defaults to the surplus priority.
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_shed_priority",
+                    name=f"{cname} Shed Priority",
+                    native_min_value=1, native_max_value=10, native_step=1,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:sort-numeric-descending",
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_shed_priority",
+                    charger_cfg.get("ev_shed_priority",
+                                    charger_cfg.get("ev_surplus_priority", 5))),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
@@ -468,10 +470,54 @@ async def async_setup_entry(
             len(per_charger_descriptions), len(ev_chargers),
         )
 
+    # Per-battery reserve-SOC numbers (#523). Multi-battery installs get
+    # one ``number.sem_battery_<bid>_reserve_soc`` each — the floor the
+    # battery never sells below in force/allow arbitrage discharge.
+    from .consts.battery_modes import DEFAULT_BATTERY_RESERVE_SOC
+    from .select import _battery_slugs, _has_battery  # shared discovery
+    batt_slugs = _battery_slugs(coordinator)
+    reserve_cfg = full_config.get("battery_reserve_socs") or []
+    per_battery_descriptions = []
+
+    def _reserve_desc(key):
+        return NumberEntityDescription(
+            key=key,
+            native_min_value=0,
+            native_max_value=100,
+            native_step=5,
+            native_unit_of_measurement=PERCENTAGE,
+            entity_category=EntityCategory.CONFIG,
+            mode=NumberMode.SLIDER,
+        )
+
+    for idx, bid in enumerate(batt_slugs):
+        cur = (
+            reserve_cfg[idx]
+            if idx < len(reserve_cfg) and reserve_cfg[idx] not in (None, "")
+            else DEFAULT_BATTERY_RESERVE_SOC
+        )
+        desc = _reserve_desc(f"battery_{bid}_reserve_soc")
+        per_battery_descriptions.append(desc)
+        entities.append(SEMPerBatteryNumber(
+            coordinator, desc, entry, idx, len(batt_slugs), float(cur),
+        ))
+
+    # SINGLE-battery install (#523): global ``number.sem_battery_reserve_soc``.
+    if not batt_slugs and _has_battery(coordinator):
+        desc = _reserve_desc("battery_reserve_soc")
+        per_battery_descriptions.append(desc)
+        cur = full_config.get("battery_reserve_soc")
+        entities.append(SEMPerBatteryNumber(
+            coordinator, desc, entry, None, 1,
+            float(cur if cur not in (None, "") else DEFAULT_BATTERY_RESERVE_SOC),
+        ))
+
     async_add_entities(entities)
 
-    # Fix entity_ids from pre-translation installs and clean up stale entities
-    all_descriptions = list(NUMBER_TYPES) + per_charger_descriptions
+    # Fix entity_ids from pre-translation installs and clean up stale entities.
+    # per_battery_descriptions MUST be included so the stale-key sweep doesn't
+    # immediately remove the reserve-SOC numbers it just created (#523).
+    all_descriptions = list(NUMBER_TYPES) + per_charger_descriptions + per_battery_descriptions
     _fix_entity_ids(hass, entry, all_descriptions, "number")
     _cleanup_stale_entities(hass, entry, all_descriptions, "number")
 
@@ -570,15 +616,11 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
 
         # Set initial value from config.
         # Some entity keys differ from config keys for dashboard compatibility.
-        _CONFIG_KEY_MAP = {
-            "battery_capacity": "battery_capacity_kwh",
-            "ev_minimum_current": "ev_min_current",
-        }
         config = {**entry.data, **entry.options}
-        config_key = _CONFIG_KEY_MAP.get(description.key, description.key)
+        config_key = CONFIG_KEY_MAP.get(description.key, description.key)
         # Null-safe: config may store None explicitly, which makes the
         # entity unavailable.  Fall through to the default in that case.
-        # Note: don't use `or` — 0 is a valid value (e.g. max_grid_import=0).
+        # Note: don't use `or` — 0 is a valid value (e.g. minimum_solar_power=0).
         value = config.get(config_key)
         if value is None:
             value = config.get(description.key)
@@ -590,16 +632,11 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         """Get default value for a setting."""
         from .const import (
             DEFAULT_UPDATE_INTERVAL,
-            DEFAULT_POWER_DELTA,
-            DEFAULT_CURRENT_DELTA,
-            DEFAULT_SOC_DELTA,
             DEFAULT_BATTERY_PRIORITY_SOC,
-            DEFAULT_BATTERY_MINIMUM_SOC,
-            DEFAULT_BATTERY_RESUME_SOC,
             DEFAULT_MIN_SOLAR_POWER,
-            DEFAULT_MAX_GRID_IMPORT,
             DEFAULT_DAILY_EV_TARGET,
             DEFAULT_BATTERY_ASSIST_MAX_POWER,
+            DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
             DEFAULT_REGULATION_OFFSET,
             DEFAULT_DEMAND_CHARGE_RATE,
             DEFAULT_CHEAP_PRICE_THRESHOLD,
@@ -609,25 +646,19 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_SYSTEM_SIZE_KWP,
             DEFAULT_EV_INITIAL_CURRENT,
             DEFAULT_EV_MIN_CURRENT,
-            DEFAULT_EV_STALL_COOLDOWN,
             DEFAULT_BATTERY_CAPACITY_KWH,
         )
 
         defaults = {
             "update_interval": DEFAULT_UPDATE_INTERVAL,
-            "power_delta": DEFAULT_POWER_DELTA,
-            "current_delta": DEFAULT_CURRENT_DELTA,
-            "soc_delta": DEFAULT_SOC_DELTA,
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
-            "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
-            "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
-            "maximum_grid_import": DEFAULT_MAX_GRID_IMPORT,
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
             # Ceiling defaults to full (charge freely from sun until capped) (#245)
             "daily_ev_target_max": 100,
             "ev_target_soc_max": 100,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
+            "battery_assist_min_surplus": DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
             "regulation_offset": DEFAULT_REGULATION_OFFSET,
             "demand_charge_rate": DEFAULT_DEMAND_CHARGE_RATE,
             "cheap_price_threshold": DEFAULT_CHEAP_PRICE_THRESHOLD,
@@ -640,15 +671,14 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "system_size_kwp": DEFAULT_SYSTEM_SIZE_KWP,
             "initial_current": DEFAULT_EV_INITIAL_CURRENT,
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
-            "ev_stall_cooldown": DEFAULT_EV_STALL_COOLDOWN,
+            "ev_enable_delay_seconds": 60,
+            "ev_disable_delay_seconds": 300,
             "ev_phases": 3,
             "ev_kwh_per_100km": 18,
-            "public_charging_rate": 0.55,
             "electricity_import_rate": 0.3387,
             "electricity_export_rate": 0.075,
             "battery_buffer_soc": 70,
             "battery_auto_start_soc": 90,
-            "battery_assist_floor_soc": 60,
             "battery_capacity": DEFAULT_BATTERY_CAPACITY_KWH,
             "night_earliest_start": 20.5,
             "night_latest_end": 7.0,
@@ -671,12 +701,9 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         """Update the setting value."""
         self._attr_native_value = value
 
-        # Map entity key back to config key if they differ
-        _CONFIG_KEY_MAP = {
-            "battery_capacity": "battery_capacity_kwh",
-            "ev_minimum_current": "ev_min_current",
-        }
-        config_key = _CONFIG_KEY_MAP.get(self.entity_description.key, self.entity_description.key)
+        # Map entity key back to config key if they differ (single source of
+        # truth at module level).
+        config_key = CONFIG_KEY_MAP.get(self.entity_description.key, self.entity_description.key)
 
         # Update coordinator config (immediate, in-memory)
         await self.coordinator.async_update_config({config_key: value})
@@ -743,25 +770,14 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         """Update the per-charger setting value."""
         self._attr_native_value = value
 
-        # Keep coordinator's in-memory config in sync immediately
-        new_options = {**self._entry.options}
-        # Copy each charger dict — in-place mutation leaves entry.options unchanged,
-        # so async_update_entry skips persisting and the value reverts on restart (#245).
-        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
-        for charger in ev_chargers:
-            if charger.get("id") == self._charger_id:
-                charger[self._config_key] = value
-                break
-        new_options["ev_chargers"] = ev_chargers
-
-        if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-
-        # Persist without triggering integration reload (snapshot-keyed skip)
-        self.coordinator._skip_options_reload = new_options
-        self.hass.config_entries.async_update_entry(
-            self._entry,
-            options=new_options,
+        # Shared per-charger write path (#485 K2) — owns the data-side
+        # fallback, missing-charger recovery (#462/#464), coordinator
+        # mirror and reload-skip arming. Do NOT inline a copy here; the
+        # copy-paste class already produced one missed writer (#469).
+        from . import persist_per_charger_option
+        persist_per_charger_option(
+            self.hass, self._entry, self.coordinator,
+            self._charger_id, self._config_key, value,
         )
 
         self.async_write_ha_state()
@@ -769,3 +785,65 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
             "Updated per-charger %s.%s to %s",
             self._charger_id, self._config_key, value,
         )
+
+
+class SEMPerBatteryNumber(CoordinatorEntity, NumberEntity):
+    """Per-battery reserve-SOC NUMBER (#523), persisted positionally into
+    the ``battery_reserve_socs`` list key (idx-aligned to
+    ``battery_power_list``).
+
+    The battery-side mirror of :class:`SEMPerChargerNumber`, but positional
+    — writes through :func:`persist_per_battery_option` (no reload).
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: SEMCoordinator,
+        description: NumberEntityDescription,
+        entry: ConfigEntry,
+        idx: int,
+        count: int,
+        initial_value: float,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_translation_key = "battery_reserve_soc"
+        self._attr_name = "Reserve SOC"
+        self._attr_suggested_object_id = f"sem_{description.key}"
+        self.entity_id = f"number.sem_{description.key}"
+        self._entry = entry
+        self._idx = idx
+        self._count = count
+        self._attr_native_value = initial_value
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def device_info(self):
+        return self.coordinator.device_info
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Persist the reserve SOC (no reload). ``idx is None`` is the
+        SINGLE-battery install → scalar ``battery_reserve_soc`` key."""
+        self._attr_native_value = value
+        if self._idx is None:
+            from . import persist_global_option
+            persist_global_option(
+                self.hass, self._entry, self.coordinator,
+                "battery_reserve_soc", value,
+            )
+            _LOGGER.info("Updated battery reserve SOC to %s", value)
+        else:
+            from . import persist_per_battery_option
+            persist_per_battery_option(
+                self.hass, self._entry, self.coordinator,
+                self._idx, "battery_reserve_socs", value, self._count,
+            )
+            _LOGGER.info("Updated battery %d reserve SOC to %s", self._idx, value)
+        self.async_write_ha_state()

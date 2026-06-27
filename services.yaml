@@ -292,3 +292,39 @@ schedule_appliance:
           min: 1
           max: 10
           step: 1
+
+reset_sign_detection:
+  name: Reset sign detection
+  description: >
+    Forget the learned grid and battery sign-convention locks (RAM and
+    storage) and re-learn them from the Energy Dashboard counters. Use
+    this if grid import/export or battery charge/discharge are showing
+    flipped after the autodetect locked a wrong sign — the lock now
+    persists across restarts (#476), so a restart alone no longer
+    clears it.
+  fields:
+    entry_id:
+      name: Config entry
+      description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:
+
+flip_grid_sign:
+  name: Flip grid sign
+  description: >
+    Flip the grid import/export convention by one tap and return a
+    support report. Toggles the persisted grid_sign_user_flip override
+    (sits on top of the auto/manual decision), reloads so the corrected
+    sign takes effect immediately, and returns a diagnostics payload
+    (raw meter value, configured counters, correlation evidence) that the
+    Control-tab button copies for a GitHub issue. Use when import/export
+    appears inverted and a re-learn can't fix it (e.g. a swapped or
+    net-only meter). Calling it again flips back.
+  fields:
+    entry_id:
+      name: Config entry
+      description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:

@@ -49,14 +49,18 @@ def _runtime(battery_id="batt1", **kw):
 
 
 def _view(*, runtime=None, charging_state="idle", ev_charging=False,
-          home_w=500.0, scheduler_decision=None, config=None,
-          fleet=None):
+          ev_connected=None, home_w=500.0, scheduler_decision=None,
+          config=None, fleet=None):
     return BatteryView(
         runtime=runtime or _runtime(),
         config=config or {},
         fleet=fleet or FleetContext(),
         charging_state=charging_state,
         ev_charging=ev_charging,
+        # Default ev_connected to ev_charging when not given: a drawing
+        # car is by definition plugged in. Tests that exercise the
+        # "plugged but idle" case pass ev_connected explicitly.
+        ev_connected=ev_charging if ev_connected is None else ev_connected,
         home_consumption_w=home_w,
         scheduler_decision=scheduler_decision,
     )
@@ -133,21 +137,52 @@ class TestI18LimitDischargeGate:
         ))
         assert d.intent is BatteryIntent.NORMAL
 
-    def test_solar_charging_active_with_ev_does_not_limit_by_default(self):
+    def test_solar_charging_with_ev_and_surplus_does_not_limit(self):
+        # Real solar surplus ≥ gate (3500 W) AND SoC ≥ buffer → battery
+        # free to assist the EV; the unified clamp does not fire.
         d = decide_battery(_view(
             charging_state="solar_charging_active",
-            ev_charging=True,
-            config={"battery_discharge_protection_enabled": True,
-                    "battery_hold_solar_ev": False},
+            ev_charging=True, home_w=500.0,
+            fleet=FleetContext(solar_w=4000.0, home_w=500.0,
+                               battery_soc=80.0, buffer_soc=70.0),
+            config={"battery_discharge_protection_enabled": True},
         ))
         assert d.intent is BatteryIntent.NORMAL
 
-    def test_solar_charging_active_with_ev_limits_when_opted_in(self):
+    def test_below_buffer_limits_even_with_surplus(self):
+        # PROD 2026-06-26: SoC below the buffer floor but surplus ≥ gate.
+        # The battery must NOT feed the car below the self-consumption
+        # reserve, in any zone — clamp via the buffer arm.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=True, home_w=600.0,
+            fleet=FleetContext(solar_w=2000.0, home_w=600.0,   # surplus 1400 ≥ gate
+                               battery_soc=83.0, buffer_soc=85.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == 600.0
+        assert "buffer" in d.reason
+
+    def test_at_buffer_with_surplus_does_not_limit(self):
+        # Exactly at the buffer (SoC == buffer) → in the assist band → free.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=True, home_w=600.0,
+            fleet=FleetContext(solar_w=2000.0, home_w=600.0,
+                               battery_soc=85.0, buffer_soc=85.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.NORMAL
+
+    def test_solar_charging_with_ev_below_gate_limits(self):
+        # Solar surplus below the gate (cloudy day) → the unified clamp
+        # protects the battery in ANY mode, no opt-in flag needed.
         d = decide_battery(_view(
             charging_state="solar_charging_active",
             ev_charging=True, home_w=800.0,
-            config={"battery_discharge_protection_enabled": True,
-                    "battery_hold_solar_ev": True},
+            fleet=FleetContext(solar_w=300.0, home_w=800.0),
+            config={"battery_discharge_protection_enabled": True},
         ))
         assert d.intent is BatteryIntent.LIMIT_DISCHARGE
         assert d.discharge_limit_w == 800.0
@@ -157,6 +192,33 @@ class TestI18LimitDischargeGate:
             charging_state="night_charging_active",
             ev_charging=True,
             config={"battery_discharge_protection_enabled": False},
+        ))
+        assert d.intent is BatteryIntent.NORMAL
+
+    def test_plugged_but_not_drawing_still_limits(self):
+        # The coupling fix: a bursty car (Renault Zoe) is plugged in
+        # (ev_connected) but momentarily NOT drawing (ev_charging=False)
+        # between pulses. The clamp MUST still hold — otherwise the
+        # battery discharges freely in the gap and feeds the next pull
+        # (PROD 2026-06-24, 93→41 % overnight). Surplus 0 < gate.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=False, ev_connected=True, home_w=800.0,
+            fleet=FleetContext(solar_w=0.0, home_w=800.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == 800.0
+
+    def test_unplugged_and_not_drawing_does_not_limit(self):
+        # No car plugged in at all → the protection does not fire even
+        # in a low-surplus state; the battery is free to discharge for
+        # the house as normal.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=False, ev_connected=False, home_w=800.0,
+            fleet=FleetContext(solar_w=0.0, home_w=800.0),
+            config={"battery_discharge_protection_enabled": True},
         ))
         assert d.intent is BatteryIntent.NORMAL
 

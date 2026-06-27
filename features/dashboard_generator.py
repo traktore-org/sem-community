@@ -412,10 +412,27 @@ class DashboardGenerator:
         """Replace placeholder weather.home with a real weather entity, or
         drop weather card entirely if the user has none."""
         states = self.hass.states.async_all("weather")
-        # Prefer real weather entities over the auto-generated weather.forecast_*
-        # subentity (which lacks the forecast attributes the card expects).
+
+        def _usable(s) -> bool:
+            # A weather entity is only useful to the card if it carries a
+            # current ``temperature`` and isn't unavailable/unknown. The
+            # auto-generated ``weather.forecast_*`` subentity and an entity
+            # that's reloading both fail this (#516: RienduPre's tile showed
+            # "?" / "—°C" because the picked entity had no temperature).
+            return (
+                s.state not in ("unavailable", "unknown")
+                and s.attributes.get("temperature") is not None
+            )
+
         non_forecast = [s for s in states if not s.entity_id.startswith("weather.forecast_")]
-        chosen = non_forecast or states
+        # Prefer a non-forecast entity with real data; then any non-forecast;
+        # then any usable entity at all; finally fall back to whatever exists.
+        chosen = (
+            [s for s in non_forecast if _usable(s)]
+            or non_forecast
+            or [s for s in states if _usable(s)]
+            or states
+        )
         weather_id = chosen[0].entity_id if chosen else None
 
         weather_card_types = ("custom:clock-weather-card", "custom:sem-weather-card")

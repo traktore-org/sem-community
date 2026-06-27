@@ -2,7 +2,7 @@
 
 Mixin class providing all EV charging control logic:
 - Night charging: dynamic peak-aware current every cycle
-- Solar charging: evcc-style enable/disable delays with ramp limiting
+- Solar charging: hysteresis enable/disable delays with ramp limiting
 - Min+PV mode: guaranteed minimum from grid + solar surplus
 - Session cost tracking (per-session energy, cost, solar share)
 - Self-healing via KEBA stall detection
@@ -26,7 +26,6 @@ from ..const import (
     EV_DEADLINE_LOOKAHEAD_HOURS,
 )
 from .types import PowerReadings, PowerFlows, SessionData
-from .charging_control import ChargingContext
 from .ev_tariff_planner import NightChargePlan, plan_night_charge
 
 _LOGGER = logging.getLogger(__name__)
@@ -241,6 +240,43 @@ class EVControlMixin:
 
         return plan
 
+    def _night_deliverable_kwh(self, charger_cfg: dict) -> float:
+        """Energy tonight's window can deliver to this charger (#501).
+
+        Hours from the night-window start to the charger's ``Charge by``
+        deadline (clamped to the window) × max current. Feeds the
+        daytime ``min_plus_solar`` floor gate in ``decide.py`` — the
+        floor only engages when the remaining Min exceeds this, i.e.
+        when deferring to the night top-up would risk the guarantee.
+
+        Uses max current (the rate a forcing deadline can ramp to),
+        not the peak-managed rate: the night planner's own reachability
+        check + "can't reach Min in time" notification remain the
+        backstop for peak-constrained nights. Errs toward
+        self-consumption (``inf`` on any parse failure = floor stays
+        off), matching the mode's documented daytime behaviour.
+        """
+        try:
+            night_start, night_end = self.time_manager.get_night_window()
+            window_h = self.time_manager.get_night_window_hours()
+            cfg = charger_cfg if isinstance(charger_cfg, dict) else {}
+            deadline = str(cfg.get("ev_target_time") or night_end)
+            sh, sm = night_start.split(":")[:2]
+            dh, dm = deadline.split(":")[:2]
+            start_min = int(sh) * 60 + int(sm)
+            deadline_min = int(dh) * 60 + int(dm)
+            hours = ((deadline_min - start_min) % (24 * 60)) / 60.0
+            hours = min(hours, window_h)
+            max_a = float(
+                cfg.get("ev_max_current")
+                or self.config.get("ev_max_current", 16)
+            )
+            phases = int(cfg.get("ev_phases") or self.config.get("ev_phases", 3))
+            voltage = float(cfg.get("ev_voltage") or self.config.get("ev_voltage", 230))
+            return hours * max_a * phases * voltage / 1000.0
+        except (ValueError, TypeError, AttributeError):
+            return float("inf")
+
     def _expected_night_home_w(self, energy: Any, window_hours: float = 8.0) -> float:
         """Expected average home consumption (W) over the upcoming night window.
 
@@ -308,383 +344,6 @@ class EVControlMixin:
         ChargingState.SOLAR_PAUSE_LOW_BATTERY,
         ChargingState.SOLAR_WAITING_BATTERY_PRIORITY,
     }
-
-    async def _execute_ev_control(
-        self,
-        state: str,
-        power: PowerReadings,
-        energy: Any,
-        context: ChargingContext,
-    ) -> None:
-        """Unified EV control: coordinator always owns EV via CurrentControlDevice.
-
-        State-based dispatch:
-        - NIGHT_CHARGING_ACTIVE: dynamic peak-aware current every cycle.
-        - NIGHT_WAITING_FOR_WINDOW / NIGHT_TIME_EXPIRED: stop session, wait.
-        - SOLAR_CHARGING_STATES (incl. SOLAR_MIN_PV): ramp-limited current
-          with evcc-style enable/disable delays.
-        - SOLAR_PAUSE_STATES: zero current, keep session alive.
-        - Terminal states: stop session.
-
-        SurplusController manages all other devices (hot water, heat pump, etc.).
-
-        Args:
-            state: Current charging state from state machine.
-            power: Current sensor readings.
-            energy: Daily/monthly energy totals.
-            context: Charging context with strategy, targets, and night fields.
-        """
-        ev = self._ev_device
-        ev.managed_externally = True  # ALWAYS — coordinator owns EV
-
-        # v1.6.8: cache this charger's power once per call. Avoids reading
-        # the global fleet sum (``power.ev_power``) when we mean THIS
-        # charger's draw — exactly the bug class that caused the v1.6.5
-        # KEBA self-resume regression and the broader sweep this release
-        # ships. See ``docs/MULTI_CHARGER.md`` for the invariant.
-        this_power_w = self._this_charger_power(ev, power)
-
-        # === NIGHT CHARGING (peak-managed, ramp-limited) ===
-        # Design: evcc-style ramp, configurable min current, IEC 61851 compliant
-        if state == ChargingState.NIGHT_CHARGING_ACTIVE:
-            # Multi-charger (#112): use per-charger night target if distributed
-            per_charger_night = getattr(self, "_night_target_per_charger", None)
-            remaining_kwh = per_charger_night if per_charger_night is not None else context.night_target_kwh
-
-            # Guard: target reached
-            if remaining_kwh <= 0.1:
-                if ev._session_active:
-                    await ev.stop_session()
-                return
-
-            # Detect already-charging after SEM reload (don't interrupt)
-            if not ev._session_active and this_power_w > 50:
-                ev._session_active = True
-                _LOGGER.info("Night: KEBA already active (%.0fW), resuming", this_power_w)
-
-            # Read configurable EV parameters — per-charger overrides (#193)
-            charger_cfg = self._get_active_charger_config()
-            initial_amps = int(charger_cfg.get(
-                "initial_current",
-                self.config.get("initial_current", 10),
-            ))
-            # (#440 ADR 0010 #3) effective min = max(loadpoint_min, vehicle_min)
-            from .decide import effective_min_amps
-            min_amps = effective_min_amps({
-                "ev_min_current": charger_cfg.get(
-                    "ev_min_current", self.config.get("ev_min_current", 6)),
-                "vehicle_min_current": charger_cfg.get("vehicle_min_current"),
-            }, 6)
-            stall_cooldown = int(self.config.get("ev_stall_cooldown", 120))
-
-            # Deadline floor (#246): the planner's required current to reach Min
-            # by the target time. When active, it overrides both the gentle ramp
-            # and the peak cap (the user opted into "be ready by HH:MM", so the
-            # car may draw grid above the peak limit to make the deadline).
-            deadline_amps = int(getattr(context, "night_deadline_amps", 0) or 0)
-            deadline_active = bool(getattr(context, "night_deadline_active", False))
-            deadline_floor = min(deadline_amps, ev.max_current) if deadline_active else 0
-
-            if not ev._session_active:
-                # Fresh start: set_current BEFORE start_session
-                # (KEBA ignores enable at 0A). Cap the kickstart to the peak
-                # headroom too: the car is not drawing yet, so estimate W/A from
-                # phases*voltage. Without this the first cycle starts at
-                # initial_amps (default 10A ~ 6.9kW) which alone can exceed the
-                # peak limit before the dynamic loop takes over.
-                est_wpa = ev.phases * ev.voltage
-                peak_amps = self._night_peak_managed_amps(
-                    power, est_wpa, min_amps, ev.max_current)
-                initial_current = min(initial_amps, peak_amps)
-                if deadline_floor > initial_current:
-                    initial_current = deadline_floor  # deadline overrides gentle start
-                await ev._set_current(initial_current)
-                await ev.start_session(energy_target_kwh=0)
-                self._ev_last_change_time = dt_util.now()
-                _LOGGER.info(
-                    "Night start: %dA, target=%.1fkWh%s", initial_current, remaining_kwh,
-                    f" (deadline floor {deadline_floor}A)" if deadline_floor else "",
-                )
-            else:
-                # Stall detection: car stopped drawing despite setpoint
-                last_change = getattr(self, '_ev_last_change_time', None)
-                cooldown_ok = (last_change is None or
-                               (dt_util.now() - last_change).total_seconds() > stall_cooldown)
-                if cooldown_ok and self._should_reenable_charger(power):
-                    _LOGGER.info("Night: charger stalled, re-enabling")
-                    await ev._set_current(ev._current_setpoint or initial_amps)
-                    await ev.start_session(energy_target_kwh=0)
-                    self._ev_last_change_time = dt_util.now()
-
-                # Dynamic peak-managed current (only when car is actually drawing)
-                if this_power_w > 100:
-                    # W/A from actual charger readings (adapts to any car)
-                    watts_per_amp = this_power_w / max(1, ev._current_setpoint)
-                    target = self._night_peak_managed_amps(
-                        power, watts_per_amp, min_amps, ev.max_current)
-                    peak_limit_w = self._get_peak_limit_w()  # for the log line
-
-                    # Ramp limit: configurable ±N amps per cycle
-                    ramp_rate = int(self.config.get("ev_ramp_rate_amps", 2))
-                    current = ev._current_setpoint
-                    if target > current:
-                        target = min(target, current + ramp_rate)
-                    elif target < current:
-                        target = max(target, current - ramp_rate)
-
-                    # Deadline floor (#246): raise to the required current,
-                    # jumping past the gentle ramp limit when time is short.
-                    if deadline_floor > target:
-                        target = deadline_floor
-
-                    if abs(target - current) >= 1:
-                        _LOGGER.info(
-                            "Night adjust: %dA->%dA (peak=%.0fW, grid=%.0fW%s)",
-                            current, target, peak_limit_w, power.grid_import_power,
-                            f", deadline floor {deadline_floor}A" if deadline_floor else "",
-                        )
-                        await ev._set_current(target)
-
-            _LOGGER.debug("Night EV: %dA, %.0fW, remaining=%.1fkWh",
-                          ev._current_setpoint, this_power_w, remaining_kwh)
-            return
-
-        # === NIGHT WAITING STATES: stop session if running ===
-        # TARIFF_WAITING_FOR_CHEAP (#247) waits for a cheaper price window — the
-        # Min floor is still guaranteed before the deadline (the planner only
-        # parks here when waiting can still meet Min in time).
-        if state in (ChargingState.NIGHT_WAITING_FOR_WINDOW,
-                     ChargingState.NIGHT_TIME_EXPIRED,
-                     ChargingState.TARIFF_WAITING_FOR_CHEAP):
-            if ev._session_active:
-                await ev.stop_session()
-            return
-
-        # === SOLAR CHARGING (unified, with evcc-style enable/disable delays) ===
-        if state in self.SOLAR_CHARGING_STATES:
-            # Multi-charger (#112): use pre-distributed budget if available
-            per_charger_budget = getattr(self, "_current_charger_budget", None)
-            if per_charger_budget is not None:
-                budget_w = per_charger_budget
-            else:
-                # Canonical EV budget — Phase D.2 cleanup (#282).
-                # ``self._cycle_ev_budget`` is set unconditionally every
-                # cycle by ``_build_charging_context``, so this branch's
-                # only failure mode is "coordinator init incomplete"
-                # (config-flow midway / fixture wrong shape / something
-                # else loud). Fail-safe: log + return 0 W = no charge
-                # this cycle. Was a legacy-formula fallback pre-D.2;
-                # carrying two budget formulas was exactly the
-                # disagreement-class root cause we removed in the
-                # unification arc.
-                cycle_budget = getattr(self, "_cycle_ev_budget", None)
-                if cycle_budget is None:
-                    _LOGGER.error(
-                        "Canonical EV budget not set this cycle — "
-                        "coordinator init bug. Falling through with 0 W "
-                        "budget (no charge this cycle) to fail safe. "
-                        "Investigate _build_charging_context."
-                    )
-                    budget_w = 0.0
-                else:
-                    budget_w = cycle_budget.net_w
-
-            # Phase switching: auto-switch 1p/3p based on available surplus
-            await ev.check_phase_switch(budget_w)
-            now_ts = dt_util.now().timestamp()
-            enable_delay = self.config.get("ev_enable_delay_seconds", 60)
-            disable_delay = self.config.get("ev_disable_delay_seconds", 300)
-
-            # Now mode and Min+PV overrides remain HERE (not in the
-            # canonical budget) because they depend on PER-CHARGER
-            # parameters (ev.max_current, ev.min_power_threshold) that
-            # the cycle-level budget doesn't see — multi-charger fleets
-            # have different overrides per charger.
-            if context.charging_strategy == "now":
-                budget_w = ev.max_current * ev.phases * ev.voltage
-                enable_delay = 0
-            elif state == ChargingState.SOLAR_MIN_PV:
-                budget_w = max(ev.min_power_threshold, budget_w)
-                enable_delay = 0  # No enable delay — guaranteed charge
-
-            # Layer 1 — smooth the per-cycle budget so a single-cycle inverter
-            # modbus flicker (PROD: Huawei SUN2000 8 kW → 0 W → 8 kW across
-            # consecutive cycles) doesn't propagate into a current change.
-            # Rolling median (window default 3) drops the outlier sample.
-            budget_w = self._smooth_solar_budget(budget_w)
-
-            if budget_w >= ev.min_power_threshold:
-                # Surplus is sufficient — track how long it's been sufficient
-                self._ev_enable_surplus_since = self._ev_enable_surplus_since or now_ts
-
-                if ev._session_active and this_power_w > 100:
-                    # Already charging — adjust current via Layers 2/3/5
-                    # (delta + debounce + heartbeat). This was the primary
-                    # oscillation path: pre-fix it issued ``set_current``
-                    # every 10 s cycle with no guard.
-                    target_current = min(ev.max_current,
-                                         max(ev.min_current, ev.watts_to_current(budget_w)))
-                    target_current = self._apply_ramp_limit(target_current)
-                    await self._solar_set_current(
-                        ev, target_current, reason="adjust", now_ts=now_ts,
-                    )
-                    self._ev_charge_started_at = self._ev_charge_started_at or now_ts
-                elif (now_ts - self._ev_enable_surplus_since) >= enable_delay:
-                    # Surplus persisted long enough — start charging.
-                    # First command of a session always bypasses the guards.
-                    target_current = min(ev.max_current,
-                                         max(ev.min_current, ev.watts_to_current(budget_w)))
-                    await self._solar_set_current(
-                        ev, target_current, reason="cold_start", now_ts=now_ts,
-                    )
-
-                    if not ev._session_active or self._should_reenable_charger(power):
-                        await ev.start_session(energy_target_kwh=0)
-                    self._ev_charge_started_at = now_ts
-                    _LOGGER.debug(
-                        "Solar EV: enable delay passed (%.0fs) — starting at %.0fW, %.0fA",
-                        now_ts - self._ev_enable_surplus_since, budget_w,
-                        ev._current_setpoint,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "Solar EV: budget=%.0fW OK, waiting enable delay (%.0fs of %ds)",
-                        budget_w, now_ts - self._ev_enable_surplus_since, enable_delay,
-                    )
-            else:
-                # Surplus insufficient — reset enable timer
-                self._ev_enable_surplus_since = None
-
-                if (self._ev_charge_started_at
-                        and (now_ts - self._ev_charge_started_at) < disable_delay
-                        and this_power_w > 100):
-                    # Within disable delay and actually charging — hold at minimum current.
-                    # The outer ``!= min_current`` guard ensures we only fire when
-                    # we're actually stepping down; the stability layer audits and
-                    # debounces the actual transition.
-                    if ev._current_setpoint != ev.min_current:
-                        await self._solar_set_current(
-                            ev, ev.min_current, reason="adjust", now_ts=now_ts,
-                        )
-                    _LOGGER.debug(
-                        "Solar EV: budget=%.0fW < threshold, disable delay active "
-                        "(%.0fs of %ds) — holding min current",
-                        budget_w, now_ts - self._ev_charge_started_at, disable_delay,
-                    )
-                else:
-                    # Disable delay expired or not charging — zero current.
-                    # ``stop`` reason bypasses the stability guards: stopping
-                    # is a safety transition and must not be debounced.
-                    if ev._current_setpoint > 0:
-                        await self._solar_set_current(
-                            ev, 0, reason="stop", now_ts=now_ts,
-                        )
-                    self._ev_charge_started_at = None
-                    # #353: KEBA P30 firmware rejects ``set_current``
-                    # values below its 6 A IEC 61851 minimum and silently
-                    # retains the last valid setpoint. Commanding 0 A
-                    # here does NOT actually stop the car — it keeps
-                    # drawing from whatever supply is available (grid +
-                    # battery) while SEM thinks the charger is idle.
-                    # Same root cause as #315/#346: KEBA owns its
-                    # contactor and ignores requests it doesn't like.
-                    #
-                    # When ``this_power_w > 500`` we're past the
-                    # handshake idle band (KEBA at ~110 W) and into real
-                    # charging, so call stop_session() to invoke the
-                    # brand-specific disable (``keba.disable``) that
-                    # actually opens the contactor. Idempotent — safe to
-                    # call every cycle until power drops.
-                    if this_power_w > 500:
-                        await ev.stop_session()
-                        if getattr(self, "_off_mode_stop_logged_for", None) != ev.device_id:
-                            _LOGGER.warning(
-                                "Charger %s self-charging in solar mode "
-                                "(drawing %.0fW, surplus=%.0fW < min). "
-                                "Commanded 0 A but firmware retained last "
-                                "setpoint — calling stop_session() to "
-                                "force-disable. (#353)",
-                                ev.name, this_power_w, budget_w,
-                            )
-                            self._off_mode_stop_logged_for = ev.device_id
-
-            _LOGGER.debug(
-                "Solar EV: budget=%.0fW (%s), current=%.0fA, ev_power=%.0fW, session=%s",
-                budget_w, state, ev._current_setpoint, this_power_w,
-                "active" if ev._session_active else "inactive",
-            )
-            return
-
-        # === PAUSE STATES: zero current, keep session ===
-        if state in self.SOLAR_PAUSE_STATES:
-            if ev._current_setpoint > 0:
-                # battery_pause bypasses guards but updates heartbeat clock.
-                await self._solar_set_current(ev, 0, reason="battery_pause", now_ts=dt_util.now().timestamp())
-            # #351 M10 — clear the charge-started timestamp so the
-            # disable-delay counter doesn't consume its 300 s budget
-            # during a battery-priority pause. Without this, a 5-minute
-            # pause exhausts the timer and the very next cycle's
-            # terminal-branch fires stop_session even though we just
-            # resumed. Cleared here, re-armed on the next entry to
-            # an active charge state (lines 509 / 518).
-            self._ev_charge_started_at = None
-            return
-
-        # === TERMINAL STATES: full stop (EV disconnected, target reached, etc.) ===
-        if ev._session_active:
-            await ev.stop_session()
-        elif (
-            context.charging_strategy in ("disabled", "idle")
-            and self._this_charger_drawing_power(ev, power)
-        ):
-            # User intent is mode=off (#315) or solar_only at night with no
-            # surplus (#346) — but the charger is physically drawing real
-            # power that SEM doesn't own. KEBA P30 is the canonical example:
-            # its firmware self-resumes on plug-in or after certain internal
-            # events using a stored setpoint, completely independent of SEM.
-            # Since SEM never started a session here, ``_session_active`` is
-            # False and the branch above is skipped, but the charger keeps
-            # drawing. Force-call stop_session to invoke the per-brand
-            # disable (e.g. ``keba.disable``) every cycle until ev_power
-            # drops below the 500 W threshold (handshake idle is 100–200 W;
-            # real charging starts at 4140 W). Idempotent — safe to call on
-            # an already-disabled charger.
-            #
-            # #346 extended the trigger from {"disabled"} to {"disabled",
-            # "idle"} after a PROD incident where a solar_only KEBA
-            # self-resumed at 22:07 and drew 1.5 kW from the home battery
-            # till 00:48. With the strategy fix in coordinator.py honoring
-            # MODE_NIGHT_ALLOWED, solar_only at night now returns "idle";
-            # without this guard the actuator's terminal branch would still
-            # let the self-resumed session run.
-            await ev.stop_session()
-            # Suppress the per-cycle INFO log from stop_session() once
-            # we've logged it for this self-resume episode. The
-            # device's stop_session() emits an INFO line every call;
-            # without throttling, a stuck-resuming KEBA would print
-            # "Charging session stopped via keba.disable" every 10 s
-            # for hours. Re-enable the log when ev_power finally
-            # drops below threshold so the next episode is loud again.
-            if getattr(self, "_off_mode_stop_logged_for", None) != ev.device_id:
-                _LOGGER.warning(
-                    "Charger %s self-resumed while strategy=%s (drawing %.0fW). "
-                    "Calling stop_session() — will re-assert every cycle "
-                    "until ev_power drops below 500W. (#315/#346)",
-                    ev.name, context.charging_strategy,
-                    self._this_charger_power(ev, power),
-                )
-                self._off_mode_stop_logged_for = ev.device_id
-        elif (
-            context.charging_strategy in ("disabled", "idle")
-            and getattr(self, "_off_mode_stop_logged_for", None) == ev.device_id
-        ):
-            # Charger settled below threshold — clear the log-suppression
-            # flag so the next self-resume episode logs loudly again.
-            self._off_mode_stop_logged_for = None
-
-        self._ev_stalled_since = None
-        self._ev_reenable_attempts = 0
-        self._ev_charge_refused = False
 
     def _get_peak_limit_w(self) -> float:
         """Get peak limit in watts from load manager or config."""
@@ -941,214 +600,6 @@ class EVControlMixin:
         # reached when ``_get_active_charger_config`` lacks a
         # ``ev_charging_power_sensor`` entry (rare).
         return float(getattr(power, "ev_power", 0.0) or 0.0)
-
-    def _this_charger_drawing_power(self, ev, power) -> bool:
-        """True iff THIS charger is drawing more than the 500 W threshold.
-
-        Threshold rationale: KEBA's handshake idle draws 100–200 W
-        continuously while plugged in (control-pilot duty cycle). Real
-        charging starts at ev.min_current × phases × voltage (3 phases ×
-        6 A × 230 V ≈ 4140 W). 500 W safely separates "actually pulling
-        current" from "plugged in, not charging".
-        """
-        return self._this_charger_power(ev, power) > 500
-
-    # ─── Solar stability layer (v1.7.1-beta.14) ─────────────────
-    # Layered guards around ``ev._set_current`` in the solar path. The night
-    # path at L440 already has a delta guard; mirroring + extending it here
-    # closes the oscillation class where Huawei modbus jitter (8 kW → 0 W →
-    # 8 kW across cycles) drove KEBA into a current loop the car aborted.
-    #
-    # Layer 1: ``_smooth_solar_budget`` — rolling median over recent budget_w.
-    # Layers 2+3+5: ``_solar_set_current`` — delta, debounce, heartbeat.
-    #
-    # All per-charger state lives on ``PerChargerContext`` (swapped via
-    # ``_ev_last_set_amps_ts`` / ``_ev_budget_history``), so a multi-charger
-    # fleet keeps independent guards per loadpoint.
-
-    _SOLAR_GUARD_BYPASS_REASONS = frozenset({
-        "cold_start", "mode_switch", "stop", "stall_recovery", "deadline",
-        "battery_pause",
-    })
-
-    def _smooth_solar_budget(self, raw_budget_w: float) -> float:
-        """Layer 1: rolling-median smoothing of the per-cycle EV budget.
-
-        Why median, not mean: a single-cycle inverter modbus flicker
-        (Huawei observed 8 kW → 0 W → 8 kW across consecutive cycles)
-        gets dropped by the median but only halved by the mean. The
-        flicker is the dominant root cause of the cycle-by-cycle
-        ``set_current`` re-issues that abort EV sessions.
-
-        Window size from ``ev_surplus_smooth_window`` (default 3
-        cycles ≈ 30 s). One-sample window degenerates to identity.
-        Stored on the per-charger context's ``_ev_budget_history``
-        list (swapped by ``PerChargerContext``) so multi-charger
-        fleets keep independent windows per loadpoint.
-        """
-        from ..consts.core import DEFAULT_EV_SURPLUS_SMOOTH_WINDOW
-        window = max(1, int(self.config.get(
-            "ev_surplus_smooth_window", DEFAULT_EV_SURPLUS_SMOOTH_WINDOW,
-        )))
-        # Lazy-init so tests that build the coordinator via ``__new__`` (and
-        # therefore skip ``__init__``) don't AttributeError. Production always
-        # has this initialised by ``coordinator.py:__init__``.
-        hist = getattr(self, "_ev_budget_history", None)
-        if hist is None:
-            hist = []
-            self._ev_budget_history = hist
-        hist.append(float(raw_budget_w))
-        while len(hist) > window:
-            hist.pop(0)
-        ordered = sorted(hist)
-        # For even-length windows we deliberately pick the UPPER of the two
-        # centre values (``len // 2`` rather than ``(len - 1) // 2``). With
-        # the default window=3 this never matters; with a user-configured
-        # window=2 it biases toward the recent / higher sample, which is
-        # the safe direction for a charge controller (under-deliver vs
-        # over-deliver under uncertainty).
-        return ordered[len(ordered) // 2]
-
-    async def _solar_set_current(
-        self, ev, target_amps: int, *, reason: str, now_ts: float,
-    ) -> bool:
-        """Layered ``ev._set_current`` wrapper for the solar control path.
-
-        Returns ``True`` iff the underlying call was issued (so callers can
-        update their own state mirrors when appropriate). Always-bypass
-        reasons go through unconditionally — see
-        ``_SOLAR_GUARD_BYPASS_REASONS``.
-
-        Guards (each can suppress, in order):
-
-        * Layer 2 — delta: skip when ``|target - current_setpoint| <
-          ev_min_change_amps`` (default 1 A). This is the missing parity
-          with the night-path guard at ev_control.py:440.
-        * Layer 3 — debounce: skip when less than
-          ``ev_min_change_interval_sec`` (default 30 s) has elapsed since
-          the previous issued call.
-        * Layer 5 — heartbeat: when more than
-          ``ev_state_refresh_sec`` (default 300 s) has elapsed, force a
-          re-send even if Layers 2/3 would skip. Protects against lost
-          commands on a transient network blip and against stale
-          per-charger state across a restart.
-
-        Every suppress emits a structured INFO log so the PROD soak can
-        verify the guards are firing with sensible counts.
-        """
-        from ..consts.core import (
-            DEFAULT_EV_MIN_CHANGE_AMPS,
-            DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC,
-            DEFAULT_EV_STATE_REFRESH_SEC,
-        )
-        min_change_amps = int(self.config.get(
-            "ev_min_change_amps", DEFAULT_EV_MIN_CHANGE_AMPS,
-        ))
-        min_change_interval = int(self.config.get(
-            "ev_min_change_interval_sec", DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC,
-        ))
-        heartbeat_sec = int(self.config.get(
-            "ev_state_refresh_sec", DEFAULT_EV_STATE_REFRESH_SEC,
-        ))
-
-        target_amps = int(target_amps)
-        current = int(getattr(ev, "_current_setpoint", 0) or 0)
-        # Lazy-init so tests that build the coordinator via ``__new__`` work.
-        # Production has this initialised by ``coordinator.py:__init__``.
-        last_ts = getattr(self, "_ev_last_set_amps_ts", None)
-        dt_since = (now_ts - last_ts) if last_ts is not None else None
-        cid = getattr(ev, "device_id", None) or "ev"
-
-        # Layer 5 — heartbeat upgrade. If it's been heartbeat_sec since the
-        # last issued call, we MUST send regardless of delta/debounce. Tag
-        # the reason so the post-call log is honest about why we sent.
-        heartbeat_due = (
-            dt_since is not None and dt_since >= heartbeat_sec
-        )
-        effective_reason = reason
-        if heartbeat_due and reason not in self._SOLAR_GUARD_BYPASS_REASONS:
-            effective_reason = "heartbeat"
-
-        bypass = (
-            effective_reason in self._SOLAR_GUARD_BYPASS_REASONS
-            or effective_reason == "heartbeat"
-        )
-
-        # Layer 2 — delta guard. The dominant oscillation kill on PROD.
-        if not bypass and abs(target_amps - current) < min_change_amps:
-            _LOGGER.info(
-                "solar set_current suppressed layer=delta charger=%s "
-                "target=%dA last=%dA dt_since_last_set=%s reason=%s",
-                cid, target_amps, current,
-                f"{dt_since:.0f}s" if dt_since is not None else "none",
-                reason,
-            )
-            return False
-
-        # Layer 3 — time debounce.
-        if not bypass and dt_since is not None and dt_since < min_change_interval:
-            _LOGGER.info(
-                "solar set_current suppressed layer=debounce charger=%s "
-                "target=%dA last=%dA dt_since_last_set=%.1fs min=%ds reason=%s",
-                cid, target_amps, current, dt_since, min_change_interval, reason,
-            )
-            return False
-
-        await ev._set_current(target_amps)
-        self._ev_last_set_amps_ts = now_ts
-        if effective_reason == "heartbeat":
-            _LOGGER.info(
-                "solar set_current heartbeat charger=%s target=%dA "
-                "dt_since_last_set=%.0fs (refresh_floor=%ds)",
-                cid, target_amps, dt_since or 0.0, heartbeat_sec,
-            )
-        return True
-
-    def _apply_ramp_limit(self, target_current: float) -> float:
-        """Limit current changes to ±ramp_rate per cycle during solar charging.
-
-        Prevents sudden jumps that stress inverter/grid. Stopping drops
-        immediately. Config: ``ev_ramp_rate_amps`` (default 2).
-
-        v1.6.13 / #8: cold start (current < 1) now climbs from
-        ``min_current`` rather than jumping directly to target.
-        Pre-fix the "starting from 0" branch returned ``target_current``
-        unchanged — KEBA's ~30 s physical actuator lag then caused the
-        observed grid-import overshoot. Confirmed on PROD 2026-05-31
-        at 10:43: SEM commanded 14 A from a cold 0 A, KEBA's ramp
-        overshot, ~4.4 kW of grid was imported for the duration of the
-        ramp. With this fix the first command is ``min_current``
-        (typically 6 A ≈ 4140 W on 3-phase EU); subsequent cycles
-        climb via the existing ``±ramp_rate`` clamp below.
-
-        ``target_current`` arriving here is already clamped to
-        ``[min_current, max_current]`` at the call site (see
-        ``ev_control.py:495-501``), so we don't need to bound
-        ``min_current`` to it. The ``target_current < 1`` stop-fast
-        branch stays — that path is for the explicit-off / disable
-        case where we want an immediate drop, not a gentle decline.
-
-        Args:
-            target_current: Desired current in amps (≥ ``ev.min_current``
-                or 0 when stopping).
-
-        Returns:
-            Ramp-limited current in amps.
-        """
-        ev = self._ev_device
-        current = ev._current_setpoint
-        ramp = self.config.get("ev_ramp_rate_amps", 2)
-
-        if target_current < 1.0:  # Stopping → drop immediately
-            return 0
-        if current < 1.0:
-            # Cold start: hand KEBA the gentle ``min_current`` first.
-            # Next cycle's ``current`` will be non-zero and the
-            # standard clamp below will climb toward target at
-            # ``ramp_rate``.
-            return ev.min_current
-
-        return max(current - ramp, min(current + ramp, target_current))
 
     def _update_session_tracking(self, power: PowerReadings, power_flows: PowerFlows) -> None:
         """Track per-session energy, cost, and source attribution.

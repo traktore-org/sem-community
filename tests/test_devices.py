@@ -269,7 +269,10 @@ async def test_current_control_min_max_clamp(current_device):
 
 @pytest.mark.asyncio
 async def test_current_control_start_stop_session(current_device):
-    """Test KEBA session management."""
+    """Test KEBA session management (with the managed failsafe opted in)."""
+    # #546 — SEM no longer arms the failsafe by default (evcc-style); opt in to
+    # exercise the full arming sequence here.
+    current_device.arm_failsafe_enabled = True
     await current_device.start_session(energy_target_kwh=10.0)
     assert current_device._session_active is True
     # Should have called set_failsafe, set_energy, and enable (no disable
@@ -277,14 +280,60 @@ async def test_current_control_start_stop_session(current_device):
     # sequence shipped since v1.5.0. ``keba.authorize`` was tried briefly
     # on 2026-06-02 as a speculative fix for an auth-rejected cascade —
     # reverted same day after confirming git history shows authorize was
-    # never in the sequence; the real fix is the IDLE debounce in
-    # ``actuate.py`` / ``ChargerAdapter.attempt_idle``.
+    # never in the sequence; the real fix is the IDLE flicker-hold, now
+    # owned by ``ChargerReconciler`` (its consecutive-idle threshold).
     assert current_device.hass.services.async_call.call_count == 3
+
+    # The KEBA failsafe must be set BENIGN, not "disabled" with an invalid
+    # timeout=0 (the HA service rejects 0 → the old call failed and the box
+    # kept a 6 A failsafe that paused the car). Valid timeout + fallback at the
+    # charging floor (≥6 A).
+    fs_calls = [
+        c for c in current_device.hass.services.async_call.await_args_list
+        if len(c.args) >= 2 and c.args[1] == "set_failsafe"
+    ]
+    assert fs_calls, "start_session must set the KEBA failsafe"
+    fs = fs_calls[0].args[2]
+    assert fs["failsafe_timeout"] >= 1, "timeout must be valid (service min=1)"
+    assert fs["failsafe_fallback"] >= 6, "fallback at/above the IEC floor"
+    # #546 — steady mode (default) PERSISTS the benign failsafe so it overwrites
+    # the box's built-in 6 A (the 6↔9 A flap source). persist=1 by default.
+    assert fs["failsafe_persist"] == 1, "steady mode must persist (overwrite box 6A)"
 
     current_device.hass.services.async_call.reset_mock()
     await current_device.stop_session()
     assert current_device._session_active is False
     assert current_device._status.state == DeviceState.IDLE
+
+
+@pytest.mark.asyncio
+async def test_failsafe_managed_nontripping_by_default(current_device):
+    """#546 managed-neutralize default: SEM arms a LONG non-tripping persisted
+    failsafe (overwrites the box's short built-in one, which a real P30 won't
+    let us disable over UDP)."""
+    from custom_components.solar_energy_management.devices.base import (
+        FAILSAFE_TIMEOUT_S,
+    )
+    assert current_device.arm_failsafe_enabled is True  # default = managed
+    current_device.hass.services.async_call.reset_mock()
+    await current_device.arm_failsafe()
+    fs = [c for c in current_device.hass.services.async_call.await_args_list
+          if len(c.args) >= 2 and c.args[1] == "set_failsafe"][0].args[2]
+    assert fs["failsafe_timeout"] == FAILSAFE_TIMEOUT_S == 600  # never trips
+    assert fs["failsafe_persist"] == 1                          # overwrite the box
+    assert fs["failsafe_fallback"] >= 6                         # at the floor
+
+
+@pytest.mark.asyncio
+async def test_failsafe_not_armed_when_disabled(current_device):
+    """#546 — keba_arm_failsafe off (don't-arm, evcc-style): SEM doesn't touch
+    the failsafe (a Repair guides the user to disable it at the box)."""
+    current_device.arm_failsafe_enabled = False
+    current_device.hass.services.async_call.reset_mock()
+    await current_device.arm_failsafe()
+    fs = [c for c in current_device.hass.services.async_call.await_args_list
+          if len(c.args) >= 2 and c.args[1] == "set_failsafe"]
+    assert not fs, "don't-arm mode must NOT call set_failsafe"
 
 
 @pytest.mark.asyncio
@@ -495,18 +544,18 @@ async def test_heat_pump_block_unblock(heat_pump):
 @pytest.mark.asyncio
 async def test_heat_pump_relay_control(heat_pump):
     """Test relay service calls match SG-Ready mapping."""
-    await heat_pump.activate(3000.0)  # Should be BOOST (relay1=on, relay2=off)
+    await heat_pump.activate(3000.0)  # Should be BOOST
     calls = heat_pump.hass.services.async_call.call_args_list
 
     # Find the relay calls (first two before climate call)
     relay_calls = [c for c in calls if c[0][1] in ("turn_on", "turn_off")]
-    # BOOST = (True, False) -> relay1=turn_on, relay2=turn_off
+    # #523: BOOST is the SG-Ready standard 0:1 -> relay1=turn_off, relay2=turn_on
     relay1_call = [c for c in relay_calls if "sg_relay1" in str(c)]
     relay2_call = [c for c in relay_calls if "sg_relay2" in str(c)]
     assert len(relay1_call) >= 1
     assert len(relay2_call) >= 1
-    assert relay1_call[0][0][1] == "turn_on"
-    assert relay2_call[0][0][1] == "turn_off"
+    assert relay1_call[0][0][1] == "turn_off"
+    assert relay2_call[0][0][1] == "turn_on"
 
 
 def test_heat_pump_get_current_temperature(heat_pump):

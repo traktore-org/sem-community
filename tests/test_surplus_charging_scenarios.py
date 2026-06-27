@@ -27,6 +27,9 @@ from custom_components.solar_energy_management.coordinator.actuate import actuat
 from custom_components.solar_energy_management.coordinator.actuate_battery import (
     actuate_battery,
 )
+from custom_components.solar_energy_management.coordinator.charger_reconciler import (
+    ChargerReconciler,
+)
 from custom_components.solar_energy_management.coordinator.charger_types import (
     BatteryDecision,
     BatteryIntent,
@@ -89,14 +92,19 @@ def _ev_view(
 
 def _battery_view(
     *, charging_state: str, ev_charging: bool,
-    home_w: float = 500.0, soc: float = 50.0,
+    home_w: float = 500.0, soc: float = 50.0, solar_w: float = 0.0,
+    buffer_soc: float = 0.0,
 ) -> BatteryView:
+    # buffer_soc defaults to 0 so these tests exercise the SURPLUS gate arm of
+    # the clamp in isolation. The buffer-floor arm (clamp when SoC < buffer
+    # regardless of surplus) is covered in test_inverter_battery_arch.py.
     return BatteryView(
         runtime=BatteryRuntime(
             battery_id="primary", last_known_soc=soc, capacity_kwh=15.0,
         ),
         config={"battery_discharge_protection_enabled": True},
-        fleet=FleetContext(battery_soc=soc),
+        fleet=FleetContext(battery_soc=soc, buffer_soc=buffer_soc,
+                           solar_w=solar_w, home_w=home_w),
         charging_state=charging_state,
         ev_charging=ev_charging,
         home_consumption_w=home_w,
@@ -227,10 +235,13 @@ class TestMinPlusSolarAcrossZones:
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
 
     def test_min_plus_solar_day_zone_4_full_assist(self):
-        """SOC 95 (Zone 4) + battery dischargeing → full assist budget."""
+        """SOC 95 (Zone 4) with solar surplus above the gate → full
+        assist budget tops up to the EV minimum. (Solar gate: assist
+        only fires when there is real solar to supplement — solar=0
+        would idle instead, preserving the battery.)"""
         d = decide(_ev_view(
-            mode="min_plus_solar", solar_w=0.0, home_w=500.0,
-            battery_discharge_w=4500.0, soc=95.0, is_night=False,
+            mode="min_plus_solar", solar_w=2000.0, home_w=500.0,
+            soc=95.0, is_night=False,
         ))
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
         assert "Zone 4" in d.reason
@@ -287,14 +298,24 @@ class TestBatteryPipelineAcrossStates:
         ))
         assert d.intent is BatteryIntent.NORMAL
 
-    def test_solar_charging_active_ev_drawing_normal_by_default(self):
-        """Day-time EV charging does NOT trip protection unless
-        battery_hold_solar_ev is on (opt-in)."""
+    def test_solar_charging_active_ev_drawing_normal_with_surplus(self):
+        """Day-time EV charging with real solar surplus (≥ gate) does
+        NOT trip protection — the battery is free to assist."""
         d = decide_battery(_battery_view(
             charging_state="solar_charging_active",
-            ev_charging=True,
+            ev_charging=True, solar_w=4000.0, home_w=500.0,
         ))
         assert d.intent is BatteryIntent.NORMAL
+
+    def test_solar_charging_active_ev_drawing_below_gate_limits(self):
+        """Day-time EV charging but solar surplus below the gate
+        (cloudy) → the unified clamp protects the battery."""
+        d = decide_battery(_battery_view(
+            charging_state="solar_charging_active",
+            ev_charging=True, solar_w=300.0, home_w=800.0,
+        ))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == 800.0
 
     def test_solar_idle_state_normal(self):
         d = decide_battery(_battery_view(
@@ -338,13 +359,25 @@ class TestSurplusChargingTimeline:
 # Actuate dispatch — full coverage with mock adapter
 # ─────────────────────────────────────────────────────────────────
 
-def _ev_adapter():
+def _ev_adapter(*, drawing: bool = False, setpoint_a: int = 0, max_a: int = 32):
+    """Mock adapter that satisfies the reconciler's ``observe()`` contract.
+
+    ``drawing`` models a charger already pulling power (so an OFF intent
+    converges via ``command_disable``); a fresh idle charger (default)
+    converges an IDLE intent to NONE.
+    """
     a = MagicMock()
     a.command_disable = AsyncMock()
     a.command_idle = AsyncMock()
     a.command_current = AsyncMock()
     a.command_max = AsyncMock()
+    a.arm_failsafe = AsyncMock()
+    a.ensure_enabled = AsyncMock()
     a.is_self_charging = MagicMock(return_value=False)
+    a.actual_charging = MagicMock(return_value=drawing)
+    a.enable_state = MagicMock(return_value=(None, True))  # no readable switch
+    a.max_current_a = max_a
+    a._device = MagicMock(_current_setpoint=setpoint_a)
     a.last_intent = None
     return a
 
@@ -360,43 +393,72 @@ def _battery_adapter():
 
 
 class TestEndToEndActuation:
-    """For each (mode, zone) combo, run decide → actuate and verify
-    the right adapter method was called."""
+    """For each (mode, zone) combo, run decide → actuate (through a real
+    ``ChargerReconciler``, the production convergence path) and verify the
+    right adapter command was issued.
+
+    Migrated from the legacy direct-dispatch path (Task 11): the reconciler
+    now owns convergence, so the expected outcomes follow its semantics —
+    OFF disables only a *drawing* box, CHARGE_* converge via
+    ``command_current`` (not ``command_max``/``command_current`` split), and
+    an IDLE intent on an already-open contactor converges to NONE (no
+    ``command_idle`` churn — the root-cause fix for the keba.disable spam).
+    """
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("mode,solar_w,soc,is_night,expected_method", [
-        # OFF: always command_disable
-        ("off",            5000.0, 50.0, False, "command_disable"),
-        ("off",            5000.0, 50.0, True,  "command_disable"),
-        ("off",               0.0, 95.0, False, "command_disable"),
-        # ALWAYS_MAX: always command_max
-        ("always_max",        0.0, 50.0, True,  "command_max"),
-        ("always_max",    10000.0, 50.0, False, "command_max"),
-        # SOLAR_ONLY: command_idle when no surplus; command_current when surplus
-        ("solar_only",        0.0, 50.0, True,  "command_idle"),
-        ("solar_only",       10000.0, 95.0, False, "command_current"),
-        # MIN_PLUS_SOLAR: night top-up → command_current at min
-        ("min_plus_solar",    0.0, 50.0, True,  "command_current"),
-        # MIN_PLUS_SOLAR day Zone 1: idle
-        ("min_plus_solar", 8000.0, 20.0, False, "command_idle"),
+    @pytest.mark.parametrize("mode,solar_w,soc,is_night,drawing,expected_intent,expected_cmd", [
+        # OFF + drawing box → DISABLE intent, reconciler force-disables.
+        ("off",            5000.0, 50.0, False, True,  ChargerIntent.DISABLE,       "command_disable"),
+        ("off",            5000.0, 50.0, True,  True,  ChargerIntent.DISABLE,       "command_disable"),
+        # OFF + already-open contactor → DISABLE intent but reconciler emits
+        # NONE (idempotent — the production no-spam case).
+        ("off",               0.0, 95.0, False, False, ChargerIntent.DISABLE,       None),
+        # ALWAYS_MAX: CHARGE_MAX → reconciler START_AND_WRITE → command_current(max).
+        ("always_max",        0.0, 50.0, True,  False, ChargerIntent.CHARGE_MAX,    "command_current"),
+        ("always_max",    10000.0, 50.0, False, False, ChargerIntent.CHARGE_MAX,    "command_current"),
+        # SOLAR_ONLY no surplus → IDLE intent → reconciler NONE (open contactor).
+        ("solar_only",        0.0, 50.0, True,  False, ChargerIntent.IDLE,          None),
+        # SOLAR_ONLY strong surplus → CHARGE_AT_AMPS → command_current.
+        ("solar_only",       10000.0, 95.0, False, False, ChargerIntent.CHARGE_AT_AMPS, "command_current"),
+        # MIN_PLUS_SOLAR night top-up → CHARGE_AT_AMPS at min → command_current.
+        ("min_plus_solar",    0.0, 50.0, True,  False, ChargerIntent.CHARGE_AT_AMPS, "command_current"),
+        # MIN_PLUS_SOLAR day Zone 1 → IDLE intent → reconciler NONE.
+        ("min_plus_solar", 8000.0, 20.0, False, False, ChargerIntent.IDLE,          None),
     ])
     async def test_decide_to_actuate_dispatch(
-        self, mode, solar_w, soc, is_night, expected_method,
+        self, mode, solar_w, soc, is_night, drawing, expected_intent, expected_cmd,
     ):
         view = _ev_view(
             mode=mode, solar_w=solar_w, soc=soc, is_night=is_night,
             target_kwh=10.0,
         )
         decision = decide(view)
-        adapter = _ev_adapter()
-        await actuate(decision, adapter, view.power)
-
-        method = getattr(adapter, expected_method)
-        assert method.await_count >= 1, (
+        assert decision.intent is expected_intent, (
             f"mode={mode} solar={solar_w} soc={soc} night={is_night}: "
-            f"expected {expected_method}, got intent={decision.intent} "
+            f"expected intent {expected_intent}, got {decision.intent} "
             f"reason={decision.reason}"
         )
+
+        adapter = _ev_adapter(drawing=drawing)
+        reconciler = ChargerReconciler(
+            charger_id="keba", heartbeat_s=5.0, idle_disable_threshold=4,
+        )
+        await actuate(decision, adapter, view.power, reconciler=reconciler)
+
+        cmd_methods = ("command_disable", "command_current", "command_max", "command_idle")
+        if expected_cmd is None:
+            for name in cmd_methods:
+                assert getattr(adapter, name).await_count == 0, (
+                    f"mode={mode} solar={solar_w} soc={soc} night={is_night}: "
+                    f"expected NONE (idempotent), but {name} was called; "
+                    f"intent={decision.intent} reason={decision.reason}"
+                )
+        else:
+            assert getattr(adapter, expected_cmd).await_count >= 1, (
+                f"mode={mode} solar={solar_w} soc={soc} night={is_night}: "
+                f"expected {expected_cmd}, got intent={decision.intent} "
+                f"reason={decision.reason}"
+            )
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -496,8 +558,9 @@ class TestJointDecisionCoherence:
         ))
         bat = decide_battery(_battery_view(
             charging_state="solar_charging_active", ev_charging=True, soc=95.0,
+            solar_w=10000.0, home_w=500.0,
         ))
-        # EV charges from surplus; battery NOT in protection (day path,
-        # no opt-in for solar hold).
+        # EV charges from surplus; with real solar surplus (9500 ≥ gate)
+        # the battery is NOT clamped — it may assist freely.
         assert ev.intent is ChargerIntent.CHARGE_AT_AMPS
         assert bat.intent is BatteryIntent.NORMAL

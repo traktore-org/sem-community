@@ -645,18 +645,10 @@ class TestDivisionByZero:
         flows = flow_calc.calculate_power_flows(power)
         assert flows.solar_to_home == 0.0
 
-    def test_calculate_energy_flows_zero_demand_returns_empty_flows(self, flow_calc):
-        """should return zeroed EnergyFlows (not raise) when total demand < 0.001 kWh."""
-        energy = EnergyTotals(
-            daily_solar=5.0,
-            daily_home=0.0,
-            daily_ev=0.0,
-            daily_battery_charge=0.0,
-            daily_grid_export=0.0,
-        )
-        flows = flow_calc.calculate_energy_flows(energy)
-        assert flows.solar_to_home == 0.0
-        assert flows.solar_to_grid == 0.0
+    # ``test_calculate_energy_flows_zero_demand...`` removed in the legacy
+    # retirement (#536): the deprecated proportional ``calculate_energy_flows``
+    # is gone. The zero-demand boundary of the live path is covered by
+    # ``calculate_power_flows`` tests above and ``integrate_energy_flows``.
 
     # ``calculate_charging_current`` zero/negative boundary tests removed
     # in Phase D.2 (#282): the method was deleted. The watts→amps path now

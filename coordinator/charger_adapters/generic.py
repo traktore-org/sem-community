@@ -36,7 +36,7 @@ class GenericAdapter(ChargerAdapter):
     actually stops the contactor."""
 
     def __init__(self, device: "CurrentControlDevice") -> None:
-        super().__init__()  # initialise the IDLE debounce counter
+        super().__init__()
         self._device = device
         self._last_intent: Optional[ChargerIntent] = None
 
@@ -46,6 +46,19 @@ class GenericAdapter(ChargerAdapter):
 
     @property
     def max_current_a(self) -> int:
+        # Effective max = config max clamped to the control entity's own max,
+        # so CHARGE_MAX resolves to a value the device can actually hold
+        # (no perpetual clamp-drift; #536). Falls back to config max — the
+        # ``isinstance`` guard keeps it robust to mock devices in tests
+        # (a MagicMock attr is callable but returns a non-numeric mock).
+        eff = getattr(self._device, "effective_max_current", None)
+        if callable(eff):
+            try:
+                v = eff()
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    return int(v)
+            except (TypeError, ValueError):
+                pass
         return int(getattr(self._device, "max_current", 32))
 
     @property

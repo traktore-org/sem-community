@@ -85,7 +85,7 @@ class KebaAdapter(ChargerAdapter):
     """
 
     def __init__(self, device: "CurrentControlDevice") -> None:
-        super().__init__()  # initialise the IDLE debounce counter
+        super().__init__()
         self._device = device
         self._last_intent: Optional[ChargerIntent] = None
         """The most recent intent the actuator commanded. Used by
@@ -103,6 +103,18 @@ class KebaAdapter(ChargerAdapter):
 
     @property
     def max_current_a(self) -> int:
+        # Effective max (config clamped to the control entity's max). KEBA
+        # is service-controlled with no current entity, so this returns the
+        # configured max unchanged — but kept consistent with GenericAdapter.
+        # ``isinstance`` guard keeps it robust to mock devices in tests.
+        eff = getattr(self._device, "effective_max_current", None)
+        if callable(eff):
+            try:
+                v = eff()
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    return int(v)
+            except (TypeError, ValueError):
+                pass
         return int(getattr(self._device, "max_current", 32))
 
     @property
@@ -124,6 +136,9 @@ class KebaAdapter(ChargerAdapter):
         return False
 
     # ─── Commands ──────────────────────────────────────────────
+
+    async def arm_failsafe(self) -> None:
+        await self._device.arm_failsafe()
 
     async def command_current(self, amps: int) -> None:
         """Set charging current. Translates below-min requests to

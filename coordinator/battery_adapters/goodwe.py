@@ -40,10 +40,12 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
         return True
 
     async def command_normal(self) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         await self._apply_discharge_limit(self._max_discharge_w)
         self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         watts = max(0.0, min(watts, self._max_discharge_w))
         if (self._last_discharge_limit_w >= 0
                 and abs(watts - self._last_discharge_limit_w) < 100.0):
@@ -55,16 +57,18 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
     async def command_force_charge(
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         from ..battery_charge_adapter import ChargeCommand
         cmd = ChargeCommand(
             target_soc=target_soc,
-            charge_power_w=charge_power_w,
-            duration_min=duration_min,
+            max_power_w=charge_power_w,
+            duration_minutes=duration_min,
         )
         await self._charge_adapter.start_forced_charge(cmd)
         self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         await self._charge_adapter.stop_forced_charge()
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
 

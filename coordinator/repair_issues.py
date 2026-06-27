@@ -100,6 +100,100 @@ def clear_sensor_unavailable(hass: HomeAssistant, entity_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
+def _actuation_issue_id(device_id: str) -> str:
+    return f"charger_actuation_failed_{device_id}"
+
+
+def raise_charger_actuation_failed(
+    hass: HomeAssistant,
+    device_id: str,
+    *,
+    name: str,
+    error: str,
+) -> None:
+    """File a repair when a charger rejects set-current commands repeatedly.
+
+    #462 follow-up: a misconfigured control surface (e.g.
+    ``number.set_value`` configured as the charger service, a renamed
+    entity after an upstream integration update) made EVERY command fail
+    with only per-cycle ERROR log lines as evidence. The user experience
+    was "SEM doesn't react" with nothing actionable in the UI. Raised by
+    ``CurrentControlDevice`` after 3 consecutive failures; cleared on the
+    next successful write.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_actuation_issue_id(device_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="charger_actuation_failed",
+            translation_placeholders={
+                "name": name,
+                "error": error,
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
+    """Clear the actuation repair after a successful write."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _actuation_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
+def _soc_cap_issue_id(device_id: str) -> str:
+    return f"soc_cap_unenforceable_{device_id}"
+
+
+def raise_soc_cap_unenforceable(
+    hass: HomeAssistant,
+    device_id: str,
+    *,
+    name: str,
+    target_soc: float,
+) -> None:
+    """File a repair when an SOC-% charge target can't be enforced (#526).
+
+    A charger set to a ``%`` target needs a readable vehicle SOC to stop at
+    the cap. When the car isn't reporting SOC (asleep / no real sensor — the
+    dashboard may still show an *estimated* SOC, which SEM deliberately
+    ignores for the cap), SEM keeps charging until the car tapers. That
+    surprised RienduPre ("car charged past 80%"). Surface it as a persistent,
+    actionable repair instead of silently overshooting. Cleared the moment a
+    real SOC reading returns (or the target is no longer SOC-based).
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_soc_cap_issue_id(device_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="soc_cap_unenforceable",
+            translation_placeholders={
+                "name": name,
+                "target": f"{target_soc:.0f}",
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_soc_cap_unenforceable(hass: HomeAssistant, device_id: str) -> None:
+    """Clear the SOC-cap repair once a real SOC reading is back."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _soc_cap_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
 # ---------------------------------------------------------------------------
 # Setup-time integration checks (once per setup)
 # ---------------------------------------------------------------------------
@@ -477,3 +571,81 @@ def clear_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
         _LOGGER.debug(
             "issue_registry.delete heat_pump_partial_sg_ready failed: %s", e,
         )
+
+
+# ---------------------------------------------------------------------------
+# KEBA failsafe enabled (#546)
+# ---------------------------------------------------------------------------
+
+# Where the user is sent to fix it (how + why to disable the KEBA failsafe).
+KEBA_FAILSAFE_DOC_URL = (
+    "https://github.com/traktore-org/sem-community/blob/main/docs/KEBA_FAILSAFE.md"
+)
+
+
+def raise_keba_failsafe_active(
+    hass: HomeAssistant, *, charger_name: str,
+) -> None:
+    """File a repair when a KEBA charger's failsafe watchdog is enabled (#546).
+
+    The KEBA failsafe drops the offered current to a fallback (6 A) when the
+    controller goes quiet; SEM re-asserts the target every cycle, producing the
+    6↔9 A flap a steady-needing car can't charge through. evcc (the reference
+    implementation) DISABLES the KEBA failsafe for exactly this reason — and so
+    does SEM now (it no longer arms it). But the box keeps its OWN failsafe
+    until the user turns it off at the charger, which HA's keba.set_failsafe
+    service can't do (it rejects timeout 0). So surface an actionable Repair
+    that walks them through it. Cleared the moment the failsafe reads off.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="keba_failsafe_active",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="keba_failsafe_active",
+            translation_placeholders={"name": charger_name},
+            learn_more_url=KEBA_FAILSAFE_DOC_URL,
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create keba_failsafe_active failed: %s", e)
+
+
+def clear_keba_failsafe_active(hass: HomeAssistant) -> None:
+    """Clear the KEBA-failsafe Repair once the failsafe reads off."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "keba_failsafe_active")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete keba_failsafe_active failed: %s", e)
+
+
+def detect_keba_failsafe_state(hass: HomeAssistant) -> Optional[bool]:
+    """Best-effort read of the KEBA failsafe state from the keba integration's
+    failsafe binary sensor (e.g. ``binary_sensor.keba_p30_failsafe_mode``).
+
+    Returns:
+      * True  — failsafe is ON (armed).
+      * False — failsafe is OFF.
+      * None  — no such sensor, or it's ``unavailable``/``unknown`` (KEBA offline).
+                "Can't tell" → the caller HOLDS the current Repair state rather
+                than clearing it on a transient outage.
+
+    Scoped to entity ids containing BOTH ``keba`` and ``failsafe`` (M3) so an
+    unrelated integration's ``*_failsafe`` binary sensor (UPS, inverter battery
+    protection) can't trigger a spurious KEBA Repair.
+    """
+    try:
+        for state in hass.states.async_all("binary_sensor"):
+            eid = state.entity_id
+            if "keba" in eid and "failsafe" in eid:
+                if state.state == "on":
+                    return True
+                if state.state == "off":
+                    return False
+                # unavailable/unknown → can't tell; keep looking, else None.
+        return None
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("detect_keba_failsafe_state failed: %s", e)
+        return None

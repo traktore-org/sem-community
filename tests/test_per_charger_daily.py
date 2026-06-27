@@ -16,6 +16,8 @@ class TestPerChargerDailyReport:
         c = MagicMock()
         c.config = {"ev_chargers": chargers}
         c._daily_ev_per_charger = accum
+        # Bind the real id accessor (#485 H1) — the report keys on it.
+        c.primary_charger_id = SEMCoordinator.primary_charger_id.__get__(c)
         return c
 
     def test_single_charger_reports_global(self):
