@@ -133,6 +133,13 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # always may; auto follows the global toggle) and its OWN reserve
         # SOC — so a self-consumption battery keeps its charge while its
         # sibling sells, on the same shared verdict.
+        # INTENTIONAL precedence (#533, user decision 2026-06-27 = pure
+        # economics): this arbitrage branch runs BEFORE the EV LIMIT_DISCHARGE
+        # clamp below. When selling is profitable the battery sells even with
+        # an EV connected — the price signal decides, the EV/house do not
+        # pre-empt it. Do NOT "fix" this ordering by gating arbitrage on
+        # ev_connected; the profitability test (export > import÷eff + cycle) is
+        # what keeps it sane.
         if state_value == "discharging_arbitrage":
             global_arb = bool(cfg.get("battery_grid_arbitrage_enabled", False))
             if arbitrage_allowed_for_mode(mode, global_arb):
@@ -152,12 +159,22 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             # global-off) or already at/under its reserve → fall through to
             # the normal decision (don't sell this unit).
 
-        # Target reached or no longer needed — stop a running charge.
+        # Target reached or no longer needed — stop a running force op.
         if state_value in ("target_reached", "not_needed", "idle", "not_profitable"):
-            # Only emit STOP if we actually started; otherwise NORMAL is fine.
-            # The decision doesn't know the adapter's last intent — it returns
-            # the intent that fits the world state; the actuator may no-op if
-            # already in that state (adapter idempotency).
+            # Route the stop by WHICH scheduler produced the verdict (#533):
+            # an arbitrage verdict (from_arbitrage) was selling → STOP_FORCE_
+            # DISCHARGE; the night charge scheduler's same-named states stop a
+            # force-CHARGE. Before this, both emitted STOP_FORCE_CHARGE and
+            # relied on the Huawei stop-charge service ALSO clearing a forcible
+            # discharge (a brand coincidence) — a generic adapter would have
+            # kept selling. The actuator may no-op if already in that state
+            # (adapter idempotency).
+            if getattr(sched, "from_arbitrage", False):
+                return BatteryDecision(
+                    battery_id=rt.battery_id,
+                    intent=BatteryIntent.STOP_FORCE_DISCHARGE,
+                    reason=f"arbitrage {state_value} → stop selling to grid",
+                )
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.STOP_FORCE_CHARGE,

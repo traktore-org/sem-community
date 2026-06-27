@@ -181,6 +181,13 @@ class SchedulerDecision:
     issue 0 W (B1). Populated from ``SchedulerConfig.battery_max_charge_power_w``."""
     duration_min: int = 60
     """Used iff state == SCHEDULED — force-charge safety timeout (minutes)."""
+    from_arbitrage: bool = False
+    """True for every verdict produced by ``evaluate_arbitrage`` (#533),
+    firing or not. Lets ``decide_battery`` route the STOP correctly: an
+    arbitrage non-firing verdict (not_profitable / not_needed-at-reserve) must
+    STOP_FORCE_DISCHARGE, whereas the night scheduler's same-named states stop
+    a force-CHARGE. Without this the stop relied on a Huawei-only coincidence
+    (its stop-charge service also clears a forcible discharge)."""
     reason: str = ""
     evaluated_at: Optional[datetime] = None
 
@@ -258,6 +265,9 @@ class SchedulerConfig:
     arbitrage_min_export_price: float = 0.20  # /kWh floor worth cycling for
     arbitrage_reserve_soc: float = 50.0       # never sell below this SOC
     max_discharge_power_w: float = 5000.0     # battery→grid power when selling
+    arbitrage_max_export_w: float = 0.0       # #533: cap the sell power so
+    # arbitrage can't create a billed grid peak (capacity-tariff markets). 0 =
+    # no cap. Defaults to the configured grid export limit (max_export_power).
 
     @classmethod
     def from_config(cls, config: dict) -> "SchedulerConfig":
@@ -298,6 +308,12 @@ class SchedulerConfig:
             arbitrage_min_export_price=config.get("battery_arbitrage_min_export_price", 0.20),
             arbitrage_reserve_soc=config.get("battery_arbitrage_reserve_soc", 50.0),
             max_discharge_power_w=config.get("battery_max_discharge_power", 5000.0),
+            # #533: cap the arbitrage sell power. Explicit key wins; else fall
+            # back to the grid export limit (max_export_power); 0 = uncapped.
+            arbitrage_max_export_w=float(
+                config.get("battery_arbitrage_max_export_w",
+                           config.get("max_export_power", 0.0)) or 0.0
+            ),
         )
 
 
@@ -645,35 +661,37 @@ class BatteryChargeScheduler:
         """
         now = dt_util.now()
         cfg = self._config
+
+        # Every verdict from this method carries from_arbitrage=True (#533) so
+        # decide_battery routes a non-firing stop to STOP_FORCE_DISCHARGE (not
+        # the night scheduler's STOP_FORCE_CHARGE).
+        def _v(**kw) -> SchedulerDecision:
+            return SchedulerDecision(from_arbitrage=True, evaluated_at=now, **kw)
+
         # ``enabled_override`` lets the coordinator run the economic check
         # even when the GLOBAL toggle is off — needed for per-battery
         # ``allow_arbitrage`` mode (#523). decide_battery then gates WHICH
         # battery acts on the verdict, so producing it here is safe.
         enabled = cfg.arbitrage_enabled if enabled_override is None else enabled_override
         if not enabled:
-            return SchedulerDecision(
-                state=SchedulerState.IDLE,
-                reason="export arbitrage disabled", evaluated_at=now,
-            )
+            return _v(state=SchedulerState.IDLE, reason="export arbitrage disabled")
         # Reserve floor — never sell the backup reserve.
         if current_soc <= cfg.arbitrage_reserve_soc:
-            return SchedulerDecision(
+            return _v(
                 state=SchedulerState.NOT_NEEDED,
                 reason=(
                     f"SOC {current_soc:.0f}% at/below reserve "
                     f"{cfg.arbitrage_reserve_soc:.0f}%"
                 ),
-                evaluated_at=now,
             )
         # Export must clear the configured floor to bother cycling.
         if export_rate < cfg.arbitrage_min_export_price:
-            return SchedulerDecision(
+            return _v(
                 state=SchedulerState.NOT_PROFITABLE,
                 reason=(
                     f"export {export_rate:.3f} < floor "
                     f"{cfg.arbitrage_min_export_price:.3f}/kWh"
                 ),
-                evaluated_at=now,
             )
         # Profitability — the symmetric break-even to charge-on-cheap:
         # selling now must beat buying back later (cheapest upcoming import
@@ -684,35 +702,37 @@ class BatteryChargeScheduler:
         # arbitrage sold on the export floor alone (too eager; e.g. NL export
         # spot−margin is well below import all-in). Conservative default.
         if import_forecast_min is None:
-            return SchedulerDecision(
+            return _v(
                 state=SchedulerState.NOT_PROFITABLE,
                 reason="no import-price forecast — can't prove profitable, holding",
-                evaluated_at=now,
             )
         recharge_cost = (
             float(import_forecast_min) / cfg.roundtrip_efficiency
             + cfg.battery_cycle_cost * 2
         )
         if export_rate <= recharge_cost:
-            return SchedulerDecision(
+            return _v(
                 state=SchedulerState.NOT_PROFITABLE,
                 reason=(
                     f"export {export_rate:.3f} ≤ recharge break-even "
                     f"{recharge_cost:.3f}/kWh"
                 ),
-                evaluated_at=now,
             )
-        return SchedulerDecision(
+        # #533: cap the sell power so arbitrage can't create a billed grid peak
+        # (capacity-tariff markets). 0 = uncapped.
+        sell_w = cfg.max_discharge_power_w
+        if cfg.arbitrage_max_export_w > 0:
+            sell_w = min(sell_w, cfg.arbitrage_max_export_w)
+        return _v(
             state=SchedulerState.DISCHARGING_ARBITRAGE,
-            discharge_power_w=cfg.max_discharge_power_w,
+            discharge_power_w=sell_w,
             floor_soc=cfg.arbitrage_reserve_soc,
             reason=(
                 f"export arbitrage: {export_rate:.3f}/kWh ≥ floor "
                 f"{cfg.arbitrage_min_export_price:.3f}, SOC {current_soc:.0f}% > "
                 f"reserve {cfg.arbitrage_reserve_soc:.0f}% → sell "
-                f"{cfg.max_discharge_power_w:.0f} W to grid"
+                f"{sell_w:.0f} W to grid"
             ),
-            evaluated_at=now,
         )
 
     def _resolve_forecast(

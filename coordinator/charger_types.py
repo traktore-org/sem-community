@@ -490,6 +490,29 @@ class ChargerDecision:
 # ─────────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
+class ArbitrageSignals:
+    """Battery→grid arbitrage market signals (#533), computed ONCE per cycle
+    and carried on :class:`FleetContext` — the single source of truth, so the
+    arbitrage decision no longer depends on ad-hoc tariff/power reads scattered
+    in the coordinator. ``None`` on FleetContext = arbitrage not evaluated this
+    cycle (the default; it stays dormant until v1.7.4)."""
+
+    export_rate: float = 0.0
+    """Signed current export price (/kWh) — provider.get_current_export_rate()."""
+
+    import_forecast_min: Optional[float] = None
+    """Cheapest upcoming import price (/kWh), corrected to the all-in floor
+    (provider.effective_import_floor). None = no forecast → don't sell."""
+
+    storable_surplus_w: float = 0.0
+    """Solar above home load (W) the battery could still absorb."""
+
+    storable: bool = False
+    """True when there's meaningful storable surplus and the battery isn't
+    full → charge-first, don't sell (#531)."""
+
+
+@dataclass(frozen=True)
 class FleetContext:
     """Shared fleet-level inputs a single charger's decide() needs.
 
@@ -540,6 +563,10 @@ class FleetContext:
     peak_committed_w: float = 0.0
     """Watts already committed to higher-priority chargers in
     this cycle (the #274/H1 share-one-peak-budget invariant)."""
+
+    arbitrage: Optional["ArbitrageSignals"] = None
+    """Battery→grid arbitrage market signals (#533), computed once per cycle.
+    None = arbitrage not evaluated (default; dormant until v1.7.4)."""
 
     solar_committed_w: float = 0.0
     """Solar surplus already committed to higher-priority chargers
