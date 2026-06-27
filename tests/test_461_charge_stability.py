@@ -42,11 +42,18 @@ class FakeAdapter:
 
 
 def _view(mode="solar_only", *, connected=True, power_w=0.0, is_night=False,
-          cid="wb", solar_w=3000.0, min_solar_w=200.0, tariff_level=None):
+          cid="wb", solar_w=3000.0, min_solar_w=200.0, tariff_level=None,
+          battery_soc=90.0, buffer_soc=70.0, home_w=0.0):
     # ``solar_w`` defaults to a MEANINGFUL value (3 kW > the 200 W
     # min_solar_w) so a deficit on this view reads as TRANSIENT — a
     # passing cloud, the case the disable hold is meant to bridge.
     # Deep-deficit tests (#461 part 2) pass ``solar_w=0`` explicitly.
+    # INVARIANT: ``battery_soc`` MUST default ≥ ``buffer_soc`` so the
+    # default deficit is bridgeable by the battery → TestDisableDelay keeps
+    # testing the "assist available → full 300 s bridge" path, NOT the
+    # no_assist_deficit short-grace escape. Drop it below buffer here and
+    # every transient-bridge test silently flips to a 45 s stop. The
+    # no-assist tests pass a below-buffer SoC explicitly.
     return ChargerView(
         power=ChargerPower(charger_id=cid, power_w=power_w,
                            connected=connected, charging=power_w > 500),
@@ -55,7 +62,9 @@ def _view(mode="solar_only", *, connected=True, power_w=0.0, is_night=False,
         config={"ev_min_current": 6, "ev_phases": 3, "ev_voltage": 230,
                 "ev_max_current": 16},
         fleet=FleetContext(is_night=is_night, solar_w=solar_w,
-                           min_solar_w=min_solar_w, tariff_level=tariff_level),
+                           min_solar_w=min_solar_w, tariff_level=tariff_level,
+                           battery_soc=battery_soc, buffer_soc=buffer_soc,
+                           home_w=home_w),
     )
 
 
@@ -165,6 +174,19 @@ class TestDisableDelay:
         d301 = st.filter(_idle(), view, adapter,
                          enable_delay_s=60, disable_delay_s=300, now_ts=301.0)
         assert d301.intent is ChargerIntent.IDLE
+
+    def test_full_bridge_in_assist_band_below_auto_start(self):
+        # Pin the [buffer, auto_start) band explicitly (M1): SoC 75 ≥ buffer
+        # 70 → battery can assist → the thin-surplus deficit still gets the
+        # full 300 s bridge, NOT the no_assist_deficit short grace.
+        st = ChargeStability()
+        adapter = FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+        view = _view(power_w=4500.0, solar_w=3000.0, home_w=2500.0,
+                     battery_soc=75.0, buffer_soc=70.0)
+        for t in (0.0, 150.0, 290.0):
+            d = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                          disable_delay_s=300, deep_deficit_grace_s=45, now_ts=t)
+            assert d.intent is ChargerIntent.CHARGE_AT_AMPS, f"stopped early at {t}"
 
     def test_deficit_timer_survives_charging_blip(self):
         # Regression (PROD 2026-06-26): a bursty car (Zoe) blips power to 0
@@ -600,6 +622,137 @@ class TestNotCheapTariffDeficit:
         adapter = self._charging()
         view = _view(power_w=4500.0, solar_w=3000.0, tariff_level=None)
         for t in (0.0, 150.0, 290.0):
+            d = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                          disable_delay_s=300, deep_deficit_grace_s=45, now_ts=t)
+            assert d.intent is ChargerIntent.CHARGE_AT_AMPS, f"stopped early at {t}"
+
+
+@pytest.mark.unit
+class TestNoAssistDeficit:
+    """Battery can't assist (SoC < buffer) + no real EV surplus → stop fast.
+
+    The leak this conversation surfaced (PROD 2026-06-27, min_plus_solar):
+    the two decision engines already idle the EV at low SoC (Zone 2 →
+    solar_only) and clamp the battery, but the disable bridge held minimum
+    current for the full 300 s because its escape keyed on RAW solar
+    (``solar_w < min_solar_w``). With solar high but entirely consumed by
+    the house / reserved for a below-buffer battery, the real EV surplus is
+    ~0, so the hold imported grid. The bridge now also escapes when the
+    battery can't assist AND the real EV surplus can't sustain even the
+    minimum charge — behaving like solar_only, as expected.
+    """
+
+    def _charging(self):
+        return FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+
+    def test_no_assist_no_surplus_stops_after_short_grace(self):
+        # solar 3 kW > 200 W min (NOT a deep deficit), cheap tariff (NOT the
+        # expensive escape), but battery 33 % < buffer 85 % and real EV
+        # surplus = 3000 − 2500 = 500 W < 4140 W min charge → nothing to
+        # bridge → short grace, not 300 s.
+        st = ChargeStability()
+        adapter = self._charging()
+        view = _view(power_w=4500.0, solar_w=3000.0, home_w=2500.0,
+                     battery_soc=33.0, buffer_soc=85.0, tariff_level="cheap")
+        d0 = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                       disable_delay_s=300, deep_deficit_grace_s=45, now_ts=0.0)
+        assert d0.intent is ChargerIntent.CHARGE_AT_AMPS  # grace not elapsed
+        d50 = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                        disable_delay_s=300, deep_deficit_grace_s=45, now_ts=50.0)
+        assert d50.intent is ChargerIntent.IDLE  # stopped well before 300 s
+        assert "no battery assist" in d50.reason
+
+    def test_assist_available_keeps_full_bridge(self):
+        # Same thin surplus, but battery 90 % ≥ buffer 85 % → the battery can
+        # legitimately bridge the hold → full 300 s (unchanged).
+        st = ChargeStability()
+        adapter = self._charging()
+        view = _view(power_w=4500.0, solar_w=3000.0, home_w=2500.0,
+                     battery_soc=90.0, buffer_soc=85.0, tariff_level="cheap")
+        for t in (0.0, 50.0, 150.0, 290.0):
+            d = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                          disable_delay_s=300, deep_deficit_grace_s=45, now_ts=t)
+            assert d.intent is ChargerIntent.CHARGE_AT_AMPS, f"stopped early at {t}"
+
+    def test_stop_is_durable_no_reengage_loop(self):
+        # Regression (PROD 2026-06-27 history): the bridge stopped on the
+        # short grace, then RE-ENGAGED at "deficit 0s — holding 8A" because
+        # the draw-latch (held_recently) survived the wind-down, so the next
+        # cycle re-entered the hold and re-offered min current — a
+        # self-sustaining grid loop. The stop must clear the latch so a
+        # wound-down car settles into a genuine stop.
+        st = ChargeStability()
+        adapter = FakeAdapter(last_intent=None)  # charging follows draw
+        drawing = _view(power_w=4500.0, solar_w=3000.0, home_w=2500.0,
+                        battery_soc=33.0, buffer_soc=85.0, tariff_level="cheap")
+        stopped = _view(power_w=0.0, solar_w=3000.0, home_w=2500.0,
+                        battery_soc=33.0, buffer_soc=85.0, tariff_level="cheap")
+        # Hold then stop on the short grace.
+        st.filter(_idle(), drawing, adapter, enable_delay_s=60,
+                  disable_delay_s=300, deep_deficit_grace_s=45, now_ts=0.0)
+        d46 = st.filter(_idle(), drawing, adapter, enable_delay_s=60,
+                        disable_delay_s=300, deep_deficit_grace_s=45, now_ts=46.0)
+        assert d46.intent is ChargerIntent.IDLE  # short-grace stop
+        # Car wound down; 10 s later (< LATCH_HOLD_S) it must STAY stopped,
+        # not re-offer 8 A. Pre-fix this returned "holding 8A".
+        d56 = st.filter(_idle(), stopped, adapter, enable_delay_s=60,
+                        disable_delay_s=300, deep_deficit_grace_s=45, now_ts=56.0)
+        assert d56.intent is ChargerIntent.IDLE
+        assert "holding" not in d56.reason
+
+    def test_stop_survives_actuator_lag(self):
+        # Review finding: after the stop clears the latch, if the car is STILL
+        # drawing on the very next cycle (KEBA hasn't cut the contactor yet),
+        # the latch would be re-stamped and the bridge re-open. The post-stop
+        # settle must honour the IDLE through the wind-down — no re-offer.
+        st = ChargeStability()
+        adapter = FakeAdapter(last_intent=None)
+        drawing = _view(power_w=4500.0, solar_w=3000.0, home_w=2500.0,
+                        battery_soc=33.0, buffer_soc=85.0, tariff_level="cheap")
+        st.filter(_idle(), drawing, adapter, enable_delay_s=60,
+                  disable_delay_s=300, deep_deficit_grace_s=45, now_ts=0.0)
+        d46 = st.filter(_idle(), drawing, adapter, enable_delay_s=60,
+                        disable_delay_s=300, deep_deficit_grace_s=45, now_ts=46.0)
+        assert d46.intent is ChargerIntent.IDLE  # short-grace stop
+        # T+1: car STILL drawing (actuator lag) — must NOT re-offer.
+        d47 = st.filter(_idle(), drawing, adapter, enable_delay_s=60,
+                        disable_delay_s=300, deep_deficit_grace_s=45, now_ts=47.0)
+        assert d47.intent is ChargerIntent.IDLE
+        assert "holding" not in d47.reason
+        # Wound down later — stays stopped.
+        d100 = st.filter(_idle(), _view(power_w=0.0, solar_w=3000.0,
+                         home_w=2500.0, battery_soc=33.0, buffer_soc=85.0,
+                         tariff_level="cheap"), adapter, enable_delay_s=60,
+                         disable_delay_s=300, deep_deficit_grace_s=45, now_ts=100.0)
+        assert d100.intent is ChargerIntent.IDLE
+
+    def test_charge_resumes_after_stop_when_surplus_returns(self):
+        # The settle must NOT trap the charger off: once decide wants to charge
+        # again (surplus returned), charging resumes normally.
+        st = ChargeStability()
+        adapter = FakeAdapter(last_intent=None)
+        drawing = _view(power_w=4500.0, solar_w=3000.0, home_w=2500.0,
+                        battery_soc=33.0, buffer_soc=85.0, tariff_level="cheap")
+        st.filter(_idle(), drawing, adapter, enable_delay_s=0,
+                  disable_delay_s=300, deep_deficit_grace_s=45, now_ts=0.0)
+        st.filter(_idle(), drawing, adapter, enable_delay_s=0,
+                  disable_delay_s=300, deep_deficit_grace_s=45, now_ts=46.0)
+        # Surplus returns → CHARGE decision; enable_delay=0 → passes through.
+        good = _view(power_w=4500.0, solar_w=9000.0, home_w=300.0,
+                     battery_soc=33.0, buffer_soc=85.0, tariff_level="cheap")
+        d = st.filter(_charge(amps=10), good, adapter, enable_delay_s=0,
+                      disable_delay_s=300, deep_deficit_grace_s=45, now_ts=60.0)
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+
+    def test_real_surplus_present_keeps_full_bridge(self):
+        # Battery below buffer BUT real EV surplus 6000 − 300 = 5700 W ≥
+        # 4140 W min charge → a genuine cloud to bridge → full hold (the Zoe
+        # steadiness the bridge exists for is preserved).
+        st = ChargeStability()
+        adapter = self._charging()
+        view = _view(power_w=4500.0, solar_w=6000.0, home_w=300.0,
+                     battery_soc=33.0, buffer_soc=85.0, tariff_level="cheap")
+        for t in (0.0, 50.0, 150.0, 290.0):
             d = st.filter(_idle(), view, adapter, enable_delay_s=60,
                           disable_delay_s=300, deep_deficit_grace_s=45, now_ts=t)
             assert d.intent is ChargerIntent.CHARGE_AT_AMPS, f"stopped early at {t}"

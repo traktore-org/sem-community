@@ -53,7 +53,7 @@ from dataclasses import replace
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from .charger_types import ChargerDecision, ChargerIntent, ChargerView
-from .decide import effective_min_amps
+from .decide import effective_min_amps, self_consumption_surplus_w
 
 if TYPE_CHECKING:  # pragma: no cover
     from .charger_adapters.base import ChargerAdapter
@@ -170,11 +170,18 @@ class ChargeStability:
         self._start_offer: Dict[str, int] = {}
         # Last time the car was observed drawing — latch hysteresis.
         self._latched: Dict[str, float] = {}
+        # Set when the disable-bridge STOPS. While present, an IDLE decision is
+        # honoured as-is and the bridge does NOT re-engage even if the car is
+        # still drawing (actuator lag) — closes the bounded re-engagement the
+        # latch-clear alone leaves. Cleared on a genuine no-draw or a real
+        # CHARGE (#461 / PROD 2026-06-27 re-engagement loop).
+        self._stopped_at: Dict[str, float] = {}
 
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
         self._deficit_since.pop(cid, None)
         self._deep_deficit_since.pop(cid, None)
+        self._stopped_at.pop(cid, None)
         self._amps_history.pop(cid, None)
         self._last_amps.pop(cid, None)
         self._last_change_ts.pop(cid, None)
@@ -285,6 +292,7 @@ class ChargeStability:
         if charge_wanted:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
+            self._stopped_at.pop(cid, None)  # a real charge ends the stop-settle
             target = max(min_amps, min(max_amps, med_amps))
             drawing = adapter.actual_charging(view.power)
             if drawing:
@@ -416,6 +424,20 @@ class ChargeStability:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
             return decision
+        # Post-stop settle: once the bridge has STOPPED, honour the IDLE while
+        # the car winds down. Without this, actuator lag (KEBA hasn't cut the
+        # contactor yet, so the car still draws on the next cycle) re-stamps the
+        # draw-latch and re-opens the hold — the bounded re-engagement the
+        # latch-clear alone leaves (review finding, PROD 2026-06-27). When the
+        # car has actually stopped drawing, finalize the genuine stop; a real
+        # CHARGE clears this flag above so charging always resumes normally.
+        if cid in self._stopped_at:
+            if not adapter.actual_charging(view.power):
+                self._stopped_at.pop(cid, None)
+                self._latched.pop(cid, None)
+                self._deficit_since.pop(cid, None)
+                self._deep_deficit_since.pop(cid, None)
+            return decision
         # Smoothed deficit (day).
         # A bursty car (Zoe) blips ``charging`` False between pulses. Without
         # the latch, every blip reset the deficit timer (line below) so the
@@ -456,7 +478,26 @@ class ChargeStability:
         # deep deficit (short grace, not the full 300 s bridge). cheap /
         # very_cheap and unknown/static (tariff_level None) keep the bridge.
         expensive_deficit = view.fleet.tariff_level in _NOT_CHEAP_LEVELS
-        short_grace = deep_deficit or expensive_deficit
+        # The raw-solar gate (deep_deficit) misses the case the two decision
+        # engines DO catch but this bridge couldn't see: solar is plentiful
+        # yet entirely consumed by the house and/or reserved for a battery
+        # below its buffer (assist withheld), so the REAL EV surplus is ~0.
+        # Holding minimum current then imports grid — the leak. When the
+        # battery can't assist (SoC < buffer) AND the real EV surplus can't
+        # sustain even the minimum charge, there is nothing to bridge to:
+        # behave like solar_only (short grace, not the full bridge). When the
+        # battery CAN assist (SoC ≥ buffer) or real surplus IS present, the
+        # full bridge stays — that's the steadiness the bridge exists for.
+        phases = int(cfg.get("ev_phases", 3))
+        voltage = int(cfg.get("ev_voltage", 230))
+        min_charge_w = min_amps * max(1, phases) * max(1, voltage)
+        real_surplus_w = self_consumption_surplus_w(view)
+        no_assist_deficit = (
+            not deep_deficit
+            and float(view.fleet.battery_soc) < float(view.fleet.buffer_soc)
+            and real_surplus_w < min_charge_w
+        )
+        short_grace = deep_deficit or expensive_deficit or no_assist_deficit
         if short_grace:
             deep_since = self._deep_deficit_since.setdefault(cid, now)
             deep_held = now - deep_since
@@ -473,6 +514,20 @@ class ChargeStability:
             self._amps_history.pop(cid, None)
             self._last_amps.pop(cid, None)
             self._last_change_ts.pop(cid, None)
+            # DURABLE stop: drop the draw-latch too. Without this the bridge
+            # re-engages in a loop (PROD 2026-06-27 history: hold 180s → stop
+            # → "deficit 0s/180s holding 8A" again, forever). The car was
+            # still winding down within LATCH_HOLD_S, so the next cycle saw
+            # held_recently=True, skipped the genuine-stop return, and
+            # re-entered the hold — and the hold re-offered min current, so
+            # the car kept drawing: self-sustaining. The latch exists to let
+            # the deficit timer survive blips DURING a hold; once we've
+            # decided to STOP it must clear so the wind-down settles into a
+            # real stop instead of restarting the timer.
+            self._latched.pop(cid, None)
+            # Arm the post-stop settle so actuator lag (car still drawing next
+            # cycle) can't re-open the hold before KEBA cuts the contactor.
+            self._stopped_at[cid] = now
             # Short-grace stops always re-stamp the reason — even when
             # decide() already idled — so the strategy sensor shows SEM
             # CHOSE to stop (no cheap surplus) rather than silently holding
@@ -486,6 +541,16 @@ class ChargeStability:
                         f"(solar {view.fleet.solar_w:.0f}W < "
                         f"{view.fleet.min_solar_w:.0f}W) — no surplus to "
                         f"bridge — {decision.reason}"
+                    )
+                elif no_assist_deficit:
+                    reason = (
+                        f"stability: no battery assist "
+                        f"(SoC {view.fleet.battery_soc:.0f}% < buffer "
+                        f"{view.fleet.buffer_soc:.0f}%) + EV surplus "
+                        f"{real_surplus_w:.0f}W < min charge "
+                        f"{min_charge_w:.0f}W "
+                        f"{deep_held:.0f}s/{deep_deficit_grace_s:.0f}s — "
+                        f"no surplus to bridge — {decision.reason}"
                     )
                 else:
                     reason = (
