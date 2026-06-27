@@ -1563,6 +1563,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             ev_device.steady_failsafe = bool(_cfg("keba_steady_failsafe", True))
             # #546 — live offered-current sensor for the EV-OFFER-PROBE.
             ev_device.current_sensor_entity_id = str(_cfg("ev_current_sensor", "") or "")
+            # #548 — charger STATUS enum (Wallbox: sensor.*_status). The
+            # WallboxAdapter reads this as the authoritative "actually
+            # charging?" signal (cloud power lags ~90 s) and to detect
+            # app-lock (Eco-Smart / Scheduled / Power-Sharing) so SEM can
+            # surface "can't stop" instead of silently failing OFF mode.
+            ev_device.charging_status_entity = str(_cfg("ev_charging_sensor", "") or "")
             # Per-integration charger profile (#82)
             if _cfg("ev_service_param_name"):
                 ev_device.service_param_name = _cfg("ev_service_param_name")
