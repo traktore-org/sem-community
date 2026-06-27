@@ -11,6 +11,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3] — 27.06.2026
+
+> **Stable release.** Consolidates the 1.7.3 beta line (beta.1 → beta.65, detailed
+> below) plus the final hardening below. Headline: a big EV-charging reliability
+> pass (steady offer, clean stops, max-SOC ceiling, battery-assist), the
+> single-source EV decision architecture, multi-battery + per-battery modes,
+> grid-sign auto-detection, the audit-telemetry program, and a large census /
+> dead-code cleanup. Battery→grid arbitrage remains **deactivated** (tracked for
+> v1.7.4 in #533).
+
+### 🔌 EV — single-source stability bridge (#461)
+- 🐛 **The EV could grid-hold at low battery SoC and never settle.** The anti-flap
+  "disable bridge" re-derived solar/surplus/SoC/tariff and held minimum current
+  after `decide()` had already structurally idled, then re-engaged in a loop —
+  importing grid indefinitely (PROD-confirmed via the strategy-sensor history).
+  `decide()` is now the single source of truth: it classifies each IDLE as
+  transient (hold) vs structural (stop) on `ChargerDecision.bridgeable`, and the
+  stability layer simply honours the flag — no re-derivation — plus a durable
+  stop and a post-stop settle so a winding-down car can't re-open the hold.
+  (by @guidoeberle in #461)
+
+### ⚙️ Config — knobs apply without a reload (#547)
+- ✨ **Changing a setting now takes effect live.** Scalars cached on a controller
+  at construction (regulation offset, heat-pump / hot-water tunables, per-charger
+  EV priority + min/max current + shed priority, tariff rates) used to need a full
+  integration reload. `refresh_runtime_config()` now pushes them into the live
+  controllers on every config change — a refresh, not a rebuild, so timers, cost
+  accumulators and smoothing windows are preserved. (by @guidoeberle in #547)
+
+### 🔌 EV / Load management — single-writer peak control (#461)
+- 🐛 **Load management could fight the EV controller (or silently fail to shed it).**
+  The EV is now removed from load-management's per-cycle device shedding entirely:
+  daytime EV charging is solar-driven (no grid peak) and the night grid top-up is
+  already peak-managed by the night planner — both through the single
+  `decide()`/reconciler writer. The old side-channel (`number.set_value 0` /
+  `keba.set_current 0`) fought the reconciler heartbeat on KEBA and mis-read
+  number-entity Wallbox chargers, so it could only flap or fail. (by @guidoeberle in #461)
+
 # [1.7.3-beta.65] — 26.06.2026
 
 > Hardens the battery-protection limit against an EV-ramp sensor-lag spike.
