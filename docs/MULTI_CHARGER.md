@@ -270,37 +270,67 @@ for the original plan.
 
 ---
 
-## Adapters: prefer the STATUS enum over the power reading (#548)
+## Adapters: the STATUS enum is authoritative over the power reading (#548)
 
-**The road every brand-specific adapter should take.** The reconciler
-decides "is the charger still drawing?" from `adapter.actual_charging(power)`.
-The generic default is power-based (`power_w > handshake`), which is wrong for
-any charger whose power reading **lags the contactor** — cloud-polled brands
-(Wallbox ~90 s), or any integration where the power sensor updates slower than
-SEM's cycle. A lagging-to-zero reading makes the reconciler read OFF/IDLE as
-"already converged" on cycle 1 and stop re-issuing the stop while the charger
-keeps charging (#548); a lagging-high reading does the reverse.
+The reconciler decides "is the charger still drawing?" from
+`adapter.actual_charging(power)`. A power-based answer is wrong for any
+charger whose power reading **lags the contactor** — every cloud-polled brand
+(Wallbox ~90 s, Easee ~60 s, Zaptec ~60–600 s, Ohme ~30 s, go-e ~20 s, OCPP
+~60 s meter cadence). A lagging-to-zero reading makes the reconciler read
+OFF/IDLE as "already converged" on cycle 1 and stop re-issuing the stop while
+the charger keeps charging (#548); a lagging-high reading does the reverse.
 
-`WallboxAdapter` is the template (`coordinator/charger_adapters/wallbox.py`):
-read the brand's **status enum** from `device.charging_status_entity` (plumbed
-from the `ev_charging_sensor` config) and make it authoritative:
+**One shared classifier, not a bespoke adapter per brand.** Brand entity
+*naming* is user-dependent (most are HACS integrations), but SEM already has
+each charger's status sensor — the user configures `ev_charging_sensor`, which
+`__init__.py` plumbs to `device.charging_status_entity`. So the only
+brand-specific knowledge is the status-string → control-class **map**. That
+lives in **`coordinator/charger_adapters/status_enum.py`**
+(`classify_charger_status`), and `GenericAdapter` consults it in
+`actual_charging` + `enable_state`. Every brand benefits at once; KEBA and
+Wallbox keep their dedicated adapters only for their *actuation* quirks (KEBA
+`keba.disable`, Wallbox pause switch) and inherit the shared status logic.
 
-- `actual_charging` → True on the brand's charging states (even at lagging-0 W),
-  False on idle/paused/locked states (even at lagging-high W), and **fall back
-  to the generic power heuristic** on unknown/error/unconfigured (strictly
-  additive — no status sensor ⇒ unchanged behaviour).
-- `enable_state()` → return `(None, False)` (uncontrollable) when the status
-  reports an **app/cloud-controlled lock** (Eco-Smart / Scheduled / queued /
-  Locked) so the reconciler surfaces `REPORT_ENABLE_BLOCKED` instead of
-  spinning a futile stop.
+Rules: **exact lower-cased whole-string match** (several brands have idle
+states that *contain* "charging" — go-e `charging finished, vehicle still
+connected`, Alfen `Wait Vehicle Charging`, Easee `stop_charging`); **unknown →
+power fallback** (strictly additive); **no string collisions** across classes.
 
-This is the evcc "connector" concept adapted to SEM (we read HA's status
-sensor; evcc reads it over OCPP/cloud). **Brands to migrate next** as their
-status sensors are confirmed: Easee (`status`), go-eCharger (`car`), OCPP
-(`status_connector`), Ohme, Alfen, Wallbox-family clones. KEBA stays
-power-based (its `charging_state` binary lags worse than power, #289). Each
-migration needs the brand's exact status strings + a parity test like
-`tests/test_548_mode_parity.py` (every mode's intent actuates the same as KEBA).
+- `charging` → `actual_charging=True` even at lagging-0 W.
+- `not_charging` → False even at lagging-high W.
+- `locked` (app/cloud/schedule/auth controlled — Eco-Smart, Easee smart-start,
+  Ohme `pending_approval`, Alfen In-operative) → False **and**
+  `enable_state()=(None,False)` so the reconciler surfaces
+  `REPORT_ENABLE_BLOCKED` instead of fighting a contactor it can't drive.
+
+KEBA stays power-based for `actual_charging` (its `charging_state` binary lags
+worse than power, #289). Tests: `tests/test_status_enum_brands.py` (per-brand
+strings), `tests/test_548_mode_parity.py` (every mode actuates like KEBA),
+`tests/test_charger_brand_coverage.py` (every control pattern triggers).
+
+### Per-brand reference (verified against each HA integration source)
+
+| Brand | Integration | Lag | Current control | Stop mechanism | Status entity / key | Notes |
+|---|---|---|---|---|---|---|
+| KEBA | core `keba` | low | `keba.set_current` (`current`) | `keba.disable` | binary `charging_state` (power-based) | dedicated adapter; 6 A min, self-resume, 110 W handshake |
+| Wallbox | core `wallbox` | ~90 s cloud | `number.*_max_charging_current` | pause switch `switch.*_charging_enable` | `sensor.*_status` | dedicated adapter (pause switch); set-current-0 ≠ stop |
+| Easee | HACS `nordicopen/easee_hass` | ~60 s cloud | `easee.set_charger_dynamic_limit` (`current`, **device_id**) | `easee.action_command` `pause`/`stop` | `sensor.*_status` | **set-current-0 ≠ stop**; smart-charge/auth = locked; power in **kW** |
+| Zaptec | HACS `custom-components/zaptec` | 60–600 s cloud | `number.*_available_current` (0–max) | switch / `stop_charging_final` | `sensor.*_charger_mode` | command-validity gating; power in W |
+| go-eCharger | HACS `cathiele/...goecharger` | ~20 s local | `goecharger.set_max_current` (`max_current`, 6–32) | `switch.*_allow_charging` (`alw`) | `sensor.*_car_status` | **set-current-0 ≠ stop** (clamps ≥6 A); power in **kW** |
+| Ohme | core `ohme` | ~30 s cloud | **none — no amp control** | `select.*_charge_mode` (`paused`) | `sensor.*_status` | **on/off only, cannot amp-modulate**; force `max_charge`; `pending_approval` lock |
+| OCPP | HACS `lbbrhzn/ocpp` | ~60 s local | `number.*_maximum_current` (needs SmartCharging profile) | `switch.*_charge_control` | `sensor.*_status_connector` | optimistic slider; power unit W **or** kW (auto-detect) |
+| Alfen | HACS `leeyuentuen/alfen_wallbox` | low local | `alfen.set_current_limit` / `number.*_max_station_current` | `select.*_operation_mode` = In-operative | `sensor.*_status_code_socket_1` | max license-gated (16/40 A); power in W |
+| Heidelberg | HACS `Schrolli91/heidelberg_energy_control` (modbus) | low local | `number.*_virtual_current` (6–16 A) | `switch.*_virtual_enable` (writes 0 A) | `sensor.*_charging_state` (letters A–F) | reg 261 not retained across reboot — re-assert; set-0 = pause (allowed) |
+
+**Actuation caveats the user must configure** (SEM's config model supports
+each; the status classifier is independent of these):
+- **Easee / Zaptec / go-e:** lowering current to 0 does **not** stop — the
+  user must set the stop service/switch (`ev_stop_service` / `ev_start_stop_entity`).
+- **Ohme:** has **no per-amp control** — SEM can only force-on (`max_charge`)
+  or pause via the charge-mode `select`. Surplus amp-following is not possible;
+  treat as on/off.
+- **Heidelberg:** register 261 reverts to 0 A after a charger reboot — SEM's
+  per-cycle re-assert (reconciler heartbeat) covers this.
 
 ---
 
