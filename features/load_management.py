@@ -670,6 +670,14 @@ class LoadManagementCoordinator:
         devices_to_shed = [
             device_id for device_id, device_info in self._devices.items()
             if (device_info.get("control_mode") != "off" and
+                # EV chargers are NOT shed here (#461-peak). Daytime EV
+                # charging is solar/surplus-driven (no grid peak), and the
+                # night grid top-up is peak-managed by the night planner
+                # (ev_control._night_peak_managed_amps) — both via the single
+                # decide()/reconciler writer. load_management shedding the EV
+                # via its side-channel fought that writer / mis-read
+                # number-entity chargers, so the EV is never actuated here.
+                device_info.get("device_type") != "ev_charger" and
                 device_info.get("is_controllable", True) and
                 device_info.get("is_available", False) and
                 not device_info.get("is_critical", False) and
@@ -774,6 +782,11 @@ class LoadManagementCoordinator:
             # Skip devices in "off" mode — SEM never touches these (#49)
             if device_info.get("control_mode") == "off":
                 continue
+            # EV chargers are peak-managed by decide()/the night planner (the
+            # single reconciler writer), never shed from here (#461-peak — see
+            # _emergency_load_shedding for the full rationale).
+            if device_info.get("device_type") == "ev_charger":
+                continue
             if (device_info.get("is_controllable", True) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
@@ -808,6 +821,18 @@ class LoadManagementCoordinator:
             return
 
         if device_id not in self._devices:
+            return
+
+        # Single-writer guard (#461-peak): EV chargers are peak-managed by
+        # decide()/the night planner → the reconciler. Never shed one from
+        # here even if a future caller reaches this — the side-channel write
+        # would fight the reconciler heartbeat. Belt-and-braces with the two
+        # selection-path skips.
+        if self._devices[device_id].get("device_type") == "ev_charger":
+            _LOGGER.debug(
+                "Skipping load-manager shed of EV charger %s — peak-managed "
+                "by decide()/night planner (#461-peak)", device_id,
+            )
             return
 
         device_info = self._devices[device_id]
@@ -967,6 +992,14 @@ class LoadManagementCoordinator:
 
         device_info = self._devices[device_id]
 
+        # Single-writer guard (#461-peak): never restore an EV charger from
+        # here — load_management doesn't shed it, so it should never be in
+        # _devices_shed, but a side-channel restore would still fight the
+        # reconciler. Belt-and-braces with _shed_device.
+        if device_info.get("device_type") == "ev_charger":
+            self._devices_shed = [d for d in self._devices_shed if d != device_id]
+            return
+
         # Check anti-flicker constraint
         if not self._can_restore_device(device_id, device_info):
             return
@@ -1089,9 +1122,13 @@ class LoadManagementCoordinator:
         # "Switchable" = controllable AND currently on (i.e. could be shed now).
         # Previously counted all available+controllable devices, which kept the
         # number at "10" even when the user had turned them all off (#193).
+        # EV chargers are excluded everywhere (#461-peak): load_management
+        # neither sheds them nor counts them as sheddable, so the sensor
+        # doesn't over-report (a 22 kW EV draw is NOT reducible from here).
         controllable_devices = sum(
             1 for d in self._devices.values()
-            if d.get("is_controllable", True)
+            if d.get("device_type") != "ev_charger"
+            and d.get("is_controllable", True)
             and d.get("is_available", False)
             and self._is_device_currently_on(d)
         )
@@ -1099,7 +1136,8 @@ class LoadManagementCoordinator:
         available_reduction = sum(
             self._device_discovery.get_device_current_state(device_info)["current_power"] / 1000
             for device_id, device_info in self._devices.items()
-            if (device_info.get("is_controllable", True) and
+            if (device_info.get("device_type") != "ev_charger" and
+                device_info.get("is_controllable", True) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
                 self._is_device_currently_on(device_info))
