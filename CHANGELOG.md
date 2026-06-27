@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.2] — 27.06.2026
+
+> **Pre-release.** Generalises the Wallbox status-enum fix to every charger brand.
+
+### 🔌 EV — cross-brand status-enum classifier (#548)
+- ✨ **Every charger brand now uses its STATUS enum (authoritative) instead of the
+  cloud-lagged power reading** to decide "is it charging?" and "can SEM stop it?".
+  The Wallbox #548 fix is generalised into one shared classifier
+  (`coordinator/charger_adapters/status_enum.py`) mapping each brand's real
+  HA-integration status strings — Easee, Zaptec, go-e, Ohme, OCPP, Alfen,
+  Heidelberg, Wallbox — to charging / not_charging / locked. `GenericAdapter`
+  reads it over the already-configured status sensor; KEBA stays power-based.
+  Strictly additive: no status sensor / unrecognised string → unchanged
+  power-based behaviour. App/cloud-locked states (Eco-Smart, Easee smart-start,
+  Ohme pending-approval, Alfen in-operative) now surface "can't stop — leave
+  eco-smart" instead of spinning silently.
+- 📝 `docs/MULTI_CHARGER.md` gains a per-brand reference table (verified against
+  each HA integration source) + actuation caveats (Easee/Zaptec/go-e set-0≠stop;
+  Ohme is on/off only; Heidelberg reg-261 reboot revert).
+- ✅ Verified: per-brand classifier tests, every-mode KEBA parity, control-pattern
+  coverage, and a live HA-TEST mock walk (Zaptec/Alfen charging strings detected
+  over 0 W; Eco-Smart lock surfaced). Full suite 3986 green.
+
 # [1.7.4-beta.1] — 27.06.2026
 
 > **Pre-release.** Opens the 1.7.4 line. Headline: Wallbox now stops reliably in
