@@ -21,6 +21,9 @@ from custom_components.solar_energy_management.tariff.tariff_provider import (
     DynamicTariffProvider,
     StaticTariffProvider,
 )
+from custom_components.solar_energy_management.tariff.calendar_provider import (
+    CalendarTariffProvider,
+)
 
 
 class _Dev:
@@ -97,7 +100,8 @@ class TestRefreshRuntimeConfig:
         assert hw._legionella_cycle_active is True
 
     def test_ev_priority_and_currents_pushed_per_charger(self):
-        dev = _Dev(priority=1, min_current=6.0, max_current=32.0)
+        dev = _Dev(priority=1, min_current=6.0, max_current=32.0,
+                   phases=3, voltage=230, min_power_threshold=0.0)
         # global ev_surplus_priority + per-charger override for min/max
         cfg = {
             "ev_surplus_priority": 4,
@@ -111,6 +115,28 @@ class TestRefreshRuntimeConfig:
         assert dev.min_current == 10.0    # per-charger override
         assert dev.max_current == 16.0
         assert lm._devices["load_device_wb"]["priority"] == 8  # shed priority
+
+    def test_min_power_threshold_re_derived(self):
+        # HIGH (review): the surplus-activation gate must follow min_current,
+        # else a min-current change applies to commanded current but not to
+        # whether the charger turns on.
+        dev = _Dev(priority=3, min_current=6.0, max_current=32.0,
+                   phases=3, voltage=230, min_power_threshold=6 * 3 * 230)
+        cfg = {"ev_chargers": [{"id": "wb", "ev_min_current": 10}]}
+        coord = _coord(cfg, ev_devices={"wb": dev})
+        SEMCoordinator.refresh_runtime_config(coord)
+        assert dev.min_current == 10.0
+        assert dev.min_power_threshold == 10 * 3 * 230  # 6900, re-derived
+
+    def test_ev_load_priority_alias(self):
+        # LOW (review): legacy ev_load_priority alias is the fallback, as at
+        # construction (__init__._cfg).
+        dev = _Dev(priority=3, min_current=6.0, max_current=32.0,
+                   phases=3, voltage=230, min_power_threshold=0.0)
+        cfg = {"ev_chargers": [{"id": "wb", "ev_load_priority": 7}]}
+        coord = _coord(cfg, ev_devices={"wb": dev})
+        SEMCoordinator.refresh_runtime_config(coord)
+        assert dev.priority == 7
 
     def test_static_tariff_rates_pushed(self):
         tp = StaticTariffProvider(peak_rate=0.1, off_peak_rate=0.1, export_rate=0.01)
@@ -133,6 +159,30 @@ class TestRefreshRuntimeConfig:
         assert tp.expensive_threshold == 0.40
         assert tp.export_rate == 0.08
         assert tp.fallback_price == 0.31
+
+    def test_calendar_tariff_rates_pushed(self):
+        tp = CalendarTariffProvider(None, peak_rate=0.1, off_peak_rate=0.1,
+                                    export_rate=0.01)
+        coord = _coord({
+            "electricity_import_rate": 0.38,
+            "electricity_off_peak_rate": 0.22,
+            "electricity_export_rate": 0.07,
+        }, tariff=tp)
+        SEMCoordinator.refresh_runtime_config(coord)
+        assert tp.peak_rate == 0.38
+        assert tp.off_peak_rate == 0.22
+        assert tp.export_rate == 0.07
+
+    def test_calendar_rate_unchanged_when_key_absent(self):
+        # MEDIUM (review): an absent import-rate key must leave the provider's
+        # current value alone (calendar default 0.35 ≠ static default 0.3387).
+        tp = CalendarTariffProvider(None, peak_rate=0.35, off_peak_rate=0.30,
+                                    export_rate=0.01)
+        coord = _coord({"electricity_export_rate": 0.05}, tariff=tp)  # no rate keys
+        SEMCoordinator.refresh_runtime_config(coord)
+        assert tp.peak_rate == 0.35       # unchanged, NOT nudged to 0.3387
+        assert tp.off_peak_rate == 0.30   # unchanged
+        assert tp.export_rate == 0.05     # the one key present applied
 
     def test_no_controllers_is_safe(self):
         # All handles None / absent → must not raise.

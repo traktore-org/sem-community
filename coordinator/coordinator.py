@@ -5504,14 +5504,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, dev in ev_devices.items():
                 ccfg = chargers_by_id.get(cid, {})
                 try:
-                    surplus_prio = int(
-                        _cfg_charger(ccfg, "ev_surplus_priority", 3)
-                    )
+                    # Match the construction resolution (__init__._cfg): the
+                    # legacy ``ev_load_priority`` alias is the fallback.
+                    surplus_prio = int(_cfg_charger(
+                        ccfg, "ev_surplus_priority",
+                        _cfg_charger(ccfg, "ev_load_priority", dev.priority),
+                    ))
                     dev.priority = max(1, min(10, surplus_prio))
                     dev.min_current = float(_cfg_charger(ccfg, "ev_min_current", 6))
                     dev.max_current = float(
                         _cfg_charger(ccfg, "max_charging_current", 32)
                     )
+                    # Re-derive the surplus-activation gate (HIGH, review): the
+                    # SurplusController activates this charger on
+                    # ``remaining_surplus >= min_power_threshold``, NOT on
+                    # min_current directly — so a min-current change that didn't
+                    # also update this scalar applied to the commanded current
+                    # but not to whether the charger turns on. Mirror
+                    # base.py:682 using the LIVE phases (post phase-switch).
+                    ph = int(getattr(dev, "phases", 3) or 3)
+                    volt = float(getattr(dev, "voltage", 230) or 230)
+                    dev.min_power_threshold = dev.min_current * ph * volt
                 except (TypeError, ValueError):
                     surplus_prio = dev.priority
                 # Shed priority lives in the load manager's device dict
@@ -5545,11 +5558,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         cfg, "electricity_import_rate", default=0.30
                     )
                 else:
-                    # Static / Calendar share peak/off-peak rate fields.
-                    tp.peak_rate = float(cfg.get("electricity_import_rate", 0.3387))
+                    # Static / Calendar share peak/off-peak rate fields. Fall
+                    # back to the provider's CURRENT value when the key is
+                    # absent so a factory-default calendar install (different
+                    # construction default 0.35 vs static 0.3387) isn't nudged
+                    # to a wrong rate by the refresh (MEDIUM, review).
+                    tp.peak_rate = float(
+                        cfg.get("electricity_import_rate", tp.peak_rate)
+                    )
                     tp.off_peak_rate = _cfg_rate(
                         cfg, "electricity_off_peak_rate", "electricity_nt_rate",
-                        default=float(cfg.get("electricity_import_rate", 0.3387)),
+                        default=tp.off_peak_rate,
                     )
             except (TypeError, ValueError):
                 pass
