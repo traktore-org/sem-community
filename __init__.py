@@ -357,8 +357,27 @@ def persist_per_charger_option(
     new_options["ev_chargers"] = ev_chargers
     if isinstance(getattr(coordinator, "config", None), dict):
         coordinator.config.update({**(entry.data or {}), **new_options})
+        _refresh_runtime_config(coordinator)  # #547: apply without reload
     coordinator._skip_options_reload = new_options
     hass.config_entries.async_update_entry(entry, options=new_options)
+
+
+def _refresh_runtime_config(coordinator) -> None:
+    """Push construction-cached scalars into live controllers (#547).
+
+    The ``persist_*`` writers update ``coordinator.config`` in place and arm
+    ``_skip_options_reload`` so the entry write does NOT trigger a reload —
+    which means any knob cached on a controller at construction would stay
+    stale until a manual reload. Mirror ``async_update_config``'s refresh so
+    those no-reload writes apply immediately too. Defensive: never let a
+    refresh hiccup break the option persist itself.
+    """
+    fn = getattr(coordinator, "refresh_runtime_config", None)
+    if callable(fn):
+        try:
+            fn()
+        except Exception:  # noqa: BLE001 — refresh must never break persist
+            _LOGGER.debug("refresh_runtime_config failed", exc_info=True)
 
 
 def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
@@ -373,6 +392,7 @@ def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
     new_options[key] = value
     if isinstance(getattr(coordinator, "config", None), dict):
         coordinator.config.update({**(entry.data or {}), **new_options})
+        _refresh_runtime_config(coordinator)  # #547: apply without reload
     coordinator._skip_options_reload = new_options
     hass.config_entries.async_update_entry(entry, options=new_options)
 
@@ -403,6 +423,7 @@ def persist_per_battery_option(
     new_options[list_key] = lst
     if isinstance(getattr(coordinator, "config", None), dict):
         coordinator.config.update({**(entry.data or {}), **new_options})
+        _refresh_runtime_config(coordinator)  # #547: apply without reload
     coordinator._skip_options_reload = new_options
     hass.config_entries.async_update_entry(entry, options=new_options)
 

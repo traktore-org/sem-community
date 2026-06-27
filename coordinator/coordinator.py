@@ -5405,7 +5405,154 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """
         self.config.update(config_update)
         self._mirror_primary_charger_to_global()  # keep legacy global keys fresh (#255)
+        self.refresh_runtime_config()  # #547: push construction-cached scalars live
         _LOGGER.info("Configuration updated: %s", list(config_update.keys()))
+
+    def refresh_runtime_config(self) -> None:
+        """Push construction-cached scalar knobs into live controllers (#547).
+
+        ``async_update_config`` (and the ``persist_*`` no-reload writers)
+        mutate ``self.config`` in place, so every knob read *per-cycle* off
+        ``self.config`` already applies live. The handful of scalars CACHED
+        into a controller object at construction — and never re-read — used
+        to need a full integration reload to take effect (the "I changed the
+        setting but nothing happened until I restarted SEM" surprise).
+
+        This re-derives those cached scalars from the current ``self.config``
+        and assigns them via attribute / existing setter. It is a **refresh**,
+        not a rebuild: stateful objects (the legionella timer, cost
+        accumulators, smoothing windows, price-curve caches) are preserved —
+        only the tunable is updated. Full-resync (re-read every knob, not just
+        the changed one) keeps it idempotent and lets every config-mutation
+        path call it without plumbing a changed-keys set.
+
+        Structural keys (entity ids, EV phase count, tariff *mode*) still need
+        a reload — those rebuild objects, not just retune them.
+        """
+        cfg = self.config
+
+        # ── SurplusController: regulation offset + export cap ───────────
+        sc = getattr(self, "_surplus_controller", None)
+        if sc is not None:
+            try:
+                sc.regulation_offset = float(cfg.get("regulation_offset", 50))
+                sc.max_export_w = float(cfg.get("max_export_power", 0))
+            except (TypeError, ValueError):
+                pass
+
+            # Heat pump (registered with the surplus controller)
+            hp = sc.get_device("heat_pump")
+            if hp is not None:
+                try:
+                    hp.boost_offset = float(cfg.get("heat_pump_boost_offset", 2.0))
+                    hp.max_setpoint = float(cfg.get("heat_pump_max_setpoint", 55.0))
+                    hp.force_on_threshold = float(
+                        cfg.get("heat_pump_force_on_threshold", 5000)
+                    )
+                    hp.invert_sg_ready = bool(cfg.get("heat_pump_invert_sg_ready", False))
+                    hp.priority = max(1, min(10, int(cfg.get("heat_pump_priority", 4))))
+                except (TypeError, ValueError):
+                    pass
+
+            # Hot water — push targets/interval only; the legionella timer
+            # state (hours_since_legionella, _legionella_cycle_active) is
+            # preserved because we never re-init the controller.
+            hw = sc.get_device("hot_water")
+            if hw is not None:
+                try:
+                    from ..devices.hot_water_controller import (
+                        DEFAULT_LEGIONELLA_MIN_TEMP,
+                    )
+                    hw.max_temperature = float(cfg.get("hot_water_max_temperature", 70.0))
+                    hw.min_temperature = float(
+                        cfg.get("hot_water_minimum_temperature", 40.0)
+                    )
+                    hw.solar_target_temp = float(cfg.get("hot_water_solar_target", 50.0))
+                    hw.legionella_target_temp = max(
+                        float(cfg.get("hot_water_legionella_target", 65.0)),
+                        DEFAULT_LEGIONELLA_MIN_TEMP,
+                    )
+                    hw.legionella_interval_hours = float(
+                        cfg.get("hot_water_legionella_interval_hours", 168.0)
+                    )
+                    hw.priority = max(1, min(10, int(cfg.get("hot_water_priority", 6))))
+                except (TypeError, ValueError):
+                    pass
+
+        # ── EV chargers: per-charger surplus priority + min/max current on
+        # the device; shed priority in the load manager. Per-charger writes
+        # arm _skip_options_reload (no reload), so these device-cached
+        # scalars are otherwise stuck until a real reload. Resolve each
+        # charger's value with the same charger-override→global fallback the
+        # construction path uses (__init__._cfg).
+        ev_devices = getattr(self, "_ev_devices", None)
+        if ev_devices:
+            chargers_by_id = {
+                c.get("id"): c
+                for c in (cfg.get("ev_chargers") or [])
+                if isinstance(c, dict)
+            }
+
+            def _cfg_charger(ccfg, key, default=None):
+                v = ccfg.get(key) if isinstance(ccfg, dict) else None
+                if v is not None:
+                    return v
+                v = cfg.get(key)
+                return v if v is not None else default
+
+            lm = getattr(self, "_load_manager", None)
+            for cid, dev in ev_devices.items():
+                ccfg = chargers_by_id.get(cid, {})
+                try:
+                    surplus_prio = int(
+                        _cfg_charger(ccfg, "ev_surplus_priority", 3)
+                    )
+                    dev.priority = max(1, min(10, surplus_prio))
+                    dev.min_current = float(_cfg_charger(ccfg, "ev_min_current", 6))
+                    dev.max_current = float(
+                        _cfg_charger(ccfg, "max_charging_current", 32)
+                    )
+                except (TypeError, ValueError):
+                    surplus_prio = dev.priority
+                # Shed priority lives in the load manager's device dict
+                # (load_device_<id>), independent of surplus order (#470).
+                if lm is not None and isinstance(
+                    getattr(lm, "_devices", None), dict
+                ):
+                    ld = lm._devices.get(f"load_device_{cid}")
+                    if isinstance(ld, dict):
+                        try:
+                            ld["priority"] = int(
+                                _cfg_charger(ccfg, "ev_shed_priority", surplus_prio)
+                            )
+                        except (TypeError, ValueError):
+                            pass
+
+        # ── Tariff provider: rates + thresholds. The EnergyCalculator's
+        # cost rates are refreshed from the provider every cycle (see the
+        # get_tariff_data() push in _async_update_data), so updating the
+        # provider here is enough — the cost accumulators follow next cycle.
+        tp = getattr(self, "_tariff_provider", None)
+        if tp is not None:
+            try:
+                tp.export_rate = float(cfg.get("electricity_export_rate", 0.075))
+                if isinstance(tp, DynamicTariffProvider):
+                    tp.cheap_threshold = float(cfg.get("cheap_price_threshold", 0.15))
+                    tp.expensive_threshold = float(
+                        cfg.get("expensive_price_threshold", 0.35)
+                    )
+                    tp.fallback_price = _cfg_rate(
+                        cfg, "electricity_import_rate", default=0.30
+                    )
+                else:
+                    # Static / Calendar share peak/off-peak rate fields.
+                    tp.peak_rate = float(cfg.get("electricity_import_rate", 0.3387))
+                    tp.off_peak_rate = _cfg_rate(
+                        cfg, "electricity_off_peak_rate", "electricity_nt_rate",
+                        default=float(cfg.get("electricity_import_rate", 0.3387)),
+                    )
+            except (TypeError, ValueError):
+                pass
 
     def sensors_ready(self) -> bool:
         """Check if required sensors are available."""
