@@ -469,6 +469,21 @@ class ChargerDecision:
     'off mode — explicit user disable', 'night mode + min_plus_solar
     floor, deadline 06:00'."""
 
+    bridgeable: bool = True
+    """For an IDLE decision: is this a TRANSIENT dip worth holding the
+    contactor through (a passing cloud while real surplus / battery
+    assist exists) — or a STRUCTURAL stop (sun gone, battery below
+    buffer with no real surplus, or a not-cheap tariff window) that the
+    stability layer must NOT bridge by importing grid?
+
+    Single source of truth (computed in ``decide`` where the SoC /
+    surplus / tariff data already lives) so ``charge_stability`` does NOT
+    re-derive it. ``True`` for CHARGE decisions and transient idles (the
+    bridge holds for the full disable delay); ``False`` for structural
+    idles (the bridge stops on the short grace). Honours the dataclass
+    contract: 'All fields are computed once in decide … no re-derivation
+    downstream.'"""
+
 
 # ─────────────────────────────────────────────────────────────────
 # Per-charger view (the input to decide())

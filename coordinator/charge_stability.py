@@ -53,7 +53,7 @@ from dataclasses import replace
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from .charger_types import ChargerDecision, ChargerIntent, ChargerView
-from .decide import effective_min_amps, self_consumption_surplus_w
+from .decide import effective_min_amps
 
 if TYPE_CHECKING:  # pragma: no cover
     from .charger_adapters.base import ChargerAdapter
@@ -103,13 +103,6 @@ DEFAULT_RAMP_AMPS = 2
 DEFAULT_DEEP_DEFICIT_GRACE_S = 45
 
 _CHARGE_INTENTS = (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX)
-
-# #524: tariff levels where bridging a solar deficit by holding minimum
-# current would import EXPENSIVE grid. In these windows the transient
-# bridge is cut short to the deep-deficit grace instead of the full
-# disable delay. ``cheap`` / ``very_cheap`` (and unknown/static → None)
-# keep the full bridge — there grid is cheap or price-agnostic.
-_NOT_CHEAP_LEVELS = frozenset({"normal", "expensive", "very_expensive"})
 
 # Grace after the gentle min-current start before escalating to the
 # ``initial_current`` start-kick when the car still isn't drawing. Some
@@ -462,42 +455,17 @@ class ChargeStability:
         since = self._deficit_since.setdefault(cid, now)
         held = now - since
 
-        # #461 part 2 — deep-deficit escape. A deficit while solar is
-        # below ``min_solar_w`` is not a cloud to bridge; it is genuine
-        # darkness, and the hold's minimum current would come entirely
-        # from the battery + grid. Once the deep deficit outlives the
-        # short grace (long enough to ride out a single-cycle inverter
-        # flicker to 0 W, far shorter than the 300 s transient bridge),
-        # stop now instead of holding for the full disable window. A
-        # transient deficit (solar still >= min_solar_w) clears the
-        # timer and keeps the full bridge below.
-        deep_deficit = view.fleet.solar_w < view.fleet.min_solar_w
-        # #524: in a NOT-cheap tariff window, holding minimum current to
-        # bridge a deficit imports EXPENSIVE grid — exactly what
-        # solar_plus_cheap / min_plus_solar exist to avoid. Treat it like a
-        # deep deficit (short grace, not the full 300 s bridge). cheap /
-        # very_cheap and unknown/static (tariff_level None) keep the bridge.
-        expensive_deficit = view.fleet.tariff_level in _NOT_CHEAP_LEVELS
-        # The raw-solar gate (deep_deficit) misses the case the two decision
-        # engines DO catch but this bridge couldn't see: solar is plentiful
-        # yet entirely consumed by the house and/or reserved for a battery
-        # below its buffer (assist withheld), so the REAL EV surplus is ~0.
-        # Holding minimum current then imports grid — the leak. When the
-        # battery can't assist (SoC < buffer) AND the real EV surplus can't
-        # sustain even the minimum charge, there is nothing to bridge to:
-        # behave like solar_only (short grace, not the full bridge). When the
-        # battery CAN assist (SoC ≥ buffer) or real surplus IS present, the
-        # full bridge stays — that's the steadiness the bridge exists for.
-        phases = int(cfg.get("ev_phases", 3))
-        voltage = int(cfg.get("ev_voltage", 230))
-        min_charge_w = min_amps * max(1, phases) * max(1, voltage)
-        real_surplus_w = self_consumption_surplus_w(view)
-        no_assist_deficit = (
-            not deep_deficit
-            and float(view.fleet.battery_soc) < float(view.fleet.buffer_soc)
-            and real_surplus_w < min_charge_w
-        )
-        short_grace = deep_deficit or expensive_deficit or no_assist_deficit
+        # Transient dip vs structural stop is decided ONCE in decide()
+        # (#461 single source of truth) and carried on ``decision.bridgeable``
+        # — the bridge no longer re-derives solar / surplus / SoC / tariff
+        # here (that duplication across engines was the bug class). A
+        # STRUCTURAL idle (not bridgeable: sun gone, battery can't assist with
+        # no real surplus, or a not-cheap tariff) gets only the short grace
+        # (absorbs a single-cycle flicker) before a hard stop, so SEM doesn't
+        # import grid. A TRANSIENT dip keeps the full disable-delay bridge so a
+        # steady car (Zoe) doesn't flap. decide() already appended the
+        # structural cause to ``decision.reason`` ("[structural: …]").
+        short_grace = not decision.bridgeable
         if short_grace:
             deep_since = self._deep_deficit_since.setdefault(cid, now)
             deep_held = now - deep_since
@@ -515,53 +483,23 @@ class ChargeStability:
             self._last_amps.pop(cid, None)
             self._last_change_ts.pop(cid, None)
             # DURABLE stop: drop the draw-latch too. Without this the bridge
-            # re-engages in a loop (PROD 2026-06-27 history: hold 180s → stop
-            # → "deficit 0s/180s holding 8A" again, forever). The car was
-            # still winding down within LATCH_HOLD_S, so the next cycle saw
-            # held_recently=True, skipped the genuine-stop return, and
-            # re-entered the hold — and the hold re-offered min current, so
-            # the car kept drawing: self-sustaining. The latch exists to let
-            # the deficit timer survive blips DURING a hold; once we've
-            # decided to STOP it must clear so the wind-down settles into a
-            # real stop instead of restarting the timer.
+            # re-engages in a loop (PROD 2026-06-27 history: hold → stop →
+            # "holding 8A" again, forever). The car was still winding down
+            # within LATCH_HOLD_S, so the next cycle saw held_recently=True,
+            # skipped the genuine-stop return, re-entered the hold, and
+            # re-offered min current — self-sustaining. The latch survives
+            # blips DURING a hold; once we STOP it must clear.
             self._latched.pop(cid, None)
             # Arm the post-stop settle so actuator lag (car still drawing next
             # cycle) can't re-open the hold before KEBA cuts the contactor.
             self._stopped_at[cid] = now
-            # Short-grace stops always re-stamp the reason — even when
-            # decide() already idled — so the strategy sensor shows SEM
-            # CHOSE to stop (no cheap surplus) rather than silently holding
-            # the contactor on battery/grid. The transient-persisted stop
-            # keeps the legacy pass-through when already IDLE.
             if stop_for_short:
-                if deep_deficit:
-                    reason = (
-                        f"stability: deep deficit "
-                        f"{deep_held:.0f}s/{deep_deficit_grace_s:.0f}s "
-                        f"(solar {view.fleet.solar_w:.0f}W < "
-                        f"{view.fleet.min_solar_w:.0f}W) — no surplus to "
-                        f"bridge — {decision.reason}"
-                    )
-                elif no_assist_deficit:
-                    reason = (
-                        f"stability: no battery assist "
-                        f"(SoC {view.fleet.battery_soc:.0f}% < buffer "
-                        f"{view.fleet.buffer_soc:.0f}%) + EV surplus "
-                        f"{real_surplus_w:.0f}W < min charge "
-                        f"{min_charge_w:.0f}W "
-                        f"{deep_held:.0f}s/{deep_deficit_grace_s:.0f}s — "
-                        f"no surplus to bridge — {decision.reason}"
-                    )
-                else:
-                    reason = (
-                        f"stability: not-cheap tariff "
-                        f"({view.fleet.tariff_level}) "
-                        f"{deep_held:.0f}s/{deep_deficit_grace_s:.0f}s — "
-                        f"not bridging expensive grid — {decision.reason}"
-                    )
+                # Re-stamp so the strategy sensor shows SEM CHOSE to stop;
+                # decision.reason already carries the structural cause.
                 return replace(
                     decision, intent=ChargerIntent.IDLE, commanded_amps=0,
-                    reason=reason,
+                    reason=f"stability: structural idle — not bridging — "
+                           f"{decision.reason}",
                 )
             if decision.intent is ChargerIntent.IDLE:
                 return decision

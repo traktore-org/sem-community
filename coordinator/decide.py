@@ -257,6 +257,63 @@ def effective_min_amps(cfg: dict, fallback: int = 6) -> int:
     return effective
 
 
+# Tariff levels where holding minimum current to bridge a deficit would
+# import EXPENSIVE grid — exactly what min_plus_solar / solar_plus_cheap
+# exist to avoid (#524). ``cheap`` / ``very_cheap`` and unknown/static
+# (tariff_level None) are bridgeable. Canonical here (decide owns tariff
+# classification); charge_stability reads the resulting ``bridgeable`` flag.
+_NOT_CHEAP_LEVELS = frozenset({"normal", "expensive", "very_expensive"})
+
+
+def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
+    """Classify an IDLE decision: TRANSIENT dip (worth holding the contactor
+    through to avoid flapping the car) vs STRUCTURAL stop (the stability
+    bridge must NOT hold it — holding would import grid).
+
+    Single source of truth (#461): the SoC / surplus / solar / tariff data
+    all live here, so ``decide`` makes the call once and stamps it on the
+    decision. ``charge_stability`` then reads ``decision.bridgeable`` instead
+    of re-deriving the same truth — honouring the ChargerDecision contract
+    ('all fields computed once in decide, no re-derivation downstream').
+
+    Returns ``(bridgeable, why)``. ``why`` is empty when bridgeable; when
+    structural it names the cause for the strategy-sensor reason (preserving
+    the diagnostics that the bridge used to emit).
+
+    STRUCTURAL (returns False) when ANY of:
+      * the sun is effectively gone (``solar_w < min_solar_w``) — deep
+        darkness, nothing to bridge to (#461 part 2);
+      * a not-cheap tariff window (#524) — holding imports expensive grid;
+      * the battery can't assist (``battery_soc < buffer_soc``) AND the real
+        EV surplus (solar − home − reserved battery) can't sustain even the
+        minimum charge — solar is high but fully consumed by the house /
+        reserved for a below-buffer battery, so the hold imports grid
+        (PROD 2026-06-27).
+    Otherwise TRANSIENT (real surplus or battery assist, cheap/unknown
+    tariff) → the full bridge is worth it.
+    """
+    f = view.fleet
+    if float(f.solar_w) < float(f.min_solar_w):
+        return False, (
+            f"sun gone (solar {f.solar_w:.0f}W < {f.min_solar_w:.0f}W)"
+        )
+    if f.tariff_level in _NOT_CHEAP_LEVELS:
+        return False, f"not-cheap tariff ({f.tariff_level})"
+    cfg = view.config if isinstance(view.config, dict) else {}
+    min_amps = effective_min_amps(cfg, 6)
+    phases = int(cfg.get("ev_phases", 3))
+    voltage = int(cfg.get("ev_voltage", 230))
+    min_charge_w = min_amps * max(1, phases) * max(1, voltage)
+    real_surplus_w = self_consumption_surplus_w(view)
+    if float(f.battery_soc) < float(f.buffer_soc) and real_surplus_w < min_charge_w:
+        return False, (
+            f"no battery assist (SoC {f.battery_soc:.0f}% < buffer "
+            f"{f.buffer_soc:.0f}%) + EV surplus {real_surplus_w:.0f}W "
+            f"< min charge {min_charge_w:.0f}W"
+        )
+    return True, ""
+
+
 # ─────────────────────────────────────────────────────────────────
 # Mode strategy protocol
 # ─────────────────────────────────────────────────────────────────
@@ -680,9 +737,10 @@ def decide(view: ChargerView) -> ChargerDecision:
     # solar_plus_cheap all honour it. Skip while disconnected so a stale
     # ceiling can't suppress the "idle — disconnected" reason.
     if view.soc_ceiling_reached and view.power.connected:
+        # Max SOC/target is a STRUCTURAL stop — never bridge it.
         return ChargerDecision(
             charger_id=view.power.charger_id, mode=view.mode,
-            intent=ChargerIntent.IDLE,
+            intent=ChargerIntent.IDLE, bridgeable=False,
             reason=f"{view.mode}: max SOC/target reached — stop charging (#548)",
         )
 
@@ -693,4 +751,23 @@ def decide(view: ChargerView) -> ChargerDecision:
             view.mode, view.power.charger_id,
         )
         return _OFF.decide(view)
-    return strategy.decide(view)
+    result = strategy.decide(view)
+    # Single source of truth for the stability bridge (#461): classify an
+    # IDLE as transient (hold) vs structural (stop now) HERE, where the SoC /
+    # surplus / tariff data lives, and stamp it on the decision. The bridge
+    # reads ``decision.bridgeable`` instead of re-deriving it. CHARGE/DISABLE
+    # decisions keep the default (bridgeable=True, irrelevant to them).
+    # Only DAY idles matter: the stability bridge bypasses at night (the night
+    # planner owns start/stop), so classifying a night idle would just append a
+    # misleading "[structural: sun gone]" to "target reached" / "waiting for
+    # cheaper". Leave night idles at the default bridgeable=True (ignored).
+    if result.intent is ChargerIntent.IDLE and not view.fleet.is_night:
+        bridgeable, why = _idle_bridgeable(view)
+        if bridgeable:
+            result = replace(result, bridgeable=True)
+        else:
+            result = replace(
+                result, bridgeable=False,
+                reason=f"{result.reason} [structural: {why}]",
+            )
+    return result
