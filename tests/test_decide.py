@@ -25,6 +25,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
 )
 from custom_components.solar_energy_management.coordinator.decide import (
     MODE_STRATEGIES,
+    _idle_bridgeable,
     amps_from_watts,
     battery_assist_budget_w,
     decide,
@@ -587,3 +588,72 @@ class TestModeRegistryComplete:
         )
         for mode in EV_CHARGE_MODES:
             assert mode in MODE_STRATEGIES, f"mode {mode!r} missing strategy"
+
+
+@pytest.mark.unit
+class TestIdleBridgeable:
+    """decide() is the SINGLE source of truth (#461) for whether an IDLE is a
+    TRANSIENT dip (bridge it) or a STRUCTURAL stop (don't grid-hold). The
+    stability bridge reads ``decision.bridgeable`` instead of re-deriving
+    solar/surplus/SoC/tariff. These pin the classification.
+
+    (_view defaults: buffer_soc=70, min_solar_w=1000, min charge at 6A/3ph =
+    6*3*230 = 4140 W.)
+    """
+
+    def test_sun_gone_is_structural(self):
+        ok, why = _idle_bridgeable(_view(solar_w=500))  # < 1000 min_solar
+        assert ok is False
+        assert "sun gone" in why
+
+    def test_not_cheap_tariff_is_structural(self):
+        ok, why = _idle_bridgeable(_view(solar_w=5000, tariff_level="normal"))
+        assert ok is False
+        assert "not-cheap tariff" in why
+
+    def test_no_assist_no_surplus_is_structural(self):
+        # solar 3000, home 2500 → real surplus 500 < 4140 min charge; battery
+        # 33% < buffer 70% → can't assist → structural.
+        ok, why = _idle_bridgeable(_view(
+            solar_w=3000, home_w=2500, battery_soc=33, tariff_level="cheap"))
+        assert ok is False
+        assert "no battery assist" in why
+
+    def test_real_surplus_present_is_transient(self):
+        # Big real surplus (9000 − 300 = 8700 ≥ 4140) → worth bridging.
+        ok, why = _idle_bridgeable(_view(
+            solar_w=9000, home_w=300, battery_soc=33, tariff_level="cheap"))
+        assert ok is True
+        assert why == ""
+
+    def test_battery_can_assist_is_transient(self):
+        # Thin surplus (500 < 4140) BUT battery 80% ≥ buffer 70% → assist
+        # available → bridgeable.
+        ok, why = _idle_bridgeable(_view(
+            solar_w=3000, home_w=2500, battery_soc=80, tariff_level="cheap"))
+        assert ok is True
+
+    def test_cheap_tariff_does_not_trip_not_cheap(self):
+        ok, _ = _idle_bridgeable(_view(
+            solar_w=9000, home_w=300, battery_soc=80, tariff_level="cheap"))
+        assert ok is True
+
+    def test_decide_stamps_structural_idle_with_reason(self):
+        # Integration: a solar_only idle in deep darkness comes back IDLE,
+        # bridgeable=False, with the structural cause appended to the reason.
+        d = decide(_view(mode="solar_only", solar_w=500))
+        assert d.intent is ChargerIntent.IDLE
+        assert d.bridgeable is False
+        assert "[structural:" in d.reason
+
+    def test_decide_charge_decision_defaults_bridgeable_true(self):
+        d = decide(_view(mode="solar_only", solar_w=9000, home_w=300,
+                         battery_soc=95))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.bridgeable is True  # default, irrelevant to CHARGE
+
+    def test_decide_soc_ceiling_idle_is_structural(self):
+        d = decide(_view(mode="min_plus_solar", soc_ceiling_reached=True,
+                         solar_w=8000, home_w=500))
+        assert d.intent is ChargerIntent.IDLE
+        assert d.bridgeable is False
