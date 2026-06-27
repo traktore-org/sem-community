@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, Optional
 
 from homeassistant.helpers import entity_registry as er
 
-from ..charger_types import ChargerIntent, ChargerPower
 from .generic import GenericAdapter
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -37,53 +36,14 @@ if TYPE_CHECKING:  # pragma: no cover
 
 _LOGGER = logging.getLogger(__name__)
 
-
-# ── #548 — Wallbox status enum (evcc-connector concept, no cloud) ──────
-#
-# The Wallbox HA integration exposes a rich status sensor whose state is
-# the firmware's ``ChargerStatus`` (HA core ``wallbox/const.py``). evcc's
-# Pulsar connector treats this enum — NOT the (cloud-lagged) power reading
-# — as the source of truth for "is it charging?" and "can I control it?".
-# SEM does the same here so the reconciler converges on the real state:
-#   * power lags the contactor by ~90 s over the cloud poll, so a
-#     power-only ``actual_charging`` makes OFF mode read "already stopped"
-#     and quit re-issuing the stop while the box keeps charging (#548);
-#   * app/cloud-controlled modes (Eco-Smart, Scheduled, Power-Sharing,
-#     Power-Boost, Locked) mean SEM physically cannot open the contactor —
-#     surface that instead of silently failing.
-#
-# HA returns the state in exact title-case English; we compare lower-cased.
-_WB_CHARGING = frozenset({
-    "charging",
-    "discharging",  # V2G/V2H — still drawing the contactor closed
-})
-_WB_NOT_CHARGING = frozenset({
-    "paused",
-    "ready",
-    "waiting",
-    "waiting for car demand",
-    "connected",  # plugged, not charging
-    "disconnected",
-    "no car connected",
-})
-# App/cloud-controlled — SEM cannot drive the contactor from HA. These
-# are NOT charging (no power flows) but, crucially, NOT controllable: a
-# DISABLE is futile, so surface it rather than spin silently.
-_WB_LOCKED = frozenset({
-    "scheduled",
-    "waiting in queue by eco-smart",
-    "waiting in queue by power sharing",
-    "waiting in queue by power boost",
-    "locked",
-    "locked, car connected",
-})
-_WB_ERROR = frozenset({
-    "error",
-    "updating",
-    "waiting mid failed",
-    "waiting mid safety margin exceeded",
-    "unknown",
-})
+# #548 — the Wallbox status enum (HA core ``wallbox/const.py``
+# ChargerStatus) is now part of the shared cross-brand classifier in
+# ``status_enum.py``, read by ``GenericAdapter`` (which this adapter
+# extends). WallboxAdapter therefore inherits the status-enum-authoritative
+# ``actual_charging`` / ``enable_state`` for free — it only adds the
+# brand-specific pause-resume switch handling below. The evcc-connector
+# concept (status enum > cloud-lagged power) is the same; it just lives in
+# one place now so every brand benefits.
 
 
 def _looks_like_wallbox(device: "CurrentControlDevice") -> bool:
@@ -267,62 +227,3 @@ class WallboxAdapter(GenericAdapter):
         """User-explicit OFF — set current to 0 AND pause the switch."""
         await super().command_disable()
         await self._toggle_pause_switch(turn_on=False)
-
-    # ── #548 — status-enum observation (evcc-connector concept) ────────
-
-    def _status_raw(self) -> str:
-        """Lower-cased Wallbox status enum, or '' when unreadable.
-
-        Reads the ``charging_status_entity`` (plumbed from the
-        ``ev_charging_sensor`` config). Returns '' for missing /
-        unavailable / unknown so callers fall back to the power-based
-        heuristic — the adapter is strictly additive over the generic
-        behaviour when no status sensor is configured."""
-        eid = getattr(self._device, "charging_status_entity", "") or ""
-        hass = getattr(self._device, "hass", None)
-        if not eid or hass is None:
-            return ""
-        st = hass.states.get(eid)
-        if st is None or st.state in (None, "", "unavailable", "unknown"):
-            return ""
-        return str(st.state).strip().lower()
-
-    def actual_charging(self, power: ChargerPower) -> bool:
-        """Status-enum-authoritative "is it actually charging?".
-
-        The Wallbox cloud power reading lags the contactor by ~90 s, so a
-        power-only answer (the generic default) makes the reconciler read
-        OFF mode as "already converged" and stop re-issuing the stop while
-        the box is still delivering power (#548). The status enum reflects
-        the contactor immediately:
-
-          * ``Charging`` / ``Discharging`` → True (even at handshake power)
-          * ``Paused`` / ``Ready`` / ``Waiting*`` / ``*locked*`` → False
-            (no power flows, regardless of a lagging cloud reading)
-          * unrecognised / error / no status sensor → fall back to the
-            generic power-based heuristic (safe default).
-        """
-        status = self._status_raw()
-        if status in _WB_CHARGING:
-            return True
-        if status in _WB_NOT_CHARGING or status in _WB_LOCKED:
-            return False
-        # Error / unknown / unconfigured → power-based fallback.
-        return super().actual_charging(power)
-
-    def enable_state(self):
-        """``(enabled, controllable)`` — status-aware app-lock detection.
-
-        When the firmware is in an app/cloud-controlled mode (Eco-Smart,
-        Scheduled, Power-Sharing, Power-Boost, Locked) SEM cannot drive
-        the contactor at all — neither the current setpoint nor the
-        pause switch take effect. Report ``controllable=False`` so the
-        reconciler surfaces it (REPORT_ENABLE_BLOCKED) instead of
-        silently issuing futile commands. Detecting this from the STATUS
-        enum is more robust than relying on the start/stop switch
-        happening to read ``unavailable`` (it doesn't on every firmware).
-
-        Outside a lock, defer to the generic switch-based detection."""
-        if self._status_raw() in _WB_LOCKED:
-            return (None, False)
-        return super().enable_state()
