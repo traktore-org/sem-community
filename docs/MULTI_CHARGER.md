@@ -270,6 +270,40 @@ for the original plan.
 
 ---
 
+## Adapters: prefer the STATUS enum over the power reading (#548)
+
+**The road every brand-specific adapter should take.** The reconciler
+decides "is the charger still drawing?" from `adapter.actual_charging(power)`.
+The generic default is power-based (`power_w > handshake`), which is wrong for
+any charger whose power reading **lags the contactor** — cloud-polled brands
+(Wallbox ~90 s), or any integration where the power sensor updates slower than
+SEM's cycle. A lagging-to-zero reading makes the reconciler read OFF/IDLE as
+"already converged" on cycle 1 and stop re-issuing the stop while the charger
+keeps charging (#548); a lagging-high reading does the reverse.
+
+`WallboxAdapter` is the template (`coordinator/charger_adapters/wallbox.py`):
+read the brand's **status enum** from `device.charging_status_entity` (plumbed
+from the `ev_charging_sensor` config) and make it authoritative:
+
+- `actual_charging` → True on the brand's charging states (even at lagging-0 W),
+  False on idle/paused/locked states (even at lagging-high W), and **fall back
+  to the generic power heuristic** on unknown/error/unconfigured (strictly
+  additive — no status sensor ⇒ unchanged behaviour).
+- `enable_state()` → return `(None, False)` (uncontrollable) when the status
+  reports an **app/cloud-controlled lock** (Eco-Smart / Scheduled / queued /
+  Locked) so the reconciler surfaces `REPORT_ENABLE_BLOCKED` instead of
+  spinning a futile stop.
+
+This is the evcc "connector" concept adapted to SEM (we read HA's status
+sensor; evcc reads it over OCPP/cloud). **Brands to migrate next** as their
+status sensors are confirmed: Easee (`status`), go-eCharger (`car`), OCPP
+(`status_connector`), Ohme, Alfen, Wallbox-family clones. KEBA stays
+power-based (its `charging_state` binary lags worse than power, #289). Each
+migration needs the brand's exact status strings + a parity test like
+`tests/test_548_mode_parity.py` (every mode's intent actuates the same as KEBA).
+
+---
+
 ## See also
 
 - [`MULTI_DEVICE_GUIDE.md`](MULTI_DEVICE_GUIDE.md) — end-user setup for

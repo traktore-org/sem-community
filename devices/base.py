@@ -609,6 +609,14 @@ class CurrentControlDevice(ControllableDevice):
         # Plumbed from the ``ev_current_sensor`` config; read by the
         # EV-OFFER-PROBE (observe-only). "" = no live source (probe shows "?").
         self.current_sensor_entity_id: str = ""
+        # #548 — HA entity reporting the charger's STATUS enum (e.g.
+        # sensor.wallbox_pulsar_status). For status-rich chargers (Wallbox)
+        # this is authoritative for "is it actually charging?" — the cloud
+        # power reading lags ~90 s, so a power-only ``actual_charging`` makes
+        # the reconciler wrongly read "converged" and stop re-issuing the
+        # stop (OFF mode never takes). The adapter reads this enum directly.
+        # Plumbed from the ``ev_charging_sensor`` config; "" = power-only.
+        self.charging_status_entity: str = ""
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start

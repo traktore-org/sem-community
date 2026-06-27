@@ -147,6 +147,12 @@ class ChargerReconciler:
                 self._consecutive_idle_count = 0
                 return [Action(ActionKind.NONE)]
             if desired is DesiredState.OFF:
+                if not observed.enable_controllable:
+                    # #548 — the contactor is app/cloud-locked (Wallbox
+                    # Eco-Smart / Scheduled / Power-Sharing): SEM cannot
+                    # open it. Issuing DISABLE every cycle is futile and
+                    # hides the real cause from the user. Surface it.
+                    return [Action(ActionKind.REPORT_ENABLE_BLOCKED)]
                 # Row 1 — user-explicit OFF: open immediately, no grace.
                 return [Action(ActionKind.DISABLE)]
             # IDLE + drawing — flicker hold then confirm (rows 3-4).
