@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.1] — 27.06.2026
+
+> **Pre-release.** Opens the 1.7.4 line. Headline: Wallbox now stops reliably in
+> OFF mode (and every other mode reacts exactly as KEBA does). Battery→grid
+> arbitrage remains **deactivated** (still tracked for 1.7.4 stable in #533).
+
+### 🔌 EV — Wallbox status-enum adapter (#548)
+- 🐛 **Wallbox kept charging in OFF mode.** The reconciler judged "still drawing?"
+  from the power reading, but Wallbox power arrives over a ~90 s cloud poll — so
+  OFF mode read "already stopped" on the first cycle and quit re-issuing the stop
+  while the box kept charging. The firmware **status enum** is now authoritative
+  for the Wallbox (evcc-connector concept, no cloud transport needed):
+  `actual_charging` trusts `Charging`/`Paused`/… over the lagging power, and
+  app-locked states (Eco-Smart / Scheduled / Power-Sharing / Locked) surface a
+  clear "can't stop — leave eco-smart" repair instead of spinning silently.
+  Strictly additive: no status sensor ⇒ unchanged power-based behaviour; KEBA
+  untouched.
+- ✅ **Parity:** all four charge modes (off / solar_only / min_plus_solar /
+  always_max) now react on the Wallbox exactly as they do on KEBA — verified by
+  `tests/test_548_mode_parity.py` and a live HA-TEST mock-Wallbox walk.
+- 📝 `docs/MULTI_CHARGER.md` documents the status-enum road for the next brands
+  to migrate (Easee / go-e / OCPP / Ohme / Alfen).
+
 # [1.7.3] — 27.06.2026
 
 > **Stable release.** Consolidates the 1.7.3 beta line (beta.1 → beta.65, detailed
