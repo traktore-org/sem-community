@@ -52,9 +52,10 @@ _NOT_CHARGING = frozenset({
     # Wallbox
     "paused", "ready", "waiting", "waiting for car demand", "connected",
     "disconnected", "no car connected",
-    # Easee
+    # Easee — note de_authorizing is the session ENDING (RFID pulled), not a
+    # control lock, so it belongs here, not in _LOCKED.
     "awaiting_start", "completed", "ready_to_charge", "stop_charging",
-    "awaiting_load_balancing", "paused_due_to_equalizer",
+    "de_authorizing", "awaiting_load_balancing", "paused_due_to_equalizer",
     # Zaptec
     "connected_requesting", "connected_finished",
     # go-e (cathiele car_status strings)
@@ -65,8 +66,8 @@ _NOT_CHARGING = frozenset({
     # OCPP 1.6 ChargePointStatus (lower-cased, both spellings of suspended)
     "available", "preparing", "suspendedev", "suspended_ev",
     "suspendedevse", "suspended_evse", "finishing", "reserved",
-    # Alfen
-    "off", "authorizing", "authorized", "cable connected", "ev connected",
+    # Alfen ("off" already listed above for the binary case)
+    "authorizing", "authorized", "cable connected", "ev connected",
     "not charging", "charging non charging", "preparing charging",
     "wait vehicle charging", "solar charging wait", "finish wait vehicle",
     "finish wait disconnect", "charge point ready, waiting for power",
@@ -84,7 +85,7 @@ _LOCKED = frozenset({
     "waiting in queue by power sharing", "waiting in queue by power boost",
     "locked", "locked, car connected",
     # Easee (RFID / smart-charge schedule / authorisation)
-    "awaiting_authorization", "de_authorizing", "awaiting_smart_start",
+    "awaiting_authorization", "awaiting_smart_start",
     "awaiting_scheduled_start", "authenticating",
     # Ohme (requires the Approve-charge button)
     "pending_approval",
@@ -93,8 +94,9 @@ _LOCKED = frozenset({
     # the adapter must treat as "sensor unreadable → power fallback". The
     # OCPP out-of-service case degrades to the power heuristic (safe; OCPP
     # is local/low-lag and reports ~0 W when unavailable anyway).
-    # Alfen (operation mode = In-operative)
-    "in operative",
+    # Alfen — status sensor reports "In Operative" (STATUS_DICT 34); the
+    # operation-mode select uses "In-operative". Cover both spellings.
+    "in operative", "in-operative", "in_operative",
 })
 
 
@@ -113,7 +115,7 @@ def classify_charger_status(raw: "str | None") -> str:
     if raw is None:
         return "unknown"
     s = str(raw).strip().lower()
-    if not s or s in ("unavailable_state",):
+    if not s:
         return "unknown"
     if s in _CHARGING:
         return "charging"

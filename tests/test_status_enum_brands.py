@@ -27,7 +27,7 @@ class TestWallbox:
 class TestEasee:
     def test_charging(self): assert C("charging") == "charging"
     @pytest.mark.parametrize("s", ["awaiting_start", "completed", "ready_to_charge",
-                                   "stop_charging", "disconnected"])
+                                   "stop_charging", "de_authorizing", "disconnected"])
     def test_not(self, s): assert C(s) == "not_charging"
     @pytest.mark.parametrize("s", ["awaiting_authorization", "awaiting_smart_start",
                                    "awaiting_scheduled_start", "authenticating"])
@@ -79,7 +79,8 @@ class TestAlfen:
                                    "Not Charging", "Wait Vehicle Charging",
                                    "Preparing Charging", "Solar Charging Wait"])
     def test_not(self, s): assert C(s) == "not_charging"
-    def test_locked(self): assert C("In Operative") == "locked"
+    @pytest.mark.parametrize("s", ["In Operative", "In-operative", "In_operative"])
+    def test_locked(self, s): assert C(s) == "locked"
     def test_substring_traps(self):
         # all contain "charging" but are NOT charging
         for s in ("Wait Vehicle Charging", "Preparing Charging", "Solar Charging Wait",
