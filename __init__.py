@@ -3697,6 +3697,7 @@ async def _async_register_phase_services(
         box ignored it" without another round-trip.
         """
         from .coordinator.charger_types import ChargerPower
+        from .coordinator.charger_adapters import adapter_for
 
         out: dict = {}
         devs = getattr(coordinator, "_ev_devices", {}) or {}
@@ -3713,8 +3714,19 @@ async def _async_register_phase_services(
         for cid, dev in devs.items():
             adapter = adapters.get(cid)
             rec = recs.get(cid)
+            # In observer mode (or before the first per-charger cycle) the
+            # adapter isn't cached — build a transient one so the status /
+            # enable / actual_charging verdicts are still reported. The
+            # reconciler memory (last_actions) only exists when cached.
+            adapter_cached = adapter is not None
+            if adapter is None:
+                try:
+                    adapter = adapter_for(dev)
+                except Exception:  # noqa: BLE001
+                    adapter = None
             entry = {
                 "adapter": type(adapter).__name__ if adapter else None,
+                "adapter_cached": adapter_cached,
                 "charger_service": getattr(dev, "charger_service", None),
                 "current_entity": getattr(dev, "current_entity_id", None),
                 "current_entity_state": _state(getattr(dev, "current_entity_id", None)),
