@@ -128,6 +128,17 @@ class ChargerReconciler:
         self._enable_retry_interval_s: float = float(enable_retry_interval_s)
         self._enable_attempts: int = 0
         self._enable_gave_up_at: float = 0.0
+        # #548 actuation observability — record what the reconciler last DID
+        # and whether the charger kept drawing against a stop, so the
+        # ``diagnose`` service can show "SEM commanded stop N× but the box
+        # is still drawing" without another triage round.
+        self._last_desired: "str | None" = None
+        self._last_actions: List[str] = []
+        self._last_apply_at: float = 0.0
+        self._stop_commanded_while_drawing: int = 0
+        """Consecutive cycles SEM has issued DISABLE while the charger is
+        still drawing — a non-zero value means the stop is not taking
+        (charger ignoring the command / re-enabled externally)."""
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
@@ -251,6 +262,27 @@ class ChargerReconciler:
             amps = int(getattr(adapter, "max_current_a", 0)) or amps
         observed = observe(adapter, power)
         actions = self.reconcile(desired, amps, observed, now)
+
+        # #548 actuation observability — record desired + actions + whether a
+        # stop is failing to take (charger still drawing while we DISABLE).
+        self._last_desired = desired.name
+        self._last_actions = [a.kind.name for a in actions]
+        self._last_apply_at = now
+        _drawing = bool(observed.charging or observed.self_charging)
+        if any(a.kind is ActionKind.DISABLE for a in actions) and _drawing:
+            self._stop_commanded_while_drawing += 1
+            if self._stop_commanded_while_drawing in (3, 12, 60):
+                _LOGGER.warning(
+                    "reconcile(%s): commanded STOP %d× but charger still drawing "
+                    "%.0f W (status/power says charging) — the stop is not taking. "
+                    "Check the charger's stop control (enable switch %s, status %s).",
+                    self.charger_id, self._stop_commanded_while_drawing,
+                    float(getattr(power, "power_w", 0.0) or 0.0),
+                    getattr(getattr(adapter, "_device", None), "start_stop_entity", None),
+                    getattr(getattr(adapter, "_device", None), "charging_status_entity", None),
+                )
+        elif not _drawing:
+            self._stop_commanded_while_drawing = 0
 
         # ── #546 OFFER-STEADINESS PROBE (observe-only, DEBUG) ────────────
         # Diagnostic that pinned the 6↔9 A KEBA flap (#546, now resolved by
