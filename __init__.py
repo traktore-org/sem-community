@@ -3685,6 +3685,96 @@ async def _async_register_phase_services(
         "overview": (),
     }
 
+    def _charger_actuation_diag(hass, coordinator) -> dict:
+        """Per-charger actuation truth for the #548 stop-not-taking class.
+
+        For each live charger: the adapter type, the status sensor + raw value
+        + classification, the enable switch + its state + whether SEM can drive
+        it (``enable_state``), the actual_charging / self_charging verdicts, the
+        live power vs the believed setpoint, and the reconciler's last desired
+        state + actions + the stop-not-taking counter. This is exactly what's
+        needed to tell "SEM never issued the stop" from "SEM issued it but the
+        box ignored it" without another round-trip.
+        """
+        from .coordinator.charger_types import ChargerPower
+        from .coordinator.charger_adapters import adapter_for
+
+        out: dict = {}
+        devs = getattr(coordinator, "_ev_devices", {}) or {}
+        adapters = getattr(coordinator, "_charger_adapters", {}) or {}
+        recs = getattr(coordinator, "_charger_reconcilers", {}) or {}
+        live = (coordinator.data or {}) if coordinator else {}
+
+        def _state(eid):
+            if not eid:
+                return None
+            st = hass.states.get(eid)
+            return st.state if st else "<missing>"
+
+        for cid, dev in devs.items():
+            adapter = adapters.get(cid)
+            rec = recs.get(cid)
+            # In observer mode (or before the first per-charger cycle) the
+            # adapter isn't cached — build a transient one so the status /
+            # enable / actual_charging verdicts are still reported. The
+            # reconciler memory (last_actions) only exists when cached.
+            adapter_cached = adapter is not None
+            if adapter is None:
+                try:
+                    adapter = adapter_for(dev)
+                except Exception:  # noqa: BLE001
+                    adapter = None
+            entry = {
+                "adapter": type(adapter).__name__ if adapter else None,
+                "adapter_cached": adapter_cached,
+                "charger_service": getattr(dev, "charger_service", None),
+                "current_entity": getattr(dev, "current_entity_id", None),
+                "current_entity_state": _state(getattr(dev, "current_entity_id", None)),
+                "start_stop_entity": getattr(dev, "start_stop_entity", None),
+                "start_stop_state": _state(getattr(dev, "start_stop_entity", None)),
+                "status_entity": getattr(dev, "charging_status_entity", None),
+                "status_raw": _state(getattr(dev, "charging_status_entity", None)),
+                "believed_setpoint_a": getattr(dev, "_current_setpoint", None),
+                "session_active": getattr(dev, "_session_active", None),
+                "power_entity": getattr(dev, "power_entity_id", None),
+                "power_w": _state(getattr(dev, "power_entity_id", None)),
+            }
+            # Adapter verdicts (status class, enable_state, actual_charging).
+            if adapter is not None:
+                try:
+                    if hasattr(adapter, "_status_class"):
+                        entry["status_class"] = adapter._status_class()
+                except Exception as e:  # noqa: BLE001
+                    entry["status_class"] = f"err:{e}"
+                try:
+                    en, ctrl = adapter.enable_state()
+                    entry["enable_state"] = {"enabled": en, "controllable": ctrl}
+                except Exception as e:  # noqa: BLE001
+                    entry["enable_state"] = f"err:{e}"
+                try:
+                    pw = float(entry["power_w"])
+                except (TypeError, ValueError):
+                    pw = 0.0
+                try:
+                    p = ChargerPower(charger_id=cid, power_w=pw)
+                    entry["actual_charging"] = adapter.actual_charging(p)
+                    entry["is_self_charging"] = adapter.is_self_charging(p)
+                except Exception as e:  # noqa: BLE001
+                    entry["actual_charging"] = f"err:{e}"
+            # Reconciler memory: what SEM last decided + did, and the
+            # stop-not-taking counter (the smoking gun for #548).
+            if rec is not None:
+                entry["reconciler"] = {
+                    "last_desired": getattr(rec, "_last_desired", None),
+                    "last_actions": getattr(rec, "_last_actions", None),
+                    "consecutive_idle": getattr(rec, "_consecutive_idle_count", None),
+                    "charging_intent_active": getattr(rec, "_charging_intent_active", None),
+                    "enable_attempts": getattr(rec, "_enable_attempts", None),
+                    "stop_commanded_while_drawing": getattr(rec, "_stop_commanded_while_drawing", None),
+                }
+            out[cid] = entry
+        return out
+
     async def async_diagnose(call):
         """Return a focused diagnose payload for a section.
 
@@ -3787,6 +3877,18 @@ async def _async_register_phase_services(
                 "data": _chargers_brief(target.data),
                 "options": _chargers_brief(target.options),
             }
+
+            # #548 actuation truth — the load-bearing facts for "SEM says
+            # stop but the charger keeps charging": per charger, the adapter's
+            # status read + classification, the enable-switch state SEM sees,
+            # whether SEM thinks it can control it, the actual_charging verdict,
+            # and what the reconciler last DID. Without this every triage round
+            # needs another screenshot. Computed live from the cached
+            # adapters/reconcilers/devices — never raises (best-effort).
+            try:
+                payload["ev_actuation"] = _charger_actuation_diag(hass, coordinator)
+            except Exception as exc:  # noqa: BLE001
+                payload["ev_actuation"] = {"error": str(exc)}
 
         return {"section": section, "payload": payload}
 

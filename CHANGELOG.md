@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.3] — 28.06.2026
+
+> **Pre-release.** Adds per-charger actuation diagnostics for the "SEM says stop but the box keeps charging" class (#548).
+
+### 🔌 EV — actuation diagnostics + stop-not-taking signal (#548)
+- 🔍 **The Diagnose button now shows the actuation truth.** A new per-charger
+  `ev_actuation` block reports the adapter, the status sensor's raw value +
+  classification, the enable-switch entity + state, whether SEM can drive it
+  (`enable_state`), the `actual_charging`/`is_self_charging` verdicts, the
+  believed setpoint vs live power, and the reconciler's last desired state +
+  actions + a `stop_commanded_while_drawing` counter. One screenshot now tells
+  "SEM never issued the stop" apart from "SEM issued it but the box ignored it"
+  — no more multi-round triage.
+- ⚠️ The reconciler now **logs a warning** ("commanded STOP N× but charger still
+  drawing") when a stop isn't taking, so an ignored stop is no longer silent.
+- Note: the decision/stop arc itself is verified sound — a max-SOC ceiling stops
+  promptly on a responsive charger (HA-TEST mock: 6 A → 0 A in ~20 s). When a
+  real charger keeps drawing, the cause is downstream of SEM (HA↔charger link or
+  the charger ignoring the stop), which this diagnostic now pinpoints.
+
 # [1.7.4-beta.2] — 27.06.2026
 
 > **Pre-release.** Generalises the Wallbox status-enum fix to every charger brand.
