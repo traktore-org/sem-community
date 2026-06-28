@@ -347,6 +347,25 @@ class SEMConfigCard extends SEMLitBase {
     async _selectOption(entityId, value) {
         await this._hass.callService('select', 'select_option', { entity_id: entityId, option: value });
     }
+    // Direct-set a number entity to an exact value (slider drag), clamped to
+    // the entity's own min/max. Live tunable — no entry reload.
+    async _setNumber(entityId, value) {
+        const s = this._hass?.states[entityId];
+        if (!s) return;
+        const min = parseFloat(s.attributes.min);
+        const max = parseFloat(s.attributes.max);
+        let v = value;
+        if (!Number.isNaN(min)) v = Math.max(min, v);
+        if (!Number.isNaN(max)) v = Math.min(max, v);
+        await this._hass.callService('number', 'set_value', { entity_id: entityId, value: v });
+    }
+    // Read a full entity_id as a number (no prefix), fallback when unavailable.
+    _num(id, fb = null) {
+        const e = this._hass?.states[id];
+        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fb;
+        const n = parseFloat(e.state);
+        return Number.isNaN(n) ? fb : n;
+    }
 
     // ── Subtitles ──
 
@@ -590,19 +609,79 @@ class SEMConfigCard extends SEMLitBase {
         return name.replace(/\s+Min Amps$/i, '');
     }
 
+    // Colorful accent slider + value chip + fine −/+ buttons (#528 — the
+    // battery-card design language restored to the config controls). Live
+    // tunable: drag → _setNumber, no entry reload. Themed via
+    // ``var(--section-accent)`` so each section keeps its colour.
+    _renderZoneKnob(entityId, labelKey, T, helpKey) {
+        const e = this._hass?.states[entityId];
+        if (!e) return nothing;
+        const val = parseFloat(e.state) || 0;
+        const min = parseFloat(e.attributes.min) || 0;
+        const max = parseFloat(e.attributes.max) != null ? parseFloat(e.attributes.max) : 100;
+        const step = parseFloat(e.attributes.step) || 1;
+        const unit = e.attributes.unit_of_measurement || '';
+        const decimals = step < 1 ? 1 : 0;
+        const pct = max > min ? Math.round(((val - min) / (max - min)) * 100) : 0;
+        return html`
+            <div class="zone-knob">
+                <div class="zone-knob-top">
+                    <span class="zone-knob-label">${this._t(labelKey)}</span>
+                    <span class="zone-chip">${val.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                </div>
+                <div class="zone-knob-slider">
+                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, -1)}>−</button>
+                    <input type="range" class="zone-range"
+                        min=${min} max=${max} step=${step} .value=${String(val)}
+                        style=${`--fill:${pct}%`}
+                        @change=${(ev) => this._setNumber(entityId, parseFloat(ev.target.value))} />
+                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, 1)}>+</button>
+                </div>
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // SOC-zone strip — visualises the three thresholds on a 0–100 % bar so
+    // the priority/buffer/auto-start relationship is obvious at a glance
+    // (the "very nice and colorful" battery viz, #528).
+    _renderSocZoneStrip(T) {
+        const p = this._num('number.sem_battery_priority_soc');
+        const b = this._num('number.sem_battery_buffer_soc');
+        const a = this._num('number.sem_battery_auto_start_soc');
+        if (p == null || b == null || a == null) return nothing;
+        const soc = this._num('sensor.sem_battery_soc');
+        const clamp = (x) => Math.max(0, Math.min(100, x));
+        return html`
+            <div class="soc-strip">
+                <div class="soc-bar">
+                    <div class="soc-zone" style=${`width:${clamp(p)}%;background:#e57373`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(b - p)}%;background:#ffb74d`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(a - b)}%;background:#81c784`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(100 - a)}%;background:#64b5f6`}></div>
+                    ${soc != null ? html`<div class="soc-now" style=${`left:${clamp(soc)}%`} title="SOC ${soc}%"></div>` : nothing}
+                    <div class="soc-tick" style=${`left:${clamp(p)}%`}><span>${p}</span></div>
+                    <div class="soc-tick" style=${`left:${clamp(b)}%`}><span>${b}</span></div>
+                    <div class="soc-tick" style=${`left:${clamp(a)}%`}><span>${a}</span></div>
+                </div>
+                <div class="soc-legend">
+                    <span><i style="background:#e57373"></i>Reserve</span>
+                    <span><i style="background:#ffb74d"></i>Buffer</span>
+                    <span><i style="background:#81c784"></i>EV assist</span>
+                    <span><i style="background:#64b5f6"></i>Surplus</span>
+                </div>
+            </div>
+        `;
+    }
+
     _renderBatteryZones(T) {
         return html`
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
-                ${this._renderStepper('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
-                ${this._renderStepper('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
-            </div>
+            ${this._renderSocZoneStrip(T)}
+            ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
+            ${this._renderZoneKnob('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
+            ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
+            ${this._renderZoneKnob('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
+            ${this._renderZoneKnob('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
         `;
     }
 
@@ -1602,6 +1681,83 @@ class SEMConfigCard extends SEMLitBase {
                 .toggle-track.on .toggle-thumb { left: 20px; }
 
                 .stepper-cell { display: flex; flex-direction: column; }
+
+                /* ── #528: colorful zone controls (battery design language) ── */
+                .zone-knob { padding: 8px 2px 10px; }
+                .zone-knob-top {
+                    display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 7px;
+                }
+                .zone-knob-label { font-size: 14px; font-weight: 600; }
+                .zone-chip {
+                    background: color-mix(in srgb, var(--section-accent) 18%, transparent);
+                    color: var(--section-accent);
+                    font-weight: 700; font-size: 0.92em;
+                    padding: 2px 11px; border-radius: 11px;
+                    border: 1px solid color-mix(in srgb, var(--section-accent) 40%, transparent);
+                    min-width: 56px; text-align: center;
+                }
+                .zone-knob-slider { display: flex; align-items: center; gap: 10px; }
+                .zone-mini {
+                    width: 28px; height: 28px; flex-shrink: 0;
+                    border-radius: 8px; cursor: pointer;
+                    border: 1px solid color-mix(in srgb, var(--section-accent) 35%, ${T.surfaceBorder});
+                    background: color-mix(in srgb, var(--section-accent) 8%, transparent);
+                    color: var(--section-accent);
+                    font-size: 18px; line-height: 1; font-weight: 600;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: background 0.12s;
+                }
+                .zone-mini:hover { background: color-mix(in srgb, var(--section-accent) 20%, transparent); }
+                .zone-range {
+                    -webkit-appearance: none; appearance: none;
+                    flex: 1; min-width: 0; height: 6px; border-radius: 3px;
+                    cursor: pointer; outline: none;
+                    background: linear-gradient(to right,
+                        var(--section-accent) 0%, var(--section-accent) var(--fill, 0%),
+                        ${isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)'} var(--fill, 0%),
+                        ${isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)'} 100%);
+                }
+                .zone-range::-webkit-slider-thumb {
+                    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+                    background: var(--section-accent); border: 2px solid #fff;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.45); cursor: pointer;
+                }
+                .zone-range::-moz-range-thumb {
+                    width: 16px; height: 16px; border-radius: 50%;
+                    background: var(--section-accent); border: 2px solid #fff;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.45); cursor: pointer;
+                }
+
+                /* SOC-zone strip */
+                .soc-strip { padding: 4px 2px 12px; }
+                .soc-bar {
+                    position: relative; display: flex;
+                    height: 14px; border-radius: 7px; overflow: hidden;
+                    margin-bottom: 22px;
+                }
+                .soc-zone { height: 100%; }
+                .soc-now {
+                    position: absolute; top: -3px; width: 3px; height: 20px;
+                    background: #fff; border-radius: 2px;
+                    box-shadow: 0 0 4px rgba(0,0,0,0.6); transform: translateX(-50%);
+                }
+                .soc-tick {
+                    position: absolute; bottom: -20px; transform: translateX(-50%);
+                    font-size: 10px; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .soc-tick::before {
+                    content: ''; position: absolute; top: -7px; left: 50%;
+                    width: 1px; height: 6px; background: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.5; transform: translateX(-50%);
+                }
+                .soc-legend {
+                    display: flex; flex-wrap: wrap; gap: 4px 14px;
+                    font-size: 11px; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .soc-legend span { display: inline-flex; align-items: center; gap: 5px; }
+                .soc-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
                 .setting-help-text {
                     font-size: 11px; line-height: 1.35;
                     color: var(--secondary-text-color, ${T.textSec});
