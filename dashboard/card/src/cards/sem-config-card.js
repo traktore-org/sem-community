@@ -442,27 +442,12 @@ class SEMConfigCard extends SEMLitBase {
 
     // ── Reusable inline primitives ──
 
+    // #528: every number setting now uses the colorful accent-slider knob
+    // (battery design language) instead of the flat −/+ row. ``_renderStepper``
+    // delegates to ``_renderZoneKnob`` so all sections (tariff, heat pump,
+    // hot water, advanced, per-charger) restyle uniformly with one change.
     _renderStepper(entityId, labelKey, T, helpKey) {
-        const entity = this._hass?.states[entityId];
-        if (!entity) return nothing;
-        const val = parseFloat(entity.state) || 0;
-        const step = parseFloat(entity.attributes.step) || 1;
-        const unit = entity.attributes.unit_of_measurement || '';
-        const decimals = step < 1 ? 1 : 0;
-        const displayVal = val.toFixed(decimals) + (unit ? ' ' + unit : '');
-        return html`
-            <div class="stepper-cell">
-                <div class="stepper-row">
-                    <span class="stepper-label">${this._t(labelKey)}</span>
-                    <div class="stepper-controls">
-                        <button class="stepper-minus" @click=${() => this._stepNumber(entityId, -1)}>−</button>
-                        <span class="stepper-value">${displayVal}</span>
-                        <button class="stepper-plus" @click=${() => this._stepNumber(entityId, 1)}>+</button>
-                    </div>
-                </div>
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
-            </div>
-        `;
+        return this._renderZoneKnob(entityId, labelKey, T, helpKey);
     }
 
     _renderToggle(entityId, labelKey, T, helpKey) {
@@ -1193,26 +1178,31 @@ class SEMConfigCard extends SEMLitBase {
 
     // Slider that writes to entry.options on change. Use for option-only
     // numeric fields that don't have a runtime ``number.sem_*`` entity.
+    // #528: option-key slider in the same colorful accent style as the
+    // entity knob (saves an entry.option live via _saveOption).
     _renderOptionSlider(optionKey, labelKey, cfg, opts, helpKey) {
-        const cur = opts[optionKey] != null ? opts[optionKey] : cfg.default;
+        const cur = parseFloat(opts[optionKey] != null ? opts[optionKey] : cfg.default) || 0;
         const status = this._saveStatus[optionKey];
         const decimals = cfg.step < 1 ? 1 : 0;
-        const displayVal = parseFloat(cur).toFixed(decimals) + (cfg.unit ? ' ' + cfg.unit : '');
+        const unit = cfg.unit || '';
+        const pct = cfg.max > cfg.min ? Math.round(((cur - cfg.min) / (cfg.max - cfg.min)) * 100) : 0;
+        const stepBy = (d) => {
+            const next = Math.min(cfg.max, Math.max(cfg.min, cur + d * cfg.step));
+            this._saveOption(optionKey, next, optionKey);
+        };
         return html`
-            <div class="stepper-cell">
-                <div class="stepper-row">
-                    <span class="stepper-label">${this._t(labelKey)}</span>
-                    <div class="stepper-controls">
-                        <button class="stepper-minus" @click=${() => {
-                            const next = Math.max(cfg.min, parseFloat(cur) - cfg.step);
-                            this._saveOption(optionKey, next, optionKey);
-                        }}>−</button>
-                        <span class="stepper-value">${displayVal}</span>
-                        <button class="stepper-plus" @click=${() => {
-                            const next = Math.min(cfg.max, parseFloat(cur) + cfg.step);
-                            this._saveOption(optionKey, next, optionKey);
-                        }}>+</button>
-                    </div>
+            <div class="zone-knob">
+                <div class="zone-knob-top">
+                    <span class="zone-knob-label">${this._t(labelKey)}</span>
+                    <span class="zone-chip">${cur.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                </div>
+                <div class="zone-knob-slider">
+                    <button class="zone-mini" @click=${() => stepBy(-1)}>−</button>
+                    <input type="range" class="zone-range"
+                        min=${cfg.min} max=${cfg.max} step=${cfg.step} .value=${String(cur)}
+                        style=${`--fill:${pct}%`}
+                        @change=${(ev) => this._saveOption(optionKey, parseFloat(ev.target.value), optionKey)} />
+                    <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
