@@ -131,6 +131,18 @@ const WATCHED = [
     'sensor.sem_diag_grid_sign',
 ];
 
+// #528 — entity-wiring keys that trigger an entry RELOAD when changed (mirror
+// of __init__.py:_SET_OPTION_STRUCTURAL_KEYS). Pickers for these stage their
+// edit and commit on one Apply, so the reload fires once for the whole batch.
+const STRUCTURAL_KEYS = new Set([
+    'battery_soc_sensor',
+    'heat_pump_relay1_entity', 'heat_pump_relay2_entity',
+    'heat_pump_climate_entity', 'heat_pump_power_sensor',
+    'heat_pump_temperature_sensor', 'heat_pump_invert_sg_ready',
+    'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
+    'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
+]);
+
 class SEMConfigCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
 
@@ -143,6 +155,10 @@ class SEMConfigCard extends SEMLitBase {
             // #461 grid-sign fix button transient UI state.
             _signBusy: { state: true },
             _signMsg: { state: true },
+            // #528 staged structural (entity-wiring) edits — committed in one
+            // Apply so a reload fires once for the whole batch, not per field.
+            _pending: { state: true },
+            _applying: { state: true },
         };
     }
 
@@ -162,6 +178,8 @@ class SEMConfigCard extends SEMLitBase {
         this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
         this._signBusy = false;
         this._signMsg = '';
+        this._pending = {};   // { structuralKey: stagedValue }
+        this._applying = false;
     }
 
     disconnectedCallback() {
@@ -1055,25 +1073,87 @@ class SEMConfigCard extends SEMLitBase {
     // Entity picker bound to an entry.options key. Auto-saves via WebSocket
     // on change → SEM update_listener reloads → registered=on within ~1s.
     _renderPicker(optionKey, labelKey, domain, deviceClass, opts, helpKey) {
-        const cur = opts[optionKey] || '';
         const status = this._saveStatus[optionKey];
+        // #528: structural (entity-wiring) keys reload the entry — stage the
+        // edit locally and commit on Apply so the reload fires once for the
+        // whole batch. Non-structural keys save live on change (unchanged).
+        const structural = STRUCTURAL_KEYS.has(optionKey);
+        const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
+        const cur = staged ? this._pending[optionKey] : (opts[optionKey] || '');
+        const onChange = (val) => {
+            if (structural) {
+                this._pending = { ...this._pending, [optionKey]: val || '' };
+                this.requestUpdate();
+            } else {
+                this._saveOption(optionKey, val, optionKey);
+            }
+        };
         return html`
             <div class="picker-cell">
                 <div class="picker-row">
-                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <span class="picker-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="Pending — press Apply">●</span>` : nothing}</span>
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
                         .includeDomains=${[domain]}
                         .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
                         .allowCustomEntity=${false}
-                        @value-changed=${(e) => this._saveOption(optionKey, e.detail?.value || '', optionKey)}>
+                        @value-changed=${(e) => onChange(e.detail?.value || '')}>
                     </ha-entity-picker>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
                 ${status && status !== 'saving' && status !== 'ok' ? html`<div class="save-status err">⚠ ${status}</div>` : nothing}
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // #528 — commit all staged structural edits in ONE set_option call (one
+    // entry reload for the whole batch) and clear the buffer.
+    async _applyPending() {
+        const keys = Object.keys(this._pending);
+        if (!keys.length || this._applying) return;
+        const entryId = await this._ensureEntryId();
+        this._applying = true;
+        this.requestUpdate();
+        try {
+            const options = { ...this._pending };
+            await this._hass.callService('solar_energy_management', 'set_option', {
+                options, ...(entryId ? { entry_id: entryId } : {}),
+            });
+            // Reflect locally; the entry reload will re-publish authoritative state.
+            this._options = { ...this._options, ...options };
+            this._pending = {};
+        } catch (err) {
+            console.error('[sem-config-card] apply failed', err);
+            this._saveStatus = { ...this._saveStatus, _apply: err?.message || 'apply failed' };
+        } finally {
+            this._applying = false;
+            this.requestUpdate();
+        }
+    }
+
+    _discardPending() {
+        this._pending = {};
+        this.requestUpdate();
+    }
+
+    // Sticky bar shown whenever structural edits are staged.
+    _renderApplyBar() {
+        const n = Object.keys(this._pending).length;
+        if (!n && !this._applying) return nothing;
+        return html`
+            <div class="apply-bar">
+                <span class="apply-msg">
+                    ${this._applying
+                        ? html`<span class="apply-spin"></span>Applying… (reloading)`
+                        : `${n} pending change${n === 1 ? '' : 's'} — entities reload on Apply`}
+                </span>
+                ${this._applying ? nothing : html`
+                    <button class="apply-discard" @click=${() => this._discardPending()}>Discard</button>
+                    <button class="apply-btn" @click=${() => this._applyPending()}>Apply</button>
+                `}
             </div>
         `;
     }
@@ -1748,6 +1828,36 @@ class SEMConfigCard extends SEMLitBase {
                 .soc-legend span { display: inline-flex; align-items: center; gap: 5px; }
                 .soc-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 
+                /* #528 staged-changes Apply bar (sticky at top of the card) */
+                .apply-bar {
+                    position: sticky; top: 6px; z-index: 5;
+                    display: flex; align-items: center; gap: 10px;
+                    margin: 0 0 12px; padding: 9px 12px;
+                    border-radius: 10px;
+                    background: color-mix(in srgb, ${accent} 16%, ${T.surface});
+                    border: 1px solid color-mix(in srgb, ${accent} 45%, ${T.surfaceBorder});
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+                }
+                .apply-msg { flex: 1; font-size: 12.5px; font-weight: 600;
+                    display: inline-flex; align-items: center; gap: 8px; }
+                .apply-btn, .apply-discard {
+                    border: none; border-radius: 8px; cursor: pointer;
+                    font-size: 12.5px; font-weight: 700; padding: 6px 14px;
+                }
+                .apply-btn { background: ${accent}; color: #fff; }
+                .apply-discard {
+                    background: transparent; color: var(--secondary-text-color, ${T.textSec});
+                    border: 1px solid ${T.surfaceBorder};
+                }
+                .apply-spin {
+                    width: 13px; height: 13px; border-radius: 50%;
+                    border: 2px solid color-mix(in srgb, ${accent} 30%, transparent);
+                    border-top-color: ${accent}; display: inline-block;
+                    animation: applyspin 0.7s linear infinite;
+                }
+                @keyframes applyspin { to { transform: rotate(360deg); } }
+                .pending-dot { color: ${accent}; font-size: 9px; margin-left: 6px; vertical-align: middle; }
+
                 .setting-help-text {
                     font-size: 11px; line-height: 1.35;
                     color: var(--secondary-text-color, ${T.textSec});
@@ -1834,6 +1944,7 @@ class SEMConfigCard extends SEMLitBase {
                             style="--mdc-icon-size:18px"
                         ></ha-icon>
                     </div>
+                    ${this._renderApplyBar()}
                     ${SECTIONS.map(s => this._renderSection(s, renderers[s.id], T))}
                 </div>
             </ha-card>
