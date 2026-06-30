@@ -1574,25 +1574,25 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
                     default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "electricity_export_rate",
                     default=_c("electricity_export_rate", 0.075),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "demand_charge_rate",
                     default=_c("demand_charge_rate", 4.32),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=20.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=100000.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "update_interval",

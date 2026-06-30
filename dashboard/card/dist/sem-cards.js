@@ -6007,10 +6007,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${this._renderStepper("number.sem_cheap_price_threshold","cheap_threshold",t,"setting_help_cheap_threshold")}
                 ${this._renderStepper("number.sem_expensive_price_threshold","expensive_threshold",t,"setting_help_expensive_threshold")}
             </div>
-            ${this._renderOptionNumberInput("electricity_import_rate","config_import_rate",{min:0,max:1,step:.001,unit:`${a}/kWh`,default:.3387},e,"config_help_import_rate")}
-            ${this._renderOptionNumberInput("electricity_off_peak_rate","config_off_peak_rate",{min:0,max:1,step:.001,unit:`${a}/kWh`,default:.3387},e,"config_help_off_peak_rate")}
-            ${this._renderOptionNumberInput("electricity_export_rate","config_export_rate",{min:0,max:.5,step:.001,unit:`${a}/kWh`,default:.075},e,"config_help_export_rate")}
-            ${this._renderOptionNumberInput("demand_charge_rate","config_demand_charge_rate",{min:0,max:20,step:.01,unit:`${a}/kW/Mt`,default:4.32},e,"config_help_demand_charge_rate")}
+            ${""}
+            ${this._renderOptionNumberInput("electricity_import_rate","config_import_rate",{min:0,max:1e4,step:.001,unit:`${a}/kWh`,default:.3387},e,"config_help_import_rate")}
+            ${this._renderOptionNumberInput("electricity_off_peak_rate","config_off_peak_rate",{min:0,max:1e4,step:.001,unit:`${a}/kWh`,default:.3387},e,"config_help_off_peak_rate")}
+            ${this._renderOptionNumberInput("electricity_export_rate","config_export_rate",{min:0,max:1e4,step:.001,unit:`${a}/kWh`,default:.075},e,"config_help_export_rate")}
+            ${this._renderOptionNumberInput("demand_charge_rate","config_demand_charge_rate",{min:0,max:1e5,step:.01,unit:`${a}/kW/Mt`,default:4.32},e,"config_help_demand_charge_rate")}
             ${this._renderPicker("grid_import_power_entity","config_grid_import_entity","sensor","power",e,"config_help_grid_import_entity")}
             ${this._renderPicker("grid_export_power_entity","config_grid_export_entity","sensor","power",e,"config_help_grid_export_entity")}
             ${this._hasBattery()?W`

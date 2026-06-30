@@ -173,7 +173,12 @@ NUMBER_TYPES = [
         key="electricity_import_rate",
         native_unit_of_measurement="CHF/kWh",  # CHF replaced dynamically with HA currency
         native_min_value=0.0,
-        native_max_value=1.0,
+        # #549: max must fit ANY currency's per-kWh magnitude (e.g. LKR ~70,
+        # VND/IDR ~2500), not just CHF/EUR decimals — a hardcoded 1.0 cap made
+        # the entity unusable for high-denomination currencies. The fine step
+        # is kept (decimal currencies unaffected; whole values like 22 already
+        # divide evenly), so this is purely a wider ceiling. BOX = free entry.
+        native_max_value=10000.0,
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
@@ -181,7 +186,7 @@ NUMBER_TYPES = [
         key="electricity_export_rate",
         native_unit_of_measurement="CHF/kWh",  # CHF replaced dynamically with HA currency
         native_min_value=0.0,
-        native_max_value=0.50,
+        native_max_value=10000.0,  # #549 — currency-agnostic ceiling
         native_step=0.005,
         mode=NumberMode.BOX,
     ),
@@ -199,7 +204,7 @@ NUMBER_TYPES = [
         key="demand_charge_rate",
         native_unit_of_measurement="CHF/kW/Mt",
         native_min_value=0.0,
-        native_max_value=20.0,
+        native_max_value=100000.0,  # #549 — per kW/month can be large in high-denom currencies
         native_step=0.5,
         mode=NumberMode.BOX,
     ),
@@ -208,7 +213,7 @@ NUMBER_TYPES = [
         key="cheap_price_threshold",
         native_unit_of_measurement="CHF/kWh",
         native_min_value=0.0,
-        native_max_value=5.0,
+        native_max_value=10000.0,  # #549 — currency-agnostic ceiling
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
@@ -216,7 +221,7 @@ NUMBER_TYPES = [
         key="expensive_price_threshold",
         native_unit_of_measurement="CHF/kWh",
         native_min_value=0.0,
-        native_max_value=5.0,
+        native_max_value=10000.0,  # #549 — currency-agnostic ceiling
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
