@@ -552,7 +552,9 @@ class SEMConfigCard extends SEMLitBase {
             <div class="setup-progress">
                 <div class="setup-progress-top">
                     <span class="setup-progress-label">
-                        ${allDone ? '✓ All set up' : `Setup — ${done} of ${total} configured`}
+                        ${allDone
+                            ? this._t('config_setup_done')
+                            : this._t('config_setup_progress').replace('{done}', String(done)).replace('{total}', String(total))}
                     </span>
                     <span class="setup-progress-pct">${pct}%</span>
                 </div>
@@ -567,7 +569,7 @@ class SEMConfigCard extends SEMLitBase {
                         <ha-icon icon="${i.icon}" style="--mdc-icon-size:16px;color:${i.color}"></ha-icon>
                         <div class="chip-label">${this._t(i.labelKey)}</div>
                         <div class="chip-value ${i.done ? 'c-ok' : 'c-warn'}">
-                            ${i.done ? '✓' : 'Set up →'}
+                            ${i.done ? '✓' : this._t('config_setup_action')}
                         </div>
                     </div>`)}
             </div>
@@ -702,10 +704,10 @@ class SEMConfigCard extends SEMLitBase {
                     <div class="soc-tick" style=${`left:${clamp(a)}%`}><span>${a}</span></div>
                 </div>
                 <div class="soc-legend">
-                    <span><i style="background:#e57373"></i>Reserve</span>
-                    <span><i style="background:#ffb74d"></i>Buffer</span>
-                    <span><i style="background:#81c784"></i>EV assist</span>
-                    <span><i style="background:#64b5f6"></i>Surplus</span>
+                    <span><i style="background:#e57373"></i>${this._t('zone_legend_reserve')}</span>
+                    <span><i style="background:#ffb74d"></i>${this._t('zone_legend_buffer')}</span>
+                    <span><i style="background:#81c784"></i>${this._t('zone_legend_assist')}</span>
+                    <span><i style="background:#64b5f6"></i>${this._t('zone_legend_surplus')}</span>
                 </div>
             </div>
         `;
@@ -1125,7 +1127,7 @@ class SEMConfigCard extends SEMLitBase {
         return html`
             <div class="picker-cell">
                 <div class="picker-row">
-                    <span class="picker-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="Pending — press Apply">●</span>` : nothing}</span>
+                    <span class="picker-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}</span>
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
@@ -1181,12 +1183,12 @@ class SEMConfigCard extends SEMLitBase {
             <div class="apply-bar">
                 <span class="apply-msg">
                     ${this._applying
-                        ? html`<span class="apply-spin"></span>Applying… (reloading)`
-                        : `${n} pending change${n === 1 ? '' : 's'} — entities reload on Apply`}
+                        ? html`<span class="apply-spin"></span>${this._t('config_applying')}`
+                        : this._t('config_pending_changes').replace('{n}', String(n))}
                 </span>
                 ${this._applying ? nothing : html`
-                    <button class="apply-discard" @click=${() => this._discardPending()}>Discard</button>
-                    <button class="apply-btn" @click=${() => this._applyPending()}>Apply</button>
+                    <button class="apply-discard" @click=${() => this._discardPending()}>${this._t('config_discard')}</button>
+                    <button class="apply-btn" @click=${() => this._applyPending()}>${this._t('config_apply')}</button>
                 `}
             </div>
         `;

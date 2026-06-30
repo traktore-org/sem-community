@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-26T05:58:59.987522+00:00
+// Generated: 2026-06-30T09:53:40.026836+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1091,7 +1091,19 @@
       "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
       "config_battery_control": "Battery control",
       "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
-      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise.",
+      "zone_legend_reserve": "Reserve",
+      "zone_legend_buffer": "Buffer",
+      "zone_legend_assist": "EV assist",
+      "zone_legend_surplus": "Surplus",
+      "config_apply": "Apply",
+      "config_discard": "Discard",
+      "config_applying": "Applying…",
+      "config_pending_changes": "{n} pending — reload on Apply",
+      "config_pending_hint": "Pending — press Apply",
+      "config_setup_done": "✓ All set up",
+      "config_setup_progress": "Setup — {done} of {total} configured",
+      "config_setup_action": "Set up →"
     },
     "de": {
       "charging": "Laden",
@@ -2179,7 +2191,19 @@
       "config_help_battery_bidirectional": "Aktivieren, wenn die Entladeleistungs-Entität dieser Batterie ein bidirektionaler Sollwert ist – eine Number-Entität für Laden und Entladen, z. B. Sessy. SEM lädt dann durch Schreiben eines negativen Werts. Für eine einseitige Zwangsentlade-Entität (z. B. Huawei) aus lassen.",
       "config_battery_control": "Batteriesteuerung",
       "config_strategy_entity": "Leistungsstrategie-Entität (Sessy usw.)",
-      "config_help_strategy_entity": "Die Select-Entität, die die Leistungsstrategie der Batterie setzt (z. B. select.sessy_*_power_strategy). SEM schaltet sie auf den API-/Aktiv-Wert, während es den Sollwert steuert, und stellt danach Ihren Normalmodus (nom/roi/eco) wieder her. Für AC-gekoppelte Batterien wie Sessy; sonst leer lassen."
+      "config_help_strategy_entity": "Die Select-Entität, die die Leistungsstrategie der Batterie setzt (z. B. select.sessy_*_power_strategy). SEM schaltet sie auf den API-/Aktiv-Wert, während es den Sollwert steuert, und stellt danach Ihren Normalmodus (nom/roi/eco) wieder her. Für AC-gekoppelte Batterien wie Sessy; sonst leer lassen.",
+      "zone_legend_reserve": "Reserve",
+      "zone_legend_buffer": "Puffer",
+      "zone_legend_assist": "EV-Hilfe",
+      "zone_legend_surplus": "Überschuss",
+      "config_apply": "Übernehmen",
+      "config_discard": "Verwerfen",
+      "config_applying": "Wird übernommen…",
+      "config_pending_changes": "{n} ausstehend — Neuladen bei Übernehmen",
+      "config_pending_hint": "Ausstehend — Übernehmen drücken",
+      "config_setup_done": "✓ Alles eingerichtet",
+      "config_setup_progress": "Einrichtung — {done} von {total} konfiguriert",
+      "config_setup_action": "Einrichten →"
     },
     "fr": {
       "charging": "En charge",
@@ -3267,7 +3291,19 @@
       "battery_mode_hint_self_consumption": "Charge depuis le surplus et alimente la maison — ne vend jamais au réseau.",
       "battery_mode_hint_force_charge": "Charge à pleine capacité maintenant, quel que soit le prix ou le surplus.",
       "battery_mode_hint_force_discharge": "Décharge vers le réseau maintenant, jusqu'au SOC de réserve.",
-      "battery_mode_hint_off": "SEM reste sans intervention — l'onduleur gère cette batterie seul."
+      "battery_mode_hint_off": "SEM reste sans intervention — l'onduleur gère cette batterie seul.",
+      "zone_legend_reserve": "Réserve",
+      "zone_legend_buffer": "Tampon",
+      "zone_legend_assist": "Assist. VE",
+      "zone_legend_surplus": "Surplus",
+      "config_apply": "Appliquer",
+      "config_discard": "Annuler",
+      "config_applying": "Application…",
+      "config_pending_changes": "{n} en attente — rechargement à Appliquer",
+      "config_pending_hint": "En attente — appuyez sur Appliquer",
+      "config_setup_done": "✓ Tout est configuré",
+      "config_setup_progress": "Configuration — {done} sur {total} configurés",
+      "config_setup_action": "Configurer →"
     },
     "es": {
       "charging": "Cargando",
@@ -4355,7 +4391,19 @@
       "battery_mode_hint_self_consumption": "Carga del excedente y alimenta la casa — nunca vende a la red.",
       "battery_mode_hint_force_charge": "Cargando a plena capacidad ahora, sin importar el precio o el excedente.",
       "battery_mode_hint_force_discharge": "Descargando a la red ahora, hasta el SOC de reserva.",
-      "battery_mode_hint_off": "SEM se mantiene al margen — el inversor gestiona esta batería por su cuenta."
+      "battery_mode_hint_off": "SEM se mantiene al margen — el inversor gestiona esta batería por su cuenta.",
+      "zone_legend_reserve": "Reserva",
+      "zone_legend_buffer": "Búfer",
+      "zone_legend_assist": "Asist. VE",
+      "zone_legend_surplus": "Excedente",
+      "config_apply": "Aplicar",
+      "config_discard": "Descartar",
+      "config_applying": "Aplicando…",
+      "config_pending_changes": "{n} pendiente(s) — recarga al Aplicar",
+      "config_pending_hint": "Pendiente — pulse Aplicar",
+      "config_setup_done": "✓ Todo configurado",
+      "config_setup_progress": "Configuración — {done} de {total} configurados",
+      "config_setup_action": "Configurar →"
     },
     "it": {
       "charging": "In carica",
@@ -5443,7 +5491,19 @@
       "battery_mode_hint_self_consumption": "Carica dal surplus e alimenta la casa — non vende mai alla rete.",
       "battery_mode_hint_force_charge": "In carica a piena capacità ora, indipendentemente da prezzo o surplus.",
       "battery_mode_hint_force_discharge": "In scarica verso la rete ora, fino al SOC di riserva.",
-      "battery_mode_hint_off": "SEM resta senza intervento — l'inverter gestisce questa batteria da solo."
+      "battery_mode_hint_off": "SEM resta senza intervento — l'inverter gestisce questa batteria da solo.",
+      "zone_legend_reserve": "Riserva",
+      "zone_legend_buffer": "Buffer",
+      "zone_legend_assist": "Assist. VE",
+      "zone_legend_surplus": "Surplus",
+      "config_apply": "Applica",
+      "config_discard": "Annulla",
+      "config_applying": "Applicazione…",
+      "config_pending_changes": "{n} in sospeso — ricarica con Applica",
+      "config_pending_hint": "In sospeso — premi Applica",
+      "config_setup_done": "✓ Tutto configurato",
+      "config_setup_progress": "Configurazione — {done} di {total} configurati",
+      "config_setup_action": "Configura →"
     },
     "nl": {
       "charging": "Laden",
@@ -6531,7 +6591,19 @@
       "config_arbitrage_reserve_soc": "Arbitrage-reserve-SOC",
       "config_help_arbitrage_reserve_soc": "Ontlaad de batterij nooit naar het net onder deze SOC — je back-upreserve.",
       "config_force_discharge_entity": "Entiteit voor geforceerd-ontladenvermogen",
-      "config_help_force_discharge_entity": "De number-entiteit die het geforceerde batterij-naar-net-ontlaadvermogen van je omvormer instelt (bijv. de Huawei “Forcible discharge power”). Vereist om arbitrage uit te voeren."
+      "config_help_force_discharge_entity": "De number-entiteit die het geforceerde batterij-naar-net-ontlaadvermogen van je omvormer instelt (bijv. de Huawei “Forcible discharge power”). Vereist om arbitrage uit te voeren.",
+      "zone_legend_reserve": "Reserve",
+      "zone_legend_buffer": "Buffer",
+      "zone_legend_assist": "EV-hulp",
+      "zone_legend_surplus": "Overschot",
+      "config_apply": "Toepassen",
+      "config_discard": "Verwerpen",
+      "config_applying": "Toepassen…",
+      "config_pending_changes": "{n} in afwachting — herladen bij Toepassen",
+      "config_pending_hint": "In afwachting — druk op Toepassen",
+      "config_setup_done": "✓ Alles ingesteld",
+      "config_setup_progress": "Instellen — {done} van {total} geconfigureerd",
+      "config_setup_action": "Instellen →"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7619,7 +7691,19 @@
       "battery_mode_hint_self_consumption": "Nabíjí z přebytku a napájí dům — nikdy neprodává do sítě.",
       "battery_mode_hint_force_charge": "Nabíjí se nyní do plna, bez ohledu na cenu nebo přebytek.",
       "battery_mode_hint_force_discharge": "Vybíjí se nyní do sítě, až po rezervní SOC.",
-      "battery_mode_hint_off": "SEM se nezasahuje — tuto baterii řídí střídač sám."
+      "battery_mode_hint_off": "SEM se nezasahuje — tuto baterii řídí střídač sám.",
+      "zone_legend_reserve": "Rezerva",
+      "zone_legend_buffer": "Buffer",
+      "zone_legend_assist": "Pomoc EV",
+      "zone_legend_surplus": "Přebytek",
+      "config_apply": "Použít",
+      "config_discard": "Zahodit",
+      "config_applying": "Používání…",
+      "config_pending_changes": "{n} čeká — znovunačtení po Použít",
+      "config_pending_hint": "Čeká — stiskněte Použít",
+      "config_setup_done": "✓ Vše nastaveno",
+      "config_setup_progress": "Nastavení — {done} z {total} nakonfigurováno",
+      "config_setup_action": "Nastavit →"
     },
     "da": {
       "charging": "Oplader",
@@ -8707,7 +8791,19 @@
       "battery_mode_hint_self_consumption": "Oplader fra overskud og forsyner huset — sælger aldrig til nettet.",
       "battery_mode_hint_force_charge": "Oplader til fuld nu, uanset pris eller overskud.",
       "battery_mode_hint_force_discharge": "Aflader til nettet nu, ned til reserve-SOC.",
-      "battery_mode_hint_off": "SEM holder sig væk — vekselretteren styrer selv dette batteri."
+      "battery_mode_hint_off": "SEM holder sig væk — vekselretteren styrer selv dette batteri.",
+      "zone_legend_reserve": "Reserve",
+      "zone_legend_buffer": "Buffer",
+      "zone_legend_assist": "EV-hjælp",
+      "zone_legend_surplus": "Overskud",
+      "config_apply": "Anvend",
+      "config_discard": "Kassér",
+      "config_applying": "Anvender…",
+      "config_pending_changes": "{n} afventer — genindlæs ved Anvend",
+      "config_pending_hint": "Afventer — tryk Anvend",
+      "config_setup_done": "✓ Alt er sat op",
+      "config_setup_progress": "Opsætning — {done} af {total} konfigureret",
+      "config_setup_action": "Konfigurér →"
     },
     "fi": {
       "charging": "Lataus",
@@ -9795,7 +9891,19 @@
       "battery_mode_hint_self_consumption": "Lataa ylijäämästä ja syöttää talon — ei koskaan myy verkkoon.",
       "battery_mode_hint_force_charge": "Lataa täyteen nyt hinnasta tai ylijäämästä riippumatta.",
       "battery_mode_hint_force_discharge": "Purkautuu verkkoon nyt, reservi-SOC:hen asti.",
-      "battery_mode_hint_off": "SEM pysyy puuttumatta — invertteri hallitsee tätä akkua itse."
+      "battery_mode_hint_off": "SEM pysyy puuttumatta — invertteri hallitsee tätä akkua itse.",
+      "zone_legend_reserve": "Varaus",
+      "zone_legend_buffer": "Puskuri",
+      "zone_legend_assist": "EV-apu",
+      "zone_legend_surplus": "Ylijäämä",
+      "config_apply": "Käytä",
+      "config_discard": "Hylkää",
+      "config_applying": "Otetaan käyttöön…",
+      "config_pending_changes": "{n} odottaa — lataus Käytä-painikkeella",
+      "config_pending_hint": "Odottaa — paina Käytä",
+      "config_setup_done": "✓ Kaikki valmista",
+      "config_setup_progress": "Asennus — {done}/{total} määritetty",
+      "config_setup_action": "Määritä →"
     },
     "hu": {
       "charging": "Töltés",
@@ -10883,7 +10991,19 @@
       "battery_mode_hint_self_consumption": "Többletből tölt és ellátja a házat — soha nem ad el a hálózatnak.",
       "battery_mode_hint_force_charge": "Most teljesre tölt, az ártól vagy többlettől függetlenül.",
       "battery_mode_hint_force_discharge": "Most kisül a hálózatba, a tartalék SOC-ig.",
-      "battery_mode_hint_off": "A SEM nem avatkozik be — az inverter maga kezeli ezt az akkumulátort."
+      "battery_mode_hint_off": "A SEM nem avatkozik be — az inverter maga kezeli ezt az akkumulátort.",
+      "zone_legend_reserve": "Tartalék",
+      "zone_legend_buffer": "Puffer",
+      "zone_legend_assist": "EV-segéd",
+      "zone_legend_surplus": "Többlet",
+      "config_apply": "Alkalmaz",
+      "config_discard": "Elvet",
+      "config_applying": "Alkalmazás…",
+      "config_pending_changes": "{n} függőben — újratöltés az Alkalmaznál",
+      "config_pending_hint": "Függőben — nyomja meg az Alkalmaz gombot",
+      "config_setup_done": "✓ Minden beállítva",
+      "config_setup_progress": "Beállítás — {done}/{total} beállítva",
+      "config_setup_action": "Beállít →"
     },
     "no": {
       "charging": "Lader",
@@ -11971,7 +12091,19 @@
       "battery_mode_hint_self_consumption": "Lader fra overskudd og forsyner huset — selger aldri til nettet.",
       "battery_mode_hint_force_charge": "Lader til fullt nå, uavhengig av pris eller overskudd.",
       "battery_mode_hint_force_discharge": "Utlader til nettet nå, ned til reserve-SOC.",
-      "battery_mode_hint_off": "SEM holder seg unna — vekselretteren styrer dette batteriet selv."
+      "battery_mode_hint_off": "SEM holder seg unna — vekselretteren styrer dette batteriet selv.",
+      "zone_legend_reserve": "Reserve",
+      "zone_legend_buffer": "Buffer",
+      "zone_legend_assist": "EV-hjelp",
+      "zone_legend_surplus": "Overskudd",
+      "config_apply": "Bruk",
+      "config_discard": "Forkast",
+      "config_applying": "Bruker…",
+      "config_pending_changes": "{n} venter — lastes på nytt ved Bruk",
+      "config_pending_hint": "Venter — trykk Bruk",
+      "config_setup_done": "✓ Alt er satt opp",
+      "config_setup_progress": "Oppsett — {done} av {total} konfigurert",
+      "config_setup_action": "Sett opp →"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13059,7 +13191,19 @@
       "battery_mode_hint_self_consumption": "Ładuje z nadwyżki i zasila dom — nigdy nie sprzedaje do sieci.",
       "battery_mode_hint_force_charge": "Ładuje do pełna teraz, niezależnie od ceny czy nadwyżki.",
       "battery_mode_hint_force_discharge": "Rozładowuje do sieci teraz, aż do rezerwowego SOC.",
-      "battery_mode_hint_off": "SEM nie ingeruje — falownik sam zarządza tą baterią."
+      "battery_mode_hint_off": "SEM nie ingeruje — falownik sam zarządza tą baterią.",
+      "zone_legend_reserve": "Rezerwa",
+      "zone_legend_buffer": "Bufor",
+      "zone_legend_assist": "Wsparcie EV",
+      "zone_legend_surplus": "Nadwyżka",
+      "config_apply": "Zastosuj",
+      "config_discard": "Odrzuć",
+      "config_applying": "Stosowanie…",
+      "config_pending_changes": "{n} oczekuje — przeładowanie po Zastosuj",
+      "config_pending_hint": "Oczekuje — naciśnij Zastosuj",
+      "config_setup_done": "✓ Wszystko gotowe",
+      "config_setup_progress": "Konfiguracja — {done} z {total} skonfigurowano",
+      "config_setup_action": "Skonfiguruj →"
     },
     "pt": {
       "charging": "A carregar",
@@ -14147,7 +14291,19 @@
       "battery_mode_hint_self_consumption": "Carrega do excedente e alimenta a casa — nunca vende à rede.",
       "battery_mode_hint_force_charge": "A carregar até à carga total agora, independentemente do preço ou do excedente.",
       "battery_mode_hint_force_discharge": "A descarregar para a rede agora, até ao SOC de reserva.",
-      "battery_mode_hint_off": "O SEM mantém-se sem intervenção — o inversor gere esta bateria sozinho."
+      "battery_mode_hint_off": "O SEM mantém-se sem intervenção — o inversor gere esta bateria sozinho.",
+      "zone_legend_reserve": "Reserva",
+      "zone_legend_buffer": "Tampão",
+      "zone_legend_assist": "Apoio VE",
+      "zone_legend_surplus": "Excedente",
+      "config_apply": "Aplicar",
+      "config_discard": "Descartar",
+      "config_applying": "Aplicando…",
+      "config_pending_changes": "{n} pendente(s) — recarrega ao Aplicar",
+      "config_pending_hint": "Pendente — prima Aplicar",
+      "config_setup_done": "✓ Tudo configurado",
+      "config_setup_progress": "Configuração — {done} de {total} configurados",
+      "config_setup_action": "Configurar →"
     },
     "ro": {
       "charging": "Încărcare",
@@ -15235,7 +15391,19 @@
       "battery_mode_hint_self_consumption": "Încarcă din surplus și alimentează casa — nu vinde niciodată în rețea.",
       "battery_mode_hint_force_charge": "Se încarcă la maxim acum, indiferent de preț sau surplus.",
       "battery_mode_hint_force_discharge": "Se descarcă în rețea acum, până la SOC-ul de rezervă.",
-      "battery_mode_hint_off": "SEM nu intervine — invertorul gestionează singur această baterie."
+      "battery_mode_hint_off": "SEM nu intervine — invertorul gestionează singur această baterie.",
+      "zone_legend_reserve": "Rezervă",
+      "zone_legend_buffer": "Tampon",
+      "zone_legend_assist": "Asist. EV",
+      "zone_legend_surplus": "Surplus",
+      "config_apply": "Aplică",
+      "config_discard": "Renunță",
+      "config_applying": "Se aplică…",
+      "config_pending_changes": "{n} în așteptare — reîncărcare la Aplică",
+      "config_pending_hint": "În așteptare — apăsați Aplică",
+      "config_setup_done": "✓ Totul configurat",
+      "config_setup_progress": "Configurare — {done} din {total} configurate",
+      "config_setup_action": "Configurează →"
     },
     "sv": {
       "charging": "Laddar",
@@ -16323,7 +16491,19 @@
       "battery_mode_hint_self_consumption": "Laddar från överskott och försörjer huset — säljer aldrig till nätet.",
       "battery_mode_hint_force_charge": "Laddar till fullt nu, oavsett pris eller överskott.",
       "battery_mode_hint_force_discharge": "Urladdar till nätet nu, ner till reserv-SOC.",
-      "battery_mode_hint_off": "SEM håller sig undan — växelriktaren styr detta batteri själv."
+      "battery_mode_hint_off": "SEM håller sig undan — växelriktaren styr detta batteri själv.",
+      "zone_legend_reserve": "Reserv",
+      "zone_legend_buffer": "Buffert",
+      "zone_legend_assist": "EV-hjälp",
+      "zone_legend_surplus": "Överskott",
+      "config_apply": "Tillämpa",
+      "config_discard": "Ignorera",
+      "config_applying": "Tillämpar…",
+      "config_pending_changes": "{n} väntar — laddas om vid Tillämpa",
+      "config_pending_hint": "Väntar — tryck Tillämpa",
+      "config_setup_done": "✓ Allt klart",
+      "config_setup_progress": "Inställning — {done} av {total} konfigurerade",
+      "config_setup_action": "Ställ in →"
     }
   };
 
