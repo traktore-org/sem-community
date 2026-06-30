@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "Caricatore VE",
-        "description": "Verifica e aggiorna le mappature delle entità del caricatore VE. I campi SOC del veicolo vengono utilizzati solo se fornisci un sensore SOC batteria del veicolo.",
+        "description": "Suggerimento: la maggior parte delle impostazioni è ora nella dashboard SEM → scheda Configurazione (a colori, in tempo reale). Questo flusso resta per installazioni senza dashboard.\n\nVerifica e aggiorna le mappature delle entità del caricatore VE. I campi SOC del veicolo vengono utilizzati solo se fornisci un sensore SOC batteria del veicolo.",
         "data": {
           "ev_connected_sensor": "Stato connessione VE",
           "ev_charging_sensor": "Stato di carica VE",

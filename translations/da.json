@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "EV Lader",
-        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Tip: de fleste indstillinger findes nu på SEM-dashboardet → fanen Konfiguration (farverigt, live). Dette flow forbliver til opsætninger uden dashboard.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "EV Forbindelsesstatus",
           "ev_charging_sensor": "EV Ladestatus",

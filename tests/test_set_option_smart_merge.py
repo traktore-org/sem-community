@@ -273,6 +273,8 @@ class TestStructuralKeysVisibility:
             "hot_water_temperature_sensor",
             "ev_chargers",
             "battery_force_discharge_control_entity",
+            "battery_discharge_control_entity",  # #528 — discharge-limit (protection) entity
+            "battery_discharge_protection_enabled",  # #528 — no runtime switch → explicit reload
             "battery_force_discharge_entities",
             "battery_discharge_control_entities",
             "battery_strategy_entities",

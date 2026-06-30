@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-lader",
-        "description": "Controleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
+        "description": "Tip: de meeste instellingen staan nu op het SEM-dashboard → tabblad Configuratie (kleurrijk, live). Deze flow blijft voor installaties zonder dashboard.\n\nControleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
         "data": {
           "ev_connected_sensor": "EV-verbindingsstatus",
           "ev_charging_sensor": "EV-laadstatus",

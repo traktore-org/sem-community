@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "Ładowarka EV",
-        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Wskazówka: większość ustawień znajduje się teraz na pulpicie SEM → karta Konfiguracja (kolorowo, na żywo). Ten przepływ pozostaje dla instalacji bez pulpitu.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "Status podłączenia EV",
           "ev_charging_sensor": "Status ładowania EV",

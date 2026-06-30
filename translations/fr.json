@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "Chargeur VE",
-        "description": "Vérifiez et mettez à jour les mappages d'entités de votre chargeur VE. Les champs SOC du véhicule ne sont utilisés que si vous fournissez un capteur SOC de batterie du véhicule.",
+        "description": "Astuce : la plupart des réglages sont désormais sur le tableau de bord SEM → onglet Configuration (en couleur, en direct). Ce flux reste pour les installations sans tableau de bord.\n\nVérifiez et mettez à jour les mappages d'entités de votre chargeur VE. Les champs SOC du véhicule ne sont utilisés que si vous fournissez un capteur SOC de batterie du véhicule.",
         "data": {
           "ev_connected_sensor": "État de connexion VE",
           "ev_charging_sensor": "État de charge VE",

@@ -206,6 +206,15 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #523 Tier 3: the forced-discharge entity is read at battery-adapter
     # construction, so changing it must reload to rebuild the adapter.
     "battery_force_discharge_control_entity",
+    # #528: the discharge-LIMIT control entity (battery protection) is read
+    # from the coordinator's config snapshot, so a change must reload to take
+    # effect (the snapshot is rebuilt on reload).
+    "battery_discharge_control_entity",
+    # #528: the discharge-protection toggle has no runtime switch entity, so a
+    # set_option would otherwise hit the "unrouted → reload" path silently.
+    # Declare it structural so the reload is explicit (battery_protection reads
+    # it from the config snapshot, which is rebuilt on reload). Rarely changed.
+    "battery_discharge_protection_enabled",
     # #523 multi-battery: per-battery control-entity lists are read at
     # adapter construction too, so a change must reload.
     "battery_force_discharge_entities",
@@ -3348,6 +3357,52 @@ async def _async_register_phase_services(
         async_set_option,
         schema=vol.Schema({
             vol.Required("options"): dict,
+            vol.Optional("entry_id"): cv.string,
+        }),
+    )
+
+    # #528 Phase 4 — remove an EV charger from the dashboard. ``set_option``
+    # smart-merges ``ev_chargers`` (additive, keeps siblings — #464), so it
+    # can't express a removal. This service drops the charger by id and
+    # reloads. Explicit-intent + id-keyed so it can never accidentally clobber
+    # a sibling the way a full-list replace could.
+    async def async_remove_charger(call):
+        charger_id = (call.data.get("charger_id") or "").strip()
+        if not charger_id:
+            return
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return
+        target_entry = sem_entries[0]
+        if len(sem_entries) > 1 and call.data.get("entry_id"):
+            for e in sem_entries:
+                if e.entry_id == call.data["entry_id"]:
+                    target_entry = e
+                    break
+        existing = (
+            (target_entry.options or {}).get("ev_chargers")
+            or (target_entry.data or {}).get("ev_chargers")
+            or []
+        )
+        dicts = [c for c in existing if isinstance(c, dict)]
+        kept = [c for c in dicts if c.get("id") != charger_id]
+        if len(kept) == len(dicts):
+            _LOGGER.warning("remove_charger: id %s not found — nothing removed", charger_id)
+            return
+        new_options = {**(target_entry.options or {}), "ev_chargers": kept}
+        coordinator = getattr(target_entry, "runtime_data", None)
+        if coordinator is not None:
+            coordinator._skip_options_reload = dict(new_options)
+        hass.config_entries.async_update_entry(target_entry, options=new_options)
+        await hass.config_entries.async_reload(target_entry.entry_id)
+        _LOGGER.info("Removed EV charger '%s' (%d remain)", charger_id, len(kept))
+
+    hass.services.async_register(
+        DOMAIN,
+        "remove_charger",
+        async_remove_charger,
+        schema=vol.Schema({
+            vol.Required("charger_id"): cv.string,
             vol.Optional("entry_id"): cv.string,
         }),
     )

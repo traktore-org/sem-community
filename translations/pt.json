@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "Carregador EV",
-        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Dica: a maioria das definições está agora no painel SEM → separador Configuração (a cores, ao vivo). Este fluxo permanece para instalações sem painel.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "Estado de conexão VE",
           "ev_charging_sensor": "Estado de carregamento VE",

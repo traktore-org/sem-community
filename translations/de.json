@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-Ladegerät",
-        "description": "Überprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
+        "description": "Tipp: Die meisten Einstellungen sind jetzt im SEM-Dashboard → Tab Konfiguration (farbig, live). Dieser Dialog bleibt für Setups ohne Dashboard.\n\nÜberprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
         "data": {
           "ev_connected_sensor": "EV-Verbindungsstatus",
           "ev_charging_sensor": "EV-Ladestatus",
