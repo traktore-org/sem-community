@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "Cargador VE",
-        "description": "Revise y actualice las asignaciones de entidades de su cargador de VE. Los campos de SOC del vehículo solo se utilizan si proporciona un sensor de SOC de batería del vehículo.",
+        "description": "Consejo: la mayoría de los ajustes están ahora en el panel SEM → pestaña Configuración (a color, en vivo). Este flujo permanece para instalaciones sin panel.\n\nRevise y actualice las asignaciones de entidades de su cargador de VE. Los campos de SOC del vehículo solo se utilizan si proporciona un sensor de SOC de batería del vehículo.",
         "data": {
           "ev_connected_sensor": "Estado de conexión VE",
           "ev_charging_sensor": "Estado de carga VE",

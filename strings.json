@@ -106,7 +106,7 @@
     "step": {
       "ev_charger": {
         "title": "EV Charger",
-        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Tip: most settings now live on the SEM dashboard → Configuration tab (colorful, live). This flow remains for headless setups and entity wiring.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",

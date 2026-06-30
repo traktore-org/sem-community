@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "Încărcător EV",
-        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Sfat: majoritatea setărilor sunt acum pe tabloul SEM → fila Configurare (colorat, live). Acest flux rămâne pentru instalări fără tablou de bord.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
