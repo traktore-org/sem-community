@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.6] — 30.06.2026
+
+> **Pre-release.** Completes the dashboard-first configuration work (#528).
+
+### ⚙️ Configuration on the dashboard — completion (#528)
+- 🔋 **Battery discharge-protection settings** now on the Config tab (Battery
+  zones): protection toggle, max-discharge-power knob, and the discharge-limit
+  entity picker — no more options-flow trip for these.
+- 🔌 **Add / remove EV chargers from the dashboard.** A "+ Add charger" button
+  appends a new charger (then wire it with the per-charger pickers), and each
+  charger has a "✕" with an inline confirm (new `remove_charger` service,
+  preserves siblings). The main reason to open the native flow is gone.
+- 🧭 The native options flow stays as a headless fallback and now **points to
+  the dashboard Config tab** (translated, 15 languages).
+- ruflo-reviewed; full suite green; add/remove live-verified on HA-TEST.
+
 # [1.7.4-beta.5] — 30.06.2026
 
 > **Pre-release.** Currency fix for high-denomination currencies.
