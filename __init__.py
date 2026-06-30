@@ -210,6 +210,11 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # from the coordinator's config snapshot, so a change must reload to take
     # effect (the snapshot is rebuilt on reload).
     "battery_discharge_control_entity",
+    # #528: the discharge-protection toggle has no runtime switch entity, so a
+    # set_option would otherwise hit the "unrouted → reload" path silently.
+    # Declare it structural so the reload is explicit (battery_protection reads
+    # it from the config snapshot, which is rebuilt on reload). Rarely changed.
+    "battery_discharge_protection_enabled",
     # #523 multi-battery: per-battery control-entity lists are read at
     # adapter construction too, so a change must reload.
     "battery_force_discharge_entities",
@@ -3379,8 +3384,9 @@ async def _async_register_phase_services(
             or (target_entry.data or {}).get("ev_chargers")
             or []
         )
-        kept = [c for c in existing if isinstance(c, dict) and c.get("id") != charger_id]
-        if len(kept) == len(existing):
+        dicts = [c for c in existing if isinstance(c, dict)]
+        kept = [c for c in dicts if c.get("id") != charger_id]
+        if len(kept) == len(dicts):
             _LOGGER.warning("remove_charger: id %s not found — nothing removed", charger_id)
             return
         new_options = {**(target_entry.options or {}), "ev_chargers": kept}

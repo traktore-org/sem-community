@@ -626,7 +626,8 @@ class SEMConfigCard extends SEMLitBase {
                         <span style="flex:1">${this._chargerFriendlyName(cid)}</span>
                         ${this._pendingRemove === cid ? nothing : html`
                             <button class="charger-remove-x" title="${this._t('config_ev_remove')}"
-                                @click=${() => { this._pendingRemove = cid; this.requestUpdate(); }}>✕</button>`}
+                                ?disabled=${this._chargerBusy}
+                                @click=${() => { if (!this._chargerBusy) { this._pendingRemove = cid; this.requestUpdate(); } }}>✕</button>`}
                     </div>
                     ${this._pendingRemove === cid ? html`
                         <div class="charger-remove-confirm">
@@ -747,10 +748,8 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderZoneKnob('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
             ${this._renderZoneKnob('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
             ${/* #528 — battery discharge-protection settings, migrated from the
-                  options flow (async_step_settings). */ ''}
-            <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
-                <span class="ctrl-label" style="font-weight:600">${this._t('config_batt_protection')}</span>
-            </div>
+                  options flow (async_step_settings). Visual separator only. */ ''}
+            <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
             ${this._renderOptionToggle('battery_discharge_protection_enabled', 'config_batt_protection',
                 opts, 'config_help_batt_protection', true)}
             ${this._renderZoneKnob('number.sem_battery_max_discharge_power', 'battery_max_discharge_power', T, 'config_help_batt_max_discharge')}
@@ -998,7 +997,13 @@ class SEMConfigCard extends SEMLitBase {
     async _addCharger() {
         if (this._chargerBusy) return;
         const existing = (this._options.ev_chargers || []);
-        const ids = new Set(existing.map(c => c && c.id).filter(Boolean));
+        // Uniqueness across BOTH the options list and the runtime charger ids
+        // (a stale _options could otherwise collide → smart-merge would UPDATE
+        // an existing charger instead of appending).
+        const ids = new Set([
+            ...existing.map(c => c && c.id).filter(Boolean),
+            ...this._chargersList(),
+        ]);
         let id = 'ev_charger', n = 1;
         while (ids.has(id)) { id = `ev_charger_${n++}`; }
         const charger = {
@@ -1012,6 +1017,9 @@ class SEMConfigCard extends SEMLitBase {
         this.requestUpdate();
         try {
             await this._saveOption('ev_chargers', [charger], 'ev_chargers_add');
+            // _saveOption optimistically set _options.ev_chargers to the
+            // single skeleton — re-read the merged list so siblings reappear.
+            await this._refreshOptions();
         } finally {
             this._chargerBusy = false;
             this.requestUpdate();
@@ -1026,6 +1034,8 @@ class SEMConfigCard extends SEMLitBase {
         try {
             await this._hass.callService('solar_energy_management', 'remove_charger',
                 { charger_id: cid });
+            // Re-read so the removed block disappears without a page refresh.
+            await this._refreshOptions();
         } catch (err) {
             console.error('[sem-config-card] remove_charger failed', err);
         } finally {

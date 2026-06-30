@@ -5932,7 +5932,8 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <span style="flex:1">${this._chargerFriendlyName(a)}</span>
                         ${this._pendingRemove===a?K:W`
                             <button class="charger-remove-x" title="${this._t("config_ev_remove")}"
-                                @click=${()=>{this._pendingRemove=a,this.requestUpdate()}}>✕</button>`}
+                                ?disabled=${this._chargerBusy}
+                                @click=${()=>{this._chargerBusy||(this._pendingRemove=a,this.requestUpdate())}}>✕</button>`}
                     </div>
                     ${this._pendingRemove===a?W`
                         <div class="charger-remove-confirm">
@@ -6005,9 +6006,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             ${this._renderZoneKnob("number.sem_battery_assist_min_surplus","assist_min_surplus",t,"zone_help_assist_min_surplus")}
             ${this._renderZoneKnob("number.sem_battery_assist_max_power","assist_max_power",t,"zone_help_assist_max_power")}
             ${""}
-            <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${t.surfaceBorder};padding-top:8px">
-                <span class="ctrl-label" style="font-weight:600">${this._t("config_batt_protection")}</span>
-            </div>
+            <div style="margin-top:6px;border-top:1px solid ${t.surfaceBorder};padding-top:4px"></div>
             ${this._renderOptionToggle("battery_discharge_protection_enabled","config_batt_protection",e,"config_help_batt_protection",!0)}
             ${this._renderZoneKnob("number.sem_battery_max_discharge_power","battery_max_discharge_power",t,"config_help_batt_max_discharge")}
             ${this._renderPicker("battery_discharge_control_entity","config_batt_discharge_entity","number",null,e,"config_help_batt_discharge_entity")}
@@ -6122,7 +6121,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${this._renderOptionSlider("hot_water_minimum_temperature","config_hw_min_temperature",{min:30,max:55,step:1,unit:"°C",default:40},e,"config_help_hw_min_temperature")}
                 ${this._renderOptionSlider("hot_water_priority","config_hw_priority",{min:1,max:10,step:1,unit:"",default:5},e,"config_help_hw_priority")}
             </div>
-        `}async _saveChargerField(t,e,i,s,r,a){const o=(a.ev_chargers||[]).map(t=>({...t}));o[t]||(o[t]={}),!o[t].id&&e&&(o[t].id=e),o[t][i]=s,await this._saveOption("ev_chargers",o,r)}async _addCharger(){if(this._chargerBusy)return;const t=this._options.ev_chargers||[],e=new Set(t.map(t=>t&&t.id).filter(Boolean));let i="ev_charger",s=1;for(;e.has(i);)i="ev_charger_"+s++;const r={id:i,name:`${this._t("config_ev_new_charger")} ${t.length+1}`,ev_min_current:6,max_charging_current:32,ev_surplus_priority:t.length+3};this._chargerBusy=!0,this.requestUpdate();try{await this._saveOption("ev_chargers",[r],"ev_chargers_add")}finally{this._chargerBusy=!1,this.requestUpdate()}}async _removeCharger(t){if(!this._chargerBusy&&t){this._chargerBusy=!0,this._pendingRemove="",this.requestUpdate();try{await this._hass.callService("solar_energy_management","remove_charger",{charger_id:t})}catch(t){console.error("[sem-config-card] remove_charger failed",t)}finally{this._chargerBusy=!1,this.requestUpdate()}}}_renderTargetTypeSelectNested(t,e,i,s){const r=i.ev_target_type||"kwh",a=!!i.vehicle_soc_entity,o=`ev_chargers.${t}.ev_target_type`,n=this._saveStatus[o];return W`
+        `}async _saveChargerField(t,e,i,s,r,a){const o=(a.ev_chargers||[]).map(t=>({...t}));o[t]||(o[t]={}),!o[t].id&&e&&(o[t].id=e),o[t][i]=s,await this._saveOption("ev_chargers",o,r)}async _addCharger(){if(this._chargerBusy)return;const t=this._options.ev_chargers||[],e=new Set([...t.map(t=>t&&t.id).filter(Boolean),...this._chargersList()]);let i="ev_charger",s=1;for(;e.has(i);)i="ev_charger_"+s++;const r={id:i,name:`${this._t("config_ev_new_charger")} ${t.length+1}`,ev_min_current:6,max_charging_current:32,ev_surplus_priority:t.length+3};this._chargerBusy=!0,this.requestUpdate();try{await this._saveOption("ev_chargers",[r],"ev_chargers_add"),await this._refreshOptions()}finally{this._chargerBusy=!1,this.requestUpdate()}}async _removeCharger(t){if(!this._chargerBusy&&t){this._chargerBusy=!0,this._pendingRemove="",this.requestUpdate();try{await this._hass.callService("solar_energy_management","remove_charger",{charger_id:t}),await this._refreshOptions()}catch(t){console.error("[sem-config-card] remove_charger failed",t)}finally{this._chargerBusy=!1,this.requestUpdate()}}}_renderTargetTypeSelectNested(t,e,i,s){const r=i.ev_target_type||"kwh",a=!!i.vehicle_soc_entity,o=`ev_chargers.${t}.ev_target_type`,n=this._saveStatus[o];return W`
             <div class="stepper-cell">
                 <div class="ctrl-row">
                     <span class="ctrl-label">${this._t("config_ev_target_type")}</span>
