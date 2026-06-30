@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.4] — 30.06.2026
+
+> **Pre-release.** Dashboard-first configuration — the Config tab, made colorful and easy (#528).
+
+### ⚙️ Configuration on the dashboard (#528)
+- 🎨 **The Config tab is now the home for post-setup configuration, in the colorful
+  battery-card design language** — accent sliders with value chips, an SOC-zone
+  strip, and per-section accent theming across every section (no more flat
+  stepper rows). You rarely need HA's Settings → Devices → Configure flow.
+- 🔌 **Batched Apply for entity wiring** — entity pickers that reload the entry
+  now stage their edits and commit in **one** reload via a sticky Apply bar,
+  instead of a reload per field. Tunables still save live.
+- 🧭 **First-run completeness guide** — the Setup overview shows a progress bar +
+  "Set up →" chips that jump to the unconfigured section, and recedes to a green
+  "All set up" when done.
+- 🌍 Full **15-language** translations for the new UI; added the missing
+  hot-water power-sensor picker. ruflo-reviewed.
+
 # [1.7.4-beta.3] — 28.06.2026
 
 > **Pre-release.** Adds per-charger actuation diagnostics for the "SEM says stop but the box keeps charging" class (#548).
