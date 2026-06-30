@@ -131,6 +131,18 @@ const WATCHED = [
     'sensor.sem_diag_grid_sign',
 ];
 
+// #528 — entity-wiring keys that trigger an entry RELOAD when changed (mirror
+// of __init__.py:_SET_OPTION_STRUCTURAL_KEYS). Pickers for these stage their
+// edit and commit on one Apply, so the reload fires once for the whole batch.
+const STRUCTURAL_KEYS = new Set([
+    'battery_soc_sensor',
+    'heat_pump_relay1_entity', 'heat_pump_relay2_entity',
+    'heat_pump_climate_entity', 'heat_pump_power_sensor',
+    'heat_pump_temperature_sensor', 'heat_pump_invert_sg_ready',
+    'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
+    'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
+]);
+
 class SEMConfigCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
 
@@ -143,6 +155,10 @@ class SEMConfigCard extends SEMLitBase {
             // #461 grid-sign fix button transient UI state.
             _signBusy: { state: true },
             _signMsg: { state: true },
+            // #528 staged structural (entity-wiring) edits — committed in one
+            // Apply so a reload fires once for the whole batch, not per field.
+            _pending: { state: true },
+            _applying: { state: true },
         };
     }
 
@@ -153,8 +169,9 @@ class SEMConfigCard extends SEMLitBase {
         this._collapsed = {
             overview: false,
             ev_chargers: true, battery_zones: true, tariff: true,
-            heat_pump: true, battery_scheduler: true, load_management: true,
-            forecast: true, notifications: true, advanced: true,
+            heat_pump: true, hot_water: true, battery_scheduler: true,
+            load_management: true, forecast: true, notifications: true,
+            advanced: true,
         };
         this._showHelp = false;
         this._entryId = '';
@@ -162,6 +179,8 @@ class SEMConfigCard extends SEMLitBase {
         this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
         this._signBusy = false;
         this._signMsg = '';
+        this._pending = {};   // { structuralKey: stagedValue }
+        this._applying = false;
     }
 
     disconnectedCallback() {
@@ -347,6 +366,25 @@ class SEMConfigCard extends SEMLitBase {
     async _selectOption(entityId, value) {
         await this._hass.callService('select', 'select_option', { entity_id: entityId, option: value });
     }
+    // Direct-set a number entity to an exact value (slider drag), clamped to
+    // the entity's own min/max. Live tunable — no entry reload.
+    async _setNumber(entityId, value) {
+        const s = this._hass?.states[entityId];
+        if (!s) return;
+        const min = parseFloat(s.attributes.min);
+        const max = parseFloat(s.attributes.max);
+        let v = value;
+        if (!Number.isNaN(min)) v = Math.max(min, v);
+        if (!Number.isNaN(max)) v = Math.min(max, v);
+        await this._hass.callService('number', 'set_value', { entity_id: entityId, value: v });
+    }
+    // Read a full entity_id as a number (no prefix), fallback when unavailable.
+    _num(id, fb = null) {
+        const e = this._hass?.states[id];
+        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fb;
+        const n = parseFloat(e.state);
+        return Number.isNaN(n) ? fb : n;
+    }
 
     // ── Subtitles ──
 
@@ -423,27 +461,12 @@ class SEMConfigCard extends SEMLitBase {
 
     // ── Reusable inline primitives ──
 
+    // #528: every number setting now uses the colorful accent-slider knob
+    // (battery design language) instead of the flat −/+ row. ``_renderStepper``
+    // delegates to ``_renderZoneKnob`` so all sections (tariff, heat pump,
+    // hot water, advanced, per-charger) restyle uniformly with one change.
     _renderStepper(entityId, labelKey, T, helpKey) {
-        const entity = this._hass?.states[entityId];
-        if (!entity) return nothing;
-        const val = parseFloat(entity.state) || 0;
-        const step = parseFloat(entity.attributes.step) || 1;
-        const unit = entity.attributes.unit_of_measurement || '';
-        const decimals = step < 1 ? 1 : 0;
-        const displayVal = val.toFixed(decimals) + (unit ? ' ' + unit : '');
-        return html`
-            <div class="stepper-cell">
-                <div class="stepper-row">
-                    <span class="stepper-label">${this._t(labelKey)}</span>
-                    <div class="stepper-controls">
-                        <button class="stepper-minus" @click=${() => this._stepNumber(entityId, -1)}>−</button>
-                        <span class="stepper-value">${displayVal}</span>
-                        <button class="stepper-plus" @click=${() => this._stepNumber(entityId, 1)}>+</button>
-                    </div>
-                </div>
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
-            </div>
-        `;
+        return this._renderZoneKnob(entityId, labelKey, T, helpKey);
     }
 
     _renderToggle(entityId, labelKey, T, helpKey) {
@@ -493,27 +516,63 @@ class SEMConfigCard extends SEMLitBase {
 
     // ── Per-section content renderers ──
 
+    // #528 — first-run completeness guide. Lists the optional subsystems with
+    // their status; an unconfigured one is a clickable "Set up →" chip that
+    // expands its section. Core (Energy Dashboard) is guaranteed by the native
+    // flow so it's always ✓. Turns all-green and shows "All set up" when done.
+    _setupItems() {
+        const opts = this._options || {};
+        return [
+            { key: 'energy', labelKey: 'config_overview_energy_dashboard', icon: 'mdi:flash',
+              color: '#ff9800', sectionId: 'overview',
+              done: !!this._hass?.states['sensor.sem_charging_state'] },
+            { key: 'ev', labelKey: 'config_overview_chargers', icon: 'mdi:ev-station',
+              color: '#5BC8D8', sectionId: 'ev_chargers',
+              done: this._chargersList().length > 0 },
+            { key: 'hp', labelKey: 'heat_pump_title', icon: 'mdi:heat-pump',
+              color: '#4db6ac', sectionId: 'heat_pump',
+              done: this._bin('heat_pump_registered') },
+            { key: 'hw', labelKey: 'config_section_hot_water', icon: 'mdi:water-boiler',
+              color: '#5BC8D8', sectionId: 'hot_water',
+              done: !!opts.hot_water_entity },
+        ];
+    }
+
+    _openSection(id) {
+        this._collapsed = { ...this._collapsed, [id]: false };
+        this.requestUpdate();
+    }
+
     _renderOverview(T) {
-        const dashboardReady = !!this._hass?.states['sensor.sem_charging_state'];
-        const chargers = this._chargersList().length;
-        const heatpump = this._bin('heat_pump_registered');
+        const items = this._setupItems();
+        const done = items.filter(i => i.done).length;
+        const total = items.length;
+        const allDone = done === total;
+        const pct = total ? Math.round((done / total) * 100) : 100;
         return html`
+            <div class="setup-progress">
+                <div class="setup-progress-top">
+                    <span class="setup-progress-label">
+                        ${allDone
+                            ? this._t('config_setup_done')
+                            : this._t('config_setup_progress').replace(/\{done\}/g, String(done)).replace(/\{total\}/g, String(total))}
+                    </span>
+                    <span class="setup-progress-pct">${pct}%</span>
+                </div>
+                <div class="setup-progress-bar">
+                    <div class="setup-progress-fill ${allDone ? 'done' : ''}" style=${`width:${pct}%`}></div>
+                </div>
+            </div>
             <div class="chips">
-                <div class="chip">
-                    <ha-icon icon="mdi:flash" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
-                    <div class="chip-label">${this._t('config_overview_energy_dashboard')}</div>
-                    <div class="chip-value ${dashboardReady ? 'c-ok' : 'c-warn'}">${dashboardReady ? '✓' : '!'}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                    <div class="chip-label">${this._t('config_overview_chargers')}</div>
-                    <div class="chip-value" style="color:#5BC8D8">${chargers}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:heat-pump" style="--mdc-icon-size:16px;color:#4db6ac"></ha-icon>
-                    <div class="chip-label">${this._t('heat_pump_title')}</div>
-                    <div class="chip-value" style="color:#4db6ac">${heatpump ? this._t('configured') : this._t('not_configured')}</div>
-                </div>
+                ${items.map(i => html`
+                    <div class="chip ${i.done ? '' : 'chip-todo'}"
+                        @click=${i.done ? undefined : () => this._openSection(i.sectionId)}>
+                        <ha-icon icon="${i.icon}" style="--mdc-icon-size:16px;color:${i.color}"></ha-icon>
+                        <div class="chip-label">${this._t(i.labelKey)}</div>
+                        <div class="chip-value ${i.done ? 'c-ok' : 'c-warn'}">
+                            ${i.done ? '✓' : this._t('config_setup_action')}
+                        </div>
+                    </div>`)}
             </div>
             <div class="overview-help">${this._t('config_overview_help')}</div>
             <div class="overview-actions">
@@ -590,19 +649,81 @@ class SEMConfigCard extends SEMLitBase {
         return name.replace(/\s+Min Amps$/i, '');
     }
 
+    // Colorful accent slider + value chip + fine −/+ buttons (#528 — the
+    // battery-card design language restored to the config controls). Live
+    // tunable: drag → _setNumber, no entry reload. Themed via
+    // ``var(--section-accent)`` so each section keeps its colour.
+    _renderZoneKnob(entityId, labelKey, T, helpKey) {
+        const e = this._hass?.states[entityId];
+        if (!e) return nothing;
+        const val = parseFloat(e.state) || 0;
+        const _mn = parseFloat(e.attributes.min);
+        const _mx = parseFloat(e.attributes.max);
+        const min = Number.isNaN(_mn) ? 0 : _mn;
+        const max = Number.isNaN(_mx) ? 100 : _mx;
+        const step = parseFloat(e.attributes.step) || 1;
+        const unit = e.attributes.unit_of_measurement || '';
+        const decimals = step < 1 ? 1 : 0;
+        const pct = max > min ? Math.round(((val - min) / (max - min)) * 100) : 0;
+        return html`
+            <div class="zone-knob">
+                <div class="zone-knob-top">
+                    <span class="zone-knob-label">${this._t(labelKey)}</span>
+                    <span class="zone-chip">${val.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                </div>
+                <div class="zone-knob-slider">
+                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, -1)}>−</button>
+                    <input type="range" class="zone-range"
+                        min=${min} max=${max} step=${step} .value=${String(val)}
+                        style=${`--fill:${pct}%`}
+                        @change=${(ev) => this._setNumber(entityId, parseFloat(ev.target.value))} />
+                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, 1)}>+</button>
+                </div>
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // SOC-zone strip — visualises the three thresholds on a 0–100 % bar so
+    // the priority/buffer/auto-start relationship is obvious at a glance
+    // (the "very nice and colorful" battery viz, #528).
+    _renderSocZoneStrip(T) {
+        const p = this._num('number.sem_battery_priority_soc');
+        const b = this._num('number.sem_battery_buffer_soc');
+        const a = this._num('number.sem_battery_auto_start_soc');
+        if (p == null || b == null || a == null) return nothing;
+        const soc = this._num('sensor.sem_battery_soc');
+        const clamp = (x) => Math.max(0, Math.min(100, x));
+        return html`
+            <div class="soc-strip">
+                <div class="soc-bar">
+                    <div class="soc-zone" style=${`width:${clamp(p)}%;background:#e57373`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(b - p)}%;background:#ffb74d`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(a - b)}%;background:#81c784`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(100 - a)}%;background:#64b5f6`}></div>
+                    ${soc != null ? html`<div class="soc-now" style=${`left:${clamp(soc)}%`} title="SOC ${soc}%"></div>` : nothing}
+                    <div class="soc-tick" style=${`left:${clamp(p)}%`}><span>${p}</span></div>
+                    <div class="soc-tick" style=${`left:${clamp(b)}%`}><span>${b}</span></div>
+                    <div class="soc-tick" style=${`left:${clamp(a)}%`}><span>${a}</span></div>
+                </div>
+                <div class="soc-legend">
+                    <span><i style="background:#e57373"></i>${this._t('zone_legend_reserve')}</span>
+                    <span><i style="background:#ffb74d"></i>${this._t('zone_legend_buffer')}</span>
+                    <span><i style="background:#81c784"></i>${this._t('zone_legend_assist')}</span>
+                    <span><i style="background:#64b5f6"></i>${this._t('zone_legend_surplus')}</span>
+                </div>
+            </div>
+        `;
+    }
+
     _renderBatteryZones(T) {
         return html`
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
-                ${this._renderStepper('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
-                ${this._renderStepper('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
-            </div>
+            ${this._renderSocZoneStrip(T)}
+            ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
+            ${this._renderZoneKnob('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
+            ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
+            ${this._renderZoneKnob('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
+            ${this._renderZoneKnob('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
         `;
     }
 
@@ -804,6 +925,8 @@ class SEMConfigCard extends SEMLitBase {
                     null, null, opts, 'config_help_hw_entity')}
                 ${this._renderPicker('hot_water_temperature_sensor', 'config_hw_temp_sensor',
                     'sensor', 'temperature', opts, 'config_help_hw_temp_sensor')}
+                ${this._renderPicker('hot_water_power_sensor', 'config_hw_power_sensor',
+                    'sensor', 'power', opts, 'config_help_hw_power_sensor')}
                 ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
                     T, 'config_help_hw_solar_target')}
                 ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
@@ -991,25 +1114,92 @@ class SEMConfigCard extends SEMLitBase {
     // Entity picker bound to an entry.options key. Auto-saves via WebSocket
     // on change → SEM update_listener reloads → registered=on within ~1s.
     _renderPicker(optionKey, labelKey, domain, deviceClass, opts, helpKey) {
-        const cur = opts[optionKey] || '';
         const status = this._saveStatus[optionKey];
+        // #528: structural (entity-wiring) keys reload the entry — stage the
+        // edit locally and commit on Apply so the reload fires once for the
+        // whole batch. Non-structural keys save live on change (unchanged).
+        const structural = STRUCTURAL_KEYS.has(optionKey);
+        const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
+        const cur = staged ? this._pending[optionKey] : (opts[optionKey] || '');
+        const onChange = (val) => {
+            if (structural) {
+                this._pending = { ...this._pending, [optionKey]: val || '' };
+                this.requestUpdate();
+            } else {
+                this._saveOption(optionKey, val, optionKey);
+            }
+        };
         return html`
             <div class="picker-cell">
                 <div class="picker-row">
-                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <span class="picker-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}</span>
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
                         .includeDomains=${[domain]}
                         .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
                         .allowCustomEntity=${false}
-                        @value-changed=${(e) => this._saveOption(optionKey, e.detail?.value || '', optionKey)}>
+                        @value-changed=${(e) => onChange(e.detail?.value || '')}>
                     </ha-entity-picker>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
                 ${status && status !== 'saving' && status !== 'ok' ? html`<div class="save-status err">⚠ ${status}</div>` : nothing}
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // #528 — commit all staged structural edits in ONE set_option call (one
+    // entry reload for the whole batch) and clear the buffer.
+    async _applyPending() {
+        const keys = Object.keys(this._pending);
+        if (!keys.length || this._applying) return;
+        const entryId = await this._ensureEntryId();
+        this._applying = true;
+        // Clear any prior apply error before retrying.
+        const ss = { ...this._saveStatus }; delete ss._apply; this._saveStatus = ss;
+        this.requestUpdate();
+        try {
+            const options = { ...this._pending };
+            await this._hass.callService('solar_energy_management', 'set_option', {
+                options, ...(entryId ? { entry_id: entryId } : {}),
+            });
+            // Reflect locally; the entry reload will re-publish authoritative state.
+            this._options = { ...this._options, ...options };
+            this._pending = {};
+        } catch (err) {
+            console.error('[sem-config-card] apply failed', err);
+            this._saveStatus = { ...this._saveStatus, _apply: err?.message || 'apply failed' };
+        } finally {
+            this._applying = false;
+            this.requestUpdate();
+        }
+    }
+
+    _discardPending() {
+        this._pending = {};
+        this.requestUpdate();
+    }
+
+    // Sticky bar shown whenever structural edits are staged.
+    _renderApplyBar() {
+        const n = Object.keys(this._pending).length;
+        if (!n && !this._applying) return nothing;
+        const err = this._saveStatus._apply;
+        return html`
+            <div class="apply-bar ${err ? 'apply-err' : ''}">
+                <span class="apply-msg">
+                    ${this._applying
+                        ? html`<span class="apply-spin"></span>${this._t('config_applying')}`
+                        : (err
+                            ? html`⚠ ${err}`
+                            : this._t('config_pending_changes').replace(/\{n\}/g, String(n)))}
+                </span>
+                ${this._applying ? nothing : html`
+                    <button class="apply-discard" @click=${() => this._discardPending()}>${this._t('config_discard')}</button>
+                    <button class="apply-btn" @click=${() => this._applyPending()}>${this._t('config_apply')}</button>
+                `}
             </div>
         `;
     }
@@ -1114,26 +1304,31 @@ class SEMConfigCard extends SEMLitBase {
 
     // Slider that writes to entry.options on change. Use for option-only
     // numeric fields that don't have a runtime ``number.sem_*`` entity.
+    // #528: option-key slider in the same colorful accent style as the
+    // entity knob (saves an entry.option live via _saveOption).
     _renderOptionSlider(optionKey, labelKey, cfg, opts, helpKey) {
-        const cur = opts[optionKey] != null ? opts[optionKey] : cfg.default;
+        const cur = parseFloat(opts[optionKey] != null ? opts[optionKey] : cfg.default) || 0;
         const status = this._saveStatus[optionKey];
         const decimals = cfg.step < 1 ? 1 : 0;
-        const displayVal = parseFloat(cur).toFixed(decimals) + (cfg.unit ? ' ' + cfg.unit : '');
+        const unit = cfg.unit || '';
+        const pct = cfg.max > cfg.min ? Math.round(((cur - cfg.min) / (cfg.max - cfg.min)) * 100) : 0;
+        const stepBy = (d) => {
+            const next = Math.min(cfg.max, Math.max(cfg.min, cur + d * cfg.step));
+            this._saveOption(optionKey, next, optionKey);
+        };
         return html`
-            <div class="stepper-cell">
-                <div class="stepper-row">
-                    <span class="stepper-label">${this._t(labelKey)}</span>
-                    <div class="stepper-controls">
-                        <button class="stepper-minus" @click=${() => {
-                            const next = Math.max(cfg.min, parseFloat(cur) - cfg.step);
-                            this._saveOption(optionKey, next, optionKey);
-                        }}>−</button>
-                        <span class="stepper-value">${displayVal}</span>
-                        <button class="stepper-plus" @click=${() => {
-                            const next = Math.min(cfg.max, parseFloat(cur) + cfg.step);
-                            this._saveOption(optionKey, next, optionKey);
-                        }}>+</button>
-                    </div>
+            <div class="zone-knob">
+                <div class="zone-knob-top">
+                    <span class="zone-knob-label">${this._t(labelKey)}</span>
+                    <span class="zone-chip">${cur.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                </div>
+                <div class="zone-knob-slider">
+                    <button class="zone-mini" @click=${() => stepBy(-1)}>−</button>
+                    <input type="range" class="zone-range"
+                        min=${cfg.min} max=${cfg.max} step=${cfg.step} .value=${String(cur)}
+                        style=${`--fill:${pct}%`}
+                        @change=${(ev) => this._saveOption(optionKey, parseFloat(ev.target.value), optionKey)} />
+                    <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
@@ -1602,6 +1797,139 @@ class SEMConfigCard extends SEMLitBase {
                 .toggle-track.on .toggle-thumb { left: 20px; }
 
                 .stepper-cell { display: flex; flex-direction: column; }
+
+                /* ── #528: colorful zone controls (battery design language) ── */
+                .zone-knob { padding: 8px 2px 10px; }
+                .zone-knob-top {
+                    display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 7px;
+                }
+                .zone-knob-label { font-size: 14px; font-weight: 600; }
+                .zone-chip {
+                    background: color-mix(in srgb, var(--section-accent) 18%, transparent);
+                    color: var(--section-accent);
+                    font-weight: 700; font-size: 0.92em;
+                    padding: 2px 11px; border-radius: 11px;
+                    border: 1px solid color-mix(in srgb, var(--section-accent) 40%, transparent);
+                    min-width: 56px; text-align: center;
+                }
+                .zone-knob-slider { display: flex; align-items: center; gap: 10px; }
+                .zone-mini {
+                    width: 28px; height: 28px; flex-shrink: 0;
+                    border-radius: 8px; cursor: pointer;
+                    border: 1px solid color-mix(in srgb, var(--section-accent) 35%, ${T.surfaceBorder});
+                    background: color-mix(in srgb, var(--section-accent) 8%, transparent);
+                    color: var(--section-accent);
+                    font-size: 18px; line-height: 1; font-weight: 600;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: background 0.12s;
+                }
+                .zone-mini:hover { background: color-mix(in srgb, var(--section-accent) 20%, transparent); }
+                .zone-range {
+                    -webkit-appearance: none; appearance: none;
+                    flex: 1; min-width: 0; height: 6px; border-radius: 3px;
+                    cursor: pointer; outline: none;
+                    background: linear-gradient(to right,
+                        var(--section-accent) 0%, var(--section-accent) var(--fill, 0%),
+                        ${isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)'} var(--fill, 0%),
+                        ${isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)'} 100%);
+                }
+                .zone-range::-webkit-slider-thumb {
+                    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+                    background: var(--section-accent); border: 2px solid #fff;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.45); cursor: pointer;
+                }
+                .zone-range::-moz-range-thumb {
+                    width: 16px; height: 16px; border-radius: 50%;
+                    background: var(--section-accent); border: 2px solid #fff;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.45); cursor: pointer;
+                }
+
+                /* SOC-zone strip */
+                .soc-strip { padding: 4px 2px 12px; }
+                .soc-bar {
+                    position: relative; display: flex;
+                    height: 14px; border-radius: 7px; overflow: hidden;
+                    margin-bottom: 22px;
+                }
+                .soc-zone { height: 100%; }
+                .soc-now {
+                    position: absolute; top: -3px; width: 3px; height: 20px;
+                    background: #fff; border-radius: 2px;
+                    box-shadow: 0 0 4px rgba(0,0,0,0.6); transform: translateX(-50%);
+                }
+                .soc-tick {
+                    position: absolute; bottom: -20px; transform: translateX(-50%);
+                    font-size: 10px; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .soc-tick::before {
+                    content: ''; position: absolute; top: -7px; left: 50%;
+                    width: 1px; height: 6px; background: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.5; transform: translateX(-50%);
+                }
+                .soc-legend {
+                    display: flex; flex-wrap: wrap; gap: 4px 14px;
+                    font-size: 11px; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .soc-legend span { display: inline-flex; align-items: center; gap: 5px; }
+                .soc-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+                /* #528 staged-changes Apply bar (sticky at top of the card) */
+                .apply-bar {
+                    position: sticky; top: 6px; z-index: 5;
+                    display: flex; align-items: center; gap: 10px;
+                    margin: 0 0 12px; padding: 9px 12px;
+                    border-radius: 10px;
+                    background: color-mix(in srgb, ${accent} 16%, ${T.surface});
+                    border: 1px solid color-mix(in srgb, ${accent} 45%, ${T.surfaceBorder});
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+                }
+                .apply-msg { flex: 1; font-size: 12.5px; font-weight: 600;
+                    display: inline-flex; align-items: center; gap: 8px; }
+                .apply-btn, .apply-discard {
+                    border: none; border-radius: 8px; cursor: pointer;
+                    font-size: 12.5px; font-weight: 700; padding: 6px 14px;
+                }
+                .apply-btn { background: ${accent}; color: #fff; }
+                .apply-discard {
+                    background: transparent; color: var(--secondary-text-color, ${T.textSec});
+                    border: 1px solid ${T.surfaceBorder};
+                }
+                .apply-spin {
+                    width: 13px; height: 13px; border-radius: 50%;
+                    border: 2px solid color-mix(in srgb, ${accent} 30%, transparent);
+                    border-top-color: ${accent}; display: inline-block;
+                    animation: applyspin 0.7s linear infinite;
+                }
+                @keyframes applyspin { to { transform: rotate(360deg); } }
+                .apply-bar.apply-err {
+                    background: color-mix(in srgb, #e57373 18%, ${T.surface});
+                    border-color: color-mix(in srgb, #e57373 55%, ${T.surfaceBorder});
+                }
+                .apply-bar.apply-err .apply-msg { color: #e57373; }
+                .pending-dot { color: ${accent}; font-size: 9px; margin-left: 6px; vertical-align: middle; }
+
+                /* #528 first-run completeness guide */
+                .setup-progress { margin: 2px 2px 12px; }
+                .setup-progress-top {
+                    display: flex; justify-content: space-between; align-items: baseline;
+                    margin-bottom: 6px;
+                }
+                .setup-progress-label { font-size: 13px; font-weight: 700; }
+                .setup-progress-pct { font-size: 12px; color: var(--secondary-text-color, ${T.textSec}); }
+                .setup-progress-bar {
+                    height: 7px; border-radius: 4px; overflow: hidden;
+                    background: ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'};
+                }
+                .setup-progress-fill {
+                    height: 100%; border-radius: 4px;
+                    background: #ffb74d; transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+                }
+                .setup-progress-fill.done { background: #81c784; }
+                .chip-todo { cursor: pointer; border-style: dashed !important; }
+                .chip-todo:hover { border-color: ${accent} !important; }
+                .chip-todo .c-warn { color: ${accent} !important; font-weight: 700; white-space: nowrap; }
+
                 .setting-help-text {
                     font-size: 11px; line-height: 1.35;
                     color: var(--secondary-text-color, ${T.textSec});
@@ -1688,6 +2016,7 @@ class SEMConfigCard extends SEMLitBase {
                             style="--mdc-icon-size:18px"
                         ></ha-icon>
                     </div>
+                    ${this._renderApplyBar()}
                     ${SECTIONS.map(s => this._renderSection(s, renderers[s.id], T))}
                 </div>
             </ha-card>
