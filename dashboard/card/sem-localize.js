@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-30T18:45:14.892997+00:00
+// Generated: 2026-06-30T19:08:59.505885+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1111,7 +1111,11 @@
       "config_batt_protection": "Discharge protection",
       "config_help_batt_protection": "Limit battery discharge to the max power above to protect it and keep a reserve.",
       "config_batt_discharge_entity": "Discharge limit entity",
-      "config_help_batt_discharge_entity": "The number entity SEM writes to cap battery discharge (e.g. the inverter's max-discharge-power)."
+      "config_help_batt_discharge_entity": "The number entity SEM writes to cap battery discharge (e.g. the inverter's max-discharge-power).",
+      "config_ev_add_charger": "Add charger",
+      "config_ev_remove": "Remove",
+      "config_ev_remove_confirm": "Remove this charger from SEM?",
+      "config_ev_new_charger": "New charger"
     },
     "de": {
       "charging": "Laden",
@@ -2219,7 +2223,11 @@
       "config_batt_protection": "Entladeschutz",
       "config_help_batt_protection": "Begrenzt die Batterieentladung auf die obige max. Leistung, um sie zu schützen und eine Reserve zu halten.",
       "config_batt_discharge_entity": "Entladelimit-Entität",
-      "config_help_batt_discharge_entity": "Die number-Entität, die SEM beschreibt, um die Batterieentladung zu begrenzen (z. B. max. Entladeleistung des Wechselrichters)."
+      "config_help_batt_discharge_entity": "Die number-Entität, die SEM beschreibt, um die Batterieentladung zu begrenzen (z. B. max. Entladeleistung des Wechselrichters).",
+      "config_ev_add_charger": "Ladegerät hinzufügen",
+      "config_ev_remove": "Entfernen",
+      "config_ev_remove_confirm": "Dieses Ladegerät aus SEM entfernen?",
+      "config_ev_new_charger": "Neues Ladegerät"
     },
     "fr": {
       "charging": "En charge",
@@ -3327,7 +3335,11 @@
       "config_batt_protection": "Protection de décharge",
       "config_help_batt_protection": "Limite la décharge de la batterie à la puissance max ci-dessus pour la protéger et garder une réserve.",
       "config_batt_discharge_entity": "Entité limite de décharge",
-      "config_help_batt_discharge_entity": "L'entité number que SEM écrit pour limiter la décharge de la batterie (p. ex. la puissance de décharge max de l'onduleur)."
+      "config_help_batt_discharge_entity": "L'entité number que SEM écrit pour limiter la décharge de la batterie (p. ex. la puissance de décharge max de l'onduleur).",
+      "config_ev_add_charger": "Ajouter une borne",
+      "config_ev_remove": "Supprimer",
+      "config_ev_remove_confirm": "Supprimer cette borne de SEM ?",
+      "config_ev_new_charger": "Nouvelle borne"
     },
     "es": {
       "charging": "Cargando",
@@ -4435,7 +4447,11 @@
       "config_batt_protection": "Protección de descarga",
       "config_help_batt_protection": "Limita la descarga de la batería a la potencia máx anterior para protegerla y mantener una reserva.",
       "config_batt_discharge_entity": "Entidad límite de descarga",
-      "config_help_batt_discharge_entity": "La entidad number que SEM escribe para limitar la descarga de la batería (p. ej. la potencia de descarga máx del inversor)."
+      "config_help_batt_discharge_entity": "La entidad number que SEM escribe para limitar la descarga de la batería (p. ej. la potencia de descarga máx del inversor).",
+      "config_ev_add_charger": "Añadir cargador",
+      "config_ev_remove": "Eliminar",
+      "config_ev_remove_confirm": "¿Eliminar este cargador de SEM?",
+      "config_ev_new_charger": "Nuevo cargador"
     },
     "it": {
       "charging": "In carica",
@@ -5543,7 +5559,11 @@
       "config_batt_protection": "Protezione scarica",
       "config_help_batt_protection": "Limita la scarica della batteria alla potenza max sopra per proteggerla e mantenere una riserva.",
       "config_batt_discharge_entity": "Entità limite scarica",
-      "config_help_batt_discharge_entity": "L'entità number che SEM scrive per limitare la scarica della batteria (es. la potenza di scarica max dell'inverter)."
+      "config_help_batt_discharge_entity": "L'entità number che SEM scrive per limitare la scarica della batteria (es. la potenza di scarica max dell'inverter).",
+      "config_ev_add_charger": "Aggiungi caricatore",
+      "config_ev_remove": "Rimuovi",
+      "config_ev_remove_confirm": "Rimuovere questo caricatore da SEM?",
+      "config_ev_new_charger": "Nuovo caricatore"
     },
     "nl": {
       "charging": "Laden",
@@ -6651,7 +6671,11 @@
       "config_batt_protection": "Ontlaadbeveiliging",
       "config_help_batt_protection": "Beperkt de batterijontlading tot het max. vermogen hierboven om hem te beschermen en een reserve te houden.",
       "config_batt_discharge_entity": "Ontlaadlimiet-entiteit",
-      "config_help_batt_discharge_entity": "De number-entiteit die SEM schrijft om de batterijontlading te begrenzen (bijv. het max. ontlaadvermogen van de omvormer)."
+      "config_help_batt_discharge_entity": "De number-entiteit die SEM schrijft om de batterijontlading te begrenzen (bijv. het max. ontlaadvermogen van de omvormer).",
+      "config_ev_add_charger": "Lader toevoegen",
+      "config_ev_remove": "Verwijderen",
+      "config_ev_remove_confirm": "Deze lader uit SEM verwijderen?",
+      "config_ev_new_charger": "Nieuwe lader"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7759,7 +7783,11 @@
       "config_batt_protection": "Ochrana vybíjení",
       "config_help_batt_protection": "Omezí vybíjení baterie na výše uvedený max. výkon pro její ochranu a udržení rezervy.",
       "config_batt_discharge_entity": "Entita limitu vybíjení",
-      "config_help_batt_discharge_entity": "Entita number, do které SEM zapisuje pro omezení vybíjení baterie (např. max. vybíjecí výkon měniče)."
+      "config_help_batt_discharge_entity": "Entita number, do které SEM zapisuje pro omezení vybíjení baterie (např. max. vybíjecí výkon měniče).",
+      "config_ev_add_charger": "Přidat nabíječku",
+      "config_ev_remove": "Odebrat",
+      "config_ev_remove_confirm": "Odebrat tuto nabíječku ze SEM?",
+      "config_ev_new_charger": "Nová nabíječka"
     },
     "da": {
       "charging": "Oplader",
@@ -8867,7 +8895,11 @@
       "config_batt_protection": "Afladningsbeskyttelse",
       "config_help_batt_protection": "Begrænser batteriafladning til maks.-effekten ovenfor for at beskytte det og holde en reserve.",
       "config_batt_discharge_entity": "Afladningsgrænse-enhed",
-      "config_help_batt_discharge_entity": "Den number-enhed, SEM skriver til for at begrænse batteriafladning (f.eks. inverterens maks. afladningseffekt)."
+      "config_help_batt_discharge_entity": "Den number-enhed, SEM skriver til for at begrænse batteriafladning (f.eks. inverterens maks. afladningseffekt).",
+      "config_ev_add_charger": "Tilføj lader",
+      "config_ev_remove": "Fjern",
+      "config_ev_remove_confirm": "Fjern denne lader fra SEM?",
+      "config_ev_new_charger": "Ny lader"
     },
     "fi": {
       "charging": "Lataus",
@@ -9975,7 +10007,11 @@
       "config_batt_protection": "Purkusuojaus",
       "config_help_batt_protection": "Rajoittaa akun purkamisen yllä olevaan maksimitehoon sen suojaamiseksi ja varauksen säilyttämiseksi.",
       "config_batt_discharge_entity": "Purkurajan entiteetti",
-      "config_help_batt_discharge_entity": "number-entiteetti, johon SEM kirjoittaa rajoittaakseen akun purkua (esim. invertterin maks. purkuteho)."
+      "config_help_batt_discharge_entity": "number-entiteetti, johon SEM kirjoittaa rajoittaakseen akun purkua (esim. invertterin maks. purkuteho).",
+      "config_ev_add_charger": "Lisää laturi",
+      "config_ev_remove": "Poista",
+      "config_ev_remove_confirm": "Poistetaanko tämä laturi SEM:stä?",
+      "config_ev_new_charger": "Uusi laturi"
     },
     "hu": {
       "charging": "Töltés",
@@ -11083,7 +11119,11 @@
       "config_batt_protection": "Kisütésvédelem",
       "config_help_batt_protection": "Az akkumulátor kisütését a fenti max. teljesítményre korlátozza a védelem és tartalék érdekében.",
       "config_batt_discharge_entity": "Kisütési limit entitás",
-      "config_help_batt_discharge_entity": "A number entitás, amelybe a SEM ír az akkumulátor kisütésének korlátozásához (pl. az inverter max. kisütési teljesítménye)."
+      "config_help_batt_discharge_entity": "A number entitás, amelybe a SEM ír az akkumulátor kisütésének korlátozásához (pl. az inverter max. kisütési teljesítménye).",
+      "config_ev_add_charger": "Töltő hozzáadása",
+      "config_ev_remove": "Eltávolítás",
+      "config_ev_remove_confirm": "Eltávolítja ezt a töltőt a SEM-ből?",
+      "config_ev_new_charger": "Új töltő"
     },
     "no": {
       "charging": "Lader",
@@ -12191,7 +12231,11 @@
       "config_batt_protection": "Utladingsbeskyttelse",
       "config_help_batt_protection": "Begrenser batteriutlading til maks.-effekten over for å beskytte det og beholde en reserve.",
       "config_batt_discharge_entity": "Utladingsgrense-enhet",
-      "config_help_batt_discharge_entity": "number-enheten SEM skriver til for å begrense batteriutlading (f.eks. inverterens maks. utladingseffekt)."
+      "config_help_batt_discharge_entity": "number-enheten SEM skriver til for å begrense batteriutlading (f.eks. inverterens maks. utladingseffekt).",
+      "config_ev_add_charger": "Legg til lader",
+      "config_ev_remove": "Fjern",
+      "config_ev_remove_confirm": "Fjerne denne laderen fra SEM?",
+      "config_ev_new_charger": "Ny lader"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13299,7 +13343,11 @@
       "config_batt_protection": "Ochrona rozładowania",
       "config_help_batt_protection": "Ogranicza rozładowanie akumulatora do powyższej maks. mocy, aby go chronić i zachować rezerwę.",
       "config_batt_discharge_entity": "Encja limitu rozładowania",
-      "config_help_batt_discharge_entity": "Encja number, do której SEM zapisuje, aby ograniczyć rozładowanie akumulatora (np. maks. moc rozładowania falownika)."
+      "config_help_batt_discharge_entity": "Encja number, do której SEM zapisuje, aby ograniczyć rozładowanie akumulatora (np. maks. moc rozładowania falownika).",
+      "config_ev_add_charger": "Dodaj ładowarkę",
+      "config_ev_remove": "Usuń",
+      "config_ev_remove_confirm": "Usunąć tę ładowarkę z SEM?",
+      "config_ev_new_charger": "Nowa ładowarka"
     },
     "pt": {
       "charging": "A carregar",
@@ -14407,7 +14455,11 @@
       "config_batt_protection": "Proteção de descarga",
       "config_help_batt_protection": "Limita a descarga da bateria à potência máx acima para protegê-la e manter uma reserva.",
       "config_batt_discharge_entity": "Entidade limite de descarga",
-      "config_help_batt_discharge_entity": "A entidade number que o SEM escreve para limitar a descarga da bateria (p. ex. a potência de descarga máx do inversor)."
+      "config_help_batt_discharge_entity": "A entidade number que o SEM escreve para limitar a descarga da bateria (p. ex. a potência de descarga máx do inversor).",
+      "config_ev_add_charger": "Adicionar carregador",
+      "config_ev_remove": "Remover",
+      "config_ev_remove_confirm": "Remover este carregador do SEM?",
+      "config_ev_new_charger": "Novo carregador"
     },
     "ro": {
       "charging": "Încărcare",
@@ -15515,7 +15567,11 @@
       "config_batt_protection": "Protecție descărcare",
       "config_help_batt_protection": "Limitează descărcarea bateriei la puterea max de mai sus pentru a o proteja și a păstra o rezervă.",
       "config_batt_discharge_entity": "Entitate limită descărcare",
-      "config_help_batt_discharge_entity": "Entitatea number în care SEM scrie pentru a limita descărcarea bateriei (de ex. puterea max de descărcare a invertorului)."
+      "config_help_batt_discharge_entity": "Entitatea number în care SEM scrie pentru a limita descărcarea bateriei (de ex. puterea max de descărcare a invertorului).",
+      "config_ev_add_charger": "Adaugă încărcător",
+      "config_ev_remove": "Elimină",
+      "config_ev_remove_confirm": "Eliminați acest încărcător din SEM?",
+      "config_ev_new_charger": "Încărcător nou"
     },
     "sv": {
       "charging": "Laddar",
@@ -16623,7 +16679,11 @@
       "config_batt_protection": "Urladdningsskydd",
       "config_help_batt_protection": "Begränsar batteriurladdning till max-effekten ovan för att skydda det och behålla en reserv.",
       "config_batt_discharge_entity": "Urladdningsgräns-entitet",
-      "config_help_batt_discharge_entity": "Den number-entitet SEM skriver till för att begränsa batteriurladdning (t.ex. växelriktarens max urladdningseffekt)."
+      "config_help_batt_discharge_entity": "Den number-entitet SEM skriver till för att begränsa batteriurladdning (t.ex. växelriktarens max urladdningseffekt).",
+      "config_ev_add_charger": "Lägg till laddare",
+      "config_ev_remove": "Ta bort",
+      "config_ev_remove_confirm": "Ta bort denna laddare från SEM?",
+      "config_ev_new_charger": "Ny laddare"
     }
   };
 

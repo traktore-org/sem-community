@@ -160,6 +160,10 @@ class SEMConfigCard extends SEMLitBase {
             // Apply so a reload fires once for the whole batch, not per field.
             _pending: { state: true },
             _applying: { state: true },
+            // #528 Phase 4 — per-charger remove confirm (inline, no blocking
+            // window.confirm) + add/remove busy flag.
+            _pendingRemove: { state: true },
+            _chargerBusy: { state: true },
         };
     }
 
@@ -182,6 +186,8 @@ class SEMConfigCard extends SEMLitBase {
         this._signMsg = '';
         this._pending = {};   // { structuralKey: stagedValue }
         this._applying = false;
+        this._pendingRemove = '';  // charger id awaiting remove-confirm
+        this._chargerBusy = false;
     }
 
     disconnectedCallback() {
@@ -595,8 +601,10 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="empty-state">
                     <ha-icon icon="mdi:ev-station-outline" style="--mdc-icon-size:32px;color:#5BC8D8;opacity:0.7"></ha-icon>
                     <div class="empty-title">${this._t('config_ev_no_chargers')}</div>
-                    <div class="empty-help">${this._t('config_ev_add_via_settings')}</div>
-                    ${this._renderHaSettingsButton('config_ev_add_button')}
+                    <button class="add-charger-btn" ?disabled=${this._chargerBusy} @click=${() => this._addCharger()}>
+                        <ha-icon icon="mdi:plus" style="--mdc-icon-size:16px"></ha-icon>
+                        ${this._t('config_ev_add_charger')}
+                    </button>
                 </div>
             `;
         }
@@ -615,8 +623,17 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="charger-block">
                     <div class="charger-block-title">
                         <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:18px;color:#5BC8D8"></ha-icon>
-                        ${this._chargerFriendlyName(cid)}
+                        <span style="flex:1">${this._chargerFriendlyName(cid)}</span>
+                        ${this._pendingRemove === cid ? nothing : html`
+                            <button class="charger-remove-x" title="${this._t('config_ev_remove')}"
+                                @click=${() => { this._pendingRemove = cid; this.requestUpdate(); }}>✕</button>`}
                     </div>
+                    ${this._pendingRemove === cid ? html`
+                        <div class="charger-remove-confirm">
+                            <span>${this._t('config_ev_remove_confirm')}</span>
+                            <button class="charger-remove-cancel" @click=${() => { this._pendingRemove = ''; this.requestUpdate(); }}>${this._t('config_discard')}</button>
+                            <button class="charger-remove-go" @click=${() => this._removeCharger(cid)}>${this._t('config_ev_remove')}</button>
+                        </div>` : nothing}
                     ${this._renderPickerNested(idx, cid, 'ev_connected_sensor', 'config_ev_connected_sensor',
                         'binary_sensor', null, opts, 'config_help_ev_connected_sensor')}
                     ${this._renderPickerNested(idx, cid, 'ev_charging_power_sensor', 'config_ev_charging_power',
@@ -640,7 +657,10 @@ class SEMConfigCard extends SEMLitBase {
                 </div>
             `;})}
             <div class="section-footer">
-                ${this._renderHaSettingsButton('config_ev_add_remove')}
+                <button class="add-charger-btn" ?disabled=${this._chargerBusy} @click=${() => this._addCharger()}>
+                    <ha-icon icon="mdi:plus" style="--mdc-icon-size:16px"></ha-icon>
+                    ${this._t('config_ev_add_charger')}
+                </button>
             </div>
         `;
     }
@@ -969,6 +989,49 @@ class SEMConfigCard extends SEMLitBase {
         if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
         newChargers[chargerIndex][key] = value;
         await this._saveOption('ev_chargers', newChargers, statusKey);
+    }
+
+    // #528 Phase 4 — add a charger from the dashboard. Sends ONLY the new
+    // skeleton; the backend smart-merge (#464) appends it by id and preserves
+    // siblings. The new charger appears as a block to wire via the per-charger
+    // pickers (it's inert until a power sensor + control entity are set).
+    async _addCharger() {
+        if (this._chargerBusy) return;
+        const existing = (this._options.ev_chargers || []);
+        const ids = new Set(existing.map(c => c && c.id).filter(Boolean));
+        let id = 'ev_charger', n = 1;
+        while (ids.has(id)) { id = `ev_charger_${n++}`; }
+        const charger = {
+            id,
+            name: `${this._t('config_ev_new_charger')} ${existing.length + 1}`,
+            ev_min_current: 6,
+            max_charging_current: 32,
+            ev_surplus_priority: existing.length + 3,
+        };
+        this._chargerBusy = true;
+        this.requestUpdate();
+        try {
+            await this._saveOption('ev_chargers', [charger], 'ev_chargers_add');
+        } finally {
+            this._chargerBusy = false;
+            this.requestUpdate();
+        }
+    }
+
+    async _removeCharger(cid) {
+        if (this._chargerBusy || !cid) return;
+        this._chargerBusy = true;
+        this._pendingRemove = '';
+        this.requestUpdate();
+        try {
+            await this._hass.callService('solar_energy_management', 'remove_charger',
+                { charger_id: cid });
+        } catch (err) {
+            console.error('[sem-config-card] remove_charger failed', err);
+        } finally {
+            this._chargerBusy = false;
+            this.requestUpdate();
+        }
     }
 
     // EV target-type select bound to ev_chargers[index].ev_target_type.
@@ -1922,6 +1985,40 @@ class SEMConfigCard extends SEMLitBase {
                 }
                 .apply-bar.apply-err .apply-msg { color: #e57373; }
                 .pending-dot { color: ${accent}; font-size: 9px; margin-left: 6px; vertical-align: middle; }
+
+                /* #528 Phase 4 — add/remove charger */
+                .add-charger-btn {
+                    display: inline-flex; align-items: center; gap: 6px;
+                    margin-top: 8px; padding: 8px 16px; border-radius: 9px; cursor: pointer;
+                    background: color-mix(in srgb, #5BC8D8 16%, transparent);
+                    border: 1px dashed color-mix(in srgb, #5BC8D8 55%, ${T.surfaceBorder});
+                    color: #5BC8D8; font-size: 13px; font-weight: 700;
+                }
+                .add-charger-btn:hover { background: color-mix(in srgb, #5BC8D8 28%, transparent); }
+                .add-charger-btn[disabled] { opacity: 0.5; cursor: default; }
+                .charger-remove-x {
+                    border: none; background: transparent; cursor: pointer;
+                    color: var(--secondary-text-color, ${T.textSec}); font-size: 14px;
+                    padding: 2px 6px; border-radius: 6px; line-height: 1;
+                }
+                .charger-remove-x:hover { color: #e57373; background: color-mix(in srgb, #e57373 15%, transparent); }
+                .charger-remove-confirm {
+                    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+                    margin: 4px 0 8px; padding: 8px 10px; border-radius: 8px;
+                    background: color-mix(in srgb, #e57373 14%, ${T.surface});
+                    border: 1px solid color-mix(in srgb, #e57373 45%, ${T.surfaceBorder});
+                    font-size: 12.5px;
+                }
+                .charger-remove-confirm span { flex: 1; }
+                .charger-remove-go {
+                    border: none; border-radius: 7px; cursor: pointer; font-weight: 700;
+                    padding: 5px 12px; background: #e57373; color: #fff; font-size: 12px;
+                }
+                .charger-remove-cancel {
+                    border: 1px solid ${T.surfaceBorder}; border-radius: 7px; cursor: pointer;
+                    padding: 5px 12px; background: transparent;
+                    color: var(--secondary-text-color, ${T.textSec}); font-size: 12px;
+                }
 
                 /* #528 first-run completeness guide */
                 .setup-progress { margin: 2px 2px 12px; }
