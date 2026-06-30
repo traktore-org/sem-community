@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.5] — 30.06.2026
+
+> **Pre-release.** Currency fix for high-denomination currencies.
+
+### 💱 Tariff — currency-agnostic price bounds (#549)
+- 🐛 **Price entities were unusable for high-denomination currencies.** With HA
+  currency set to LKR (or IDR/VND/JPY/…), the import/export rate, cheap/expensive
+  threshold and demand-charge entities showed the right unit (`LKR/kWh`) but kept
+  EUR/CHF-scale caps (export max 0.5), so a real 22 LKR/kWh tariff couldn't be
+  entered. The ceilings are now currency-agnostic (rates/thresholds 10000,
+  demand 100000) across all three surfaces — number entities, the Config-tab
+  inputs, and the OptionsFlow selectors. Fine steps kept, so decimal currencies
+  (CHF/EUR) are unchanged. (by @hrdilshan in #549)
+
 # [1.7.4-beta.4] — 30.06.2026
 
 > **Pre-release.** Dashboard-first configuration — the Config tab, made colorful and easy (#528).
