@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-30T10:06:20.835065+00:00
+// Generated: 2026-06-30T18:45:14.892997+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1105,7 +1105,13 @@
       "config_setup_progress": "Setup — {done} of {total} configured",
       "config_setup_action": "Set up →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Max discharge power",
+      "config_help_batt_max_discharge": "Cap the battery's discharge power.",
+      "config_batt_protection": "Discharge protection",
+      "config_help_batt_protection": "Limit battery discharge to the max power above to protect it and keep a reserve.",
+      "config_batt_discharge_entity": "Discharge limit entity",
+      "config_help_batt_discharge_entity": "The number entity SEM writes to cap battery discharge (e.g. the inverter's max-discharge-power)."
     },
     "de": {
       "charging": "Laden",
@@ -2207,7 +2213,13 @@
       "config_setup_progress": "Einrichtung — {done} von {total} konfiguriert",
       "config_setup_action": "Einrichten →",
       "config_hw_power_sensor": "Leistungs-Sensor",
-      "config_help_hw_power_sensor": "Optional — lässt SEM den Wärmepumpe-Verbrauch in Lasttracking und Ersparnis einbeziehen."
+      "config_help_hw_power_sensor": "Optional — lässt SEM den Wärmepumpe-Verbrauch in Lasttracking und Ersparnis einbeziehen.",
+      "battery_max_discharge_power": "Max. Entladeleistung",
+      "config_help_batt_max_discharge": "Begrenzt die Entladeleistung der Batterie.",
+      "config_batt_protection": "Entladeschutz",
+      "config_help_batt_protection": "Begrenzt die Batterieentladung auf die obige max. Leistung, um sie zu schützen und eine Reserve zu halten.",
+      "config_batt_discharge_entity": "Entladelimit-Entität",
+      "config_help_batt_discharge_entity": "Die number-Entität, die SEM beschreibt, um die Batterieentladung zu begrenzen (z. B. max. Entladeleistung des Wechselrichters)."
     },
     "fr": {
       "charging": "En charge",
@@ -3309,7 +3321,13 @@
       "config_setup_progress": "Configuration — {done} sur {total} configurés",
       "config_setup_action": "Configurer →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Puissance de décharge max",
+      "config_help_batt_max_discharge": "Limite la puissance de décharge de la batterie.",
+      "config_batt_protection": "Protection de décharge",
+      "config_help_batt_protection": "Limite la décharge de la batterie à la puissance max ci-dessus pour la protéger et garder une réserve.",
+      "config_batt_discharge_entity": "Entité limite de décharge",
+      "config_help_batt_discharge_entity": "L'entité number que SEM écrit pour limiter la décharge de la batterie (p. ex. la puissance de décharge max de l'onduleur)."
     },
     "es": {
       "charging": "Cargando",
@@ -4411,7 +4429,13 @@
       "config_setup_progress": "Configuración — {done} de {total} configurados",
       "config_setup_action": "Configurar →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Potencia descarga máx",
+      "config_help_batt_max_discharge": "Limita la potencia de descarga de la batería.",
+      "config_batt_protection": "Protección de descarga",
+      "config_help_batt_protection": "Limita la descarga de la batería a la potencia máx anterior para protegerla y mantener una reserva.",
+      "config_batt_discharge_entity": "Entidad límite de descarga",
+      "config_help_batt_discharge_entity": "La entidad number que SEM escribe para limitar la descarga de la batería (p. ej. la potencia de descarga máx del inversor)."
     },
     "it": {
       "charging": "In carica",
@@ -5513,7 +5537,13 @@
       "config_setup_progress": "Configurazione — {done} di {total} configurati",
       "config_setup_action": "Configura →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Potenza scarica max",
+      "config_help_batt_max_discharge": "Limita la potenza di scarica della batteria.",
+      "config_batt_protection": "Protezione scarica",
+      "config_help_batt_protection": "Limita la scarica della batteria alla potenza max sopra per proteggerla e mantenere una riserva.",
+      "config_batt_discharge_entity": "Entità limite scarica",
+      "config_help_batt_discharge_entity": "L'entità number che SEM scrive per limitare la scarica della batteria (es. la potenza di scarica max dell'inverter)."
     },
     "nl": {
       "charging": "Laden",
@@ -6615,7 +6645,13 @@
       "config_setup_progress": "Instellen — {done} van {total} geconfigureerd",
       "config_setup_action": "Instellen →",
       "config_hw_power_sensor": "Vermogenssensor",
-      "config_help_hw_power_sensor": "Optioneel — laat SEM het warmtepompverbruik meenemen in verbruiksregistratie en besparingen."
+      "config_help_hw_power_sensor": "Optioneel — laat SEM het warmtepompverbruik meenemen in verbruiksregistratie en besparingen.",
+      "battery_max_discharge_power": "Max. ontlaadvermogen",
+      "config_help_batt_max_discharge": "Begrenst het ontlaadvermogen van de batterij.",
+      "config_batt_protection": "Ontlaadbeveiliging",
+      "config_help_batt_protection": "Beperkt de batterijontlading tot het max. vermogen hierboven om hem te beschermen en een reserve te houden.",
+      "config_batt_discharge_entity": "Ontlaadlimiet-entiteit",
+      "config_help_batt_discharge_entity": "De number-entiteit die SEM schrijft om de batterijontlading te begrenzen (bijv. het max. ontlaadvermogen van de omvormer)."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7717,7 +7753,13 @@
       "config_setup_progress": "Nastavení — {done} z {total} nakonfigurováno",
       "config_setup_action": "Nastavit →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Max. vybíjecí výkon",
+      "config_help_batt_max_discharge": "Omezí vybíjecí výkon baterie.",
+      "config_batt_protection": "Ochrana vybíjení",
+      "config_help_batt_protection": "Omezí vybíjení baterie na výše uvedený max. výkon pro její ochranu a udržení rezervy.",
+      "config_batt_discharge_entity": "Entita limitu vybíjení",
+      "config_help_batt_discharge_entity": "Entita number, do které SEM zapisuje pro omezení vybíjení baterie (např. max. vybíjecí výkon měniče)."
     },
     "da": {
       "charging": "Oplader",
@@ -8819,7 +8861,13 @@
       "config_setup_progress": "Opsætning — {done} af {total} konfigureret",
       "config_setup_action": "Konfigurér →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Maks. afladningseffekt",
+      "config_help_batt_max_discharge": "Begrænser batteriets afladningseffekt.",
+      "config_batt_protection": "Afladningsbeskyttelse",
+      "config_help_batt_protection": "Begrænser batteriafladning til maks.-effekten ovenfor for at beskytte det og holde en reserve.",
+      "config_batt_discharge_entity": "Afladningsgrænse-enhed",
+      "config_help_batt_discharge_entity": "Den number-enhed, SEM skriver til for at begrænse batteriafladning (f.eks. inverterens maks. afladningseffekt)."
     },
     "fi": {
       "charging": "Lataus",
@@ -9921,7 +9969,13 @@
       "config_setup_progress": "Asennus — {done}/{total} määritetty",
       "config_setup_action": "Määritä →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Maks. purkuteho",
+      "config_help_batt_max_discharge": "Rajoittaa akun purkutehoa.",
+      "config_batt_protection": "Purkusuojaus",
+      "config_help_batt_protection": "Rajoittaa akun purkamisen yllä olevaan maksimitehoon sen suojaamiseksi ja varauksen säilyttämiseksi.",
+      "config_batt_discharge_entity": "Purkurajan entiteetti",
+      "config_help_batt_discharge_entity": "number-entiteetti, johon SEM kirjoittaa rajoittaakseen akun purkua (esim. invertterin maks. purkuteho)."
     },
     "hu": {
       "charging": "Töltés",
@@ -11023,7 +11077,13 @@
       "config_setup_progress": "Beállítás — {done}/{total} beállítva",
       "config_setup_action": "Beállít →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Max. kisütési telj.",
+      "config_help_batt_max_discharge": "Korlátozza az akkumulátor kisütési teljesítményét.",
+      "config_batt_protection": "Kisütésvédelem",
+      "config_help_batt_protection": "Az akkumulátor kisütését a fenti max. teljesítményre korlátozza a védelem és tartalék érdekében.",
+      "config_batt_discharge_entity": "Kisütési limit entitás",
+      "config_help_batt_discharge_entity": "A number entitás, amelybe a SEM ír az akkumulátor kisütésének korlátozásához (pl. az inverter max. kisütési teljesítménye)."
     },
     "no": {
       "charging": "Lader",
@@ -12125,7 +12185,13 @@
       "config_setup_progress": "Oppsett — {done} av {total} konfigurert",
       "config_setup_action": "Sett opp →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Maks. utladingseffekt",
+      "config_help_batt_max_discharge": "Begrenser batteriets utladingseffekt.",
+      "config_batt_protection": "Utladingsbeskyttelse",
+      "config_help_batt_protection": "Begrenser batteriutlading til maks.-effekten over for å beskytte det og beholde en reserve.",
+      "config_batt_discharge_entity": "Utladingsgrense-enhet",
+      "config_help_batt_discharge_entity": "number-enheten SEM skriver til for å begrense batteriutlading (f.eks. inverterens maks. utladingseffekt)."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13227,7 +13293,13 @@
       "config_setup_progress": "Konfiguracja — {done} z {total} skonfigurowano",
       "config_setup_action": "Skonfiguruj →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Maks. moc rozład.",
+      "config_help_batt_max_discharge": "Ogranicza moc rozładowania akumulatora.",
+      "config_batt_protection": "Ochrona rozładowania",
+      "config_help_batt_protection": "Ogranicza rozładowanie akumulatora do powyższej maks. mocy, aby go chronić i zachować rezerwę.",
+      "config_batt_discharge_entity": "Encja limitu rozładowania",
+      "config_help_batt_discharge_entity": "Encja number, do której SEM zapisuje, aby ograniczyć rozładowanie akumulatora (np. maks. moc rozładowania falownika)."
     },
     "pt": {
       "charging": "A carregar",
@@ -14329,7 +14401,13 @@
       "config_setup_progress": "Configuração — {done} de {total} configurados",
       "config_setup_action": "Configurar →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Potência descarga máx",
+      "config_help_batt_max_discharge": "Limita a potência de descarga da bateria.",
+      "config_batt_protection": "Proteção de descarga",
+      "config_help_batt_protection": "Limita a descarga da bateria à potência máx acima para protegê-la e manter uma reserva.",
+      "config_batt_discharge_entity": "Entidade limite de descarga",
+      "config_help_batt_discharge_entity": "A entidade number que o SEM escreve para limitar a descarga da bateria (p. ex. a potência de descarga máx do inversor)."
     },
     "ro": {
       "charging": "Încărcare",
@@ -15431,7 +15509,13 @@
       "config_setup_progress": "Configurare — {done} din {total} configurate",
       "config_setup_action": "Configurează →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Putere descărcare max",
+      "config_help_batt_max_discharge": "Limitează puterea de descărcare a bateriei.",
+      "config_batt_protection": "Protecție descărcare",
+      "config_help_batt_protection": "Limitează descărcarea bateriei la puterea max de mai sus pentru a o proteja și a păstra o rezervă.",
+      "config_batt_discharge_entity": "Entitate limită descărcare",
+      "config_help_batt_discharge_entity": "Entitatea number în care SEM scrie pentru a limita descărcarea bateriei (de ex. puterea max de descărcare a invertorului)."
     },
     "sv": {
       "charging": "Laddar",
@@ -16533,7 +16617,13 @@
       "config_setup_progress": "Inställning — {done} av {total} konfigurerade",
       "config_setup_action": "Ställ in →",
       "config_hw_power_sensor": "Power sensor",
-      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings.",
+      "battery_max_discharge_power": "Max urladdningseffekt",
+      "config_help_batt_max_discharge": "Begränsar batteriets urladdningseffekt.",
+      "config_batt_protection": "Urladdningsskydd",
+      "config_help_batt_protection": "Begränsar batteriurladdning till max-effekten ovan för att skydda det och behålla en reserv.",
+      "config_batt_discharge_entity": "Urladdningsgräns-entitet",
+      "config_help_batt_discharge_entity": "Den number-entitet SEM skriver till för att begränsa batteriurladdning (t.ex. växelriktarens max urladdningseffekt)."
     }
   };
 

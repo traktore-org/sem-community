@@ -141,6 +141,7 @@ const STRUCTURAL_KEYS = new Set([
     'heat_pump_temperature_sensor', 'heat_pump_invert_sg_ready',
     'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
     'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
+    'battery_discharge_control_entity',  // #528 — discharge-limit (protection) entity
 ]);
 
 class SEMConfigCard extends SEMLitBase {
@@ -717,6 +718,7 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderBatteryZones(T) {
+        const opts = this._options || {};
         return html`
             ${this._renderSocZoneStrip(T)}
             ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
@@ -724,6 +726,16 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
             ${this._renderZoneKnob('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
             ${this._renderZoneKnob('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
+            ${/* #528 — battery discharge-protection settings, migrated from the
+                  options flow (async_step_settings). */ ''}
+            <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
+                <span class="ctrl-label" style="font-weight:600">${this._t('config_batt_protection')}</span>
+            </div>
+            ${this._renderOptionToggle('battery_discharge_protection_enabled', 'config_batt_protection',
+                opts, 'config_help_batt_protection', true)}
+            ${this._renderZoneKnob('number.sem_battery_max_discharge_power', 'battery_max_discharge_power', T, 'config_help_batt_max_discharge')}
+            ${this._renderPicker('battery_discharge_control_entity', 'config_batt_discharge_entity',
+                'number', null, opts, 'config_help_batt_discharge_entity')}
         `;
     }
 

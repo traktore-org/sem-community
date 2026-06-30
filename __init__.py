@@ -206,6 +206,10 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #523 Tier 3: the forced-discharge entity is read at battery-adapter
     # construction, so changing it must reload to rebuild the adapter.
     "battery_force_discharge_control_entity",
+    # #528: the discharge-LIMIT control entity (battery protection) is read
+    # from the coordinator's config snapshot, so a change must reload to take
+    # effect (the snapshot is rebuilt on reload).
+    "battery_discharge_control_entity",
     # #523 multi-battery: per-battery control-entity lists are read at
     # adapter construction too, so a change must reload.
     "battery_force_discharge_entities",
