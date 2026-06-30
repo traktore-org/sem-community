@@ -5888,23 +5888,28 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 <ha-icon icon="mdi:cog-outline" style="--mdc-icon-size:14px"></ha-icon>
                 ${this._t(t)}
             </button>
-        `}_renderOverview(t){const e=!!this._hass?.states["sensor.sem_charging_state"],i=this._chargersList().length,s=this._bin("heat_pump_registered");return W`
+        `}_setupItems(){const t=this._options||{};return[{key:"energy",labelKey:"config_overview_energy_dashboard",icon:"mdi:flash",color:"#ff9800",sectionId:"overview",done:!!this._hass?.states["sensor.sem_charging_state"]},{key:"ev",labelKey:"config_overview_chargers",icon:"mdi:ev-station",color:"#5BC8D8",sectionId:"ev_chargers",done:this._chargersList().length>0},{key:"hp",labelKey:"heat_pump_title",icon:"mdi:heat-pump",color:"#4db6ac",sectionId:"heat_pump",done:this._bin("heat_pump_registered")},{key:"hw",labelKey:"config_section_hot_water",icon:"mdi:water-boiler",color:"#5BC8D8",sectionId:"hot_water",done:!!t.hot_water_entity}]}_openSection(t){this._collapsed={...this._collapsed,[t]:!1},this.requestUpdate()}_renderOverview(t){const e=this._setupItems(),i=e.filter(t=>t.done).length,s=e.length,r=i===s,a=s?Math.round(i/s*100):100;return W`
+            <div class="setup-progress">
+                <div class="setup-progress-top">
+                    <span class="setup-progress-label">
+                        ${r?"✓ All set up":`Setup — ${i} of ${s} configured`}
+                    </span>
+                    <span class="setup-progress-pct">${a}%</span>
+                </div>
+                <div class="setup-progress-bar">
+                    <div class="setup-progress-fill ${r?"done":""}" style=${`width:${a}%`}></div>
+                </div>
+            </div>
             <div class="chips">
-                <div class="chip">
-                    <ha-icon icon="mdi:flash" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
-                    <div class="chip-label">${this._t("config_overview_energy_dashboard")}</div>
-                    <div class="chip-value ${e?"c-ok":"c-warn"}">${e?"✓":"!"}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                    <div class="chip-label">${this._t("config_overview_chargers")}</div>
-                    <div class="chip-value" style="color:#5BC8D8">${i}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:heat-pump" style="--mdc-icon-size:16px;color:#4db6ac"></ha-icon>
-                    <div class="chip-label">${this._t("heat_pump_title")}</div>
-                    <div class="chip-value" style="color:#4db6ac">${s?this._t("configured"):this._t("not_configured")}</div>
-                </div>
+                ${e.map(t=>W`
+                    <div class="chip ${t.done?"":"chip-todo"}"
+                        @click=${t.done?void 0:()=>this._openSection(t.sectionId)}>
+                        <ha-icon icon="${t.icon}" style="--mdc-icon-size:16px;color:${t.color}"></ha-icon>
+                        <div class="chip-label">${this._t(t.labelKey)}</div>
+                        <div class="chip-value ${t.done?"c-ok":"c-warn"}">
+                            ${t.done?"✓":"Set up →"}
+                        </div>
+                    </div>`)}
             </div>
             <div class="overview-help">${this._t("config_overview_help")}</div>
             <div class="overview-actions">
@@ -6655,6 +6660,27 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
                 @keyframes applyspin { to { transform: rotate(360deg); } }
                 .pending-dot { color: ${i}; font-size: 9px; margin-left: 6px; vertical-align: middle; }
+
+                /* #528 first-run completeness guide */
+                .setup-progress { margin: 2px 2px 12px; }
+                .setup-progress-top {
+                    display: flex; justify-content: space-between; align-items: baseline;
+                    margin-bottom: 6px;
+                }
+                .setup-progress-label { font-size: 13px; font-weight: 700; }
+                .setup-progress-pct { font-size: 12px; color: var(--secondary-text-color, ${t.textSec}); }
+                .setup-progress-bar {
+                    height: 7px; border-radius: 4px; overflow: hidden;
+                    background: ${e?"rgba(255,255,255,0.12)":"rgba(0,0,0,0.1)"};
+                }
+                .setup-progress-fill {
+                    height: 100%; border-radius: 4px;
+                    background: #ffb74d; transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+                }
+                .setup-progress-fill.done { background: #81c784; }
+                .chip-todo { cursor: pointer; border-style: dashed !important; }
+                .chip-todo:hover { border-color: ${i} !important; }
+                .chip-todo .c-warn { color: ${i} !important; font-weight: 700; white-space: nowrap; }
 
                 .setting-help-text {
                     font-size: 11px; line-height: 1.35;

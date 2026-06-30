@@ -515,27 +515,61 @@ class SEMConfigCard extends SEMLitBase {
 
     // ── Per-section content renderers ──
 
+    // #528 — first-run completeness guide. Lists the optional subsystems with
+    // their status; an unconfigured one is a clickable "Set up →" chip that
+    // expands its section. Core (Energy Dashboard) is guaranteed by the native
+    // flow so it's always ✓. Turns all-green and shows "All set up" when done.
+    _setupItems() {
+        const opts = this._options || {};
+        return [
+            { key: 'energy', labelKey: 'config_overview_energy_dashboard', icon: 'mdi:flash',
+              color: '#ff9800', sectionId: 'overview',
+              done: !!this._hass?.states['sensor.sem_charging_state'] },
+            { key: 'ev', labelKey: 'config_overview_chargers', icon: 'mdi:ev-station',
+              color: '#5BC8D8', sectionId: 'ev_chargers',
+              done: this._chargersList().length > 0 },
+            { key: 'hp', labelKey: 'heat_pump_title', icon: 'mdi:heat-pump',
+              color: '#4db6ac', sectionId: 'heat_pump',
+              done: this._bin('heat_pump_registered') },
+            { key: 'hw', labelKey: 'config_section_hot_water', icon: 'mdi:water-boiler',
+              color: '#5BC8D8', sectionId: 'hot_water',
+              done: !!opts.hot_water_entity },
+        ];
+    }
+
+    _openSection(id) {
+        this._collapsed = { ...this._collapsed, [id]: false };
+        this.requestUpdate();
+    }
+
     _renderOverview(T) {
-        const dashboardReady = !!this._hass?.states['sensor.sem_charging_state'];
-        const chargers = this._chargersList().length;
-        const heatpump = this._bin('heat_pump_registered');
+        const items = this._setupItems();
+        const done = items.filter(i => i.done).length;
+        const total = items.length;
+        const allDone = done === total;
+        const pct = total ? Math.round((done / total) * 100) : 100;
         return html`
+            <div class="setup-progress">
+                <div class="setup-progress-top">
+                    <span class="setup-progress-label">
+                        ${allDone ? '✓ All set up' : `Setup — ${done} of ${total} configured`}
+                    </span>
+                    <span class="setup-progress-pct">${pct}%</span>
+                </div>
+                <div class="setup-progress-bar">
+                    <div class="setup-progress-fill ${allDone ? 'done' : ''}" style=${`width:${pct}%`}></div>
+                </div>
+            </div>
             <div class="chips">
-                <div class="chip">
-                    <ha-icon icon="mdi:flash" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
-                    <div class="chip-label">${this._t('config_overview_energy_dashboard')}</div>
-                    <div class="chip-value ${dashboardReady ? 'c-ok' : 'c-warn'}">${dashboardReady ? '✓' : '!'}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                    <div class="chip-label">${this._t('config_overview_chargers')}</div>
-                    <div class="chip-value" style="color:#5BC8D8">${chargers}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:heat-pump" style="--mdc-icon-size:16px;color:#4db6ac"></ha-icon>
-                    <div class="chip-label">${this._t('heat_pump_title')}</div>
-                    <div class="chip-value" style="color:#4db6ac">${heatpump ? this._t('configured') : this._t('not_configured')}</div>
-                </div>
+                ${items.map(i => html`
+                    <div class="chip ${i.done ? '' : 'chip-todo'}"
+                        @click=${i.done ? undefined : () => this._openSection(i.sectionId)}>
+                        <ha-icon icon="${i.icon}" style="--mdc-icon-size:16px;color:${i.color}"></ha-icon>
+                        <div class="chip-label">${this._t(i.labelKey)}</div>
+                        <div class="chip-value ${i.done ? 'c-ok' : 'c-warn'}">
+                            ${i.done ? '✓' : 'Set up →'}
+                        </div>
+                    </div>`)}
             </div>
             <div class="overview-help">${this._t('config_overview_help')}</div>
             <div class="overview-actions">
@@ -1857,6 +1891,27 @@ class SEMConfigCard extends SEMLitBase {
                 }
                 @keyframes applyspin { to { transform: rotate(360deg); } }
                 .pending-dot { color: ${accent}; font-size: 9px; margin-left: 6px; vertical-align: middle; }
+
+                /* #528 first-run completeness guide */
+                .setup-progress { margin: 2px 2px 12px; }
+                .setup-progress-top {
+                    display: flex; justify-content: space-between; align-items: baseline;
+                    margin-bottom: 6px;
+                }
+                .setup-progress-label { font-size: 13px; font-weight: 700; }
+                .setup-progress-pct { font-size: 12px; color: var(--secondary-text-color, ${T.textSec}); }
+                .setup-progress-bar {
+                    height: 7px; border-radius: 4px; overflow: hidden;
+                    background: ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'};
+                }
+                .setup-progress-fill {
+                    height: 100%; border-radius: 4px;
+                    background: #ffb74d; transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+                }
+                .setup-progress-fill.done { background: #81c784; }
+                .chip-todo { cursor: pointer; border-style: dashed !important; }
+                .chip-todo:hover { border-color: ${accent} !important; }
+                .chip-todo .c-warn { color: ${accent} !important; font-weight: 700; white-space: nowrap; }
 
                 .setting-help-text {
                     font-size: 11px; line-height: 1.35;
