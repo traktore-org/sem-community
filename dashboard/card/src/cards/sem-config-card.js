@@ -169,8 +169,9 @@ class SEMConfigCard extends SEMLitBase {
         this._collapsed = {
             overview: false,
             ev_chargers: true, battery_zones: true, tariff: true,
-            heat_pump: true, battery_scheduler: true, load_management: true,
-            forecast: true, notifications: true, advanced: true,
+            heat_pump: true, hot_water: true, battery_scheduler: true,
+            load_management: true, forecast: true, notifications: true,
+            advanced: true,
         };
         this._showHelp = false;
         this._entryId = '';
@@ -554,7 +555,7 @@ class SEMConfigCard extends SEMLitBase {
                     <span class="setup-progress-label">
                         ${allDone
                             ? this._t('config_setup_done')
-                            : this._t('config_setup_progress').replace('{done}', String(done)).replace('{total}', String(total))}
+                            : this._t('config_setup_progress').replace(/\{done\}/g, String(done)).replace(/\{total\}/g, String(total))}
                     </span>
                     <span class="setup-progress-pct">${pct}%</span>
                 </div>
@@ -656,8 +657,10 @@ class SEMConfigCard extends SEMLitBase {
         const e = this._hass?.states[entityId];
         if (!e) return nothing;
         const val = parseFloat(e.state) || 0;
-        const min = parseFloat(e.attributes.min) || 0;
-        const max = parseFloat(e.attributes.max) != null ? parseFloat(e.attributes.max) : 100;
+        const _mn = parseFloat(e.attributes.min);
+        const _mx = parseFloat(e.attributes.max);
+        const min = Number.isNaN(_mn) ? 0 : _mn;
+        const max = Number.isNaN(_mx) ? 100 : _mx;
         const step = parseFloat(e.attributes.step) || 1;
         const unit = e.attributes.unit_of_measurement || '';
         const decimals = step < 1 ? 1 : 0;
@@ -922,6 +925,8 @@ class SEMConfigCard extends SEMLitBase {
                     null, null, opts, 'config_help_hw_entity')}
                 ${this._renderPicker('hot_water_temperature_sensor', 'config_hw_temp_sensor',
                     'sensor', 'temperature', opts, 'config_help_hw_temp_sensor')}
+                ${this._renderPicker('hot_water_power_sensor', 'config_hw_power_sensor',
+                    'sensor', 'power', opts, 'config_help_hw_power_sensor')}
                 ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
                     T, 'config_help_hw_solar_target')}
                 ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
@@ -1152,6 +1157,8 @@ class SEMConfigCard extends SEMLitBase {
         if (!keys.length || this._applying) return;
         const entryId = await this._ensureEntryId();
         this._applying = true;
+        // Clear any prior apply error before retrying.
+        const ss = { ...this._saveStatus }; delete ss._apply; this._saveStatus = ss;
         this.requestUpdate();
         try {
             const options = { ...this._pending };
@@ -1179,12 +1186,15 @@ class SEMConfigCard extends SEMLitBase {
     _renderApplyBar() {
         const n = Object.keys(this._pending).length;
         if (!n && !this._applying) return nothing;
+        const err = this._saveStatus._apply;
         return html`
-            <div class="apply-bar">
+            <div class="apply-bar ${err ? 'apply-err' : ''}">
                 <span class="apply-msg">
                     ${this._applying
                         ? html`<span class="apply-spin"></span>${this._t('config_applying')}`
-                        : this._t('config_pending_changes').replace('{n}', String(n))}
+                        : (err
+                            ? html`⚠ ${err}`
+                            : this._t('config_pending_changes').replace(/\{n\}/g, String(n)))}
                 </span>
                 ${this._applying ? nothing : html`
                     <button class="apply-discard" @click=${() => this._discardPending()}>${this._t('config_discard')}</button>
@@ -1892,6 +1902,11 @@ class SEMConfigCard extends SEMLitBase {
                     animation: applyspin 0.7s linear infinite;
                 }
                 @keyframes applyspin { to { transform: rotate(360deg); } }
+                .apply-bar.apply-err {
+                    background: color-mix(in srgb, #e57373 18%, ${T.surface});
+                    border-color: color-mix(in srgb, #e57373 55%, ${T.surfaceBorder});
+                }
+                .apply-bar.apply-err .apply-msg { color: #e57373; }
                 .pending-dot { color: ${accent}; font-size: 9px; margin-left: 6px; vertical-align: middle; }
 
                 /* #528 first-run completeness guide */

@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-30T09:53:40.026836+00:00
+// Generated: 2026-06-30T10:06:20.835065+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1103,7 +1103,9 @@
       "config_pending_hint": "Pending — press Apply",
       "config_setup_done": "✓ All set up",
       "config_setup_progress": "Setup — {done} of {total} configured",
-      "config_setup_action": "Set up →"
+      "config_setup_action": "Set up →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "de": {
       "charging": "Laden",
@@ -2203,7 +2205,9 @@
       "config_pending_hint": "Ausstehend — Übernehmen drücken",
       "config_setup_done": "✓ Alles eingerichtet",
       "config_setup_progress": "Einrichtung — {done} von {total} konfiguriert",
-      "config_setup_action": "Einrichten →"
+      "config_setup_action": "Einrichten →",
+      "config_hw_power_sensor": "Leistungs-Sensor",
+      "config_help_hw_power_sensor": "Optional — lässt SEM den Wärmepumpe-Verbrauch in Lasttracking und Ersparnis einbeziehen."
     },
     "fr": {
       "charging": "En charge",
@@ -3303,7 +3307,9 @@
       "config_pending_hint": "En attente — appuyez sur Appliquer",
       "config_setup_done": "✓ Tout est configuré",
       "config_setup_progress": "Configuration — {done} sur {total} configurés",
-      "config_setup_action": "Configurer →"
+      "config_setup_action": "Configurer →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "es": {
       "charging": "Cargando",
@@ -4403,7 +4409,9 @@
       "config_pending_hint": "Pendiente — pulse Aplicar",
       "config_setup_done": "✓ Todo configurado",
       "config_setup_progress": "Configuración — {done} de {total} configurados",
-      "config_setup_action": "Configurar →"
+      "config_setup_action": "Configurar →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "it": {
       "charging": "In carica",
@@ -5503,7 +5511,9 @@
       "config_pending_hint": "In sospeso — premi Applica",
       "config_setup_done": "✓ Tutto configurato",
       "config_setup_progress": "Configurazione — {done} di {total} configurati",
-      "config_setup_action": "Configura →"
+      "config_setup_action": "Configura →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "nl": {
       "charging": "Laden",
@@ -6603,7 +6613,9 @@
       "config_pending_hint": "In afwachting — druk op Toepassen",
       "config_setup_done": "✓ Alles ingesteld",
       "config_setup_progress": "Instellen — {done} van {total} geconfigureerd",
-      "config_setup_action": "Instellen →"
+      "config_setup_action": "Instellen →",
+      "config_hw_power_sensor": "Vermogenssensor",
+      "config_help_hw_power_sensor": "Optioneel — laat SEM het warmtepompverbruik meenemen in verbruiksregistratie en besparingen."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7703,7 +7715,9 @@
       "config_pending_hint": "Čeká — stiskněte Použít",
       "config_setup_done": "✓ Vše nastaveno",
       "config_setup_progress": "Nastavení — {done} z {total} nakonfigurováno",
-      "config_setup_action": "Nastavit →"
+      "config_setup_action": "Nastavit →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "da": {
       "charging": "Oplader",
@@ -8803,7 +8817,9 @@
       "config_pending_hint": "Afventer — tryk Anvend",
       "config_setup_done": "✓ Alt er sat op",
       "config_setup_progress": "Opsætning — {done} af {total} konfigureret",
-      "config_setup_action": "Konfigurér →"
+      "config_setup_action": "Konfigurér →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "fi": {
       "charging": "Lataus",
@@ -9903,7 +9919,9 @@
       "config_pending_hint": "Odottaa — paina Käytä",
       "config_setup_done": "✓ Kaikki valmista",
       "config_setup_progress": "Asennus — {done}/{total} määritetty",
-      "config_setup_action": "Määritä →"
+      "config_setup_action": "Määritä →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "hu": {
       "charging": "Töltés",
@@ -11003,7 +11021,9 @@
       "config_pending_hint": "Függőben — nyomja meg az Alkalmaz gombot",
       "config_setup_done": "✓ Minden beállítva",
       "config_setup_progress": "Beállítás — {done}/{total} beállítva",
-      "config_setup_action": "Beállít →"
+      "config_setup_action": "Beállít →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "no": {
       "charging": "Lader",
@@ -12103,7 +12123,9 @@
       "config_pending_hint": "Venter — trykk Bruk",
       "config_setup_done": "✓ Alt er satt opp",
       "config_setup_progress": "Oppsett — {done} av {total} konfigurert",
-      "config_setup_action": "Sett opp →"
+      "config_setup_action": "Sett opp →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13203,7 +13225,9 @@
       "config_pending_hint": "Oczekuje — naciśnij Zastosuj",
       "config_setup_done": "✓ Wszystko gotowe",
       "config_setup_progress": "Konfiguracja — {done} z {total} skonfigurowano",
-      "config_setup_action": "Skonfiguruj →"
+      "config_setup_action": "Skonfiguruj →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "pt": {
       "charging": "A carregar",
@@ -14303,7 +14327,9 @@
       "config_pending_hint": "Pendente — prima Aplicar",
       "config_setup_done": "✓ Tudo configurado",
       "config_setup_progress": "Configuração — {done} de {total} configurados",
-      "config_setup_action": "Configurar →"
+      "config_setup_action": "Configurar →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "ro": {
       "charging": "Încărcare",
@@ -15403,7 +15429,9 @@
       "config_pending_hint": "În așteptare — apăsați Aplică",
       "config_setup_done": "✓ Totul configurat",
       "config_setup_progress": "Configurare — {done} din {total} configurate",
-      "config_setup_action": "Configurează →"
+      "config_setup_action": "Configurează →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     },
     "sv": {
       "charging": "Laddar",
@@ -16503,7 +16531,9 @@
       "config_pending_hint": "Väntar — tryck Tillämpa",
       "config_setup_done": "✓ Allt klart",
       "config_setup_progress": "Inställning — {done} av {total} konfigurerade",
-      "config_setup_action": "Ställ in →"
+      "config_setup_action": "Ställ in →",
+      "config_hw_power_sensor": "Power sensor",
+      "config_help_hw_power_sensor": "Optional — lets SEM include heat-pump draw in load tracking and savings."
     }
   };
 
