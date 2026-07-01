@@ -160,6 +160,9 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             # the normal decision (don't sell this unit).
 
         # Target reached or no longer needed — stop a running force op.
+        # NOTE: ``target_reached`` is only ever produced by the night-charge
+        # ``evaluate()``, never by ``evaluate_arbitrage`` — so target_reached +
+        # from_arbitrage is unreachable (harmless; kept for symmetry) (ruflo L4).
         if state_value in ("target_reached", "not_needed", "idle", "not_profitable"):
             # Route the stop by WHICH scheduler produced the verdict (#533):
             # an arbitrage verdict (from_arbitrage) was selling → STOP_FORCE_

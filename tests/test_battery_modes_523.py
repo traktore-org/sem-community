@@ -135,6 +135,11 @@ def test_self_consumption_suppresses_arbitrage():
 
 
 def test_allow_arbitrage_sells_even_with_global_off():
+    # decide_battery layer ONLY — this asserts the pure decision permits an
+    # allow_arbitrage battery to actuate a verdict even with the global toggle
+    # off. It does NOT mean arbitrage runs in v1.7.3: the coordinator gate
+    # (_any_allow_arb=False) never calls evaluate_arbitrage, so no verdict is
+    # ever produced to actuate. Re-armed in v1.7.4 (ruflo L3).
     d = decide_battery(_view(
         mode="allow_arbitrage", sched=_arb_verdict(),
         cfg_extra={"battery_grid_arbitrage_enabled": False},

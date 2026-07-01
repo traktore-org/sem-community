@@ -1000,6 +1000,14 @@ def test_decide_battery_arbitrage_stop_emits_stop_force_discharge():
     assert stop.state is SchedulerState.NOT_PROFITABLE
     d = decide_battery(_view(stop))
     assert d.intent is BatteryIntent.STOP_FORCE_DISCHARGE
+    # NOT_NEEDED (SOC at/below reserve) is the other arbitrage stop state — it
+    # also carries from_arbitrage=True and must route the same way, else a
+    # battery that dropped to its reserve while selling would keep force-
+    # discharging (ruflo L2).
+    at_reserve = s.evaluate_arbitrage(45.0, 0.45, 0.20)  # SOC 45 ≤ reserve 50
+    assert at_reserve.state is SchedulerState.NOT_NEEDED
+    assert decide_battery(_view(at_reserve)).intent is \
+        BatteryIntent.STOP_FORCE_DISCHARGE
 
 
 def test_decide_battery_night_stop_still_emits_stop_force_charge():
