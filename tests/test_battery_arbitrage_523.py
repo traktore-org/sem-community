@@ -28,6 +28,7 @@ from custom_components.solar_energy_management.coordinator.actuate_battery impor
 from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
     BatteryChargeScheduler,
     SchedulerConfig,
+    SchedulerDecision,
     SchedulerState,
 )
 from custom_components.solar_energy_management.coordinator.battery_adapters.huawei import (
@@ -948,3 +949,83 @@ async def test_setpoint_clamp_emits_warning(caplog):
     with caplog.at_level(logging.WARNING):
         await gen.command_force_discharge(5000, 50.0)
     assert any("clamped" in r.message for r in caplog.records)
+
+
+# ── #533 hardening: export cap, from_arbitrage flag, clean stop ────────
+
+def test_export_cap_limits_sell_power():
+    # #533: cap the sell power so arbitrage can't create a billed grid peak.
+    s = _scheduler(max_discharge_power_w=4000.0, arbitrage_max_export_w=2500.0)
+    d = s.evaluate_arbitrage(80.0, 0.45, 0.20)
+    assert d.state is SchedulerState.DISCHARGING_ARBITRAGE
+    assert d.discharge_power_w == 2500.0  # capped from 4000
+
+
+def test_export_cap_zero_means_uncapped():
+    s = _scheduler(max_discharge_power_w=4000.0, arbitrage_max_export_w=0.0)
+    d = s.evaluate_arbitrage(80.0, 0.45, 0.20)
+    assert d.discharge_power_w == 4000.0  # full discharge
+
+
+def test_from_config_export_cap_defaults_to_export_limit():
+    cfg = SchedulerConfig.from_config({
+        "battery_grid_arbitrage_enabled": True,
+        "max_export_power": 3000.0,  # no explicit arbitrage cap → inherits this
+    })
+    assert cfg.arbitrage_max_export_w == 3000.0
+
+
+def test_all_verdicts_marked_from_arbitrage():
+    # #533: every evaluate_arbitrage verdict carries from_arbitrage=True so the
+    # stop routes to STOP_FORCE_DISCHARGE.
+    s = _scheduler()
+    for d in (
+        s.evaluate_arbitrage(80.0, 0.45, 0.20),     # firing
+        s.evaluate_arbitrage(50.0, 0.45, None),     # not_needed (reserve)
+        s.evaluate_arbitrage(80.0, 0.10, None),     # not_profitable (floor)
+        s.evaluate_arbitrage(80.0, 0.45, None),     # not_profitable (no forecast)
+        s.evaluate_arbitrage(80.0, 0.21, 0.30),     # not_profitable (break-even)
+    ):
+        assert d.from_arbitrage is True
+    # disabled path too
+    assert _scheduler(arbitrage_enabled=False).evaluate_arbitrage(
+        80.0, 0.45, 0.20).from_arbitrage is True
+
+
+def test_decide_battery_arbitrage_stop_emits_stop_force_discharge():
+    # #533: an arbitrage non-firing verdict (was selling, now unprofitable)
+    # must STOP_FORCE_DISCHARGE — not STOP_FORCE_CHARGE (the Huawei coincidence).
+    s = _scheduler()
+    stop = s.evaluate_arbitrage(80.0, 0.21, 0.30)  # not_profitable, from_arbitrage
+    assert stop.state is SchedulerState.NOT_PROFITABLE
+    d = decide_battery(_view(stop))
+    assert d.intent is BatteryIntent.STOP_FORCE_DISCHARGE
+    # NOT_NEEDED (SOC at/below reserve) is the other arbitrage stop state — it
+    # also carries from_arbitrage=True and must route the same way, else a
+    # battery that dropped to its reserve while selling would keep force-
+    # discharging (ruflo L2).
+    at_reserve = s.evaluate_arbitrage(45.0, 0.45, 0.20)  # SOC 45 ≤ reserve 50
+    assert at_reserve.state is SchedulerState.NOT_NEEDED
+    assert decide_battery(_view(at_reserve)).intent is \
+        BatteryIntent.STOP_FORCE_DISCHARGE
+
+
+def test_decide_battery_night_stop_still_emits_stop_force_charge():
+    # A night-charge non-firing verdict (from_arbitrage=False) keeps the
+    # original STOP_FORCE_CHARGE behaviour.
+    night = SchedulerDecision(
+        state=SchedulerState.NOT_NEEDED, from_arbitrage=False,
+        reason="already at target",
+    )
+    d = decide_battery(_view(night))
+    assert d.intent is BatteryIntent.STOP_FORCE_CHARGE
+
+
+def test_arbitrage_off_by_default_stays_deactivated():
+    # #533: hardened but NOT activated. A default config (no arbitrage keys)
+    # leaves it disabled, and a disabled scheduler never fires.
+    cfg = SchedulerConfig.from_config({})
+    assert cfg.arbitrage_enabled is False
+    s = BatteryChargeScheduler(MagicMock(), MagicMock(), cfg)
+    assert s.evaluate_arbitrage(80.0, 0.45, 0.20).state is not \
+        SchedulerState.DISCHARGING_ARBITRAGE

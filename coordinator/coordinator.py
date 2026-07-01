@@ -3490,6 +3490,56 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             else:
                 seen[ent] = battery_id
 
+    def _compute_arbitrage_signals(self, power) -> "ArbitrageSignals":
+        """Compute the battery→grid arbitrage market signals in ONE place
+        (#533) so the arbitrage decision reads them off the view instead of
+        ad-hoc tariff/power reads scattered in the pipeline. Pure-ish: reads
+        the tariff provider + power, no side effects. Only called when
+        arbitrage is being evaluated (the block stays dormant until v1.7.4).
+        """
+        from .charger_types import ArbitrageSignals
+        solar_w = float(getattr(power, "solar_power", 0.0) or 0.0)
+        home_w = float(getattr(power, "home_consumption_power", 0.0) or 0.0)
+        soc_now = float(getattr(power, "battery_soc", 0.0) or 0.0)
+        surplus_w = solar_w - home_w
+        # #531 charge-first: storable solar surplus the battery could absorb →
+        # don't sell (storing free solar avoids a future ~retail import, worth
+        # far more than the export price).
+        storable = surplus_w > 200.0 and soc_now < 98.0
+        export_rate = 0.0
+        import_forecast_min = None
+        provider = getattr(self, "_tariff_provider", None)
+        if provider is not None:
+            try:
+                export_rate = float(provider.get_current_export_rate())
+            except Exception:  # noqa: BLE001
+                export_rate = 0.0
+            try:
+                ups = getattr(
+                    provider.get_tariff_data(), "upcoming_prices", None
+                ) or []
+                prices = [
+                    float(p.price) for p in ups
+                    if getattr(p, "price", None) is not None
+                ]
+                if prices:
+                    # Correct the raw spot min up to the all-in import floor so
+                    # the break-even basis matches what the user pays to recharge
+                    # (no-op for all-in providers like Tibber). #531.
+                    raw_min = min(prices)
+                    floor = getattr(provider, "effective_import_floor", None)
+                    import_forecast_min = (
+                        floor(raw_min) if callable(floor) else raw_min
+                    )
+            except Exception:  # noqa: BLE001
+                import_forecast_min = None
+        return ArbitrageSignals(
+            export_rate=export_rate,
+            import_forecast_min=import_forecast_min,
+            storable_surplus_w=max(0.0, surplus_w),
+            storable=storable,
+        )
+
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
         """Per-cycle battery control via decide_battery + actuate_battery.
 
@@ -3524,7 +3574,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         from .actuate_battery import actuate_battery
         from .battery_adapters import adapter_for, _integration_loaded
         from .charger_types import (
-            BatteryIntent, BatteryRuntime, BatteryView, FleetContext,
+            ArbitrageSignals, BatteryIntent, BatteryRuntime, BatteryView,
+            FleetContext,
         )
         from .decide_battery import decide_battery
 
@@ -3570,56 +3621,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``allow_arbitrage`` config goes dormant (behaves like ``auto`` — no
         # selling) rather than quietly selling to grid. Restored in v1.7.4.
         _any_allow_arb = False  # v1.7.3: per-battery arbitrage opt-in disabled (#533)
-        # #531 charge-first: never sell while there's storable solar surplus the
-        # battery could absorb. Storing free solar avoids a future import (~full
-        # retail price) which is worth far more than the export price — so we
-        # only arbitrage from stored energy when there's no surplus to soak OR
-        # the battery is effectively full. (Surplus = solar above home load.)
-        _solar_w = float(getattr(power, "solar_power", 0.0) or 0.0)
-        _home_w = float(getattr(power, "home_consumption_power", 0.0) or 0.0)
-        _soc_now = float(getattr(power, "battery_soc", 0.0) or 0.0)
-        _storable_surplus = (_solar_w - _home_w) > 200.0 and _soc_now < 98.0
-        if _storable_surplus and (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb):
-            _LOGGER.debug(
-                "Arbitrage held: %0.0f W storable solar surplus, SOC %.0f%% — "
-                "charge-first (#531)", _solar_w - _home_w, _soc_now,
-            )
-        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb) \
-                and not _charge_active and not _storable_surplus:
-            export_rate_per_kwh = 0.0
-            import_forecast_min = None
-            _provider = getattr(self, "_tariff_provider", None)
-            if _provider is not None:
-                try:
-                    export_rate_per_kwh = float(_provider.get_current_export_rate())
-                except Exception:  # noqa: BLE001
-                    export_rate_per_kwh = 0.0
-                try:
-                    _ups = getattr(
-                        _provider.get_tariff_data(), "upcoming_prices", None
-                    ) or []
-                    _prices = [
-                        float(p.price) for p in _ups
-                        if getattr(p, "price", None) is not None
-                    ]
-                    if _prices:
-                        # #531: the curve may be raw spot (Nord Pool/ENTSO-E)
-                        # while the user pays all-in to recharge — correct the
-                        # break-even basis up to the live all-in import rate so
-                        # arbitrage doesn't sell at a loss. No-op for all-in
-                        # providers (Tibber) where the factor is ≈1.0.
-                        _raw_min = min(_prices)
-                        _floor = getattr(_provider, "effective_import_floor", None)
-                        import_forecast_min = (
-                            _floor(_raw_min) if callable(_floor) else _raw_min
-                        )
-                except Exception:  # noqa: BLE001
-                    import_forecast_min = None
+        # Market signals are computed ONCE here (#533) and carried on the
+        # FleetContext below — single source of truth, no ad-hoc tariff/power
+        # reads in the decision. ``None`` unless arbitrage is being evaluated
+        # (the whole block is dormant while the toggle + _any_allow_arb are off).
+        arb_signals = None
+        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb):
+            arb_signals = self._compute_arbitrage_signals(power)
+            # #531 charge-first: never sell while there's storable solar surplus
+            # the battery could absorb — storing free solar avoids a future
+            # ~retail import, worth far more than the export price.
+            if arb_signals.storable:
+                _LOGGER.debug(
+                    "Arbitrage held: %0.0f W storable solar surplus — "
+                    "charge-first (#531)", arb_signals.storable_surplus_w,
+                )
+        if arb_signals is not None and not _charge_active and not arb_signals.storable:
             try:
                 _arb = scheduler.evaluate_arbitrage(
                     current_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
-                    export_rate=export_rate_per_kwh,
-                    import_forecast_min=import_forecast_min,
+                    export_rate=arb_signals.export_rate,
+                    import_forecast_min=arb_signals.import_forecast_min,
                     # Run the economic check when globally enabled OR any
                     # battery is in allow_arbitrage mode (#523); decide_battery
                     # gates per battery which units actually sell.
@@ -3670,6 +3692,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # clamp keys on it so Zone 1/2 protect the battery regardless of
             # surplus — the surplus gate alone left it draining below buffer).
             buffer_soc=float(self.config.get("battery_buffer_soc", 70)),
+            # #533: arbitrage market signals, computed once above (None unless
+            # arbitrage is being evaluated → dormant until v1.7.4).
+            arbitrage=arb_signals,
         )
 
         # 2. Source per-battery iteration. Multi-battery installs

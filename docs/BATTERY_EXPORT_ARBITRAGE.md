@@ -144,3 +144,34 @@ in Configuration → Tariff. One battery can sell while a sibling holds.
   command via a controllable number entity.
 - **Curtailment on negative export** (turning down solar when export is negative)
   needs inverter export-limit control and is a separate, future enhancement.
+
+---
+
+## v1.7.4 re-enable checklist (maintainers)
+
+The arbitrage decision path was **hardened** ahead of v1.7.4 (view-plumbed
+market signals, a peak-aware export cap, and a clean `STOP_FORCE_DISCHARGE`
+stop that works on every brand — not just Huawei by coincidence). It ships
+**dormant**: three independent gates keep it off (`_any_allow_arb=False` in the
+coordinator, migration v14 forcing `battery_grid_arbitrage_enabled=False`, and
+`allow_arbitrage` removed from the mode selector). To activate in v1.7.4:
+
+1. Re-add `allow_arbitrage` to `BATTERY_MODES` (`consts/battery_modes.py`).
+2. Re-expose the global toggle + section in the config flow and the dashboard
+   Config card, and restore `_any_allow_arb` to read the per-battery opt-in
+   (`coordinator/coordinator.py`).
+3. Stop migration v14 from forcing the toggle off (or add a v15 that leaves the
+   user's choice intact).
+4. **Address the two hardening follow-ups deferred from the #533 review:**
+   - **Actuate-layer idempotency (ruflo M1).** Once live, a non-firing arbitrage
+     verdict emits `STOP_FORCE_DISCHARGE` every cycle. The adapters de-dup so
+     there's no bus spam, but add a `last_intent == STOP_FORCE_DISCHARGE`
+     short-circuit at the actuate layer (or in `command_stop_force_discharge`)
+     to skip the redundant `command_normal()` call when already stopped.
+   - **Export-cap default semantics (ruflo L1).** `arbitrage_max_export_w`
+     defaults to the system-wide `max_export_power` (a solar anti-export cap).
+     Document this clearly in the config-flow help, or give arbitrage its own
+     default, so an installer's DNO solar cap doesn't silently throttle battery
+     selling in a surprising way.
+5. Soak on the HA-TEST sim rig (`sem_sim_dynamic_export.yaml`) — **never on the
+   shared PROD battery** (#532 was a real LUNA2000 drain).
