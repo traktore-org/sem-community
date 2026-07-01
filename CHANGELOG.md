@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.7] — 01.07.2026
+
+> **Pre-release.** Dashboard config reachability + dormant arbitrage hardening.
+
+### ⚙️ Configuration on the dashboard (#550)
+- 🔋 **Battery SOC sensor picker** on the Config tab — if SEM didn't auto-detect
+  your battery state-of-charge (e.g. Deye + Seplos: SOC is in the Energy
+  Dashboard but shows unavailable), you can now point SEM at the SOC entity
+  directly. No device-class filter, so any sensor is selectable. (reported by @praun)
+- 🔌 **Heat-pump temperature-sensor picker** and **Invert SG-Ready toggle** added
+  to the Config tab — both were structural settings with no UI (the toggle was
+  reachable only via the native options flow).
+- 🧭 **Structural toggles now batch through the Apply bar** like the entity
+  pickers, so flipping one no longer fires its own reload and discards a staged
+  edit. Full 15-language labels + help. ruflo-reviewed.
+
+### 🔧 Internal — battery→grid arbitrage hardening (#533, still DEACTIVATED)
+- 🛡️ The dormant arbitrage path was hardened ahead of a future v1.7.4 activation
+  (view-plumbed market signals, a peak-aware export cap, and a clean cross-brand
+  `STOP_FORCE_DISCHARGE` stop). **No behaviour change** — three gates keep it off
+  (`_any_allow_arb=False`, migration v14 forces the toggle off, `allow_arbitrage`
+  out of the selector). ruflo-reviewed; re-enable checklist documented.
+
 # [1.7.4-beta.6] — 30.06.2026
 
 > **Pre-release.** Completes the dashboard-first configuration work (#528).
