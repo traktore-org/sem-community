@@ -142,6 +142,9 @@ const STRUCTURAL_KEYS = new Set([
     'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
     'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
     'battery_discharge_control_entity',  // #528 — discharge-limit (protection) entity
+    // #550 — structural TOGGLES: reload the entry too, so they stage + commit on
+    // Apply like the pickers (a live flip would reload and discard staged edits).
+    'battery_discharge_protection_enabled', 'battery_setpoint_bidirectional',
 ]);
 
 class SEMConfigCard extends SEMLitBase {
@@ -742,6 +745,13 @@ class SEMConfigCard extends SEMLitBase {
         const opts = this._options || {};
         return html`
             ${this._renderSocZoneStrip(T)}
+            ${/* #550 — manual battery-SOC entity override. SEM auto-detects the
+                  SOC sensor from the battery-power entity, but some hardware
+                  (e.g. Deye + Seplos) isn't matched. This is the escape hatch:
+                  no device_class filter so ANY sensor can be picked. Structural
+                  → Apply-batched reload. */ ''}
+            ${this._renderPicker('battery_soc_sensor', 'config_battery_soc_sensor',
+                'sensor', null, opts, 'config_help_battery_soc_sensor')}
             ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
             ${this._renderZoneKnob('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
             ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
@@ -875,10 +885,18 @@ class SEMConfigCard extends SEMLitBase {
                     null, opts, 'config_help_hp_relay')}
                 ${this._renderPicker('heat_pump_relay2_entity', 'config_hp_relay2', 'switch',
                     null, opts, 'config_help_hp_relay')}
+                ${/* #550: relay contact polarity — read at HeatPumpController
+                      construction (structural). Was only on the native flow. */ ''}
+                ${this._renderOptionToggle('heat_pump_invert_sg_ready', 'config_hp_invert_sg_ready',
+                    opts, 'config_help_hp_invert_sg_ready', false)}
                 ${this._renderPicker('heat_pump_climate_entity', 'config_hp_climate', 'climate',
                     null, opts, 'config_help_hp_climate')}
                 ${this._renderPicker('heat_pump_power_sensor', 'config_hp_power_sensor', 'sensor',
                     'power', opts, 'config_help_hp_power_sensor')}
+                ${/* #550: HP temperature sensor override — structural key that had
+                      no picker anywhere (unreachable). */ ''}
+                ${this._renderPicker('heat_pump_temperature_sensor', 'config_hp_temperature_sensor',
+                    'sensor', 'temperature', opts, 'config_help_hp_temperature_sensor')}
                 ${registered
                     ? this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T, 'config_help_hp_boost_offset')
                     : this._renderOptionSlider('heat_pump_boost_offset', 'heat_pump_boost_offset',
@@ -1293,25 +1311,6 @@ class SEMConfigCard extends SEMLitBase {
 
     // Toggle bound to an entry.options key. Use when no runtime
     // ``switch.sem_*`` entity exists for the option.
-    _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal = false) {
-        const cur = opts[optionKey] != null ? !!opts[optionKey] : defaultVal;
-        const status = this._saveStatus[optionKey];
-        return html`
-            <div class="stepper-cell">
-                <div class="toggle-row">
-                    <span class="toggle-label">${this._t(labelKey)}</span>
-                    <div class="toggle-track ${cur ? 'on' : ''}"
-                         @click=${() => this._saveOption(optionKey, !cur, optionKey)}>
-                        <div class="toggle-thumb"></div>
-                    </div>
-                </div>
-                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
-                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
-            </div>
-        `;
-    }
-
     // Native <select> bound to an entry.options key.
     _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
         const cur = opts[optionKey] != null ? opts[optionKey] : defaultVal;
@@ -1337,15 +1336,32 @@ class SEMConfigCard extends SEMLitBase {
 
     // Boolean toggle backed by an entry OPTION (not a switch entity) —
     // saves a real boolean via set_option (#523 arbitrage opt-in).
+    // #550: structural toggles (entity-wiring keys that reload the entry, e.g.
+    // heat_pump_invert_sg_ready, battery_discharge_protection_enabled) stage
+    // into _pending and commit on Apply — same as _renderPicker — so a flip
+    // doesn't fire its own reload and discard a sibling picker's staged edit.
+    // Non-structural toggles keep saving live on click (unchanged).
     _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal) {
-        const cur = opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal;
         const status = this._saveStatus[optionKey];
+        const structural = STRUCTURAL_KEYS.has(optionKey);
+        const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
+        const cur = staged
+            ? !!this._pending[optionKey]
+            : (opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal);
+        const onToggle = () => {
+            if (structural) {
+                this._pending = { ...this._pending, [optionKey]: !cur };
+                this.requestUpdate();
+            } else {
+                this._saveOption(optionKey, !cur, optionKey);
+            }
+        };
         return html`
             <div class="stepper-cell">
                 <div class="toggle-row">
-                    <span class="toggle-label">${this._t(labelKey)}</span>
+                    <span class="toggle-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}</span>
                     <div class="toggle-track ${cur ? 'on' : ''}"
-                         @click=${() => this._saveOption(optionKey, !cur, optionKey)}>
+                         @click=${onToggle}>
                         <div class="toggle-thumb"></div>
                     </div>
                 </div>

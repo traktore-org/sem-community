@@ -1109,7 +1109,13 @@
     "config_ev_add_charger": "Add charger",
     "config_ev_remove": "Remove",
     "config_ev_remove_confirm": "Remove this charger from SEM?",
-    "config_ev_new_charger": "New charger"
+    "config_ev_new_charger": "New charger",
+    "config_battery_soc_sensor": "Battery SOC sensor",
+    "config_help_battery_soc_sensor": "The sensor SEM reads for battery state-of-charge (%). Set this if SEM didn't auto-detect it — SOC is in your Energy Dashboard but shows as unavailable.",
+    "config_hp_invert_sg_ready": "Invert SG-Ready contacts",
+    "config_help_hp_invert_sg_ready": "Enable for normally-closed (NC) relay wiring — inverts the SG-Ready contact logic.",
+    "config_hp_temperature_sensor": "Heat pump temperature sensor",
+    "config_help_hp_temperature_sensor": "The sensor SEM reads for the heat pump / buffer temperature."
   },
   "de": {
     "charging": "Laden",
@@ -2221,7 +2227,13 @@
     "config_ev_add_charger": "Ladegerät hinzufügen",
     "config_ev_remove": "Entfernen",
     "config_ev_remove_confirm": "Dieses Ladegerät aus SEM entfernen?",
-    "config_ev_new_charger": "Neues Ladegerät"
+    "config_ev_new_charger": "Neues Ladegerät",
+    "config_battery_soc_sensor": "Batterie-SOC-Sensor",
+    "config_help_battery_soc_sensor": "Der Sensor, den SEM für den Batterieladestand (%) liest. Setze ihn, falls SEM ihn nicht automatisch erkannt hat — der SOC ist im Energie-Dashboard, wird aber als nicht verfügbar angezeigt.",
+    "config_hp_invert_sg_ready": "SG-Ready-Kontakte invertieren",
+    "config_help_hp_invert_sg_ready": "Für Schließer-Verkabelung mit Öffner (NC) aktivieren — invertiert die SG-Ready-Kontaktlogik.",
+    "config_hp_temperature_sensor": "Wärmepumpen-Temperatursensor",
+    "config_help_hp_temperature_sensor": "Der Sensor, den SEM für die Wärmepumpen-/Puffertemperatur liest."
   },
   "fr": {
     "charging": "En charge",
@@ -3333,7 +3345,13 @@
     "config_ev_add_charger": "Ajouter une borne",
     "config_ev_remove": "Supprimer",
     "config_ev_remove_confirm": "Supprimer cette borne de SEM ?",
-    "config_ev_new_charger": "Nouvelle borne"
+    "config_ev_new_charger": "Nouvelle borne",
+    "config_battery_soc_sensor": "Capteur SOC batterie",
+    "config_help_battery_soc_sensor": "Le capteur que SEM lit pour l'état de charge de la batterie (%). Définissez-le si SEM ne l'a pas détecté automatiquement — le SOC est dans votre tableau de bord Énergie mais s'affiche comme indisponible.",
+    "config_hp_invert_sg_ready": "Inverser les contacts SG-Ready",
+    "config_help_hp_invert_sg_ready": "Activez pour un câblage de relais normalement fermé (NF) — inverse la logique des contacts SG-Ready.",
+    "config_hp_temperature_sensor": "Capteur de température PAC",
+    "config_help_hp_temperature_sensor": "Le capteur que SEM lit pour la température de la PAC / du ballon tampon."
   },
   "es": {
     "charging": "Cargando",
@@ -4445,7 +4463,13 @@
     "config_ev_add_charger": "Añadir cargador",
     "config_ev_remove": "Eliminar",
     "config_ev_remove_confirm": "¿Eliminar este cargador de SEM?",
-    "config_ev_new_charger": "Nuevo cargador"
+    "config_ev_new_charger": "Nuevo cargador",
+    "config_battery_soc_sensor": "Sensor SOC batería",
+    "config_help_battery_soc_sensor": "El sensor que SEM lee para el estado de carga de la batería (%). Configúralo si SEM no lo detectó automáticamente — el SOC está en tu panel de Energía pero aparece como no disponible.",
+    "config_hp_invert_sg_ready": "Invertir contactos SG-Ready",
+    "config_help_hp_invert_sg_ready": "Actívalo para cableado de relé normalmente cerrado (NC) — invierte la lógica de contactos SG-Ready.",
+    "config_hp_temperature_sensor": "Sensor de temperatura bomba de calor",
+    "config_help_hp_temperature_sensor": "El sensor que SEM lee para la temperatura de la bomba de calor / acumulador."
   },
   "it": {
     "charging": "In carica",
@@ -5557,7 +5581,13 @@
     "config_ev_add_charger": "Aggiungi caricatore",
     "config_ev_remove": "Rimuovi",
     "config_ev_remove_confirm": "Rimuovere questo caricatore da SEM?",
-    "config_ev_new_charger": "Nuovo caricatore"
+    "config_ev_new_charger": "Nuovo caricatore",
+    "config_battery_soc_sensor": "Sensore SOC batteria",
+    "config_help_battery_soc_sensor": "Il sensore che SEM legge per lo stato di carica della batteria (%). Impostalo se SEM non l'ha rilevato automaticamente — il SOC è nella dashboard Energia ma risulta non disponibile.",
+    "config_hp_invert_sg_ready": "Inverti contatti SG-Ready",
+    "config_help_hp_invert_sg_ready": "Attiva per cablaggio relè normalmente chiuso (NC) — inverte la logica dei contatti SG-Ready.",
+    "config_hp_temperature_sensor": "Sensore temperatura pompa di calore",
+    "config_help_hp_temperature_sensor": "Il sensore che SEM legge per la temperatura della pompa di calore / accumulo."
   },
   "nl": {
     "charging": "Laden",
@@ -6669,7 +6699,13 @@
     "config_ev_add_charger": "Lader toevoegen",
     "config_ev_remove": "Verwijderen",
     "config_ev_remove_confirm": "Deze lader uit SEM verwijderen?",
-    "config_ev_new_charger": "Nieuwe lader"
+    "config_ev_new_charger": "Nieuwe lader",
+    "config_battery_soc_sensor": "Batterij-SOC-sensor",
+    "config_help_battery_soc_sensor": "De sensor die SEM leest voor de batterijladingstoestand (%). Stel dit in als SEM het niet automatisch detecteerde — de SOC staat in je Energie-dashboard maar wordt als niet-beschikbaar getoond.",
+    "config_hp_invert_sg_ready": "SG-Ready-contacten omkeren",
+    "config_help_hp_invert_sg_ready": "Inschakelen bij normaal-gesloten (NC) relaisbedrading — keert de SG-Ready-contactlogica om.",
+    "config_hp_temperature_sensor": "Warmtepomp-temperatuursensor",
+    "config_help_hp_temperature_sensor": "De sensor die SEM leest voor de warmtepomp-/buffertemperatuur."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -7781,7 +7817,13 @@
     "config_ev_add_charger": "Přidat nabíječku",
     "config_ev_remove": "Odebrat",
     "config_ev_remove_confirm": "Odebrat tuto nabíječku ze SEM?",
-    "config_ev_new_charger": "Nová nabíječka"
+    "config_ev_new_charger": "Nová nabíječka",
+    "config_battery_soc_sensor": "Senzor SOC baterie",
+    "config_help_battery_soc_sensor": "Senzor, který SEM čte pro stav nabití baterie (%). Nastavte jej, pokud jej SEM nezjistil automaticky — SOC je v Energetickém přehledu, ale zobrazuje se jako nedostupný.",
+    "config_hp_invert_sg_ready": "Invertovat kontakty SG-Ready",
+    "config_help_hp_invert_sg_ready": "Zapněte pro zapojení relé v klidu sepnuté (NC) — invertuje logiku kontaktů SG-Ready.",
+    "config_hp_temperature_sensor": "Teplotní senzor tepelného čerpadla",
+    "config_help_hp_temperature_sensor": "Senzor, který SEM čte pro teplotu tepelného čerpadla / akumulační nádrže."
   },
   "da": {
     "charging": "Oplader",
@@ -8893,7 +8935,13 @@
     "config_ev_add_charger": "Tilføj lader",
     "config_ev_remove": "Fjern",
     "config_ev_remove_confirm": "Fjern denne lader fra SEM?",
-    "config_ev_new_charger": "Ny lader"
+    "config_ev_new_charger": "Ny lader",
+    "config_battery_soc_sensor": "Batteri-SOC-sensor",
+    "config_help_battery_soc_sensor": "Sensoren SEM læser for batteriets ladetilstand (%). Angiv den, hvis SEM ikke registrerede den automatisk — SOC er i dit Energi-dashboard, men vises som utilgængelig.",
+    "config_hp_invert_sg_ready": "Inverter SG-Ready-kontakter",
+    "config_help_hp_invert_sg_ready": "Aktivér ved normalt lukket (NC) relæledning — inverterer SG-Ready-kontaktlogikken.",
+    "config_hp_temperature_sensor": "Varmepumpe-temperatursensor",
+    "config_help_hp_temperature_sensor": "Sensoren SEM læser for varmepumpe-/buffertemperaturen."
   },
   "fi": {
     "charging": "Lataus",
@@ -10005,7 +10053,13 @@
     "config_ev_add_charger": "Lisää laturi",
     "config_ev_remove": "Poista",
     "config_ev_remove_confirm": "Poistetaanko tämä laturi SEM:stä?",
-    "config_ev_new_charger": "Uusi laturi"
+    "config_ev_new_charger": "Uusi laturi",
+    "config_battery_soc_sensor": "Akun SOC-anturi",
+    "config_help_battery_soc_sensor": "Anturi, jota SEM lukee akun varaustilaan (%). Aseta tämä, jos SEM ei tunnistanut sitä automaattisesti — SOC on Energia-koontinäytössä mutta näkyy ei-saatavilla.",
+    "config_hp_invert_sg_ready": "Käännä SG-Ready-koskettimet",
+    "config_help_hp_invert_sg_ready": "Ota käyttöön normaalisti suljetulle (NC) relekytkennälle — kääntää SG-Ready-koskettimien logiikan.",
+    "config_hp_temperature_sensor": "Lämpöpumpun lämpötila-anturi",
+    "config_help_hp_temperature_sensor": "Anturi, jota SEM lukee lämpöpumpun / puskurin lämpötilaan."
   },
   "hu": {
     "charging": "Töltés",
@@ -11117,7 +11171,13 @@
     "config_ev_add_charger": "Töltő hozzáadása",
     "config_ev_remove": "Eltávolítás",
     "config_ev_remove_confirm": "Eltávolítja ezt a töltőt a SEM-ből?",
-    "config_ev_new_charger": "Új töltő"
+    "config_ev_new_charger": "Új töltő",
+    "config_battery_soc_sensor": "Akkumulátor SOC érzékelő",
+    "config_help_battery_soc_sensor": "Az érzékelő, amelyet a SEM az akkumulátor töltöttségéhez (%) olvas. Állítsd be, ha a SEM nem észlelte automatikusan — a SOC az Energia irányítópulton van, de nem elérhetőként jelenik meg.",
+    "config_hp_invert_sg_ready": "SG-Ready érintkezők invertálása",
+    "config_help_hp_invert_sg_ready": "Kapcsold be alaphelyzetben zárt (NC) relébekötéshez — invertálja az SG-Ready érintkezők logikáját.",
+    "config_hp_temperature_sensor": "Hőszivattyú hőmérséklet-érzékelő",
+    "config_help_hp_temperature_sensor": "Az érzékelő, amelyet a SEM a hőszivattyú / puffertartály hőmérsékletéhez olvas."
   },
   "no": {
     "charging": "Lader",
@@ -12229,7 +12289,13 @@
     "config_ev_add_charger": "Legg til lader",
     "config_ev_remove": "Fjern",
     "config_ev_remove_confirm": "Fjerne denne laderen fra SEM?",
-    "config_ev_new_charger": "Ny lader"
+    "config_ev_new_charger": "Ny lader",
+    "config_battery_soc_sensor": "Batteri-SOC-sensor",
+    "config_help_battery_soc_sensor": "Sensoren SEM leser for batteriets ladenivå (%). Angi denne hvis SEM ikke oppdaget den automatisk — SOC er i Energi-dashbordet, men vises som utilgjengelig.",
+    "config_hp_invert_sg_ready": "Inverter SG-Ready-kontakter",
+    "config_help_hp_invert_sg_ready": "Aktiver for normalt lukket (NC) relékabling — inverterer SG-Ready-kontaktlogikken.",
+    "config_hp_temperature_sensor": "Varmepumpe-temperatursensor",
+    "config_help_hp_temperature_sensor": "Sensoren SEM leser for varmepumpe-/buffertemperaturen."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -13341,7 +13407,13 @@
     "config_ev_add_charger": "Dodaj ładowarkę",
     "config_ev_remove": "Usuń",
     "config_ev_remove_confirm": "Usunąć tę ładowarkę z SEM?",
-    "config_ev_new_charger": "Nowa ładowarka"
+    "config_ev_new_charger": "Nowa ładowarka",
+    "config_battery_soc_sensor": "Czujnik SOC akumulatora",
+    "config_help_battery_soc_sensor": "Czujnik, który SEM odczytuje dla stanu naładowania akumulatora (%). Ustaw go, jeśli SEM nie wykrył go automatycznie — SOC jest w panelu Energia, ale pokazuje się jako niedostępny.",
+    "config_hp_invert_sg_ready": "Odwróć styki SG-Ready",
+    "config_help_hp_invert_sg_ready": "Włącz dla okablowania przekaźnika normalnie zamkniętego (NC) — odwraca logikę styków SG-Ready.",
+    "config_hp_temperature_sensor": "Czujnik temperatury pompy ciepła",
+    "config_help_hp_temperature_sensor": "Czujnik, który SEM odczytuje dla temperatury pompy ciepła / bufora."
   },
   "pt": {
     "charging": "A carregar",
@@ -14453,7 +14525,13 @@
     "config_ev_add_charger": "Adicionar carregador",
     "config_ev_remove": "Remover",
     "config_ev_remove_confirm": "Remover este carregador do SEM?",
-    "config_ev_new_charger": "Novo carregador"
+    "config_ev_new_charger": "Novo carregador",
+    "config_battery_soc_sensor": "Sensor SOC da bateria",
+    "config_help_battery_soc_sensor": "O sensor que o SEM lê para o estado de carga da bateria (%). Defina-o se o SEM não o detetou automaticamente — o SOC está no painel de Energia mas aparece como indisponível.",
+    "config_hp_invert_sg_ready": "Inverter contactos SG-Ready",
+    "config_help_hp_invert_sg_ready": "Ative para cablagem de relé normalmente fechado (NF) — inverte a lógica dos contactos SG-Ready.",
+    "config_hp_temperature_sensor": "Sensor de temperatura da bomba de calor",
+    "config_help_hp_temperature_sensor": "O sensor que o SEM lê para a temperatura da bomba de calor / acumulador."
   },
   "ro": {
     "charging": "Încărcare",
@@ -15565,7 +15643,13 @@
     "config_ev_add_charger": "Adaugă încărcător",
     "config_ev_remove": "Elimină",
     "config_ev_remove_confirm": "Eliminați acest încărcător din SEM?",
-    "config_ev_new_charger": "Încărcător nou"
+    "config_ev_new_charger": "Încărcător nou",
+    "config_battery_soc_sensor": "Senzor SOC baterie",
+    "config_help_battery_soc_sensor": "Senzorul pe care SEM îl citește pentru starea de încărcare a bateriei (%). Setează-l dacă SEM nu l-a detectat automat — SOC este în tabloul Energie dar apare ca indisponibil.",
+    "config_hp_invert_sg_ready": "Inversează contactele SG-Ready",
+    "config_help_hp_invert_sg_ready": "Activează pentru cablare releu normal închis (NC) — inversează logica contactelor SG-Ready.",
+    "config_hp_temperature_sensor": "Senzor de temperatură pompă de căldură",
+    "config_help_hp_temperature_sensor": "Senzorul pe care SEM îl citește pentru temperatura pompei de căldură / rezervorului tampon."
   },
   "sv": {
     "charging": "Laddar",
@@ -16677,6 +16761,12 @@
     "config_ev_add_charger": "Lägg till laddare",
     "config_ev_remove": "Ta bort",
     "config_ev_remove_confirm": "Ta bort denna laddare från SEM?",
-    "config_ev_new_charger": "Ny laddare"
+    "config_ev_new_charger": "Ny laddare",
+    "config_battery_soc_sensor": "Batteri-SOC-sensor",
+    "config_help_battery_soc_sensor": "Sensorn SEM läser för batteriets laddningsnivå (%). Ange denna om SEM inte upptäckte den automatiskt — SOC finns i din Energi-panel men visas som otillgänglig.",
+    "config_hp_invert_sg_ready": "Invertera SG-Ready-kontakter",
+    "config_help_hp_invert_sg_ready": "Aktivera för normalt sluten (NC) relädragning — inverterar SG-Ready-kontaktlogiken.",
+    "config_hp_temperature_sensor": "Värmepump-temperatursensor",
+    "config_help_hp_temperature_sensor": "Sensorn SEM läser för värmepumpens/bufferttankens temperatur."
   }
 }
