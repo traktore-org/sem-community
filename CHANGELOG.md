@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.8] — 02.07.2026
+
+> **Pre-release.** Documentation overhaul — no code changes.
+
+### 📚 Documentation
+- 🏬 **README reworked for the HACS default store** — SEM now speaks for itself:
+  the competitor comparison table is gone, replaced by a positive "Why SEM?";
+  install instructions reflect the default store with an "Open in HACS" button.
+- 📸 **Configuration-tab screenshot added** (the colorful post-setup config
+  surface was missing from the docs) + refreshed Control-tab screenshot; both
+  without the HA side panel. README now lists all **8** dashboard views.
+- 🛠️ **Repo-wide accuracy pass, every fix verified against code**: KEBA
+  failsafe doc had its default inverted (managed-neutralize IS the default —
+  no user action needed); retired battery knobs removed from the User Guide;
+  EV-intelligence sensor list rewritten to the real per-charger entities;
+  stale entity names, defaults, translation-key counts, ADR field names and
+  3 broken links fixed across 14 documentation files.
+
+# [1.7.4-beta.8] — 02.07.2026
+
+> **Pre-release.** Documentation overhaul — no code changes.
+
+### 📚 Documentation
+- 🏬 **README reworked for the HACS default store** — the competitor comparison
+  is gone (SEM speaks for itself), install instructions reflect the default
+  store with an "Open in HACS" button.
+- 📸 **All 8 dashboard tab screenshots recaptured** chrome-free (no side panel,
+  no header) — including the previously missing **Configuration tab** shot.
+- 🧹 **fold-entity-row retired from the required HACS cards** (zero uses since
+  the onboarding banner became a bundled card) — required set is now card-mod,
+  mushroom, apexcharts-card, sankey-chart.
+- 🛠️ **Repo-wide accuracy pass, every fix verified against code**: the KEBA
+  failsafe doc had its default inverted (managed-neutralize IS the default);
+  retired battery knobs removed from the User Guide; EV-intelligence sensor
+  list rewritten to the real per-charger entities; stale entity names,
+  defaults, ADR field names and broken links fixed across 14 files.
+
 # [1.7.4-beta.7] — 01.07.2026
 
 > **Pre-release.** Dashboard config reachability + dormant arbitrage hardening.
