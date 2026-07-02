@@ -127,7 +127,6 @@ The SEM dashboard uses several HACS frontend cards. Install these via
 | `card-mod` | Glass card styling -- without this, all dashboard tabs are blank |
 | `apexcharts-card` | All power and energy charts |
 | `sankey-chart` | Energy flow diagram on the Energy tab |
-| `fold-entity-row` | Collapsible welcome section on the Home tab (optional but recommended) |
 
 See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full list and
 troubleshooting steps when a card shows "Custom element doesn't exist".

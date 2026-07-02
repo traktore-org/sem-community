@@ -3,15 +3,14 @@
 # ============================================================
 # Version: 6.1 (2026-04)
 #
-# 7 views: Home, Energy, Battery, EV, Control, Costs, System
+# 8 views: Home, Energy, Battery, EV, Control, Configuration, Costs, System
 # Dark glassmorphism theme, mobile-first responsive design
 #
-# Required HACS cards (only 5):
+# Required HACS cards (only 4):
 #   mushroom         — chips, entity, template, number, title cards
 #   card-mod         — *glass_card YAML anchor for unified styling
 #   apexcharts-card  — all trend / power / cost charts
 #   sankey-chart     — Energy flow diagram on Energy tab
-#   fold-entity-row  — collapsible Welcome intro on Home tab
 #
 # Optional HACS cards:
 #   k-flow-card      — animated energy flow visualization (#206)

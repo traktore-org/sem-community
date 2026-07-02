@@ -178,7 +178,7 @@ lovelace:
       type: module
     - url: /hacsfiles/lovelace-mushroom/mushroom.js
       type: module
-    # ... and apexcharts-card, sankey-chart, fold-entity-row as installed.
+    # ... and apexcharts-card, sankey-chart as installed.
 ```
 
 Restart HA. The warning will still log once per startup (YAML mode is
