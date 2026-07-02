@@ -139,6 +139,15 @@ class ChargerReconciler:
         """Consecutive cycles SEM has issued DISABLE while the charger is
         still drawing — a non-zero value means the stop is not taking
         (charger ignoring the command / re-enabled externally)."""
+        # #552 — idle-settled marker. The IDLE flicker-grace (N cycles before
+        # DISABLE) exists ONLY to absorb actuator lag while a session SEM just
+        # stopped winds down. Once idle has SETTLED (contactor observed open,
+        # no draw), a newly-appearing draw is a rogue self-start (KEBA
+        # auto-start at its stored setpoint, #315) — it gets DISABLE
+        # immediately, same as the user-explicit OFF row. Without this every
+        # box self-start earned a fresh grace window (~3 cycles × 4.9 kW from
+        # the home battery, every car-retry, all night).
+        self._idle_settled: bool = False
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
@@ -149,6 +158,10 @@ class ChargerReconciler:
         if desired in (DesiredState.OFF, DesiredState.IDLE):
             # Leaving CHARGE — the next CHARGE episode must START + re-arm,
             # and gets a fresh round of enable re-asserts (#536 backoff).
+            # #552: a fresh CHARGE→IDLE transition begins a WIND-DOWN — the
+            # flicker-grace below applies until idle settles.
+            if self._charging_intent_active:
+                self._idle_settled = False
             self._charging_intent_active = False
             self._enable_attempts = 0
             self._enable_gave_up_at = 0.0
@@ -156,6 +169,7 @@ class ChargerReconciler:
             if not drawing:
                 # Row 2 — already converged. THE spam fix: issue nothing.
                 self._consecutive_idle_count = 0
+                self._idle_settled = True  # #552 — wind-down complete
                 return [Action(ActionKind.NONE)]
             if desired is DesiredState.OFF:
                 if not observed.enable_controllable:
@@ -165,6 +179,13 @@ class ChargerReconciler:
                     # hides the real cause from the user. Surface it.
                     return [Action(ActionKind.REPORT_ENABLE_BLOCKED)]
                 # Row 1 — user-explicit OFF: open immediately, no grace.
+                return [Action(ActionKind.DISABLE)]
+            # #552 — draw appeared AFTER idle had settled: not our wind-down
+            # but a rogue self-start (KEBA auto-start, #315). Open the
+            # contactor immediately, re-asserted every cycle it persists —
+            # parity with the OFF row. The grace below stays reserved for
+            # winding down a session SEM itself just stopped.
+            if self._idle_settled:
                 return [Action(ActionKind.DISABLE)]
             # IDLE + drawing — flicker hold then confirm (rows 3-4).
             self._consecutive_idle_count += 1

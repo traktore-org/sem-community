@@ -86,13 +86,20 @@ def test_idle_drawing_holds_then_disables_after_threshold():
     assert actions == [Action(ActionKind.DISABLE)]
 
 
-def test_idle_resets_flicker_counter_when_box_stops():
+def test_idle_settled_then_draw_disables_immediately():
+    # #552 INVERSION of the old test_idle_resets_flicker_counter_when_box_stops:
+    # once idle has SETTLED (box observed open + no draw), a newly-appearing
+    # draw is a rogue self-start (KEBA auto-start, #315) — it gets DISABLE on
+    # the FIRST cycle, not a fresh flicker-grace. The grace is reserved for
+    # winding down a session SEM itself just stopped.
     rec = _rec()
-    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=10.0)  # count=1
-    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=20.0)  # stopped → NONE + reset
-    # next drawing idle starts a fresh hold window, not an immediate disable
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=10.0)  # wind-down
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=20.0)  # settled
     actions = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=30.0)
-    assert actions == [Action(ActionKind.NONE)]
+    assert actions == [Action(ActionKind.DISABLE)]
+    # ...and keeps re-asserting while the rogue draw persists (parity with OFF)
+    actions = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=40.0)
+    assert actions == [Action(ActionKind.DISABLE)]
 
 
 def test_charge_not_charging_starts():
