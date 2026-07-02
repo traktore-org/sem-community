@@ -4,7 +4,7 @@
 
 # Quick Start Guide
 
-Get Solar Energy Management (SEM) v1.4.7 running in your Home Assistant in about 10 minutes.
+Get Solar Energy Management (SEM) running in your Home Assistant in about 10 minutes.
 
 ---
 

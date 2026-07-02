@@ -229,7 +229,7 @@ push to develop, ask user "tag it?".
 - Migration chain: [`__init__.py`](../__init__.py) (`async_migrate_entry`,
   v1 → v8)
 - Test naming: `tests/test_<N>_<topic>.py` per
-  [ADR 0005](adr/0005-per-brand-pipeline-test.md)
+  [ADR 0005](adr/0005-pipeline-test-per-brand.md)
 - Deploy + validate: `~/bin/deploy-test.sh --code-only` and
   `~/bin/validate-sem.sh`
 - Research: `ruflo-goals:deep-researcher`

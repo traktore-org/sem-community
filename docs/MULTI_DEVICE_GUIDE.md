@@ -85,7 +85,7 @@ Each charger gets its own EV charging configuration:
 |--------|-------------|
 | `number.sem_charger_{id}_daily_ev_target` | Night charging target (kWh) per charger |
 | `number.sem_charger_{id}_daily_ev_target_max` | Solar-surplus ceiling (kWh) per charger |
-| `number.sem_charger_{id}_night_initial_current` | Start amps for night charging |
+| `number.sem_charger_{id}_initial_current` | Vehicle start amps (first current offered when a session begins) |
 | `number.sem_charger_{id}_minimum_current` | Minimum charging current (A) |
 | `select.sem_charger_{id}_charge_mode` | Per-charger Charge mode (Solar only / Solar + cheapest hours / Min + Solar / Always (max) / Off). v1.6.3 replacement for the legacy `night_charging`, `smart_night_charging`, `tariff_optimized` switches. |
 
@@ -103,9 +103,8 @@ Each configured charger creates its own sensor entities:
 | `sensor.sem_charger_{id}_taper_trend` | BMS taper detection (stable/declining) |
 | `sensor.sem_charger_{id}_taper_ratio` | Taper ratio (%) |
 | `sensor.sem_charger_{id}_estimated_soc` | EV battery SOC estimate (%) |
-| `sensor.sem_charger_{id}_nights_until_charge` | Estimated nights before charge needed |
-| `sensor.sem_charger_{id}_charge_needed` | Whether tonight's charge is needed |
 | `sensor.sem_charger_{id}_taper_minutes_to_full` | Estimated minutes to full charge |
+| `sensor.sem_charger_{id}_daily_energy` | Energy delivered today by this charger (kWh) |
 
 ### Surplus Priority
 

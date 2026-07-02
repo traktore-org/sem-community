@@ -229,7 +229,7 @@ When the battery SOC is above the buffer threshold (default 70%), SEM supplement
 
 ## Dashboard
 
-SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark theme:
+SEM includes a built-in dashboard with 8 views and a unified glassmorphism dark theme:
 
 | View | Description |
 |------|-------------|
@@ -237,7 +237,8 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 | **Energy** | Sankey diagram, self-consumption/autarky gauges, donut chart, 24h power, CO2 avoided, trees saved |
 | **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
 | **EV** | Charging status, session stats, solar share gauge, lifetime totals, EV Intelligence (taper trend, virtual SOC, charge skip reasoning, battery health) |
-| **Control** | Load priority drag-and-drop, surplus allocation, battery/EV/tariff settings |
+| **Control** | Live surplus allocation, load-priority drag-and-drop, per-device control modes, today's schedule |
+| **Configuration** | All post-setup configuration in one place — colorful SOC-zone controls, entity pickers, EV charger add/remove, tariff, heat pump, hot water, battery scheduler. Rarely need HA's native config flow |
 | **Costs** | Today/month/year KPIs, period selector, cost & savings charts, demand charge, tariff rates |
 | **System** | Health diagnostics, sensor status, charging state, peak management |
 
@@ -246,6 +247,7 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 | ![Energy](docs/images/sem_energy_tab.png) | ![Costs](docs/images/sem_costs_tab.png) |
 | ![Battery](docs/images/sem_battery_tab.png) | ![EV](docs/images/sem_ev_tab.png) |
 | ![Control](docs/images/sem_control_tab.png) | ![System](docs/images/sem_system_tab.png) |
+| ![Configuration](docs/images/sem_config_tab.png) | |
 
 ### Dashboard Features
 - **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects

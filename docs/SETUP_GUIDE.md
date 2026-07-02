@@ -764,7 +764,7 @@ the next day.
 
 ### Scheduler state sensor
 
-`sensor.sem_battery_charge_scheduler_state` shows:
+`sensor.sem_battery_scheduler_state` shows:
 
 | State | Meaning |
 |-------|---------|
@@ -925,7 +925,7 @@ To change the server language (affects static labels for all users):
    with the new language
 
 The source of truth for all translations is `dashboard/translations.json`
-(759 keys across 15 languages). If you want to contribute a translation
+(1116 keys across 15 languages). If you want to contribute a translation
 correction or add a new language, see
 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 

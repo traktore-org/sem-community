@@ -126,8 +126,8 @@ config flow. If it doesn't:
 
 **If the dashboard appears but cards show "Custom element doesn't exist":**
 some HACS frontend cards are missing. See [Dashboard Guide → Required
-Custom Cards](docs/DASHBOARD_GUIDE.md#required-custom-cards) for the full
-list — `card-mod`, `bar-card` and `mushroom` are the most commonly missing.
+HACS Cards](docs/DASHBOARD_GUIDE.md#required-hacs-cards) for the full
+list — `card-mod`, `apexcharts-card` and `mushroom` are the most commonly missing.
 
 ---
 
