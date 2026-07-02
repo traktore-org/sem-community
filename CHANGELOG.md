@@ -11,23 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.4-beta.8] — 02.07.2026
+# [1.7.4-beta.9] — 02.07.2026
 
-> **Pre-release.** Documentation overhaul — no code changes.
+> **Pre-release.** Root-cause fix: SEM never starts or holds a charge it didn't command.
 
-### 📚 Documentation
-- 🏬 **README reworked for the HACS default store** — SEM now speaks for itself:
-  the competitor comparison table is gone, replaced by a positive "Why SEM?";
-  install instructions reflect the default store with an "Open in HACS" button.
-- 📸 **Configuration-tab screenshot added** (the colorful post-setup config
-  surface was missing from the docs) + refreshed Control-tab screenshot; both
-  without the HA side panel. README now lists all **8** dashboard views.
-- 🛠️ **Repo-wide accuracy pass, every fix verified against code**: KEBA
-  failsafe doc had its default inverted (managed-neutralize IS the default —
-  no user action needed); retired battery knobs removed from the User Guide;
-  EV-intelligence sensor list rewritten to the real per-charger entities;
-  stale entity names, defaults, translation-key counts, ADR field names and
-  3 broken links fixed across 14 documentation files.
+### 🔋 EV charging — session ownership (#552)
+- 🐛 **`solar_only` no longer drains the home battery at night.** When a KEBA
+  auto-started at its stored setpoint (car retry, #315), the charge-stability
+  deficit-hold engaged for the un-owned draw — rewriting decide()'s correct
+  IDLE into a 10 A charge command and formally STARTing a session nobody
+  decided, pulling ~4.9 kW from the battery in 90 s–4 min bursts every ~10
+  minutes after sunset (~2 kWh per evening, observed on PROD 01.+02.07).
+- 🛡️ **Fix = session ownership**: the stability layer only bridges/holds
+  sessions it started itself, and the reconciler's idle grace applies only
+  while winding down SEM's own stop — a draw appearing after idle has settled
+  is disabled immediately, every cycle it persists.
+- ✅ **Live-verified on PROD**: 30-min watch, two box auto-starts on the old
+  cadence, both killed in ≤10 s with zero SEM starts (was 90–240 s each).
+  ruflo-reviewed (0 blocker/0 high); 10 new regression tests; 4007 tests green.
 
 # [1.7.4-beta.8] — 02.07.2026
 
