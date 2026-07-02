@@ -169,6 +169,18 @@ class ChargeStability:
         # latch-clear alone leaves. Cleared on a genuine no-draw or a real
         # CHARGE (#461 / PROD 2026-06-27 re-engagement loop).
         self._stopped_at: Dict[str, float] = {}
+        # #552 — session OWNERSHIP. Chargers whose current session was started
+        # by THIS filter (every charge-commit passes through ``_commit_amps``).
+        # The deficit-bridge/hold below only ever engages for owned sessions:
+        # a draw SEM didn't command (KEBA auto-start at its stored setpoint,
+        # #315) must NOT be adopted and held — that converted "police the
+        # rogue draw" into "endorse it at min amps for the grace window",
+        # draining the home battery in ~90 s bursts every car-retry (PROD
+        # 2026-07-02, solar_only after sunset). Ownership is stability-local
+        # on purpose: ``adapter.last_intent`` can go stale (a stability stop
+        # that lands while the car happens to blip 0 W never reaches the
+        # adapter, leaving last_intent=CHARGE forever).
+        self._sem_session: set[str] = set()
 
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
@@ -181,6 +193,7 @@ class ChargeStability:
         self._start_since.pop(cid, None)
         self._start_offer.pop(cid, None)
         self._latched.pop(cid, None)
+        self._sem_session.discard(cid)
 
     def _median_amps(self, cid: str, raw_amps: int, window: int) -> int:
         """Layer 1 — rolling median of the raw target-amps stream.
@@ -203,6 +216,10 @@ class ChargeStability:
         if self._last_amps.get(cid) != amps:
             self._last_change_ts[cid] = now
         self._last_amps[cid] = amps
+        # #552 — every charge-commit flows through here (fresh start, start
+        # kick, mid-session adjust, deficit hold), so this is the single
+        # point where a session becomes SEM-owned.
+        self._sem_session.add(cid)
 
     def filter(
         self,
@@ -431,6 +448,25 @@ class ChargeStability:
                 self._deficit_since.pop(cid, None)
                 self._deep_deficit_since.pop(cid, None)
             return decision
+        # #552 — OWNERSHIP GATE. The deficit-bridge below exists to protect a
+        # session SEM STARTED from flapping on a transient dip. A draw SEM
+        # never commanded (KEBA auto-starts at its stored setpoint when the
+        # car retries, #315) is NOT a session to hold — bridging it rewrote
+        # decide()'s correct IDLE into CHARGE_AT_AMPS min-amps, made the
+        # reconciler formally START the rogue session (enable + failsafe-arm
+        # + write), and drained the home battery into the car in ~90 s bursts
+        # every ~10 min after sunset (PROD 2026-07-02, solar_only, SOC 99%).
+        # Pass decide()'s IDLE through untouched: the reconciler's IDLE row
+        # stops the un-owned draw. This also covers a coordinator restart
+        # mid-deficit: an unknown session in deficit is stopped, not held —
+        # policy (decide) says idle, and SEM cannot vouch for a session it
+        # doesn't remember starting. (Restart mid-SURPLUS still adopts via
+        # the charge_wanted branch above, unchanged.)
+        if cid not in self._sem_session:
+            self._deficit_since.pop(cid, None)
+            self._deep_deficit_since.pop(cid, None)
+            self._latched.pop(cid, None)
+            return decision
         # Smoothed deficit (day).
         # A bursty car (Zoe) blips ``charging`` False between pulses. Without
         # the latch, every blip reset the deficit timer (line below) so the
@@ -451,6 +487,7 @@ class ChargeStability:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
             self._latched.pop(cid, None)  # genuine stop — drop the latch
+            self._sem_session.discard(cid)  # #552 — session over
             return decision
         since = self._deficit_since.setdefault(cid, now)
         held = now - since
@@ -493,6 +530,13 @@ class ChargeStability:
             # Arm the post-stop settle so actuator lag (car still drawing next
             # cycle) can't re-open the hold before KEBA cuts the contactor.
             self._stopped_at[cid] = now
+            # #552 — SEM ended this session; ownership ends WITH it. Without
+            # this, a stability stop that lands while the car blips 0 W never
+            # reaches the adapter (reconciler sees idle+no-draw → no-op), the
+            # stale CHARGE last_intent kept ``charging`` True, and the bridge
+            # re-entered from idle on the next cycle — the self-sustaining
+            # burst loop.
+            self._sem_session.discard(cid)
             if stop_for_short:
                 # Re-stamp so the strategy sensor shows SEM CHOSE to stop;
                 # decision.reason already carries the structural cause.
