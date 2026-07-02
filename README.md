@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon@2x.png" alt="SEM Logo" width="200">
+  <img src="https://raw.githubusercontent.com/traktore-org/sem-community/main/icon@2x.png" alt="SEM Logo" width="200">
 </p>
 
 # Solar Energy Management (SEM)
@@ -15,10 +15,10 @@
 
 SEM monitors your solar production, battery, grid, EV charger, and household devices every 10 seconds and distributes surplus power by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
 
-![SEM Dashboard Overview](docs/images/sem_home_tab.png)
+![SEM Dashboard Overview](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_home_tab.png)
 
 <p align="center">
-  <img src="docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
+  <img src="https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
 </p>
 
 ---
@@ -178,7 +178,7 @@ Enable peak load management if your utility bills based on peak demand:
 | Warning level | — | Early warning threshold |
 | Emergency level | — | All non-critical loads shed |
 
-![SEM Integration Page](docs/images/sem_integration_detail.png)
+![SEM Integration Page](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_integration_detail.png)
 
 ---
 
@@ -244,10 +244,10 @@ SEM includes a built-in dashboard with 8 views and a unified glassmorphism dark 
 
 | | |
 |---|---|
-| ![Energy](docs/images/sem_energy_tab.png) | ![Costs](docs/images/sem_costs_tab.png) |
-| ![Battery](docs/images/sem_battery_tab.png) | ![EV](docs/images/sem_ev_tab.png) |
-| ![Control](docs/images/sem_control_tab.png) | ![System](docs/images/sem_system_tab.png) |
-| ![Configuration](docs/images/sem_config_tab.png) | |
+| ![Energy](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_energy_tab.png) | ![Costs](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_costs_tab.png) |
+| ![Battery](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_battery_tab.png) | ![EV](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_ev_tab.png) |
+| ![Control](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_control_tab.png) | ![System](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_system_tab.png) |
+| ![Configuration](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_config_tab.png) | |
 
 ### Dashboard Features
 - **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects
