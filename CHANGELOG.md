@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.12] — 03.07.2026
+
+> **Pre-release.** KEBA guard correction — beta.11's tagged build carried a
+> silent no-op guard value.
+
+### 🔌 KEBA — runaway cap corrected (#553)
+- 🐛 beta.11 tagged the guard at ~1 Wh, which the KEBA library **rejects**
+  (minimum 1 kWh; the error is swallowed as a log line) — caught by a live
+  layer-check on a real P30. The guard now arms **1 kWh**: a runaway cap that
+  bounds a firmware auto-start session when SEM is down or restarting
+  (previously unbounded). Per-retry policing while SEM is alive is #552's job
+  and unchanged. Authorization-based approaches are explicitly out of scope.
+
 # [1.7.4-beta.11] — 03.07.2026
 
 > **Pre-release.** Improvement batch (#553): KEBA idle-guard, full grid schema, cleanup.
