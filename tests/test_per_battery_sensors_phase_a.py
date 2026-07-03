@@ -115,6 +115,9 @@ class TestSensorReaderSlugAssignment:
         ed.battery_power_inverted = False
         ed.battery_soc = None
         ed.battery_soc_list = []
+        ed.battery_power_pairs = []
+        ed.grid_power_from = None
+        ed.grid_power_to = None
         ed.solar_power = None
         ed.solar_power_list = []
         ed.grid_power = None
@@ -178,6 +181,9 @@ class TestSensorReaderSlugAssignment:
         ed.battery_power_inverted = False
         ed.battery_soc = None
         ed.battery_soc_list = []
+        ed.battery_power_pairs = []
+        ed.grid_power_from = None
+        ed.grid_power_to = None
         ed.solar_power = None
         ed.solar_power_list = []
         ed.grid_power = None

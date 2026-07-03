@@ -76,6 +76,11 @@ def test_off_drawing_disables_immediately_no_flicker_grace():
 
 def test_idle_drawing_holds_then_disables_after_threshold():
     rec = _rec()
+    # #553: the flicker grace only exists for winding down SEM's own stop —
+    # establish an active charge first (at boot, idle is settled and a rogue
+    # draw is disabled immediately; see test_boot_rogue_draw below).
+    rec.reconcile(DesiredState.CHARGE, 10,
+                  _obs(charging=True, power=6000.0, setpoint=10), now=0.0)
     # cycles 1..3 (< threshold 4): flicker hold → NONE
     for cycle in range(1, 4):
         actions = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0),
@@ -86,6 +91,15 @@ def test_idle_drawing_holds_then_disables_after_threshold():
     assert actions == [Action(ActionKind.DISABLE)]
 
 
+def test_boot_rogue_draw_disables_first_cycle():
+    """#553 — at boot SEM has commanded nothing: a draw found while
+    desired=IDLE is not our wind-down; DISABLE on the very first cycle."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.IDLE, 0,
+                            _obs(charging=True, power=6000.0), now=0.0)
+    assert actions == [Action(ActionKind.DISABLE)]
+
+
 def test_idle_settled_then_draw_disables_immediately():
     # #552 INVERSION of the old test_idle_resets_flicker_counter_when_box_stops:
     # once idle has SETTLED (box observed open + no draw), a newly-appearing
@@ -93,8 +107,11 @@ def test_idle_settled_then_draw_disables_immediately():
     # the FIRST cycle, not a fresh flicker-grace. The grace is reserved for
     # winding down a session SEM itself just stopped.
     rec = _rec()
-    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=10.0)  # wind-down
-    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=20.0)  # settled
+    # At boot idle is already settled (#553), so this first draw is itself
+    # rogue → immediate DISABLE (review M2: assert it, don't mislabel it).
+    a0 = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=10.0)
+    assert a0 == [Action(ActionKind.DISABLE)]
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=20.0)  # settled again
     actions = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=30.0)
     assert actions == [Action(ActionKind.DISABLE)]
     # ...and keeps re-asserting while the rogue draw persists (parity with OFF)
@@ -467,6 +484,9 @@ def test_idle_self_charging_flicker_then_disable():
     """#353: self-charging against an IDLE intent gets the flicker hold
     then a confirmed DISABLE (same path as power-based drawing)."""
     rec = _rec()
+    # #553: grace requires a wind-down — start a charge episode first.
+    rec.reconcile(DesiredState.CHARGE, 10,
+                  _obs(charging=True, power=4000.0, setpoint=10), now=0.0)
     for cyc in range(1, 4):  # < threshold → hold
         a = rec.reconcile(DesiredState.IDLE, 0,
                           _obs(charging=False, self_charging=True, power=4000.0), now=cyc*10.0)

@@ -68,7 +68,16 @@ class EnergyDashboardConfig:
     # sign must be flipped on read.
     battery_power_from: Optional[str] = None  # discharge power sensor
     battery_power_to: Optional[str] = None    # charge power sensor
+    # #553 — grid two-sensor power_config (from=import, to=export). Consumed
+    # by a dedicated reader branch with manual-override semantics
+    # (grid_power = export − import, sign fixed by declaration).
+    grid_power_from: Optional[str] = None
+    grid_power_to: Optional[str] = None
     battery_power_inverted: bool = False
+    # #553 — ALL two-sensor pairs (multi-battery installs may configure more
+    # than one battery in Two-sensor mode). Each entry: (from, to). The
+    # scalar fields above stay = first pair (single-battery fast path).
+    battery_power_pairs: List[tuple] = field(default_factory=list)
 
     # #551 — the battery SOC entity the USER configured in HA's Energy
     # Dashboard battery dialog (``stat_soc``). Deterministic — read it
@@ -331,24 +340,51 @@ def _extract_grid_config(source: Dict[str, Any], config: EnergyDashboardConfig) 
             config.grid_export_energy = eid
 
     # Grid power — collect ALL power entries
-    power_config = source.get("power", [])
-    if power_config:
-        for entry in power_config:
-            eid = entry.get("stat_rate")
-            if eid:
-                config.grid_power_list.append(eid)
-                if not config.grid_import_power:
-                    config.grid_import_power = eid
-    elif source.get("stat_rate"):
-        eid = source.get("stat_rate")
-        config.grid_power_list.append(eid)
-        if not config.grid_import_power:
-            config.grid_import_power = eid
+    # #553 — grid sources carry the same power_config as batteries (#551):
+    # {stat_rate} | {stat_rate_inverted} | {stat_rate_from, stat_rate_to}.
+    # Two-sensor grid (from=import, to=export) maps onto SEM's existing
+    # split-grid support (Pattern E). An INVERTED combined sensor is read as
+    # combined — the #461 sign-detection stack already resolves polarity
+    # deterministically (brand > solar-anchored > counter), so no extra sign
+    # plumbing is layered here.
+    pc = source.get("power_config") or {}
+    if isinstance(pc, dict) and (
+        pc.get("stat_rate") or pc.get("stat_rate_inverted")
+        or (pc.get("stat_rate_from") and pc.get("stat_rate_to"))
+    ):
+        if pc.get("stat_rate") or pc.get("stat_rate_inverted"):
+            eid = pc.get("stat_rate") or pc.get("stat_rate_inverted")
+            config.grid_power_list.append(eid)
+            if not config.grid_import_power:
+                config.grid_import_power = eid
+        else:
+            # Two sensors: from=import, to=export. Dedicated fields ONLY —
+            # grid_import_power is consumed as a COMBINED sensor by the
+            # reader, and grid_power_list feeds the multi-meter sum; putting
+            # the import side there read import-only as combined (review B1).
+            if not config.grid_power_from:
+                config.grid_power_from = pc["stat_rate_from"]
+                config.grid_power_to = pc["stat_rate_to"]
+    else:
+        power_config = source.get("power", [])
+        if power_config:
+            for entry in power_config:
+                eid = entry.get("stat_rate")
+                if eid:
+                    config.grid_power_list.append(eid)
+                    if not config.grid_import_power:
+                        config.grid_import_power = eid
+        elif source.get("stat_rate"):
+            eid = source.get("stat_rate")
+            config.grid_power_list.append(eid)
+            if not config.grid_import_power:
+                config.grid_import_power = eid
 
     config.has_grid = bool(
         config.grid_import_energy_list
         or config.grid_power_list
         or config.grid_export_energy_list
+        or (config.grid_power_from and config.grid_power_to)  # #553 pair
     )
 
     if config.has_grid:
@@ -392,15 +428,14 @@ def _extract_battery_config(source: Dict[str, Any], config: EnergyDashboardConfi
         elif pc.get("stat_rate_from") and pc.get("stat_rate_to"):
             # Two sensors: from=discharge, to=charge. No combined entity —
             # leave battery_power unset; the reader computes net = to − from.
+            # #553: every pair is collected (multi-battery two-sensor
+            # fleets); the scalars stay = first pair for the single path.
+            config.battery_power_pairs.append(
+                (pc["stat_rate_from"], pc["stat_rate_to"]),
+            )
             if not config.battery_power_from:
                 config.battery_power_from = pc["stat_rate_from"]
                 config.battery_power_to = pc["stat_rate_to"]
-            else:
-                _LOGGER.warning(
-                    "Multiple two-sensor battery power_configs found; only "
-                    "the first pair is used for real-time power — fleet "
-                    "power may be underreported (#551)."
-                )
             power = None
 
     # #551 — the explicit SOC entity from HA's battery dialog. Deterministic:

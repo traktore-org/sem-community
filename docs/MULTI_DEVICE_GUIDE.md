@@ -85,7 +85,6 @@ Each charger gets its own EV charging configuration:
 |--------|-------------|
 | `number.sem_charger_{id}_daily_ev_target` | Night charging target (kWh) per charger |
 | `number.sem_charger_{id}_daily_ev_target_max` | Solar-surplus ceiling (kWh) per charger |
-| `number.sem_charger_{id}_initial_current` | Vehicle start amps (first current offered when a session begins) |
 | `number.sem_charger_{id}_minimum_current` | Minimum charging current (A) |
 | `select.sem_charger_{id}_charge_mode` | Per-charger Charge mode (Solar only / Solar + cheapest hours / Min + Solar / Always (max) / Off). v1.6.3 replacement for the legacy `night_charging`, `smart_night_charging`, `tariff_optimized` switches. |
 

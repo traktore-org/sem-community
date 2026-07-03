@@ -54,6 +54,8 @@ _BRAND_WATCHDOG_REFRESH_S = {
 # Persisted so it overwrites the box's short built-in failsafe.
 FAILSAFE_TIMEOUT_S = 600
 
+from ..consts.core import KEBA_IDLE_GUARD_KWH
+
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -1081,10 +1083,17 @@ class CurrentControlDevice(ControllableDevice):
                 # the box). Only arms when opted in via ``keba_arm_failsafe``.
                 await self.arm_failsafe()
 
-                # Set energy target if supported (KEBA)
-                if energy_target_kwh > 0 and self.hass.services.has_service(domain, "set_energy"):
+                # Set energy target if supported (KEBA). #553: when SEM has
+                # no target, EXPLICITLY clear the register (0 = no limit) —
+                # stop_session() arms a ~1 Wh idle-guard there so a firmware
+                # auto-start (#315) self-terminates at the box; every real
+                # SEM start must release that guard or the session would end
+                # at 1 Wh. SEM owns the KEBA session-energy register.
+                if self.hass.services.has_service(domain, "set_energy"):
                     await self.hass.services.async_call(
-                        domain, "set_energy", {"energy": energy_target_kwh}, blocking=True,
+                        domain, "set_energy",
+                        {"energy": energy_target_kwh if energy_target_kwh > 0 else 0},
+                        blocking=True,
                     )
 
                 # Pilot cycle: disable/enable for cars that need fresh signal
@@ -1163,6 +1172,39 @@ class CurrentControlDevice(ControllableDevice):
                 if self.hass.services.has_service(domain, "disable"):
                     await self.hass.services.async_call(domain, "disable", {}, blocking=True)
                     stop_method = f"{domain}.disable"
+                    # #553 — BOX-LEVEL idle-guard (#315 root residue): KEBA
+                    # firmware auto-restarts a session at its stored setpoint
+                    # when the car retries (~every 10 min), even after
+                    # keba.disable — observed 55×/night on PROD (2026-07-03),
+                    # each killed by SEM within a cycle but still ~1.2 kWh of
+                    # battery drain. Arm a ~1 Wh session-energy target so a
+                    # self-started session terminates AT THE BOX after ~1 Wh,
+                    # with SEM out of the loop entirely. Every SEM start
+                    # releases the guard (start_session writes the real
+                    # target, or 0 = no limit). Note: SEM owns this register —
+                    # a user-set box energy limit is overwritten by SEM starts.
+                    #
+                    # Own try (review H1): a set_energy failure must neither
+                    # skip the _session_active reset below nor mask that the
+                    # disable itself succeeded.
+                    if self.hass.services.has_service(domain, "set_energy"):
+                        try:
+                            await self.hass.services.async_call(
+                                domain, "set_energy",
+                                {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
+                            )
+                            _LOGGER.debug(
+                                "stop_session(%s): armed %.3f kWh idle-guard "
+                                "energy target (#553)", self.name,
+                                KEBA_IDLE_GUARD_KWH,
+                            )
+                        except Exception as guard_err:  # noqa: BLE001
+                            _LOGGER.warning(
+                                "stop_session(%s): idle-guard set_energy "
+                                "failed (%s) — box auto-start protection "
+                                "not armed this stop (#553)",
+                                self.name, guard_err,
+                            )
                 else:
                     _LOGGER.warning(
                         "stop_session(%s): charger_service=%s configured but "
@@ -1201,20 +1243,9 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as e:
             _LOGGER.error("Failed to stop session on %s: %s", self.name, e)
 
-    async def update_energy_target(self, remaining_kwh: float) -> None:
-        """Update KEBA energy target mid-session (for accurate auto-stop)."""
-        if not self._session_active:
-            return
-        try:
-            if self.charger_service and "keba" in (self.charger_service or ""):
-                domain = self.charger_service.split(".", 1)[0]
-                await self.hass.services.async_call(
-                    domain, "set_energy",
-                    {"energy": max(0, remaining_kwh)},
-                    blocking=True,
-                )
-        except Exception as e:
-            _LOGGER.debug("Failed to update energy target on %s: %s", self.name, e)
+    # update_energy_target() removed (#553 review L1): zero callers, and a
+    # mid-session set_energy write would overwrite the idle-guard register.
+
 
     def to_dict(self) -> Dict[str, Any]:
         d = super().to_dict()

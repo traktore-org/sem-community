@@ -455,6 +455,9 @@ class E2ETestBase:
         ed.battery_power_inverted = False
         ed.battery_soc = None
         ed.battery_soc_list = []
+        ed.battery_power_pairs = []
+        ed.grid_power_from = None
+        ed.grid_power_to = None
         ed.grid_import_energy = inv.grid_import_energy
         ed.grid_export_energy = inv.grid_export_energy
         ed.battery_charge_energy = inv.battery_charge_energy
@@ -508,6 +511,9 @@ class E2ETestBase:
         ed.battery_power_inverted = False
         ed.battery_soc = None
         ed.battery_soc_list = []
+        ed.battery_power_pairs = []
+        ed.grid_power_from = None
+        ed.grid_power_to = None
         ed.grid_import_energy = inv.grid_import_energy
         ed.grid_export_energy = inv.grid_export_energy
         ed.battery_charge_energy = inv.battery_charge_energy

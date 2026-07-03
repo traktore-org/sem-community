@@ -147,7 +147,11 @@ class ChargerReconciler:
         # immediately, same as the user-explicit OFF row. Without this every
         # box self-start earned a fresh grace window (~3 cycles × 4.9 kW from
         # the home battery, every car-retry, all night).
-        self._idle_settled: bool = False
+        # #553 — initialized True: at boot SEM has commanded NOTHING, so a
+        # draw found while desired=IDLE is by definition not our wind-down —
+        # policy says idle, disable immediately. The grace re-arms on every
+        # genuine CHARGE→IDLE transition (the only wind-down there is).
+        self._idle_settled: bool = True
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:

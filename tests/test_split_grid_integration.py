@@ -63,6 +63,9 @@ def _make_energy_dashboard_config(
     ed.battery_power_inverted = False
     ed.battery_soc = None
     ed.battery_soc_list = []
+    ed.battery_power_pairs = []
+    ed.grid_power_from = None
+    ed.grid_power_to = None
     ed.ev_power = None
     ed.has_solar = bool(solar_power)
     ed.has_grid = bool(grid_import_energy or grid_import_power or grid_power_list)
@@ -1032,6 +1035,67 @@ class TestBatteryPowerConfigPipeline:
         power.calculate_derived()
 
         assert power.battery_power == -1200  # flipped → discharge
+
+    def test_two_sensor_grid_power_config_pipeline(self):
+        """#553 review B1 — declared two-sensor GRID pair must be consumed
+        as export − import (manual-override semantics), not read as a
+        combined sensor. Pre-fix the import side landed in
+        grid_import_power and was read as combined (always-positive =
+        phantom export)."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power=None,
+            battery_power="sensor.batt",
+        )
+        ed.grid_power_from = "sensor.grid_import_p"
+        ed.grid_power_to = "sensor.grid_export_p"
+        states = {
+            "sensor.pv": _state(1000),
+            "sensor.batt": _state(0),
+            "sensor.grid_import_p": _state(1500),  # importing 1.5 kW
+            "sensor.grid_export_p": _state(0),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_power == -1500  # SEM convention: − = import
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
+
+    def test_two_two_sensor_batteries_summed(self):
+        """#553 — a fleet of TWO two-sensor batteries: per-battery nets
+        computed and summed; pairs are never sign-flipped."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power=None,
+        )
+        ed.battery_power_pairs = [
+            ("sensor.b1_discharge_p", "sensor.b1_charge_p"),
+            ("sensor.b2_discharge_p", "sensor.b2_charge_p"),
+        ]
+        ed.battery_power_from = "sensor.b1_discharge_p"
+        ed.battery_power_to = "sensor.b1_charge_p"
+        ed.has_battery = True
+        states = {
+            "sensor.pv": _state(5000),
+            "sensor.grid": _state(0),
+            "sensor.b1_charge_p": _state(2000),
+            "sensor.b1_discharge_p": _state(0),
+            "sensor.b2_charge_p": _state(0),
+            "sensor.b2_discharge_p": _state(500),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # b1 charging 2000, b2 discharging 500 → fleet net +1500
+        assert power.battery_power == 1500
+        assert power.batteries["b1"].power_w == 2000
+        assert power.batteries["b2"].power_w == -500
 
     def test_soc_precedence_sem_option_beats_stat_soc(self):
         """SEM's explicit battery_soc_sensor option outranks the Energy
