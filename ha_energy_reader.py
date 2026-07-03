@@ -60,6 +60,22 @@ class EnergyDashboardConfig:
     battery_power: Optional[str] = None  # Combined: positive=charge, negative=discharge
     ev_power: Optional[str] = None
 
+    # #551 — battery ``power_config`` alternatives (HA ≥2026.x battery dialog).
+    # Two-sensor mode has NO single combined entity: HA stores
+    # ``power_config: {stat_rate_from, stat_rate_to}`` (from=discharge,
+    # to=charge) and battery_power stays None — the reader computes
+    # net = to − from. ``stat_rate_inverted`` flags a combined sensor whose
+    # sign must be flipped on read.
+    battery_power_from: Optional[str] = None  # discharge power sensor
+    battery_power_to: Optional[str] = None    # charge power sensor
+    battery_power_inverted: bool = False
+
+    # #551 — the battery SOC entity the USER configured in HA's Energy
+    # Dashboard battery dialog (``stat_soc``). Deterministic — read it
+    # instead of guessing via device-registry heuristics.
+    battery_soc: Optional[str] = None
+    battery_soc_list: List[str] = field(default_factory=list)
+
     # Energy sensors (for cumulative tracking)
     solar_energy: Optional[str] = None
     grid_import_energy: Optional[str] = None
@@ -121,9 +137,12 @@ class EnergyDashboardConfig:
         if not self.is_minimally_configured():
             return False
         battery_energy = self.battery_charge_energy or self.battery_discharge_energy
+        # #551 — a two-sensor power_config has NO combined battery_power by
+        # design (from/to pair instead); that is fully resolved, not missing.
+        battery_power_resolved = bool(self.battery_power or self.battery_power_from)
         return bool(
             (self.solar_energy and not self.solar_power)
-            or (battery_energy and not self.battery_power)
+            or (battery_energy and not battery_power_resolved)
         )
 
     def get_missing_components(self) -> List[str]:
@@ -351,10 +370,46 @@ def _extract_battery_config(source: Dict[str, Any], config: EnergyDashboardConfi
     - stat_energy_from: discharge energy
     - stat_energy_to: charge energy
     - stat_rate/stat_power: combined power (positive=charge, negative=discharge in HA 2025.12)
+    - power_config (#551, HA ≥2026.x): {stat_rate} | {stat_rate_inverted} |
+      {stat_rate_from, stat_rate_to} — the "Standard / Inverted / Two sensors"
+      choices in HA's battery dialog. Two-sensor mode has NO combined entity.
+    - stat_soc (#551): the user's explicit battery state-of-charge sensor.
     """
     discharge_energy = source.get("stat_energy_from")
     charge_energy = source.get("stat_energy_to")
     power = source.get("stat_rate") or source.get("stat_power")
+
+    # #551 — power_config is authoritative when present (HA duplicates the
+    # combined stat_rate at top level for back-compat, but ONLY for the
+    # Standard mode; Inverted and Two-sensor configs exist solely here).
+    pc = source.get("power_config") or {}
+    if isinstance(pc, dict):
+        if pc.get("stat_rate"):
+            power = pc["stat_rate"]
+        elif pc.get("stat_rate_inverted"):
+            power = pc["stat_rate_inverted"]
+            config.battery_power_inverted = True
+        elif pc.get("stat_rate_from") and pc.get("stat_rate_to"):
+            # Two sensors: from=discharge, to=charge. No combined entity —
+            # leave battery_power unset; the reader computes net = to − from.
+            if not config.battery_power_from:
+                config.battery_power_from = pc["stat_rate_from"]
+                config.battery_power_to = pc["stat_rate_to"]
+            else:
+                _LOGGER.warning(
+                    "Multiple two-sensor battery power_configs found; only "
+                    "the first pair is used for real-time power — fleet "
+                    "power may be underreported (#551)."
+                )
+            power = None
+
+    # #551 — the explicit SOC entity from HA's battery dialog. Deterministic:
+    # no device-registry guessing needed when the user already told HA.
+    soc = source.get("stat_soc")
+    if soc:
+        config.battery_soc_list.append(soc)
+        if not config.battery_soc:
+            config.battery_soc = soc
 
     if discharge_energy:
         config.battery_discharge_energy_list.append(discharge_energy)
@@ -373,9 +428,10 @@ def _extract_battery_config(source: Dict[str, Any], config: EnergyDashboardConfi
         config.battery_discharge_energy_list
         or config.battery_charge_energy_list
         or config.battery_power_list
+        or config.battery_power_from  # #551 two-sensor power, no combined entity
     )
 
-    if discharge_energy or charge_energy or power:
+    if discharge_energy or charge_energy or power or config.battery_power_from:
         _LOGGER.debug(
             "Found battery source #%d: charge_energy=%s, discharge_energy=%s, power=%s",
             len(config.battery_power_list),

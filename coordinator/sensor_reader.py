@@ -1254,17 +1254,39 @@ class SensorReader:
                 )
             readings.battery_power = total
         elif ed.battery_power:
-            readings.battery_power = self._read_sensor(ed.battery_power, "battery")
+            raw_batt = self._read_sensor(ed.battery_power, "battery")
+            # #551 — the user chose "Inverted" in HA's battery dialog
+            # (power_config.stat_rate_inverted): flip on read so the rest of
+            # the pipeline sees the declared convention.
+            if ed.battery_power_inverted:
+                raw_batt = -raw_batt
+            readings.battery_power = raw_batt
+        elif ed.battery_power_from and ed.battery_power_to:
+            # #551 — "Two sensors" battery power_config (e.g. Fronius Verto):
+            # separate charge/discharge sensors, NO combined entity exists.
+            # net = charge − discharge (SEM convention: positive = charging).
+            charge_w = self._read_sensor(ed.battery_power_to, "battery")
+            discharge_w = self._read_sensor(ed.battery_power_from, "battery")
+            readings.battery_power = charge_w - discharge_w
 
-        # Battery SOC — from config, or auto-detect and average across all units
+        # Battery SOC — precedence (#551): SEM's own explicit override
+        # (battery_soc_sensor option) > multi-battery average (the fleet SOC
+        # must not be dominated by ONE source's stat_soc) > the entity the
+        # user configured in HA's Energy Dashboard battery dialog (stat_soc —
+        # deterministic, no guessing) > device-registry auto-detect.
         # Use allow_none so 0% SOC is distinguishable from "unavailable"
         soc_val = None
+        ed_soc = ed.battery_soc
         if self.config.battery_soc_sensor:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
         elif len(ed.battery_power_list) > 1:
+            # Multi-battery installs keep the per-battery average (a single
+            # stat_soc from one source must not masquerade as the fleet SOC).
             soc_val = self._read_battery_soc_average(ed.battery_power_list) or None
+        elif ed_soc:
+            soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
             soc_entity = self._auto_detect_battery_soc(ed.battery_power)
             if soc_entity:
