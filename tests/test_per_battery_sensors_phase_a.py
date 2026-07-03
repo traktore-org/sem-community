@@ -109,6 +109,12 @@ class TestSensorReaderSlugAssignment:
             "sensor.huawei_b2_power",
         ]
         ed.battery_power = "sensor.huawei_b1_power"
+        # #551 mock fidelity — MagicMock auto-attrs are truthy.
+        ed.battery_power_from = None
+        ed.battery_power_to = None
+        ed.battery_power_inverted = False
+        ed.battery_soc = None
+        ed.battery_soc_list = []
         ed.solar_power = None
         ed.solar_power_list = []
         ed.grid_power = None
@@ -166,6 +172,12 @@ class TestSensorReaderSlugAssignment:
         ed = MagicMock()
         ed.battery_power_list = ["sensor.huawei_b1_power"]
         ed.battery_power = "sensor.huawei_b1_power"
+        # #551 mock fidelity — MagicMock auto-attrs are truthy.
+        ed.battery_power_from = None
+        ed.battery_power_to = None
+        ed.battery_power_inverted = False
+        ed.battery_soc = None
+        ed.battery_soc_list = []
         ed.solar_power = None
         ed.solar_power_list = []
         ed.grid_power = None
