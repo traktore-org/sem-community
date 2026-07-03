@@ -115,14 +115,6 @@ SEM_BINARY_SENSORS: Final = {
     "solar_active": "binary_sensor.sem_solar_active",
 }
 
-# Input numbers for configuration
-EMS_INPUT_NUMBERS: Final = {
-    "min_solar_power": "input_number.min_solar_power",
-    "daily_ev_target": "input_number.daily_ev_target",
-    "min_charging_current": "input_number.min_charging_current",
-    "keba_charging_current": "input_number.keba_charging_current",
-}
-
 # ============================================
 # ENERGY SOURCE TYPES
 # ============================================
@@ -131,16 +123,6 @@ ENERGY_SOURCE_RIEMANN: Final = "riemann"
 ENERGY_SOURCE_MANUAL: Final = "manual"
 ENERGY_SOURCE_NONE: Final = "none"
 
-# Riemann Integration Sensor Names
-RIEMANN_ENERGY_SENSORS: Final = {
-    "solar_energy": "sensor.sem_solar_energy_riemann",
-    "home_energy": "sensor.sem_home_energy_riemann",
-    "grid_import_energy": "sensor.sem_grid_import_energy_riemann",
-    "grid_export_energy": "sensor.sem_grid_export_energy_riemann",
-    "battery_charge_energy": "sensor.sem_battery_charge_energy_riemann",
-    "battery_discharge_energy": "sensor.sem_battery_discharge_energy_riemann",
-    "ev_energy": "sensor.sem_ev_energy_riemann",
-}
 
 # ============================================
 # HARDWARE ENERGY SENSORS (Optional)
@@ -161,18 +143,6 @@ ENERGY_MODE_MIXED: Final = "mixed"
 ENERGY_METER_RESET_HOUR: Final = 0  # Midnight daily reset (standard)
 ENERGY_METER_RESET_DAY: Final = 1   # Monthly reset on 1st day
 
-# ============================================
-# LOAD MANAGEMENT SENSORS
-# ============================================
-LOAD_MANAGEMENT_SENSORS: Final = {
-    "target_peak_limit": "sensor.sem_target_peak_limit",
-    "peak_margin": "sensor.sem_peak_margin",
-    "load_management_status": "sensor.sem_load_management_status",
-    "loads_currently_shed": "sensor.sem_loads_currently_shed",
-    "available_load_reduction": "sensor.sem_available_load_reduction",
-    "controllable_devices_count": "sensor.sem_controllable_devices_count",
-    "load_shedding_active": "binary_sensor.sem_load_shedding_active",
-}
 
 # ============================================
 # ATTRIBUTES FOR SENSORS

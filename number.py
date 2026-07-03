@@ -336,20 +336,14 @@ async def async_setup_entry(
                     native_min_value=0, native_max_value=200, native_step=0.5,
                     mode=NumberMode.SLIDER,
                 ), "daily_ev_target", full_config.get("daily_ev_target", 10)),
-                # (#441) Renamed from ``night_initial_current`` to
-                # ``initial_current`` (display "Vehicle Start Amps") to
-                # group with the new per-vehicle Min Amps and decouple
-                # from the now-misleading "night" prefix — the value is
-                # the session-start ramp current, used at any time the
-                # session begins, not strictly tied to nighttime.
-                (NumberEntityDescription(
-                    key=f"charger_{cid}_initial_current",
-                    name=f"{cname} Vehicle Start Amps",
-                    native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-                    native_min_value=6, native_max_value=32, native_step=1,
-                    mode=NumberMode.SLIDER,
-                    icon="mdi:car-clock",
-                ), "initial_current", full_config.get("initial_current", 10)),
+                # #553 — "Vehicle Start Amps" (``initial_current``, ex
+                # ``night_initial_current`` #441) RETIRED: since the
+                # auto-discovering start-kick (beta.57, charge_stability)
+                # no decision code reads it — the filter climbs from Min
+                # Amps until the car latches. The entity was a silent
+                # no-op (#542 class), so it is removed rather than left
+                # as a dead knob. The stale registry entry is purged by
+                # the orphan-entity cleanup on setup.
                 (NumberEntityDescription(
                     key=f"charger_{cid}_minimum_current",
                     name=f"{cname} Min Amps",
@@ -649,7 +643,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_HEAT_PUMP_BOOST_OFFSET,
             DEFAULT_HOT_WATER_MAX_TEMP,
             DEFAULT_SYSTEM_SIZE_KWP,
-            DEFAULT_EV_INITIAL_CURRENT,
             DEFAULT_EV_MIN_CURRENT,
             DEFAULT_BATTERY_CAPACITY_KWH,
         )
@@ -674,7 +667,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "legionella_target_temp": 65.0,
             "legionella_interval_hours": 72,
             "system_size_kwp": DEFAULT_SYSTEM_SIZE_KWP,
-            "initial_current": DEFAULT_EV_INITIAL_CURRENT,
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
             "ev_enable_delay_seconds": 60,
             "ev_disable_delay_seconds": 300,

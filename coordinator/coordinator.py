@@ -506,7 +506,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         for key in (
             "daily_ev_target", "daily_ev_target_max",
             "ev_target_soc", "ev_target_soc_max",
-            "ev_min_current", "initial_current",
+            "ev_min_current",
             "ev_kwh_per_100km", "ev_target_type",
             # ``ev_charging_mode`` removed in #277 Phase C — the v6→v7
             # migration drops the field; there's nothing to mirror.

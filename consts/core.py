@@ -40,7 +40,8 @@ DEFAULT_EV_CHARGER_SERVICE_ENTITY_ID: Final = ""  # Entity ID to use for service
 # EV Charging Parameters
 DEFAULT_EV_RAMP_RATE_AMPS: Final = 2  # Max ±2A per 10s cycle during solar/night charging
 DEFAULT_EV_CHARGING_MODE: Final = "auto"  # "auto" (forecast-aware), "pv" (solar+battery), "self_consumption" (true surplus only), "minpv" (min+PV), "now" (max), "off" (disabled)
-DEFAULT_EV_INITIAL_CURRENT: Final = 10  # Amps - starting current for night charging
+# DEFAULT_EV_INITIAL_CURRENT removed (#553): "Vehicle Start Amps" retired —
+# the start-kick (charge_stability) discovers the latch current itself.
 DEFAULT_EV_MIN_CURRENT: Final = 6  # Amps - IEC 61851 minimum (increase for sensitive cars)
 
 # Solar-path EV current-stability guards. The per-cycle set_current churn
