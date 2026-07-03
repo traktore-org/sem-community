@@ -36,6 +36,7 @@ def _ed_config(grid_power="sensor.grid_power"):
     ed.battery_power_inverted = False
     ed.battery_soc = None
     ed.battery_soc_list = []
+    ed.battery_power_pairs = []
     ed.battery_charge_energy = None
     ed.battery_discharge_energy = None
     ed.battery_charge_energy_list = []

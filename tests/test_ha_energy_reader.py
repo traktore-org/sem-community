@@ -227,6 +227,63 @@ class TestExtractSolarConfig:
 class TestExtractGridConfig:
     """Test _extract_grid_config()."""
 
+    def test_extract_grid_power_config_standard(self):
+        """#553 — grid power_config.stat_rate (authoritative over legacy)."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.grid_import_e",
+            "power_config": {"stat_rate": "sensor.grid_power"},
+        }
+        _extract_grid_config(source, config)
+        assert config.grid_import_power == "sensor.grid_power"
+        assert config.grid_power_list == ["sensor.grid_power"]
+
+    def test_extract_grid_power_config_two_sensors(self):
+        """#553 — grid Two-sensor mode maps onto split-grid support:
+        from=import, to=export."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.grid_import_e",
+            "stat_energy_to": "sensor.grid_export_e",
+            "power_config": {
+                "stat_rate_from": "sensor.grid_import_power",
+                "stat_rate_to": "sensor.grid_export_power",
+            },
+        }
+        _extract_grid_config(source, config)
+        assert config.grid_import_power == "sensor.grid_import_power"
+        assert config.grid_export_power == "sensor.grid_export_power"
+        assert config.has_grid is True
+
+    def test_extract_grid_power_config_inverted_reads_as_combined(self):
+        """#553 — inverted combined grid sensor is read as combined; the
+        #461 sign-detection stack owns polarity."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.grid_import_e",
+            "power_config": {"stat_rate_inverted": "sensor.grid_power_inv"},
+        }
+        _extract_grid_config(source, config)
+        assert config.grid_import_power == "sensor.grid_power_inv"
+
+    def test_extract_battery_two_pairs_collected(self):
+        """#553 — two two-sensor batteries: BOTH pairs collected."""
+        config = EnergyDashboardConfig()
+        for i in (1, 2):
+            _extract_battery_config({
+                "stat_energy_from": f"sensor.b{i}_discharge_e",
+                "stat_energy_to": f"sensor.b{i}_charge_e",
+                "power_config": {
+                    "stat_rate_from": f"sensor.b{i}_discharge_p",
+                    "stat_rate_to": f"sensor.b{i}_charge_p",
+                },
+            }, config)
+        assert config.battery_power_pairs == [
+            ("sensor.b1_discharge_p", "sensor.b1_charge_p"),
+            ("sensor.b2_discharge_p", "sensor.b2_charge_p"),
+        ]
+        assert config.battery_power_from == "sensor.b1_discharge_p"
+
     def test_extract_grid_config(self):
         config = EnergyDashboardConfig()
         source = {

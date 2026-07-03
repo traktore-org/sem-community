@@ -402,10 +402,16 @@ class SensorReader:
         # Single-battery / combined-sensor installs fall back to the
         # legacy fleet-level path.
         ed = self._energy_dashboard_config
+        # #553 — units = combined entities + two-sensor pairs (#551). Pairs
+        # are convention-authoritative (the user declared charge/discharge
+        # directions in HA), so only combined units go through sign detect.
+        _n_units = 0 if ed is None else (
+            len(ed.battery_power_list) + len(ed.battery_power_pairs)
+        )
         per_battery_mode = (
             ed is not None
-            and len(ed.battery_power_list) >= 2
-            and len(readings.batteries) == len(ed.battery_power_list)
+            and _n_units >= 2
+            and len(readings.batteries) == _n_units
         )
 
         if per_battery_mode:
@@ -431,6 +437,14 @@ class SensorReader:
                     bp = replace(bp, power_w=-bp.power_w)
                     readings.batteries[bid] = bp
                 corrected_total += bp.power_w
+            # #553 — pair units join the total as-is (never sign-flipped:
+            # net = declared charge − declared discharge is already SEM
+            # convention by construction).
+            for k in range(len(ed.battery_power_pairs)):
+                bid = f"b{len(ed.battery_power_list) + k + 1}"
+                bp = readings.batteries.get(bid)
+                if bp is not None:
+                    corrected_total += bp.power_w
             readings.battery_power = corrected_total
             readings.calculate_derived()
         else:
@@ -1224,7 +1238,10 @@ class SensorReader:
         # uses the primary sensor and assumes all units share the same
         # sign convention.
         from .charger_types import BatteryPower
-        if len(ed.battery_power_list) > 1:
+        # #553 — a battery "unit" is either a combined power entity OR a
+        # two-sensor pair (#551). Multi-battery handling counts both.
+        n_units = len(ed.battery_power_list) + len(ed.battery_power_pairs)
+        if n_units > 1:
             total = 0.0
             # Phase A of per-battery card mirror: assign short stable
             # slugs (``b1``, ``b2`` …) keyed by the Energy Dashboard
@@ -1251,6 +1268,25 @@ class SensorReader:
                         soc_val = s
                 readings.batteries[bid] = BatteryPower(
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=entity,
+                )
+            # #553 — two-sensor pair units, bids continue after the combined
+            # ones. net = charge(to) − discharge(from); the user-declared
+            # pair IS the sign convention, so these are never sign-flipped.
+            for k, (p_from, p_to) in enumerate(ed.battery_power_pairs):
+                bid = f"b{len(ed.battery_power_list) + k + 1}"
+                w = (self._read_sensor(p_to, "battery")
+                     - self._read_sensor(p_from, "battery"))
+                total += w
+                soc_val = 0.0
+                soc_entity = self._auto_detect_battery_soc(p_to)
+                if soc_entity:
+                    s = self._read_sensor(
+                        soc_entity, "battery_soc", allow_none=True,
+                    )
+                    if s is not None and s >= 0:
+                        soc_val = s
+                readings.batteries[bid] = BatteryPower(
+                    battery_id=bid, power_w=w, soc_pct=soc_val, name=p_to,
                 )
             readings.battery_power = total
         elif ed.battery_power:
@@ -1281,10 +1317,14 @@ class SensorReader:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
-        elif len(ed.battery_power_list) > 1:
+        elif n_units > 1:
             # Multi-battery installs keep the per-battery average (a single
             # stat_soc from one source must not masquerade as the fleet SOC).
-            soc_val = self._read_battery_soc_average(ed.battery_power_list) or None
+            # #553 — pair units contribute via their charge-power entity's
+            # device (same auto-detect heuristic).
+            soc_val = self._read_battery_soc_average(
+                ed.battery_power_list + [to for _, to in ed.battery_power_pairs]
+            ) or None
         elif ed_soc:
             soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
