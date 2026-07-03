@@ -147,6 +147,10 @@ KEBA_SERVICE_START: Final = "enable"             # Enable/start charging
 KEBA_SERVICE_STOP: Final = "disable"             # Disable/stop charging
 KEBA_SERVICE_SET_CURRENT: Final = "set_current"  # Set max current in Ampere
 KEBA_SERVICE_SET_ENERGY: Final = "set_energy"    # Set session target energy in kWh
+# #553 — box-level idle-guard: armed by stop_session() so a KEBA firmware
+# auto-start (#315) self-terminates after ~1 Wh with SEM out of the loop.
+# Released by every SEM start (start_session writes the real target or 0).
+KEBA_IDLE_GUARD_KWH: Final = 0.001
 KEBA_SERVICE_AUTHORIZE: Final = "authorize"      # Authorize with RFID tag
 KEBA_COMMAND_DELAY: Final = 2  # seconds between commands
 
