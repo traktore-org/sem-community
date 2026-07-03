@@ -1145,6 +1145,16 @@ class SensorReader:
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
             self._audit_manual_grid_sign(readings.grid_power, ed)
+        elif ed.grid_power_from and ed.grid_power_to:
+            # #553 — declared two-sensor pair from HA's grid dialog
+            # (power_config.stat_rate_from/to). Same semantics as the manual
+            # override above: grid_power = export − import, both sensors
+            # always positive; the convention is fixed BY DECLARATION so no
+            # sign auto-detection runs (nothing to detect).
+            import_w = self._read_sensor(ed.grid_power_from, "grid_import")
+            export_w = self._read_sensor(ed.grid_power_to, "grid_export")
+            readings.grid_power = export_w - import_w
+            self._grid_sign_detected = True
         elif len(ed.grid_power_list) > 1:
             # Multiple grid power sensors — sum all (e.g. multi-meter setups)
             readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")

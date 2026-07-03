@@ -64,6 +64,8 @@ def _make_energy_dashboard_config(
     ed.battery_soc = None
     ed.battery_soc_list = []
     ed.battery_power_pairs = []
+    ed.grid_power_from = None
+    ed.grid_power_to = None
     ed.ev_power = None
     ed.has_solar = bool(solar_power)
     ed.has_grid = bool(grid_import_energy or grid_import_power or grid_power_list)
@@ -1033,6 +1035,34 @@ class TestBatteryPowerConfigPipeline:
         power.calculate_derived()
 
         assert power.battery_power == -1200  # flipped → discharge
+
+    def test_two_sensor_grid_power_config_pipeline(self):
+        """#553 review B1 — declared two-sensor GRID pair must be consumed
+        as export − import (manual-override semantics), not read as a
+        combined sensor. Pre-fix the import side landed in
+        grid_import_power and was read as combined (always-positive =
+        phantom export)."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power=None,
+            battery_power="sensor.batt",
+        )
+        ed.grid_power_from = "sensor.grid_import_p"
+        ed.grid_power_to = "sensor.grid_export_p"
+        states = {
+            "sensor.pv": _state(1000),
+            "sensor.batt": _state(0),
+            "sensor.grid_import_p": _state(1500),  # importing 1.5 kW
+            "sensor.grid_export_p": _state(0),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_power == -1500  # SEM convention: − = import
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
 
     def test_two_two_sensor_batteries_summed(self):
         """#553 — a fleet of TWO two-sensor batteries: per-battery nets

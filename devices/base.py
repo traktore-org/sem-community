@@ -1181,17 +1181,30 @@ class CurrentControlDevice(ControllableDevice):
                     # self-started session terminates AT THE BOX after ~1 Wh,
                     # with SEM out of the loop entirely. Every SEM start
                     # releases the guard (start_session writes the real
-                    # target, or 0 = no limit).
+                    # target, or 0 = no limit). Note: SEM owns this register —
+                    # a user-set box energy limit is overwritten by SEM starts.
+                    #
+                    # Own try (review H1): a set_energy failure must neither
+                    # skip the _session_active reset below nor mask that the
+                    # disable itself succeeded.
                     if self.hass.services.has_service(domain, "set_energy"):
-                        await self.hass.services.async_call(
-                            domain, "set_energy",
-                            {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
-                        )
-                        _LOGGER.debug(
-                            "stop_session(%s): armed %.3f kWh idle-guard "
-                            "energy target (#553)", self.name,
-                            KEBA_IDLE_GUARD_KWH,
-                        )
+                        try:
+                            await self.hass.services.async_call(
+                                domain, "set_energy",
+                                {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
+                            )
+                            _LOGGER.debug(
+                                "stop_session(%s): armed %.3f kWh idle-guard "
+                                "energy target (#553)", self.name,
+                                KEBA_IDLE_GUARD_KWH,
+                            )
+                        except Exception as guard_err:  # noqa: BLE001
+                            _LOGGER.warning(
+                                "stop_session(%s): idle-guard set_energy "
+                                "failed (%s) — box auto-start protection "
+                                "not armed this stop (#553)",
+                                self.name, guard_err,
+                            )
                 else:
                     _LOGGER.warning(
                         "stop_session(%s): charger_service=%s configured but "
@@ -1230,20 +1243,9 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as e:
             _LOGGER.error("Failed to stop session on %s: %s", self.name, e)
 
-    async def update_energy_target(self, remaining_kwh: float) -> None:
-        """Update KEBA energy target mid-session (for accurate auto-stop)."""
-        if not self._session_active:
-            return
-        try:
-            if self.charger_service and "keba" in (self.charger_service or ""):
-                domain = self.charger_service.split(".", 1)[0]
-                await self.hass.services.async_call(
-                    domain, "set_energy",
-                    {"energy": max(0, remaining_kwh)},
-                    blocking=True,
-                )
-        except Exception as e:
-            _LOGGER.debug("Failed to update energy target on %s: %s", self.name, e)
+    # update_energy_target() removed (#553 review L1): zero callers, and a
+    # mid-session set_energy write would overwrite the idle-guard register.
+
 
     def to_dict(self) -> Dict[str, Any]:
         d = super().to_dict()

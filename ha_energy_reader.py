@@ -68,6 +68,11 @@ class EnergyDashboardConfig:
     # sign must be flipped on read.
     battery_power_from: Optional[str] = None  # discharge power sensor
     battery_power_to: Optional[str] = None    # charge power sensor
+    # #553 — grid two-sensor power_config (from=import, to=export). Consumed
+    # by a dedicated reader branch with manual-override semantics
+    # (grid_power = export − import, sign fixed by declaration).
+    grid_power_from: Optional[str] = None
+    grid_power_to: Optional[str] = None
     battery_power_inverted: bool = False
     # #553 — ALL two-sensor pairs (multi-battery installs may configure more
     # than one battery in Two-sensor mode). Each entry: (from, to). The
@@ -353,12 +358,13 @@ def _extract_grid_config(source: Dict[str, Any], config: EnergyDashboardConfig) 
             if not config.grid_import_power:
                 config.grid_import_power = eid
         else:
-            # Two sensors → split grid: from=import, to=export.
-            if not config.grid_import_power:
-                config.grid_import_power = pc["stat_rate_from"]
-            if not config.grid_export_power:
-                config.grid_export_power = pc["stat_rate_to"]
-            config.grid_power_list.append(pc["stat_rate_from"])
+            # Two sensors: from=import, to=export. Dedicated fields ONLY —
+            # grid_import_power is consumed as a COMBINED sensor by the
+            # reader, and grid_power_list feeds the multi-meter sum; putting
+            # the import side there read import-only as combined (review B1).
+            if not config.grid_power_from:
+                config.grid_power_from = pc["stat_rate_from"]
+                config.grid_power_to = pc["stat_rate_to"]
     else:
         power_config = source.get("power", [])
         if power_config:
@@ -378,6 +384,7 @@ def _extract_grid_config(source: Dict[str, Any], config: EnergyDashboardConfig) 
         config.grid_import_energy_list
         or config.grid_power_list
         or config.grid_export_energy_list
+        or (config.grid_power_from and config.grid_power_to)  # #553 pair
     )
 
     if config.has_grid:

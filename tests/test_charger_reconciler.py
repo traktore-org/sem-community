@@ -107,8 +107,11 @@ def test_idle_settled_then_draw_disables_immediately():
     # the FIRST cycle, not a fresh flicker-grace. The grace is reserved for
     # winding down a session SEM itself just stopped.
     rec = _rec()
-    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=10.0)  # wind-down
-    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=20.0)  # settled
+    # At boot idle is already settled (#553), so this first draw is itself
+    # rogue → immediate DISABLE (review M2: assert it, don't mislabel it).
+    a0 = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=10.0)
+    assert a0 == [Action(ActionKind.DISABLE)]
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=20.0)  # settled again
     actions = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=6000.0), now=30.0)
     assert actions == [Action(ActionKind.DISABLE)]
     # ...and keeps re-asserting while the rogue draw persists (parity with OFF)

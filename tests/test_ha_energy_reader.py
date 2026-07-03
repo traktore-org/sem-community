@@ -251,8 +251,13 @@ class TestExtractGridConfig:
             },
         }
         _extract_grid_config(source, config)
-        assert config.grid_import_power == "sensor.grid_import_power"
-        assert config.grid_export_power == "sensor.grid_export_power"
+        # #553 review B1 — dedicated pair fields, NOT grid_import_power
+        # (that field is consumed as a COMBINED sensor by the reader) and
+        # NOT grid_power_list (that feeds the multi-meter sum).
+        assert config.grid_power_from == "sensor.grid_import_power"
+        assert config.grid_power_to == "sensor.grid_export_power"
+        assert config.grid_import_power is None
+        assert config.grid_power_list == []
         assert config.has_grid is True
 
     def test_extract_grid_power_config_inverted_reads_as_combined(self):
