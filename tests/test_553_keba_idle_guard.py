@@ -1,11 +1,11 @@
-"""#553 — KEBA box-level idle-guard via the session-energy register.
+"""#553 — KEBA box-level RUNAWAY CAP via the session-energy register.
 
 KEBA firmware auto-restarts a session at its stored setpoint when the car
-retries (~every 10 min, #315) — even after ``keba.disable``. Post-#552 SEM
-kills each rogue start within a cycle, but PROD still logged 55 restarts /
-~1.2 kWh in one night. Root, box-level enforcement: ``stop_session()`` arms
-a ~1 Wh session-energy target (``keba.set_energy``), so a self-started
-session terminates AT THE BOX with SEM out of the loop entirely.
+retries (~every 10 min, #315) — even after ``keba.disable``. While SEM is
+alive its policing (#552) kills each rogue start within a cycle; this guard
+bounds the damage when SEM is NOT policing (down/restarting). 1 kWh is the
+keba library MINIMUM (0 < energy < 1 is rejected — live-verified on a real
+P30: 0.001 was a silent no-op).
 
 The counterpart invariant: EVERY SEM start must release the guard —
 ``start_session()`` always writes the session-energy register (the real

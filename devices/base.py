@@ -1172,17 +1172,18 @@ class CurrentControlDevice(ControllableDevice):
                 if self.hass.services.has_service(domain, "disable"):
                     await self.hass.services.async_call(domain, "disable", {}, blocking=True)
                     stop_method = f"{domain}.disable"
-                    # #553 — BOX-LEVEL idle-guard (#315 root residue): KEBA
-                    # firmware auto-restarts a session at its stored setpoint
-                    # when the car retries (~every 10 min), even after
-                    # keba.disable — observed 55×/night on PROD (2026-07-03),
-                    # each killed by SEM within a cycle but still ~1.2 kWh of
-                    # battery drain. Arm a ~1 Wh session-energy target so a
-                    # self-started session terminates AT THE BOX after ~1 Wh,
-                    # with SEM out of the loop entirely. Every SEM start
-                    # releases the guard (start_session writes the real
-                    # target, or 0 = no limit). Note: SEM owns this register —
-                    # a user-set box energy limit is overwritten by SEM starts.
+                    # #553 — BOX-LEVEL runaway cap (#315): KEBA firmware
+                    # auto-restarts a session at its stored setpoint when the
+                    # car retries (~every 10 min), even after keba.disable.
+                    # While SEM is alive its policing (#552) kills each rogue
+                    # start within a cycle; this 1 kWh session-energy target
+                    # (the keba library MINIMUM — smaller values are rejected,
+                    # live-verified) bounds the damage when SEM is NOT
+                    # policing (down/restarting): the box then ends a rogue
+                    # session itself at 1 kWh instead of charging unbounded.
+                    # Every SEM start releases the guard (start_session writes
+                    # the real target, or 0 = no limit). Note: SEM owns this
+                    # register — user-set box limits are overwritten.
                     #
                     # Own try (review H1): a set_energy failure must neither
                     # skip the _session_active reset below nor mask that the
@@ -1194,7 +1195,7 @@ class CurrentControlDevice(ControllableDevice):
                                 {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
                             )
                             _LOGGER.debug(
-                                "stop_session(%s): armed %.3f kWh idle-guard "
+                                "stop_session(%s): armed %.1f kWh runaway-cap "
                                 "energy target (#553)", self.name,
                                 KEBA_IDLE_GUARD_KWH,
                             )

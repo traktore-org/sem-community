@@ -15,13 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > **Pre-release.** Improvement batch (#553): KEBA idle-guard, full grid schema, cleanup.
 
-### 🔌 KEBA — box-level idle-guard (#315)
-- 🛡️ **A KEBA that auto-restarts while SEM is idle now stops itself at the box
-  after ~1 Wh.** The firmware retries a stored session every ~10 min when a
-  hungry car is plugged (55×/night observed); SEM killed each within a cycle
-  (#552) but ~1.2 kWh still leaked overnight. SEM now arms a ~1 Wh
-  session-energy target on every stop and releases it on every start — the
-  box polices itself with SEM out of the loop.
+### 🔌 KEBA — box-level runaway cap (#315)
+- 🛡️ **A KEBA auto-start that SEM isn't policing now stops itself at the box
+  after 1 kWh.** The firmware retries a stored session every ~10 min when a
+  hungry car is plugged; SEM kills each within a cycle (#552) — this guard
+  bounds the damage when SEM is down or restarting (previously unbounded).
+  SEM arms a 1 kWh session-energy target on every stop and releases it on
+  every start. (1 kWh is the KEBA library minimum — live-verified on the
+  real P30; the originally announced ~1 Wh value is rejected by the library.)
 
 ### ⚡ Grid — full Energy-Dashboard schema (#551 sibling)
 - 🐛 Grid sources support the same `power_config` modes as batteries; the

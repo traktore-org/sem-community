@@ -148,10 +148,17 @@ KEBA_SERVICE_START: Final = "enable"             # Enable/start charging
 KEBA_SERVICE_STOP: Final = "disable"             # Disable/stop charging
 KEBA_SERVICE_SET_CURRENT: Final = "set_current"  # Set max current in Ampere
 KEBA_SERVICE_SET_ENERGY: Final = "set_energy"    # Set session target energy in kWh
-# #553 — box-level idle-guard: armed by stop_session() so a KEBA firmware
-# auto-start (#315) self-terminates after ~1 Wh with SEM out of the loop.
-# Released by every SEM start (start_session writes the real target or 0).
-KEBA_IDLE_GUARD_KWH: Final = 0.001
+# #553 — box-level idle-guard, armed by stop_session() and released by every
+# SEM start. 1 kWh is the MINIMUM the keba-kecontact library accepts
+# (set_energy rejects 0 < energy < 1 — live-verified on a real P30: 0.001 was
+# a silent no-op, 1.0 stores and clears). At 1 kWh this is a RUNAWAY CAP, not
+# a per-retry stop: while SEM is alive its policing (#552) kills a rogue
+# auto-start within a cycle anyway; the guard bounds the damage when SEM is
+# down/restarting (a rogue session then ends at the box after 1 kWh instead
+# of charging unbounded). Eliminating the per-retry drain entirely would need
+# deauthorize-on-idle — deliberately NOT used (keba.authorize put the box in
+# an auth-rejected state on PROD 2026-06-02; needs a supervised experiment).
+KEBA_IDLE_GUARD_KWH: Final = 1.0
 KEBA_SERVICE_AUTHORIZE: Final = "authorize"      # Authorize with RFID tag
 KEBA_COMMAND_DELAY: Final = 2  # seconds between commands
 
