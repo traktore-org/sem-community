@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.11] — 03.07.2026
+
+> **Pre-release.** Improvement batch (#553): KEBA idle-guard, full grid schema, cleanup.
+
+### 🔌 KEBA — box-level idle-guard (#315)
+- 🛡️ **A KEBA that auto-restarts while SEM is idle now stops itself at the box
+  after ~1 Wh.** The firmware retries a stored session every ~10 min when a
+  hungry car is plugged (55×/night observed); SEM killed each within a cycle
+  (#552) but ~1.2 kWh still leaked overnight. SEM now arms a ~1 Wh
+  session-energy target on every stop and releases it on every start — the
+  box polices itself with SEM out of the loop.
+
+### ⚡ Grid — full Energy-Dashboard schema (#551 sibling)
+- 🐛 Grid sources support the same `power_config` modes as batteries; the
+  Two-sensor mode is now consumed correctly as import/export split
+  (review-caught: the first draft read the import side as a combined sensor —
+  permanent phantom export). Inverted combined sensors defer to the #461
+  sign-detection stack.
+- 🔋 **Multiple two-sensor batteries** are now summed per-battery (previously
+  only the first pair fed real-time power).
+
+### 🧹 Cleanup & clarity
+- 🚀 A draw found at boot while SEM wants idle is disabled on the first cycle
+  (no wind-down grace for a session SEM never commanded).
+- 🏷️ **"Assist Max" → "Battery → EV assist limit"**, **"Max discharge power" →
+  "Battery total discharge limit"** — new help text explains the containment
+  (assist is a sub-limit of the total), 15 languages.
+- 🪦 Retired: the write-only "Vehicle Start Amps" knob (the start-kick
+  auto-discovers the latch current since beta.57), three dead legacy consts
+  maps, and the unused mid-session energy-target updater.
+
 # [1.7.4-beta.10] — 03.07.2026
 
 > **Pre-release.** Battery readings for every Energy-Dashboard battery mode.
