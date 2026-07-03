@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.10] — 03.07.2026
+
+> **Pre-release.** Battery readings for every Energy-Dashboard battery mode.
+
+### 🔋 Battery — full Energy-Dashboard schema support (#551)
+- 🐛 **Batteries configured with HA's "Two sensors" power mode showed
+  "sensor unavailable" and SOC 0%** (reported with a Fronius Verto 15.0 Plus).
+  SEM only read the top-level `stat_rate` — which HA writes only for the
+  Standard mode — and never read the dialog's SOC field at all.
+- ✅ SEM now parses the complete battery `power_config` (**Standard /
+  Inverted / Two sensors**) and the explicit **`stat_soc`** state-of-charge
+  entity: real-time power is computed as charge − discharge for two-sensor
+  setups, inverted sensors are flipped on read, and SOC comes deterministically
+  from what you configured in HA — the auto-detect heuristics remain only as
+  fallback. No SEM-side reconfiguration needed. (reported by @ebnerjoh)
+- 🧪 Live-verified with the reporter's exact configuration shape; 9 new
+  regression tests including the full Fronius pipeline; 4016 tests green.
+
 # [1.7.4-beta.9] — 02.07.2026
 
 > **Pre-release.** Root-cause fix: SEM never starts or holds a charge it didn't command.
