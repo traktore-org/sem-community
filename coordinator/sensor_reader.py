@@ -58,6 +58,11 @@ PLATFORM_GRID_SIGN_INVERT: dict[str, bool] = {
     "goodwe": False,
     # Pattern D — grid +=import, negate
     "solax": True,
+    # Deye via hass-deyecloud (#554): totalgridpower reports +=import /
+    # −=export — live-verified from the reporter's diagnostics + observed
+    # behavior (−4.9 kW while exporting, SEM read it as import until the
+    # manual flip). HIGH-CONFIDENCE: platform string from his diagnostics.
+    "deyecloud": True,
 }
 
 
