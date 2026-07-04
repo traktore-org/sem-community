@@ -901,6 +901,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     f"battery={dashboard_config.battery_power}"
                 )
 
+                # (#556) daily-solar reconciliation against the inverter's
+                # production counters — gated by prefer_hardware_energy.
+                solar_counters = list(dashboard_config.solar_energy_list) or (
+                    [dashboard_config.solar_energy] if dashboard_config.solar_energy else []
+                )
+                self._energy_calculator.configure_solar_counters(
+                    self.hass,
+                    solar_counters,
+                    self.config.get("prefer_hardware_energy", True),
+                )
+
                 # v1.7.0 / #312: auto-discover per-PV-string sensors and
                 # plumb them to the sensor reader so every cycle populates
                 # ``readings.solar_power_per_string``. Discovery is a
@@ -943,6 +954,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         except Exception as e:
             _LOGGER.warning("Failed to read Energy Dashboard: %s", e)
+
+        # (#556) No Energy Dashboard — fall back to the explicitly
+        # configured solar energy counter for daily-solar reconciliation.
+        if not self._energy_dashboard_config:
+            manual_counter = self.config.get("solar_energy_sensor")
+            if manual_counter:
+                self._energy_calculator.configure_solar_counters(
+                    self.hass,
+                    [manual_counter],
+                    self.config.get("prefer_hardware_energy", True),
+                )
 
         # EV energy reconciliation disabled — keba_p30_charging_daily resets at
         # midnight but daily_ev resets at sunrise, causing misalignment after sunrise

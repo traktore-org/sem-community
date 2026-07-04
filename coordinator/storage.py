@@ -153,7 +153,10 @@ class SEMStorage:
         """Validate + repair the daily store (#563).
 
         This store holds the calculator's real accumulators; same
-        per-entry repair semantics as ``_validate_energy_data``."""
+        per-entry repair semantics as ``_validate_energy_data``.
+        ``solar_counter_baselines`` (#556) is deliberately NOT in the
+        whitelist — it holds nested dicts and a date string, which the
+        numeric-value repair would mangle."""
         if not isinstance(data, dict):
             return False
         return SEMStorage._repair_accumulator_dicts(
@@ -489,6 +492,10 @@ class SEMStorage:
             "yearly_cost_accumulators": dict(self._daily_data.get("yearly_cost_accumulators", {})),
             "last_update": self._energy_data.get("last_update"),
             "yearly_seeded": self._daily_data.get("yearly_seeded", False),
+            # (#556) solar hardware-counter baselines
+            "solar_counter_baselines": dict(
+                self._daily_data.get("solar_counter_baselines", {})
+            ),
         }
 
     def import_energy_calculator_state(self, state: Dict[str, Any]) -> None:
@@ -510,6 +517,9 @@ class SEMStorage:
             self._daily_data["yearly_cost_accumulators"] = state["yearly_cost_accumulators"]
         if "yearly_seeded" in state:
             self._daily_data["yearly_seeded"] = state["yearly_seeded"]
+        # (#556) solar hardware-counter baselines
+        if "solar_counter_baselines" in state:
+            self._daily_data["solar_counter_baselines"] = state["solar_counter_baselines"]
 
     def export_forecast_tracker_state(self) -> Dict[str, Any]:
         """Export state for ForecastTracker."""

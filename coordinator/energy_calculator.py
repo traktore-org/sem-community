@@ -73,6 +73,15 @@ class EnergyCalculator:
         # Hardware EV energy reconciliation
         self._hass: Optional[HomeAssistant] = None
         self._ev_daily_energy_sensor: Optional[str] = None
+        # (#556) Daily-solar reconciliation against hardware production
+        # counters — closes the cloud-poll undercount (integrating a power
+        # sensor that reports 0/unavailable between polls). Baselines are
+        # per-entity counter snapshots for the current day:
+        # {"date": "YYYY-MM-DD", "<entity_id>": kwh_at_first_sight}.
+        self._solar_counter_entities: List[str] = []
+        self._solar_counter_enabled: bool = False
+        self._solar_counter_logged: bool = False
+        self._solar_counter_baselines: Dict[str, Any] = {}
         self._lifetime_seeded: bool = False
         self._yearly_seeded: bool = False
         self._yearly_seed_attempts: int = 0
@@ -169,6 +178,9 @@ class EnergyCalculator:
         if power.solar_power >= MIN_POWER_THRESHOLD:
             solar_increment = (power.solar_power * interval_hours) / 1000  # kWh
             self._accumulate("solar", today, month_key, year_key, solar_increment)
+        # (#556) hardware-counter reconciliation — upward-only correction
+        # for cloud-polled power sensors; must run before the read below.
+        self._reconcile_solar_energy(today, month_key, year_key)
         energy.daily_solar = self._get_daily("solar", today)
         energy.monthly_solar = self._get_monthly("solar", month_key)
         energy.yearly_solar = self._get_yearly("solar", year_key)
@@ -328,6 +340,33 @@ class EnergyCalculator:
         if entity_id:
             _LOGGER.info("EV energy reconciliation enabled: %s", entity_id)
 
+    def configure_solar_counters(
+        self, hass: HomeAssistant, entity_ids: List[str], enabled: bool
+    ) -> None:
+        """Enable daily-solar reconciliation against hardware counters (#556).
+
+        ``entity_ids`` are the inverter production counters (lifetime like
+        Fronius ``pv_energy`` / Deye ``TotalActiveProduction``, or daily
+        like ``DailyActiveProduction`` — both work, see
+        ``_reconcile_solar_energy``). Gated by the ``prefer_hardware_energy``
+        config option.
+        """
+        self._hass = hass
+        new_entities = [e for e in (entity_ids or []) if e]
+        if new_entities != self._solar_counter_entities and self._solar_counter_entities:
+            # Entity set changed mid-run (ED re-read) — the anchor was
+            # calibrated to the old set; drop baselines so the next cycle
+            # re-anchors on the current daily value.
+            self._solar_counter_baselines = {}
+        self._solar_counter_entities = new_entities
+        self._solar_counter_enabled = bool(enabled) and bool(self._solar_counter_entities)
+        if self._solar_counter_enabled and not self._solar_counter_logged:
+            self._solar_counter_logged = True
+            _LOGGER.info(
+                "Daily solar reconciliation against hardware counters enabled: %s",
+                ", ".join(self._solar_counter_entities),
+            )
+
     async def async_detect_install_date(self, hass: HomeAssistant) -> None:
         """Detect system install date from recorder statistics.
 
@@ -429,7 +468,14 @@ class EnergyCalculator:
             return 0.0
 
         # Read all hardware counters first
-        solar = _read(ed_config.solar_energy)
+        # (#556) multi-string installs have several solar counters — seed
+        # from their SUM, matching what the daily reconciliation tracks
+        # (single-counter seeding could later SHRINK lifetime on re-seed).
+        solar_list = list(getattr(ed_config, "solar_energy_list", None) or [])
+        if solar_list:
+            solar = sum(_read(e) for e in solar_list)
+        else:
+            solar = _read(ed_config.solar_energy)
         grid_import = _read(ed_config.grid_import_energy)
         grid_export = _read(ed_config.grid_export_energy)
         batt_charge = _read(ed_config.battery_charge_energy)
@@ -713,6 +759,117 @@ class EnergyCalculator:
             imp_rate, exp_rate, grid_import * imp_rate, grid_export * exp_rate,
             solar_direct * imp_rate, batt_discharge * imp_rate,
         )
+
+    def _reconcile_solar_energy(
+        self, today: date, month_key: str, year_key: str
+    ) -> None:
+        """Track daily solar against hardware production counters (#556).
+
+        Power integration undercounts badly when the solar power sensor is
+        cloud-polled and sits at 0/unavailable between polls (Deye Cloud:
+        SEM 6.2 kWh vs inverter 18.6 kWh). The inverter's own energy
+        counter is the truth, so when counters are configured
+        (``prefer_hardware_energy``), daily solar follows them:
+
+        - Per-entity baseline = counter value at first sight today. Counter
+          deltas since baseline are credited ON TOP of whatever integration
+          had accumulated up to that moment (pre-baseline production stays).
+        - Works for lifetime counters (baseline = large number) and daily
+          counters (baseline ≈ 0 after midnight) alike.
+        - Counter going backwards (inverter reboot / midnight reset of a
+          daily counter) → re-baseline that entity; accumulated value keeps.
+        - ADOPTION IS UPWARD-ONLY (like EV reconciliation): integration
+          remains the floor, so an unavailable/stale/partial counter can
+          never shrink the day. The delta propagates to monthly, yearly and
+          lifetime so all periods stay consistent.
+
+        Known limitation: cost savings are computed from live power flows,
+        so cost figures for counter-recovered energy remain approximate.
+        """
+        if not self._solar_counter_enabled or not self._hass:
+            return
+
+        today_str = str(today)
+        bl = self._solar_counter_baselines
+        if bl.get("date") != today_str or "base" not in bl or "last" not in bl:
+            # Day rollover (or first run / legacy or damaged shape):
+            # fresh baselines for the new day.
+            bl = self._solar_counter_baselines = {
+                "date": today_str, "base": {}, "last": {},
+            }
+
+        daily_key = f"solar_{today}"
+        integrated = self._daily_accumulators.get(daily_key, 0.0)
+
+        readings: Dict[str, float] = {}
+        for entity_id in self._solar_counter_entities:
+            state = self._hass.states.get(entity_id)
+            if not state or state.state in ("unknown", "unavailable", None):
+                continue
+            value = self._energy_state_kwh(state)  # #551 unit-aware
+            if value >= 0:
+                readings[entity_id] = value
+
+        if not readings:
+            return
+
+        # A counter that went BACKWARDS since its last reading (inverter
+        # reboot, or a daily-type counter resetting) invalidates the whole
+        # baseline set: its past contribution is already inside the adopted
+        # daily value, so deltas must restart from here. Re-baseline
+        # everything and re-anchor on the current daily value — nothing
+        # lost, nothing double-counted. (Compared against the LAST reading,
+        # not the baseline: after a reset the value is usually still above
+        # a lifetime baseline of 0 but below where it just was.)
+        reset = any(
+            entity_id in bl["last"]
+            and value < bl["last"][entity_id] - 0.001
+            for entity_id, value in readings.items()
+        )
+        if reset:
+            bl["base"] = {}
+            bl.pop("anchor", None)
+        for entity_id, value in readings.items():
+            bl["base"].setdefault(entity_id, value)
+            bl["last"][entity_id] = value
+        # The counters track production SINCE their baselines; production
+        # before that (SEM down over midnight, counter loaded late) is
+        # only known to the integrator — anchor on the daily value at
+        # baseline time: target = anchor + counter deltas.
+        bl.setdefault("anchor", integrated)
+
+        counter_daily = sum(
+            value - bl["base"][entity_id]
+            for entity_id, value in readings.items()
+        )
+        target = bl["anchor"] + counter_daily
+
+        # Sanity cap — same physical bound the integrator uses.
+        inverter_kwp = self.config.get("system_size_kwp", 10)
+        if target > inverter_kwp * 16:
+            _LOGGER.warning(
+                "Solar counter reconciliation target %.1f kWh exceeds "
+                "%d kWp × 16h — ignoring this cycle (unit mismatch?)",
+                target, inverter_kwp,
+            )
+            return
+
+        delta = target - integrated
+        if delta <= RECONCILIATION_THRESHOLD:
+            return  # Upward-only; small drift stays with the integrator.
+
+        _LOGGER.info(
+            "Solar energy reconciliation: counter=%.2f kWh > integrated=%.2f kWh "
+            "— adopting counter value (+%.2f kWh)",
+            target, integrated, delta,
+        )
+        self._daily_accumulators[daily_key] = target
+        for accumulators, key in (
+            (self._monthly_accumulators, f"solar_{month_key}"),
+            (self._yearly_accumulators, f"solar_{year_key}"),
+            (self._lifetime_accumulators, "lifetime_solar"),
+        ):
+            accumulators[key] = accumulators.get(key, 0.0) + delta
 
     def _reconcile_ev_energy(self, today: date, month_key: str) -> None:
         """Cross-check integrated EV energy against hardware counter.
@@ -1207,6 +1364,10 @@ class EnergyCalculator:
             "accumulated_grid_import_kwh": self._accumulated_grid_import_kwh,
             "accumulated_self_consumed_kwh": self._accumulated_self_consumed_kwh,
             "accumulated_export_kwh": self._accumulated_export_kwh,
+            # (#556) persisting the counter baselines makes the counter
+            # delta span SEM downtime — production while SEM was off is
+            # credited on the first cycle after restart.
+            "solar_counter_baselines": dict(self._solar_counter_baselines),
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -1229,6 +1390,9 @@ class EnergyCalculator:
             self._accumulated_grid_import_kwh = state.get("accumulated_grid_import_kwh", 0.0)
             self._accumulated_self_consumed_kwh = state.get("accumulated_self_consumed_kwh", 0.0)
             self._accumulated_export_kwh = state.get("accumulated_export_kwh", 0.0)
+            baselines = state.get("solar_counter_baselines")
+            if isinstance(baselines, dict):
+                self._solar_counter_baselines = baselines
             last_update = state.get("last_update")
             if last_update:
                 self._last_update = datetime.fromisoformat(last_update)
