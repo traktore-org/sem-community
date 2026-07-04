@@ -3791,6 +3791,9 @@ async def _async_register_phase_services(
                 "status_raw": _state(getattr(dev, "charging_status_entity", None)),
                 "believed_setpoint_a": getattr(dev, "_current_setpoint", None),
                 "session_active": getattr(dev, "_session_active", None),
+                # #553 — SEM's belief that the KEBA runaway-cap energy target
+                # is armed (stop arms, start releases).
+                "idle_guard_armed": getattr(dev, "_idle_guard_armed", None),
                 "power_entity": getattr(dev, "power_entity_id", None),
                 "power_w": _state(getattr(dev, "power_entity_id", None)),
             }
