@@ -199,8 +199,8 @@ class ForecastReader:
 
         Records the read path on ``self._last_read_path`` (#434):
         ``cold_detect`` (first call) / ``cached_source_valid`` /
-        ``cached_source_lost_redetected`` / ``no_source_after_detect``
-        / ``read_complete``.
+        ``cached_source_lost_redetected`` / ``upgraded_to_solcast`` /
+        ``no_source_after_detect`` / ``read_complete``.
         """
         # Reset unit-conversion counter per read so we can see how
         # many magic-number kW→W bumps fired this cycle.
@@ -210,18 +210,42 @@ class ForecastReader:
             self.detect_source()
             self._last_read_path = "cold_detect"
         elif self._source != "custom":
-            # Verify cached source is still valid (entity may have disappeared)
-            test_entity = self._entities.get("forecast_today")
-            if test_entity:
-                state = self.hass.states.get(test_entity)
-                if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                    self._source = None
-                    self.detect_source()
-                    self._last_read_path = "cached_source_lost_redetected"
+            # (#562) Source priority is Solcast > Forecast.Solar, but the
+            # cache used to be sticky: if Solcast loaded after SEM's first
+            # detection (integration start order is arbitrary), SEM latched
+            # onto Forecast.Solar until the next restart. Upgrade as soon
+            # as the preferred source's entity becomes available.
+            upgraded = False
+            if self._source != "solcast":
+                solcast_state = self.hass.states.get(
+                    SOLCAST_ENTITIES["forecast_today"]
+                )
+                if solcast_state and solcast_state.state not in (
+                    STATE_UNKNOWN, STATE_UNAVAILABLE, None,
+                ):
+                    _LOGGER.info(
+                        "Solcast PV Solar became available — upgrading "
+                        "forecast source from %s to solcast",
+                        self._source,
+                    )
+                    self._entities = SOLCAST_ENTITIES
+                    self._source = "solcast"
+                    self._last_source_detection_path = "solcast"
+                    self._last_read_path = "upgraded_to_solcast"
+                    upgraded = True
+            if not upgraded:
+                # Verify cached source is still valid (entity may have disappeared)
+                test_entity = self._entities.get("forecast_today")
+                if test_entity:
+                    state = self.hass.states.get(test_entity)
+                    if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                        self._source = None
+                        self.detect_source()
+                        self._last_read_path = "cached_source_lost_redetected"
+                    else:
+                        self._last_read_path = "cached_source_valid"
                 else:
                     self._last_read_path = "cached_source_valid"
-            else:
-                self._last_read_path = "cached_source_valid"
         else:
             self._last_read_path = "cached_source_valid"
 

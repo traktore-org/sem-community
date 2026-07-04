@@ -322,3 +322,89 @@ class TestForecastDataSerialization:
         assert d["forecast_today_kwh"] == 0.0
         assert d["forecast_source"] == "none"
         assert d["forecast_available"] is False
+
+
+# ---------------------------------------------------------------------------
+# #562 — cached-source upgrade to Solcast
+# ---------------------------------------------------------------------------
+
+class TestSourceUpgradeToSolcast:
+    """Solcast > Forecast.Solar priority must survive the source cache.
+
+    Integration start order is arbitrary: if Solcast loads after SEM's
+    first detection, SEM used to latch onto Forecast.Solar until the
+    next restart (#562, reported by ebnerjoh — Solcast installed and
+    active, SEM stuck on a misconfigured Forecast.Solar).
+    """
+
+    def _forecast_solar_only(self, entity_id):
+        if entity_id == FORECAST_SOLAR_ENTITIES["forecast_today"]:
+            return _make_state("18.0")
+        if entity_id == FORECAST_SOLAR_ENTITIES["forecast_tomorrow"]:
+            return _make_state("16.0")
+        return None
+
+    def _both_sources(self, entity_id):
+        if entity_id == SOLCAST_ENTITIES["forecast_today"]:
+            return _make_state("25.5")
+        if entity_id == SOLCAST_ENTITIES["forecast_tomorrow"]:
+            return _make_state("20.0")
+        return self._forecast_solar_only(entity_id)
+
+    def test_upgrades_when_solcast_appears(self, mock_hass):
+        mock_hass.states.get = self._forecast_solar_only
+        reader = ForecastReader(mock_hass)
+        data = reader.read_forecast()
+        assert data.source == "forecast_solar"
+
+        # Solcast integration finishes loading later
+        mock_hass.states.get = self._both_sources
+        data = reader.read_forecast()
+        assert reader.source == "solcast"
+        assert data.source == "solcast"
+        assert data.forecast_today_kwh == 25.5
+
+    def test_no_upgrade_without_solcast(self, mock_hass):
+        mock_hass.states.get = self._forecast_solar_only
+        reader = ForecastReader(mock_hass)
+        reader.read_forecast()
+        reader.read_forecast()
+        assert reader.source == "forecast_solar"
+
+    def test_no_upgrade_on_unavailable_solcast(self, mock_hass):
+        def get(entity_id):
+            if entity_id == SOLCAST_ENTITIES["forecast_today"]:
+                return _unavailable_state()
+            return self._forecast_solar_only(entity_id)
+        mock_hass.states.get = get
+        reader = ForecastReader(mock_hass)
+        reader.read_forecast()
+        reader.read_forecast()
+        assert reader.source == "forecast_solar"
+
+    def test_cycle_after_upgrade_is_stable(self, mock_hass):
+        mock_hass.states.get = self._forecast_solar_only
+        reader = ForecastReader(mock_hass)
+        reader.read_forecast()
+        mock_hass.states.get = self._both_sources
+        reader.read_forecast()
+        assert reader.source == "solcast"
+        # Next cycle: normal cached-source validation, no re-upgrade churn
+        data = reader.read_forecast()
+        assert reader.source == "solcast"
+        assert data.source == "solcast"
+
+    def test_custom_source_never_upgrades(self, mock_hass):
+        custom = {"forecast_today": "sensor.custom_solar"}
+
+        def get(entity_id):
+            if entity_id == "sensor.custom_solar":
+                return _make_state("12.0")
+            if entity_id == SOLCAST_ENTITIES["forecast_today"]:
+                return _make_state("25.5")
+            return None
+        mock_hass.states.get = get
+        reader = ForecastReader(mock_hass, custom_entities=custom)
+        reader.read_forecast()
+        reader.read_forecast()
+        assert reader.source == "custom"
