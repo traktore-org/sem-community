@@ -3083,27 +3083,53 @@ async def _async_register_phase_services(
         return
 
     # Phase 0: Register/unregister surplus devices
-    async def async_register_surplus_device(call) -> None:
-        """Register a device for surplus control."""
-        from .devices.base import SwitchDevice
-        device_id = call.data.get("device_id")
-        entity_id = call.data.get("entity_id")
-        name = call.data.get("name", device_id)
-        priority = call.data.get("priority", 5)
-        rated_power = call.data.get("rated_power", 1000)
-        power_entity = call.data.get("power_entity_id")
+    async def async_register_surplus_device(call):
+        """Register a device for surplus control (#559 Phase 0).
 
-        device = SwitchDevice(
-            hass=hass,
-            device_id=device_id,
-            name=name,
-            rated_power=rated_power,
-            priority=priority,
-            entity_id=entity_id,
-            power_entity_id=power_entity,
+        One call does everything: persisted across restarts, defaults to
+        control_mode=surplus (that's what you register a device FOR;
+        auto-discovered devices keep peak_only), and returns a summary.
+        """
+        spec = {
+            "device_id": call.data.get("device_id"),
+            "entity_id": call.data.get("entity_id"),
+            "name": call.data.get("name") or call.data.get("device_id"),
+            "priority": call.data.get("priority", 5),
+            "rated_power": call.data.get("rated_power", 1000),
+            "power_entity_id": call.data.get("power_entity_id"),
+            "control_mode": call.data.get("control_mode", "surplus"),
+            "depends_on": call.data.get("depends_on") or [],
+        }
+        registry = getattr(coordinator, "_device_registry", None)
+        if registry:
+            summary = await registry.async_register_service_device(spec)
+        else:
+            # Registry not up (very early call) — register unpersisted so
+            # the call still works; the user can re-run to persist.
+            from .devices.base import SwitchDevice, DeviceControlMode
+            device = SwitchDevice(
+                hass=hass,
+                device_id=spec["device_id"],
+                name=spec["name"],
+                rated_power=spec["rated_power"],
+                priority=spec["priority"],
+                entity_id=spec["entity_id"],
+                power_entity_id=spec["power_entity_id"],
+            )
+            try:
+                device.control_mode = DeviceControlMode(spec["control_mode"])
+            except ValueError:
+                device.control_mode = DeviceControlMode.SURPLUS
+            coordinator._surplus_controller.register_device(device)
+            summary = {**spec, "persisted": False,
+                       "total_devices": len(coordinator._surplus_controller._devices)}
+        _LOGGER.info(
+            "Registered surplus device: %s (priority %d, mode %s)",
+            spec["name"], spec["priority"], spec["control_mode"],
         )
-        coordinator._surplus_controller.register_device(device)
-        _LOGGER.info("Registered surplus device: %s (priority %d)", name, priority)
+        if call.return_response:
+            return summary
+        return None
 
     hass.services.async_register(
         DOMAIN,
@@ -3116,7 +3142,47 @@ async def _async_register_phase_services(
             vol.Optional("priority", default=5): vol.All(int, vol.Range(min=1, max=10)),
             vol.Optional("rated_power", default=1000): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
+            vol.Optional("control_mode", default="surplus"): vol.In(
+                ["off", "peak_only", "surplus"]
+            ),
+            vol.Optional("depends_on"): vol.All(cv.ensure_list, [cv.string]),
         }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    async def async_unregister_surplus_device(call):
+        """Remove a service-registered surplus device (#559 Phase 0)."""
+        device_id = call.data.get("device_id")
+        registry = getattr(coordinator, "_device_registry", None)
+        removed = False
+        if registry:
+            removed = await registry.async_unregister_service_device(device_id)
+        elif coordinator._surplus_controller.get_device(device_id):
+            coordinator._surplus_controller.unregister_device(device_id)
+            removed = True
+        if not removed:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_found",
+                translation_placeholders={"device_id": device_id},
+            )
+        _LOGGER.info("Unregistered surplus device: %s", device_id)
+        if call.return_response:
+            return {
+                "device_id": device_id,
+                "removed": True,
+                "total_devices": len(coordinator._surplus_controller._devices),
+            }
+        return None
+
+    hass.services.async_register(
+        DOMAIN,
+        "unregister_surplus_device",
+        async_unregister_surplus_device,
+        schema=vol.Schema({
+            vol.Required("device_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     # Phase 4: Schedule appliance

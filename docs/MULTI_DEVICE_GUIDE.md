@@ -180,6 +180,69 @@ On the **System tab** of the dashboard, the Diagnostics section shows:
 
 ---
 
+## Generic Surplus Loads (switches, sockets, pumps)
+
+Any switchable load — pool pump, heater rod, a dumb EV socket — can be
+driven by SEM. One service call is enough; the registration **persists
+across restarts** and returns a summary response:
+
+```yaml
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: kia_socket
+  entity_id: switch.kia_socket
+  name: Kia Socket
+  rated_power: 2300        # W the load draws when on
+  priority: 5              # lower = gets surplus first
+```
+
+SEM then switches the load ON when the solar surplus covers its rated
+power and OFF when the surplus is gone (anti-flicker: min 5 min on /
+1 min off). Remove it again with
+`solar_energy_management.unregister_surplus_device`.
+
+### Control modes — who is in charge
+
+Every device has a control mode (changeable on the Control tab or via
+`update_device_config`):
+
+| Mode | Behavior |
+|---|---|
+| `off` | SEM monitors only, never switches the device |
+| `peak_only` | **Your own automations** run the device; SEM only sheds it to protect the grid peak and restores it afterwards |
+| `surplus` | SEM proactively runs the device on solar surplus (the default for service-registered devices) |
+
+Devices auto-discovered from the Energy Dashboard default to
+`peak_only`; devices you register via the service default to `surplus`
+— that's what you register them for.
+
+### Catching the surplus in your own automations (`peak_only`)
+
+If you prefer to keep your own schedules (e.g. a 3×/day pump
+automation) and just want them to land on solar surplus, subscribe to
+SEM's surplus signal:
+
+- **`binary_sensor.sem_surplus_available`** — ON once the unallocated
+  surplus has stayed above the threshold
+  (`number.sem_surplus_event_threshold`, default 1500 W) for 60 s; OFF
+  once it has stayed below 80 % of the threshold for 120 s. The
+  debounce means clouds can not flap your automations.
+- **`solar_energy_management_surplus` event** — fired on every
+  transition with `available`, `surplus_w`, `unallocated_w`,
+  `threshold_w` in the payload.
+
+```yaml
+automation:
+  - alias: Pump on solar surplus
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sem_surplus_available
+        to: "on"
+    actions:
+      - action: switch.turn_on
+        target: { entity_id: switch.pool_pump }
+```
+
 ## Appliance Dependencies
 
 Devices can declare dependencies so they only activate when other devices are already running. This prevents wasted energy or equipment damage.

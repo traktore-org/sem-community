@@ -50,6 +50,11 @@ BINARY_SENSOR_TYPES = [
         key="solar_active",
         device_class=BinarySensorDeviceClass.POWER,
     ),
+    # (#559 Phase 0) debounced surplus availability for user automations
+    # (no device class — POWER/RUNNING would show misleading icons)
+    BinarySensorEntityDescription(
+        key="surplus_available",
+    ),
     # Phase 0: Forecast available
     BinarySensorEntityDescription(
         key="forecast_available",

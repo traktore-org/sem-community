@@ -38,6 +38,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._sortable = null;
         this._interacting = false;
         this._lastDeviceSig = '';
+        this._showHelp = false;  // (#559) inline option help
     }
 
     setConfig(config) {
@@ -159,6 +160,21 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.9em; }
             .configure-btn:hover { background:rgba(255,193,7,0.22); }
             .hint { text-align:center; font-size:0.95em; opacity:0.4; margin-top:10px; }
+            .help-btn {
+                width:24px; height:24px; border-radius:50%;
+                border:1px solid var(--divider-color, rgba(255,255,255,0.2));
+                background:transparent; color:var(--secondary-text-color,#999);
+                font-weight:700; cursor:pointer; margin-left:8px; flex:0 0 auto;
+            }
+            .help-btn.active { color:#ff9800; border-color:#ff9800; }
+            .help-panel {
+                margin:4px 0 14px; padding:12px 14px; border-radius:10px;
+                background:rgba(128,128,128,0.08);
+                font-size:0.9em; line-height:1.5;
+            }
+            .help-item { margin-bottom:8px; }
+            .help-item:last-child { margin-bottom:0; }
+            .help-item b { color:var(--primary-text-color,#e0e0e0); }
             .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `;
     }
@@ -221,6 +237,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <span class="dim">${this._t('peak')}</span>
                         <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>
                         <span class="dim">/ ${this.targetPeakLimit.toFixed(1)}</span>
+                        <button class="help-btn ${this._showHelp ? 'active' : ''}" data-action="toggle-help"
+                                title="${this._t('help')}">?</button>
                     </div>
 
                     <div class="peak-box">
@@ -249,6 +267,15 @@ class SEMLoadPriorityCard extends SEMLitBase {
                             <button id="setTargetBtn">${this._t('set')}</button>
                         </div>
                     </div>
+
+                    ${this._showHelp ? html`
+                    <div class="help-panel">
+                        <div class="help-item"><b>${this._t('mode')}</b> — ${this._t('help_device_mode')}</div>
+                        <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
+                        <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
+                        <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
+                        <div class="help-item"><b>${this._t('target_limit')}</b> — ${this._t('help_device_peak')}</div>
+                    </div>` : nothing}
 
                     <div class="section-label">
                         <ha-icon icon="mdi:drag-vertical" style="--mdc-icon-size:18px"></ha-icon>
@@ -415,6 +442,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 this._moveDevice(deviceId, action === 'move-up' ? -1 : 1);
             } else if (action === 'configure') {
                 this._showConfigureModal(target.dataset.energy, target.dataset.name);
+            } else if (action === 'toggle-help') {
+                this._showHelp = !this._showHelp;
+                this.requestUpdate();
             }
         };
 

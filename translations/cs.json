@@ -930,6 +930,9 @@
       "solar_active": {
         "name": "Solar Active"
       },
+      "surplus_available": {
+        "name": "Přebytek k dispozici"
+      },
       "forecast_available": {
         "name": "Forecast Available"
       },
@@ -1059,6 +1062,9 @@
       },
       "initial_current": {
         "name": "Startovací proud vozidla"
+      },
+      "surplus_event_threshold": {
+        "name": "Práh události přebytku"
       }
     },
     "select": {

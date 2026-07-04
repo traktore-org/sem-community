@@ -552,6 +552,8 @@ class SurplusControlData:
     surplus_unallocated_w: float = 0.0
     surplus_active_devices: int = 0
     surplus_total_devices: int = 0
+    # (#559 Phase 0) debounced availability signal for user automations
+    surplus_available: bool = False
 
 
 @dataclass
@@ -1047,6 +1049,7 @@ class SEMData:
             "surplus_allocated_w": self.surplus_control.surplus_allocated_w,
             "surplus_unallocated_w": self.surplus_control.surplus_unallocated_w,
             "surplus_active_devices": self.surplus_control.surplus_active_devices,
+            "surplus_available": self.surplus_control.surplus_available,
             "surplus_total_devices": self.surplus_control.surplus_total_devices,
 
             # Forecast (Phase 0)

@@ -930,6 +930,9 @@
       "solar_active": {
         "name": "Solar Active"
       },
+      "surplus_available": {
+        "name": "Nadwyżka dostępna"
+      },
       "forecast_available": {
         "name": "Forecast Available"
       },
@@ -1059,6 +1062,9 @@
       },
       "initial_current": {
         "name": "Prąd startowy pojazdu"
+      },
+      "surplus_event_threshold": {
+        "name": "Próg zdarzenia nadwyżki"
       }
     },
     "select": {
