@@ -251,3 +251,11 @@ push to develop, ask user "tag it?".
   inserted it.** `git log --all -S "<constant>"` first.
 - **Batching unrelated audits into one beta.** Telemetry surfaces of
   3–5 unrelated modules can ride together; algorithm changes don't.
+- **Shipping a hardware-facing value on unit tests alone.** Mocks accept
+  any float; the device library may not. The #553 KEBA guard tagged a
+  ~1 Wh energy target that the keba library silently rejects (minimum
+  1 kWh, ValueError swallowed by the integration) — a live layer-check
+  on the real box (`set value → read the device's own sensor → clear`)
+  found it in two minutes. Rule: any constant/parameter that crosses
+  into a device service gets ONE live round-trip verification against
+  the real (or sim) hardware before the tag, not just pytest.

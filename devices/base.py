@@ -654,6 +654,10 @@ class CurrentControlDevice(ControllableDevice):
         # persistent Repair left by a previous device instance.
         self._stale_repair_checked: bool = False
         self._session_active: bool = False
+        # #553 — SEM's belief that the KEBA runaway-cap energy target is
+        # armed (set by stop_session, cleared by start_session). Surfaced in
+        # the diagnose service's ev_actuation block.
+        self._idle_guard_armed: bool = False
         self._min_power_change_interval = min_power_change_interval
 
     @property
@@ -1095,6 +1099,7 @@ class CurrentControlDevice(ControllableDevice):
                         {"energy": energy_target_kwh if energy_target_kwh > 0 else 0},
                         blocking=True,
                     )
+                    self._idle_guard_armed = False
 
                 # Pilot cycle: disable/enable for cars that need fresh signal
                 if self.needs_pilot_cycle and self.hass.services.has_service(domain, "disable"):
@@ -1194,6 +1199,7 @@ class CurrentControlDevice(ControllableDevice):
                                 domain, "set_energy",
                                 {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
                             )
+                            self._idle_guard_armed = True
                             _LOGGER.debug(
                                 "stop_session(%s): armed %.1f kWh runaway-cap "
                                 "energy target (#553)", self.name,
