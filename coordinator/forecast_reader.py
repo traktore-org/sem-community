@@ -40,6 +40,39 @@ FORECAST_SOLAR_ENTITIES = {
     "power_now": "sensor.energy_production_now",
 }
 
+# (#562) Entity IDs are LOCALIZED — a German install names the Solcast
+# sensor ``sensor.solcast_pv_forecast_forecast_heute``, so the hardcoded
+# English entity_ids above never match. The entity registry's
+# ``unique_id`` is language-independent, so resolution goes registry
+# first (platform + unique_id), hardcoded entity_id second (fallback for
+# renamed/odd registries). Unique IDs verified against the upstream
+# sources: BJReplay/ha-solcast-solar const.py and HA core
+# forecast_solar/sensor.py (``{entry_id}_{key}``).
+SOLCAST_PLATFORM = "solcast_solar"
+# Known limitation: multi-rooftop Solcast installs also emit PER-SITE
+# sensors with prefixed unique_ids ("<site>_total_kwh_forecast_today").
+# Those are deliberately NOT matched — a single site's value would be
+# wrong for the fleet. If a user disabled the fleet-total sensors and
+# kept only per-site ones, detection falls back to the hardcoded
+# entity_ids (and may fail); re-enabling the totals is the fix.
+SOLCAST_UNIQUE_IDS = {
+    "forecast_today": ("total_kwh_forecast_today",),
+    "forecast_tomorrow": ("total_kwh_forecast_tomorrow",),
+    # unique_id kept its pre-rename value upstream; match both to be safe
+    "forecast_remaining": ("get_remaining_today", "forecast_remaining_today"),
+    "power_now": ("power_now",),
+    "power_next_hour": ("power_next_hour",),
+    "peak_power_today": ("peak_w_today",),
+    "peak_time_today": ("peak_w_time_today",),
+}
+FORECAST_SOLAR_PLATFORM = "forecast_solar"
+FORECAST_SOLAR_UNIQUE_SUFFIXES = {
+    "forecast_today": "_energy_production_today",
+    "forecast_tomorrow": "_energy_production_tomorrow",
+    "forecast_remaining": "_energy_production_today_remaining",
+    "power_now": "_power_production_now",
+}
+
 
 @dataclass
 class ForecastData:
@@ -99,6 +132,8 @@ class ForecastReader:
         self._no_forecast_since_mono: Optional[float] = None
         self._no_forecast_repair_raised: bool = False
         self._mono_time = _time.monotonic
+        # (#562) 60 s cache for entity-registry scans: {platform: (mono_ts, entities)}
+        self._registry_cache: Dict[str, tuple] = {}
 
         # #434 — telemetry surface mirroring classifier_path /
         # dampening_path. Each public method sets the corresponding
@@ -130,6 +165,64 @@ class ForecastReader:
                 _LOGGER.debug("Could not clear no_forecast Repair: %s", e)
             self._no_forecast_repair_raised = False
 
+    def _registry_entities(self, platform: str) -> Dict[str, str]:
+        """Resolve a forecast integration's entities via the entity registry.
+
+        (#562) Entity IDs are localized per HA language; the registry
+        ``unique_id`` is not. Returns ``{role: entity_id}`` for every
+        role whose unique_id matches; empty dict when the registry is
+        unavailable (tests, early boot) or nothing matches.
+
+        Results are cached for 60 s — the upgrade peek in
+        ``read_forecast`` runs every coordinator cycle (~10 s) while a
+        lower-priority source is active; a full registry scan per cycle
+        would be wasteful on large installs.
+        """
+        cached = self._registry_cache.get(platform)
+        if cached is not None and (self._mono_time() - cached[0]) < 60:
+            return cached[1]
+        try:
+            from homeassistant.helpers import entity_registry as er
+            registry = er.async_get(self.hass)
+            entries = list(registry.entities.values())
+        except Exception:  # noqa: BLE001 — registry absent/mocked; may be
+            # transient at boot, so this path is deliberately NOT cached
+            return {}
+
+        resolved: Dict[str, str] = {}
+        for entry in entries:
+            try:
+                if entry.platform != platform or entry.disabled_by is not None:
+                    continue
+                unique_id = str(entry.unique_id)
+                entity_id = str(entry.entity_id)
+            except Exception:  # noqa: BLE001
+                continue
+            if platform == SOLCAST_PLATFORM:
+                for role, keys in SOLCAST_UNIQUE_IDS.items():
+                    if unique_id in keys and role not in resolved:
+                        resolved[role] = entity_id
+            else:
+                for role, suffix in FORECAST_SOLAR_UNIQUE_SUFFIXES.items():
+                    if unique_id.endswith(suffix) and role not in resolved:
+                        resolved[role] = entity_id
+        self._registry_cache[platform] = (self._mono_time(), resolved)
+        return resolved
+
+    def _locate_integration(
+        self, platform: str, fallback: Dict[str, str]
+    ) -> Optional[Dict[str, str]]:
+        """Find an integration's entities (registry first, hardcoded
+        entity_ids second) and confirm ``forecast_today`` is usable."""
+        for candidate in (self._registry_entities(platform), fallback):
+            test_entity = candidate.get("forecast_today")
+            if not test_entity:
+                continue
+            state = self.hass.states.get(test_entity)
+            if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
+                return candidate
+        return None
+
     def detect_source(self) -> Optional[str]:
         """Auto-detect available forecast integration.
 
@@ -147,10 +240,9 @@ class ForecastReader:
             return self._source
 
         # Check Solcast
-        test_entity = SOLCAST_ENTITIES["forecast_today"]
-        state = self.hass.states.get(test_entity)
-        if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
-            self._entities = SOLCAST_ENTITIES
+        entities = self._locate_integration(SOLCAST_PLATFORM, SOLCAST_ENTITIES)
+        if entities:
+            self._entities = entities
             self._source = "solcast"
             self._last_source_detection_path = "solcast"
             _LOGGER.info("Detected Solcast PV Solar integration")
@@ -158,10 +250,11 @@ class ForecastReader:
             return self._source
 
         # Check Forecast.Solar
-        test_entity = FORECAST_SOLAR_ENTITIES["forecast_today"]
-        state = self.hass.states.get(test_entity)
-        if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
-            self._entities = FORECAST_SOLAR_ENTITIES
+        entities = self._locate_integration(
+            FORECAST_SOLAR_PLATFORM, FORECAST_SOLAR_ENTITIES
+        )
+        if entities:
+            self._entities = entities
             self._source = "forecast_solar"
             self._last_source_detection_path = "forecast_solar"
             _LOGGER.info("Detected Forecast.Solar integration")
@@ -217,18 +310,16 @@ class ForecastReader:
             # as the preferred source's entity becomes available.
             upgraded = False
             if self._source != "solcast":
-                solcast_state = self.hass.states.get(
-                    SOLCAST_ENTITIES["forecast_today"]
+                solcast_entities = self._locate_integration(
+                    SOLCAST_PLATFORM, SOLCAST_ENTITIES
                 )
-                if solcast_state and solcast_state.state not in (
-                    STATE_UNKNOWN, STATE_UNAVAILABLE, None,
-                ):
+                if solcast_entities:
                     _LOGGER.info(
                         "Solcast PV Solar became available — upgrading "
                         "forecast source from %s to solcast",
                         self._source,
                     )
-                    self._entities = SOLCAST_ENTITIES
+                    self._entities = solcast_entities
                     self._source = "solcast"
                     self._last_source_detection_path = "solcast"
                     self._last_read_path = "upgraded_to_solcast"
