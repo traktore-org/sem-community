@@ -110,6 +110,36 @@ class SEMCostsDetailCard extends SEMLitBase {
         return '';
     }
 
+    // #557 — typed numeric entry for large values (a 1,000,000+ LKR system
+    // cost is unreachable via ±100 steppers). Keeps the ± buttons for fine
+    // adjustment; the value itself is an editable number field committing
+    // on blur/Enter.
+    _renderTypedStepper(entityId, labelKey) {
+        const entity = this._hass?.states[entityId];
+        const val = this._numVal(entityId);
+        const unit = entity?.attributes?.unit_of_measurement || '';
+        const commit = (e) => {
+            const n = parseFloat(e.target.value);
+            if (!Number.isNaN(n)) this._setNumber(entityId, n);
+        };
+        return html`
+            <div class="stepper-row">
+                <span class="stepper-label">${this._t(labelKey)}</span>
+                <div class="stepper-controls">
+                    <button class="stepper-minus" aria-label="Decrease"
+                        @click=${() => this._stepNumber(entityId, -1)}>−</button>
+                    <input class="stepper-input" type="number"
+                        .value=${String(val)}
+                        @change=${commit}
+                        @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}>
+                    ${unit ? html`<span class="stepper-unit">${unit}</span>` : nothing}
+                    <button class="stepper-plus" aria-label="Increase"
+                        @click=${() => this._stepNumber(entityId, 1)}>+</button>
+                </div>
+            </div>
+        `;
+    }
+
     _renderStepper(entityId, labelKey) {
         const entity = this._hass?.states[entityId];
         const val = this._numVal(entityId);
@@ -175,7 +205,7 @@ class SEMCostsDetailCard extends SEMLitBase {
         }
 
         if (id === 'investment') {
-            return html`${this._renderStepper('number.sem_system_investment_cost', 'system_investment_cost')}`;
+            return html`${this._renderTypedStepper('number.sem_system_investment_cost', 'system_investment_cost')}`;
         }
 
         if (id === 'demand') {
@@ -357,6 +387,15 @@ class SEMCostsDetailCard extends SEMLitBase {
                 background: rgba(255,255,255,0.10);
                 border-color: var(--primary-color, #42a5f5);
             }
+            .stepper-input {
+                width: 110px; text-align: center;
+                background: transparent; border: 1px solid rgba(150,202,238,0.35);
+                border-radius: 6px; color: inherit; font: inherit;
+                padding: 3px 6px; -moz-appearance: textfield;
+            }
+            .stepper-input::-webkit-outer-spin-button,
+            .stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+            .stepper-unit { font-size: 12px; opacity: 0.75; }
             .stepper-value {
                 font-size: 13px; font-weight: 600;
                 min-width: 60px; text-align: center;
