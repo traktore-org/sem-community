@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.13] — 04.07.2026
+
+> **Pre-release.** Observability + contract-test pass (#553 wrap-up).
+
+### 🔎 Diagnostics & guardrails
+- 🧭 The `diagnose` action's `ev_actuation` block now reports
+  **`idle_guard_armed`** — SEM's belief that the KEBA runaway-cap energy
+  target is armed (stop arms, start releases). One service call to triage.
+- 🧪 **Silent-no-op contract extended to switches and selects**: the wiring
+  test that already guards number knobs now covers switch/select entities —
+  including a source-scan that fails CI when a new dynamic per-charger /
+  per-battery key isn't covered. (No dead knobs found today.)
+- 📖 Audit playbook: hardware-facing values require one live device
+  round-trip before tagging (the 1 Wh-vs-1 kWh KEBA lesson).
+
 # [1.7.4-beta.12] — 03.07.2026
 
 > **Pre-release.** KEBA guard correction — beta.11's tagged build carried a
