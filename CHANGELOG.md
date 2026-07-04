@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.16] — 04.07.2026
+
+> **Pre-release.** Config-picker fixes, friendly missing-card notice, typed
+> investment input, unambiguous Net labels.
+
+### 🛠️ Configuration pickers (#560)
+- 🐛 **Hot-water switch (and several other entities) could not be selected** —
+  the dashboard Config card's entity pickers passed a broken domain filter
+  that excluded *every* entity when no domain was set. The hot-water picker
+  now accepts `switch`, `input_boolean`, `water_heater` and `climate`
+  entities. (reported by @covuser)
+- 🐛 Heat-pump relay 1/2 pickers (Config card **and** the native config flow)
+  only accepted `switch` — SG-Ready setups bridged through `input_boolean`
+  helpers couldn't be configured. Both now accept `input_boolean` too.
+
+### 🧩 Dashboard — friendly missing-card notice (#555, #558)
+- 🩹 A missing optional HACS card (e.g. `sankey-chart`) no longer shows a red
+  "Configuration Error" banner — a new wrapper renders a friendly, translated
+  notice naming the missing card and how to install it, and renders the real
+  card as soon as it's available. (reported by @hrdilshan and @ebnerjoh)
+
+### 💰 Costs — typed System Investment Cost (#557)
+- ✨ The System Investment Cost stepper now accepts **direct numeric entry**
+  (keyboard input next to the ± buttons), and the accepted range is wide
+  enough for any real installation. (requested by @hrdilshan)
+
+### 📊 Grid card — Net direction spelled out (#561 follow-up)
+- 🐛 The grid card's "Net" row showed `|import − export|` with the direction
+  conveyed only by color. The label now states it: **Net import** /
+  **Net export** — translated in all 15 languages. (follow-up to @ebnerjoh's
+  report)
+
 # [1.7.4-beta.15] — 04.07.2026
 
 > **Pre-release.** Deye grid direction out-of-the-box.
