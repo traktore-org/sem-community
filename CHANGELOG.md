@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.14] — 04.07.2026
+
+> **Pre-release.** Feedback-round fixes: Wh counters + consistent Net display.
+
+### 🔋 Energy statistics — unit-aware hardware counters (#551)
+- 🐛 **Fronius (and any Wh-reporting) lifetime counters inflated the lifetime
+  statistics ×1000** — a 2-day-old install showed 21,350 battery "cycles" and
+  a health score pinned at 70% (real value: ~21). Counter reads are now
+  unit-aware (Wh/kWh/MWh), covering lifetime seeding and the EV daily-energy
+  reconciliation. (reported by @ebnerjoh)
+- 🩹 **Self-healing**: installs that already seeded the inflated values are
+  detected and re-seeded from the corrected counters automatically on the
+  first restart after updating — no manual cleanup.
+
+### 💰 Costs — consistent Net framing (#554)
+- 🐛 The Costs hero said "+1.71 net saving" while the Today/Month/Year rows
+  printed "−1.71" — the same cost-signed value in two contradictory framings.
+  All Costs surfaces now use the savings-positive framing ('+' and green when
+  earning; plain pink when a net cost). The math was always consistent:
+  Net = import cost − export revenue. (reported by @hrdilshan)
+
 # [1.7.4-beta.13] — 04.07.2026
 
 > **Pre-release.** Observability + contract-test pass (#553 wrap-up).
