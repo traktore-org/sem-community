@@ -1116,7 +1116,9 @@
     "config_hp_temperature_sensor": "Heat pump temperature sensor",
     "config_help_hp_temperature_sensor": "The sensor SEM reads for the heat pump / buffer temperature.",
     "require_missing_title": "{name} card not installed",
-    "require_missing_body": "For the full dashboard, install \"{name}\" via HACS → Frontend, then hard-refresh this page (Ctrl+Shift+R)."
+    "require_missing_body": "For the full dashboard, install \"{name}\" via HACS → Frontend, then hard-refresh this page (Ctrl+Shift+R).",
+    "net_saving": "Net saving",
+    "net_cost": "Net cost"
   },
   "de": {
     "charging": "Laden",
@@ -2235,7 +2237,9 @@
     "config_hp_temperature_sensor": "Wärmepumpen-Temperatursensor",
     "config_help_hp_temperature_sensor": "Der Sensor, den SEM für die Wärmepumpen-/Puffertemperatur liest.",
     "require_missing_title": "{name}-Karte nicht installiert",
-    "require_missing_body": "Für das vollständige Dashboard installiere „{name}\" über HACS → Frontend und lade die Seite dann hart neu (Strg+Umschalt+R)."
+    "require_missing_body": "Für das vollständige Dashboard installiere „{name}\" über HACS → Frontend und lade die Seite dann hart neu (Strg+Umschalt+R).",
+    "net_saving": "Nettoeinsparung",
+    "net_cost": "Nettokosten"
   },
   "fr": {
     "charging": "En charge",
@@ -3354,7 +3358,9 @@
     "config_hp_temperature_sensor": "Capteur de température PAC",
     "config_help_hp_temperature_sensor": "Le capteur que SEM lit pour la température de la PAC / du ballon tampon.",
     "require_missing_title": "Carte {name} non installée",
-    "require_missing_body": "Pour le tableau de bord complet, installez « {name} » via HACS → Frontend, puis actualisez complètement la page (Ctrl+Maj+R)."
+    "require_missing_body": "Pour le tableau de bord complet, installez « {name} » via HACS → Frontend, puis actualisez complètement la page (Ctrl+Maj+R).",
+    "net_saving": "Économie nette",
+    "net_cost": "Coût net"
   },
   "es": {
     "charging": "Cargando",
@@ -4473,7 +4479,9 @@
     "config_hp_temperature_sensor": "Sensor de temperatura bomba de calor",
     "config_help_hp_temperature_sensor": "El sensor que SEM lee para la temperatura de la bomba de calor / acumulador.",
     "require_missing_title": "Tarjeta {name} no instalada",
-    "require_missing_body": "Para el panel completo, instala «{name}» desde HACS → Frontend y recarga la página por completo (Ctrl+Mayús+R)."
+    "require_missing_body": "Para el panel completo, instala «{name}» desde HACS → Frontend y recarga la página por completo (Ctrl+Mayús+R).",
+    "net_saving": "Ahorro neto",
+    "net_cost": "Coste neto"
   },
   "it": {
     "charging": "In carica",
@@ -5592,7 +5600,9 @@
     "config_hp_temperature_sensor": "Sensore temperatura pompa di calore",
     "config_help_hp_temperature_sensor": "Il sensore che SEM legge per la temperatura della pompa di calore / accumulo.",
     "require_missing_title": "Scheda {name} non installata",
-    "require_missing_body": "Per la dashboard completa, installa \"{name}\" da HACS → Frontend, poi ricarica completamente la pagina (Ctrl+Maiusc+R)."
+    "require_missing_body": "Per la dashboard completa, installa \"{name}\" da HACS → Frontend, poi ricarica completamente la pagina (Ctrl+Maiusc+R).",
+    "net_saving": "Risparmio netto",
+    "net_cost": "Costo netto"
   },
   "nl": {
     "charging": "Laden",
@@ -6711,7 +6721,9 @@
     "config_hp_temperature_sensor": "Warmtepomp-temperatuursensor",
     "config_help_hp_temperature_sensor": "De sensor die SEM leest voor de warmtepomp-/buffertemperatuur.",
     "require_missing_title": "{name}-kaart niet geïnstalleerd",
-    "require_missing_body": "Installeer voor het volledige dashboard \"{name}\" via HACS → Frontend en ververs daarna de pagina hard (Ctrl+Shift+R)."
+    "require_missing_body": "Installeer voor het volledige dashboard \"{name}\" via HACS → Frontend en ververs daarna de pagina hard (Ctrl+Shift+R).",
+    "net_saving": "Nettobesparing",
+    "net_cost": "Nettokosten"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -7830,7 +7842,9 @@
     "config_hp_temperature_sensor": "Teplotní senzor tepelného čerpadla",
     "config_help_hp_temperature_sensor": "Senzor, který SEM čte pro teplotu tepelného čerpadla / akumulační nádrže.",
     "require_missing_title": "Karta {name} není nainstalována",
-    "require_missing_body": "Pro úplný dashboard nainstalujte „{name}\" přes HACS → Frontend a poté stránku tvrdě obnovte (Ctrl+Shift+R)."
+    "require_missing_body": "Pro úplný dashboard nainstalujte „{name}\" přes HACS → Frontend a poté stránku tvrdě obnovte (Ctrl+Shift+R).",
+    "net_saving": "Čistá úspora",
+    "net_cost": "Čisté náklady"
   },
   "da": {
     "charging": "Oplader",
@@ -8949,7 +8963,9 @@
     "config_hp_temperature_sensor": "Varmepumpe-temperatursensor",
     "config_help_hp_temperature_sensor": "Sensoren SEM læser for varmepumpe-/buffertemperaturen.",
     "require_missing_title": "{name}-kort ikke installeret",
-    "require_missing_body": "For det fulde dashboard skal du installere \"{name}\" via HACS → Frontend og derefter genindlæse siden hårdt (Ctrl+Shift+R)."
+    "require_missing_body": "For det fulde dashboard skal du installere \"{name}\" via HACS → Frontend og derefter genindlæse siden hårdt (Ctrl+Shift+R).",
+    "net_saving": "Nettobesparelse",
+    "net_cost": "Nettoomkostning"
   },
   "fi": {
     "charging": "Lataus",
@@ -10068,7 +10084,9 @@
     "config_hp_temperature_sensor": "Lämpöpumpun lämpötila-anturi",
     "config_help_hp_temperature_sensor": "Anturi, jota SEM lukee lämpöpumpun / puskurin lämpötilaan.",
     "require_missing_title": "{name}-korttia ei ole asennettu",
-    "require_missing_body": "Asenna koko koontinäyttöä varten \"{name}\" HACS → Frontend -kautta ja lataa sivu sitten uudelleen (Ctrl+Shift+R)."
+    "require_missing_body": "Asenna koko koontinäyttöä varten \"{name}\" HACS → Frontend -kautta ja lataa sivu sitten uudelleen (Ctrl+Shift+R).",
+    "net_saving": "Nettosäästö",
+    "net_cost": "Nettokustannus"
   },
   "hu": {
     "charging": "Töltés",
@@ -11187,7 +11205,9 @@
     "config_hp_temperature_sensor": "Hőszivattyú hőmérséklet-érzékelő",
     "config_help_hp_temperature_sensor": "Az érzékelő, amelyet a SEM a hőszivattyú / puffertartály hőmérsékletéhez olvas.",
     "require_missing_title": "A(z) {name} kártya nincs telepítve",
-    "require_missing_body": "A teljes irányítópulthoz telepítsd a(z) „{name}\" kártyát a HACS → Frontend menüből, majd frissítsd keményen az oldalt (Ctrl+Shift+R)."
+    "require_missing_body": "A teljes irányítópulthoz telepítsd a(z) „{name}\" kártyát a HACS → Frontend menüből, majd frissítsd keményen az oldalt (Ctrl+Shift+R).",
+    "net_saving": "Nettó megtakarítás",
+    "net_cost": "Nettó költség"
   },
   "no": {
     "charging": "Lader",
@@ -12306,7 +12326,9 @@
     "config_hp_temperature_sensor": "Varmepumpe-temperatursensor",
     "config_help_hp_temperature_sensor": "Sensoren SEM leser for varmepumpe-/buffertemperaturen.",
     "require_missing_title": "{name}-kort ikke installert",
-    "require_missing_body": "For det fulle dashbordet, installer «{name}» via HACS → Frontend, og last siden helt på nytt (Ctrl+Shift+R)."
+    "require_missing_body": "For det fulle dashbordet, installer «{name}» via HACS → Frontend, og last siden helt på nytt (Ctrl+Shift+R).",
+    "net_saving": "Nettobesparelse",
+    "net_cost": "Nettokostnad"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -13425,7 +13447,9 @@
     "config_hp_temperature_sensor": "Czujnik temperatury pompy ciepła",
     "config_help_hp_temperature_sensor": "Czujnik, który SEM odczytuje dla temperatury pompy ciepła / bufora.",
     "require_missing_title": "Karta {name} nie jest zainstalowana",
-    "require_missing_body": "Aby uzyskać pełny pulpit, zainstaluj „{name}\" przez HACS → Frontend, a następnie twardo odśwież stronę (Ctrl+Shift+R)."
+    "require_missing_body": "Aby uzyskać pełny pulpit, zainstaluj „{name}\" przez HACS → Frontend, a następnie twardo odśwież stronę (Ctrl+Shift+R).",
+    "net_saving": "Oszczędność netto",
+    "net_cost": "Koszt netto"
   },
   "pt": {
     "charging": "A carregar",
@@ -14544,7 +14568,9 @@
     "config_hp_temperature_sensor": "Sensor de temperatura da bomba de calor",
     "config_help_hp_temperature_sensor": "O sensor que o SEM lê para a temperatura da bomba de calor / acumulador.",
     "require_missing_title": "Cartão {name} não instalado",
-    "require_missing_body": "Para o painel completo, instale \"{name}\" via HACS → Frontend e depois recarregue totalmente a página (Ctrl+Shift+R)."
+    "require_missing_body": "Para o painel completo, instale \"{name}\" via HACS → Frontend e depois recarregue totalmente a página (Ctrl+Shift+R).",
+    "net_saving": "Poupança líquida",
+    "net_cost": "Custo líquido"
   },
   "ro": {
     "charging": "Încărcare",
@@ -15663,7 +15689,9 @@
     "config_hp_temperature_sensor": "Senzor de temperatură pompă de căldură",
     "config_help_hp_temperature_sensor": "Senzorul pe care SEM îl citește pentru temperatura pompei de căldură / rezervorului tampon.",
     "require_missing_title": "Cardul {name} nu este instalat",
-    "require_missing_body": "Pentru tabloul complet, instalează „{name}\" prin HACS → Frontend, apoi reîncarcă complet pagina (Ctrl+Shift+R)."
+    "require_missing_body": "Pentru tabloul complet, instalează „{name}\" prin HACS → Frontend, apoi reîncarcă complet pagina (Ctrl+Shift+R).",
+    "net_saving": "Economie netă",
+    "net_cost": "Cost net"
   },
   "sv": {
     "charging": "Laddar",
@@ -16782,6 +16810,8 @@
     "config_hp_temperature_sensor": "Värmepump-temperatursensor",
     "config_help_hp_temperature_sensor": "Sensorn SEM läser för värmepumpens/bufferttankens temperatur.",
     "require_missing_title": "{name}-kortet är inte installerat",
-    "require_missing_body": "För hela panelen, installera \"{name}\" via HACS → Frontend och hårduppdatera sedan sidan (Ctrl+Skift+R)."
+    "require_missing_body": "För hela panelen, installera \"{name}\" via HACS → Frontend och hårduppdatera sedan sidan (Ctrl+Skift+R).",
+    "net_saving": "Nettobesparing",
+    "net_cost": "Nettokostnad"
   }
 }

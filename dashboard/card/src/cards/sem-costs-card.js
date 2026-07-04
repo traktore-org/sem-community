@@ -90,7 +90,7 @@ class SEMCostsCard extends SEMLitBase {
                     <span class="metric-val c-export">${this._fmtCurr(exp, curr)}</span>
                 </div>
                 <div class="metric-row net-row">
-                    <span class="metric-label"><strong>${this._t('net')}</strong></span>
+                    <span class="metric-label"><strong>${this._t(net <= 0 ? 'net_saving' : 'net_cost')}</strong></span>
                     <span class="metric-val" style="color:${netColor}">${netText}</span>
                 </div>
             </div>
