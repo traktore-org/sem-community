@@ -401,6 +401,10 @@ class SurplusController:
             if device._deadline_forced:
                 if not device.deadline_pressure:
                     reason = "deadline force expired"
+                elif device.top_up_policy != "always":
+                    # policy changed mid-force — the new policy no longer
+                    # permits deadline forcing
+                    reason = f"policy changed to {device.top_up_policy}"
             elif device._offpeak_forced:
                 stale = (
                     device._offpeak_forced_date is not None
@@ -454,16 +458,21 @@ class SurplusController:
                     )
                 if done_reason:
                     if device.is_active and device.can_deactivate():
-                        _LOGGER.info(
-                            "%s: %s — deactivating for the rest of the day",
-                            device.name, done_reason,
-                        )
                         await device.deactivate()
                         if not device.is_active:
                             device.record_deactivated()
                             device._offpeak_forced = False
                             device._deadline_forced = False
                             device._offpeak_forced_date = None
+                            _LOGGER.info(
+                                "%s: %s — deactivated for the rest of the day",
+                                device.name, done_reason,
+                            )
+                    elif device.is_active:
+                        _LOGGER.debug(
+                            "%s: %s — deactivation waiting for anti-flicker",
+                            device.name, done_reason,
+                        )
                     allocations.append(SurplusAllocation(
                         device_id=device.device_id,
                         device_name=device.name,

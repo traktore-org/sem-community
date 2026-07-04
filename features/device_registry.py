@@ -259,6 +259,8 @@ class UnifiedDeviceRegistry:
             if spec.get("depends_on"):
                 device.depends_on = list(spec["depends_on"])
             self._apply_goals(device)
+            if device.control_mode == DeviceControlMode.SURPLUS:
+                device.adopt_if_running()  # (#559) re-own after restart
             self._surplus_controller.register_device(device)
         if self._service_registrations:
             _LOGGER.info(
@@ -478,6 +480,8 @@ class UnifiedDeviceRegistry:
                 except ValueError:
                     surplus_device.control_mode = DeviceControlMode.PEAK_ONLY
                 self._apply_goals(surplus_device)
+                if surplus_device.control_mode == DeviceControlMode.SURPLUS:
+                    surplus_device.adopt_if_running()  # (#559) re-own after restart
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":

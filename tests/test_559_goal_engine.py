@@ -388,3 +388,71 @@ class TestForceExpiry:
         sc.register_device(dev)
         await sc.update(0.0, price_level="cheap")
         dev.deactivate.assert_not_called()
+
+    async def test_policy_change_mid_force_ends_deadline_force(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        dev = _mock_device(is_active=True, policy="solar_only", pressure=True)
+        dev._deadline_forced = True  # forced while policy was "always"
+        sc.register_device(dev)
+        await sc.update(0.0)
+        dev.deactivate.assert_awaited()
+        assert dev._deadline_forced is False
+
+
+# ---------------------------------------------------------------------------
+# Boot re-ownership (#559 — orphaned-ON risk)
+# ---------------------------------------------------------------------------
+
+class TestAdoptIfRunning:
+
+    def _hass(self, state):
+        hass = MagicMock()
+        hass.states.get = lambda e: SimpleNamespace(state=state, attributes={}) if e == "switch.pump" else None
+        return hass
+
+    def test_adopts_on_switch(self):
+        dev = _switch(hass=self._hass("on"))
+        dev.entity_id = "switch.pump"
+        assert dev.is_active is False
+        assert dev.adopt_if_running() is True
+        assert dev.is_active is True
+
+    def test_off_switch_not_adopted(self):
+        dev = _switch(hass=self._hass("off"))
+        dev.entity_id = "switch.pump"
+        assert dev.adopt_if_running() is False
+        assert dev.is_active is False
+
+    def test_already_active_noop(self):
+        dev = _switch(hass=self._hass("on"))
+        dev.entity_id = "switch.pump"
+        dev.adopt_if_running()
+        assert dev.adopt_if_running() is False
+
+
+@pytest.mark.asyncio
+async def test_boot_reregister_adopts_running_surplus_device(registry):
+    hass = MagicMock()
+    hass.states.get = lambda e: SimpleNamespace(state="on", attributes={}) if e == "switch.pump" else None
+    registry.hass = hass
+    registry._service_registrations = {"pump": {
+        "entity_id": "switch.pump", "name": "Pump", "priority": 5,
+        "rated_power": 800, "power_entity_id": None, "control_mode": "surplus",
+    }}
+    registry._register_service_devices()
+    dev = registry._surplus_controller.get_device("pump")
+    assert dev.is_active is True  # re-owned — the goal gates govern it again
+
+
+@pytest.mark.asyncio
+async def test_boot_reregister_never_adopts_peak_only(registry):
+    hass = MagicMock()
+    hass.states.get = lambda e: SimpleNamespace(state="on", attributes={})
+    registry.hass = hass
+    registry._service_registrations = {"pump": {
+        "entity_id": "switch.pump", "name": "Pump", "priority": 5,
+        "rated_power": 800, "power_entity_id": None, "control_mode": "peak_only",
+    }}
+    registry._register_service_devices()
+    dev = registry._surplus_controller.get_device("pump")
+    assert dev.is_active is False  # user-managed — never adopted

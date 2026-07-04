@@ -590,6 +590,29 @@ class SwitchDevice(ControllableDevice):
     def device_type(self) -> DeviceType:
         return DeviceType.SWITCH
 
+    def adopt_if_running(self) -> bool:
+        """(#559) Re-own a switch that is physically ON at (re-)registration.
+
+        After an HA restart SEM's internal state is IDLE while the switch
+        it turned on is still ON — orphaned: no goal gate, force expiry or
+        surplus logic would ever stop it. Adopting it as ACTIVE puts it
+        back under normal control (and its runtime counts again).
+        """
+        if not self.entity_id or not self.hass or self.is_active:
+            return False
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state != "on":
+            return False
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        _LOGGER.info(
+            "%s: switch %s was ON at registration — re-owned as active",
+            self.name, self.entity_id,
+        )
+        return True
+
     async def activate(self, available_watts: float) -> float:
         if not self.entity_id:
             return 0.0
