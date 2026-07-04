@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (keyboard input next to the ± buttons), and the accepted range is wide
   enough for any real installation. (requested by @hrdilshan)
 
+### ☀️ Forecast — Solcast no longer misses the bus (#562)
+- 🐛 **SEM latched onto Forecast.Solar even when Solcast was installed** — if
+  the Solcast integration finished loading after SEM's first source
+  detection, the cache stuck until the next restart. SEM now upgrades to
+  Solcast (its preferred source) as soon as the Solcast entities appear.
+  (reported by @ebnerjoh)
+
 ### 📊 Grid card — Net direction spelled out (#561 follow-up)
 - 🐛 The grid card's "Net" row showed `|import − export|` with the direction
   conveyed only by color. The label now states it: **Net import** /
