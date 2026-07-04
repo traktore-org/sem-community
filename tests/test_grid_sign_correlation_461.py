@@ -178,6 +178,20 @@ def test_brand_seed_solaredge_negate():
     assert r._grid_sign_inverted is True
 
 
+def test_brand_seed_deyecloud_negate():
+    """#554 — Deye via hass-deyecloud: totalgridpower is +=import /
+    −=export (verified from the reporter's diagnostics); seeds negation
+    deterministically so the direction is right from the first cycle."""
+    r, reg = _reader_with_grid("deyecloud")
+    with patch(_ER_PATCH, return_value=reg):
+        readings = MagicMock()
+        readings.grid_power = -4900.0  # exporting 4.9 kW, Deye convention
+        readings.solar_power = None
+        r._detect_grid_sign(readings)
+    assert r._grid_sign_detected is True
+    assert r._grid_sign_inverted is True
+
+
 def test_unknown_platform_does_not_seed():
     """A separate P1/CT meter (unknown platform) falls through to stats."""
     r, reg = _reader_with_grid("sessy")
