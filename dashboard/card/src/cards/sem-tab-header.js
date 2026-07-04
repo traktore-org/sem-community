@@ -237,7 +237,9 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'costs') return [
             this._getState('daily_costs', 0).toFixed(2) + ' ' + _c,
             this._getState('daily_savings', 0).toFixed(2) + ' ' + _c,
-            this._getState('daily_net_cost', 0).toFixed(2) + ' ' + _c,
+            // #554 — savings-positive framing, consistent with the costs card
+            (() => { const n = this._getState('daily_net_cost', 0);
+                     return (n <= 0 ? '+' : '') + Math.abs(n).toFixed(2) + ' ' + _c; })(),
         ];
         if (tab === 'system') return [
             this._getState('energy_optimization_score', 0).toFixed(0),
