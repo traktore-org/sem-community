@@ -39,6 +39,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._interacting = false;
         this._lastDeviceSig = '';
         this._showHelp = false;  // (#559) inline option help
+        this._goalOpen = {};      // (#559) device_id -> goal editor expanded
     }
 
     setConfig(config) {
@@ -175,6 +176,36 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .help-item { margin-bottom:8px; }
             .help-item:last-child { margin-bottom:0; }
             .help-item b { color:var(--primary-text-color,#e0e0e0); }
+            .goal-btn {
+                width:26px; height:26px; border-radius:8px;
+                border:1px solid var(--divider-color, rgba(255,255,255,0.15));
+                background:transparent; color:var(--secondary-text-color,#999);
+                cursor:pointer; display:flex; align-items:center; justify-content:center;
+                margin-left:6px; flex:0 0 auto;
+            }
+            .goal-btn.active { color:#ff9800; border-color:#ff9800; }
+            .goal-progress { display:flex; align-items:center; gap:8px; }
+            .goal-bar {
+                flex:1 1 auto; height:5px; border-radius:3px;
+                background:rgba(128,128,128,0.2); overflow:hidden; max-width:220px;
+            }
+            .goal-bar-fill { height:100%; border-radius:3px; transition:width 0.4s; }
+            .goal-progress-text { font-size:12px; color:var(--secondary-text-color,#999); white-space:nowrap; }
+            .goal-editor {
+                margin:8px 0 4px 28px; padding:10px 12px; border-radius:10px;
+                background:rgba(128,128,128,0.07);
+                display:grid; grid-template-columns:1fr 1fr; gap:8px 16px;
+                font-size:13px;
+            }
+            .goal-editor label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+            .goal-editor input[type=number], .goal-editor input[type=time], .goal-editor input[type=text] {
+                background:var(--secondary-background-color, rgba(255,255,255,0.06));
+                border:1px solid var(--divider-color, rgba(255,255,255,0.15));
+                border-radius:6px; color:var(--primary-text-color,#e0e0e0);
+                padding:4px 6px; width:76px;
+            }
+            .goal-editor input[type=text] { width:150px; }
+            @media (max-width:600px) { .goal-editor { grid-template-columns:1fr; } }
             .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `;
     }
@@ -212,6 +243,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     controlType: info.control?.type || 'switch',
                     controlMode: info.control_mode || 'peak_only',
                     dependsOn: info.depends_on || [],
+                    goals: info.goals || null,
+                    progress: info.progress || null,
                     blockedBy: info.blocked_by || null,
                     icon: this._resolveDeviceIcon(info),
                 }))
@@ -275,6 +308,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
                         <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
                         <div class="help-item"><b>${this._t('target_limit')}</b> — ${this._t('help_device_peak')}</div>
+                        <div class="help-item"><b>${this._t('daily_target')}</b> — ${this._t('help_device_target')}</div>
                     </div>` : nothing}
 
                     <div class="section-label">
@@ -358,9 +392,99 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <button class="arrow-btn" data-action="move-up"   data-device="${device.id}" title="${this._t('move_up')}">&#9650;</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">&#9660;</button>
                     </div>
+                    ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
+                    <button class="goal-btn ${this._goalOpen[device.id] ? 'active' : ''}"
+                            data-action="toggle-goal" data-device="${device.id}"
+                            title="${this._t('daily_target')}">
+                        <ha-icon icon="mdi:target" style="--mdc-icon-size:16px;pointer-events:none"></ha-icon>
+                    </button>`}
                 </div>
+                ${this._renderGoalProgress(device)}
+                ${this._goalOpen[device.id] ? this._renderGoalEditor(device) : nothing}
             </div>
         </div>`;
+    }
+
+    // ── (#559) goal engine UI ──
+    _goalPct(device) {
+        const g = device.goals, p = device.progress;
+        if (!g || !p) return null;
+        const pcts = [];
+        if (parseFloat(g.daily_min_runtime_min) > 0) {
+            pcts.push(Math.min(100, (p.runtime_today_min / parseFloat(g.daily_min_runtime_min)) * 100));
+        }
+        if (parseFloat(g.daily_target_energy_kwh) > 0) {
+            pcts.push(Math.min(100, (p.energy_today_kwh / parseFloat(g.daily_target_energy_kwh)) * 100));
+        }
+        if (!pcts.length) return null;
+        return Math.min(...pcts);
+    }
+
+    _renderGoalProgress(device) {
+        const pct = this._goalPct(device);
+        if (pct === null) return nothing;
+        const g = device.goals, p = device.progress;
+        const done = p.targets_met || pct >= 100;
+        const bits = [];
+        if (parseFloat(g.daily_min_runtime_min) > 0) {
+            bits.push(Math.round(p.runtime_today_min) + '/' + Math.round(g.daily_min_runtime_min) + ' min');
+        }
+        if (parseFloat(g.daily_target_energy_kwh) > 0) {
+            bits.push(p.energy_today_kwh.toFixed(1) + '/' + parseFloat(g.daily_target_energy_kwh).toFixed(1) + ' kWh');
+        }
+        return html`
+            <div class="goal-progress" style="padding:2px 0 0 28px">
+                <div class="goal-bar"><div class="goal-bar-fill" style="width:${pct}%;background:${done ? '#8DC892' : '#ff9800'}"></div></div>
+                <span class="goal-progress-text">${bits.join(' · ')}${g.target_deadline ? ' → ' + g.target_deadline : ''}${done ? ' ✓' : ''}</span>
+            </div>`;
+    }
+
+    _renderGoalEditor(device) {
+        const g = device.goals || {};
+        return html`
+            <div class="goal-editor">
+                <label>
+                    <span class="dim">${this._t('min_runtime_per_day')}</span>
+                    <input type="number" min="0" max="1440" step="5"
+                           .value="${String(g.daily_min_runtime_min || 0)}"
+                           data-goal="daily_min_runtime_min" data-device="${device.id}"> min
+                </label>
+                <label>
+                    <span class="dim">${this._t('max_runtime_per_day')}</span>
+                    <input type="number" min="0" max="1440" step="5"
+                           .value="${String(g.daily_max_runtime_min || 0)}"
+                           data-goal="daily_max_runtime_min" data-device="${device.id}"> min
+                </label>
+                <label>
+                    <span class="dim">${this._t('energy_target_per_day')}</span>
+                    <input type="number" min="0" max="200" step="0.5"
+                           .value="${String(g.daily_target_energy_kwh || 0)}"
+                           data-goal="daily_target_energy_kwh" data-device="${device.id}"> kWh
+                </label>
+                <label>
+                    <span class="dim">${this._t('target_deadline')}</span>
+                    <input type="time"
+                           .value="${g.target_deadline || ''}"
+                           data-goal="target_deadline" data-device="${device.id}">
+                </label>
+                <label>
+                    <span class="dim">${this._t('top_up_policy')}</span>
+                    <select class="mode-select" data-goal="top_up_policy" data-device="${device.id}">
+                        <option value="solar_only" ?selected="${(g.top_up_policy || 'solar_only') === 'solar_only'}">${this._t('policy_solar_only')}</option>
+                        <option value="cheap_hours" ?selected="${g.top_up_policy === 'cheap_hours'}">${this._t('policy_cheap_hours')}</option>
+                        <option value="always" ?selected="${g.top_up_policy === 'always'}">${this._t('policy_always')}</option>
+                    </select>
+                </label>
+                <label>
+                    <span class="dim">${this._t('stop_condition')}</span>
+                    <input type="text" placeholder="sensor.car_soc"
+                           .value="${g.stop_entity || ''}"
+                           data-goal="stop_entity" data-device="${device.id}">
+                    ≥ <input type="number" min="0" step="1" style="width:64px"
+                           .value="${String(g.stop_at || 0)}"
+                           data-goal="stop_at" data-device="${device.id}">
+                </label>
+            </div>`;
     }
 
     // ── SortableJS initialisation ──
@@ -445,6 +569,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
             } else if (action === 'toggle-help') {
                 this._showHelp = !this._showHelp;
                 this.requestUpdate();
+            } else if (action === 'toggle-goal') {
+                this._goalOpen[deviceId] = !this._goalOpen[deviceId];
+                this.requestUpdate();
             }
         };
 
@@ -457,6 +584,16 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     device.controlMode = modeTarget.value;
                     this._sendDeviceUpdate(deviceId, 'control_mode', modeTarget.value);
                 }
+                return;
+            }
+            const goalTarget = e.target.closest('[data-goal]');
+            if (goalTarget) {
+                const deviceId = goalTarget.dataset.device;
+                const prop = goalTarget.dataset.goal;
+                let value = goalTarget.value;
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) { device.goals = device.goals || {}; device.goals[prop] = value; }
+                this._sendDeviceUpdate(deviceId, prop, String(value));
                 return;
             }
             const depTarget = e.target.closest('[data-action="depends_on"]');

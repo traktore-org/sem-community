@@ -385,22 +385,48 @@ class SurplusController:
         remaining_surplus = distributable
         active_count = 0
 
-        # Off-peak deactivation: turn off forced devices when tariff switches to HT
-        if price_level not in ("cheap", "very_cheap", "negative"):
-            for device in devices:
-                if device._offpeak_forced and device.is_active:
-                    await device.deactivate()
-                    if not device.is_active:
-                        device._offpeak_forced = False
-                        _LOGGER.info(
-                            "Off-peak deactivated %s (tariff now %s)",
-                            device.name, price_level,
-                        )
-                    else:
-                        _LOGGER.debug(
-                            "Off-peak deactivation of %s blocked by anti-flicker",
-                            device.name,
-                        )
+        # Force expiry: a force ends with its reason (#559 review).
+        # - cheap-hours force: tariff left the cheap window, OR the day
+        #   rolled over (the deficit it served was YESTERDAY's — without
+        #   the date check a device forced into a cheap midnight window
+        #   would re-fill the NEW day's target from grid all night).
+        # - deadline force: the deadline pressure is gone (target met is
+        #   handled by the goal gate; after rollover pressure resets).
+        from homeassistant.util import dt as dt_util
+        today_local = dt_util.now().date()
+        for device in devices:
+            if not device.is_active:
+                continue
+            reason = None
+            if device._deadline_forced:
+                if not device.deadline_pressure:
+                    reason = "deadline force expired"
+                elif device.top_up_policy != "always":
+                    # policy changed mid-force — the new policy no longer
+                    # permits deadline forcing
+                    reason = f"policy changed to {device.top_up_policy}"
+            elif device._offpeak_forced:
+                stale = (
+                    device._offpeak_forced_date is not None
+                    and device._offpeak_forced_date != today_local
+                )
+                if stale:
+                    reason = "cheap-hours force expired (day rollover)"
+                elif price_level not in ("cheap", "very_cheap", "negative"):
+                    reason = f"tariff now {price_level}"
+            if reason:
+                await device.deactivate()
+                if not device.is_active:
+                    device._offpeak_forced = False
+                    device._deadline_forced = False
+                    device._offpeak_forced_date = None
+                    _LOGGER.info(
+                        "Force ended for %s (%s)", device.name, reason,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Force-end of %s blocked by anti-flicker", device.name,
+                    )
 
         # Import control mode enum
         from ..devices.base import DeviceControlMode
@@ -413,6 +439,49 @@ class SurplusController:
             # Skip devices in "off" mode — SEM never touches these
             if device.control_mode == DeviceControlMode.OFF:
                 continue
+
+            # (#559) Goal gates — a device that is DONE for the day (max
+            # runtime cap, all daily targets met, or the external stop
+            # condition like the car's SOC target) is stopped and stays off
+            # until the day rolls over. Only SURPLUS-mode devices: peak_only
+            # devices are user-managed, SEM never proactively stops them.
+            if device.control_mode == DeviceControlMode.SURPLUS:
+                done_reason = None
+                if device.daily_max_runtime_reached:
+                    done_reason = "daily max runtime reached"
+                elif device.daily_targets_met:
+                    done_reason = "daily target met"
+                elif device.stop_condition_met:
+                    done_reason = (
+                        f"stop condition met ({device.stop_entity} >= "
+                        f"{device.stop_at:g})"
+                    )
+                if done_reason:
+                    if device.is_active and device.can_deactivate():
+                        await device.deactivate()
+                        if not device.is_active:
+                            device.record_deactivated()
+                            device._offpeak_forced = False
+                            device._deadline_forced = False
+                            device._offpeak_forced_date = None
+                            _LOGGER.info(
+                                "%s: %s — deactivated for the rest of the day",
+                                device.name, done_reason,
+                            )
+                    elif device.is_active:
+                        _LOGGER.debug(
+                            "%s: %s — deactivation waiting for anti-flicker",
+                            device.name, done_reason,
+                        )
+                    allocations.append(SurplusAllocation(
+                        device_id=device.device_id,
+                        device_name=device.name,
+                        priority=device.priority,
+                        allocated_watts=0.0,
+                        actual_consumption_watts=device.get_current_consumption() if device.is_active else 0.0,
+                        state=DeviceState.ACTIVE.value if device.is_active else DeviceState.IDLE.value,
+                    ))
+                    continue
 
             if remaining_surplus >= device.min_power_threshold and not device.is_active:
                 # Only activate if device is in "surplus" mode
@@ -455,6 +524,11 @@ class SurplusController:
             for device in reversed(devices):
                 if remaining_surplus >= 0:
                     break
+                # (#559) forced devices run WITHOUT surplus by design —
+                # the force-expiry section and the peak shed pass own their
+                # lifecycle; the deficit LIFO must not flap them off.
+                if device._offpeak_forced or device._deadline_forced:
+                    continue
                 if device.is_active and device.can_deactivate():
                     consumption = device.get_current_consumption()
                     await device.deactivate()
@@ -556,10 +630,17 @@ class SurplusController:
             for device in devices:
                 if device.control_mode != DeviceControlMode.SURPLUS:
                     continue
+                # (#559) solar_only devices NEVER grid-force — they accept
+                # missing the target on a dark day (logged once per day).
+                if device.top_up_policy == "solar_only":
+                    continue
+                if device.daily_max_runtime_reached or device.stop_condition_met:
+                    continue
                 if device.needs_offpeak_activation:
                     consumed = await device.activate(device.min_power_threshold)
                     if consumed > 0:
                         device._offpeak_forced = True
+                        device._offpeak_forced_date = today_local
                         active_count += 1
                         remaining_surplus -= consumed
                         # Update or add allocation entry
@@ -584,6 +665,57 @@ class SurplusController:
                             "Off-peak forced %s (%.0fW, deficit %.0fs)",
                             device.name, consumed, device.remaining_daily_runtime_sec,
                         )
+
+        # (#559) Deadline-critical pass: a device with top_up_policy
+        # "always" whose remaining daily target no longer fits before its
+        # deadline is force-started regardless of price level. Per the plan
+        # of record the peak veto outranks the goal ramp — suppressed while
+        # the peak is at risk (unlike ScheduleDevice's one-shot deadline).
+        # solar_only devices log the miss once instead of grid-forcing.
+        if not peak_freeze:
+            for device in devices:
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue
+                if device.is_active or not device.deadline_pressure:
+                    continue
+                if device.daily_max_runtime_reached or device.stop_condition_met:
+                    continue
+                policy = device.top_up_policy
+                if policy != "always":
+                    if policy == "solar_only" and not device._solar_only_miss_logged:
+                        device._solar_only_miss_logged = True
+                        _LOGGER.info(
+                            "%s: daily target will be missed (deadline %s, "
+                            "policy solar_only — never grid-forced)",
+                            device.name, device.target_deadline or "23:59",
+                        )
+                    continue
+                consumed = await device.activate(device.min_power_threshold)
+                if consumed > 0:
+                    device._deadline_forced = True
+                    active_count += 1
+                    remaining_surplus -= consumed
+                    found = False
+                    for a in allocations:
+                        if a.device_id == device.device_id:
+                            a.allocated_watts = consumed
+                            a.actual_consumption_watts = consumed
+                            a.state = DeviceState.ACTIVE.value
+                            found = True
+                            break
+                    if not found:
+                        allocations.append(SurplusAllocation(
+                            device_id=device.device_id,
+                            device_name=device.name,
+                            priority=device.priority,
+                            allocated_watts=consumed,
+                            actual_consumption_watts=consumed,
+                            state=DeviceState.ACTIVE.value,
+                        ))
+                    _LOGGER.warning(
+                        "Deadline-forced %s (%.0fW) — target must finish by %s",
+                        device.name, consumed, device.target_deadline or "23:59",
+                    )
 
         # Build allocation data
         total_allocated = sum(a.actual_consumption_watts for a in allocations)

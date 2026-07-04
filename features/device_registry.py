@@ -130,6 +130,10 @@ class UnifiedDeviceRegistry:
         # device_id → {entity_id, name, priority, rated_power,
         #              power_entity_id, control_mode}
         self._service_registrations: Dict[str, Dict[str, Any]] = {}
+        # (#559 Phases 1-3) per-device goal config (targets, deadline,
+        # top-up policy, stop condition) — device_id → dict. Applies to
+        # BOTH auto-discovered and service-registered devices.
+        self._device_goals: Dict[str, Dict[str, Any]] = {}
 
     @property
     def devices(self) -> List[UnifiedDevice]:
@@ -149,6 +153,7 @@ class UnifiedDeviceRegistry:
                 self._priority_overrides = data.get("priority_overrides", {})
                 self._control_mode_overrides: Dict[str, str] = data.get("control_modes", {})
                 self._service_registrations = data.get("service_registrations", {})
+                self._device_goals = data.get("device_goals", {})
                 # Migrate the removed "surplus_target" mode (#235): a device set to
                 # surplus_target in v1.5.9 keeps surplus charging (rather than silently
                 # falling back to peak_only). The "stop at target" intent is now the
@@ -182,6 +187,55 @@ class UnifiedDeviceRegistry:
 
         self.hass.async_create_task(_delayed_rediscovery())
 
+    # (#559) goal properties settable via update_device_config / register
+    GOAL_PROPERTIES = (
+        "daily_min_runtime_min", "daily_max_runtime_min",
+        "daily_target_energy_kwh", "target_deadline", "top_up_policy",
+        "stop_entity", "stop_at",
+    )
+
+    def _apply_goals(self, device) -> None:
+        """Apply the persisted goal config onto a live device object."""
+        goals = self._device_goals.get(device.device_id)
+        if not goals:
+            return
+        device.daily_min_runtime_sec = int(
+            float(goals.get("daily_min_runtime_min", 0)) * 60
+        )
+        device.daily_max_runtime_sec = int(
+            float(goals.get("daily_max_runtime_min", 0)) * 60
+        )
+        device.daily_target_energy_kwh = float(
+            goals.get("daily_target_energy_kwh", 0.0)
+        )
+        device.target_deadline = str(goals.get("target_deadline", "") or "")
+        device.top_up_policy = str(
+            goals.get("top_up_policy", "solar_only") or "solar_only"
+        )
+        device.stop_entity = str(goals.get("stop_entity", "") or "")
+        device.stop_at = float(goals.get("stop_at", 0.0) or 0.0)
+
+    def seed_goals(self, device_id: str, goals: "Dict[str, Any]") -> None:
+        """Stage goal fields before registration (register_surplus_device
+        one-call path). Unknown properties are dropped."""
+        clean = {k: v for k, v in goals.items() if k in self.GOAL_PROPERTIES}
+        if clean:
+            self._device_goals.setdefault(device_id, {}).update(clean)
+
+    async def async_update_device_goal(
+        self, device_id: str, prop: str, value: Any
+    ) -> None:
+        """Set one goal property, persist it, and apply it live (#559)."""
+        if prop not in self.GOAL_PROPERTIES:
+            raise ValueError(f"Unknown goal property: {prop}")
+        goals = self._device_goals.setdefault(device_id, {})
+        goals[prop] = value
+        device = self._surplus_controller.get_device(device_id)
+        if device:
+            self._apply_goals(device)
+        await self._save_storage()
+        _LOGGER.info("Device goal updated: %s.%s = %s", device_id, prop, value)
+
     def _register_service_devices(self) -> None:
         """(Re-)register all persisted service registrations with the
         surplus controller."""
@@ -204,6 +258,9 @@ class UnifiedDeviceRegistry:
                 device.control_mode = DeviceControlMode.SURPLUS
             if spec.get("depends_on"):
                 device.depends_on = list(spec["depends_on"])
+            self._apply_goals(device)
+            if device.control_mode == DeviceControlMode.SURPLUS:
+                device.adopt_if_running()  # (#559) re-own after restart
             self._surplus_controller.register_device(device)
         if self._service_registrations:
             _LOGGER.info(
@@ -252,6 +309,7 @@ class UnifiedDeviceRegistry:
             stored["control_mode"] = "surplus"
         if stored["depends_on"]:
             device.depends_on = list(stored["depends_on"])
+        self._apply_goals(device)
         self._surplus_controller.register_device(device)
         # Dedupe: if auto-discovery already registered this switch under an
         # energy_dashboard_* id, drop that instance — two device objects
@@ -278,6 +336,7 @@ class UnifiedDeviceRegistry:
             return False
         self._service_registrations.pop(device_id, None)
         self._control_mode_overrides.pop(device_id, None)
+        self._device_goals.pop(device_id, None)
         if self._surplus_controller.get_device(device_id):
             self._surplus_controller.unregister_device(device_id)
         await self._save_storage()
@@ -420,6 +479,9 @@ class UnifiedDeviceRegistry:
                     surplus_device.control_mode = DeviceControlMode(mode_str)
                 except ValueError:
                     surplus_device.control_mode = DeviceControlMode.PEAK_ONLY
+                self._apply_goals(surplus_device)
+                if surplus_device.control_mode == DeviceControlMode.SURPLUS:
+                    surplus_device.adopt_if_running()  # (#559) re-own after restart
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
@@ -544,8 +606,64 @@ class UnifiedDeviceRegistry:
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
                 "control_mode": self._control_mode_overrides.get(did, "peak_only"),
+                **self._goal_payload(did),
+            }
+
+        # (#559) service-registered devices — pre-fix they never appeared
+        # on the Control tab at all.
+        for did, spec in self._service_registrations.items():
+            if did in result:
+                continue
+            live = self._surplus_controller.get_device(did)
+            is_on = bool(live and live.is_active)
+            current_power = live.get_current_consumption() / 1000 if is_on and live else 0.0
+            result[did] = {
+                "name": spec.get("name", did),
+                "priority": spec.get("priority", 5),
+                "is_controllable": True,
+                "is_critical": False,
+                "power_rating": spec.get("rated_power", 1000),
+                "power_entity": spec.get("power_entity_id"),
+                "energy_sensor": None,
+                "switch_entity": spec.get("entity_id"),
+                "is_available": True,
+                "is_on": is_on,
+                "current_power": current_power,
+                "device_type": "service_device",
+                "has_manual_mapping": False,
+                "control": {"type": "switch", "entity": spec.get("entity_id")},
+                "control_mode": spec.get("control_mode", "surplus"),
+                **self._goal_payload(did),
             }
         return result
+
+    def _goal_payload(self, device_id: str) -> Dict[str, Any]:
+        """Goal config + live progress for the card payload (#559)."""
+        goals = self._device_goals.get(device_id, {})
+        live = self._surplus_controller.get_device(device_id)
+        runtime_min = 0.0
+        energy_kwh = 0.0
+        targets_met = False
+        if live is not None:
+            runtime_min = live._daily_runtime_accumulated_sec / 60
+            energy_kwh = live._daily_energy_accumulated_kwh
+            targets_met = bool(live.daily_targets_met)
+        return {
+            "goals": {
+                "daily_min_runtime_min": goals.get("daily_min_runtime_min", 0),
+                "daily_max_runtime_min": goals.get("daily_max_runtime_min", 0),
+                "daily_target_energy_kwh": goals.get("daily_target_energy_kwh", 0),
+                "target_deadline": goals.get("target_deadline", ""),
+                "top_up_policy": goals.get("top_up_policy", "solar_only"),
+                "stop_entity": goals.get("stop_entity", ""),
+                "stop_at": goals.get("stop_at", 0),
+            },
+            "progress": {
+                "runtime_today_min": round(runtime_min, 1),
+                "energy_today_kwh": round(energy_kwh, 2),
+                "targets_met": targets_met,
+            },
+        }
 
     async def async_set_manual_mapping(
         self,
@@ -656,6 +774,7 @@ class UnifiedDeviceRegistry:
             "priority_overrides": self._priority_overrides,
             "control_modes": self._control_mode_overrides,
             "service_registrations": self._service_registrations,
+            "device_goals": self._device_goals,
         }
         await self._store.async_save(data)
         _LOGGER.debug("Saved device mappings to storage")

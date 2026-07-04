@@ -304,12 +304,16 @@ class SEMStorage:
         """Get all persisted device runtimes."""
         return self._daily_data.get("device_runtimes", {})
 
-    def set_device_runtime(self, device_id: str, accumulated_sec: float, meter_day: str) -> None:
-        """Persist a device's daily runtime."""
+    def set_device_runtime(
+        self, device_id: str, accumulated_sec: float, meter_day: str,
+        accumulated_kwh: float = 0.0,
+    ) -> None:
+        """Persist a device's daily runtime (+ energy progress, #559)."""
         if "device_runtimes" not in self._daily_data:
             self._daily_data["device_runtimes"] = {}
         self._daily_data["device_runtimes"][device_id] = {
             "accumulated_sec": accumulated_sec,
+            "accumulated_kwh": accumulated_kwh,
             "meter_day": meter_day,
         }
 

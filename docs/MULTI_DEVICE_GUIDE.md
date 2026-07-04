@@ -243,6 +243,38 @@ automation:
         target: { entity_id: switch.pool_pump }
 ```
 
+### Daily targets — the goal engine
+
+A `surplus`-mode device can be given a **daily goal** — one call, or per
+field later via `update_device_config`, or interactively on the
+Control tab (target 🞋 button on each device row):
+
+```yaml
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: pool_pump
+  entity_id: switch.pool_pump
+  rated_power: 800
+  daily_min_runtime_min: 240      # ≥ 4h/day…
+  target_deadline: "21:00"        # …finished by 9pm
+  top_up_policy: cheap_hours      # grid top-up only in cheap windows
+```
+
+| Field | Meaning |
+|---|---|
+| `daily_min_runtime_min` | Runtime target — for dumb loads (pool pump 4 h/day) |
+| `daily_target_energy_kwh` | Energy target — for metered loads; the device stops once it consumed this much today |
+| `daily_max_runtime_min` | Safety cap — stopped for the rest of the day once reached |
+| `target_deadline` | HH:MM by which the target should be met (default: end of day) |
+| `top_up_policy` | `solar_only` (never grid — accept a missed target on a dark day), `cheap_hours` (complete during cheap tariff windows), `always` (force-run in time to meet the deadline) |
+| `stop_entity` + `stop_at` | External completion condition — e.g. the car's SOC sensor at 80: the device ends its day early once reached |
+
+During the day the device runs opportunistically on surplus exactly as
+before; the goal only adds behavior when the sun alone won't get there.
+Progress (runtime/energy today, target met) shows as a bar on the
+Control tab and survives restarts. **Peak protection always outranks
+the goal** — a device chasing its 4 h still sheds for a grid peak.
+
 ## Appliance Dependencies
 
 Devices can declare dependencies so they only activate when other devices are already running. This prevents wasted energy or equipment damage.

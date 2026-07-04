@@ -1128,7 +1128,18 @@
     "help_device_priority": "the order devices get surplus and survive peak shedding. Lower number = gets surplus first and stays on longest; higher number = shed first when the peak limit is at risk. Drag the ≡ handle or use the ▲▼ arrows.",
     "help_device_requires": "chains devices: this device only switches on while the selected device is already running (e.g. a booster pump that needs the main pump).",
     "help_device_configure": "set or correct the control entity (switch) SEM uses for this device — needed when auto-detection picked the wrong one or found none.",
-    "help_device_peak": "the grid-import limit peak protection defends. When the 15-min average import approaches it, SEM sheds devices in priority order (highest number first) and restores them when the peak passes."
+    "help_device_peak": "the grid-import limit peak protection defends. When the 15-min average import approaches it, SEM sheds devices in priority order (highest number first) and restores them when the peak passes.",
+    "daily_target": "Daily target",
+    "min_runtime_per_day": "Min runtime/day",
+    "max_runtime_per_day": "Max runtime/day",
+    "energy_target_per_day": "Energy target/day",
+    "target_deadline": "Finish by",
+    "top_up_policy": "Top-up policy",
+    "policy_solar_only": "Solar only",
+    "policy_cheap_hours": "Cheap hours",
+    "policy_always": "Always (meet target)",
+    "stop_condition": "Stop when",
+    "help_device_target": "give the device a daily goal: minimum runtime (dumb loads like a pool pump) and/or an energy amount (metered loads), optionally finished by a deadline. Top-up policy decides what happens when the sun alone won't get there: Solar only never uses grid power and accepts missing the target; Cheap hours completes it during cheap tariff windows; Always force-runs the device in time to meet the deadline. Max runtime is a safety cap; Stop when ends the day early once an external sensor (e.g. the car's SOC) reaches the value. Peak protection always outranks these targets."
   },
   "de": {
     "charging": "Laden",
@@ -2259,7 +2270,18 @@
     "help_device_priority": "die Reihenfolge, in der Geräte Überschuss bekommen und bei Spitzenabschaltung überleben. Kleinere Zahl = bekommt zuerst Überschuss und bleibt am längsten an; größere Zahl = wird bei Spitzengefahr zuerst abgeworfen. Ziehe am ≡ Griff oder nutze die ▲▼ Pfeile.",
     "help_device_requires": "verkettet Geräte: dieses Gerät schaltet nur ein, solange das gewählte Gerät bereits läuft (z. B. eine Zusatzpumpe, die die Hauptpumpe braucht).",
     "help_device_configure": "legt die Steuer-Entität (Schalter) fest, die SEM für dieses Gerät nutzt — nötig, wenn die Auto-Erkennung die falsche oder keine gefunden hat.",
-    "help_device_peak": "das Netzbezugs-Limit, das der Spitzenschutz verteidigt. Nähert sich der 15-Min-Mittelwert, wirft SEM Geräte in Prioritätsreihenfolge ab (größte Zahl zuerst) und stellt sie nach der Spitze wieder her."
+    "help_device_peak": "das Netzbezugs-Limit, das der Spitzenschutz verteidigt. Nähert sich der 15-Min-Mittelwert, wirft SEM Geräte in Prioritätsreihenfolge ab (größte Zahl zuerst) und stellt sie nach der Spitze wieder her.",
+    "daily_target": "Tagesziel",
+    "min_runtime_per_day": "Min. Laufzeit/Tag",
+    "max_runtime_per_day": "Max. Laufzeit/Tag",
+    "energy_target_per_day": "Energieziel/Tag",
+    "target_deadline": "Fertig bis",
+    "top_up_policy": "Auffüll-Strategie",
+    "policy_solar_only": "Nur Solar",
+    "policy_cheap_hours": "Günstige Stunden",
+    "policy_always": "Immer (Ziel einhalten)",
+    "stop_condition": "Stopp wenn",
+    "help_device_target": "gibt dem Gerät ein Tagesziel: Mindestlaufzeit (einfache Lasten wie Poolpumpe) und/oder eine Energiemenge (gemessene Lasten), optional fertig bis zu einer Uhrzeit. Die Auffüll-Strategie entscheidet, was passiert, wenn die Sonne allein nicht reicht: Nur Solar nutzt nie Netzstrom und akzeptiert ein verfehltes Ziel; Günstige Stunden füllt in günstigen Tariffenstern auf; Immer erzwingt den Betrieb rechtzeitig zur Deadline. Max. Laufzeit ist eine Sicherheitsgrenze; Stopp wenn beendet den Tag vorzeitig, sobald ein externer Sensor (z. B. Auto-SOC) den Wert erreicht. Der Spitzenschutz hat immer Vorrang."
   },
   "fr": {
     "charging": "En charge",
@@ -3390,7 +3412,18 @@
     "help_device_priority": "l'ordre dans lequel les appareils reçoivent le surplus et survivent au délestage. Numéro bas = servi en premier et maintenu le plus longtemps ; numéro haut = délesté en premier. Glissez la poignée ≡ ou utilisez ▲▼.",
     "help_device_requires": "chaîne les appareils : celui-ci ne s'allume que si l'appareil sélectionné tourne déjà (p. ex. un surpresseur qui a besoin de la pompe principale).",
     "help_device_configure": "définit ou corrige l'entité de contrôle (interrupteur) que SEM utilise — utile quand l'auto-détection s'est trompée ou n'a rien trouvé.",
-    "help_device_peak": "la limite d'import réseau défendue par la protection de pointe. Quand la moyenne 15 min s'en approche, SEM déleste les appareils par ordre de priorité (numéro le plus haut d'abord) puis les rétablit."
+    "help_device_peak": "la limite d'import réseau défendue par la protection de pointe. Quand la moyenne 15 min s'en approche, SEM déleste les appareils par ordre de priorité (numéro le plus haut d'abord) puis les rétablit.",
+    "daily_target": "Objectif journalier",
+    "min_runtime_per_day": "Durée min/jour",
+    "max_runtime_per_day": "Durée max/jour",
+    "energy_target_per_day": "Objectif d'énergie/jour",
+    "target_deadline": "Terminer avant",
+    "top_up_policy": "Stratégie de complément",
+    "policy_solar_only": "Solaire uniquement",
+    "policy_cheap_hours": "Heures creuses",
+    "policy_always": "Toujours (objectif garanti)",
+    "stop_condition": "Arrêter quand",
+    "help_device_target": "donne un objectif journalier : durée minimale (charges simples comme une pompe de piscine) et/ou une quantité d'énergie (charges mesurées), à terminer avant une heure limite. La stratégie de complément décide quand le soleil ne suffit pas : Solaire uniquement n'utilise jamais le réseau ; Heures creuses complète pendant les fenêtres bon marché ; Toujours force le fonctionnement à temps. Durée max = garde-fou ; Arrêter quand termine la journée dès qu'un capteur externe (SOC voiture) atteint la valeur. La protection de pointe reste prioritaire."
   },
   "es": {
     "charging": "Cargando",
@@ -4521,7 +4554,18 @@
     "help_device_priority": "el orden en que los dispositivos reciben excedente y sobreviven al deslastre. Número bajo = recibe excedente primero y permanece más tiempo; número alto = se apaga primero. Arrastra ≡ o usa ▲▼.",
     "help_device_requires": "encadena dispositivos: este solo se enciende mientras el dispositivo seleccionado ya está funcionando (p. ej. una bomba auxiliar que necesita la principal).",
     "help_device_configure": "define o corrige la entidad de control (interruptor) que usa SEM — necesario cuando la autodetección eligió mal o no encontró ninguna.",
-    "help_device_peak": "el límite de importación de red que defiende la protección de pico. Cuando la media de 15 min se acerca, SEM apaga dispositivos por orden de prioridad (número más alto primero) y los restaura al pasar el pico."
+    "help_device_peak": "el límite de importación de red que defiende la protección de pico. Cuando la media de 15 min se acerca, SEM apaga dispositivos por orden de prioridad (número más alto primero) y los restaura al pasar el pico.",
+    "daily_target": "Objetivo diario",
+    "min_runtime_per_day": "Tiempo mín/día",
+    "max_runtime_per_day": "Tiempo máx/día",
+    "energy_target_per_day": "Objetivo de energía/día",
+    "target_deadline": "Terminar antes de",
+    "top_up_policy": "Política de recarga",
+    "policy_solar_only": "Solo solar",
+    "policy_cheap_hours": "Horas baratas",
+    "policy_always": "Siempre (cumplir objetivo)",
+    "stop_condition": "Parar cuando",
+    "help_device_target": "da al dispositivo un objetivo diario: tiempo mínimo (cargas simples) y/o una cantidad de energía (cargas medidas), opcionalmente antes de una hora límite. La política de recarga decide si el sol no basta: Solo solar nunca usa red; Horas baratas completa en ventanas baratas; Siempre fuerza el funcionamiento a tiempo. Tiempo máx es un tope de seguridad; Parar cuando termina el día al alcanzar un sensor externo (SOC del coche) el valor. La protección de pico siempre tiene prioridad."
   },
   "it": {
     "charging": "In carica",
@@ -5652,7 +5696,18 @@
     "help_device_priority": "l'ordine in cui i dispositivi ricevono surplus e sopravvivono al distacco. Numero basso = servito per primo e acceso più a lungo; numero alto = staccato per primo. Trascina ≡ o usa ▲▼.",
     "help_device_requires": "concatena i dispositivi: questo si accende solo mentre il dispositivo selezionato è già in funzione (es. una pompa ausiliaria che richiede la principale).",
     "help_device_configure": "imposta o corregge l'entità di controllo (interruttore) usata da SEM — serve quando il rilevamento automatico ha sbagliato o non ha trovato nulla.",
-    "help_device_peak": "il limite di import di rete difeso dalla protezione picco. Quando la media 15 min si avvicina, SEM stacca i dispositivi in ordine di priorità (numero più alto prima) e li ripristina passato il picco."
+    "help_device_peak": "il limite di import di rete difeso dalla protezione picco. Quando la media 15 min si avvicina, SEM stacca i dispositivi in ordine di priorità (numero più alto prima) e li ripristina passato il picco.",
+    "daily_target": "Obiettivo giornaliero",
+    "min_runtime_per_day": "Runtime min/giorno",
+    "max_runtime_per_day": "Runtime max/giorno",
+    "energy_target_per_day": "Obiettivo energia/giorno",
+    "target_deadline": "Completare entro",
+    "top_up_policy": "Politica di rabbocco",
+    "policy_solar_only": "Solo solare",
+    "policy_cheap_hours": "Ore economiche",
+    "policy_always": "Sempre (garantire obiettivo)",
+    "stop_condition": "Ferma quando",
+    "help_device_target": "assegna un obiettivo giornaliero: runtime minimo (carichi semplici) e/o energia (carichi misurati), da completare entro una scadenza. La politica di rabbocco decide se il sole non basta: Solo solare non usa mai la rete; Ore economiche completa nelle finestre convenienti; Sempre forza l'esecuzione in tempo. Runtime max è un limite di sicurezza; Ferma quando termina la giornata quando un sensore esterno (SOC auto) raggiunge il valore. La protezione picco ha sempre precedenza."
   },
   "nl": {
     "charging": "Laden",
@@ -6783,7 +6838,18 @@
     "help_device_priority": "de volgorde waarin apparaten overschot krijgen en piekafschakeling overleven. Laag nummer = krijgt eerst overschot en blijft het langst aan; hoog nummer = wordt eerst afgeschakeld. Sleep ≡ of gebruik ▲▼.",
     "help_device_requires": "koppelt apparaten: dit apparaat schakelt alleen in zolang het gekozen apparaat al draait (bijv. een boosterpomp die de hoofdpomp nodig heeft).",
     "help_device_configure": "stelt de bedienings-entiteit (schakelaar) in die SEM gebruikt — nodig als autodetectie de verkeerde of geen vond.",
-    "help_device_peak": "de netimport-limiet die piekbescherming verdedigt. Nadert het 15-min-gemiddelde, dan schakelt SEM apparaten af op prioriteitsvolgorde (hoogste nummer eerst) en herstelt ze na de piek."
+    "help_device_peak": "de netimport-limiet die piekbescherming verdedigt. Nadert het 15-min-gemiddelde, dan schakelt SEM apparaten af op prioriteitsvolgorde (hoogste nummer eerst) en herstelt ze na de piek.",
+    "daily_target": "Dagdoel",
+    "min_runtime_per_day": "Min. looptijd/dag",
+    "max_runtime_per_day": "Max. looptijd/dag",
+    "energy_target_per_day": "Energiedoel/dag",
+    "target_deadline": "Klaar vóór",
+    "top_up_policy": "Aanvul-beleid",
+    "policy_solar_only": "Alleen zon",
+    "policy_cheap_hours": "Goedkope uren",
+    "policy_always": "Altijd (doel halen)",
+    "stop_condition": "Stop wanneer",
+    "help_device_target": "geeft het apparaat een dagdoel: minimale looptijd (simpele lasten zoals zwembadpomp) en/of energiehoeveelheid (gemeten lasten), optioneel klaar vóór een deadline. Het aanvul-beleid bepaalt wat er gebeurt als de zon niet volstaat: Alleen zon gebruikt nooit netstroom; Goedkope uren vult aan in goedkope venstertijden; Altijd forceert op tijd draaien. Max. looptijd is een veiligheidsgrens; Stop wanneer beëindigt de dag zodra een externe sensor (auto-SOC) de waarde bereikt. Piekbescherming gaat altijd voor."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -7914,7 +7980,18 @@
     "help_device_priority": "pořadí, v jakém zařízení dostávají přebytek a přežívají odlehčování špičky. Nižší číslo = dostane přebytek první a zůstává zapnuté nejdéle; vyšší číslo = odpojí se první. Táhni ≡ nebo použij ▲▼.",
     "help_device_requires": "řetězí zařízení: toto zařízení se zapne, jen pokud už běží vybrané zařízení (např. posilovací čerpadlo, které potřebuje hlavní).",
     "help_device_configure": "nastaví nebo opraví ovládací entitu (spínač), kterou SEM používá — potřeba, když autodetekce vybrala špatnou nebo žádnou.",
-    "help_device_peak": "limit odběru ze sítě, který chrání ochrana špičky. Když se 15min průměr blíží, SEM odpojuje zařízení v pořadí priority (nejvyšší číslo první) a po špičce je obnoví."
+    "help_device_peak": "limit odběru ze sítě, který chrání ochrana špičky. Když se 15min průměr blíží, SEM odpojuje zařízení v pořadí priority (nejvyšší číslo první) a po špičce je obnoví.",
+    "daily_target": "Denní cíl",
+    "min_runtime_per_day": "Min. běh/den",
+    "max_runtime_per_day": "Max. běh/den",
+    "energy_target_per_day": "Cíl energie/den",
+    "target_deadline": "Hotovo do",
+    "top_up_policy": "Strategie doplnění",
+    "policy_solar_only": "Pouze solár",
+    "policy_cheap_hours": "Levné hodiny",
+    "policy_always": "Vždy (splnit cíl)",
+    "stop_condition": "Zastavit když",
+    "help_device_target": "dává zařízení denní cíl: minimální dobu běhu (jednoduché spotřebiče) a/nebo množství energie (měřené spotřebiče), volitelně hotovo do termínu. Strategie doplnění rozhoduje, když slunce nestačí: Pouze solár nikdy nebere ze sítě; Levné hodiny doplní v levných oknech; Vždy vynutí běh včas. Max. běh je bezpečnostní strop; Zastavit když ukončí den, jakmile externí senzor (SOC auta) dosáhne hodnoty. Ochrana špičky má vždy přednost."
   },
   "da": {
     "charging": "Oplader",
@@ -9045,7 +9122,18 @@
     "help_device_priority": "rækkefølgen enheder får overskud og overlever spidsudkobling. Lavt tal = får overskud først og forbliver længst tændt; højt tal = kobles fra først. Træk ≡ eller brug ▲▼.",
     "help_device_requires": "kæder enheder: denne tænder kun, mens den valgte enhed allerede kører (f.eks. en boosterpumpe der kræver hovedpumpen).",
     "help_device_configure": "sætter eller retter den styringsentitet (kontakt) SEM bruger — nødvendigt når autodetektion valgte forkert eller intet fandt.",
-    "help_device_peak": "grænsen for netimport som spidsbeskyttelsen forsvarer. Når 15-min-gennemsnittet nærmer sig, udkobler SEM enheder i prioritetsrækkefølge (højeste tal først) og genopretter dem efter spidsen."
+    "help_device_peak": "grænsen for netimport som spidsbeskyttelsen forsvarer. Når 15-min-gennemsnittet nærmer sig, udkobler SEM enheder i prioritetsrækkefølge (højeste tal først) og genopretter dem efter spidsen.",
+    "daily_target": "Dagligt mål",
+    "min_runtime_per_day": "Min. driftstid/dag",
+    "max_runtime_per_day": "Maks. driftstid/dag",
+    "energy_target_per_day": "Energimål/dag",
+    "target_deadline": "Færdig inden",
+    "top_up_policy": "Efterfyldningspolitik",
+    "policy_solar_only": "Kun sol",
+    "policy_cheap_hours": "Billige timer",
+    "policy_always": "Altid (nå målet)",
+    "stop_condition": "Stop når",
+    "help_device_target": "giver enheden et dagligt mål: minimum driftstid (simple laster som poolpumpe) og/eller energimængde (målte laster), evt. færdig inden en deadline. Efterfyldningspolitik afgør hvad der sker når solen ikke rækker: Kun sol bruger aldrig net; Billige timer fuldfører i billige vinduer; Altid tvangskører i tide. Maks. driftstid er en sikkerhedsgrænse; Stop når afslutter dagen når en ekstern sensor (bilens SOC) når værdien. Spidsbeskyttelse har altid forrang."
   },
   "fi": {
     "charging": "Lataus",
@@ -10176,7 +10264,18 @@
     "help_device_priority": "järjestys, jossa laitteet saavat ylijäämää ja selviävät huippukevennyksestä. Pieni numero = saa ylijäämän ensin ja pysyy pisimpään päällä; iso numero = pudotetaan ensin. Vedä ≡ tai käytä ▲▼.",
     "help_device_requires": "ketjuttaa laitteet: tämä kytkeytyy päälle vain, kun valittu laite on jo käynnissä (esim. tehostinpumppu, joka tarvitsee pääpumpun).",
     "help_device_configure": "asettaa tai korjaa ohjausentiteetin (kytkimen), jota SEM käyttää — tarpeen, jos automaattitunnistus valitsi väärin tai ei löytänyt mitään.",
-    "help_device_peak": "verkkotuonnin raja, jota huippusuoja puolustaa. Kun 15 min keskiarvo lähestyy sitä, SEM pudottaa laitteita prioriteettijärjestyksessä (suurin numero ensin) ja palauttaa ne huipun mentyä."
+    "help_device_peak": "verkkotuonnin raja, jota huippusuoja puolustaa. Kun 15 min keskiarvo lähestyy sitä, SEM pudottaa laitteita prioriteettijärjestyksessä (suurin numero ensin) ja palauttaa ne huipun mentyä.",
+    "daily_target": "Päivätavoite",
+    "min_runtime_per_day": "Min. käyntiaika/pv",
+    "max_runtime_per_day": "Maks. käyntiaika/pv",
+    "energy_target_per_day": "Energiatavoite/pv",
+    "target_deadline": "Valmis klo",
+    "top_up_policy": "Täydennyskäytäntö",
+    "policy_solar_only": "Vain aurinko",
+    "policy_cheap_hours": "Halvat tunnit",
+    "policy_always": "Aina (tavoite täyttyy)",
+    "stop_condition": "Pysäytä kun",
+    "help_device_target": "antaa laitteelle päivätavoitteen: minimikäyntiaika (yksinkertaiset kuormat) ja/tai energiamäärä (mitatut kuormat), valinnaisesti valmiiksi määräaikaan mennessä. Täydennyskäytäntö ratkaisee kun aurinko ei riitä: Vain aurinko ei koskaan käytä verkkoa; Halvat tunnit täydentää halvoissa ikkunoissa; Aina pakottaa käynnin ajoissa. Maks. käyntiaika on turvaraja; Pysäytä kun päättää päivän kun ulkoinen anturi (auton SOC) saavuttaa arvon. Huippusuoja on aina etusijalla."
   },
   "hu": {
     "charging": "Töltés",
@@ -11307,7 +11406,18 @@
     "help_device_priority": "a sorrend, ahogy az eszközök többletet kapnak és túlélik a csúcslekapcsolást. Kisebb szám = először kap többletet és legtovább marad bekapcsolva; nagyobb szám = először kapcsolódik le. Húzd a ≡ fogantyút vagy használd a ▲▼ nyilakat.",
     "help_device_requires": "láncolja az eszközöket: ez csak akkor kapcsol be, amíg a kiválasztott eszköz már működik (pl. nyomásfokozó, amelynek kell a fő szivattyú).",
     "help_device_configure": "beállítja vagy javítja a vezérlő entitást (kapcsolót), amit a SEM használ — akkor kell, ha az automatikus felismerés rosszat vagy semmit sem talált.",
-    "help_device_peak": "a hálózati vételezési határ, amit a csúcsvédelem véd. Ha a 15 perces átlag közelíti, a SEM prioritási sorrendben kapcsolja le az eszközöket (legnagyobb szám először), majd a csúcs után visszaállítja."
+    "help_device_peak": "a hálózati vételezési határ, amit a csúcsvédelem véd. Ha a 15 perces átlag közelíti, a SEM prioritási sorrendben kapcsolja le az eszközöket (legnagyobb szám először), majd a csúcs után visszaállítja.",
+    "daily_target": "Napi cél",
+    "min_runtime_per_day": "Min. futásidő/nap",
+    "max_runtime_per_day": "Max. futásidő/nap",
+    "energy_target_per_day": "Energiacél/nap",
+    "target_deadline": "Befejezés eddig",
+    "top_up_policy": "Kiegészítési szabály",
+    "policy_solar_only": "Csak napelem",
+    "policy_cheap_hours": "Olcsó órák",
+    "policy_always": "Mindig (cél teljesül)",
+    "stop_condition": "Állj, ha",
+    "help_device_target": "napi célt ad az eszköznek: minimális futásidő (egyszerű fogyasztók) és/vagy energiamennyiség (mért fogyasztók), opcionálisan határidőre. A kiegészítési szabály dönt, ha a nap nem elég: Csak napelem soha nem használ hálózatot; Olcsó órák az olcsó ablakokban pótol; Mindig időben kikényszeríti a futást. Max. futásidő biztonsági plafon; Állj, ha idő előtt zárja a napot, ha egy külső szenzor (autó SOC) eléri az értéket. A csúcsvédelem mindig elsőbbséget élvez."
   },
   "no": {
     "charging": "Lader",
@@ -12438,7 +12548,18 @@
     "help_device_priority": "rekkefølgen enheter får overskudd og overlever topputkobling. Lavt tall = får overskudd først og holdes lengst på; høyt tall = kobles ut først. Dra ≡ eller bruk ▲▼.",
     "help_device_requires": "kjeder enheter: denne slås bare på mens den valgte enheten allerede kjører (f.eks. en trykkpumpe som trenger hovedpumpen).",
     "help_device_configure": "setter eller retter styringsentiteten (bryteren) SEM bruker — nødvendig når autodeteksjon valgte feil eller ikke fant noen.",
-    "help_device_peak": "grensen for nettimport som toppbeskyttelsen forsvarer. Når 15-min-snittet nærmer seg, kobler SEM ut enheter i prioritetsrekkefølge (høyest tall først) og gjenoppretter dem etter toppen."
+    "help_device_peak": "grensen for nettimport som toppbeskyttelsen forsvarer. Når 15-min-snittet nærmer seg, kobler SEM ut enheter i prioritetsrekkefølge (høyest tall først) og gjenoppretter dem etter toppen.",
+    "daily_target": "Daglig mål",
+    "min_runtime_per_day": "Min. driftstid/dag",
+    "max_runtime_per_day": "Maks. driftstid/dag",
+    "energy_target_per_day": "Energimål/dag",
+    "target_deadline": "Ferdig innen",
+    "top_up_policy": "Etterfyllingspolicy",
+    "policy_solar_only": "Kun sol",
+    "policy_cheap_hours": "Billige timer",
+    "policy_always": "Alltid (nå målet)",
+    "stop_condition": "Stopp når",
+    "help_device_target": "gir enheten et daglig mål: minimum driftstid (enkle laster som bassengpumpe) og/eller energimengde (målte laster), eventuelt ferdig innen en frist. Etterfyllingspolicy avgjør når solen ikke strekker til: Kun sol bruker aldri nett; Billige timer fullfører i billige vinduer; Alltid tvangskjører i tide. Maks. driftstid er en sikkerhetsgrense; Stopp når avslutter dagen når en ekstern sensor (bilens SOC) når verdien. Toppbeskyttelse har alltid forrang."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -13569,7 +13690,18 @@
     "help_device_priority": "kolejność, w jakiej urządzenia dostają nadwyżkę i przetrwają zrzut szczytu. Niższy numer = dostaje nadwyżkę pierwszy i działa najdłużej; wyższy numer = odłączany pierwszy. Przeciągnij ≡ lub użyj ▲▼.",
     "help_device_requires": "łączy urządzenia w łańcuch: to włącza się tylko, gdy wybrane urządzenie już działa (np. pompa wspomagająca wymagająca głównej).",
     "help_device_configure": "ustawia lub poprawia encję sterującą (przełącznik), której używa SEM — potrzebne, gdy autodetekcja wybrała złą lub żadnej nie znalazła.",
-    "help_device_peak": "limit poboru z sieci broniony przez ochronę szczytu. Gdy średnia 15-min się zbliża, SEM odłącza urządzenia wg priorytetu (najwyższy numer pierwszy) i przywraca po szczycie."
+    "help_device_peak": "limit poboru z sieci broniony przez ochronę szczytu. Gdy średnia 15-min się zbliża, SEM odłącza urządzenia wg priorytetu (najwyższy numer pierwszy) i przywraca po szczycie.",
+    "daily_target": "Cel dzienny",
+    "min_runtime_per_day": "Min. czas pracy/dzień",
+    "max_runtime_per_day": "Maks. czas pracy/dzień",
+    "energy_target_per_day": "Cel energii/dzień",
+    "target_deadline": "Zakończ do",
+    "top_up_policy": "Zasada uzupełniania",
+    "policy_solar_only": "Tylko solar",
+    "policy_cheap_hours": "Tanie godziny",
+    "policy_always": "Zawsze (osiągnij cel)",
+    "stop_condition": "Zatrzymaj gdy",
+    "help_device_target": "nadaje urządzeniu cel dzienny: minimalny czas pracy (proste odbiorniki jak pompa basenowa) i/lub ilość energii (odbiorniki mierzone), opcjonalnie do określonej godziny. Zasada uzupełniania decyduje, gdy słońce nie wystarcza: Tylko solar nigdy nie używa sieci; Tanie godziny uzupełnia w tanich oknach; Zawsze wymusza pracę na czas. Maks. czas pracy to limit bezpieczeństwa; Zatrzymaj gdy kończy dzień, gdy zewnętrzny czujnik (SOC auta) osiągnie wartość. Ochrona szczytu ma zawsze pierwszeństwo."
   },
   "pt": {
     "charging": "A carregar",
@@ -14700,7 +14832,18 @@
     "help_device_priority": "a ordem em que os dispositivos recebem excedente e sobrevivem ao corte de pico. Número baixo = recebe excedente primeiro e fica ligado mais tempo; número alto = cortado primeiro. Arraste ≡ ou use ▲▼.",
     "help_device_requires": "encadeia dispositivos: este só liga enquanto o dispositivo selecionado já está a funcionar (p. ex. uma bomba auxiliar que precisa da principal).",
     "help_device_configure": "define ou corrige a entidade de controlo (interruptor) que o SEM usa — necessário quando a autodeteção escolheu mal ou não encontrou nenhuma.",
-    "help_device_peak": "o limite de importação da rede que a proteção de pico defende. Quando a média de 15 min se aproxima, o SEM corta dispositivos por ordem de prioridade (número mais alto primeiro) e repõe-nos após o pico."
+    "help_device_peak": "o limite de importação da rede que a proteção de pico defende. Quando a média de 15 min se aproxima, o SEM corta dispositivos por ordem de prioridade (número mais alto primeiro) e repõe-nos após o pico.",
+    "daily_target": "Meta diária",
+    "min_runtime_per_day": "Tempo mín/dia",
+    "max_runtime_per_day": "Tempo máx/dia",
+    "energy_target_per_day": "Meta de energia/dia",
+    "target_deadline": "Concluir até",
+    "top_up_policy": "Política de reforço",
+    "policy_solar_only": "Só solar",
+    "policy_cheap_hours": "Horas baratas",
+    "policy_always": "Sempre (cumprir meta)",
+    "stop_condition": "Parar quando",
+    "help_device_target": "dá ao dispositivo uma meta diária: tempo mínimo (cargas simples como bomba de piscina) e/ou quantidade de energia (cargas medidas), opcionalmente concluída até uma hora. A política de reforço decide quando o sol não chega: Só solar nunca usa rede; Horas baratas completa nas janelas baratas; Sempre força o funcionamento a tempo. Tempo máx é um limite de segurança; Parar quando termina o dia quando um sensor externo (SOC do carro) atinge o valor. A proteção de pico tem sempre prioridade."
   },
   "ro": {
     "charging": "Încărcare",
@@ -15831,7 +15974,18 @@
     "help_device_priority": "ordinea în care dispozitivele primesc surplus și supraviețuiesc deconectării de vârf. Număr mic = primește surplus primul și rămâne pornit cel mai mult; număr mare = deconectat primul. Trage ≡ sau folosește ▲▼.",
     "help_device_requires": "înlănțuie dispozitivele: acesta pornește doar cât timp dispozitivul selectat rulează deja (ex. o pompă auxiliară care are nevoie de cea principală).",
     "help_device_configure": "setează sau corectează entitatea de control (comutatorul) folosită de SEM — necesar când autodetecția a ales greșit sau nu a găsit nimic.",
-    "help_device_peak": "limita de import din rețea apărată de protecția de vârf. Când media pe 15 min se apropie, SEM deconectează dispozitivele în ordinea priorității (numărul cel mai mare primul) și le repornește după vârf."
+    "help_device_peak": "limita de import din rețea apărată de protecția de vârf. Când media pe 15 min se apropie, SEM deconectează dispozitivele în ordinea priorității (numărul cel mai mare primul) și le repornește după vârf.",
+    "daily_target": "Țintă zilnică",
+    "min_runtime_per_day": "Durată min/zi",
+    "max_runtime_per_day": "Durată max/zi",
+    "energy_target_per_day": "Țintă de energie/zi",
+    "target_deadline": "Finalizare până la",
+    "top_up_policy": "Politică de completare",
+    "policy_solar_only": "Doar solar",
+    "policy_cheap_hours": "Ore ieftine",
+    "policy_always": "Întotdeauna (atinge ținta)",
+    "stop_condition": "Oprește când",
+    "help_device_target": "dă dispozitivului o țintă zilnică: durată minimă (sarcini simple ca pompa de piscină) și/sau cantitate de energie (sarcini măsurate), opțional finalizată până la o oră. Politica de completare decide când soarele nu ajunge: Doar solar nu folosește niciodată rețeaua; Ore ieftine completează în ferestrele ieftine; Întotdeauna forțează funcționarea la timp. Durata max e un plafon de siguranță; Oprește când încheie ziua când un senzor extern (SOC-ul mașinii) atinge valoarea. Protecția de vârf are întotdeauna prioritate."
   },
   "sv": {
     "charging": "Laddar",
@@ -16962,6 +17116,17 @@
     "help_device_priority": "ordningen enheter får överskott och överlever toppfrånkoppling. Lågt nummer = får överskott först och hålls på längst; högt nummer = kopplas från först. Dra ≡ eller använd ▲▼.",
     "help_device_requires": "kedjar enheter: denna slås bara på medan den valda enheten redan kör (t.ex. en tryckstegringspump som kräver huvudpumpen).",
     "help_device_configure": "ställer in eller rättar styrenheten (brytaren) SEM använder — behövs när autodetektering valde fel eller inget hittade.",
-    "help_device_peak": "gränsen för nätimport som toppskyddet försvarar. När 15-min-snittet närmar sig kopplar SEM från enheter i prioritetsordning (högst nummer först) och återställer dem efter toppen."
+    "help_device_peak": "gränsen för nätimport som toppskyddet försvarar. När 15-min-snittet närmar sig kopplar SEM från enheter i prioritetsordning (högst nummer först) och återställer dem efter toppen.",
+    "daily_target": "Dagligt mål",
+    "min_runtime_per_day": "Min. drifttid/dag",
+    "max_runtime_per_day": "Max. drifttid/dag",
+    "energy_target_per_day": "Energimål/dag",
+    "target_deadline": "Klart senast",
+    "top_up_policy": "Påfyllnadspolicy",
+    "policy_solar_only": "Endast sol",
+    "policy_cheap_hours": "Billiga timmar",
+    "policy_always": "Alltid (nå målet)",
+    "stop_condition": "Stoppa när",
+    "help_device_target": "ger enheten ett dagligt mål: minsta drifttid (enkla laster som poolpump) och/eller energimängd (mätta laster), valfritt klart senast en tid. Påfyllnadspolicyn avgör när solen inte räcker: Endast sol använder aldrig nät; Billiga timmar fyller på i billiga fönster; Alltid tvångskör i tid. Max. drifttid är en säkerhetsgräns; Stoppa när avslutar dagen när en extern sensor (bilens SOC) når värdet. Toppskyddet har alltid företräde."
   }
 }
