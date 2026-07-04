@@ -2434,7 +2434,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     <span class="metric-val c-export">${this._fmtCurr(l,s)}</span>
                 </div>
                 <div class="metric-row net-row">
-                    <span class="metric-label"><strong>${this._t("net")}</strong></span>
+                    <span class="metric-label"><strong>${this._t(c<=0?"net_saving":"net_cost")}</strong></span>
                     <span class="metric-val" style="color:${d}">${p}</span>
                 </div>
             </div>
@@ -6160,7 +6160,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         `;return W`
             ${d}
             <div class="hp-form">
-                ${this._renderPicker("hot_water_entity","config_hw_entity",null,null,e,"config_help_hw_entity")}
+                ${this._renderPicker("hot_water_entity","config_hw_entity",["switch","input_boolean","water_heater","climate"],null,e,"config_help_hw_entity")}
                 ${this._renderPicker("hot_water_temperature_sensor","config_hw_temp_sensor","sensor","temperature",e,"config_help_hw_temp_sensor")}
                 ${this._renderPicker("hot_water_power_sensor","config_hw_power_sensor","sensor","power",e,"config_help_hw_power_sensor")}
                 ${this._renderStepper("number.sem_hot_water_solar_target","hot_water_solar_target",t,"config_help_hw_solar_target")}
@@ -6194,7 +6194,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${c}
-                        .includeDomains=${[r]}
+                        .includeDomains=${r?Array.isArray(r)?r:[r]:void 0}
                         .includeDeviceClasses=${a?[a]:void 0}
                         .allowCustomEntity=${!1}
                         @value-changed=${t=>h(t.detail?.value||"")}>
@@ -6241,7 +6241,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${c}
-                        .includeDomains=${[i]}
+                        .includeDomains=${i?Array.isArray(i)?i:[i]:void 0}
                         .includeDeviceClasses=${s?[s]:void 0}
                         .allowCustomEntity=${!1}
                         @value-changed=${t=>d(t.detail?.value||"")}>

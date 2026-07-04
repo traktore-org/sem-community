@@ -973,7 +973,8 @@ class SEMConfigCard extends SEMLitBase {
             ${statusBlock}
             <div class="hp-form">
                 ${this._renderPicker('hot_water_entity', 'config_hw_entity',
-                    null, null, opts, 'config_help_hw_entity')}
+                    ['switch', 'input_boolean', 'water_heater', 'climate'],
+                    null, opts, 'config_help_hw_entity')}
                 ${this._renderPicker('hot_water_temperature_sensor', 'config_hw_temp_sensor',
                     'sensor', 'temperature', opts, 'config_help_hw_temp_sensor')}
                 ${this._renderPicker('hot_water_power_sensor', 'config_hw_power_sensor',
@@ -1113,7 +1114,7 @@ class SEMConfigCard extends SEMLitBase {
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
-                        .includeDomains=${[domain]}
+                        .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
                         .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => onChange(e.detail?.value || '')}>
@@ -1241,7 +1242,7 @@ class SEMConfigCard extends SEMLitBase {
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
-                        .includeDomains=${[domain]}
+                        .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
                         .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => onChange(e.detail?.value || '')}>
