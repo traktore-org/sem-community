@@ -381,6 +381,31 @@ class EnergyCalculator:
         except Exception as e:
             _LOGGER.debug("Could not detect install date from statistics: %s", e)
 
+    @staticmethod
+    def _energy_state_kwh(state) -> float:
+        """Energy-counter state → kWh, honoring unit_of_measurement.
+
+        #551 — hardware lifetime counters are NOT all kWh: Fronius
+        Gen24/Verto lifetime energy sensors report **Wh**. Reading them
+        raw inflated the lifetime accumulators ×1000 (a 2-day-old install
+        showed 21,350 battery cycles and a health score pinned at the
+        70% cap). Unknown/missing units keep the previous assume-kWh
+        behavior.
+        """
+        try:
+            v = float(state.state)
+        except (ValueError, TypeError):
+            return 0.0
+        unit = str(
+            (getattr(state, "attributes", {}) or {}).get("unit_of_measurement")
+            or ""
+        ).strip().lower()
+        if unit == "wh":
+            return v / 1000.0
+        if unit == "mwh":
+            return v * 1000.0
+        return v
+
     def seed_lifetime_from_hardware(self, hass: HomeAssistant, ed_config) -> None:
         """Seed lifetime accumulators from hardware energy counters.
 
@@ -400,10 +425,7 @@ class EnergyCalculator:
                 return 0.0
             state = hass.states.get(entity_id)
             if state and state.state not in ("unknown", "unavailable", None):
-                try:
-                    return float(state.state)
-                except (ValueError, TypeError):
-                    pass
+                return self._energy_state_kwh(state)  # #551 unit-aware
             return 0.0
 
         # Read all hardware counters first
@@ -454,6 +476,18 @@ class EnergyCalculator:
                 _LOGGER.info(
                     "Lifetime re-seed needed: %s stored=%.0f hw=%.0f (%.0f%%)",
                     key, stored, hw_value, (stored / hw_value * 100) if hw_value > 0 else 0,
+                )
+                needs_seed = True
+                break
+            # #551 — DOWNWARD self-heal: installs that seeded before the
+            # unit-aware read stored Wh values as kWh (×1000). The
+            # accumulator can never legitimately dwarf its own hardware
+            # counter, so stored >> hw means a corrupted seed — re-seed
+            # from the (now unit-corrected) counter.
+            if hw_value > 10 and stored > hw_value * 2:
+                _LOGGER.info(
+                    "Lifetime re-seed (downward, #551 unit fix): %s "
+                    "stored=%.0f hw=%.0f", key, stored, hw_value,
                 )
                 needs_seed = True
                 break
@@ -694,9 +728,8 @@ class EnergyCalculator:
         if not state or state.state in ("unknown", "unavailable", None):
             return
 
-        try:
-            hardware_kwh = float(state.state)
-        except (ValueError, TypeError):
+        hardware_kwh = self._energy_state_kwh(state)  # #551 unit-aware
+        if hardware_kwh <= 0:
             return
 
         calculated_kwh = self._get_daily("ev_daily_sun", today)
