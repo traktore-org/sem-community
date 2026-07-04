@@ -1727,13 +1727,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "heat_pump_relay1_entity",
                     description={"suggested_value": _opt("heat_pump_relay1_entity")},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="switch")
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
                 ),
                 vol.Optional(
                     "heat_pump_relay2_entity",
                     description={"suggested_value": _opt("heat_pump_relay2_entity")},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="switch")
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
                 ),
                 vol.Optional(
                     "heat_pump_invert_sg_ready",

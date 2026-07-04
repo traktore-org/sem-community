@@ -881,9 +881,9 @@ class SEMConfigCard extends SEMLitBase {
         return html`
             ${statusBlock}
             <div class="hp-form">
-                ${this._renderPicker('heat_pump_relay1_entity', 'config_hp_relay1', 'switch',
+                ${this._renderPicker('heat_pump_relay1_entity', 'config_hp_relay1', ['switch', 'input_boolean'],
                     null, opts, 'config_help_hp_relay')}
-                ${this._renderPicker('heat_pump_relay2_entity', 'config_hp_relay2', 'switch',
+                ${this._renderPicker('heat_pump_relay2_entity', 'config_hp_relay2', ['switch', 'input_boolean'],
                     null, opts, 'config_help_hp_relay')}
                 ${/* #550: relay contact polarity — read at HeatPumpController
                       construction (structural). Was only on the native flow. */ ''}
