@@ -2722,6 +2722,27 @@ async def _async_register_services(
                     translation_key="device_not_found",
                     translation_placeholders={"device_id": device_id},
                 )
+        elif prop in (
+            "daily_min_runtime_min", "daily_max_runtime_min",
+            "daily_target_energy_kwh", "target_deadline", "top_up_policy",
+            "stop_entity", "stop_at",
+        ):
+            # (#559) goal engine properties — persisted + applied live
+            registry = getattr(coordinator, "_device_registry", None)
+            if not registry:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_registry_not_initialized",
+                )
+            if prop == "top_up_policy" and str(value) not in (
+                "solar_only", "cheap_hours", "always"
+            ):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_device_property",
+                    translation_placeholders={"property": f"{prop}={value}"},
+                )
+            await registry.async_update_device_goal(device_id, prop, value)
         else:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -2738,7 +2759,13 @@ async def _async_register_services(
             async_update_device_config,
             schema=vol.Schema({
                 vol.Required("device_id"): cv.string,
-                vol.Required("property"): vol.In(["controllable", "critical", "control_mode", "depends_on"]),
+                vol.Required("property"): vol.In([
+                    "controllable", "critical", "control_mode", "depends_on",
+                    # (#559) goal engine properties
+                    "daily_min_runtime_min", "daily_max_runtime_min",
+                    "daily_target_energy_kwh", "target_deadline",
+                    "top_up_policy", "stop_entity", "stop_at",
+                ]),
                 vol.Required("value"): cv.string,
             }),
         )
@@ -3100,9 +3127,22 @@ async def _async_register_phase_services(
             "control_mode": call.data.get("control_mode", "surplus"),
             "depends_on": call.data.get("depends_on") or [],
         }
+        goal_fields = {
+            k: call.data[k]
+            for k in (
+                "daily_min_runtime_min", "daily_max_runtime_min",
+                "daily_target_energy_kwh", "target_deadline",
+                "top_up_policy", "stop_entity", "stop_at",
+            )
+            if k in call.data
+        }
         registry = getattr(coordinator, "_device_registry", None)
         if registry:
+            if goal_fields:
+                registry.seed_goals(spec["device_id"], goal_fields)
             summary = await registry.async_register_service_device(spec)
+            if goal_fields:
+                summary["goals"] = goal_fields
         else:
             # Registry not up (very early call) — register unpersisted so
             # the call still works; the user can re-run to persist.
@@ -3146,6 +3186,22 @@ async def _async_register_phase_services(
                 ["off", "peak_only", "surplus"]
             ),
             vol.Optional("depends_on"): vol.All(cv.ensure_list, [cv.string]),
+            # (#559) goal engine — daily targets with deadline + policy
+            vol.Optional("daily_min_runtime_min"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=1440)
+            ),
+            vol.Optional("daily_max_runtime_min"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=1440)
+            ),
+            vol.Optional("daily_target_energy_kwh"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=200)
+            ),
+            vol.Optional("target_deadline"): cv.string,
+            vol.Optional("top_up_policy"): vol.In(
+                ["solar_only", "cheap_hours", "always"]
+            ),
+            vol.Optional("stop_entity"): cv.string,
+            vol.Optional("stop_at"): vol.Coerce(float),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

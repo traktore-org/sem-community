@@ -234,6 +234,66 @@ register_surplus_device:
             - surplus
             - peak_only
             - "off"
+    daily_min_runtime_min:
+      name: Min Runtime per Day
+      description: Daily runtime target in minutes (e.g. 240 = pool pump runs at least 4h/day). SEM prefers solar surplus; the top-up policy decides what happens if the sun alone is not enough.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+    daily_max_runtime_min:
+      name: Max Runtime per Day
+      description: Safety cap in minutes — the device is stopped for the rest of the day once reached.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+    daily_target_energy_kwh:
+      name: Energy Target per Day
+      description: Daily energy target in kWh for metered loads — the device stops once it consumed this much today.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 200
+          step: 0.5
+          unit_of_measurement: kWh
+    target_deadline:
+      name: Finish By
+      description: Time of day (HH:MM) by which the daily target should be met. Default is end of day.
+      required: false
+      selector:
+        time:
+    top_up_policy:
+      name: Top-up Policy
+      description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target), cheap_hours (complete during cheap tariff windows), always (force-run in time to meet the deadline)."
+      required: false
+      default: solar_only
+      selector:
+        select:
+          options:
+            - solar_only
+            - cheap_hours
+            - always
+    stop_entity:
+      name: Stop Condition Sensor
+      description: Optional sensor that ends the device's day early (e.g. the car's SOC sensor).
+      required: false
+      selector:
+        entity:
+          domain: sensor
+    stop_at:
+      name: Stop Condition Value
+      description: The device stops once the stop sensor reaches this value (e.g. 80 for 80% SOC).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100000
 
 unregister_surplus_device:
   name: Unregister Surplus Device

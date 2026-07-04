@@ -57,6 +57,7 @@ FAILSAFE_TIMEOUT_S = 600
 from ..consts.core import KEBA_IDLE_GUARD_KWH
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -164,6 +165,25 @@ class ControllableDevice(ABC):
         self._daily_runtime_meter_day: Optional[date] = None
         self._offpeak_forced: bool = False
 
+        # (#559) Goal engine — daily targets with deadline + top-up policy.
+        # All opt-in (0/empty = disabled); only meaningful in SURPLUS mode.
+        self.daily_max_runtime_sec: int = 0            # safety cap, 0 = none
+        self.daily_target_energy_kwh: float = 0.0      # metered loads, 0 = none
+        self._daily_energy_accumulated_kwh: float = 0.0
+        self.target_deadline: str = ""                 # "HH:MM" local, "" = end of day
+        self.top_up_policy: str = "solar_only"         # solar_only|cheap_hours|always
+        self._solar_only_miss_logged: bool = False
+        # (#559 Phase 3) external completion condition (e.g. car SOC sensor)
+        self.stop_entity: str = ""
+        self.stop_at: float = 0.0
+        # Force bookkeeping: a force expires with its reason — cheap-hours
+        # forces at day rollover (the deficit was YESTERDAY's), deadline
+        # forces when the pressure is gone. Without this an always-policy
+        # device force-started at 21:00 would re-fill the NEW day's target
+        # from grid all night (review HIGH).
+        self._deadline_forced: bool = False
+        self._offpeak_forced_date: Optional[date] = None
+
         # Appliance dependencies (#122): device only activates when dependencies are met
         self.depends_on: List[str] = []  # device_ids that must be active
         self.dependency_mode: str = "must_active"  # must_active | must_inactive
@@ -268,6 +288,8 @@ class ControllableDevice(ABC):
                 self.name, self._daily_runtime_accumulated_sec,
             )
             self._daily_runtime_accumulated_sec = 0.0
+            self._daily_energy_accumulated_kwh = 0.0
+            self._solar_only_miss_logged = False
             self._daily_runtime_last_check = now
         self._daily_runtime_meter_day = meter_day
 
@@ -275,6 +297,13 @@ class ControllableDevice(ABC):
             elapsed = (now - self._daily_runtime_last_check).total_seconds()
             if 0 < elapsed <= 120:  # ignore jumps > 120s (restart recovery)
                 self._daily_runtime_accumulated_sec += elapsed
+                # (#559) energy progress for metered targets — integrates the
+                # live draw (power sensor when available, else rated power)
+                try:
+                    watts = self.get_current_consumption()
+                except Exception:  # noqa: BLE001
+                    watts = getattr(self, "rated_power", 0)
+                self._daily_energy_accumulated_kwh += watts * elapsed / 3_600_000
 
         self._daily_runtime_last_check = now
 
@@ -293,6 +322,81 @@ class ControllableDevice(ABC):
         if self.is_active:
             return False
         return self.remaining_daily_runtime_sec > 0
+
+    # --- (#559) goal engine ---
+
+    @property
+    def daily_max_runtime_reached(self) -> bool:
+        """Safety cap: device consumed its daily runtime allowance."""
+        return (
+            self.daily_max_runtime_sec > 0
+            and self._daily_runtime_accumulated_sec >= self.daily_max_runtime_sec
+        )
+
+    @property
+    def daily_targets_met(self) -> bool:
+        """All configured MINIMUM targets are achieved (runtime and/or
+        energy). No target configured = False — the max-runtime cap and
+        the stop condition are independent gates, not targets."""
+        runtime_open = (
+            self.daily_min_runtime_sec > 0
+            and self._daily_runtime_accumulated_sec < self.daily_min_runtime_sec
+        )
+        energy_open = (
+            self.daily_target_energy_kwh > 0
+            and self._daily_energy_accumulated_kwh < self.daily_target_energy_kwh
+        )
+        has_target = self.daily_min_runtime_sec > 0 or self.daily_target_energy_kwh > 0
+        return has_target and not runtime_open and not energy_open
+
+    @property
+    def stop_condition_met(self) -> bool:
+        """(#559 Phase 3) external completion condition — e.g. the car's SOC
+        sensor reached the target %. Unavailable sensor = condition NOT met
+        (the surplus/target bounds still limit the device)."""
+        if not self.stop_entity or self.stop_at <= 0 or not self.hass:
+            return False
+        state = self.hass.states.get(self.stop_entity)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return False
+        try:
+            return float(state.state) >= self.stop_at
+        except (ValueError, TypeError):
+            return False
+
+    def _seconds_until_deadline(self, now: datetime) -> float:
+        """Seconds until target_deadline today ("" = 23:59). Past = 0."""
+        try:
+            hh, mm = (self.target_deadline or "23:59").split(":")
+            deadline = now.replace(hour=int(hh), minute=int(mm),
+                                   second=0, microsecond=0)
+        except (ValueError, AttributeError):
+            deadline = now.replace(hour=23, minute=59, second=0, microsecond=0)
+        return max(0.0, (deadline - now).total_seconds())
+
+    @property
+    def _goal_now(self) -> datetime:
+        """Local wall-clock per HA's configured timezone — the deadline is
+        the user's 21:00, not the container's (review MED)."""
+        return dt_util.now().replace(tzinfo=None)
+
+    @property
+    def deadline_pressure(self) -> bool:
+        """True when the remaining runtime target no longer fits before the
+        deadline — the device must run NOW to meet it. Runtime-based; an
+        energy target converts via rated power."""
+        remaining_sec = 0.0
+        if self.daily_min_runtime_sec > 0:
+            remaining_sec = self.remaining_daily_runtime_sec
+        if self.daily_target_energy_kwh > 0:
+            rated = max(1, getattr(self, "rated_power", 1000))
+            energy_open_kwh = max(
+                0.0, self.daily_target_energy_kwh - self._daily_energy_accumulated_kwh
+            )
+            remaining_sec = max(remaining_sec, energy_open_kwh * 3_600_000 / rated)
+        if remaining_sec <= 0:
+            return False
+        return remaining_sec >= self._seconds_until_deadline(self._goal_now)
 
     @property
     def daily_energy_budget_kwh(self) -> float:
@@ -433,6 +537,11 @@ class ControllableDevice(ABC):
             d.update({
                 "daily_min_runtime_sec": self.daily_min_runtime_sec,
                 "daily_runtime_accumulated_sec": round(self._daily_runtime_accumulated_sec, 1),
+                "daily_target_energy_kwh": self.daily_target_energy_kwh,
+                "daily_energy_accumulated_kwh": round(self._daily_energy_accumulated_kwh, 3),
+                "daily_max_runtime_sec": self.daily_max_runtime_sec,
+                "top_up_policy": self.top_up_policy,
+                "target_deadline": self.target_deadline,
                 "remaining_daily_runtime_sec": round(self.remaining_daily_runtime_sec, 1),
                 "daily_energy_budget_kwh": round(self.daily_energy_budget_kwh, 3),
                 "offpeak_forced": self._offpeak_forced,
