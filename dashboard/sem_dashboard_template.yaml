@@ -120,15 +120,23 @@ views:
           - type: custom:sem-tab-header
             tab: energy
           # ── Sankey Energy Flow ──
-          - type: custom:sankey-chart
-            show_names: true
-            show_icons: true
-            show_states: true
-            wide: true
-            height: 280
-            unit_prefix: k
-            round: 2
-            sections:
+          # #555 — wrapped so a missing sankey-chart HACS install shows a
+          # friendly "install via HACS" notice instead of HA's cryptic
+          # collapsed "Configuration error" bar. Renders sankey unchanged
+          # when the card is present.
+          - type: custom:sem-require
+            requires: sankey-chart
+            name: Sankey Chart
+            card:
+              type: custom:sankey-chart
+              show_names: true
+              show_icons: true
+              show_states: true
+              wide: true
+              height: 280
+              unit_prefix: k
+              round: 2
+              sections:
               - entities:
                   - entity_id: sensor.sem_daily_solar_energy
                     color: "#ff9800"
@@ -210,7 +218,7 @@ views:
                   - entity_id: sensor.sem_daily_grid_export_energy
                     color: "#8353d1"
                     name: Export
-            card_mod:
+              card_mod:
               style: *glass_card
 
           # ── Self-Consumption & Autarky Gauges ──
