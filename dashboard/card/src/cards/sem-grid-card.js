@@ -315,7 +315,7 @@ class SEMGridCard extends SEMLitBase {
                             <span class="metric-val c-export">${this._fmt(dailyExport, 2)} kWh</span>
                         </div>
                         <div class="metric-row net-row">
-                            <span class="metric-label"><strong>${this._t('net')}</strong></span>
+                            <span class="metric-label"><strong>${this._t(netToday <= 0 ? 'net_export' : 'net_import')}</strong></span>
                             <span class="metric-val" style="color:${netColor}">
                                 ${this._fmt(Math.abs(netToday), 2)} kWh
                             </span>

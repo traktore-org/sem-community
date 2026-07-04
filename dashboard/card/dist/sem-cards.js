@@ -2010,7 +2010,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                             <span class="metric-val c-export">${this._fmt(_,2)} kWh</span>
                         </div>
                         <div class="metric-row net-row">
-                            <span class="metric-label"><strong>${this._t("net")}</strong></span>
+                            <span class="metric-label"><strong>${this._t(g<=0?"net_export":"net_import")}</strong></span>
                             <span class="metric-val" style="color:${u}">
                                 ${this._fmt(Math.abs(g),2)} kWh
                             </span>
@@ -6108,8 +6108,8 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         `;return W`
             ${s}
             <div class="hp-form">
-                ${this._renderPicker("heat_pump_relay1_entity","config_hp_relay1","switch",null,i,"config_help_hp_relay")}
-                ${this._renderPicker("heat_pump_relay2_entity","config_hp_relay2","switch",null,i,"config_help_hp_relay")}
+                ${this._renderPicker("heat_pump_relay1_entity","config_hp_relay1",["switch","input_boolean"],null,i,"config_help_hp_relay")}
+                ${this._renderPicker("heat_pump_relay2_entity","config_hp_relay2",["switch","input_boolean"],null,i,"config_help_hp_relay")}
                 ${""}
                 ${this._renderOptionToggle("heat_pump_invert_sg_ready","config_hp_invert_sg_ready",i,"config_help_hp_invert_sg_ready",!1)}
                 ${this._renderPicker("heat_pump_climate_entity","config_hp_climate","climate",null,i,"config_help_hp_climate")}
