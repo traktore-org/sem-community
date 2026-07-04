@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.15] — 04.07.2026
+
+> **Pre-release.** Deye grid direction out-of-the-box.
+
+### ⚡ Grid — Deye brand sign seed (#554)
+- 🎯 **Deye installs (hass-deyecloud) get the correct grid import/export
+  direction from the first cycle** — the platform is now in SEM's brand sign
+  map (`totalgridpower` reports +=import, verified from reporter diagnostics),
+  so no Fix-grid-sign button or detection wait is needed. (thanks @hrdilshan)
+
 # [1.7.4-beta.14] — 04.07.2026
 
 > **Pre-release.** Feedback-round fixes: Wh counters + consistent Net display.
