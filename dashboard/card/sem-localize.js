@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-03T14:33:54.100609+00:00
+// Generated: 2026-07-04T09:54:54.366103+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1120,7 +1120,9 @@
       "config_hp_invert_sg_ready": "Invert SG-Ready contacts",
       "config_help_hp_invert_sg_ready": "Enable for normally-closed (NC) relay wiring — inverts the SG-Ready contact logic.",
       "config_hp_temperature_sensor": "Heat pump temperature sensor",
-      "config_help_hp_temperature_sensor": "The sensor SEM reads for the heat pump / buffer temperature."
+      "config_help_hp_temperature_sensor": "The sensor SEM reads for the heat pump / buffer temperature.",
+      "require_missing_title": "{name} card not installed",
+      "require_missing_body": "For the full dashboard, install \"{name}\" via HACS → Frontend, then hard-refresh this page (Ctrl+Shift+R)."
     },
     "de": {
       "charging": "Laden",
@@ -2237,7 +2239,9 @@
       "config_hp_invert_sg_ready": "SG-Ready-Kontakte invertieren",
       "config_help_hp_invert_sg_ready": "Für Schließer-Verkabelung mit Öffner (NC) aktivieren — invertiert die SG-Ready-Kontaktlogik.",
       "config_hp_temperature_sensor": "Wärmepumpen-Temperatursensor",
-      "config_help_hp_temperature_sensor": "Der Sensor, den SEM für die Wärmepumpen-/Puffertemperatur liest."
+      "config_help_hp_temperature_sensor": "Der Sensor, den SEM für die Wärmepumpen-/Puffertemperatur liest.",
+      "require_missing_title": "{name}-Karte nicht installiert",
+      "require_missing_body": "Für das vollständige Dashboard installiere „{name}\" über HACS → Frontend und lade die Seite dann hart neu (Strg+Umschalt+R)."
     },
     "fr": {
       "charging": "En charge",
@@ -3354,7 +3358,9 @@
       "config_hp_invert_sg_ready": "Inverser les contacts SG-Ready",
       "config_help_hp_invert_sg_ready": "Activez pour un câblage de relais normalement fermé (NF) — inverse la logique des contacts SG-Ready.",
       "config_hp_temperature_sensor": "Capteur de température PAC",
-      "config_help_hp_temperature_sensor": "Le capteur que SEM lit pour la température de la PAC / du ballon tampon."
+      "config_help_hp_temperature_sensor": "Le capteur que SEM lit pour la température de la PAC / du ballon tampon.",
+      "require_missing_title": "Carte {name} non installée",
+      "require_missing_body": "Pour le tableau de bord complet, installez « {name} » via HACS → Frontend, puis actualisez complètement la page (Ctrl+Maj+R)."
     },
     "es": {
       "charging": "Cargando",
@@ -4471,7 +4477,9 @@
       "config_hp_invert_sg_ready": "Invertir contactos SG-Ready",
       "config_help_hp_invert_sg_ready": "Actívalo para cableado de relé normalmente cerrado (NC) — invierte la lógica de contactos SG-Ready.",
       "config_hp_temperature_sensor": "Sensor de temperatura bomba de calor",
-      "config_help_hp_temperature_sensor": "El sensor que SEM lee para la temperatura de la bomba de calor / acumulador."
+      "config_help_hp_temperature_sensor": "El sensor que SEM lee para la temperatura de la bomba de calor / acumulador.",
+      "require_missing_title": "Tarjeta {name} no instalada",
+      "require_missing_body": "Para el panel completo, instala «{name}» desde HACS → Frontend y recarga la página por completo (Ctrl+Mayús+R)."
     },
     "it": {
       "charging": "In carica",
@@ -5588,7 +5596,9 @@
       "config_hp_invert_sg_ready": "Inverti contatti SG-Ready",
       "config_help_hp_invert_sg_ready": "Attiva per cablaggio relè normalmente chiuso (NC) — inverte la logica dei contatti SG-Ready.",
       "config_hp_temperature_sensor": "Sensore temperatura pompa di calore",
-      "config_help_hp_temperature_sensor": "Il sensore che SEM legge per la temperatura della pompa di calore / accumulo."
+      "config_help_hp_temperature_sensor": "Il sensore che SEM legge per la temperatura della pompa di calore / accumulo.",
+      "require_missing_title": "Scheda {name} non installata",
+      "require_missing_body": "Per la dashboard completa, installa \"{name}\" da HACS → Frontend, poi ricarica completamente la pagina (Ctrl+Maiusc+R)."
     },
     "nl": {
       "charging": "Laden",
@@ -6705,7 +6715,9 @@
       "config_hp_invert_sg_ready": "SG-Ready-contacten omkeren",
       "config_help_hp_invert_sg_ready": "Inschakelen bij normaal-gesloten (NC) relaisbedrading — keert de SG-Ready-contactlogica om.",
       "config_hp_temperature_sensor": "Warmtepomp-temperatuursensor",
-      "config_help_hp_temperature_sensor": "De sensor die SEM leest voor de warmtepomp-/buffertemperatuur."
+      "config_help_hp_temperature_sensor": "De sensor die SEM leest voor de warmtepomp-/buffertemperatuur.",
+      "require_missing_title": "{name}-kaart niet geïnstalleerd",
+      "require_missing_body": "Installeer voor het volledige dashboard \"{name}\" via HACS → Frontend en ververs daarna de pagina hard (Ctrl+Shift+R)."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7822,7 +7834,9 @@
       "config_hp_invert_sg_ready": "Invertovat kontakty SG-Ready",
       "config_help_hp_invert_sg_ready": "Zapněte pro zapojení relé v klidu sepnuté (NC) — invertuje logiku kontaktů SG-Ready.",
       "config_hp_temperature_sensor": "Teplotní senzor tepelného čerpadla",
-      "config_help_hp_temperature_sensor": "Senzor, který SEM čte pro teplotu tepelného čerpadla / akumulační nádrže."
+      "config_help_hp_temperature_sensor": "Senzor, který SEM čte pro teplotu tepelného čerpadla / akumulační nádrže.",
+      "require_missing_title": "Karta {name} není nainstalována",
+      "require_missing_body": "Pro úplný dashboard nainstalujte „{name}\" přes HACS → Frontend a poté stránku tvrdě obnovte (Ctrl+Shift+R)."
     },
     "da": {
       "charging": "Oplader",
@@ -8939,7 +8953,9 @@
       "config_hp_invert_sg_ready": "Inverter SG-Ready-kontakter",
       "config_help_hp_invert_sg_ready": "Aktivér ved normalt lukket (NC) relæledning — inverterer SG-Ready-kontaktlogikken.",
       "config_hp_temperature_sensor": "Varmepumpe-temperatursensor",
-      "config_help_hp_temperature_sensor": "Sensoren SEM læser for varmepumpe-/buffertemperaturen."
+      "config_help_hp_temperature_sensor": "Sensoren SEM læser for varmepumpe-/buffertemperaturen.",
+      "require_missing_title": "{name}-kort ikke installeret",
+      "require_missing_body": "For det fulde dashboard skal du installere \"{name}\" via HACS → Frontend og derefter genindlæse siden hårdt (Ctrl+Shift+R)."
     },
     "fi": {
       "charging": "Lataus",
@@ -10056,7 +10072,9 @@
       "config_hp_invert_sg_ready": "Käännä SG-Ready-koskettimet",
       "config_help_hp_invert_sg_ready": "Ota käyttöön normaalisti suljetulle (NC) relekytkennälle — kääntää SG-Ready-koskettimien logiikan.",
       "config_hp_temperature_sensor": "Lämpöpumpun lämpötila-anturi",
-      "config_help_hp_temperature_sensor": "Anturi, jota SEM lukee lämpöpumpun / puskurin lämpötilaan."
+      "config_help_hp_temperature_sensor": "Anturi, jota SEM lukee lämpöpumpun / puskurin lämpötilaan.",
+      "require_missing_title": "{name}-korttia ei ole asennettu",
+      "require_missing_body": "Asenna koko koontinäyttöä varten \"{name}\" HACS → Frontend -kautta ja lataa sivu sitten uudelleen (Ctrl+Shift+R)."
     },
     "hu": {
       "charging": "Töltés",
@@ -11173,7 +11191,9 @@
       "config_hp_invert_sg_ready": "SG-Ready érintkezők invertálása",
       "config_help_hp_invert_sg_ready": "Kapcsold be alaphelyzetben zárt (NC) relébekötéshez — invertálja az SG-Ready érintkezők logikáját.",
       "config_hp_temperature_sensor": "Hőszivattyú hőmérséklet-érzékelő",
-      "config_help_hp_temperature_sensor": "Az érzékelő, amelyet a SEM a hőszivattyú / puffertartály hőmérsékletéhez olvas."
+      "config_help_hp_temperature_sensor": "Az érzékelő, amelyet a SEM a hőszivattyú / puffertartály hőmérsékletéhez olvas.",
+      "require_missing_title": "A(z) {name} kártya nincs telepítve",
+      "require_missing_body": "A teljes irányítópulthoz telepítsd a(z) „{name}\" kártyát a HACS → Frontend menüből, majd frissítsd keményen az oldalt (Ctrl+Shift+R)."
     },
     "no": {
       "charging": "Lader",
@@ -12290,7 +12310,9 @@
       "config_hp_invert_sg_ready": "Inverter SG-Ready-kontakter",
       "config_help_hp_invert_sg_ready": "Aktiver for normalt lukket (NC) relékabling — inverterer SG-Ready-kontaktlogikken.",
       "config_hp_temperature_sensor": "Varmepumpe-temperatursensor",
-      "config_help_hp_temperature_sensor": "Sensoren SEM leser for varmepumpe-/buffertemperaturen."
+      "config_help_hp_temperature_sensor": "Sensoren SEM leser for varmepumpe-/buffertemperaturen.",
+      "require_missing_title": "{name}-kort ikke installert",
+      "require_missing_body": "For det fulle dashbordet, installer «{name}» via HACS → Frontend, og last siden helt på nytt (Ctrl+Shift+R)."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13407,7 +13429,9 @@
       "config_hp_invert_sg_ready": "Odwróć styki SG-Ready",
       "config_help_hp_invert_sg_ready": "Włącz dla okablowania przekaźnika normalnie zamkniętego (NC) — odwraca logikę styków SG-Ready.",
       "config_hp_temperature_sensor": "Czujnik temperatury pompy ciepła",
-      "config_help_hp_temperature_sensor": "Czujnik, który SEM odczytuje dla temperatury pompy ciepła / bufora."
+      "config_help_hp_temperature_sensor": "Czujnik, który SEM odczytuje dla temperatury pompy ciepła / bufora.",
+      "require_missing_title": "Karta {name} nie jest zainstalowana",
+      "require_missing_body": "Aby uzyskać pełny pulpit, zainstaluj „{name}\" przez HACS → Frontend, a następnie twardo odśwież stronę (Ctrl+Shift+R)."
     },
     "pt": {
       "charging": "A carregar",
@@ -14524,7 +14548,9 @@
       "config_hp_invert_sg_ready": "Inverter contactos SG-Ready",
       "config_help_hp_invert_sg_ready": "Ative para cablagem de relé normalmente fechado (NF) — inverte a lógica dos contactos SG-Ready.",
       "config_hp_temperature_sensor": "Sensor de temperatura da bomba de calor",
-      "config_help_hp_temperature_sensor": "O sensor que o SEM lê para a temperatura da bomba de calor / acumulador."
+      "config_help_hp_temperature_sensor": "O sensor que o SEM lê para a temperatura da bomba de calor / acumulador.",
+      "require_missing_title": "Cartão {name} não instalado",
+      "require_missing_body": "Para o painel completo, instale \"{name}\" via HACS → Frontend e depois recarregue totalmente a página (Ctrl+Shift+R)."
     },
     "ro": {
       "charging": "Încărcare",
@@ -15641,7 +15667,9 @@
       "config_hp_invert_sg_ready": "Inversează contactele SG-Ready",
       "config_help_hp_invert_sg_ready": "Activează pentru cablare releu normal închis (NC) — inversează logica contactelor SG-Ready.",
       "config_hp_temperature_sensor": "Senzor de temperatură pompă de căldură",
-      "config_help_hp_temperature_sensor": "Senzorul pe care SEM îl citește pentru temperatura pompei de căldură / rezervorului tampon."
+      "config_help_hp_temperature_sensor": "Senzorul pe care SEM îl citește pentru temperatura pompei de căldură / rezervorului tampon.",
+      "require_missing_title": "Cardul {name} nu este instalat",
+      "require_missing_body": "Pentru tabloul complet, instalează „{name}\" prin HACS → Frontend, apoi reîncarcă complet pagina (Ctrl+Shift+R)."
     },
     "sv": {
       "charging": "Laddar",
@@ -16758,7 +16786,9 @@
       "config_hp_invert_sg_ready": "Invertera SG-Ready-kontakter",
       "config_help_hp_invert_sg_ready": "Aktivera för normalt sluten (NC) relädragning — inverterar SG-Ready-kontaktlogiken.",
       "config_hp_temperature_sensor": "Värmepump-temperatursensor",
-      "config_help_hp_temperature_sensor": "Sensorn SEM läser för värmepumpens/bufferttankens temperatur."
+      "config_help_hp_temperature_sensor": "Sensorn SEM läser för värmepumpens/bufferttankens temperatur.",
+      "require_missing_title": "{name}-kortet är inte installerat",
+      "require_missing_body": "För hela panelen, installera \"{name}\" via HACS → Frontend och hårduppdatera sedan sidan (Ctrl+Skift+R)."
     }
   };
 

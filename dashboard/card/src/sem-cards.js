@@ -7,6 +7,7 @@
 
 // Display cards
 import './cards/sem-title-card.js';
+import './cards/sem-require-card.js';
 import './cards/sem-tab-header.js';
 import './cards/sem-weather-card.js';
 import './cards/sem-period-selector-card.js';
