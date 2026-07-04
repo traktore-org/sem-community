@@ -932,6 +932,9 @@
       "solar_active": {
         "name": "Solar Active"
       },
+      "surplus_available": {
+        "name": "Surplus Available"
+      },
       "forecast_available": {
         "name": "Forecast Available"
       },
@@ -1061,6 +1064,9 @@
       },
       "initial_current": {
         "name": "Vehicle Start Amps"
+      },
+      "surplus_event_threshold": {
+        "name": "Surplus Event Threshold"
       }
     },
     "select": {

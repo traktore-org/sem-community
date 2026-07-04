@@ -143,6 +143,17 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.SLIDER,
     ),
+    # (#559 Phase 0) threshold for the surplus-availability signal
+    # (binary_sensor.sem_surplus_available + the surplus event) that user
+    # automations of self-managed (peak_only) devices subscribe to.
+    NumberEntityDescription(
+        key="surplus_event_threshold",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=100,
+        native_max_value=20000,
+        native_step=100,
+        mode=NumberMode.SLIDER,
+    ),
     # EV Charging Parameters — global night_initial_current + minimum_current
     # removed as per-charger duplicates (#255). ev_stall_cooldown removed
     # (dead: the entity value was never read; the stall detector uses a
@@ -660,6 +671,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "ev_target_soc_max": 100,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
             "battery_assist_min_surplus": DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
+            "surplus_event_threshold": 1500,
             "regulation_offset": DEFAULT_REGULATION_OFFSET,
             "demand_charge_rate": DEFAULT_DEMAND_CHARGE_RATE,
             "cheap_price_threshold": DEFAULT_CHEAP_PRICE_THRESHOLD,

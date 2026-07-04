@@ -932,6 +932,9 @@
       "solar_active": {
         "name": "Zon Actief"
       },
+      "surplus_available": {
+        "name": "Overschot beschikbaar"
+      },
       "forecast_available": {
         "name": "Voorspelling Beschikbaar"
       },
@@ -1061,6 +1064,9 @@
       },
       "initial_current": {
         "name": "Voertuig Startstroom"
+      },
+      "surplus_event_threshold": {
+        "name": "Overschot-event drempel"
       }
     },
     "select": {

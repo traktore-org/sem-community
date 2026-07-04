@@ -172,7 +172,7 @@ remove_device_control_mapping:
 
 register_surplus_device:
   name: Register Surplus Device
-  description: Register a device (switch, relay, smart plug) for solar surplus control. The device will be activated when surplus power is available, based on its priority.
+  description: Register a device (switch, relay, smart plug) for solar surplus control. One call is enough — the registration is persisted across restarts and the device defaults to surplus mode (SEM switches it on when surplus power is available, based on its priority). Returns a summary of the registered device.
   fields:
     device_id:
       name: Device ID
@@ -186,7 +186,9 @@ register_surplus_device:
       required: true
       selector:
         entity:
-          domain: switch
+          domain:
+            - switch
+            - input_boolean
     name:
       name: Display Name
       description: Friendly name for the device
@@ -221,6 +223,28 @@ register_surplus_device:
         entity:
           domain: sensor
           device_class: power
+    control_mode:
+      name: Control Mode
+      description: "How SEM controls the device: surplus (SEM switches it on solar surplus — the default), peak_only (your own automations run it, SEM only sheds it to protect the grid peak), off (monitor only)."
+      required: false
+      default: surplus
+      selector:
+        select:
+          options:
+            - surplus
+            - peak_only
+            - "off"
+
+unregister_surplus_device:
+  name: Unregister Surplus Device
+  description: Remove a device previously registered with Register Surplus Device (also removes the persisted registration).
+  fields:
+    device_id:
+      name: Device ID
+      description: The device identifier used at registration
+      required: true
+      selector:
+        text:
 
 schedule_appliance:
   name: Schedule Appliance

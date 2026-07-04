@@ -930,6 +930,9 @@
       "solar_active": {
         "name": "Solaire Actif"
       },
+      "surplus_available": {
+        "name": "Surplus disponible"
+      },
       "forecast_available": {
         "name": "Prévision Disponible"
       },
@@ -1059,6 +1062,9 @@
       },
       "initial_current": {
         "name": "Courant de démarrage VE"
+      },
+      "surplus_event_threshold": {
+        "name": "Seuil d'événement de surplus"
       }
     },
     "select": {

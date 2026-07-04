@@ -14,6 +14,7 @@ This is a slim orchestrator that delegates to specialized modules:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 from typing import Any, Dict, Optional
 
@@ -45,6 +46,7 @@ from .types import (
     UtilitySignalSensorData, SessionData, BatterySessionData,
 )
 from .health_check import HealthCheck
+from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
 from .flow_calculator import FlowCalculator
@@ -265,6 +267,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Phase 0: Surplus controller (always-on) & forecast reader
         regulation_offset = config.get("regulation_offset", 50)
         self._surplus_controller = SurplusController(hass, regulation_offset=regulation_offset)
+        # (#559 Phase 0) debounced surplus availability signal
+        self._surplus_availability = SurplusAvailability()
         self._surplus_controller.max_export_w = config.get("max_export_power", 0)  # 0 = no limit
         self._forecast_reader = ForecastReader(
             hass,
@@ -2996,6 +3000,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             surplus_data.surplus_unallocated_w = allocation.unallocated_w
             surplus_data.surplus_active_devices = allocation.active_devices
             surplus_data.surplus_total_devices = allocation.total_devices
+
+            # (#559 Phase 0) debounced surplus availability for user
+            # automations (peak_only devices are self-managed — this is
+            # their interface to the surplus). Event fires on transitions
+            # only, so flapping clouds can't storm the automation bus.
+            threshold_w = float(self.config.get("surplus_event_threshold", 1500))
+            transition = self._surplus_availability.update(
+                allocation.unallocated_w, threshold_w, time.monotonic()
+            )
+            surplus_data.surplus_available = self._surplus_availability.available
+            if transition:
+                self.hass.bus.async_fire(
+                    f"{DOMAIN}_surplus",
+                    {
+                        "available": transition.available,
+                        "surplus_w": round(transition.surplus_w),
+                        "unallocated_w": round(allocation.unallocated_w),
+                        "threshold_w": round(transition.threshold_w),
+                    },
+                )
+                _LOGGER.info(
+                    "Surplus %s (unallocated %.0fW vs threshold %.0fW) — "
+                    "event fired",
+                    "available" if transition.available else "gone",
+                    allocation.unallocated_w, threshold_w,
+                )
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Surplus controller update failed: %s", e)
 

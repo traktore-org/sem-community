@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-04T20:26:51.002726+00:00
+// Generated: 2026-07-04T21:14:51.477578+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1127,7 +1127,14 @@
       "require_missing_title": "{name} card not installed",
       "require_missing_body": "For the full dashboard, install \"{name}\" via HACS → Frontend, then hard-refresh this page (Ctrl+Shift+R).",
       "net_saving": "Net saving",
-      "net_cost": "Net cost"
+      "net_cost": "Net cost",
+      "help": "Help",
+      "priority": "Priority",
+      "help_device_mode": "who controls this device. Off: SEM only monitors and never switches it. Peak Only: your own automations run it — SEM only switches it off to protect the grid peak and restores it afterwards (catch the surplus in your automation via the \"Surplus Available\" sensor or the surplus event). Surplus: SEM switches it on when the solar surplus covers its rated power and off when the surplus is gone (min. 5 min on / 1 min off against flicker).",
+      "help_device_priority": "the order devices get surplus and survive peak shedding. Lower number = gets surplus first and stays on longest; higher number = shed first when the peak limit is at risk. Drag the ≡ handle or use the ▲▼ arrows.",
+      "help_device_requires": "chains devices: this device only switches on while the selected device is already running (e.g. a booster pump that needs the main pump).",
+      "help_device_configure": "set or correct the control entity (switch) SEM uses for this device — needed when auto-detection picked the wrong one or found none.",
+      "help_device_peak": "the grid-import limit peak protection defends. When the 15-min average import approaches it, SEM sheds devices in priority order (highest number first) and restores them when the peak passes."
     },
     "de": {
       "charging": "Laden",
@@ -2251,7 +2258,14 @@
       "require_missing_title": "{name}-Karte nicht installiert",
       "require_missing_body": "Für das vollständige Dashboard installiere „{name}\" über HACS → Frontend und lade die Seite dann hart neu (Strg+Umschalt+R).",
       "net_saving": "Nettoeinsparung",
-      "net_cost": "Nettokosten"
+      "net_cost": "Nettokosten",
+      "help": "Hilfe",
+      "priority": "Priorität",
+      "help_device_mode": "wer dieses Gerät steuert. Aus: SEM beobachtet nur und schaltet nie. Nur Spitze: deine eigenen Automationen steuern es — SEM schaltet nur zum Schutz der Netzspitze ab und danach wieder ein (den Überschuss fängst du in deiner Automation über den Sensor „Überschuss verfügbar\" oder das Überschuss-Ereignis). Überschuss: SEM schaltet ein, wenn der Solarüberschuss die Nennleistung deckt, und aus, wenn er weg ist (min. 5 Min an / 1 Min aus gegen Flattern).",
+      "help_device_priority": "die Reihenfolge, in der Geräte Überschuss bekommen und bei Spitzenabschaltung überleben. Kleinere Zahl = bekommt zuerst Überschuss und bleibt am längsten an; größere Zahl = wird bei Spitzengefahr zuerst abgeworfen. Ziehe am ≡ Griff oder nutze die ▲▼ Pfeile.",
+      "help_device_requires": "verkettet Geräte: dieses Gerät schaltet nur ein, solange das gewählte Gerät bereits läuft (z. B. eine Zusatzpumpe, die die Hauptpumpe braucht).",
+      "help_device_configure": "legt die Steuer-Entität (Schalter) fest, die SEM für dieses Gerät nutzt — nötig, wenn die Auto-Erkennung die falsche oder keine gefunden hat.",
+      "help_device_peak": "das Netzbezugs-Limit, das der Spitzenschutz verteidigt. Nähert sich der 15-Min-Mittelwert, wirft SEM Geräte in Prioritätsreihenfolge ab (größte Zahl zuerst) und stellt sie nach der Spitze wieder her."
     },
     "fr": {
       "charging": "En charge",
@@ -3375,7 +3389,14 @@
       "require_missing_title": "Carte {name} non installée",
       "require_missing_body": "Pour le tableau de bord complet, installez « {name} » via HACS → Frontend, puis actualisez complètement la page (Ctrl+Maj+R).",
       "net_saving": "Économie nette",
-      "net_cost": "Coût net"
+      "net_cost": "Coût net",
+      "help": "Aide",
+      "priority": "Priorité",
+      "help_device_mode": "qui contrôle cet appareil. Off : SEM observe seulement. Pointe uniquement : vos propres automatisations le pilotent — SEM ne le coupe que pour protéger la pointe réseau puis le rétablit (captez le surplus via le capteur « Surplus disponible » ou l'événement surplus). Surplus : SEM l'allume quand le surplus solaire couvre sa puissance nominale et l'éteint quand il disparaît (min. 5 min on / 1 min off).",
+      "help_device_priority": "l'ordre dans lequel les appareils reçoivent le surplus et survivent au délestage. Numéro bas = servi en premier et maintenu le plus longtemps ; numéro haut = délesté en premier. Glissez la poignée ≡ ou utilisez ▲▼.",
+      "help_device_requires": "chaîne les appareils : celui-ci ne s'allume que si l'appareil sélectionné tourne déjà (p. ex. un surpresseur qui a besoin de la pompe principale).",
+      "help_device_configure": "définit ou corrige l'entité de contrôle (interrupteur) que SEM utilise — utile quand l'auto-détection s'est trompée ou n'a rien trouvé.",
+      "help_device_peak": "la limite d'import réseau défendue par la protection de pointe. Quand la moyenne 15 min s'en approche, SEM déleste les appareils par ordre de priorité (numéro le plus haut d'abord) puis les rétablit."
     },
     "es": {
       "charging": "Cargando",
@@ -4499,7 +4520,14 @@
       "require_missing_title": "Tarjeta {name} no instalada",
       "require_missing_body": "Para el panel completo, instala «{name}» desde HACS → Frontend y recarga la página por completo (Ctrl+Mayús+R).",
       "net_saving": "Ahorro neto",
-      "net_cost": "Coste neto"
+      "net_cost": "Coste neto",
+      "help": "Ayuda",
+      "priority": "Prioridad",
+      "help_device_mode": "quién controla este dispositivo. Off: SEM solo supervisa. Solo pico: tus propias automatizaciones lo manejan — SEM solo lo apaga para proteger el pico de red y luego lo restaura (captura el excedente con el sensor «Excedente disponible» o el evento de excedente). Excedente: SEM lo enciende cuando el excedente solar cubre su potencia nominal y lo apaga cuando desaparece (mín. 5 min on / 1 min off).",
+      "help_device_priority": "el orden en que los dispositivos reciben excedente y sobreviven al deslastre. Número bajo = recibe excedente primero y permanece más tiempo; número alto = se apaga primero. Arrastra ≡ o usa ▲▼.",
+      "help_device_requires": "encadena dispositivos: este solo se enciende mientras el dispositivo seleccionado ya está funcionando (p. ej. una bomba auxiliar que necesita la principal).",
+      "help_device_configure": "define o corrige la entidad de control (interruptor) que usa SEM — necesario cuando la autodetección eligió mal o no encontró ninguna.",
+      "help_device_peak": "el límite de importación de red que defiende la protección de pico. Cuando la media de 15 min se acerca, SEM apaga dispositivos por orden de prioridad (número más alto primero) y los restaura al pasar el pico."
     },
     "it": {
       "charging": "In carica",
@@ -5623,7 +5651,14 @@
       "require_missing_title": "Scheda {name} non installata",
       "require_missing_body": "Per la dashboard completa, installa \"{name}\" da HACS → Frontend, poi ricarica completamente la pagina (Ctrl+Maiusc+R).",
       "net_saving": "Risparmio netto",
-      "net_cost": "Costo netto"
+      "net_cost": "Costo netto",
+      "help": "Aiuto",
+      "priority": "Priorità",
+      "help_device_mode": "chi controlla questo dispositivo. Off: SEM osserva soltanto. Solo picco: le tue automazioni lo gestiscono — SEM lo spegne solo per proteggere il picco di rete e poi lo ripristina (intercetta il surplus con il sensore «Surplus disponibile» o l'evento surplus). Surplus: SEM lo accende quando il surplus solare copre la potenza nominale e lo spegne quando sparisce (min. 5 min on / 1 min off).",
+      "help_device_priority": "l'ordine in cui i dispositivi ricevono surplus e sopravvivono al distacco. Numero basso = servito per primo e acceso più a lungo; numero alto = staccato per primo. Trascina ≡ o usa ▲▼.",
+      "help_device_requires": "concatena i dispositivi: questo si accende solo mentre il dispositivo selezionato è già in funzione (es. una pompa ausiliaria che richiede la principale).",
+      "help_device_configure": "imposta o corregge l'entità di controllo (interruttore) usata da SEM — serve quando il rilevamento automatico ha sbagliato o non ha trovato nulla.",
+      "help_device_peak": "il limite di import di rete difeso dalla protezione picco. Quando la media 15 min si avvicina, SEM stacca i dispositivi in ordine di priorità (numero più alto prima) e li ripristina passato il picco."
     },
     "nl": {
       "charging": "Laden",
@@ -6747,7 +6782,14 @@
       "require_missing_title": "{name}-kaart niet geïnstalleerd",
       "require_missing_body": "Installeer voor het volledige dashboard \"{name}\" via HACS → Frontend en ververs daarna de pagina hard (Ctrl+Shift+R).",
       "net_saving": "Nettobesparing",
-      "net_cost": "Nettokosten"
+      "net_cost": "Nettokosten",
+      "help": "Help",
+      "priority": "Prioriteit",
+      "help_device_mode": "wie dit apparaat bestuurt. Uit: SEM kijkt alleen mee. Alleen piek: je eigen automatiseringen sturen het — SEM schakelt het alleen uit om de netpiek te beschermen en herstelt het daarna (vang het overschot in je automatisering via de sensor \"Overschot beschikbaar\" of het overschot-event). Overschot: SEM schakelt in wanneer het zonne-overschot het nominale vermogen dekt en uit wanneer het weg is (min. 5 min aan / 1 min uit).",
+      "help_device_priority": "de volgorde waarin apparaten overschot krijgen en piekafschakeling overleven. Laag nummer = krijgt eerst overschot en blijft het langst aan; hoog nummer = wordt eerst afgeschakeld. Sleep ≡ of gebruik ▲▼.",
+      "help_device_requires": "koppelt apparaten: dit apparaat schakelt alleen in zolang het gekozen apparaat al draait (bijv. een boosterpomp die de hoofdpomp nodig heeft).",
+      "help_device_configure": "stelt de bedienings-entiteit (schakelaar) in die SEM gebruikt — nodig als autodetectie de verkeerde of geen vond.",
+      "help_device_peak": "de netimport-limiet die piekbescherming verdedigt. Nadert het 15-min-gemiddelde, dan schakelt SEM apparaten af op prioriteitsvolgorde (hoogste nummer eerst) en herstelt ze na de piek."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7871,7 +7913,14 @@
       "require_missing_title": "Karta {name} není nainstalována",
       "require_missing_body": "Pro úplný dashboard nainstalujte „{name}\" přes HACS → Frontend a poté stránku tvrdě obnovte (Ctrl+Shift+R).",
       "net_saving": "Čistá úspora",
-      "net_cost": "Čisté náklady"
+      "net_cost": "Čisté náklady",
+      "help": "Nápověda",
+      "priority": "Priorita",
+      "help_device_mode": "kdo zařízení ovládá. Vypnuto: SEM pouze sleduje. Jen špička: řídí ho vaše vlastní automatizace — SEM ho vypne jen kvůli ochraně síťové špičky a poté obnoví (přebytek zachytíte přes senzor „Přebytek k dispozici\" nebo událost přebytku). Přebytek: SEM ho zapne, když solární přebytek pokryje jmenovitý výkon, a vypne, když zmizí (min. 5 min zap / 1 min vyp).",
+      "help_device_priority": "pořadí, v jakém zařízení dostávají přebytek a přežívají odlehčování špičky. Nižší číslo = dostane přebytek první a zůstává zapnuté nejdéle; vyšší číslo = odpojí se první. Táhni ≡ nebo použij ▲▼.",
+      "help_device_requires": "řetězí zařízení: toto zařízení se zapne, jen pokud už běží vybrané zařízení (např. posilovací čerpadlo, které potřebuje hlavní).",
+      "help_device_configure": "nastaví nebo opraví ovládací entitu (spínač), kterou SEM používá — potřeba, když autodetekce vybrala špatnou nebo žádnou.",
+      "help_device_peak": "limit odběru ze sítě, který chrání ochrana špičky. Když se 15min průměr blíží, SEM odpojuje zařízení v pořadí priority (nejvyšší číslo první) a po špičce je obnoví."
     },
     "da": {
       "charging": "Oplader",
@@ -8995,7 +9044,14 @@
       "require_missing_title": "{name}-kort ikke installeret",
       "require_missing_body": "For det fulde dashboard skal du installere \"{name}\" via HACS → Frontend og derefter genindlæse siden hårdt (Ctrl+Shift+R).",
       "net_saving": "Nettobesparelse",
-      "net_cost": "Nettoomkostning"
+      "net_cost": "Nettoomkostning",
+      "help": "Hjælp",
+      "priority": "Prioritet",
+      "help_device_mode": "hvem der styrer enheden. Fra: SEM overvåger kun. Kun spids: dine egne automatiseringer kører den — SEM slukker kun for at beskytte netspidsen og genopretter bagefter (fang overskuddet via sensoren \"Overskud tilgængeligt\" eller overskudshændelsen). Overskud: SEM tænder, når soloverskuddet dækker mærkeeffekten, og slukker, når det er væk (min. 5 min tændt / 1 min slukket).",
+      "help_device_priority": "rækkefølgen enheder får overskud og overlever spidsudkobling. Lavt tal = får overskud først og forbliver længst tændt; højt tal = kobles fra først. Træk ≡ eller brug ▲▼.",
+      "help_device_requires": "kæder enheder: denne tænder kun, mens den valgte enhed allerede kører (f.eks. en boosterpumpe der kræver hovedpumpen).",
+      "help_device_configure": "sætter eller retter den styringsentitet (kontakt) SEM bruger — nødvendigt når autodetektion valgte forkert eller intet fandt.",
+      "help_device_peak": "grænsen for netimport som spidsbeskyttelsen forsvarer. Når 15-min-gennemsnittet nærmer sig, udkobler SEM enheder i prioritetsrækkefølge (højeste tal først) og genopretter dem efter spidsen."
     },
     "fi": {
       "charging": "Lataus",
@@ -10119,7 +10175,14 @@
       "require_missing_title": "{name}-korttia ei ole asennettu",
       "require_missing_body": "Asenna koko koontinäyttöä varten \"{name}\" HACS → Frontend -kautta ja lataa sivu sitten uudelleen (Ctrl+Shift+R).",
       "net_saving": "Nettosäästö",
-      "net_cost": "Nettokustannus"
+      "net_cost": "Nettokustannus",
+      "help": "Ohje",
+      "priority": "Prioriteetti",
+      "help_device_mode": "kuka laitetta ohjaa. Pois: SEM vain seuraa. Vain huippu: omat automaatiosi ohjaavat sitä — SEM sammuttaa sen vain verkkohuipun suojaamiseksi ja palauttaa sen jälkeen (nappaa ylijäämä automaatiossasi \"Ylijäämä saatavilla\" -sensorilla tai ylijäämätapahtumalla). Ylijäämä: SEM kytkee päälle, kun aurinkoylijäämä kattaa nimellistehon, ja pois, kun se loppuu (min. 5 min päällä / 1 min pois).",
+      "help_device_priority": "järjestys, jossa laitteet saavat ylijäämää ja selviävät huippukevennyksestä. Pieni numero = saa ylijäämän ensin ja pysyy pisimpään päällä; iso numero = pudotetaan ensin. Vedä ≡ tai käytä ▲▼.",
+      "help_device_requires": "ketjuttaa laitteet: tämä kytkeytyy päälle vain, kun valittu laite on jo käynnissä (esim. tehostinpumppu, joka tarvitsee pääpumpun).",
+      "help_device_configure": "asettaa tai korjaa ohjausentiteetin (kytkimen), jota SEM käyttää — tarpeen, jos automaattitunnistus valitsi väärin tai ei löytänyt mitään.",
+      "help_device_peak": "verkkotuonnin raja, jota huippusuoja puolustaa. Kun 15 min keskiarvo lähestyy sitä, SEM pudottaa laitteita prioriteettijärjestyksessä (suurin numero ensin) ja palauttaa ne huipun mentyä."
     },
     "hu": {
       "charging": "Töltés",
@@ -11243,7 +11306,14 @@
       "require_missing_title": "A(z) {name} kártya nincs telepítve",
       "require_missing_body": "A teljes irányítópulthoz telepítsd a(z) „{name}\" kártyát a HACS → Frontend menüből, majd frissítsd keményen az oldalt (Ctrl+Shift+R).",
       "net_saving": "Nettó megtakarítás",
-      "net_cost": "Nettó költség"
+      "net_cost": "Nettó költség",
+      "help": "Súgó",
+      "priority": "Prioritás",
+      "help_device_mode": "ki vezérli az eszközt. Ki: a SEM csak figyel. Csak csúcs: a saját automatizmusaid működtetik — a SEM csak a hálózati csúcs védelmére kapcsolja le, majd visszaállítja (a többletet a „Többlet elérhető\" szenzorral vagy a többlet eseménnyel kapod el). Többlet: a SEM bekapcsolja, ha a napelemes többlet fedezi a névleges teljesítményt, és lekapcsolja, ha eltűnik (min. 5 perc be / 1 perc ki).",
+      "help_device_priority": "a sorrend, ahogy az eszközök többletet kapnak és túlélik a csúcslekapcsolást. Kisebb szám = először kap többletet és legtovább marad bekapcsolva; nagyobb szám = először kapcsolódik le. Húzd a ≡ fogantyút vagy használd a ▲▼ nyilakat.",
+      "help_device_requires": "láncolja az eszközöket: ez csak akkor kapcsol be, amíg a kiválasztott eszköz már működik (pl. nyomásfokozó, amelynek kell a fő szivattyú).",
+      "help_device_configure": "beállítja vagy javítja a vezérlő entitást (kapcsolót), amit a SEM használ — akkor kell, ha az automatikus felismerés rosszat vagy semmit sem talált.",
+      "help_device_peak": "a hálózati vételezési határ, amit a csúcsvédelem véd. Ha a 15 perces átlag közelíti, a SEM prioritási sorrendben kapcsolja le az eszközöket (legnagyobb szám először), majd a csúcs után visszaállítja."
     },
     "no": {
       "charging": "Lader",
@@ -12367,7 +12437,14 @@
       "require_missing_title": "{name}-kort ikke installert",
       "require_missing_body": "For det fulle dashbordet, installer «{name}» via HACS → Frontend, og last siden helt på nytt (Ctrl+Shift+R).",
       "net_saving": "Nettobesparelse",
-      "net_cost": "Nettokostnad"
+      "net_cost": "Nettokostnad",
+      "help": "Hjelp",
+      "priority": "Prioritet",
+      "help_device_mode": "hvem som styrer enheten. Av: SEM bare overvåker. Kun topp: dine egne automatiseringer kjører den — SEM slår den bare av for å beskytte netttoppen og gjenoppretter etterpå (fang overskuddet via sensoren \"Overskudd tilgjengelig\" eller overskuddshendelsen). Overskudd: SEM slår på når soloverskuddet dekker merkeeffekten, og av når det er borte (min. 5 min på / 1 min av).",
+      "help_device_priority": "rekkefølgen enheter får overskudd og overlever topputkobling. Lavt tall = får overskudd først og holdes lengst på; høyt tall = kobles ut først. Dra ≡ eller bruk ▲▼.",
+      "help_device_requires": "kjeder enheter: denne slås bare på mens den valgte enheten allerede kjører (f.eks. en trykkpumpe som trenger hovedpumpen).",
+      "help_device_configure": "setter eller retter styringsentiteten (bryteren) SEM bruker — nødvendig når autodeteksjon valgte feil eller ikke fant noen.",
+      "help_device_peak": "grensen for nettimport som toppbeskyttelsen forsvarer. Når 15-min-snittet nærmer seg, kobler SEM ut enheter i prioritetsrekkefølge (høyest tall først) og gjenoppretter dem etter toppen."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13491,7 +13568,14 @@
       "require_missing_title": "Karta {name} nie jest zainstalowana",
       "require_missing_body": "Aby uzyskać pełny pulpit, zainstaluj „{name}\" przez HACS → Frontend, a następnie twardo odśwież stronę (Ctrl+Shift+R).",
       "net_saving": "Oszczędność netto",
-      "net_cost": "Koszt netto"
+      "net_cost": "Koszt netto",
+      "help": "Pomoc",
+      "priority": "Priorytet",
+      "help_device_mode": "kto steruje urządzeniem. Wył.: SEM tylko monitoruje. Tylko szczyt: sterują nim Twoje własne automatyzacje — SEM wyłącza je tylko dla ochrony szczytu sieci i potem przywraca (nadwyżkę złap w automatyzacji przez sensor „Nadwyżka dostępna\" lub zdarzenie nadwyżki). Nadwyżka: SEM włącza, gdy nadwyżka solarna pokrywa moc znamionową, i wyłącza, gdy zniknie (min. 5 min wł. / 1 min wył.).",
+      "help_device_priority": "kolejność, w jakiej urządzenia dostają nadwyżkę i przetrwają zrzut szczytu. Niższy numer = dostaje nadwyżkę pierwszy i działa najdłużej; wyższy numer = odłączany pierwszy. Przeciągnij ≡ lub użyj ▲▼.",
+      "help_device_requires": "łączy urządzenia w łańcuch: to włącza się tylko, gdy wybrane urządzenie już działa (np. pompa wspomagająca wymagająca głównej).",
+      "help_device_configure": "ustawia lub poprawia encję sterującą (przełącznik), której używa SEM — potrzebne, gdy autodetekcja wybrała złą lub żadnej nie znalazła.",
+      "help_device_peak": "limit poboru z sieci broniony przez ochronę szczytu. Gdy średnia 15-min się zbliża, SEM odłącza urządzenia wg priorytetu (najwyższy numer pierwszy) i przywraca po szczycie."
     },
     "pt": {
       "charging": "A carregar",
@@ -14615,7 +14699,14 @@
       "require_missing_title": "Cartão {name} não instalado",
       "require_missing_body": "Para o painel completo, instale \"{name}\" via HACS → Frontend e depois recarregue totalmente a página (Ctrl+Shift+R).",
       "net_saving": "Poupança líquida",
-      "net_cost": "Custo líquido"
+      "net_cost": "Custo líquido",
+      "help": "Ajuda",
+      "priority": "Prioridade",
+      "help_device_mode": "quem controla este dispositivo. Off: o SEM apenas monitoriza. Só pico: as suas próprias automações gerem-no — o SEM só o desliga para proteger o pico da rede e depois repõe (capte o excedente com o sensor «Excedente disponível» ou o evento de excedente). Excedente: o SEM liga-o quando o excedente solar cobre a potência nominal e desliga-o quando desaparece (mín. 5 min ligado / 1 min desligado).",
+      "help_device_priority": "a ordem em que os dispositivos recebem excedente e sobrevivem ao corte de pico. Número baixo = recebe excedente primeiro e fica ligado mais tempo; número alto = cortado primeiro. Arraste ≡ ou use ▲▼.",
+      "help_device_requires": "encadeia dispositivos: este só liga enquanto o dispositivo selecionado já está a funcionar (p. ex. uma bomba auxiliar que precisa da principal).",
+      "help_device_configure": "define ou corrige a entidade de controlo (interruptor) que o SEM usa — necessário quando a autodeteção escolheu mal ou não encontrou nenhuma.",
+      "help_device_peak": "o limite de importação da rede que a proteção de pico defende. Quando a média de 15 min se aproxima, o SEM corta dispositivos por ordem de prioridade (número mais alto primeiro) e repõe-nos após o pico."
     },
     "ro": {
       "charging": "Încărcare",
@@ -15739,7 +15830,14 @@
       "require_missing_title": "Cardul {name} nu este instalat",
       "require_missing_body": "Pentru tabloul complet, instalează „{name}\" prin HACS → Frontend, apoi reîncarcă complet pagina (Ctrl+Shift+R).",
       "net_saving": "Economie netă",
-      "net_cost": "Cost net"
+      "net_cost": "Cost net",
+      "help": "Ajutor",
+      "priority": "Prioritate",
+      "help_device_mode": "cine controlează dispozitivul. Oprit: SEM doar monitorizează. Doar vârf: automatizările tale îl conduc — SEM îl oprește doar pentru a proteja vârful de rețea și îl repornește apoi (prinde surplusul prin senzorul „Surplus disponibil\" sau evenimentul de surplus). Surplus: SEM îl pornește când surplusul solar acoperă puterea nominală și îl oprește când dispare (min. 5 min pornit / 1 min oprit).",
+      "help_device_priority": "ordinea în care dispozitivele primesc surplus și supraviețuiesc deconectării de vârf. Număr mic = primește surplus primul și rămâne pornit cel mai mult; număr mare = deconectat primul. Trage ≡ sau folosește ▲▼.",
+      "help_device_requires": "înlănțuie dispozitivele: acesta pornește doar cât timp dispozitivul selectat rulează deja (ex. o pompă auxiliară care are nevoie de cea principală).",
+      "help_device_configure": "setează sau corectează entitatea de control (comutatorul) folosită de SEM — necesar când autodetecția a ales greșit sau nu a găsit nimic.",
+      "help_device_peak": "limita de import din rețea apărată de protecția de vârf. Când media pe 15 min se apropie, SEM deconectează dispozitivele în ordinea priorității (numărul cel mai mare primul) și le repornește după vârf."
     },
     "sv": {
       "charging": "Laddar",
@@ -16863,7 +16961,14 @@
       "require_missing_title": "{name}-kortet är inte installerat",
       "require_missing_body": "För hela panelen, installera \"{name}\" via HACS → Frontend och hårduppdatera sedan sidan (Ctrl+Skift+R).",
       "net_saving": "Nettobesparing",
-      "net_cost": "Nettokostnad"
+      "net_cost": "Nettokostnad",
+      "help": "Hjälp",
+      "priority": "Prioritet",
+      "help_device_mode": "vem som styr enheten. Av: SEM övervakar bara. Endast topp: dina egna automationer kör den — SEM stänger bara av för att skydda nättoppen och återställer efteråt (fånga överskottet via sensorn \"Överskott tillgängligt\" eller överskottshändelsen). Överskott: SEM slår på när solöverskottet täcker märkeffekten och av när det försvinner (min. 5 min på / 1 min av).",
+      "help_device_priority": "ordningen enheter får överskott och överlever toppfrånkoppling. Lågt nummer = får överskott först och hålls på längst; högt nummer = kopplas från först. Dra ≡ eller använd ▲▼.",
+      "help_device_requires": "kedjar enheter: denna slås bara på medan den valda enheten redan kör (t.ex. en tryckstegringspump som kräver huvudpumpen).",
+      "help_device_configure": "ställer in eller rättar styrenheten (brytaren) SEM använder — behövs när autodetektering valde fel eller inget hittade.",
+      "help_device_peak": "gränsen för nätimport som toppskyddet försvarar. När 15-min-snittet närmar sig kopplar SEM från enheter i prioritetsordning (högst nummer först) och återställer dem efter toppen."
     }
   };
 

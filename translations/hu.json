@@ -930,6 +930,9 @@
       "solar_active": {
         "name": "Solar Active"
       },
+      "surplus_available": {
+        "name": "Többlet elérhető"
+      },
       "forecast_available": {
         "name": "Forecast Available"
       },
@@ -1059,6 +1062,9 @@
       },
       "initial_current": {
         "name": "Jármű indítóáram"
+      },
+      "surplus_event_threshold": {
+        "name": "Többlet esemény küszöb"
       }
     },
     "select": {

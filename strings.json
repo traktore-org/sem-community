@@ -968,6 +968,9 @@
       },
       "utility_signal_active": {
         "name": "Utility Signal Active"
+      },
+      "surplus_available": {
+        "name": "Surplus Available"
       }
     },
     "switch": {
@@ -1077,6 +1080,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Vehicle consumption (kWh/100km)"
+      },
+      "surplus_event_threshold": {
+        "name": "Surplus Event Threshold"
       }
     },
     "select": {
