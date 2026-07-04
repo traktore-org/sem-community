@@ -279,7 +279,10 @@ NUMBER_TYPES = [
     NumberEntityDescription(
         key="system_investment_cost",
         native_min_value=0,
-        native_max_value=200000,
+        # #557 — currency-agnostic ceiling (same class as #549): a solar
+        # system costs 1,000,000+ in LKR/IDR/VND; the old 200k cap made the
+        # entity unusable there. BOX mode = direct typed entry.
+        native_max_value=100000000,
         native_step=100,
         mode=NumberMode.BOX,
     ),
