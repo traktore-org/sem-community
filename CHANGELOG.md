@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.18] — 05.07.2026
+
+> **Pre-release.** Honest temperatures and a cleaner Home header.
+
+### 🌡️ Battery temperature — never fabricated (#564)
+- 🐛 **Installs without a temperature source showed a constant 25 °C** —
+  that was an internal default published as if measured. The sensor now
+  honestly shows *unknown* when there is no source (cards hide it), and
+  SEM **autodetects the battery's real temperature sensor** via the same
+  brand-aware hardware discovery the System diagram uses — most setups
+  get their true cell temperature with zero configuration.
+  (reported by @ebnerjoh)
+
+### 🏠 Home header — the hero, once (maintainer UI review)
+- 🎨 The Home tab header chips (Solar/Autarky/Today) duplicated the
+  Today's-Production card right below it. The header itself is now the
+  hero: big orange production value + live solar power chip; the
+  separate KPI card is gone from the generated dashboard (it remains
+  available as a card for manual dashboards). Autarky/Self-Use stay on
+  the solar and home-status cards.
+
+### 🧪 Hardening
+- ✅ Regression lint: entity pickers can never again receive an empty
+  domain filter (the #560 class).
+
 # [1.7.4-beta.17] — 05.07.2026
 
 > **Pre-release.** Load management grows up: daily targets for any
