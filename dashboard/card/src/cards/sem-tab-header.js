@@ -254,15 +254,15 @@ class SEMTabHeader extends SEMLitBase {
         const power = this._getState('solar_power', 0);
         return html`
             <div class="hero">
+                <div class="hero-main">
+                    <div class="hero-value">${today.toFixed(1)}<span class="unit">kWh</span></div>
+                    <div class="hero-label">${_t('todays_solar_production', this._hass)}</div>
+                </div>
                 ${power > 0 ? html`
                 <div class="hero-now">
                     <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
                     <span>${semFormatPower(power)}</span>
                 </div>` : nothing}
-                <div class="hero-main">
-                    <div class="hero-value">${today.toFixed(1)}<span class="unit">kWh</span></div>
-                    <div class="hero-label">${_t('todays_solar_production', this._hass)}</div>
-                </div>
             </div>`;
     }
 
@@ -329,7 +329,7 @@ class SEMTabHeader extends SEMLitBase {
                 /* Home hero — Today's production merged from the KPI card
                    (maintainer UI review: chips duplicated the KPI below) */
                 .hero { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-                .hero-main { text-align: right; }
+                .hero-main { text-align: left; }
                 .hero-value {
                     font-size: 26px; font-weight: 700; line-height: 1.05;
                     color: #ff9800; letter-spacing: -0.5px;
