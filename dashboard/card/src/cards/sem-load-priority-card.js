@@ -637,11 +637,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _goalUnitFor(device) {
-        const set = this._goalUnit[device.id];
-        if (set) return set;
-        const g = device.goals || {};
-        return (parseFloat(g.daily_target_energy_kwh) > 0
-             || parseFloat(g.daily_max_energy_kwh) > 0) ? 'kwh' : 'min';
+        // min is the default; kWh only when the user switched the picker
+        return this._goalUnit[device.id] || 'min';
     }
 
     _renderGoalEditor(device) {

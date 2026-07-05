@@ -5702,7 +5702,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             <div class="goal-progress" style="padding:2px 0 0 28px">
                 <div class="goal-bar"><div class="goal-bar-fill" style="width:${t}%;background:${r?"#8DC892":"#ff9800"}"></div></div>
                 <span class="goal-progress-text">${a.join(" · ")}${i.target_deadline?" → "+i.target_deadline:""}${r?" ✓":""}</span>
-            </div>`}_goalUnitFor(e){const t=this._goalUnit[e.id];if(t)return t;const i=e.goals||{};return parseFloat(i.daily_target_energy_kwh)>0||parseFloat(i.daily_max_energy_kwh)>0?"kwh":"min"}_renderGoalEditor(e){const t=this._mergedMode(e),i=this._goalUnitFor(e),s=("surplus_cheap"===t||"surplus_deadline"===t)&&!this._hasTarget(e),r=e.goals||{};return W`
+            </div>`}_goalUnitFor(e){return this._goalUnit[e.id]||"min"}_renderGoalEditor(e){const t=this._mergedMode(e),i=this._goalUnitFor(e),s=("surplus_cheap"===t||"surplus_deadline"===t)&&!this._hasTarget(e),r=e.goals||{};return W`
             <div class="goal-editor">
                 <div class="ge-title">
                     <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
