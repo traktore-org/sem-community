@@ -152,6 +152,7 @@ def _mock_device(**kw):
     device.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     device.daily_min_runtime_sec = 0
     device.daily_max_runtime_reached = kw.get("cap_reached", False)
+    device.daily_max_energy_reached = False
     device.daily_targets_met = kw.get("targets_met", False)
     device.stop_condition_met = kw.get("stop_met", False)
     device.deadline_pressure = kw.get("pressure", False)
@@ -456,3 +457,41 @@ async def test_boot_reregister_never_adopts_peak_only(registry):
     registry._register_service_devices()
     dev = registry._surplus_controller.get_device("pump")
     assert dev.is_active is False  # user-managed — never adopted
+
+
+class TestEnergyCap:
+    """(#559 UI round) daily_max_energy_kwh — the energy 'Up to' handle."""
+
+    def test_energy_cap_reached(self):
+        dev = _switch()
+        dev.daily_max_energy_kwh = 3.0
+        dev._daily_energy_accumulated_kwh = 2.9
+        assert dev.daily_max_energy_reached is False
+        dev._daily_energy_accumulated_kwh = 3.0
+        assert dev.daily_max_energy_reached is True
+
+    def test_zero_cap_never_reached(self):
+        dev = _switch()
+        dev._daily_energy_accumulated_kwh = 999
+        assert dev.daily_max_energy_reached is False
+
+
+@pytest.mark.asyncio
+async def test_energy_cap_gate_deactivates(mock_hass):
+    sc = SurplusController(mock_hass)
+    dev = _mock_device(is_active=True, consumption=800)
+    dev.daily_max_energy_reached = True
+    sc.register_device(dev)
+    await sc.update(5000.0)
+    dev.deactivate.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_energy_cap_goal_persists(registry):
+    await registry.async_register_service_device({
+        "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
+        "rated_power": 800, "priority": 5,
+    })
+    await registry.async_update_device_goal("pump", "daily_max_energy_kwh", 4.5)
+    dev = registry._surplus_controller.get_device("pump")
+    assert dev.daily_max_energy_kwh == 4.5

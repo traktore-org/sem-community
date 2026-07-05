@@ -169,6 +169,7 @@ class ControllableDevice(ABC):
         # All opt-in (0/empty = disabled); only meaningful in SURPLUS mode.
         self.daily_max_runtime_sec: int = 0            # safety cap, 0 = none
         self.daily_target_energy_kwh: float = 0.0      # metered loads, 0 = none
+        self.daily_max_energy_kwh: float = 0.0         # energy cap, 0 = none
         self._daily_energy_accumulated_kwh: float = 0.0
         self.target_deadline: str = ""                 # "HH:MM" local, "" = end of day
         self.top_up_policy: str = "solar_only"         # solar_only|cheap_hours|always
@@ -331,6 +332,14 @@ class ControllableDevice(ABC):
         return (
             self.daily_max_runtime_sec > 0
             and self._daily_runtime_accumulated_sec >= self.daily_max_runtime_sec
+        )
+
+    @property
+    def daily_max_energy_reached(self) -> bool:
+        """Safety cap: device consumed its daily energy allowance."""
+        return (
+            self.daily_max_energy_kwh > 0
+            and self._daily_energy_accumulated_kwh >= self.daily_max_energy_kwh
         )
 
     @property
@@ -540,6 +549,7 @@ class ControllableDevice(ABC):
                 "daily_target_energy_kwh": self.daily_target_energy_kwh,
                 "daily_energy_accumulated_kwh": round(self._daily_energy_accumulated_kwh, 3),
                 "daily_max_runtime_sec": self.daily_max_runtime_sec,
+            "daily_max_energy_kwh": self.daily_max_energy_kwh,
                 "top_up_policy": self.top_up_policy,
                 "target_deadline": self.target_deadline,
                 "remaining_daily_runtime_sec": round(self.remaining_daily_runtime_sec, 1),

@@ -2724,8 +2724,8 @@ async def _async_register_services(
                 )
         elif prop in (
             "daily_min_runtime_min", "daily_max_runtime_min",
-            "daily_target_energy_kwh", "target_deadline", "top_up_policy",
-            "stop_entity", "stop_at",
+            "daily_target_energy_kwh", "daily_max_energy_kwh",
+            "target_deadline", "top_up_policy", "stop_entity", "stop_at",
         ):
             # (#559) goal engine properties — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -2763,8 +2763,8 @@ async def _async_register_services(
                     "controllable", "critical", "control_mode", "depends_on",
                     # (#559) goal engine properties
                     "daily_min_runtime_min", "daily_max_runtime_min",
-                    "daily_target_energy_kwh", "target_deadline",
-                    "top_up_policy", "stop_entity", "stop_at",
+                    "daily_target_energy_kwh", "daily_max_energy_kwh",
+                    "target_deadline", "top_up_policy", "stop_entity", "stop_at",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -3131,8 +3131,8 @@ async def _async_register_phase_services(
             k: call.data[k]
             for k in (
                 "daily_min_runtime_min", "daily_max_runtime_min",
-                "daily_target_energy_kwh", "target_deadline",
-                "top_up_policy", "stop_entity", "stop_at",
+                "daily_target_energy_kwh", "daily_max_energy_kwh",
+                "target_deadline", "top_up_policy", "stop_entity", "stop_at",
             )
             if k in call.data
         }
@@ -3194,6 +3194,9 @@ async def _async_register_phase_services(
                 vol.Coerce(float), vol.Range(min=0, max=1440)
             ),
             vol.Optional("daily_target_energy_kwh"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=200)
+            ),
+            vol.Optional("daily_max_energy_kwh"): vol.All(
                 vol.Coerce(float), vol.Range(min=0, max=200)
             ),
             vol.Optional("target_deadline"): cv.string,

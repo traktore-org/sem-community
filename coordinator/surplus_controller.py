@@ -449,6 +449,8 @@ class SurplusController:
                 done_reason = None
                 if device.daily_max_runtime_reached:
                     done_reason = "daily max runtime reached"
+                elif device.daily_max_energy_reached:
+                    done_reason = "daily max energy reached"
                 elif device.daily_targets_met:
                     done_reason = "daily target met"
                 elif device.stop_condition_met:
@@ -634,7 +636,7 @@ class SurplusController:
                 # missing the target on a dark day (logged once per day).
                 if device.top_up_policy == "solar_only":
                     continue
-                if device.daily_max_runtime_reached or device.stop_condition_met:
+                if device.daily_max_runtime_reached or device.daily_max_energy_reached or device.stop_condition_met:
                     continue
                 if device.needs_offpeak_activation:
                     consumed = await device.activate(device.min_power_threshold)
@@ -678,7 +680,7 @@ class SurplusController:
                     continue
                 if device.is_active or not device.deadline_pressure:
                     continue
-                if device.daily_max_runtime_reached or device.stop_condition_met:
+                if device.daily_max_runtime_reached or device.daily_max_energy_reached or device.stop_condition_met:
                     continue
                 policy = device.top_up_policy
                 if policy != "always":

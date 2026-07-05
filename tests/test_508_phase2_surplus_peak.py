@@ -60,6 +60,7 @@ def _make_device(
     # (#559) goal-engine fields — pin to defaults (MagicMock auto-attrs are
     # truthy and would trip the goal gates)
     device.daily_max_runtime_reached = False
+    device.daily_max_energy_reached = False
     device.daily_targets_met = False
     device.stop_condition_met = False
     device.deadline_pressure = False
