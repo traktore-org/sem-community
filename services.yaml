@@ -262,6 +262,16 @@ register_surplus_device:
           max: 200
           step: 0.5
           unit_of_measurement: kWh
+    daily_max_energy_kwh:
+      name: Max Energy per Day
+      description: Energy cap in kWh — the device is stopped for the rest of the day once it consumed this much.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 200
+          step: 0.5
+          unit_of_measurement: kWh
     target_deadline:
       name: Finish By
       description: Time of day (HH:MM) by which the daily target should be met. Default is end of day.

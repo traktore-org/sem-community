@@ -190,7 +190,8 @@ class UnifiedDeviceRegistry:
     # (#559) goal properties settable via update_device_config / register
     GOAL_PROPERTIES = (
         "daily_min_runtime_min", "daily_max_runtime_min",
-        "daily_target_energy_kwh", "target_deadline", "top_up_policy",
+        "daily_target_energy_kwh", "daily_max_energy_kwh",
+        "target_deadline", "top_up_policy",
         "stop_entity", "stop_at",
     )
 
@@ -207,6 +208,9 @@ class UnifiedDeviceRegistry:
         )
         device.daily_target_energy_kwh = float(
             goals.get("daily_target_energy_kwh", 0.0)
+        )
+        device.daily_max_energy_kwh = float(
+            goals.get("daily_max_energy_kwh", 0.0)
         )
         device.target_deadline = str(goals.get("target_deadline", "") or "")
         device.top_up_policy = str(
@@ -653,6 +657,7 @@ class UnifiedDeviceRegistry:
                 "daily_min_runtime_min": goals.get("daily_min_runtime_min", 0),
                 "daily_max_runtime_min": goals.get("daily_max_runtime_min", 0),
                 "daily_target_energy_kwh": goals.get("daily_target_energy_kwh", 0),
+                "daily_max_energy_kwh": goals.get("daily_max_energy_kwh", 0),
                 "target_deadline": goals.get("target_deadline", ""),
                 "top_up_policy": goals.get("top_up_policy", "solar_only"),
                 "stop_entity": goals.get("stop_entity", ""),

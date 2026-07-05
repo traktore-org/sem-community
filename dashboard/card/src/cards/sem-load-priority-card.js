@@ -40,6 +40,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._lastDeviceSig = '';
         this._showHelp = false;  // (#559) inline option help
         this._goalOpen = {};      // (#559) device_id -> goal editor expanded
+        this._goalUnit = {};      // (#559) device_id -> 'min' | 'kwh' slider unit
+        this._goalDrag = null;    // (#559) live drag state {id, which, value}
     }
 
     setConfig(config) {
@@ -191,12 +193,43 @@ class SEMLoadPriorityCard extends SEMLitBase {
             }
             .goal-bar-fill { height:100%; border-radius:3px; transition:width 0.4s; }
             .goal-progress-text { font-size:12px; color:var(--secondary-text-color,#999); white-space:nowrap; }
-            .mode-chip {
-                font-size:12px; color:var(--secondary-text-color,#999);
-                padding:3px 10px; border-radius:999px;
+            .ge-spacer { margin-left:auto; }
+            .ge-unit-select {
+                appearance:none; -webkit-appearance:none;
+                background-color:var(--secondary-background-color, rgba(255,255,255,0.07));
+                background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat:no-repeat; background-position:right 4px center;
+                background-size:12px;
+                color:var(--primary-text-color,#e0e0e0);
                 border:1px solid var(--divider-color, rgba(255,255,255,0.12));
-                background:rgba(255,255,255,0.03); white-space:nowrap;
+                border-radius:6px; padding:2px 20px 2px 8px;
+                font-size:11px; font-weight:600; cursor:pointer;
+                text-transform:none; letter-spacing:0;
             }
+            .range-wrap { padding:6px 8px 10px; }
+            .range-labels {
+                display:flex; justify-content:space-between;
+                font-size:12px; color:var(--primary-text-color,#e0e0e0);
+                margin-bottom:10px;
+            }
+            .range-labels b { font-variant-numeric:tabular-nums; }
+            .range-track {
+                position:relative; height:6px; border-radius:3px;
+                background:rgba(255,255,255,0.14); margin:6px 9px;
+                touch-action:none; cursor:pointer;
+            }
+            .range-fill {
+                position:absolute; top:0; height:100%; border-radius:3px;
+                background:linear-gradient(90deg, #8DC892, #ff9800);
+            }
+            .range-handle {
+                position:absolute; top:50%; width:18px; height:18px;
+                border-radius:50%; transform:translate(-50%, -50%);
+                background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.5);
+                cursor:grab; touch-action:none; pointer-events:none;
+            }
+            .range-handle-min { border:3px solid #8DC892; }
+            .range-handle-max { border:3px solid #ff9800; }
             /* EV charge-target look (#559 UI merge) */
             .goal-editor {
                 margin:8px 0 4px 28px; padding:10px 12px;
@@ -403,7 +436,16 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
-                    <span class="mode-chip" title="${this._t('mode_tooltip')}">${this._mergedModeLabel(device)}</span>`}
+                    <label class="toggle-label" title="${this._t('mode_tooltip')}">
+                        <span class="dim">${this._t('mode')}</span>
+                        <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
+                            <option value="off" ?selected="${this._mergedMode(device) === 'off'}">${this._t('off')}</option>
+                            <option value="peak_only" ?selected="${this._mergedMode(device) === 'peak_only'}">${this._t('peak_only')}</option>
+                            <option value="surplus_solar" ?selected="${this._mergedMode(device) === 'surplus_solar'}">${this._t('mode_surplus_solar')}</option>
+                            <option value="surplus_cheap" ?selected="${this._mergedMode(device) === 'surplus_cheap'}">${this._t('mode_surplus_cheap')}</option>
+                            <option value="surplus_deadline" ?selected="${this._mergedMode(device) === 'surplus_deadline'}">${this._t('mode_surplus_deadline')}</option>
+                        </select>
+                    </label>`}
                     <label class="toggle-label" title="${this._t('requires_tooltip')}">
                         <span class="dim">${this._t('requires')}</span>
                         <select class="mode-select" data-action="depends_on" data-device="${device.id}">
@@ -490,6 +532,91 @@ class SEMLoadPriorityCard extends SEMLitBase {
         return Math.min(...pcts);
     }
 
+    _goalSliderCfg(unit) {
+        return unit === 'kwh'
+            ? { minProp: 'daily_target_energy_kwh', maxProp: 'daily_max_energy_kwh',
+                scaleMax: 100, step: 0.5, unitLabel: ' kWh' }
+            : { minProp: 'daily_min_runtime_min', maxProp: 'daily_max_runtime_min',
+                scaleMax: 720, step: 5, unitLabel: ' min' };
+    }
+
+    _renderGoalSlider(device, unit) {
+        const cfg = this._goalSliderCfg(unit);
+        const g = device.goals || {};
+        const drag = this._goalDrag;
+        let minVal = parseFloat(g[cfg.minProp]) || 0;
+        // stored max 0 = no cap -> handle parks at the far right
+        let maxVal = parseFloat(g[cfg.maxProp]) || 0;
+        let maxIsOff = maxVal <= 0;
+        if (drag && drag.id === device.id) {
+            if (drag.which === 'min') minVal = drag.value;
+            else { maxVal = drag.value; maxIsOff = drag.value >= cfg.scaleMax; }
+        }
+        const maxShown = maxIsOff ? cfg.scaleMax : Math.max(maxVal, minVal);
+        const minPct = Math.min(100, (minVal / cfg.scaleMax) * 100);
+        const maxPct = Math.min(100, (maxShown / cfg.scaleMax) * 100);
+        const fmt = (v) => cfg.step < 1 ? (v % 1 === 0 ? String(v) : v.toFixed(1)) : String(Math.round(v));
+        return html`
+            <div class="range-wrap">
+                <div class="range-labels">
+                    <span>${this._t('at_least')} <b style="color:#8DC892">${fmt(minVal)}${cfg.unitLabel}</b></span>
+                    <span>${this._t('up_to')} <b style="color:#ff9800">${maxIsOff ? '∞' : fmt(maxShown) + cfg.unitLabel}</b></span>
+                </div>
+                <div class="range-track"
+                     @pointerdown=${(e) => this._goalSliderStart(e, device, unit)}>
+                    <div class="range-fill" style="left:${minPct}%;width:${Math.max(0, maxPct - minPct)}%"></div>
+                    <div class="range-handle range-handle-min" style="left:${minPct}%"></div>
+                    <div class="range-handle range-handle-max" style="left:${maxPct}%"></div>
+                </div>
+            </div>`;
+    }
+
+    _goalSliderStart(e, device, unit) {
+        e.stopPropagation();
+        e.preventDefault();
+        const cfg = this._goalSliderCfg(unit);
+        const track = e.currentTarget;
+        const g = device.goals = device.goals || {};
+        const rect = track.getBoundingClientRect();
+        const toVal = (clientX) => {
+            let frac = (clientX - rect.left) / (rect.width || 1);
+            frac = Math.max(0, Math.min(1, frac));
+            return Math.round((frac * cfg.scaleMax) / cfg.step) * cfg.step;
+        };
+        // grab whichever handle is closer to the press
+        const startVal = toVal(e.clientX);
+        const curMin = parseFloat(g[cfg.minProp]) || 0;
+        const rawMax = parseFloat(g[cfg.maxProp]) || 0;
+        const curMax = rawMax <= 0 ? cfg.scaleMax : rawMax;
+        const which = Math.abs(startVal - curMin) <= Math.abs(startVal - curMax) ? 'min' : 'max';
+        const clamp = (v) => {
+            if (which === 'min') return Math.min(v, rawMax <= 0 ? cfg.scaleMax : curMax);
+            return Math.max(v, curMin);
+        };
+        const apply = (clientX) => {
+            this._goalDrag = { id: device.id, which, value: clamp(toVal(clientX)) };
+            this.requestUpdate();
+        };
+        apply(e.clientX);
+        const onMove = (ev) => apply(ev.clientX);
+        const onUp = (ev) => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            const v = clamp(toVal(ev.clientX));
+            this._goalDrag = null;
+            const prop = which === 'min' ? cfg.minProp : cfg.maxProp;
+            // max at the far right = no cap = stored 0
+            const stored = (which === 'max' && v >= cfg.scaleMax) ? 0 : v;
+            g[prop] = stored;
+            this._sendDeviceUpdate(device.id, prop, String(stored));
+            this.requestUpdate();
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+    }
+
     _renderGoalProgress(device) {
         const pct = this._goalPct(device);
         if (pct === null) return nothing;
@@ -509,62 +636,38 @@ class SEMLoadPriorityCard extends SEMLitBase {
             </div>`;
     }
 
-    _renderGoalEditor(device) {
+    _goalUnitFor(device) {
+        const set = this._goalUnit[device.id];
+        if (set) return set;
         const g = device.goals || {};
+        return (parseFloat(g.daily_target_energy_kwh) > 0
+             || parseFloat(g.daily_max_energy_kwh) > 0) ? 'kwh' : 'min';
+    }
+
+    _renderGoalEditor(device) {
         const merged = this._mergedMode(device);
+        const unit = this._goalUnitFor(device);
         const topUpWithoutTarget =
             (merged === 'surplus_cheap' || merged === 'surplus_deadline')
             && !this._hasTarget(device);
+        const g = device.goals || {};
         return html`
             <div class="goal-editor">
                 <div class="ge-title">
                     <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
                     ${this._t('daily_target')}
+                    <span class="ge-spacer"></span>
+                    <select class="ge-unit-select" data-action="goal_unit" data-device="${device.id}">
+                        <option value="min" ?selected="${unit === 'min'}">min</option>
+                        <option value="kwh" ?selected="${unit === 'kwh'}">kWh</option>
+                    </select>
                 </div>
-                <div class="ge-row">
-                    <span class="ge-label">${this._t('mode')}</span>
-                    <span class="ge-ctl">
-                        <select class="ge-mode-select" data-action="combined_mode" data-device="${device.id}">
-                            <option value="off" ?selected="${merged === 'off'}">${this._t('off')}</option>
-                            <option value="peak_only" ?selected="${merged === 'peak_only'}">${this._t('peak_only')}</option>
-                            <option value="surplus_solar" ?selected="${merged === 'surplus_solar'}">${this._t('mode_surplus_solar')}</option>
-                            <option value="surplus_cheap" ?selected="${merged === 'surplus_cheap'}">${this._t('mode_surplus_cheap')}</option>
-                            <option value="surplus_deadline" ?selected="${merged === 'surplus_deadline'}">${this._t('mode_surplus_deadline')}</option>
-                        </select>
-                    </span>
-                </div>
+                ${this._renderGoalSlider(device, unit)}
                 ${topUpWithoutTarget ? html`
                 <div class="ge-hint">
                     <ha-icon icon="mdi:information-outline" style="--mdc-icon-size:13px;color:#ff9800"></ha-icon>
                     <span>${this._t('goal_hint_no_target')}</span>
                 </div>` : nothing}
-                <div class="ge-row">
-                    <span class="ge-label">${this._t('min_runtime_per_day')}</span>
-                    <span class="ge-ctl">
-                        <input type="number" min="0" max="1440" step="5"
-                               .value="${String(g.daily_min_runtime_min || 0)}"
-                               data-goal="daily_min_runtime_min" data-device="${device.id}">
-                        <span class="ge-unit">min</span>
-                    </span>
-                </div>
-                <div class="ge-row">
-                    <span class="ge-label">${this._t('max_runtime_per_day')}</span>
-                    <span class="ge-ctl">
-                        <input type="number" min="0" max="1440" step="5"
-                               .value="${String(g.daily_max_runtime_min || 0)}"
-                               data-goal="daily_max_runtime_min" data-device="${device.id}">
-                        <span class="ge-unit">min</span>
-                    </span>
-                </div>
-                <div class="ge-row">
-                    <span class="ge-label">${this._t('energy_target_per_day')}</span>
-                    <span class="ge-ctl">
-                        <input type="number" min="0" max="200" step="0.5"
-                               .value="${String(g.daily_target_energy_kwh || 0)}"
-                               data-goal="daily_target_energy_kwh" data-device="${device.id}">
-                        <span class="ge-unit">kWh</span>
-                    </span>
-                </div>
                 <div class="ge-row">
                     <span class="ge-label">${this._t('target_deadline')}</span>
                     <span class="ge-ctl ge-time">
@@ -683,6 +786,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 const deviceId = modeTarget.dataset.device;
                 const device = this.devices.find(d => d.id === deviceId);
                 if (device) this._applyMergedMode(device, modeTarget.value);
+                return;
+            }
+            const unitTarget = e.target.closest('[data-action="goal_unit"]');
+            if (unitTarget) {
+                this._goalUnit[unitTarget.dataset.device] = unitTarget.value;
+                this.requestUpdate();
                 return;
             }
             const goalTarget = e.target.closest('[data-goal]');
