@@ -201,20 +201,26 @@ power and OFF when the surplus is gone (anti-flicker: min 5 min on /
 1 min off). Remove it again with
 `solar_energy_management.unregister_surplus_device`.
 
-### Control modes — who is in charge
+### The mode ladder — who is in charge, and how far SEM goes
 
-Every device has a control mode (changeable on the Control tab or via
-`update_device_config`):
+Every device row on the Control tab has **one mode picker** — a 5-step
+ladder where each step adds capability:
 
-| Mode | Behavior |
+| Mode (UI) | Behavior |
 |---|---|
-| `off` | SEM monitors only, never switches the device |
-| `peak_only` | **Your own automations** run the device; SEM only sheds it to protect the grid peak and restores it afterwards |
-| `surplus` | SEM proactively runs the device on solar surplus (the default for service-registered devices) |
+| **Off** | SEM monitors only, never switches the device |
+| **Peak only** | **Your own automations** run the device; SEM only sheds it to protect the grid peak and restores it afterwards (catch the surplus via the event interface below) |
+| **Surplus — solar only** | SEM runs the device on solar surplus; **never grid power** — on a dark day the daily target is missed (logged once) |
+| **Surplus + cheap top-up** | …and while behind the daily target, cheap tariff windows complete it from grid |
+| **Surplus + finish by deadline** | …and if the remaining target no longer fits before the deadline, SEM force-runs the device in time — regardless of price |
+
+(Services and automations see this as two fields: `control_mode` =
+`off`/`peak_only`/`surplus`, plus `top_up_policy` =
+`solar_only`/`cheap_hours`/`always` for the three surplus steps.)
 
 Devices auto-discovered from the Energy Dashboard default to
-`peak_only`; devices you register via the service default to `surplus`
-— that's what you register them for.
+`peak_only`; devices you register via the service default to
+`surplus` with `solar_only` — that's what you register them for.
 
 ### Catching the surplus in your own automations (`peak_only`)
 
@@ -245,9 +251,25 @@ automation:
 
 ### Daily targets — the goal engine
 
-A `surplus`-mode device can be given a **daily goal** — one call, or per
-field later via `update_device_config`, or interactively on the
-Control tab (target 🞋 button on each device row):
+A surplus-mode device can be given a **daily goal**. On the Control tab
+each device row has a target 🞋 button opening the **Daily Target**
+panel — the same look as the EV charger's Charge Target:
+
+- A **dual-handle slider**: the green **At least** handle is the daily
+  target, the orange **Up to** handle is the safety cap. Parking Up-to
+  at the far right means **no cap** (shown as ∞).
+- A **min ↔ kWh unit picker** (top right): the slider sets a *runtime*
+  target for dumb loads (pool pump: at least 240 min) or an *energy*
+  target for metered loads (at least 5 kWh). Default unit is min.
+- **Finish by** — the time the target should be met (empty = end of day).
+- **Stop when** — an external completion condition: a sensor and a
+  value (e.g. the car's SOC sensor ≥ 80) that ends the device's day
+  early once reached.
+- A **progress bar** under the row (e.g. `10/25 min → 21:00 ✓`) —
+  progress survives restarts.
+
+The same goal can be set in the registration call or per field via
+`update_device_config`:
 
 ```yaml
 service: solar_energy_management.register_surplus_device
@@ -257,23 +279,42 @@ data:
   rated_power: 800
   daily_min_runtime_min: 240      # ≥ 4h/day…
   target_deadline: "21:00"        # …finished by 9pm
-  top_up_policy: cheap_hours      # grid top-up only in cheap windows
+  top_up_policy: cheap_hours      # = mode "Surplus + cheap top-up"
 ```
 
 | Field | Meaning |
 |---|---|
-| `daily_min_runtime_min` | Runtime target — for dumb loads (pool pump 4 h/day) |
-| `daily_target_energy_kwh` | Energy target — for metered loads; the device stops once it consumed this much today |
-| `daily_max_runtime_min` | Safety cap — stopped for the rest of the day once reached |
+| `daily_min_runtime_min` | Runtime target (the green At-least handle, min unit) |
+| `daily_max_runtime_min` | Runtime safety cap (the orange Up-to handle; 0 = no cap) |
+| `daily_target_energy_kwh` | Energy target (At-least handle, kWh unit) |
+| `daily_max_energy_kwh` | Energy safety cap (Up-to handle, kWh unit; 0 = no cap) |
 | `target_deadline` | HH:MM by which the target should be met (default: end of day) |
-| `top_up_policy` | `solar_only` (never grid — accept a missed target on a dark day), `cheap_hours` (complete during cheap tariff windows), `always` (force-run in time to meet the deadline) |
-| `stop_entity` + `stop_at` | External completion condition — e.g. the car's SOC sensor at 80: the device ends its day early once reached |
+| `top_up_policy` | The surplus mode step: `solar_only` / `cheap_hours` / `always` |
+| `stop_entity` + `stop_at` | External completion condition |
 
-During the day the device runs opportunistically on surplus exactly as
-before; the goal only adds behavior when the sun alone won't get there.
-Progress (runtime/energy today, target met) shows as a bar on the
-Control tab and survives restarts. **Peak protection always outranks
-the goal** — a device chasing its 4 h still sheds for a grid peak.
+#### What happens when the target is NOT reached?
+
+Worked example — 25 min target, 10 min done from surplus, sun gone:
+
+- **Surplus — solar only:** nothing is forced. The target is missed,
+  SEM logs one line, progress resets at midnight for a fresh attempt.
+  This mode never draws grid power.
+- **Surplus + cheap top-up:** the next *cheap* tariff window
+  force-starts the device from grid until the remaining 15 min are
+  done. No cheap window before midnight → missed like solar-only.
+- **Surplus + finish by deadline:** SEM continuously compares
+  remaining target vs time until the deadline. With "Finish by" empty
+  (= 23:59), at 23:44 the remaining 15 min no longer fit — the device
+  force-starts regardless of price and stops when the target is met.
+  A deadline that passes unmet (HA down, peak block) still force-runs
+  afterwards until met, giving up at the day rollover.
+
+In every mode: **peak protection outranks the goal** (a device chasing
+its target still sheds for a grid peak, and forces are suppressed while
+the peak is at risk), the anti-flicker minimums (5 min on / 1 min off)
+shape the switching, and once the target or a cap is reached the device
+is done for the day. A restart never orphans a device SEM switched on —
+running surplus devices are re-owned at boot.
 
 ## Appliance Dependencies
 

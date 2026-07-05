@@ -11,6 +11,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.17] — 05.07.2026
+
+> **Pre-release.** Load management grows up: daily targets for any
+> household load, persisted registrations, a surplus event for your own
+> automations — plus counter-accurate daily solar and a Home-tab
+> production KPI.
+
+### 🎯 Load management — daily targets for household loads (#559)
+- ✨ **Give any switch a daily goal** — e.g. *pool pump at least 4 h/day*
+  (runtime) or *5 kWh/day* (energy), set on an EV-charger-style
+  dual-handle slider with a min ↔ kWh unit picker. The green *At least*
+  handle is the target, the orange *Up to* handle a safety cap (far
+  right = no cap ∞). (requested by @alexmc1510)
+- ✨ **One 5-step mode per device**: Off · Peak only · Surplus — solar
+  only · Surplus + cheap top-up · Surplus + finish by deadline. Solar
+  only never draws grid; cheap top-up completes the target in cheap
+  tariff windows; finish-by-deadline force-runs in time to meet it.
+  Peak protection always outranks the goal.
+- ✨ **Stop condition** — end a device's day early when an external
+  sensor reaches a value (charge a PHEV on a dumb socket, stop at the
+  car's 80 % SOC).
+- ✨ **Finish by** deadline per device (default: end of day); progress
+  bar on the Control tab; progress survives restarts.
+- 🐛 **Registrations now persist** — devices registered via
+  `register_surplus_device` used to silently vanish on every restart.
+  One call now does everything (defaults to surplus mode, returns a
+  response summary); new `unregister_surplus_device` service; explicit
+  registrations own their switch (auto-discovery duplicates are
+  dropped).
+- ✨ **Surplus event for your own automations** —
+  `binary_sensor.sem_surplus_available` (debounced: 60 s above the
+  threshold → on, 120 s below 80 % of it → off; threshold knob) plus a
+  `solar_energy_management_surplus` bus event on transitions. Built for
+  peak-only devices that keep their own schedules.
+- 🛡️ **Never orphaned ON**: a restart re-owns running surplus devices;
+  forces end with their reason (deadline passed target met, tariff left
+  the cheap window, day rollover).
+- 📖 The Control-tab device card gained a **? help panel** explaining
+  every option — modes, priority/shedding order, requires, configure,
+  target peak, daily targets — in all 15 languages.
+
+### ☀️ Daily solar — counter-accurate (#556)
+- 🐛 **Cloud-polled inverters (Deye Cloud & co.) undercounted daily solar
+  ~3×** — the power sensor sits at 0/unavailable between polls. SEM's
+  daily solar now reconciles against the inverter's own production
+  counters (upward-only; unit-aware; handles counter resets and
+  multi-string sums) and credits production while HA was restarting.
+  The previously inert *prefer hardware energy* option is the gate.
+  (reported by @hrdilshan)
+- ✨ **Today's Solar Production KPI** — a prominent hero card at the top
+  of the Home tab (large orange kWh + live power chip), ×15 languages.
+  (requested by @hrdilshan)
+
+### 🌍 Forecast — localized entity IDs (#562)
+- 🐛 **Solcast was never detected on non-English installs** — the
+  integration names its entities in your HA language
+  (`…_forecast_heute` on German), while SEM looked for the hardcoded
+  English IDs. Detection now resolves through the entity registry's
+  language-independent IDs, for Solcast and Forecast.Solar alike.
+  (reported by @ebnerjoh)
+
+### 🗄️ Storage — no more all-or-nothing (#563)
+- 🐛 **One bad value could wipe the whole energy store** — a single
+  out-of-range accumulator (e.g. a pre-beta.14 ×1000-inflated lifetime
+  counter) discarded ALL daily/monthly/cost data on the upgrade
+  restart. Validation now repairs per entry and keeps the rest; the
+  daily store (where the real accumulators live) is now validated at
+  all. (reported by @ebnerjoh)
+
+### 💰 Costs & grid polish (#557, #555, #560, #561)
+- ✨ System Investment Cost accepts direct numeric entry. (requested by @hrdilshan)
+- 🩹 Missing optional HACS cards (e.g. `sankey-chart`) show a friendly
+  translated install notice instead of a red error banner. (reported by @hrdilshan and @ebnerjoh)
+- 🐛 Entity pickers: hot-water accepts switch/input_boolean/water_heater/climate;
+  heat-pump relays accept input_boolean bridges (card + config flow). (reported by @covuser)
+- 🐛 Grid card "Net" row states its direction: **Net import** / **Net export**, ×15 languages.
+
+Thanks to @alexmc1510, @hrdilshan, @ebnerjoh and @covuser for the reports and ideas! 🙏
+
 # [1.7.4-beta.16] — 04.07.2026
 
 > **Pre-release.** Config-picker fixes, friendly missing-card notice, typed
