@@ -96,6 +96,9 @@ class SensorReader:
         self.config = self._parse_config(config)
         self._raw_config = config
         self._energy_dashboard_config = None
+        # (#564) autodetected battery temperature sibling (cached) + probe throttle
+        self._battery_temp_entity: Optional[str] = None
+        self._battery_temp_probe_mono: float = -1e9
         # v1.7.0 / #312: per-PV-string sensors discovered at config-
         # flow time. Empty dict in single-string setups (no discovery
         # hit), populated by ``set_pv_strings`` from
@@ -1433,13 +1436,65 @@ class SensorReader:
             )
             readings.ev_connected = True
 
-        # Battery temperature (from legacy config if available)
-        if self.config.battery_temperature_sensor:
-            readings.battery_temperature = self._read_sensor(
-                self.config.battery_temperature_sensor, "battery_temp"
-            )
+        # Battery temperature (#564: configured sensor, else device sibling)
+        self._read_battery_temperature(readings)
 
         return readings
+
+    def _read_battery_temperature(self, readings) -> None:
+        """(#564) Fill battery_temperature honestly.
+
+        Priority: the configured sensor, else a temperature-class sibling
+        on the same device as the battery SOC/power sensor (Fronius & co.
+        expose a cell temperature there). NO source → stays None and the
+        entity shows *unknown* — the old fabricated 25.0 °C default was
+        displayed as a real reading.
+        """
+        entity = (
+            self.config.battery_temperature_sensor
+            or self._autodetect_battery_temperature()
+        )
+        if not entity:
+            return
+        state = self.hass.states.get(entity)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return
+        try:
+            readings.battery_temperature = float(state.state)
+        except (ValueError, TypeError):
+            return
+
+    def _autodetect_battery_temperature(self) -> Optional[str]:
+        """Find a temperature sensor on the battery's own device.
+
+        Cached once found; a miss retries every 5 minutes (source
+        integrations load late at boot).
+        """
+        if self._battery_temp_entity:
+            return self._battery_temp_entity
+        import time as _time
+        now = _time.monotonic()
+        if now - self._battery_temp_probe_mono < 300:
+            return None
+        self._battery_temp_probe_mono = now
+
+        # Reuse the battle-tested hardware detection the dashboard's K-Flow
+        # card already relies on (brand-aware battery_temp1 regexes) —
+        # ONE source of truth instead of a parallel scan.
+        ed = getattr(self, "_energy_dashboard_config", None)
+        if ed is None:
+            return None
+        try:
+            from ..hardware_detection import discover_battery_details_from_registry
+            details = discover_battery_details_from_registry(self.hass, ed)
+        except Exception as e:  # noqa: BLE001 — registry absent in tests
+            _LOGGER.debug("Battery temperature autodetect skipped: %s", e)
+            return None
+        entity = details.get("battery_temp1")
+        if entity:
+            self._battery_temp_entity = entity
+            _LOGGER.info("Battery temperature autodetected: %s", entity)
+        return entity
 
     def _validate_manual_grid_config(
         self, ed, manual_import: Optional[str], manual_export: Optional[str],
@@ -1896,11 +1951,8 @@ class SensorReader:
                 readings.battery_soc = self._last_valid_soc
                 readings.battery_soc_unavailable = True
 
-        # Battery temperature
-        if self.config.battery_temperature_sensor:
-            readings.battery_temperature = self._read_sensor(
-                self.config.battery_temperature_sensor, "battery_temp"
-            )
+        # Battery temperature (#564: configured sensor, else device sibling)
+        self._read_battery_temperature(readings)
 
         # EV power — sum all chargers if multi-charger (#193)
         ev_chargers = self._raw_config.get("ev_chargers", [])
