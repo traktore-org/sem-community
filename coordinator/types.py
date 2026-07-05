@@ -177,7 +177,9 @@ class PowerReadings:
     # Battery state
     battery_soc: float = 0.0
     battery_soc_unavailable: bool = False  # True when SOC sensor is offline
-    battery_temperature: float = 25.0
+    # (#564) None = no temperature source — published as unknown. The old
+    # 25.0 default was FABRICATED and shown as a real reading.
+    battery_temperature: Optional[float] = None
 
     # Battery health (calculated from energy data)
     battery_cycles_estimated: float = 0.0
