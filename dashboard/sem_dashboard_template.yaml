@@ -51,28 +51,9 @@ views:
           - type: custom:sem-tab-header
             tab: home
 
-          # ── Today's Solar Production KPI (#556) ──
-          # (&glass_card anchor defined here — first styled card on Home)
-          - type: custom:sem-solar-kpi-card
-            entity_prefix: sensor.sem_
-            card_mod:
-              style: &glass_card |
-                ha-card {
-                  background-color: var(--card-background-color) !important;
-                  color: var(--primary-text-color) !important;
-                  border: 1px solid var(--divider-color) !important;
-                  border-radius: 16px !important;
-                  box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.08)) !important;
-                  max-width: 900px !important;
-                  font-family: 'Segoe UI','Roboto',sans-serif !important;
-                  transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), border-color 0.3s cubic-bezier(0.4,0,0.2,1) !important;
-                  --chip-background: var(--secondary-background-color);
-                  --primary-font-family: 'Segoe UI','Roboto',sans-serif;
-                }
-                ha-card:hover {
-                  box-shadow: var(--ha-card-box-shadow, 0 4px 16px rgba(0,0,0,0.12)) !important;
-                }
-
+          # ── Solar hero lives in the tab header (#556 → merged into
+          # sem-tab-header per maintainer UI review; the standalone
+          # sem-solar-kpi-card remains available for manual dashboards) ──
           # ── Configuration tab welcome banner (#442) ──
           # Self-hides via localStorage once dismissed (one-time only)
           - type: custom:sem-onboarding-banner
@@ -95,11 +76,26 @@ views:
           - type: custom:sem-home-status-card
             entity_prefix: sensor.sem_
 
-          # ── Solar Summary ──
+          # ── Solar Summary ── (&glass_card anchor defined here)
           - type: custom:sem-solar-card
             entity_prefix: sensor.sem_
             card_mod:
-              style: *glass_card
+              style: &glass_card |
+                ha-card {
+                  background-color: var(--card-background-color) !important;
+                  color: var(--primary-text-color) !important;
+                  border: 1px solid var(--divider-color) !important;
+                  border-radius: 16px !important;
+                  box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.08)) !important;
+                  max-width: 900px !important;
+                  font-family: 'Segoe UI','Roboto',sans-serif !important;
+                  transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), border-color 0.3s cubic-bezier(0.4,0,0.2,1) !important;
+                  --chip-background: var(--secondary-background-color);
+                  --primary-font-family: 'Segoe UI','Roboto',sans-serif;
+                }
+                ha-card:hover {
+                  box-shadow: var(--ha-card-box-shadow, 0 4px 16px rgba(0,0,0,0.12)) !important;
+                }
 
           # ── Weather & Clock ──
           - type: custom:sem-weather-card
