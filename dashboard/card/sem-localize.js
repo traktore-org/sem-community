@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-04T22:06:44.454631+00:00
+// Generated: 2026-07-05T05:57:42.089999+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1145,7 +1145,11 @@
       "policy_cheap_hours": "Cheap hours",
       "policy_always": "Always (meet target)",
       "stop_condition": "Stop when",
-      "help_device_target": "give the device a daily goal: minimum runtime (dumb loads like a pool pump) and/or an energy amount (metered loads), optionally finished by a deadline. Top-up policy decides what happens when the sun alone won't get there: Solar only never uses grid power and accepts missing the target; Cheap hours completes it during cheap tariff windows; Always force-runs the device in time to meet the deadline. Max runtime is a safety cap; Stop when ends the day early once an external sensor (e.g. the car's SOC) reaches the value. Peak protection always outranks these targets."
+      "help_device_target": "give the device a daily goal: minimum runtime (dumb loads like a pool pump) and/or an energy amount (metered loads), optionally finished by a deadline. Top-up policy decides what happens when the sun alone won't get there: Solar only never uses grid power and accepts missing the target; Cheap hours completes it during cheap tariff windows; Always force-runs the device in time to meet the deadline. Max runtime is a safety cap; Stop when ends the day early once an external sensor (e.g. the car's SOC) reaches the value. Peak protection always outranks these targets.",
+      "mode_surplus_solar": "Surplus — solar only",
+      "mode_surplus_cheap": "Surplus + cheap top-up",
+      "mode_surplus_deadline": "Surplus + finish by deadline",
+      "goal_hint_no_target": "Set a daily target below for the top-up to take effect."
     },
     "de": {
       "charging": "Laden",
@@ -2287,7 +2291,11 @@
       "policy_cheap_hours": "Günstige Stunden",
       "policy_always": "Immer (Ziel einhalten)",
       "stop_condition": "Stopp wenn",
-      "help_device_target": "gibt dem Gerät ein Tagesziel: Mindestlaufzeit (einfache Lasten wie Poolpumpe) und/oder eine Energiemenge (gemessene Lasten), optional fertig bis zu einer Uhrzeit. Die Auffüll-Strategie entscheidet, was passiert, wenn die Sonne allein nicht reicht: Nur Solar nutzt nie Netzstrom und akzeptiert ein verfehltes Ziel; Günstige Stunden füllt in günstigen Tariffenstern auf; Immer erzwingt den Betrieb rechtzeitig zur Deadline. Max. Laufzeit ist eine Sicherheitsgrenze; Stopp wenn beendet den Tag vorzeitig, sobald ein externer Sensor (z. B. Auto-SOC) den Wert erreicht. Der Spitzenschutz hat immer Vorrang."
+      "help_device_target": "gibt dem Gerät ein Tagesziel: Mindestlaufzeit (einfache Lasten wie Poolpumpe) und/oder eine Energiemenge (gemessene Lasten), optional fertig bis zu einer Uhrzeit. Die Auffüll-Strategie entscheidet, was passiert, wenn die Sonne allein nicht reicht: Nur Solar nutzt nie Netzstrom und akzeptiert ein verfehltes Ziel; Günstige Stunden füllt in günstigen Tariffenstern auf; Immer erzwingt den Betrieb rechtzeitig zur Deadline. Max. Laufzeit ist eine Sicherheitsgrenze; Stopp wenn beendet den Tag vorzeitig, sobald ein externer Sensor (z. B. Auto-SOC) den Wert erreicht. Der Spitzenschutz hat immer Vorrang.",
+      "mode_surplus_solar": "Überschuss — nur Solar",
+      "mode_surplus_cheap": "Überschuss + günstig auffüllen",
+      "mode_surplus_deadline": "Überschuss + Ziel garantiert",
+      "goal_hint_no_target": "Lege unten ein Tagesziel fest, damit das Auffüllen wirkt."
     },
     "fr": {
       "charging": "En charge",
@@ -3429,7 +3437,11 @@
       "policy_cheap_hours": "Heures creuses",
       "policy_always": "Toujours (objectif garanti)",
       "stop_condition": "Arrêter quand",
-      "help_device_target": "donne un objectif journalier : durée minimale (charges simples comme une pompe de piscine) et/ou une quantité d'énergie (charges mesurées), à terminer avant une heure limite. La stratégie de complément décide quand le soleil ne suffit pas : Solaire uniquement n'utilise jamais le réseau ; Heures creuses complète pendant les fenêtres bon marché ; Toujours force le fonctionnement à temps. Durée max = garde-fou ; Arrêter quand termine la journée dès qu'un capteur externe (SOC voiture) atteint la valeur. La protection de pointe reste prioritaire."
+      "help_device_target": "donne un objectif journalier : durée minimale (charges simples comme une pompe de piscine) et/ou une quantité d'énergie (charges mesurées), à terminer avant une heure limite. La stratégie de complément décide quand le soleil ne suffit pas : Solaire uniquement n'utilise jamais le réseau ; Heures creuses complète pendant les fenêtres bon marché ; Toujours force le fonctionnement à temps. Durée max = garde-fou ; Arrêter quand termine la journée dès qu'un capteur externe (SOC voiture) atteint la valeur. La protection de pointe reste prioritaire.",
+      "mode_surplus_solar": "Surplus — solaire uniquement",
+      "mode_surplus_cheap": "Surplus + complément heures creuses",
+      "mode_surplus_deadline": "Surplus + objectif garanti",
+      "goal_hint_no_target": "Définissez un objectif journalier ci-dessous pour que le complément s'applique."
     },
     "es": {
       "charging": "Cargando",
@@ -4571,7 +4583,11 @@
       "policy_cheap_hours": "Horas baratas",
       "policy_always": "Siempre (cumplir objetivo)",
       "stop_condition": "Parar cuando",
-      "help_device_target": "da al dispositivo un objetivo diario: tiempo mínimo (cargas simples) y/o una cantidad de energía (cargas medidas), opcionalmente antes de una hora límite. La política de recarga decide si el sol no basta: Solo solar nunca usa red; Horas baratas completa en ventanas baratas; Siempre fuerza el funcionamiento a tiempo. Tiempo máx es un tope de seguridad; Parar cuando termina el día al alcanzar un sensor externo (SOC del coche) el valor. La protección de pico siempre tiene prioridad."
+      "help_device_target": "da al dispositivo un objetivo diario: tiempo mínimo (cargas simples) y/o una cantidad de energía (cargas medidas), opcionalmente antes de una hora límite. La política de recarga decide si el sol no basta: Solo solar nunca usa red; Horas baratas completa en ventanas baratas; Siempre fuerza el funcionamiento a tiempo. Tiempo máx es un tope de seguridad; Parar cuando termina el día al alcanzar un sensor externo (SOC del coche) el valor. La protección de pico siempre tiene prioridad.",
+      "mode_surplus_solar": "Excedente — solo solar",
+      "mode_surplus_cheap": "Excedente + recarga barata",
+      "mode_surplus_deadline": "Excedente + objetivo garantizado",
+      "goal_hint_no_target": "Define un objetivo diario abajo para que la recarga tenga efecto."
     },
     "it": {
       "charging": "In carica",
@@ -5713,7 +5729,11 @@
       "policy_cheap_hours": "Ore economiche",
       "policy_always": "Sempre (garantire obiettivo)",
       "stop_condition": "Ferma quando",
-      "help_device_target": "assegna un obiettivo giornaliero: runtime minimo (carichi semplici) e/o energia (carichi misurati), da completare entro una scadenza. La politica di rabbocco decide se il sole non basta: Solo solare non usa mai la rete; Ore economiche completa nelle finestre convenienti; Sempre forza l'esecuzione in tempo. Runtime max è un limite di sicurezza; Ferma quando termina la giornata quando un sensore esterno (SOC auto) raggiunge il valore. La protezione picco ha sempre precedenza."
+      "help_device_target": "assegna un obiettivo giornaliero: runtime minimo (carichi semplici) e/o energia (carichi misurati), da completare entro una scadenza. La politica di rabbocco decide se il sole non basta: Solo solare non usa mai la rete; Ore economiche completa nelle finestre convenienti; Sempre forza l'esecuzione in tempo. Runtime max è un limite di sicurezza; Ferma quando termina la giornata quando un sensore esterno (SOC auto) raggiunge il valore. La protezione picco ha sempre precedenza.",
+      "mode_surplus_solar": "Surplus — solo solare",
+      "mode_surplus_cheap": "Surplus + rabbocco economico",
+      "mode_surplus_deadline": "Surplus + obiettivo garantito",
+      "goal_hint_no_target": "Imposta un obiettivo giornaliero qui sotto perché il rabbocco abbia effetto."
     },
     "nl": {
       "charging": "Laden",
@@ -6855,7 +6875,11 @@
       "policy_cheap_hours": "Goedkope uren",
       "policy_always": "Altijd (doel halen)",
       "stop_condition": "Stop wanneer",
-      "help_device_target": "geeft het apparaat een dagdoel: minimale looptijd (simpele lasten zoals zwembadpomp) en/of energiehoeveelheid (gemeten lasten), optioneel klaar vóór een deadline. Het aanvul-beleid bepaalt wat er gebeurt als de zon niet volstaat: Alleen zon gebruikt nooit netstroom; Goedkope uren vult aan in goedkope venstertijden; Altijd forceert op tijd draaien. Max. looptijd is een veiligheidsgrens; Stop wanneer beëindigt de dag zodra een externe sensor (auto-SOC) de waarde bereikt. Piekbescherming gaat altijd voor."
+      "help_device_target": "geeft het apparaat een dagdoel: minimale looptijd (simpele lasten zoals zwembadpomp) en/of energiehoeveelheid (gemeten lasten), optioneel klaar vóór een deadline. Het aanvul-beleid bepaalt wat er gebeurt als de zon niet volstaat: Alleen zon gebruikt nooit netstroom; Goedkope uren vult aan in goedkope venstertijden; Altijd forceert op tijd draaien. Max. looptijd is een veiligheidsgrens; Stop wanneer beëindigt de dag zodra een externe sensor (auto-SOC) de waarde bereikt. Piekbescherming gaat altijd voor.",
+      "mode_surplus_solar": "Overschot — alleen zon",
+      "mode_surplus_cheap": "Overschot + goedkoop aanvullen",
+      "mode_surplus_deadline": "Overschot + doel gegarandeerd",
+      "goal_hint_no_target": "Stel hieronder een dagdoel in zodat het aanvullen effect heeft."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7997,7 +8021,11 @@
       "policy_cheap_hours": "Levné hodiny",
       "policy_always": "Vždy (splnit cíl)",
       "stop_condition": "Zastavit když",
-      "help_device_target": "dává zařízení denní cíl: minimální dobu běhu (jednoduché spotřebiče) a/nebo množství energie (měřené spotřebiče), volitelně hotovo do termínu. Strategie doplnění rozhoduje, když slunce nestačí: Pouze solár nikdy nebere ze sítě; Levné hodiny doplní v levných oknech; Vždy vynutí běh včas. Max. běh je bezpečnostní strop; Zastavit když ukončí den, jakmile externí senzor (SOC auta) dosáhne hodnoty. Ochrana špičky má vždy přednost."
+      "help_device_target": "dává zařízení denní cíl: minimální dobu běhu (jednoduché spotřebiče) a/nebo množství energie (měřené spotřebiče), volitelně hotovo do termínu. Strategie doplnění rozhoduje, když slunce nestačí: Pouze solár nikdy nebere ze sítě; Levné hodiny doplní v levných oknech; Vždy vynutí běh včas. Max. běh je bezpečnostní strop; Zastavit když ukončí den, jakmile externí senzor (SOC auta) dosáhne hodnoty. Ochrana špičky má vždy přednost.",
+      "mode_surplus_solar": "Přebytek — pouze solár",
+      "mode_surplus_cheap": "Přebytek + levné doplnění",
+      "mode_surplus_deadline": "Přebytek + cíl zaručen",
+      "goal_hint_no_target": "Nastavte níže denní cíl, aby doplnění mělo účinek."
     },
     "da": {
       "charging": "Oplader",
@@ -9139,7 +9167,11 @@
       "policy_cheap_hours": "Billige timer",
       "policy_always": "Altid (nå målet)",
       "stop_condition": "Stop når",
-      "help_device_target": "giver enheden et dagligt mål: minimum driftstid (simple laster som poolpumpe) og/eller energimængde (målte laster), evt. færdig inden en deadline. Efterfyldningspolitik afgør hvad der sker når solen ikke rækker: Kun sol bruger aldrig net; Billige timer fuldfører i billige vinduer; Altid tvangskører i tide. Maks. driftstid er en sikkerhedsgrænse; Stop når afslutter dagen når en ekstern sensor (bilens SOC) når værdien. Spidsbeskyttelse har altid forrang."
+      "help_device_target": "giver enheden et dagligt mål: minimum driftstid (simple laster som poolpumpe) og/eller energimængde (målte laster), evt. færdig inden en deadline. Efterfyldningspolitik afgør hvad der sker når solen ikke rækker: Kun sol bruger aldrig net; Billige timer fuldfører i billige vinduer; Altid tvangskører i tide. Maks. driftstid er en sikkerhedsgrænse; Stop når afslutter dagen når en ekstern sensor (bilens SOC) når værdien. Spidsbeskyttelse har altid forrang.",
+      "mode_surplus_solar": "Overskud — kun sol",
+      "mode_surplus_cheap": "Overskud + billig efterfyldning",
+      "mode_surplus_deadline": "Overskud + mål garanteret",
+      "goal_hint_no_target": "Sæt et dagligt mål nedenfor for at efterfyldningen virker."
     },
     "fi": {
       "charging": "Lataus",
@@ -10281,7 +10313,11 @@
       "policy_cheap_hours": "Halvat tunnit",
       "policy_always": "Aina (tavoite täyttyy)",
       "stop_condition": "Pysäytä kun",
-      "help_device_target": "antaa laitteelle päivätavoitteen: minimikäyntiaika (yksinkertaiset kuormat) ja/tai energiamäärä (mitatut kuormat), valinnaisesti valmiiksi määräaikaan mennessä. Täydennyskäytäntö ratkaisee kun aurinko ei riitä: Vain aurinko ei koskaan käytä verkkoa; Halvat tunnit täydentää halvoissa ikkunoissa; Aina pakottaa käynnin ajoissa. Maks. käyntiaika on turvaraja; Pysäytä kun päättää päivän kun ulkoinen anturi (auton SOC) saavuttaa arvon. Huippusuoja on aina etusijalla."
+      "help_device_target": "antaa laitteelle päivätavoitteen: minimikäyntiaika (yksinkertaiset kuormat) ja/tai energiamäärä (mitatut kuormat), valinnaisesti valmiiksi määräaikaan mennessä. Täydennyskäytäntö ratkaisee kun aurinko ei riitä: Vain aurinko ei koskaan käytä verkkoa; Halvat tunnit täydentää halvoissa ikkunoissa; Aina pakottaa käynnin ajoissa. Maks. käyntiaika on turvaraja; Pysäytä kun päättää päivän kun ulkoinen anturi (auton SOC) saavuttaa arvon. Huippusuoja on aina etusijalla.",
+      "mode_surplus_solar": "Ylijäämä — vain aurinko",
+      "mode_surplus_cheap": "Ylijäämä + halpa täydennys",
+      "mode_surplus_deadline": "Ylijäämä + tavoite taattu",
+      "goal_hint_no_target": "Aseta alle päivätavoite, jotta täydennys vaikuttaa."
     },
     "hu": {
       "charging": "Töltés",
@@ -11423,7 +11459,11 @@
       "policy_cheap_hours": "Olcsó órák",
       "policy_always": "Mindig (cél teljesül)",
       "stop_condition": "Állj, ha",
-      "help_device_target": "napi célt ad az eszköznek: minimális futásidő (egyszerű fogyasztók) és/vagy energiamennyiség (mért fogyasztók), opcionálisan határidőre. A kiegészítési szabály dönt, ha a nap nem elég: Csak napelem soha nem használ hálózatot; Olcsó órák az olcsó ablakokban pótol; Mindig időben kikényszeríti a futást. Max. futásidő biztonsági plafon; Állj, ha idő előtt zárja a napot, ha egy külső szenzor (autó SOC) eléri az értéket. A csúcsvédelem mindig elsőbbséget élvez."
+      "help_device_target": "napi célt ad az eszköznek: minimális futásidő (egyszerű fogyasztók) és/vagy energiamennyiség (mért fogyasztók), opcionálisan határidőre. A kiegészítési szabály dönt, ha a nap nem elég: Csak napelem soha nem használ hálózatot; Olcsó órák az olcsó ablakokban pótol; Mindig időben kikényszeríti a futást. Max. futásidő biztonsági plafon; Állj, ha idő előtt zárja a napot, ha egy külső szenzor (autó SOC) eléri az értéket. A csúcsvédelem mindig elsőbbséget élvez.",
+      "mode_surplus_solar": "Többlet — csak napelem",
+      "mode_surplus_cheap": "Többlet + olcsó kiegészítés",
+      "mode_surplus_deadline": "Többlet + cél garantálva",
+      "goal_hint_no_target": "Állíts be lent napi célt, hogy a kiegészítés érvényesüljön."
     },
     "no": {
       "charging": "Lader",
@@ -12565,7 +12605,11 @@
       "policy_cheap_hours": "Billige timer",
       "policy_always": "Alltid (nå målet)",
       "stop_condition": "Stopp når",
-      "help_device_target": "gir enheten et daglig mål: minimum driftstid (enkle laster som bassengpumpe) og/eller energimengde (målte laster), eventuelt ferdig innen en frist. Etterfyllingspolicy avgjør når solen ikke strekker til: Kun sol bruker aldri nett; Billige timer fullfører i billige vinduer; Alltid tvangskjører i tide. Maks. driftstid er en sikkerhetsgrense; Stopp når avslutter dagen når en ekstern sensor (bilens SOC) når verdien. Toppbeskyttelse har alltid forrang."
+      "help_device_target": "gir enheten et daglig mål: minimum driftstid (enkle laster som bassengpumpe) og/eller energimengde (målte laster), eventuelt ferdig innen en frist. Etterfyllingspolicy avgjør når solen ikke strekker til: Kun sol bruker aldri nett; Billige timer fullfører i billige vinduer; Alltid tvangskjører i tide. Maks. driftstid er en sikkerhetsgrense; Stopp når avslutter dagen når en ekstern sensor (bilens SOC) når verdien. Toppbeskyttelse har alltid forrang.",
+      "mode_surplus_solar": "Overskudd — kun sol",
+      "mode_surplus_cheap": "Overskudd + billig etterfylling",
+      "mode_surplus_deadline": "Overskudd + mål garantert",
+      "goal_hint_no_target": "Sett et daglig mål nedenfor for at etterfyllingen skal virke."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13707,7 +13751,11 @@
       "policy_cheap_hours": "Tanie godziny",
       "policy_always": "Zawsze (osiągnij cel)",
       "stop_condition": "Zatrzymaj gdy",
-      "help_device_target": "nadaje urządzeniu cel dzienny: minimalny czas pracy (proste odbiorniki jak pompa basenowa) i/lub ilość energii (odbiorniki mierzone), opcjonalnie do określonej godziny. Zasada uzupełniania decyduje, gdy słońce nie wystarcza: Tylko solar nigdy nie używa sieci; Tanie godziny uzupełnia w tanich oknach; Zawsze wymusza pracę na czas. Maks. czas pracy to limit bezpieczeństwa; Zatrzymaj gdy kończy dzień, gdy zewnętrzny czujnik (SOC auta) osiągnie wartość. Ochrona szczytu ma zawsze pierwszeństwo."
+      "help_device_target": "nadaje urządzeniu cel dzienny: minimalny czas pracy (proste odbiorniki jak pompa basenowa) i/lub ilość energii (odbiorniki mierzone), opcjonalnie do określonej godziny. Zasada uzupełniania decyduje, gdy słońce nie wystarcza: Tylko solar nigdy nie używa sieci; Tanie godziny uzupełnia w tanich oknach; Zawsze wymusza pracę na czas. Maks. czas pracy to limit bezpieczeństwa; Zatrzymaj gdy kończy dzień, gdy zewnętrzny czujnik (SOC auta) osiągnie wartość. Ochrona szczytu ma zawsze pierwszeństwo.",
+      "mode_surplus_solar": "Nadwyżka — tylko solar",
+      "mode_surplus_cheap": "Nadwyżka + tanie uzupełnienie",
+      "mode_surplus_deadline": "Nadwyżka + cel gwarantowany",
+      "goal_hint_no_target": "Ustaw poniżej cel dzienny, aby uzupełnianie zadziałało."
     },
     "pt": {
       "charging": "A carregar",
@@ -14849,7 +14897,11 @@
       "policy_cheap_hours": "Horas baratas",
       "policy_always": "Sempre (cumprir meta)",
       "stop_condition": "Parar quando",
-      "help_device_target": "dá ao dispositivo uma meta diária: tempo mínimo (cargas simples como bomba de piscina) e/ou quantidade de energia (cargas medidas), opcionalmente concluída até uma hora. A política de reforço decide quando o sol não chega: Só solar nunca usa rede; Horas baratas completa nas janelas baratas; Sempre força o funcionamento a tempo. Tempo máx é um limite de segurança; Parar quando termina o dia quando um sensor externo (SOC do carro) atinge o valor. A proteção de pico tem sempre prioridade."
+      "help_device_target": "dá ao dispositivo uma meta diária: tempo mínimo (cargas simples como bomba de piscina) e/ou quantidade de energia (cargas medidas), opcionalmente concluída até uma hora. A política de reforço decide quando o sol não chega: Só solar nunca usa rede; Horas baratas completa nas janelas baratas; Sempre força o funcionamento a tempo. Tempo máx é um limite de segurança; Parar quando termina o dia quando um sensor externo (SOC do carro) atinge o valor. A proteção de pico tem sempre prioridade.",
+      "mode_surplus_solar": "Excedente — só solar",
+      "mode_surplus_cheap": "Excedente + reforço barato",
+      "mode_surplus_deadline": "Excedente + meta garantida",
+      "goal_hint_no_target": "Define abaixo uma meta diária para o reforço ter efeito."
     },
     "ro": {
       "charging": "Încărcare",
@@ -15991,7 +16043,11 @@
       "policy_cheap_hours": "Ore ieftine",
       "policy_always": "Întotdeauna (atinge ținta)",
       "stop_condition": "Oprește când",
-      "help_device_target": "dă dispozitivului o țintă zilnică: durată minimă (sarcini simple ca pompa de piscină) și/sau cantitate de energie (sarcini măsurate), opțional finalizată până la o oră. Politica de completare decide când soarele nu ajunge: Doar solar nu folosește niciodată rețeaua; Ore ieftine completează în ferestrele ieftine; Întotdeauna forțează funcționarea la timp. Durata max e un plafon de siguranță; Oprește când încheie ziua când un senzor extern (SOC-ul mașinii) atinge valoarea. Protecția de vârf are întotdeauna prioritate."
+      "help_device_target": "dă dispozitivului o țintă zilnică: durată minimă (sarcini simple ca pompa de piscină) și/sau cantitate de energie (sarcini măsurate), opțional finalizată până la o oră. Politica de completare decide când soarele nu ajunge: Doar solar nu folosește niciodată rețeaua; Ore ieftine completează în ferestrele ieftine; Întotdeauna forțează funcționarea la timp. Durata max e un plafon de siguranță; Oprește când încheie ziua când un senzor extern (SOC-ul mașinii) atinge valoarea. Protecția de vârf are întotdeauna prioritate.",
+      "mode_surplus_solar": "Surplus — doar solar",
+      "mode_surplus_cheap": "Surplus + completare ieftină",
+      "mode_surplus_deadline": "Surplus + țintă garantată",
+      "goal_hint_no_target": "Setează mai jos o țintă zilnică pentru ca completarea să aibă efect."
     },
     "sv": {
       "charging": "Laddar",
@@ -17133,7 +17189,11 @@
       "policy_cheap_hours": "Billiga timmar",
       "policy_always": "Alltid (nå målet)",
       "stop_condition": "Stoppa när",
-      "help_device_target": "ger enheten ett dagligt mål: minsta drifttid (enkla laster som poolpump) och/eller energimängd (mätta laster), valfritt klart senast en tid. Påfyllnadspolicyn avgör när solen inte räcker: Endast sol använder aldrig nät; Billiga timmar fyller på i billiga fönster; Alltid tvångskör i tid. Max. drifttid är en säkerhetsgräns; Stoppa när avslutar dagen när en extern sensor (bilens SOC) når värdet. Toppskyddet har alltid företräde."
+      "help_device_target": "ger enheten ett dagligt mål: minsta drifttid (enkla laster som poolpump) och/eller energimängd (mätta laster), valfritt klart senast en tid. Påfyllnadspolicyn avgör när solen inte räcker: Endast sol använder aldrig nät; Billiga timmar fyller på i billiga fönster; Alltid tvångskör i tid. Max. drifttid är en säkerhetsgräns; Stoppa när avslutar dagen när en extern sensor (bilens SOC) når värdet. Toppskyddet har alltid företräde.",
+      "mode_surplus_solar": "Överskott — endast sol",
+      "mode_surplus_cheap": "Överskott + billig påfyllning",
+      "mode_surplus_deadline": "Överskott + mål garanterat",
+      "goal_hint_no_target": "Ange ett dagligt mål nedan för att påfyllningen ska verka."
     }
   };
 
