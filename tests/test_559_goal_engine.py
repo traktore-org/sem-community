@@ -1,17 +1,19 @@
-"""#559 Phases 1-3 — the goal engine for generic surplus loads.
+"""#559 — the goal engine for generic surplus loads (grounded core).
 
-Daily targets (runtime and/or energy) with deadline + top-up policy on
-SURPLUS-mode devices; max-runtime safety cap; external stop condition.
-Peak veto outranks the goal ramp everywhere.
+After the beta.19 freeze the surface is: mode ladder off<peak_only<surplus,
+a daily runtime target (daily_min_runtime_sec), top_up_policy solar_only|cheap_hours
+(cheap_hours = HW/HP off-peak pass), and an external stop condition. The
+speculative surface (energy targets, daily-max caps, target_deadline, always
+policy, the deadline-force pass) was DELETED — it carried both HIGH bugs.
 """
-from datetime import date, datetime, timedelta
+from datetime import date
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from custom_components.solar_energy_management.devices.base import (
-    SwitchDevice, DeviceControlMode,
+    SwitchDevice, DeviceControlMode, DeviceState,
 )
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
@@ -49,31 +51,9 @@ class TestGoalProperties:
         dev._daily_runtime_accumulated_sec = 3600
         assert dev.daily_targets_met is True
 
-    def test_energy_target_met(self):
-        dev = _switch()
-        dev.daily_target_energy_kwh = 2.0
-        dev._daily_energy_accumulated_kwh = 1.9
-        assert dev.daily_targets_met is False
-        dev._daily_energy_accumulated_kwh = 2.0
-        assert dev.daily_targets_met is True
-
-    def test_both_targets_must_be_met(self):
-        dev = _switch()
-        dev.daily_min_runtime_sec = 3600
-        dev.daily_target_energy_kwh = 2.0
-        dev._daily_runtime_accumulated_sec = 3600
-        dev._daily_energy_accumulated_kwh = 0.5
-        assert dev.daily_targets_met is False
-
     def test_no_target_never_met(self):
         dev = _switch()
         assert dev.daily_targets_met is False
-
-    def test_max_runtime_cap(self):
-        dev = _switch()
-        dev.daily_max_runtime_sec = 1800
-        dev._daily_runtime_accumulated_sec = 1801
-        assert dev.daily_max_runtime_reached is True
 
     def test_stop_condition(self):
         hass = MagicMock()
@@ -93,34 +73,52 @@ class TestGoalProperties:
         dev.stop_at = 80
         assert dev.stop_condition_met is False
 
-    def test_deadline_pressure_runtime(self):
+    def test_speculative_surface_removed(self):
+        """Freeze guard: the deleted fields/props must not come back."""
         dev = _switch()
-        dev.daily_min_runtime_sec = 2 * 3600  # 2h open
-        now = datetime.now()
-        # deadline 1h away → 2h no longer fit
-        dl = (now + timedelta(hours=1)).strftime("%H:%M")
-        dev.target_deadline = dl
-        assert dev.deadline_pressure is True
-        # deadline 4h away (same day) → still fits
-        if now.hour <= 19:
-            dev.target_deadline = (now + timedelta(hours=4)).strftime("%H:%M")
-            assert dev.deadline_pressure is False
+        for attr in (
+            "daily_max_runtime_sec", "daily_target_energy_kwh",
+            "daily_max_energy_kwh", "_daily_energy_accumulated_kwh",
+            "daily_max_runtime_reached", "daily_max_energy_reached",
+            "deadline_pressure", "target_deadline", "_deadline_forced",
+            "daily_energy_budget_kwh", "_seconds_until_deadline",
+        ):
+            assert not hasattr(dev, attr), f"{attr} should be deleted"
 
-    def test_deadline_pressure_energy_converts_via_rated_power(self):
-        dev = _switch(rated_power=1000)
-        dev.daily_target_energy_kwh = 2.0  # needs 2h at 1kW
-        dev.target_deadline = (datetime.now() + timedelta(hours=1)).strftime("%H:%M")
-        assert dev.deadline_pressure is True
 
-    def test_energy_accumulates_while_active(self):
-        dev = _switch()
-        dev.get_current_consumption = MagicMock(return_value=800.0)
-        dev.status.state = MagicMock()
-        dev._daily_runtime_meter_day = TODAY
-        dev._daily_runtime_last_check = datetime.now() - timedelta(seconds=60)
-        with patch.object(type(dev), "is_active", property(lambda self: True)):
-            dev.update_daily_runtime(TODAY)
-        assert dev._daily_energy_accumulated_kwh == pytest.approx(800 * 60 / 3_600_000, rel=0.1)
+# ---------------------------------------------------------------------------
+# rated_power auto-calibration (footgun fix)
+# ---------------------------------------------------------------------------
+
+def test_rated_power_autocalibrates_from_observed_draw():
+    hass = MagicMock()
+    hass.states.get = lambda e: SimpleNamespace(state="2300", attributes={}) if e == "sensor.pool_w" else None
+    dev = SwitchDevice(
+        hass=hass, device_id="pool", name="Pool", rated_power=1000,
+        entity_id="switch.pool", power_entity_id="sensor.pool_w",
+    )
+    # default: threshold seeded from rated_power (1000W)
+    assert dev.min_power_threshold == 1000
+    dev._status.state = DeviceState.ACTIVE
+    dev.calibrate_rated_power()
+    assert dev.rated_power == 2300
+    assert dev.min_power_threshold == 2300
+
+
+def test_calibrate_noop_when_off_or_no_sensor():
+    hass = MagicMock()
+    hass.states.get = lambda e: SimpleNamespace(state="2300", attributes={})
+    # no power_entity_id → no-op
+    dev = SwitchDevice(hass=hass, device_id="p", name="P", rated_power=1000,
+                       entity_id="switch.p")
+    dev._status.state = DeviceState.ACTIVE
+    dev.calibrate_rated_power()
+    assert dev.rated_power == 1000
+    # has sensor but device OFF → no-op
+    dev2 = SwitchDevice(hass=hass, device_id="p2", name="P2", rated_power=1000,
+                        entity_id="switch.p2", power_entity_id="sensor.p2_w")
+    dev2.calibrate_rated_power()
+    assert dev2.rated_power == 1000
 
 
 # ---------------------------------------------------------------------------
@@ -151,18 +149,12 @@ def _mock_device(**kw):
     device.needs_offpeak_activation = kw.get("needs_offpeak", False)
     device.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     device.daily_min_runtime_sec = 0
-    device.daily_max_runtime_reached = kw.get("cap_reached", False)
-    device.daily_max_energy_reached = False
     device.daily_targets_met = kw.get("targets_met", False)
     device.stop_condition_met = kw.get("stop_met", False)
-    device.deadline_pressure = kw.get("pressure", False)
     device.top_up_policy = kw.get("policy", "solar_only")
-    device._solar_only_miss_logged = kw.get("miss_logged", True)
-    device._deadline_forced = False
     device._offpeak_forced_date = None
     device.stop_entity = "sensor.x"
     device.stop_at = 80
-    device.target_deadline = "21:00"
     device.__class__ = MagicMock
 
     async def _deactivate():
@@ -180,13 +172,6 @@ class TestControllerGoalGates:
         sc.register_device(dev)
         await sc.update(5000.0)
         dev.deactivate.assert_awaited()
-
-    async def test_cap_reached_device_not_activated(self, mock_hass):
-        sc = SurplusController(mock_hass)
-        dev = _mock_device(cap_reached=True)
-        sc.register_device(dev)
-        await sc.update(5000.0)
-        dev.activate.assert_not_called()
 
     async def test_stop_condition_deactivates(self, mock_hass):
         sc = SurplusController(mock_hass)
@@ -217,29 +202,14 @@ class TestControllerGoalGates:
         await sc.update(0.0, price_level="cheap")
         dev.activate.assert_called_once()
 
-    async def test_always_policy_deadline_forces_regardless_of_price(self, mock_hass):
+    async def test_no_deadline_force_at_normal_tariff(self, mock_hass):
+        # The deadline-critical pass is gone: a surplus device with a runtime
+        # deficit and NO surplus is NEVER grid-forced at normal tariff.
         sc = SurplusController(mock_hass)
-        dev = _mock_device(pressure=True, policy="always")
+        dev = _mock_device(needs_offpeak=True, remaining_sec=3600, policy="solar_only")
         sc.register_device(dev)
-        await sc.update(0.0, price_level="expensive")
-        dev.activate.assert_called_once()
-
-    async def test_deadline_force_suppressed_by_peak(self, mock_hass):
-        from custom_components.solar_energy_management.const import LoadManagementState
-        sc = SurplusController(mock_hass)
-        dev = _mock_device(pressure=True, policy="always")
-        sc.register_device(dev)
-        await sc.update(0.0, price_level="expensive",
-                        peak_state=LoadManagementState.WARNING)
+        await sc.update(0.0, price_level="normal")
         dev.activate.assert_not_called()
-
-    async def test_solar_only_deadline_miss_logged_not_forced(self, mock_hass):
-        sc = SurplusController(mock_hass)
-        dev = _mock_device(pressure=True, policy="solar_only", miss_logged=False)
-        sc.register_device(dev)
-        await sc.update(0.0)
-        dev.activate.assert_not_called()
-        assert dev._solar_only_miss_logged is True
 
 
 # ---------------------------------------------------------------------------
@@ -270,12 +240,10 @@ async def test_goal_update_persists_and_applies(registry):
     })
     await registry.async_update_device_goal("pump", "daily_min_runtime_min", 240)
     await registry.async_update_device_goal("pump", "top_up_policy", "cheap_hours")
-    await registry.async_update_device_goal("pump", "target_deadline", "21:00")
 
     dev = registry._surplus_controller.get_device("pump")
     assert dev.daily_min_runtime_sec == 240 * 60
     assert dev.top_up_policy == "cheap_hours"
-    assert dev.target_deadline == "21:00"
     assert registry._device_goals["pump"]["daily_min_runtime_min"] == 240
 
 
@@ -285,18 +253,25 @@ async def test_goals_survive_reregistration(registry):
         "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
         "rated_power": 800, "priority": 5,
     })
-    await registry.async_update_device_goal("pump", "daily_target_energy_kwh", 3.5)
+    await registry.async_update_device_goal("pump", "daily_min_runtime_min", 180)
     # simulate boot
     registry._surplus_controller._devices.clear()
     registry._register_service_devices()
     dev = registry._surplus_controller.get_device("pump")
-    assert dev.daily_target_energy_kwh == 3.5
+    assert dev.daily_min_runtime_sec == 180 * 60
 
 
 @pytest.mark.asyncio
 async def test_unknown_goal_property_raises(registry):
     with pytest.raises(ValueError):
         await registry.async_update_device_goal("pump", "nonsense", 1)
+
+
+@pytest.mark.asyncio
+async def test_removed_goal_property_raises(registry):
+    """A key deleted in the freeze is no longer settable via the service."""
+    with pytest.raises(ValueError):
+        await registry.async_update_device_goal("pump", "target_deadline", "21:00")
 
 
 @pytest.mark.asyncio
@@ -312,44 +287,42 @@ async def test_unregister_drops_goals(registry):
 
 def test_goal_payload_shape(registry):
     registry._device_goals["pump"] = {
-        "daily_min_runtime_min": 240, "top_up_policy": "always",
+        "daily_min_runtime_min": 240, "top_up_policy": "cheap_hours",
     }
     payload = registry._goal_payload("pump")
     assert payload["goals"]["daily_min_runtime_min"] == 240
-    assert payload["goals"]["top_up_policy"] == "always"
+    assert payload["goals"]["top_up_policy"] == "cheap_hours"
     assert payload["progress"]["runtime_today_min"] == 0
+    # deleted keys are gone from the payload
+    assert "target_deadline" not in payload["goals"]
+    assert "daily_max_runtime_min" not in payload["goals"]
+
+
+@pytest.mark.asyncio
+async def test_loads_goal_with_removed_keys(registry):
+    """A beta.18-persisted goal dict carrying deleted keys applies cleanly."""
+    await registry.async_register_service_device({
+        "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
+        "rated_power": 800, "priority": 5,
+    })
+    registry._device_goals["pump"] = {
+        "daily_min_runtime_min": 240, "top_up_policy": "solar_only",
+        "daily_max_runtime_min": 120, "target_deadline": "21:00",
+        "daily_target_energy_kwh": 5.0, "stop_entity": "", "stop_at": 0,
+    }
+    dev = registry._surplus_controller.get_device("pump")
+    registry._apply_goals(dev)  # must not raise on the extra keys
+    assert dev.daily_min_runtime_sec == 240 * 60
+    assert dev.top_up_policy == "solar_only"
+    assert not hasattr(dev, "daily_max_runtime_sec")
 
 
 # ---------------------------------------------------------------------------
-# Force-expiry semantics (review HIGH — night runaway)
+# Force-expiry semantics — cheap-hours off-peak (HW/HP path, kept)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 class TestForceExpiry:
-
-    async def test_deadline_force_survives_expensive_tariff(self, mock_hass):
-        # An always-policy deadline force must NOT be killed by the
-        # HT-tariff deactivation (that would flap force/kill every cycle)
-        sc = SurplusController(mock_hass)
-        dev = _mock_device(pressure=True, policy="always")
-        sc.register_device(dev)
-        await sc.update(0.0, price_level="expensive")
-        dev.activate.assert_called_once()
-        assert dev._deadline_forced is True
-        dev.is_active = True
-        await sc.update(0.0, price_level="expensive")
-        dev.deactivate.assert_not_called()  # pressure still on → keeps running
-
-    async def test_deadline_force_expires_when_pressure_gone(self, mock_hass):
-        # Day rollover resets progress → pressure false → force ends
-        # (pre-fix the device re-filled the NEW day's target from grid)
-        sc = SurplusController(mock_hass)
-        dev = _mock_device(is_active=True, policy="always", pressure=False)
-        dev._deadline_forced = True
-        sc.register_device(dev)
-        await sc.update(0.0, price_level="cheap")
-        dev.deactivate.assert_awaited()
-        assert dev._deadline_forced is False
 
     async def test_cheap_force_expires_on_day_rollover_in_cheap_window(self, mock_hass):
         from datetime import date as _date
@@ -360,9 +333,6 @@ class TestForceExpiry:
         dev._offpeak_forced = True
         dev._offpeak_forced_date = _date(2020, 1, 1)  # forced YESTERDAY
         sc.register_device(dev)
-        # tariff still cheap — the stale force ends; the cheap pass may then
-        # legitimately re-force for the NEW day's deficit (stamped today),
-        # bounded by the goal gate once the new target is met.
         await sc.update(0.0, price_level="cheap")
         dev.deactivate.assert_awaited()
         assert dev._offpeak_forced_date == dt_util.now().date()
@@ -389,15 +359,6 @@ class TestForceExpiry:
         sc.register_device(dev)
         await sc.update(0.0, price_level="cheap")
         dev.deactivate.assert_not_called()
-
-    async def test_policy_change_mid_force_ends_deadline_force(self, mock_hass):
-        sc = SurplusController(mock_hass)
-        dev = _mock_device(is_active=True, policy="solar_only", pressure=True)
-        dev._deadline_forced = True  # forced while policy was "always"
-        sc.register_device(dev)
-        await sc.update(0.0)
-        dev.deactivate.assert_awaited()
-        assert dev._deadline_forced is False
 
 
 # ---------------------------------------------------------------------------
@@ -457,41 +418,3 @@ async def test_boot_reregister_never_adopts_peak_only(registry):
     registry._register_service_devices()
     dev = registry._surplus_controller.get_device("pump")
     assert dev.is_active is False  # user-managed — never adopted
-
-
-class TestEnergyCap:
-    """(#559 UI round) daily_max_energy_kwh — the energy 'Up to' handle."""
-
-    def test_energy_cap_reached(self):
-        dev = _switch()
-        dev.daily_max_energy_kwh = 3.0
-        dev._daily_energy_accumulated_kwh = 2.9
-        assert dev.daily_max_energy_reached is False
-        dev._daily_energy_accumulated_kwh = 3.0
-        assert dev.daily_max_energy_reached is True
-
-    def test_zero_cap_never_reached(self):
-        dev = _switch()
-        dev._daily_energy_accumulated_kwh = 999
-        assert dev.daily_max_energy_reached is False
-
-
-@pytest.mark.asyncio
-async def test_energy_cap_gate_deactivates(mock_hass):
-    sc = SurplusController(mock_hass)
-    dev = _mock_device(is_active=True, consumption=800)
-    dev.daily_max_energy_reached = True
-    sc.register_device(dev)
-    await sc.update(5000.0)
-    dev.deactivate.assert_awaited()
-
-
-@pytest.mark.asyncio
-async def test_energy_cap_goal_persists(registry):
-    await registry.async_register_service_device({
-        "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
-        "rated_power": 800, "priority": 5,
-    })
-    await registry.async_update_device_goal("pump", "daily_max_energy_kwh", 4.5)
-    dev = registry._surplus_controller.get_device("pump")
-    assert dev.daily_max_energy_kwh == 4.5

@@ -2723,11 +2723,9 @@ async def _async_register_services(
                     translation_placeholders={"device_id": device_id},
                 )
         elif prop in (
-            "daily_min_runtime_min", "daily_max_runtime_min",
-            "daily_target_energy_kwh", "daily_max_energy_kwh",
-            "target_deadline", "top_up_policy", "stop_entity", "stop_at",
+            "daily_min_runtime_min", "top_up_policy", "stop_entity", "stop_at",
         ):
-            # (#559) goal engine properties — persisted + applied live
+            # (#559) goal engine — grounded core, persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
             if not registry:
                 raise HomeAssistantError(
@@ -2735,7 +2733,7 @@ async def _async_register_services(
                     translation_key="device_registry_not_initialized",
                 )
             if prop == "top_up_policy" and str(value) not in (
-                "solar_only", "cheap_hours", "always"
+                "solar_only", "cheap_hours"
             ):
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
@@ -2761,10 +2759,9 @@ async def _async_register_services(
                 vol.Required("device_id"): cv.string,
                 vol.Required("property"): vol.In([
                     "controllable", "critical", "control_mode", "depends_on",
-                    # (#559) goal engine properties
-                    "daily_min_runtime_min", "daily_max_runtime_min",
-                    "daily_target_energy_kwh", "daily_max_energy_kwh",
-                    "target_deadline", "top_up_policy", "stop_entity", "stop_at",
+                    # (#559) goal engine — grounded core
+                    "daily_min_runtime_min", "top_up_policy",
+                    "stop_entity", "stop_at",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -3130,9 +3127,8 @@ async def _async_register_phase_services(
         goal_fields = {
             k: call.data[k]
             for k in (
-                "daily_min_runtime_min", "daily_max_runtime_min",
-                "daily_target_energy_kwh", "daily_max_energy_kwh",
-                "target_deadline", "top_up_policy", "stop_entity", "stop_at",
+                "daily_min_runtime_min", "top_up_policy",
+                "stop_entity", "stop_at",
             )
             if k in call.data
         }
@@ -3186,22 +3182,12 @@ async def _async_register_phase_services(
                 ["off", "peak_only", "surplus"]
             ),
             vol.Optional("depends_on"): vol.All(cv.ensure_list, [cv.string]),
-            # (#559) goal engine — daily targets with deadline + policy
+            # (#559) goal engine — grounded core (runtime target + policy)
             vol.Optional("daily_min_runtime_min"): vol.All(
                 vol.Coerce(float), vol.Range(min=0, max=1440)
             ),
-            vol.Optional("daily_max_runtime_min"): vol.All(
-                vol.Coerce(float), vol.Range(min=0, max=1440)
-            ),
-            vol.Optional("daily_target_energy_kwh"): vol.All(
-                vol.Coerce(float), vol.Range(min=0, max=200)
-            ),
-            vol.Optional("daily_max_energy_kwh"): vol.All(
-                vol.Coerce(float), vol.Range(min=0, max=200)
-            ),
-            vol.Optional("target_deadline"): cv.string,
             vol.Optional("top_up_policy"): vol.In(
-                ["solar_only", "cheap_hours", "always"]
+                ["solar_only", "cheap_hours"]
             ),
             vol.Optional("stop_entity"): cv.string,
             vol.Optional("stop_at"): vol.Coerce(float),

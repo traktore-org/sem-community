@@ -7,6 +7,7 @@ from custom_components.solar_energy_management.coordinator.storage import (
     SEMStorage,
     STORAGE_VERSION,
     ENERGY_SAVE_DELAY,
+    DAILY_SAVE_INTERVAL,
 )
 
 
@@ -238,6 +239,23 @@ async def test_async_save_energy_delayed(storage):
     # Verify the delay argument
     args = storage._energy_store.async_delay_save.call_args
     assert args[0][1] == ENERGY_SAVE_DELAY
+
+
+@pytest.mark.asyncio
+async def test_async_save_daily_throttled(storage):
+    """Daily state gets a real mid-run disk write, throttled to one per
+    interval (so an unclean reboot loses ≤ one interval, not the day)."""
+    storage.set_device_runtime("pump", 1800.0, "2026-07-06")
+    # first call writes immediately (last-save ts starts at 0)
+    await storage.async_save_daily_throttled()
+    storage._daily_store.async_save.assert_called_once_with(storage._daily_data)
+    # an immediate second call is throttled out — still just one write
+    await storage.async_save_daily_throttled()
+    storage._daily_store.async_save.assert_called_once()
+    # after the interval elapses it writes again
+    storage._last_daily_save_ts -= (DAILY_SAVE_INTERVAL + 1)
+    await storage.async_save_daily_throttled()
+    assert storage._daily_store.async_save.call_count == 2
 
 
 @pytest.mark.asyncio

@@ -2317,6 +2317,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     except (AttributeError, ValueError):
                         pass
                 await self._storage.async_save_energy_delayed()
+                # Flush the daily store too (device runtimes, predictor, EV
+                # intelligence, flow/sign/per-charger state) on a throttled
+                # immediate write — previously it only reached disk on a
+                # graceful stop, so an unclean reboot lost the day's progress.
+                await self._storage.async_save_daily_throttled()
 
             self._initial_update_done = True
             result = sem_data.to_dict()
@@ -5343,9 +5348,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     meter_day = date.fromisoformat(data["meter_day"])
                     device._daily_runtime_accumulated_sec = data["accumulated_sec"]
                     device._daily_runtime_meter_day = meter_day
-                    device._daily_energy_accumulated_kwh = float(
-                        data.get("accumulated_kwh", 0.0)
-                    )
                     _LOGGER.debug(
                         "Restored runtime for %s: %.0fs (meter_day=%s)",
                         device_id, data["accumulated_sec"], meter_day,
@@ -5358,17 +5360,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if not self._storage:
             return
         for device in self._surplus_controller._devices.values():
-            has_goal = (
-                device.daily_min_runtime_sec > 0
-                or getattr(device, "daily_max_runtime_sec", 0) > 0
-                or getattr(device, "daily_target_energy_kwh", 0) > 0
-            )
-            if has_goal and device._daily_runtime_meter_day:
+            if device.daily_min_runtime_sec > 0 and device._daily_runtime_meter_day:
                 self._storage.set_device_runtime(
                     device.device_id,
                     device._daily_runtime_accumulated_sec,
                     device._daily_runtime_meter_day.isoformat(),
-                    getattr(device, "_daily_energy_accumulated_kwh", 0.0),
                 )
 
     def get_ed_config_detail(self) -> Optional[Dict[str, Any]]:

@@ -187,35 +187,35 @@ class UnifiedDeviceRegistry:
 
         self.hass.async_create_task(_delayed_rediscovery())
 
-    # (#559) goal properties settable via update_device_config / register
+    # (#559) goal properties settable via update_device_config / register.
+    # Grounded core after the beta.19 freeze: runtime target + top-up policy
+    # (solar_only|cheap_hours) + external stop condition. Deleted keys from
+    # beta.18 (daily_max_runtime_min, daily_target_energy_kwh, daily_max_energy_kwh,
+    # target_deadline) are ignored on load — see _apply_goals.
     GOAL_PROPERTIES = (
-        "daily_min_runtime_min", "daily_max_runtime_min",
-        "daily_target_energy_kwh", "daily_max_energy_kwh",
-        "target_deadline", "top_up_policy",
+        "daily_min_runtime_min", "top_up_policy",
         "stop_entity", "stop_at",
     )
 
     def _apply_goals(self, device) -> None:
-        """Apply the persisted goal config onto a live device object."""
+        """Apply the persisted goal config onto a live device object.
+
+        Only the surviving grounded-core keys are read; any extra keys from
+        beta.18-persisted devices (daily_max_*, daily_target_energy_kwh,
+        target_deadline) are silently ignored so upgrades load cleanly."""
         goals = self._device_goals.get(device.device_id)
         if not goals:
             return
         device.daily_min_runtime_sec = int(
             float(goals.get("daily_min_runtime_min", 0)) * 60
         )
-        device.daily_max_runtime_sec = int(
-            float(goals.get("daily_max_runtime_min", 0)) * 60
-        )
-        device.daily_target_energy_kwh = float(
-            goals.get("daily_target_energy_kwh", 0.0)
-        )
-        device.daily_max_energy_kwh = float(
-            goals.get("daily_max_energy_kwh", 0.0)
-        )
-        device.target_deadline = str(goals.get("target_deadline", "") or "")
-        device.top_up_policy = str(
-            goals.get("top_up_policy", "solar_only") or "solar_only"
-        )
+        policy = str(goals.get("top_up_policy", "solar_only") or "solar_only")
+        if policy not in ("solar_only", "cheap_hours"):
+            # migrate a legacy 'always' off the removed value AND clean the
+            # stored dict so the next _save_storage doesn't roundtrip it back
+            policy = "solar_only"
+            goals["top_up_policy"] = "solar_only"
+        device.top_up_policy = policy
         device.stop_entity = str(goals.get("stop_entity", "") or "")
         device.stop_at = float(goals.get("stop_at", 0.0) or 0.0)
 
@@ -646,26 +646,19 @@ class UnifiedDeviceRegistry:
         goals = self._device_goals.get(device_id, {})
         live = self._surplus_controller.get_device(device_id)
         runtime_min = 0.0
-        energy_kwh = 0.0
         targets_met = False
         if live is not None:
             runtime_min = live._daily_runtime_accumulated_sec / 60
-            energy_kwh = live._daily_energy_accumulated_kwh
             targets_met = bool(live.daily_targets_met)
         return {
             "goals": {
                 "daily_min_runtime_min": goals.get("daily_min_runtime_min", 0),
-                "daily_max_runtime_min": goals.get("daily_max_runtime_min", 0),
-                "daily_target_energy_kwh": goals.get("daily_target_energy_kwh", 0),
-                "daily_max_energy_kwh": goals.get("daily_max_energy_kwh", 0),
-                "target_deadline": goals.get("target_deadline", ""),
                 "top_up_policy": goals.get("top_up_policy", "solar_only"),
                 "stop_entity": goals.get("stop_entity", ""),
                 "stop_at": goals.get("stop_at", 0),
             },
             "progress": {
                 "runtime_today_min": round(runtime_min, 1),
-                "energy_today_kwh": round(energy_kwh, 2),
                 "targets_met": targets_met,
             },
         }
