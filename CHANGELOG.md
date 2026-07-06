@@ -18,9 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚙️ Generic surplus loads — simpler, safer (#559)
 - 🎯 The device **goal engine is back to its grounded core**: a mode ladder
-  (Off / Peak only / **Surplus**) plus one *"run at least N hours today"*
-  solar target and an optional stop-condition (e.g. car SOC ≥ 80 %). Surplus
-  loads are **solar-only** — they never import from grid.
+  (Off / Peak only / **Surplus**) plus one *"run up to N hours today"* solar
+  budget and an optional stop-condition (e.g. car SOC ≥ 80 %). Surplus loads
+  are **solar-only** — they never import from grid.
 - 🐛 **Removed two latent hazards** that shipped in the beta.18 engine: a
   daily-runtime *safety cap* that reset on every restart, and a *finish-by
   deadline* force that could drain the house battery at night with no
@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the goal panel (shown only in Surplus mode), a single hours slider replaces
   the dual-handle min/kWh slider, the stop condition is a clean row, and each
   mode has inline help. (requested by @alexmc1510)
+- 🏷️ **Honest label**: the runtime target reads *"Run up to N h"* — it's a
+  daily solar budget (the device rests once it hits N), not a guaranteed
+  minimum, so the old *"at least"* wording was misleading.
+- 📱 **Mobile fix**: the goal panel's "Stop when" row no longer overflows /
+  wraps its label on phone widths.
+- 💾 **Daily counters survive an unclean reboot**: device-runtime progress
+  (and the rest of SEM's daily state) is now written to disk every ~2 min
+  during runtime, not only on a graceful stop — a crash/power-loss reboot
+  loses at most a couple of minutes instead of the whole day.
 
 # [1.7.4-beta.18] — 05.07.2026
 
