@@ -158,6 +158,12 @@ SENSOR_TYPES = [
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
     ),
     SensorEntityDescription(
+        key="inverter_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+    ),
+    SensorEntityDescription(
         key="battery_cycles_estimated",
         state_class=SensorStateClass.TOTAL,
         suggested_display_precision=1,

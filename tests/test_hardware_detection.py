@@ -1,5 +1,6 @@
 """Tests for EVChargerDetector (hardware_detection.py)."""
 import pytest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from custom_components.solar_energy_management.hardware_detection import (
@@ -1126,6 +1127,100 @@ class TestDiscoverBatteryDetailsFromRegistry:
             result = discover_battery_details_from_registry(hass, cfg)
 
         assert result == {}
+
+    # ── #564 inverter-temperature coverage across supported brands ──
+
+    def _detect(self, entries, cfg, states=None):
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+        hass = MagicMock()
+        # Force the guarded bare-temperature fallback to decide by name only
+        # (state not loaded yet), unless the test supplies explicit states.
+        st = states or {}
+        hass.states.get = lambda e: st.get(e)
+        with self._patch_registry(entries):
+            return discover_battery_details_from_registry(hass, cfg)
+
+    @pytest.mark.parametrize("platform,inv_eid", [
+        # bare *_temperature — needs the guarded fallback
+        ("fronius", "sensor.fronius_verto_15_0_plus_temperature"),
+        ("goodwe", "sensor.goodwe_temperature"),
+        ("solarman", "sensor.deye_temperature"),
+        # specific named patterns
+        ("solax_modbus", "sensor.solax_radiator_temperature"),
+        ("solarman", "sensor.kstar_inverter_radiator_temperature"),
+        ("foxess_modbus", "sensor.foxess_invtemp"),
+        ("solaredge_modbus", "sensor.solaredge_tempsink"),
+        ("sma", "sensor.sma_optimizer_temp"),
+        ("givtcp", "sensor.gv_invertor_temperature"),
+        ("senec", "sensor.senec_case_temp"),
+        ("huawei_solar", "sensor.inverter_internal_temperature"),
+    ])
+    def test_inverter_temp_detected_across_brands(self, platform, inv_eid):
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.seed_solar_power")
+        entries = [
+            _make_registry_entry("sensor.seed_solar_power", platform),
+            _make_registry_entry(inv_eid, platform),
+        ]
+        result = self._detect(entries, cfg)
+        assert result.get("inv_temp") == inv_eid
+
+    def test_fallback_does_not_steal_battery_or_cell_temp(self):
+        """The bare-temperature fallback must skip battery/cell/ambient temps —
+        those belong to battery_temp1, not the inverter."""
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.fronius_battery_power",
+            solar_power="sensor.fronius_solar_power",
+        )
+        entries = [
+            _make_registry_entry("sensor.fronius_battery_power", "fronius"),
+            _make_registry_entry("sensor.fronius_solar_power", "fronius"),
+            _make_registry_entry("sensor.fronius_reserva_cell_temperature", "fronius"),
+            _make_registry_entry("sensor.fronius_ambient_temperature", "fronius"),
+        ]
+        result = self._detect(entries, cfg)
+        # cell temp goes to the battery bucket, ambient is excluded, and there
+        # is no genuine inverter temp → inv_temp stays unset (no false grab).
+        assert result.get("battery_temp1") == "sensor.fronius_reserva_cell_temperature"
+        assert "inv_temp" not in result
+
+    def test_fallback_respects_device_class_when_state_present(self):
+        """A non-temperature entity named '...temp...' is rejected by the
+        device_class/unit guard even if the name slips through."""
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.x_solar_power")
+        entries = [
+            _make_registry_entry("sensor.x_solar_power", "acme"),
+            _make_registry_entry("sensor.x_attempts", "acme"),  # 'temp' substring, not a temp
+        ]
+        states = {
+            "sensor.x_attempts": SimpleNamespace(
+                state="3", attributes={"device_class": "duration"}),
+        }
+        result = self._detect(entries, cfg, states=states)
+        assert "inv_temp" not in result
+
+    def test_new_battery_temp_shapes(self):
+        """#564 battery-temp additions: reversed word order, BMU, GoodWe BMS."""
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.b_power")
+        # Fronius core storage reversed order
+        r1 = self._detect([
+            _make_registry_entry("sensor.b_power", "fronius"),
+            _make_registry_entry("sensor.b_temperature_cell", "fronius"),
+        ], cfg)
+        assert r1.get("battery_temp1") == "sensor.b_temperature_cell"
+        # BYD bmu_temp
+        r2 = self._detect([
+            _make_registry_entry("sensor.b_power", "byd_battery_box"),
+            _make_registry_entry("sensor.b_bmu_temp", "byd_battery_box"),
+        ], cfg)
+        assert r2.get("battery_temp1") == "sensor.b_bmu_temp"
+        # GoodWe bms_bat_temperature
+        r3 = self._detect([
+            _make_registry_entry("sensor.b_power", "goodwe"),
+            _make_registry_entry("sensor.b_bms_bat_temperature", "goodwe"),
+        ], cfg)
+        assert r3.get("battery_mos") == "sensor.b_bms_bat_temperature"
 
     def test_skips_disabled_entities(self):
         """Disabled detail sensors should not be detected."""

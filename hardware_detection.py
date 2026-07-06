@@ -1658,13 +1658,27 @@ def discover_pv_string_vi_pairs(
 # Each key maps to a K-Flow config field.
 
 _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
-    # Inverter temperature
+    # Inverter temperature. Brand naming varies wildly (#564) — the specific
+    # shapes below are unambiguous; a guarded bare-``temperature`` fallback in
+    # discover_battery_details_from_registry() covers Fronius/GoodWe/Solis/
+    # Sofar/DEYE which expose the inverter temp as a plain ``*_temperature``.
     "inv_temp": [
         re.compile(r"inverter[_\s]*temp", re.IGNORECASE),
         re.compile(r"inverter.*internal.*temp", re.IGNORECASE),
         re.compile(r"inverter.*interne.*temp", re.IGNORECASE),  # Huawei DE: inverter_interne_temperatur
+        re.compile(r"inverter.*radiator.*temp", re.IGNORECASE),  # KSTAR: inverter_radiator_temperature
+        re.compile(r"invertor[_\s]*temp", re.IGNORECASE),  # GivTCP spelling: invertor_temperature
+        re.compile(r"\binvtemp\b", re.IGNORECASE),  # FoxESS: invtemp
         re.compile(r"internal[_\s]*temp", re.IGNORECASE),
         re.compile(r"device[_\s]*temp", re.IGNORECASE),
+        re.compile(r"radiator[_\s]*temp", re.IGNORECASE),  # SolaX/Sunsynk/DEYE: radiator_temperature
+        re.compile(r"heat[_\s]*sink[_\s]*temp", re.IGNORECASE),
+        re.compile(r"temp[_\s]*sink", re.IGNORECASE),  # SolarEdge modbus: tempsink
+        re.compile(r"igbt[_\s]*temp", re.IGNORECASE),
+        re.compile(r"dc[_\s]*transformer[_\s]*temp", re.IGNORECASE),  # Sunsynk
+        re.compile(r"optimizer[_\s]*temp", re.IGNORECASE),  # SMA (only temp on the device)
+        re.compile(r"case[_\s]*temp", re.IGNORECASE),  # SENEC
+        re.compile(r"mcu[_\s]*temp", re.IGNORECASE),  # SENEC
     ],
     # Battery temperature (primary)
     "battery_temp1": [
@@ -1677,6 +1691,10 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
         # ``reserva_cell_temperature`` (#564). Match a bare cell temperature
         # but keep the "2" out so it can't steal battery_temp2's sensor.
         re.compile(r"cell[_\s]*temp(?!.*2)", re.IGNORECASE),
+        # Reversed word order — Fronius core storage: ``temperature_cell`` (#564).
+        re.compile(r"temp\w*[_\s]*cell(?!.*2)", re.IGNORECASE),
+        # BYD battery-management-unit temperature: ``bmu_temp`` (#564).
+        re.compile(r"bmu[_\s]*temp", re.IGNORECASE),
     ],
     # Battery temperature (secondary)
     "battery_temp2": [
@@ -1688,6 +1706,7 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
     "battery_mos": [
         re.compile(r"mos[_\s]*temp", re.IGNORECASE),
         re.compile(r"bms[_\s]*temp", re.IGNORECASE),
+        re.compile(r"bms[_\s]*bat[_\s]*temp", re.IGNORECASE),  # GoodWe: bms_bat_temperature
     ],
     # Battery voltage (pack voltage, exclude cell voltages)
     "battery_voltage": [
@@ -1792,4 +1811,59 @@ def discover_battery_details_from_registry(
                 )
                 break
 
+    # (#564) Guarded bare-``temperature`` fallback for the inverter temp.
+    # Fronius/GoodWe/Solis/Sofar/DEYE name it as a plain ``*_temperature`` with
+    # no inverter/internal/device token, so the patterns above miss it. Claim
+    # such a sensor as inv_temp ONLY when it's a real temperature sensor (by
+    # device_class/unit), not already used by another field, and its name
+    # carries none of the non-inverter tokens below — so it can't steal a
+    # battery/cell/ambient/water sensor.
+    if "inv_temp" not in result:
+        already = set(result.values())
+        fallback = _bare_temperature_inverter_sensor(hass, sibling_sensors, already)
+        if fallback:
+            result["inv_temp"] = fallback
+            _LOGGER.info(
+                "Inverter temp detected via bare-temperature fallback: %s "
+                "(platform=%s)", fallback, platform,
+            )
+
     return result
+
+
+# Tokens that disqualify a bare ``*_temperature`` sensor from being claimed as
+# the INVERTER temperature (they belong to the battery, a cell, an ambient/room
+# probe, water/boiler, the grid meter, or a PV string).
+_NON_INVERTER_TEMP_TOKENS = re.compile(
+    r"batter|\bbat\b|_bat_|cell|bms|bmu|\bmos\b|ambient|environ|indoor|outdoor|"
+    r"outside|room|water|boiler|hot[_\s]*water|weather|dew|humid|grid|meter|"
+    r"\bpv\d|string|module|panel|heatpump|heat[_\s]*pump|cpu|freezer|fridge",
+    re.IGNORECASE,
+)
+
+
+def _bare_temperature_inverter_sensor(hass, sibling_sensors, exclude):
+    """Pick a plain ``*temperature`` sensor as the inverter temp (#564).
+
+    A candidate must (a) not already be claimed, (b) carry no non-inverter
+    token, and (c) actually be a temperature sensor — verified by device_class
+    or °C/°F unit when state is available (name shape otherwise). First hit
+    wins to stay deterministic across restarts.
+    """
+    for eid in sibling_sensors:
+        if eid in exclude:
+            continue
+        if "temp" not in eid.lower():
+            continue
+        if _NON_INVERTER_TEMP_TOKENS.search(eid):
+            continue
+        state = hass.states.get(eid) if hass else None
+        if state is not None:
+            dc = state.attributes.get("device_class")
+            unit = state.attributes.get("unit_of_measurement")
+            if dc not in ("temperature", None) or (
+                unit is not None and unit not in ("°C", "°F", "C", "F")
+            ):
+                continue
+        return eid
+    return None

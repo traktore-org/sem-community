@@ -180,6 +180,9 @@ class PowerReadings:
     # (#564) None = no temperature source — published as unknown. The old
     # 25.0 default was FABRICATED and shown as a real reading.
     battery_temperature: Optional[float] = None
+    # (#564) inverter temperature — None = no source (shows unknown). The
+    # system diagram used to display battery_temperature in the inverter slot.
+    inverter_temperature: Optional[float] = None
 
     # Battery health (calculated from energy data)
     battery_cycles_estimated: float = 0.0
@@ -859,6 +862,7 @@ class SEMData:
             "battery_discharge_power": self.power.battery_discharge_power,
             "battery_soc": None if self.power.battery_soc_unavailable else self.power.battery_soc,
             "battery_temperature": self.power.battery_temperature,
+            "inverter_temperature": self.power.inverter_temperature,
             "battery_cycles_estimated": self.power.battery_cycles_estimated,
             "battery_health_score": self.power.battery_health_score,
             "ev_connected": self.power.ev_connected,

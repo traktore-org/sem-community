@@ -81,6 +81,7 @@ class SensorConfig:
     # State sensors
     battery_soc_sensor: Optional[str] = None
     battery_temperature_sensor: Optional[str] = None
+    inverter_temperature_sensor: Optional[str] = None
 
     # Binary sensors
     ev_plug_sensor: Optional[str] = None
@@ -99,6 +100,9 @@ class SensorReader:
         # (#564) autodetected battery temperature sibling (cached) + probe throttle
         self._battery_temp_entity: Optional[str] = None
         self._battery_temp_probe_mono: float = -1e9
+        # (#564) same for the inverter temperature sibling
+        self._inverter_temp_entity: Optional[str] = None
+        self._inverter_temp_probe_mono: float = -1e9
         # v1.7.0 / #312: per-PV-string sensors discovered at config-
         # flow time. Empty dict in single-string setups (no discovery
         # hit), populated by ``set_pv_strings`` from
@@ -258,6 +262,7 @@ class SensorReader:
             ev_daily_energy_sensor=ev_daily_energy,
             battery_soc_sensor=config.get("battery_soc_sensor"),
             battery_temperature_sensor=config.get("battery_temperature_sensor"),
+            inverter_temperature_sensor=config.get("inverter_temperature_sensor"),
             ev_plug_sensor=config.get("ev_connected_sensor") or config.get("ev_plug_sensor", ""),
             ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
@@ -1456,6 +1461,8 @@ class SensorReader:
 
         # Battery temperature (#564: configured sensor, else device sibling)
         self._read_battery_temperature(readings)
+        # Inverter temperature (#564: configured sensor, else device sibling)
+        self._read_inverter_temperature(readings)
 
         return readings
 
@@ -1512,6 +1519,58 @@ class SensorReader:
         if entity:
             self._battery_temp_entity = entity
             _LOGGER.info("Battery temperature autodetected: %s", entity)
+        return entity
+
+    def _read_inverter_temperature(self, readings) -> None:
+        """(#564) Fill inverter_temperature honestly.
+
+        Priority: the configured sensor, else the ``inv_temp`` sibling on the
+        inverter's device (brand-aware detection). NO source → stays None and
+        the entity shows *unknown*. Previously the system diagram showed the
+        BATTERY temperature in the inverter slot (a fabricated ~25 °C).
+        """
+        entity = (
+            self.config.inverter_temperature_sensor
+            or self._autodetect_inverter_temperature()
+        )
+        if not entity:
+            return
+        state = self.hass.states.get(entity)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return
+        try:
+            readings.inverter_temperature = float(state.state)
+        except (ValueError, TypeError):
+            return
+
+    def _autodetect_inverter_temperature(self) -> Optional[str]:
+        """Find the inverter temperature sensor via hardware detection.
+
+        Cached once found; a miss retries every 5 minutes (source
+        integrations load late at boot). Shares the ``inv_temp`` result from
+        the same detection the battery temperature uses.
+        """
+        if self._inverter_temp_entity:
+            return self._inverter_temp_entity
+        import time as _time
+        now = _time.monotonic()
+        if now - self._inverter_temp_probe_mono < 300:
+            return None
+        self._inverter_temp_probe_mono = now
+
+        ed = getattr(self, "_energy_dashboard_config", None)
+        if ed is None:
+            return None
+        try:
+            from ..hardware_detection import discover_battery_details_from_registry
+            details = discover_battery_details_from_registry(self.hass, ed)
+        except Exception as e:  # noqa: BLE001 — registry absent in tests
+            _LOGGER.debug("Inverter temperature autodetect skipped: %s", e)
+            return None
+        entity = details.get("inv_temp")
+        if entity:
+            self._inverter_temp_entity = entity
+            _LOGGER.info("Inverter temperature autodetected: %s", entity)
         return entity
 
     def _validate_manual_grid_config(
@@ -1971,6 +2030,8 @@ class SensorReader:
 
         # Battery temperature (#564: configured sensor, else device sibling)
         self._read_battery_temperature(readings)
+        # Inverter temperature (#564: configured sensor, else device sibling)
+        self._read_inverter_temperature(readings)
 
         # EV power — sum all chargers if multi-charger (#193)
         ev_chargers = self._raw_config.get("ev_chargers", [])

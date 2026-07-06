@@ -436,6 +436,9 @@
       "battery_temperature": {
         "name": "Température batterie"
       },
+      "inverter_temperature": {
+        "name": "Température de l'onduleur"
+      },
       "battery_cycles_estimated": {
         "name": "Cycles batterie (estimés)"
       },
