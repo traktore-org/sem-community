@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.21] — 06.07.2026
+
+> **Pre-release.** Name your PV strings, and an Off-mode timer fix.
+
+### ☀️ Custom PV-string names (#566)
+- 🏷️ Your solar strings no longer have to read **PV1 / PV2 / PV3** — a new
+  **"Name your PV strings"** step in the integration options lets you call them
+  **East / South / West**. Each field shows its source sensor and live power so
+  you can tell which slot is which physical panel (the numbering follows your
+  Energy-Dashboard solar list, not compass order). The names flow through the
+  solar card chips, the system diagram, the flow card, and the entity names
+  themselves (so they also show in HA history / the Energy Dashboard).
+  (requested by @RienduPre)
+
+### ⚙️ Load management (#559)
+- 🐛 **Off-mode timer fix**: a surplus device switched to **Off** no longer keeps
+  showing — and counting — its daily solar-runtime timer. The row hides and the
+  counter freezes once SEM stops managing the device. (reported by @alexmc1510)
+
 # [1.7.4-beta.20] — 06.07.2026
 
 > **Pre-release.** Battery temperature autodetect reaches the Fronius
