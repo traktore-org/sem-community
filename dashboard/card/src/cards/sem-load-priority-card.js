@@ -40,7 +40,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._lastDeviceSig = '';
         this._showHelp = false;  // (#559) inline option help
         this._goalOpen = {};      // (#559) device_id -> goal editor expanded
-        this._goalUnit = {};      // (#559) device_id -> 'min' | 'kwh' slider unit
         this._goalDrag = null;    // (#559) live drag state {id, which, value}
     }
 
@@ -368,7 +367,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
                     ${this._showHelp ? html`
                     <div class="help-panel">
-                        <div class="help-item"><b>${this._t('mode')}</b> — ${this._t('help_device_mode')}</div>
+                        <div class="help-item"><b>${this._t('off')}</b> — ${this._t('help_mode_off')}</div>
+                        <div class="help-item"><b>${this._t('peak_only')}</b> — ${this._t('help_mode_peak_only')}</div>
+                        <div class="help-item"><b>${this._t('mode_surplus')}</b> — ${this._t('help_mode_surplus')}</div>
                         <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
                         <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
                         <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
@@ -441,9 +442,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
                             <option value="off" ?selected="${this._mergedMode(device) === 'off'}">${this._t('off')}</option>
                             <option value="peak_only" ?selected="${this._mergedMode(device) === 'peak_only'}">${this._t('peak_only')}</option>
-                            <option value="surplus_solar" ?selected="${this._mergedMode(device) === 'surplus_solar'}">${this._t('mode_surplus_solar')}</option>
-                            <option value="surplus_cheap" ?selected="${this._mergedMode(device) === 'surplus_cheap'}">${this._t('mode_surplus_cheap')}</option>
-                            <option value="surplus_deadline" ?selected="${this._mergedMode(device) === 'surplus_deadline'}">${this._t('mode_surplus_deadline')}</option>
+                            <option value="surplus" ?selected="${this._mergedMode(device) === 'surplus'}">${this._t('mode_surplus')}</option>
                         </select>
                     </label>`}
                     <label class="toggle-label" title="${this._t('requires_tooltip')}">
@@ -475,126 +474,90 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── (#559) goal engine UI — EV-charger look (one merged mode picker) ──
 
     _mergedMode(device) {
+        // (#559 beta.19 freeze) three modes only — off / peak_only / surplus.
+        // Surplus = solar_only (never imports). cheap_hours stays a backend
+        // option for HW/HP but isn't surfaced here; the deadline/always mode
+        // was deleted.
         const cm = device.controlMode || 'peak_only';
-        if (cm !== 'surplus') return cm;
-        const pol = device.goals?.top_up_policy || 'solar_only';
-        if (pol === 'cheap_hours') return 'surplus_cheap';
-        if (pol === 'always') return 'surplus_deadline';
-        return 'surplus_solar';
+        return cm === 'surplus' ? 'surplus' : cm;
     }
 
     _mergedModeLabel(device) {
         const m = this._mergedMode(device);
         const key = { off: 'off', peak_only: 'peak_only',
-                      surplus_solar: 'mode_surplus_solar',
-                      surplus_cheap: 'mode_surplus_cheap',
-                      surplus_deadline: 'mode_surplus_deadline' }[m] || m;
+                      surplus: 'mode_surplus' }[m] || m;
         return this._t(key);
     }
 
     _applyMergedMode(device, merged) {
-        // One UI picker, two backend fields — decompose (backend unchanged)
         const map = {
-            off:              { control_mode: 'off' },
-            peak_only:        { control_mode: 'peak_only' },
-            surplus_solar:    { control_mode: 'surplus', top_up_policy: 'solar_only' },
-            surplus_cheap:    { control_mode: 'surplus', top_up_policy: 'cheap_hours' },
-            surplus_deadline: { control_mode: 'surplus', top_up_policy: 'always' },
+            off:       { control_mode: 'off' },
+            peak_only: { control_mode: 'peak_only' },
+            surplus:   { control_mode: 'surplus' },
         }[merged];
         if (!map) return;
         device.controlMode = map.control_mode;
         this._sendDeviceUpdate(device.id, 'control_mode', map.control_mode);
-        if (map.top_up_policy) {
-            device.goals = device.goals || {};
-            device.goals.top_up_policy = map.top_up_policy;
-            this._sendDeviceUpdate(device.id, 'top_up_policy', map.top_up_policy);
+        // migrate a legacy 'always' policy off the removed value
+        if (map.control_mode === 'surplus'
+            && device.goals?.top_up_policy === 'always') {
+            device.goals.top_up_policy = 'solar_only';
+            this._sendDeviceUpdate(device.id, 'top_up_policy', 'solar_only');
         }
         this.requestUpdate();
     }
 
     _hasTarget(device) {
-        const g = device.goals || {};
-        return parseFloat(g.daily_min_runtime_min) > 0
-            || parseFloat(g.daily_target_energy_kwh) > 0;
+        return parseFloat((device.goals || {}).daily_min_runtime_min) > 0;
     }
 
     _goalPct(device) {
         const g = device.goals, p = device.progress;
         if (!g || !p) return null;
-        const pcts = [];
-        if (parseFloat(g.daily_min_runtime_min) > 0) {
-            pcts.push(Math.min(100, (p.runtime_today_min / parseFloat(g.daily_min_runtime_min)) * 100));
-        }
-        if (parseFloat(g.daily_target_energy_kwh) > 0) {
-            pcts.push(Math.min(100, (p.energy_today_kwh / parseFloat(g.daily_target_energy_kwh)) * 100));
-        }
-        if (!pcts.length) return null;
-        return Math.min(...pcts);
+        const target = parseFloat(g.daily_min_runtime_min);
+        if (!(target > 0)) return null;
+        return Math.min(100, (p.runtime_today_min / target) * 100);
     }
 
-    _goalSliderCfg(unit) {
-        return unit === 'kwh'
-            ? { minProp: 'daily_target_energy_kwh', maxProp: 'daily_max_energy_kwh',
-                scaleMax: 100, step: 0.5, unitLabel: ' kWh' }
-            : { minProp: 'daily_min_runtime_min', maxProp: 'daily_max_runtime_min',
-                scaleMax: 720, step: 5, unitLabel: ' min' };
-    }
-
-    _renderGoalSlider(device, unit) {
-        const cfg = this._goalSliderCfg(unit);
+    // Single "at least" runtime slider, in hours (0 = no target, max 12h).
+    _renderGoalSlider(device) {
+        const SCALE_H = 12;
         const g = device.goals || {};
         const drag = this._goalDrag;
-        let minVal = parseFloat(g[cfg.minProp]) || 0;
-        // stored max 0 = no cap -> handle parks at the far right
-        let maxVal = parseFloat(g[cfg.maxProp]) || 0;
-        let maxIsOff = maxVal <= 0;
-        if (drag && drag.id === device.id) {
-            if (drag.which === 'min') minVal = drag.value;
-            else { maxVal = drag.value; maxIsOff = drag.value >= cfg.scaleMax; }
-        }
-        const maxShown = maxIsOff ? cfg.scaleMax : Math.max(maxVal, minVal);
-        const minPct = Math.min(100, (minVal / cfg.scaleMax) * 100);
-        const maxPct = Math.min(100, (maxShown / cfg.scaleMax) * 100);
-        const fmt = (v) => cfg.step < 1 ? (v % 1 === 0 ? String(v) : v.toFixed(1)) : String(Math.round(v));
+        let hours = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
+        if (drag && drag.id === device.id) hours = drag.value;
+        const pct = Math.min(100, (hours / SCALE_H) * 100);
+        const fmt = (h) => (h % 1 === 0 ? String(h) : h.toFixed(1));
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
-                    <span>${this._t('at_least')} <b style="color:#8DC892">${fmt(minVal)}${cfg.unitLabel}</b></span>
-                    <span>${this._t('up_to')} <b style="color:#ff9800">${maxIsOff ? '∞' : fmt(maxShown) + cfg.unitLabel}</b></span>
+                    <span>${this._t('run_at_least')}
+                        <b style="color:#8DC892">${hours <= 0 ? this._t('no_target') : fmt(hours) + ' h'}</b>
+                    </span>
+                    <span style="color:var(--secondary-text-color,#999)">${this._t('goal_zero_hint')}</span>
                 </div>
                 <div class="range-track"
-                     @pointerdown=${(e) => this._goalSliderStart(e, device, unit)}>
-                    <div class="range-fill" style="left:${minPct}%;width:${Math.max(0, maxPct - minPct)}%"></div>
-                    <div class="range-handle range-handle-min" style="left:${minPct}%"></div>
-                    <div class="range-handle range-handle-max" style="left:${maxPct}%"></div>
+                     @pointerdown=${(e) => this._goalSliderStart(e, device)}>
+                    <div class="range-fill" style="left:0;width:${pct}%;background:#8DC892"></div>
+                    <div class="range-handle range-handle-min" style="left:${pct}%"></div>
                 </div>
             </div>`;
     }
 
-    _goalSliderStart(e, device, unit) {
+    _goalSliderStart(e, device) {
         e.stopPropagation();
         e.preventDefault();
-        const cfg = this._goalSliderCfg(unit);
+        const SCALE_H = 12, STEP_H = 0.5;
         const track = e.currentTarget;
         const g = device.goals = device.goals || {};
         const rect = track.getBoundingClientRect();
         const toVal = (clientX) => {
             let frac = (clientX - rect.left) / (rect.width || 1);
             frac = Math.max(0, Math.min(1, frac));
-            return Math.round((frac * cfg.scaleMax) / cfg.step) * cfg.step;
-        };
-        // grab whichever handle is closer to the press
-        const startVal = toVal(e.clientX);
-        const curMin = parseFloat(g[cfg.minProp]) || 0;
-        const rawMax = parseFloat(g[cfg.maxProp]) || 0;
-        const curMax = rawMax <= 0 ? cfg.scaleMax : rawMax;
-        const which = Math.abs(startVal - curMin) <= Math.abs(startVal - curMax) ? 'min' : 'max';
-        const clamp = (v) => {
-            if (which === 'min') return Math.min(v, rawMax <= 0 ? cfg.scaleMax : curMax);
-            return Math.max(v, curMin);
+            return Math.round((frac * SCALE_H) / STEP_H) * STEP_H;
         };
         const apply = (clientX) => {
-            this._goalDrag = { id: device.id, which, value: clamp(toVal(clientX)) };
+            this._goalDrag = { id: device.id, value: toVal(clientX) };
             this.requestUpdate();
         };
         apply(e.clientX);
@@ -603,13 +566,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
             window.removeEventListener('pointercancel', onUp);
-            const v = clamp(toVal(ev.clientX));
+            const minutes = Math.round(toVal(ev.clientX) * 60);
             this._goalDrag = null;
-            const prop = which === 'min' ? cfg.minProp : cfg.maxProp;
-            // max at the far right = no cap = stored 0
-            const stored = (which === 'max' && v >= cfg.scaleMax) ? 0 : v;
-            g[prop] = stored;
-            this._sendDeviceUpdate(device.id, prop, String(stored));
+            g.daily_min_runtime_min = minutes;
+            this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
             this.requestUpdate();
         };
         window.addEventListener('pointermove', onMove);
@@ -622,62 +582,31 @@ class SEMLoadPriorityCard extends SEMLitBase {
         if (pct === null) return nothing;
         const g = device.goals, p = device.progress;
         const done = p.targets_met || pct >= 100;
-        const bits = [];
-        if (parseFloat(g.daily_min_runtime_min) > 0) {
-            bits.push(Math.round(p.runtime_today_min) + '/' + Math.round(g.daily_min_runtime_min) + ' min');
-        }
-        if (parseFloat(g.daily_target_energy_kwh) > 0) {
-            bits.push(p.energy_today_kwh.toFixed(1) + '/' + parseFloat(g.daily_target_energy_kwh).toFixed(1) + ' kWh');
-        }
+        const h = (min) => { const v = min / 60; return v % 1 === 0 ? String(v) : v.toFixed(1); };
+        const txt = h(p.runtime_today_min) + '/' + h(parseFloat(g.daily_min_runtime_min))
+            + ' ' + this._t('hours_on_solar_today');
         return html`
             <div class="goal-progress" style="padding:2px 0 0 28px">
-                <div class="goal-bar"><div class="goal-bar-fill" style="width:${pct}%;background:${done ? '#8DC892' : '#ff9800'}"></div></div>
-                <span class="goal-progress-text">${bits.join(' · ')}${g.target_deadline ? ' → ' + g.target_deadline : ''}${done ? ' ✓' : ''}</span>
+                <div class="goal-bar"><div class="goal-bar-fill" style="width:${pct}%;background:#8DC892"></div></div>
+                <span class="goal-progress-text">${txt}${done ? ' ✓' : ''}</span>
             </div>`;
     }
 
-    _goalUnitFor(device) {
-        // min is the default; kWh only when the user switched the picker
-        return this._goalUnit[device.id] || 'min';
-    }
-
     _renderGoalEditor(device) {
-        const merged = this._mergedMode(device);
-        const unit = this._goalUnitFor(device);
-        const topUpWithoutTarget =
-            (merged === 'surplus_cheap' || merged === 'surplus_deadline')
-            && !this._hasTarget(device);
+        // Only meaningful in surplus mode — mode-gated disclosure.
+        if (this._mergedMode(device) !== 'surplus') return nothing;
         const g = device.goals || {};
         return html`
             <div class="goal-editor">
                 <div class="ge-title">
                     <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
                     ${this._t('daily_target')}
-                    <span class="ge-spacer"></span>
-                    <select class="ge-unit-select" data-action="goal_unit" data-device="${device.id}">
-                        <option value="min" ?selected="${unit === 'min'}">min</option>
-                        <option value="kwh" ?selected="${unit === 'kwh'}">kWh</option>
-                    </select>
                 </div>
-                ${this._renderGoalSlider(device, unit)}
-                ${topUpWithoutTarget ? html`
-                <div class="ge-hint">
-                    <ha-icon icon="mdi:information-outline" style="--mdc-icon-size:13px;color:#ff9800"></ha-icon>
-                    <span>${this._t('goal_hint_no_target')}</span>
-                </div>` : nothing}
-                <div class="ge-row">
-                    <span class="ge-label">${this._t('target_deadline')}</span>
-                    <span class="ge-ctl ge-time">
-                        <ha-icon icon="mdi:clock-end" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
-                        <input type="time"
-                               .value="${g.target_deadline || ''}"
-                               data-goal="target_deadline" data-device="${device.id}">
-                    </span>
-                </div>
+                ${this._renderGoalSlider(device)}
                 <div class="ge-row">
                     <span class="ge-label">${this._t('stop_condition')}</span>
                     <span class="ge-ctl">
-                        <input type="text" class="ge-entity" placeholder="sensor.car_soc"
+                        <input type="text" class="ge-entity" placeholder="${this._t('stop_entity_placeholder')}"
                                .value="${g.stop_entity || ''}"
                                data-goal="stop_entity" data-device="${device.id}">
                         <span class="ge-unit">≥</span>
@@ -783,12 +712,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 const deviceId = modeTarget.dataset.device;
                 const device = this.devices.find(d => d.id === deviceId);
                 if (device) this._applyMergedMode(device, modeTarget.value);
-                return;
-            }
-            const unitTarget = e.target.closest('[data-action="goal_unit"]');
-            if (unitTarget) {
-                this._goalUnit[unitTarget.dataset.device] = unitTarget.value;
-                this.requestUpdate();
                 return;
             }
             const goalTarget = e.target.closest('[data-goal]');
