@@ -589,6 +589,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderGoalProgress(device) {
+        // Only meaningful when SEM manages the device (Surplus). In Off /
+        // Peak-only the daily solar budget doesn't apply, so hide the row
+        // rather than show a stale/counting timer (#559 alex "Issue 6").
+        if (this._mergedMode(device) !== 'surplus') return nothing;
         const pct = this._goalPct(device);
         if (pct === null) return nothing;
         const g = device.goals, p = device.progress;
