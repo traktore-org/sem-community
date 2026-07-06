@@ -688,18 +688,22 @@ class ClimateDevice(ControllableDevice):
         return DeviceType.CLIMATE
 
     def adopt_if_running(self) -> bool:
-        """(#559) Re-own a climate unit that is running at (re-)registration.
+        """(#559) Re-own a climate unit that SEM is running at (re-)registration.
 
         After a restart SEM's internal state is IDLE while the AC it turned on
         is still cooling. A climate entity reports its active mode as the
-        state (``cool``/``heat``/…), or ``off`` when idle. Any non-off,
-        available state means the unit is running — adopt it as ACTIVE so
-        normal control (and its runtime) resumes.
+        state (``cool``/``heat``/…), or ``off`` when idle.
+
+        We only adopt when the entity's state matches **our** configured
+        ``hvac_mode`` — i.e. the unit is running in the mode SEM would have set.
+        A unit the user has manually put into a *different* mode (e.g. ``heat``
+        while we manage ``cool``) is left alone: adopting it would let a later
+        ``deactivate()`` send ``hvac_mode: off`` and kill the user's manual run.
         """
         if not self.entity_id or not self.hass or self.is_active:
             return False
         state = self.hass.states.get(self.entity_id)
-        if not state or state.state in ("off", "unavailable", "unknown", None):
+        if not state or state.state != self.hvac_mode:
             return False
         self._status.state = DeviceState.ACTIVE
         self._status.current_consumption_w = self.rated_power
@@ -721,35 +725,58 @@ class ClimateDevice(ControllableDevice):
             if elapsed < self.min_off_time:
                 return 0.0
 
+        # Set the mode first. If THIS fails the unit never turned on — report
+        # ERROR and bail.
         try:
             await self.hass.services.async_call(
                 "climate", "set_hvac_mode",
                 {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode},
                 blocking=True,
             )
-            if self.target_temperature is not None:
+        except Exception as e:
+            _LOGGER.error("Failed to activate %s: %s", self.name, e)
+            self._status.state = DeviceState.ERROR
+            self._status.error_message = str(e)
+            return 0.0
+
+        # The mode is committed — the unit is now ON. Mark ACTIVE *before* the
+        # optional setpoint write so a set_temperature failure can't leave us
+        # thinking the unit is idle (which would re-issue set_hvac_mode every
+        # cycle — the unit would run uncontrolled). B1.
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        self._status.activation_count += 1
+
+        if self.target_temperature is not None:
+            try:
                 await self.hass.services.async_call(
                     "climate", "set_temperature",
                     {"entity_id": self.entity_id,
                      "temperature": self.target_temperature},
                     blocking=True,
                 )
-            self._status.state = DeviceState.ACTIVE
-            self._status.current_consumption_w = self.rated_power
-            self._status.allocated_power_w = self.rated_power
-            self._status.last_activated = datetime.now()
-            self._status.activation_count += 1
+            except Exception as e:
+                # Non-fatal: the unit is running in the right mode, only the
+                # comfort setpoint didn't take. Stay ACTIVE.
+                _LOGGER.warning(
+                    "%s: set hvac_mode but not target temperature: %s",
+                    self.name, e,
+                )
+
+        if self.target_temperature is not None:
             _LOGGER.info(
-                "Activated climate device %s → %s @ %s°C (%dW)",
+                "Activated climate device %s → %s @ %.1f°C (%dW)",
                 self.name, self.hvac_mode, self.target_temperature,
                 self.rated_power,
             )
-            return self.rated_power
-        except Exception as e:
-            _LOGGER.error("Failed to activate %s: %s", self.name, e)
-            self._status.state = DeviceState.ERROR
-            self._status.error_message = str(e)
-            return 0.0
+        else:
+            _LOGGER.info(
+                "Activated climate device %s → %s (%dW)",
+                self.name, self.hvac_mode, self.rated_power,
+            )
+        return self.rated_power
 
     async def deactivate(self) -> None:
         if not self.entity_id:

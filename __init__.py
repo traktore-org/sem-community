@@ -3182,7 +3182,7 @@ async def _async_register_phase_services(
             vol.Optional("device_type", default="switch"): vol.In(
                 ["switch", "climate"]
             ),
-            vol.Optional("hvac_mode"): vol.In(
+            vol.Optional("hvac_mode", default="cool"): vol.In(
                 ["cool", "heat", "heat_cool", "dry", "fan_only", "auto"]
             ),
             vol.Optional("target_temperature"): vol.Coerce(float),

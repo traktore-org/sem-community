@@ -252,8 +252,25 @@ async def test_climate_device_activate(climate_device):
     calls = climate_device.hass.services.async_call.await_args_list
     assert ("climate", "set_hvac_mode",
             {"entity_id": "climate.living_room_ac", "hvac_mode": "cool"}) == calls[0].args
+    assert calls[0].kwargs == {"blocking": True}
     assert ("climate", "set_temperature",
             {"entity_id": "climate.living_room_ac", "temperature": 22.0}) == calls[1].args
+    assert calls[1].kwargs == {"blocking": True}
+
+
+@pytest.mark.asyncio
+async def test_climate_device_set_temperature_failure_stays_active(climate_device):
+    """B1: set_hvac_mode succeeds, set_temperature raises → the unit is ON,
+    so the device must stay ACTIVE (not ERROR/idle, which would re-activate
+    every cycle and run the AC uncontrolled)."""
+    async def _fail_on_temp(domain, service, data, **kw):
+        if service == "set_temperature":
+            raise Exception("temperature out of range")
+    climate_device.hass.services.async_call = AsyncMock(side_effect=_fail_on_temp)
+    result = await climate_device.activate(3000.0)
+    assert result == 1800.0
+    assert climate_device.is_active
+    assert climate_device._status.state == DeviceState.ACTIVE
 
 
 @pytest.mark.asyncio
@@ -349,6 +366,18 @@ async def test_climate_device_adopt_if_running(climate_device):
 async def test_climate_device_adopt_skips_when_off(climate_device):
     state = MagicMock()
     state.state = "off"
+    climate_device.hass.states.get = MagicMock(return_value=state)
+    assert climate_device.adopt_if_running() is False
+    assert not climate_device.is_active
+
+
+@pytest.mark.asyncio
+async def test_climate_device_adopt_skips_when_different_mode(climate_device):
+    """H1: a unit the user manually put into a different mode (heat while we
+    manage cool) must NOT be adopted — else deactivate() would turn off the
+    user's manual run."""
+    state = MagicMock()
+    state.state = "heat"  # climate_device.hvac_mode == "cool"
     climate_device.hass.states.get = MagicMock(return_value=state)
     assert climate_device.adopt_if_running() is False
     assert not climate_device.is_active

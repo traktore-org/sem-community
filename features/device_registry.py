@@ -313,7 +313,7 @@ class UnifiedDeviceRegistry:
         # driving one switch WILL fight. The explicit registration wins.
         self._drop_discovered_duplicates(device_id, stored["entity_id"])
         await self._save_storage()
-        return {
+        summary = {
             "device_id": device_id,
             "name": stored["name"],
             "entity_id": stored["entity_id"],
@@ -323,6 +323,10 @@ class UnifiedDeviceRegistry:
             "device_type": stored["device_type"],
             "total_devices": len(self._surplus_controller._devices),
         }
+        if stored["device_type"] == "climate":
+            summary["hvac_mode"] = stored["hvac_mode"]
+            summary["target_temperature"] = stored["target_temperature"]
+        return summary
 
     async def async_unregister_service_device(self, device_id: str) -> bool:
         """Remove a service registration (and its live device).
@@ -343,7 +347,7 @@ class UnifiedDeviceRegistry:
     def _drop_discovered_duplicates(
         self, service_device_id: str, entity_id: str
     ) -> None:
-        """Unregister ED-discovered devices that drive the same switch."""
+        """Unregister ED-discovered devices that drive the same entity."""
         if not entity_id:
             return
         for did, dev in list(self._surplus_controller._devices.items()):
@@ -351,7 +355,7 @@ class UnifiedDeviceRegistry:
                 continue
             if getattr(dev, "entity_id", None) == entity_id:
                 _LOGGER.info(
-                    "Dropping auto-discovered %s — switch %s is now "
+                    "Dropping auto-discovered %s — entity %s is now "
                     "explicitly registered as %s",
                     did, entity_id, service_device_id,
                 )
