@@ -438,6 +438,9 @@
       "battery_temperature": {
         "name": "Batterietemperatur"
       },
+      "inverter_temperature": {
+        "name": "Wechselrichter-Temperatur"
+      },
       "battery_cycles_estimated": {
         "name": "Batteriezyklen (geschätzt)"
       },

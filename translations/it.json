@@ -436,6 +436,9 @@
       "battery_temperature": {
         "name": "Temperatura Batteria"
       },
+      "inverter_temperature": {
+        "name": "Temperatura dell'inverter"
+      },
       "battery_cycles_estimated": {
         "name": "Cicli Batteria (Stimati)"
       },

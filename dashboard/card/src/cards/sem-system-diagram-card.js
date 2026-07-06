@@ -568,9 +568,16 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const battKwh    = `+${this._val('daily_battery_charge_energy').toFixed(1)} / -${this._val('daily_battery_discharge_energy').toFixed(1)} kWh`;
         const gridKwh    = `↓${this._val('daily_grid_import_energy').toFixed(1)} / ↑${this._val('daily_grid_export_energy').toFixed(1)} kWh`;
 
-        // Inverter status
-        const battTemp = this._val('battery_temperature');
-        const invTempStr = battTemp > 0 ? `${battTemp.toFixed(0)}°C` : '';
+        // Inverter status. #564 — this is the INVERTER node, so show the
+        // inverter's own temperature (sensor.sem_inverter_temperature). It
+        // used to read battery_temperature, so a Fronius etc. showed the
+        // battery's ~25°C in the inverter slot regardless of the real value.
+        // Blank when there is no inverter-temp source (never fabricated).
+        // Use the raw state so a legitimate ≤0 °C reading (cold climates)
+        // still shows; blank only when the source is unknown/unavailable.
+        const invTempRaw = this._valStr('inverter_temperature');
+        const invTempStr = invTempRaw !== '' && !isNaN(parseFloat(invTempRaw))
+            ? `${parseFloat(invTempRaw).toFixed(0)}°C` : '';
         const chargingState = this._valStr('charging_state');
         const maxLen = c ? 22 : 30;
         const invStatusStr = chargingState.length > maxLen

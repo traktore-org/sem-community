@@ -65,6 +65,7 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "battery_soc": {"sem_battery", "sem_core", "sem_realtime", "sem_graph", "sem_mobile"},
     "battery_status": {"sem_status", "sem_battery", "sem_primary"},
     "battery_temperature": {"sem_battery", "sem_secondary", "sem_realtime"},
+    "inverter_temperature": {"sem_solar", "sem_secondary", "sem_realtime"},
     "battery_voltage": {"sem_battery", "sem_advanced", "sem_realtime"},
     "battery_current": {"sem_battery", "sem_advanced", "sem_realtime"},
     "battery_cycles": {"sem_battery", "sem_advanced"},
