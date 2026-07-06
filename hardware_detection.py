@@ -1668,7 +1668,7 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
         re.compile(r"inverter.*interne.*temp", re.IGNORECASE),  # Huawei DE: inverter_interne_temperatur
         re.compile(r"inverter.*radiator.*temp", re.IGNORECASE),  # KSTAR: inverter_radiator_temperature
         re.compile(r"invertor[_\s]*temp", re.IGNORECASE),  # GivTCP spelling: invertor_temperature
-        re.compile(r"\binvtemp\b", re.IGNORECASE),  # FoxESS: invtemp
+        re.compile(r"inv[_\s]*temp", re.IGNORECASE),  # FoxESS: invtemp (abbrev)
         re.compile(r"internal[_\s]*temp", re.IGNORECASE),
         re.compile(r"device[_\s]*temp", re.IGNORECASE),
         re.compile(r"radiator[_\s]*temp", re.IGNORECASE),  # SolaX/Sunsynk/DEYE: radiator_temperature
@@ -1676,7 +1676,6 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
         re.compile(r"temp[_\s]*sink", re.IGNORECASE),  # SolarEdge modbus: tempsink
         re.compile(r"igbt[_\s]*temp", re.IGNORECASE),
         re.compile(r"dc[_\s]*transformer[_\s]*temp", re.IGNORECASE),  # Sunsynk
-        re.compile(r"optimizer[_\s]*temp", re.IGNORECASE),  # SMA (only temp on the device)
         re.compile(r"case[_\s]*temp", re.IGNORECASE),  # SENEC
         re.compile(r"mcu[_\s]*temp", re.IGNORECASE),  # SENEC
     ],
@@ -1835,9 +1834,9 @@ def discover_battery_details_from_registry(
 # the INVERTER temperature (they belong to the battery, a cell, an ambient/room
 # probe, water/boiler, the grid meter, or a PV string).
 _NON_INVERTER_TEMP_TOKENS = re.compile(
-    r"batter|\bbat\b|_bat_|cell|bms|bmu|\bmos\b|ambient|environ|indoor|outdoor|"
-    r"outside|room|water|boiler|hot[_\s]*water|weather|dew|humid|grid|meter|"
-    r"\bpv\d|string|module|panel|heatpump|heat[_\s]*pump|cpu|freezer|fridge",
+    r"batter|\bbat\b|_bat_|cell|bms|bmu|\bmos\b|\bair\b|ambient|environ|indoor|"
+    r"outdoor|outside|room|water|boiler|hot[_\s]*water|weather|dew|humid|grid|"
+    r"meter|\bpv\d|string|module|panel|heatpump|heat[_\s]*pump|cpu|freezer|fridge",
     re.IGNORECASE,
 )
 
@@ -1846,9 +1845,11 @@ def _bare_temperature_inverter_sensor(hass, sibling_sensors, exclude):
     """Pick a plain ``*temperature`` sensor as the inverter temp (#564).
 
     A candidate must (a) not already be claimed, (b) carry no non-inverter
-    token, and (c) actually be a temperature sensor — verified by device_class
-    or °C/°F unit when state is available (name shape otherwise). First hit
-    wins to stay deterministic across restarts.
+    token, and (c) be a CONFIRMED temperature sensor (device_class temperature
+    or a °C/°F unit). Because this fallback has no anchoring name pattern, we
+    require a loaded state and refuse to guess: if the state isn't up yet we
+    skip and let the 5-minute autodetect throttle retry once entities load —
+    a wrong pick here would be cached permanently. First confirmed hit wins.
     """
     for eid in sibling_sensors:
         if eid in exclude:
@@ -1858,12 +1859,10 @@ def _bare_temperature_inverter_sensor(hass, sibling_sensors, exclude):
         if _NON_INVERTER_TEMP_TOKENS.search(eid):
             continue
         state = hass.states.get(eid) if hass else None
-        if state is not None:
-            dc = state.attributes.get("device_class")
-            unit = state.attributes.get("unit_of_measurement")
-            if dc not in ("temperature", None) or (
-                unit is not None and unit not in ("°C", "°F", "C", "F")
-            ):
-                continue
-        return eid
+        if state is None:
+            continue  # not loaded yet — don't guess; retry next probe
+        dc = state.attributes.get("device_class")
+        unit = state.attributes.get("unit_of_measurement")
+        if dc == "temperature" or unit in ("°C", "°F", "C", "F"):
+            return eid
     return None

@@ -1142,28 +1142,32 @@ class TestDiscoverBatteryDetailsFromRegistry:
         with self._patch_registry(entries):
             return discover_battery_details_from_registry(hass, cfg)
 
-    @pytest.mark.parametrize("platform,inv_eid", [
-        # bare *_temperature — needs the guarded fallback
-        ("fronius", "sensor.fronius_verto_15_0_plus_temperature"),
-        ("goodwe", "sensor.goodwe_temperature"),
-        ("solarman", "sensor.deye_temperature"),
-        # specific named patterns
-        ("solax_modbus", "sensor.solax_radiator_temperature"),
-        ("solarman", "sensor.kstar_inverter_radiator_temperature"),
-        ("foxess_modbus", "sensor.foxess_invtemp"),
-        ("solaredge_modbus", "sensor.solaredge_tempsink"),
-        ("sma", "sensor.sma_optimizer_temp"),
-        ("givtcp", "sensor.gv_invertor_temperature"),
-        ("senec", "sensor.senec_case_temp"),
-        ("huawei_solar", "sensor.inverter_internal_temperature"),
+    @pytest.mark.parametrize("platform,inv_eid,bare", [
+        # bare *_temperature — needs the guarded fallback (loaded temp state)
+        ("fronius", "sensor.fronius_verto_15_0_plus_temperature", True),
+        ("goodwe", "sensor.goodwe_temperature", True),
+        ("solarman", "sensor.deye_temperature", True),
+        # specific named patterns (match by name, no state needed)
+        ("solax_modbus", "sensor.solax_radiator_temperature", False),
+        ("solarman", "sensor.kstar_inverter_radiator_temperature", False),
+        ("foxess_modbus", "sensor.foxess_invtemp", False),
+        ("solaredge_modbus", "sensor.solaredge_tempsink", False),
+        ("givtcp", "sensor.gv_invertor_temperature", False),
+        ("senec", "sensor.senec_case_temp", False),
+        ("huawei_solar", "sensor.inverter_internal_temperature", False),
     ])
-    def test_inverter_temp_detected_across_brands(self, platform, inv_eid):
+    def test_inverter_temp_detected_across_brands(self, platform, inv_eid, bare):
         cfg = _FakeEnergyDashboardConfig(solar_power="sensor.seed_solar_power")
         entries = [
             _make_registry_entry("sensor.seed_solar_power", platform),
             _make_registry_entry(inv_eid, platform),
         ]
-        result = self._detect(entries, cfg)
+        # The bare-temperature fallback requires a confirmed temperature state;
+        # the named-pattern cases match without one.
+        states = {inv_eid: SimpleNamespace(
+            state="40.0", attributes={"device_class": "temperature",
+                                      "unit_of_measurement": "°C"})} if bare else None
+        result = self._detect(entries, cfg, states=states)
         assert result.get("inv_temp") == inv_eid
 
     def test_fallback_does_not_steal_battery_or_cell_temp(self):
@@ -1187,17 +1191,29 @@ class TestDiscoverBatteryDetailsFromRegistry:
 
     def test_fallback_respects_device_class_when_state_present(self):
         """A non-temperature entity named '...temp...' is rejected by the
-        device_class/unit guard even if the name slips through."""
+        device_class/unit guard (name has 'temp' but it's not a temperature)."""
         cfg = _FakeEnergyDashboardConfig(solar_power="sensor.x_solar_power")
         entries = [
             _make_registry_entry("sensor.x_solar_power", "acme"),
-            _make_registry_entry("sensor.x_attempts", "acme"),  # 'temp' substring, not a temp
+            _make_registry_entry("sensor.x_temp_events", "acme"),  # has 'temp', wrong class
         ]
         states = {
-            "sensor.x_attempts": SimpleNamespace(
-                state="3", attributes={"device_class": "duration"}),
+            "sensor.x_temp_events": SimpleNamespace(
+                state="3", attributes={"device_class": "duration",
+                                       "unit_of_measurement": "s"}),
         }
         result = self._detect(entries, cfg, states=states)
+        assert "inv_temp" not in result
+
+    def test_fallback_skips_when_state_not_loaded(self):
+        """Boot race: a bare-temperature candidate with no loaded state is NOT
+        claimed (would be cached permanently); the throttle retries later."""
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.y_solar_power")
+        entries = [
+            _make_registry_entry("sensor.y_solar_power", "fronius"),
+            _make_registry_entry("sensor.y_temperature", "fronius"),
+        ]
+        result = self._detect(entries, cfg, states={})  # states.get → None
         assert "inv_temp" not in result
 
     def test_new_battery_temp_shapes(self):

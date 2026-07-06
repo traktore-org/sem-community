@@ -573,8 +573,11 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // used to read battery_temperature, so a Fronius etc. showed the
         // battery's ~25°C in the inverter slot regardless of the real value.
         // Blank when there is no inverter-temp source (never fabricated).
-        const invTemp = this._val('inverter_temperature');
-        const invTempStr = invTemp > 0 ? `${invTemp.toFixed(0)}°C` : '';
+        // Use the raw state so a legitimate ≤0 °C reading (cold climates)
+        // still shows; blank only when the source is unknown/unavailable.
+        const invTempRaw = this._valStr('inverter_temperature');
+        const invTempStr = invTempRaw !== '' && !isNaN(parseFloat(invTempRaw))
+            ? `${parseFloat(invTempRaw).toFixed(0)}°C` : '';
         const chargingState = this._valStr('charging_state');
         const maxLen = c ? 22 : 30;
         const invStatusStr = chargingState.length > maxLen
