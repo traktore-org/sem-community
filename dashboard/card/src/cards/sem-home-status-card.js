@@ -6,8 +6,7 @@
  *  1. Status chips row (solar, battery, autarky, EV, score)
  *  2. Smart energy tip + best surplus window
  *  3. Peak load status
- *  4. Quick controls (observer toggle + forecast provider)
- *  5. Environmental impact (CO2 today + lifetime)
+ *  4. Environmental impact (CO2 today + lifetime)
  *
  * Config:
  *   type: custom:sem-home-status-card
@@ -33,8 +32,6 @@ const WATCHED = [
     'sensor.sem_target_peak_limit',
     'sensor.sem_daily_co2_avoided',
     'sensor.sem_lifetime_co2_avoided',
-    'sensor.sem_forecast_source',
-    'switch.sem_observer_mode',
 ];
 
 class SEMHomeStatusCard extends SEMLitBase {
@@ -56,12 +53,6 @@ class SEMHomeStatusCard extends SEMLitBase {
     _valStr(suffix) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         return (e && e.state !== 'unavailable' && e.state !== 'unknown') ? e.state : '';
-    }
-
-    _switchOn(entityId) {
-        const frozen = this._frozenEntities[entityId];
-        if (frozen) return frozen.value === 'on';
-        return this._hass?.states[entityId]?.state === 'on';
     }
 
     _scoreColor(score) {
@@ -110,18 +101,6 @@ class SEMHomeStatusCard extends SEMLitBase {
         const currentPeak = this._val('consecutive_peak_15min').toFixed(1);
         const targetLimit = this._val('target_peak_limit').toFixed(1);
 
-        const observerOn = this._switchOn('switch.sem_observer_mode');
-        // Friendly label for the forecast provider. The coordinator emits
-        // raw source-IDs ("solcast", "forecast_solar", "custom") via
-        // sensor.sem_forecast_source — they're brand names mostly, so we
-        // map directly to their canonical product spelling instead of
-        // showing the raw id with an underscore. Falls back to the raw
-        // string for any future source we haven't mapped yet.
-        const rawProvider = this._valStr('forecast_source');
-        const provider = rawProvider
-            ? this._forecastProviderLabel(rawProvider)
-            : '—';
-
         const co2Today = this._val('daily_co2_avoided').toFixed(2);
         const co2Life = this._val('lifetime_co2_avoided').toFixed(1);
 
@@ -169,19 +148,6 @@ class SEMHomeStatusCard extends SEMLitBase {
                         <span class="peak-status-badge" style="color:${peakColor};border-color:${peakColor}">
                             ${this._t(this._peakStatusKey(peakPct))}
                         </span>
-                    </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <!-- 4. Forecast Info -->
-                <div class="section-label">${this._t('quick_controls')}</div>
-                <div class="controls-row">
-                    <div class="forecast-chip">
-                        <ha-icon icon="mdi:weather-partly-cloudy"
-                                 style="--mdc-icon-size:16px;color:#96CAEE"></ha-icon>
-                        <span class="forecast-label">${this._t('forecast')}</span>
-                        <span class="forecast-val">${provider}</span>
                     </div>
                 </div>
 
@@ -323,54 +289,6 @@ class SEMHomeStatusCard extends SEMLitBase {
                 align-self: flex-start;
             }
 
-            /* ─────────────────── 4. Quick controls ─────────────────── */
-            .controls-row {
-                display: flex; gap: 12px; align-items: center;
-                flex-wrap: wrap;
-            }
-            .observer-toggle {
-                display: flex; align-items: center; gap: 8px;
-                flex: 1; min-width: 120px;
-            }
-            .observer-toggle-label {
-                font-size: 13px; font-weight: 500; flex: 1;
-            }
-            .toggle-track {
-                position: relative;
-                width: 42px; height: 24px;
-                border-radius: 12px;
-                background: rgba(255,255,255,0.15);
-                cursor: pointer;
-                transition: background 0.2s;
-                flex-shrink: 0;
-            }
-            .toggle-track.on { background: var(--primary-color, #42a5f5); }
-            .toggle-thumb {
-                position: absolute;
-                top: 2px; left: 2px;
-                width: 20px; height: 20px;
-                border-radius: 50%;
-                background: white;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                transition: left 0.2s;
-            }
-            .toggle-track.on .toggle-thumb { left: 20px; }
-
-            .forecast-chip {
-                display: flex; align-items: center; gap: 6px;
-                padding: 4px 10px;
-                border-radius: 12px;
-                border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
-                background: var(--secondary-background-color, rgba(255,255,255,0.06));
-                flex-shrink: 0;
-            }
-            .forecast-label {
-                font-size: 11px;
-                color: var(--secondary-text-color, #999);
-                font-weight: 500;
-            }
-            .forecast-val { font-size: 12px; font-weight: 600; }
-
             /* ─────────────────── 5. Environmental ─────────────────── */
             .env-row {
                 display: flex; gap: 8px; flex-wrap: wrap;
@@ -397,7 +315,6 @@ class SEMHomeStatusCard extends SEMLitBase {
 
             @media (max-width: 400px) {
                 .env-row { flex-direction: column; }
-                .controls-row { flex-direction: column; align-items: flex-start; }
             }
         `;
     }

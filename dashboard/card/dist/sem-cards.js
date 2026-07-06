@@ -3897,12 +3897,12 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 .hero { flex-direction: column; gap: 12px; }
                 .ev-icon-area { width: 80px; height: 80px; }
             }
-        `}getCardSize(){return this._chargers.length>=1?3+2*this._chargers.length:3}static getStubConfig(){return{}}},{type:"sem-ev-status-card",name:"SEM EV Status",description:"Lumina-styled EV charging hero card with per-charger intelligence and settings"});const nt=["sensor.sem_solar_power","sensor.sem_battery_soc","sensor.sem_autarky_rate","sensor.sem_ev_power","sensor.sem_energy_optimization_score","sensor.sem_energy_tip","sensor.sem_best_surplus_window","sensor.sem_forecast_remaining_today_kwh","sensor.sem_current_vs_peak_percentage","sensor.sem_consecutive_peak_15min","sensor.sem_target_peak_limit","sensor.sem_daily_co2_avoided","sensor.sem_lifetime_co2_avoided","sensor.sem_forecast_source","switch.sem_observer_mode"];be("sem-home-status-card",class extends xe{static get watchedEntities(){return nt}setConfig(e){super.setConfig(e),this._prefix=e.entity_prefix||"sensor.sem_"}_val(e,t=0){const i=this._hass?.states[`${this._prefix}${e}`];return i&&"unavailable"!==i.state&&"unknown"!==i.state?parseFloat(i.state)??t:t}_valStr(e){const t=this._hass?.states[`${this._prefix}${e}`];return t&&"unavailable"!==t.state&&"unknown"!==t.state?t.state:""}_switchOn(e){const t=this._frozenEntities[e];return t?"on"===t.value:"on"===this._hass?.states[e]?.state}_scoreColor(e){return e>=80?"#8DC892":e>=50?"#ff9800":"#f44336"}_peakColor(e){return e>90?"#f44336":e>70?"#ff9800":"#8DC892"}_peakStatusKey(e){return e>90?"peak_critical":e>70?"peak_warning":"peak_safe"}_renderChip(e,t,i){return W`
+        `}getCardSize(){return this._chargers.length>=1?3+2*this._chargers.length:3}static getStubConfig(){return{}}},{type:"sem-ev-status-card",name:"SEM EV Status",description:"Lumina-styled EV charging hero card with per-charger intelligence and settings"});const nt=["sensor.sem_solar_power","sensor.sem_battery_soc","sensor.sem_autarky_rate","sensor.sem_ev_power","sensor.sem_energy_optimization_score","sensor.sem_energy_tip","sensor.sem_best_surplus_window","sensor.sem_forecast_remaining_today_kwh","sensor.sem_current_vs_peak_percentage","sensor.sem_consecutive_peak_15min","sensor.sem_target_peak_limit","sensor.sem_daily_co2_avoided","sensor.sem_lifetime_co2_avoided"];be("sem-home-status-card",class extends xe{static get watchedEntities(){return nt}setConfig(e){super.setConfig(e),this._prefix=e.entity_prefix||"sensor.sem_"}_val(e,t=0){const i=this._hass?.states[`${this._prefix}${e}`];return i&&"unavailable"!==i.state&&"unknown"!==i.state?parseFloat(i.state)??t:t}_valStr(e){const t=this._hass?.states[`${this._prefix}${e}`];return t&&"unavailable"!==t.state&&"unknown"!==t.state?t.state:""}_scoreColor(e){return e>=80?"#8DC892":e>=50?"#ff9800":"#f44336"}_peakColor(e){return e>90?"#f44336":e>70?"#ff9800":"#8DC892"}_peakStatusKey(e){return e>90?"peak_critical":e>70?"peak_warning":"peak_safe"}_renderChip(e,t,i){return W`
             <div class="chip">
                 <ha-icon icon="${e}" style="--mdc-icon-size:16px;color:${t}"></ha-icon>
                 <span class="chip-val">${i}</span>
             </div>
-        `}render(){if(!this._config||!this._hass)return K;const e=this._val("solar_power"),t=this._val("battery_soc"),i=this._val("autarky_rate"),s=this._val("ev_power"),r=this._val("energy_optimization_score"),a=this._scoreColor(r),o=this._valStr("energy_tip"),n=this._valStr("best_surplus_window")||"—",l=this._val("forecast_remaining_today_kwh").toFixed(1),c=this._val("current_vs_peak_percentage"),d=this._peakColor(c),p=this._val("consecutive_peak_15min").toFixed(1),h=this._val("target_peak_limit").toFixed(1);this._switchOn("switch.sem_observer_mode");const _=this._valStr("forecast_source"),g=_?this._forecastProviderLabel(_):"—",u=this._val("daily_co2_avoided").toFixed(2),f=this._val("lifetime_co2_avoided").toFixed(1);return W`
+        `}render(){if(!this._config||!this._hass)return K;const e=this._val("solar_power"),t=this._val("battery_soc"),i=this._val("autarky_rate"),s=this._val("ev_power"),r=this._val("energy_optimization_score"),a=this._scoreColor(r),o=this._valStr("energy_tip"),n=this._valStr("best_surplus_window")||"—",l=this._val("forecast_remaining_today_kwh").toFixed(1),c=this._val("current_vs_peak_percentage"),d=this._peakColor(c),p=this._val("consecutive_peak_15min").toFixed(1),h=this._val("target_peak_limit").toFixed(1),_=this._val("daily_co2_avoided").toFixed(2),g=this._val("lifetime_co2_avoided").toFixed(1);return W`
             <div class="wrap">
 
                 <!-- 1. Status Chips -->
@@ -3951,19 +3951,6 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
 
                 <div class="divider"></div>
 
-                <!-- 4. Forecast Info -->
-                <div class="section-label">${this._t("quick_controls")}</div>
-                <div class="controls-row">
-                    <div class="forecast-chip">
-                        <ha-icon icon="mdi:weather-partly-cloudy"
-                                 style="--mdc-icon-size:16px;color:#96CAEE"></ha-icon>
-                        <span class="forecast-label">${this._t("forecast")}</span>
-                        <span class="forecast-val">${g}</span>
-                    </div>
-                </div>
-
-                <div class="divider"></div>
-
                 <!-- 5. Environmental Impact -->
                 <div class="section-label">${this._t("environmental_impact")}</div>
                 <div class="env-row">
@@ -3971,7 +3958,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <ha-icon icon="mdi:leaf"
                                  style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                         <div class="env-chip-content">
-                            <span class="env-chip-val">${u} kg</span>
+                            <span class="env-chip-val">${_} kg</span>
                             <span class="env-chip-label">${this._t("co2_today")}</span>
                         </div>
                     </div>
@@ -3979,7 +3966,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <ha-icon icon="mdi:tree"
                                  style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                         <div class="env-chip-content">
-                            <span class="env-chip-val">${f} kg</span>
+                            <span class="env-chip-val">${g} kg</span>
                             <span class="env-chip-label">${this._t("co2_lifetime")}</span>
                         </div>
                     </div>
@@ -4096,54 +4083,6 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 align-self: flex-start;
             }
 
-            /* ─────────────────── 4. Quick controls ─────────────────── */
-            .controls-row {
-                display: flex; gap: 12px; align-items: center;
-                flex-wrap: wrap;
-            }
-            .observer-toggle {
-                display: flex; align-items: center; gap: 8px;
-                flex: 1; min-width: 120px;
-            }
-            .observer-toggle-label {
-                font-size: 13px; font-weight: 500; flex: 1;
-            }
-            .toggle-track {
-                position: relative;
-                width: 42px; height: 24px;
-                border-radius: 12px;
-                background: rgba(255,255,255,0.15);
-                cursor: pointer;
-                transition: background 0.2s;
-                flex-shrink: 0;
-            }
-            .toggle-track.on { background: var(--primary-color, #42a5f5); }
-            .toggle-thumb {
-                position: absolute;
-                top: 2px; left: 2px;
-                width: 20px; height: 20px;
-                border-radius: 50%;
-                background: white;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                transition: left 0.2s;
-            }
-            .toggle-track.on .toggle-thumb { left: 20px; }
-
-            .forecast-chip {
-                display: flex; align-items: center; gap: 6px;
-                padding: 4px 10px;
-                border-radius: 12px;
-                border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
-                background: var(--secondary-background-color, rgba(255,255,255,0.06));
-                flex-shrink: 0;
-            }
-            .forecast-label {
-                font-size: 11px;
-                color: var(--secondary-text-color, #999);
-                font-weight: 500;
-            }
-            .forecast-val { font-size: 12px; font-weight: 600; }
-
             /* ─────────────────── 5. Environmental ─────────────────── */
             .env-row {
                 display: flex; gap: 8px; flex-wrap: wrap;
@@ -4170,7 +4109,6 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
 
             @media (max-width: 400px) {
                 .env-row { flex-direction: column; }
-                .controls-row { flex-direction: column; align-items: flex-start; }
             }
         `}getCardSize(){return 5}static getStubConfig(){return{entity_prefix:"sensor.sem_"}}},{type:"custom:sem-home-status-card",name:"SEM Home Status Card",description:"Consolidated status panel for the SEM Home tab",preview:!1});const lt="sensor.sem_tariff_current_import_rate",ct={negative:{color:"#4db6ac",key:"price_negative"},very_cheap:{color:"#8DC892",key:"very_cheap"},cheap:{color:"#8DC892",key:"cheap"},normal:{color:"#ff9800",key:"normal"},expensive:{color:"#f06292",key:"expensive"},very_expensive:{color:"#e53935",key:"very_expensive"}};be("sem-price-card",class extends xe{constructor(){super(),this._boundVisibility=()=>{document.hidden||this.requestUpdate()}}connectedCallback(){super.connectedCallback(),document.addEventListener("visibilitychange",this._boundVisibility)}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("visibilitychange",this._boundVisibility)}setConfig(e){super.setConfig(e),this._entity=e.entity||lt,this._compact=!!e.compact}set hass(e){this._hass=e;const t=e?.states[this._entity],i=t?.attributes||{},s=[t?.state,i.price_level,i.next_cheap_start,(i.upcoming||[]).length,this._lang].join("|"),r="function"==typeof semLocalize;(s!==this._lastKey||r&&!this._localizeReady)&&(this._lastKey=s,this._lang=e?.language,this._localizeReady=r,this.requestUpdate())}get hass(){return this._hass}_hm(e){if(!e)return null;const t=this._hass?.config?.time_zone||void 0;try{return new Date(e).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZone:t})}catch(e){return null}}_levelInfo(e){return ct[e]||{color:"#9e9e9e",key:"normal"}}render(){if(!this._hass||!this._config)return K;const e=this._hass.states[this._entity];if(!e||"unavailable"===e.state||"unknown"===e.state)return W`<ha-card><div class="wrap empty">${this._t("current_electricity_price")}: —</div></ha-card>`;const t=e.attributes||{};if(!1===t.is_dynamic)return this.style.display="none",K;this.style.display="";const i=parseFloat(e.state),s=t.currency||"",r=this._levelInfo(t.price_level),a=e=>null==e||isNaN(e)?"—":Number(e).toFixed(2),o=Array.isArray(t.upcoming)?t.upcoming:[],n=this._hm(t.next_cheap_start),l=this._hm(t.next_cheap_end);return this._compact?W`
                 <ha-card>
