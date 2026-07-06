@@ -458,7 +458,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <button class="arrow-btn" data-action="move-up"   data-device="${device.id}" title="${this._t('move_up')}">&#9650;</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">&#9660;</button>
                     </div>
-                    ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
+                    ${(device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging'
+                       || this._mergedMode(device) !== 'surplus') ? nothing : html`
                     <button class="goal-btn ${this._goalOpen[device.id] ? 'active' : ''}"
                             data-action="toggle-goal" data-device="${device.id}"
                             title="${this._t('daily_target')}">

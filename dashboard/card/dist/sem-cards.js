@@ -5714,7 +5714,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <button class="arrow-btn" data-action="move-up"   data-device="${e.id}" title="${this._t("move_up")}">&#9650;</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${e.id}" title="${this._t("move_down")}">&#9660;</button>
                     </div>
-                    ${"ev_charger"===e.deviceType||"ev_charging"===e.deviceType?K:W`
+                    ${"ev_charger"===e.deviceType||"ev_charging"===e.deviceType||"surplus"!==this._mergedMode(e)?K:W`
                     <button class="goal-btn ${this._goalOpen[e.id]?"active":""}"
                             data-action="toggle-goal" data-device="${e.id}"
                             title="${this._t("daily_target")}">

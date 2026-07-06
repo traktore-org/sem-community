@@ -385,13 +385,11 @@ class SurplusController:
         remaining_surplus = distributable
         active_count = 0
 
-        # Force expiry: a force ends with its reason (#559 review).
-        # - cheap-hours force: tariff left the cheap window, OR the day
-        #   rolled over (the deficit it served was YESTERDAY's — without
-        #   the date check a device forced into a cheap midnight window
-        #   would re-fill the NEW day's target from grid all night).
-        # - deadline force: the deadline pressure is gone (target met is
-        #   handled by the goal gate; after rollover pressure resets).
+        # Force expiry: a cheap-hours force ends with its reason (#559 review) —
+        # the tariff left the cheap window, OR the day rolled over (the deficit
+        # it served was YESTERDAY's — without the date check a device forced
+        # into a cheap midnight window would re-fill the NEW day's target from
+        # grid all night).
         from homeassistant.util import dt as dt_util
         today_local = dt_util.now().date()
         for device in devices:

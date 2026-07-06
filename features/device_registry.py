@@ -210,7 +210,12 @@ class UnifiedDeviceRegistry:
             float(goals.get("daily_min_runtime_min", 0)) * 60
         )
         policy = str(goals.get("top_up_policy", "solar_only") or "solar_only")
-        device.top_up_policy = policy if policy in ("solar_only", "cheap_hours") else "solar_only"
+        if policy not in ("solar_only", "cheap_hours"):
+            # migrate a legacy 'always' off the removed value AND clean the
+            # stored dict so the next _save_storage doesn't roundtrip it back
+            policy = "solar_only"
+            goals["top_up_policy"] = "solar_only"
+        device.top_up_policy = policy
         device.stop_entity = str(goals.get("stop_entity", "") or "")
         device.stop_at = float(goals.get("stop_at", 0.0) or 0.0)
 
