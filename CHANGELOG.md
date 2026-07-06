@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.23] — 06.07.2026
+
+> **Pre-release.** Control air-conditioners from solar surplus, and a Home-tab cleanup.
+
+### ❄️ Drive `climate.*` air-conditioners / heat pumps from surplus (#569)
+- ✨ New **climate** surplus-device type: an AC or heat pump exposed only as a
+  `climate.*` entity (no switch, no `number`) can now be managed by SEM. On solar
+  surplus it sets the unit's `hvac_mode` (e.g. `cool`) and an optional comfort
+  target temperature; when the surplus is gone it turns the unit off. Same
+  priority / peak-shed / daily-goal handling as every other surplus load, and the
+  registration survives restarts (it re-owns a running unit after a reboot).
+  Register it with `device_type: climate` on
+  `solar_energy_management.register_surplus_device` — pick `hvac_mode: heat` to
+  drive a heat pump the same way in winter. (requested by @Edsol)
+
+### 🏠 Home tab: removed the leftover "Quick Controls" section (#572)
+- 🧹 The Home status card carried a **Quick Controls** heading with nothing left
+  to control — the observer-mode toggle moved to the **Config** card (#492, "Config
+  is the single settings home"), leaving only a read-only forecast-provider chip
+  under a controls heading. Removed the dead section (and its unused code/CSS); the
+  forecast provider is still shown on the Solar tab. (reported by @RienduPre)
+
 # [1.7.4-beta.22] — 06.07.2026
 
 > **Pre-release.** Two consistency/telemetry bug fixes.
