@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.22] — 06.07.2026
+
+> **Pre-release.** Two consistency/telemetry bug fixes.
+
+### 🌤️ Forecast numbers now match across pages (#568)
+- 🐛 The Home tab's system-diagram showed a *different* "Today's Forecast"
+  than the Solar tab (e.g. 23 vs 33.2 kWh). The Home glance was showing SEM's
+  **performance-corrected** estimate (Solcast × how your array actually performs
+  — ~0.69× on a cloudy day) while every other card shows the **raw** provider
+  forecast. Both were correct but sharing one label was confusing. The Home
+  glance now shows the same raw daily forecast as the Solar tab; the corrected
+  estimate stays on its own sensor. (reported by @hrdilshan)
+
+### 🔥 Heat-pump SG-Ready mode now reflects reality (#570)
+- 🐛 With a Nibe SG-Ready heat pump, the **Mode sensor was stuck at
+  "normal · 2"** even while SEM was correctly driving the SG-Ready relays into
+  BOOST. The relays flipped fine — only the telemetry was dead: the coordinator
+  never copied the controller's live SG-Ready state into its sensors. Now
+  `heat_pump_mode` / `_sg_ready_state` / `_solar_boost` track the real state,
+  and Boost / Force-on / Blocked modes are labelled in all 15 languages.
+  (reported by @RienduPre)
+
 # [1.7.4-beta.21] — 06.07.2026
 
 > **Pre-release.** Name your PV strings, and an Off-mode timer fix.
