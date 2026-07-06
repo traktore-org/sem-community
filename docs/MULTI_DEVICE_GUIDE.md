@@ -254,9 +254,12 @@ A surplus-mode device can be given a **daily goal**. On the Control tab
 each surplus device row has a target 🞋 button opening the **Daily Target**
 panel — the same look as the EV charger's Charge Target:
 
-- A single **"Run at least N h today"** slider (green *At least* handle;
-  `0` = no target, up to 12 h). This is a best-effort *solar* runtime
-  target for dumb loads (pool pump: at least 4 h).
+- A single **"Run up to N h today"** slider (green handle; `0` = no
+  target, up to 12 h). This is a **daily solar-runtime budget**: SEM runs
+  the device on surplus until it has clocked N hours, then rests it for the
+  day (pool pump: run up to 4 h on solar). Because a surplus device never
+  draws grid, a dark day may not reach N — the budget is a ceiling, not a
+  guarantee.
 - **Stop when** — an optional external completion condition: a sensor and
   a value (e.g. the car's SOC sensor ≥ 80) that ends the device's day
   early once reached.
@@ -279,7 +282,7 @@ data:
 
 | Field | Meaning |
 |---|---|
-| `daily_min_runtime_min` | Daily runtime target in minutes (the green *At least* handle) |
+| `daily_min_runtime_min` | Daily solar-runtime budget in minutes — the device rests once it has run this long today (the green slider handle) |
 | `top_up_policy` | `solar_only` (default, never grid) or `cheap_hours` (HW/HP off-peak top-up) |
 | `stop_entity` + `stop_at` | External completion condition |
 
@@ -288,14 +291,15 @@ data:
 > load runs, so an auto-discovered socket that read 0 W while off won't
 > switch on at a tiny surplus and import the rest from grid.
 
-#### What happens when the target is NOT reached?
+#### What happens when the budget is NOT reached?
 
-**Surplus (solar only):** nothing is forced. On a dark day the target is
-simply missed and progress resets at midnight for a fresh attempt — this
-mode **never draws grid power**. If you need a guaranteed runtime even on
-cloudy days, run the device from your own automation triggered on
-`binary_sensor.sem_surplus_available` (see above), where you control the
-grid-vs-solar trade-off.
+**Surplus (solar only):** nothing is forced. On a dark day the device
+simply runs less than its budget and progress resets at midnight — this
+mode **never draws grid power**. The budget is a *ceiling*, not a floor:
+SEM will not run the device from grid to "catch up." If you need a
+*guaranteed* minimum runtime even on cloudy days, run the device from your
+own automation triggered on `binary_sensor.sem_surplus_available` (see
+above), where you control the grid-vs-solar trade-off.
 
 In every mode: **peak protection outranks the goal** (a device chasing
 its target still sheds for a grid peak), the anti-flicker minimums (5 min

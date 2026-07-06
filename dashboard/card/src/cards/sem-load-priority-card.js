@@ -265,7 +265,17 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 padding:4px 8px; width:72px; font-size:12px;
                 font-variant-numeric:tabular-nums;
             }
-            .goal-editor input.ge-entity { width:160px; }
+            .goal-editor input.ge-entity { width:160px; max-width:100%; }
+            /* Mobile: the stop-when row (entity + ≥ + number) overflows a
+               phone width and squeezes the label onto two lines. Stack the
+               label above the control and let the entity field flex. */
+            @media (max-width: 480px) {
+                .goal-editor { margin-left:6px; padding:10px; }
+                .ge-row { flex-wrap:wrap; align-items:flex-start; }
+                .ge-label { flex:1 0 100%; margin-bottom:4px; }
+                .ge-ctl { margin-left:0; width:100%; }
+                .goal-editor input.ge-entity { flex:1; width:auto; }
+            }
             .ge-hint {
                 display:flex; align-items:center; gap:6px;
                 font-size:12px; color:#ff9800; padding:4px 0 6px;
@@ -532,7 +542,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
-                    <span>${this._t('run_at_least')}
+                    <span>${this._t('run_up_to')}
                         <b style="color:#8DC892">${hours <= 0 ? this._t('no_target') : fmt(hours) + ' h'}</b>
                     </span>
                     <span style="color:var(--secondary-text-color,#999)">${this._t('goal_zero_hint')}</span>

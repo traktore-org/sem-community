@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-06T03:11:18.290387+00:00
+// Generated: 2026-07-06T04:08:58.705633+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1151,13 +1151,13 @@
       "mode_surplus_deadline": "Surplus + finish by deadline",
       "goal_hint_no_target": "Set a daily target below for the top-up to take effect.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "de": {
       "charging": "Laden",
@@ -2305,13 +2305,13 @@
       "mode_surplus_deadline": "Überschuss + Ziel garantiert",
       "goal_hint_no_target": "Lege unten ein Tagesziel fest, damit das Auffüllen wirkt.",
       "mode_surplus": "Überschuss",
-      "run_at_least": "Läuft mindestens",
       "goal_zero_hint": "0 = kein Ziel",
       "hours_on_solar_today": "h mit Solar heute",
       "stop_entity_placeholder": "Sensor (z. B. SOC)",
       "help_mode_off": "SEM überwacht nur — schaltet nie.",
       "help_mode_peak_only": "Deine Automatisierung steuert es; SEM schaltet es nur bei Lastspitzen ab und danach wieder ein.",
-      "help_mode_surplus": "SEM schaltet es bei Solarüberschuss ein — nie Netzbezug."
+      "help_mode_surplus": "SEM schaltet es bei Solarüberschuss ein — nie Netzbezug.",
+      "run_up_to": "Läuft bis zu"
     },
     "fr": {
       "charging": "En charge",
@@ -3459,13 +3459,13 @@
       "mode_surplus_deadline": "Surplus + objectif garanti",
       "goal_hint_no_target": "Définissez un objectif journalier ci-dessous pour que le complément s'applique.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "es": {
       "charging": "Cargando",
@@ -4613,13 +4613,13 @@
       "mode_surplus_deadline": "Excedente + objetivo garantizado",
       "goal_hint_no_target": "Define un objetivo diario abajo para que la recarga tenga efecto.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "it": {
       "charging": "In carica",
@@ -5767,13 +5767,13 @@
       "mode_surplus_deadline": "Surplus + obiettivo garantito",
       "goal_hint_no_target": "Imposta un obiettivo giornaliero qui sotto perché il rabbocco abbia effetto.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "nl": {
       "charging": "Laden",
@@ -6921,13 +6921,13 @@
       "mode_surplus_deadline": "Overschot + doel gegarandeerd",
       "goal_hint_no_target": "Stel hieronder een dagdoel in zodat het aanvullen effect heeft.",
       "mode_surplus": "Overschot",
-      "run_at_least": "Draait minstens",
       "goal_zero_hint": "0 = geen doel",
       "hours_on_solar_today": "u op zon vandaag",
       "stop_entity_placeholder": "sensor (bijv. SOC)",
       "help_mode_off": "SEM observeert alleen — schakelt nooit.",
       "help_mode_peak_only": "Je eigen automatisering stuurt het; SEM schakelt het alleen uit bij een piek en daarna weer in.",
-      "help_mode_surplus": "SEM schakelt in bij zonne-overschot — nooit import."
+      "help_mode_surplus": "SEM schakelt in bij zonne-overschot — nooit import.",
+      "run_up_to": "Draait tot"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8075,13 +8075,13 @@
       "mode_surplus_deadline": "Přebytek + cíl zaručen",
       "goal_hint_no_target": "Nastavte níže denní cíl, aby doplnění mělo účinek.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "da": {
       "charging": "Oplader",
@@ -9229,13 +9229,13 @@
       "mode_surplus_deadline": "Overskud + mål garanteret",
       "goal_hint_no_target": "Sæt et dagligt mål nedenfor for at efterfyldningen virker.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "fi": {
       "charging": "Lataus",
@@ -10383,13 +10383,13 @@
       "mode_surplus_deadline": "Ylijäämä + tavoite taattu",
       "goal_hint_no_target": "Aseta alle päivätavoite, jotta täydennys vaikuttaa.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "hu": {
       "charging": "Töltés",
@@ -11537,13 +11537,13 @@
       "mode_surplus_deadline": "Többlet + cél garantálva",
       "goal_hint_no_target": "Állíts be lent napi célt, hogy a kiegészítés érvényesüljön.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "no": {
       "charging": "Lader",
@@ -12691,13 +12691,13 @@
       "mode_surplus_deadline": "Overskudd + mål garantert",
       "goal_hint_no_target": "Sett et daglig mål nedenfor for at etterfyllingen skal virke.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13845,13 +13845,13 @@
       "mode_surplus_deadline": "Nadwyżka + cel gwarantowany",
       "goal_hint_no_target": "Ustaw poniżej cel dzienny, aby uzupełnianie zadziałało.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "pt": {
       "charging": "A carregar",
@@ -14999,13 +14999,13 @@
       "mode_surplus_deadline": "Excedente + meta garantida",
       "goal_hint_no_target": "Define abaixo uma meta diária para o reforço ter efeito.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "ro": {
       "charging": "Încărcare",
@@ -16153,13 +16153,13 @@
       "mode_surplus_deadline": "Surplus + țintă garantată",
       "goal_hint_no_target": "Setează mai jos o țintă zilnică pentru ca completarea să aibă efect.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     },
     "sv": {
       "charging": "Laddar",
@@ -17307,13 +17307,13 @@
       "mode_surplus_deadline": "Överskott + mål garanterat",
       "goal_hint_no_target": "Ange ett dagligt mål nedan för att påfyllningen ska verka.",
       "mode_surplus": "Surplus",
-      "run_at_least": "Run at least",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
       "stop_entity_placeholder": "sensor (e.g. SOC)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
-      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid."
+      "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
+      "run_up_to": "Run up to"
     }
   };
 

@@ -5592,7 +5592,17 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 padding:4px 8px; width:72px; font-size:12px;
                 font-variant-numeric:tabular-nums;
             }
-            .goal-editor input.ge-entity { width:160px; }
+            .goal-editor input.ge-entity { width:160px; max-width:100%; }
+            /* Mobile: the stop-when row (entity + ≥ + number) overflows a
+               phone width and squeezes the label onto two lines. Stack the
+               label above the control and let the entity field flex. */
+            @media (max-width: 480px) {
+                .goal-editor { margin-left:6px; padding:10px; }
+                .ge-row { flex-wrap:wrap; align-items:flex-start; }
+                .ge-label { flex:1 0 100%; margin-bottom:4px; }
+                .ge-ctl { margin-left:0; width:100%; }
+                .goal-editor input.ge-entity { flex:1; width:auto; }
+            }
             .ge-hint {
                 display:flex; align-items:center; gap:6px;
                 font-size:12px; color:#ff9800; padding:4px 0 6px;
@@ -5727,7 +5737,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
         </div>`}_mergedMode(e){const t=e.controlMode||"peak_only";return"surplus"===t?"surplus":t}_mergedModeLabel(e){const t=this._mergedMode(e),i={off:"off",peak_only:"peak_only",surplus:"mode_surplus"}[t]||t;return this._t(i)}_applyMergedMode(e,t){const i={off:{control_mode:"off"},peak_only:{control_mode:"peak_only"},surplus:{control_mode:"surplus"}}[t];i&&(e.controlMode=i.control_mode,this._sendDeviceUpdate(e.id,"control_mode",i.control_mode),"surplus"===i.control_mode&&"always"===e.goals?.top_up_policy&&(e.goals.top_up_policy="solar_only",this._sendDeviceUpdate(e.id,"top_up_policy","solar_only")),this.requestUpdate())}_hasTarget(e){return parseFloat((e.goals||{}).daily_min_runtime_min)>0}_goalPct(e){const t=e.goals,i=e.progress;if(!t||!i)return null;const s=parseFloat(t.daily_min_runtime_min);return s>0?Math.min(100,i.runtime_today_min/s*100):null}_renderGoalSlider(e){const t=e.goals||{},i=this._goalDrag;let s=(parseFloat(t.daily_min_runtime_min)||0)/60;i&&i.id===e.id&&(s=i.value);const r=Math.min(100,s/12*100);return W`
             <div class="range-wrap">
                 <div class="range-labels">
-                    <span>${this._t("run_at_least")}
+                    <span>${this._t("run_up_to")}
                         <b style="color:#8DC892">${s<=0?this._t("no_target"):(e=>e%1==0?String(e):e.toFixed(1))(s)+" h"}</b>
                     </span>
                     <span style="color:var(--secondary-text-color,#999)">${this._t("goal_zero_hint")}</span>
