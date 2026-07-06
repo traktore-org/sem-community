@@ -2876,6 +2876,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _LOGGER.error("Error updating SEM data: %s", e, exc_info=True)
             raise UpdateFailed(f"Update failed: {e}") from e
 
+    @staticmethod
+    def _heat_pump_sensor_state(hp_controller) -> tuple[str, int, bool]:
+        """Extract (mode, sg_ready_state_value, solar_boost) from a
+        registered HeatPumpController for the sensor surface (#570).
+
+        Returns the NORMAL defaults (``"normal"``, 2, ``False``) when no
+        controller is registered — matching HeatPumpSensorData's own
+        dataclass defaults. Before #570 the coordinator never copied the
+        controller's live SG-Ready state into HeatPumpSensorData (the
+        override promised in the pipeline comment was never implemented),
+        so heat_pump_mode / heat_pump_sg_ready_state / heat_pump_solar_boost
+        stayed frozen at those defaults even while the controller drove the
+        relays to BOOST/FORCE_ON — RienduPre's Nibe read "normal · 2"
+        with relay2 physically closed.
+        """
+        if hp_controller is None:
+            return "normal", 2, False
+        sg = getattr(hp_controller, "sg_ready_state", None)
+        mode, sg_value = "normal", 2
+        if sg is not None:
+            sg_value = int(getattr(sg, "value", sg))
+            mode = str(getattr(sg, "name", "normal")).lower()
+        hp_stat = getattr(hp_controller, "hp_status", None)
+        solar_boost = bool(getattr(hp_stat, "is_solar_boosted", False))
+        return mode, sg_value, solar_boost
+
     async def _update_analytics_phases(
         self,
         power: PowerReadings,
@@ -3178,8 +3204,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             except (ValueError, TypeError, AttributeError):
                 hp_current_temp = None
 
+        # #570: wire the registered controller's LIVE SG-Ready state into
+        # the sensor surface — the override the comment above promised but
+        # that was never implemented. Without this, heat_pump_mode /
+        # heat_pump_sg_ready_state / heat_pump_solar_boost stayed at the
+        # dataclass defaults (normal / 2 / False) forever.
+        hp_mode, hp_sg_state, hp_solar_boost = self._heat_pump_sensor_state(
+            hp_controller
+        )
+
         heat_pump_data = HeatPumpSensorData(
             heat_pump_registered=registered_flag,
+            heat_pump_mode=hp_mode,
+            heat_pump_sg_ready_state=hp_sg_state,
+            heat_pump_solar_boost=hp_solar_boost,
             heat_pump_registration_status=_hp_status,
             heat_pump_relay1_entity=hp_relay1,
             heat_pump_relay2_entity=hp_relay2,
