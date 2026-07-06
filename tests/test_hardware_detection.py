@@ -1191,6 +1191,48 @@ class TestDiscoverBatteryDetailsFromRegistry:
         assert result["battery_min_cell"] == "sensor.jk_bms_min_cell_voltage"
         assert result["battery_max_cell"] == "sensor.jk_bms_max_cell_voltage"
 
+    def test_fronius_reserva_bare_cell_temperature(self):
+        """#564 — Fronius Reserva / BYD name the cell-temperature sensor
+        WITHOUT a "battery"/"1" token (``reserva_cell_temperature``).
+        battery_temp1 autodetect must still find it, otherwise the SEM
+        battery temperature stays *unknown* on these installs."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.reserva_battery_power", "fronius"),
+            _make_registry_entry("sensor.reserva_cell_temperature", "fronius"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.reserva_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result["battery_temp1"] == "sensor.reserva_cell_temperature"
+
+    def test_bare_cell_temp_does_not_steal_temp2(self):
+        """The bare-cell-temp fallback must not hijack a ``cell_temp_2``
+        sensor into battery_temp1 (#564 disambiguation guard)."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.bms_battery_power", "some_bms"),
+            _make_registry_entry("sensor.bms_cell_temperature_1", "some_bms"),
+            _make_registry_entry("sensor.bms_cell_temperature_2", "some_bms"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.bms_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result["battery_temp1"] == "sensor.bms_cell_temperature_1"
+        assert result["battery_temp2"] == "sensor.bms_cell_temperature_2"
+
     def test_huawei_german_locale(self):
         """Huawei DE locale: busspannung, busstrom, interne_temperatur."""
         from custom_components.solar_energy_management.hardware_detection import (
