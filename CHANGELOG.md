@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.24] — 06.07.2026
+
+> **Pre-release.** The system diagram now shows the *inverter's* temperature.
+
+### 🌡️ Inverter temperature is the inverter's own, not the battery's (#564)
+- 🐛 On the Home system diagram the **inverter** node showed the *battery*
+  temperature — a Fronius user saw a constant ~25 °C in the inverter slot while
+  the real inverter ran at 40 °C. The card read `battery_temperature` for the
+  inverter label. Now there's a dedicated **`sensor.sem_inverter_temperature`**
+  (autodetected from your inverter's own temperature sensor, or *unknown* when
+  there's no source — never fabricated), and the diagram reads it.
+- 🔎 Inverter-temperature **autodetection now covers far more brands** — Fronius,
+  GoodWe, DEYE/Solis/Sofar, SolaX, KSTAR, FoxESS, SolarEdge-modbus, SENEC, GivTCP
+  and others that name the sensor without an "inverter" token (bare
+  `…_temperature`, `radiator_temperature`, `tempsink`, `invtemp`, …), with a
+  guarded fallback that won't mistake a battery/cell/ambient probe for the
+  inverter. Battery-temperature detection also gained `temperature_cell`
+  (Fronius core), `bmu_temp` (BYD) and `bms_bat_temperature` (GoodWe).
+  (reported by @ebnerjoh)
+
 # [1.7.4-beta.23] — 06.07.2026
 
 > **Pre-release.** Control air-conditioners from solar surplus, and a Home-tab cleanup.
