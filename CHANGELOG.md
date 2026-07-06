@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.19] — 06.07.2026
+
+> **Pre-release.** #559 load management — the goal engine, frozen to its
+> honest core.
+
+### ⚙️ Generic surplus loads — simpler, safer (#559)
+- 🎯 The device **goal engine is back to its grounded core**: a mode ladder
+  (Off / Peak only / **Surplus**) plus one *"run at least N hours today"*
+  solar target and an optional stop-condition (e.g. car SOC ≥ 80 %). Surplus
+  loads are **solar-only** — they never import from grid.
+- 🐛 **Removed two latent hazards** that shipped in the beta.18 engine: a
+  daily-runtime *safety cap* that reset on every restart, and a *finish-by
+  deadline* force that could drain the house battery at night with no
+  state-of-charge gate. Both are gone with the speculative surface (energy
+  targets, kWh caps, deadline ramp, "always" top-up) they lived in.
+- 🔧 **Auto-discovered switch footgun fixed**: an unconfigured socket that
+  read 0 W while off could switch on at almost any surplus and pull the rest
+  from grid. SEM now **auto-calibrates the device's rated power** from its
+  power sensor the first time it runs.
+- 🎨 **Card simplified to the EV-charger pattern**: the mode picker sits in
+  the goal panel (shown only in Surplus mode), a single hours slider replaces
+  the dual-handle min/kWh slider, the stop condition is a clean row, and each
+  mode has inline help. (requested by @alexmc1510)
+
 # [1.7.4-beta.18] — 05.07.2026
 
 > **Pre-release.** Honest temperatures and a cleaner Home header.
