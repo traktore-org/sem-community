@@ -243,44 +243,9 @@ register_surplus_device:
           min: 0
           max: 1440
           unit_of_measurement: min
-    daily_max_runtime_min:
-      name: Max Runtime per Day
-      description: Safety cap in minutes — the device is stopped for the rest of the day once reached.
-      required: false
-      selector:
-        number:
-          min: 0
-          max: 1440
-          unit_of_measurement: min
-    daily_target_energy_kwh:
-      name: Energy Target per Day
-      description: Daily energy target in kWh for metered loads — the device stops once it consumed this much today.
-      required: false
-      selector:
-        number:
-          min: 0
-          max: 200
-          step: 0.5
-          unit_of_measurement: kWh
-    daily_max_energy_kwh:
-      name: Max Energy per Day
-      description: Energy cap in kWh — the device is stopped for the rest of the day once it consumed this much.
-      required: false
-      selector:
-        number:
-          min: 0
-          max: 200
-          step: 0.5
-          unit_of_measurement: kWh
-    target_deadline:
-      name: Finish By
-      description: Time of day (HH:MM) by which the daily target should be met. Default is end of day.
-      required: false
-      selector:
-        time:
     top_up_policy:
       name: Top-up Policy
-      description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target), cheap_hours (complete during cheap tariff windows), always (force-run in time to meet the deadline)."
+      description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target on a dark day), cheap_hours (top up during cheap tariff windows)."
       required: false
       default: solar_only
       selector:
@@ -288,7 +253,6 @@ register_surplus_device:
           options:
             - solar_only
             - cheap_hours
-            - always
     stop_entity:
       name: Stop Condition Sensor
       description: Optional sensor that ends the device's day early (e.g. the car's SOC sensor).
