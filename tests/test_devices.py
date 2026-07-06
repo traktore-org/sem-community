@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.solar_energy_management.devices.base import (
+    ClimateDevice,
     ControllableDevice,
     CurrentControlDevice,
     DeviceState,
@@ -11,6 +12,7 @@ from custom_components.solar_energy_management.devices.base import (
     ScheduleDevice,
     SetpointDevice,
     SwitchDevice,
+    surplus_device_from_spec,
 )
 from custom_components.solar_energy_management.devices.heat_pump_controller import (
     HeatPumpController,
@@ -87,6 +89,23 @@ def setpoint_device(mock_hass):
         normal_setpoint=21.0,
         boost_offset=2.0,
         max_setpoint=55.0,
+    )
+
+
+@pytest.fixture
+def climate_device(mock_hass):
+    return ClimateDevice(
+        hass=mock_hass,
+        device_id="ac_living",
+        name="Living Room AC",
+        rated_power=1800.0,
+        priority=6,
+        entity_id="climate.living_room_ac",
+        power_entity_id="sensor.ac_power",
+        hvac_mode="cool",
+        target_temperature=22.0,
+        min_on_time=300,
+        min_off_time=60,
     )
 
 
@@ -217,6 +236,146 @@ async def test_switch_device_error_handling(switch_device):
     assert result == 0.0
     assert switch_device._status.state == DeviceState.ERROR
     assert switch_device._status.error_message == "Service failed"
+
+
+# ──────────────────────────────────────────────
+# ClimateDevice tests (#569)
+# ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_climate_device_activate(climate_device):
+    """Activation sets the configured hvac_mode + target temperature."""
+    result = await climate_device.activate(3000.0)
+    assert result == 1800.0
+    assert climate_device.is_active
+    assert climate_device._status.activation_count == 1
+    calls = climate_device.hass.services.async_call.await_args_list
+    assert ("climate", "set_hvac_mode",
+            {"entity_id": "climate.living_room_ac", "hvac_mode": "cool"}) == calls[0].args
+    assert ("climate", "set_temperature",
+            {"entity_id": "climate.living_room_ac", "temperature": 22.0}) == calls[1].args
+
+
+@pytest.mark.asyncio
+async def test_climate_device_device_type(climate_device):
+    assert climate_device.device_type == DeviceType.CLIMATE
+
+
+@pytest.mark.asyncio
+async def test_climate_device_no_target_temp_skips_set_temperature(mock_hass):
+    """With no target temperature, only hvac_mode is set."""
+    dev = ClimateDevice(
+        hass=mock_hass, device_id="ac", name="AC", rated_power=1500.0,
+        entity_id="climate.ac", hvac_mode="heat_cool", target_temperature=None,
+    )
+    await dev.activate(3000.0)
+    calls = mock_hass.services.async_call.await_args_list
+    assert len(calls) == 1
+    assert calls[0].args[1] == "set_hvac_mode"
+    assert calls[0].args[2]["hvac_mode"] == "heat_cool"
+
+
+@pytest.mark.asyncio
+async def test_climate_device_activate_no_entity(mock_hass):
+    dev = ClimateDevice(hass=mock_hass, device_id="ac", name="AC",
+                        rated_power=1500.0, entity_id=None)
+    result = await dev.activate(2000.0)
+    assert result == 0.0
+    mock_hass.services.async_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_climate_device_anti_flicker_off(climate_device):
+    """Activate respects min_off_time."""
+    climate_device._status.last_deactivated = datetime.now()
+    result = await climate_device.activate(3000.0)
+    assert result == 0.0
+
+
+@pytest.mark.asyncio
+async def test_climate_device_deactivate_sets_off(climate_device):
+    """Deactivate turns the unit off via hvac_mode: off."""
+    await climate_device.activate(3000.0)
+    climate_device.hass.services.async_call.reset_mock()
+    climate_device._status.last_activated = datetime.now() - timedelta(seconds=400)
+    await climate_device.deactivate()
+    assert not climate_device.is_active
+    assert climate_device._status.state == DeviceState.IDLE
+    climate_device.hass.services.async_call.assert_called_once_with(
+        "climate", "set_hvac_mode",
+        {"entity_id": "climate.living_room_ac", "hvac_mode": "off"},
+        blocking=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_climate_device_deactivate_anti_flicker_on(climate_device):
+    """Deactivate respects min_on_time."""
+    await climate_device.activate(3000.0)
+    await climate_device.deactivate()  # immediate — blocked
+    assert climate_device.is_active
+
+
+@pytest.mark.asyncio
+async def test_climate_device_adjust_power(climate_device):
+    result = await climate_device.adjust_power(5000.0)
+    assert result == 0.0
+    await climate_device.activate(3000.0)
+    result = await climate_device.adjust_power(5000.0)
+    assert result == 1800.0
+
+
+@pytest.mark.asyncio
+async def test_climate_device_error_handling(climate_device):
+    climate_device.hass.services.async_call = AsyncMock(
+        side_effect=Exception("Service failed"))
+    result = await climate_device.activate(3000.0)
+    assert result == 0.0
+    assert climate_device._status.state == DeviceState.ERROR
+    assert climate_device._status.error_message == "Service failed"
+
+
+@pytest.mark.asyncio
+async def test_climate_device_adopt_if_running(climate_device):
+    """After restart, a climate entity in a non-off state is re-owned."""
+    state = MagicMock()
+    state.state = "cool"
+    climate_device.hass.states.get = MagicMock(return_value=state)
+    assert climate_device.adopt_if_running() is True
+    assert climate_device.is_active
+
+
+@pytest.mark.asyncio
+async def test_climate_device_adopt_skips_when_off(climate_device):
+    state = MagicMock()
+    state.state = "off"
+    climate_device.hass.states.get = MagicMock(return_value=state)
+    assert climate_device.adopt_if_running() is False
+    assert not climate_device.is_active
+
+
+# ──────────────────────────────────────────────
+# surplus_device_from_spec factory (#569)
+# ──────────────────────────────────────────────
+
+def test_factory_builds_switch_by_default(mock_hass):
+    dev = surplus_device_from_spec(mock_hass, "d1", {
+        "entity_id": "switch.plug", "name": "Plug", "rated_power": 1000,
+        "priority": 5,
+    })
+    assert isinstance(dev, SwitchDevice)
+
+
+def test_factory_builds_climate(mock_hass):
+    dev = surplus_device_from_spec(mock_hass, "ac1", {
+        "device_type": "climate", "entity_id": "climate.ac", "name": "AC",
+        "rated_power": 1800, "priority": 6, "hvac_mode": "cool",
+        "target_temperature": 22.0,
+    })
+    assert isinstance(dev, ClimateDevice)
+    assert dev.hvac_mode == "cool"
+    assert dev.target_temperature == 22.0
+    assert dev.entity_id == "climate.ac"
 
 
 def test_switch_device_type(switch_device):
