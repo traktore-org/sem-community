@@ -55,6 +55,23 @@ class TestGoalProperties:
         dev = _switch()
         assert dev.daily_targets_met is False
 
+    def test_off_mode_does_not_accumulate_runtime(self):
+        # #559 (alex Issue 6): a device switched to Off must NOT keep counting
+        # its daily solar budget, even if physically still active.
+        from datetime import datetime, timedelta
+        dev = _switch()
+        dev._status.state = DeviceState.ACTIVE
+        dev._daily_runtime_meter_day = TODAY
+        dev._daily_runtime_last_check = datetime.now() - timedelta(seconds=60)
+        dev.control_mode = DeviceControlMode.OFF
+        dev.update_daily_runtime(TODAY)
+        assert dev._daily_runtime_accumulated_sec == 0.0
+        # in Surplus it WOULD accumulate
+        dev.control_mode = DeviceControlMode.SURPLUS
+        dev._daily_runtime_last_check = datetime.now() - timedelta(seconds=60)
+        dev.update_daily_runtime(TODAY)
+        assert dev._daily_runtime_accumulated_sec > 0
+
     def test_stop_condition(self):
         hass = MagicMock()
         hass.states.get = lambda e: SimpleNamespace(state="82", attributes={}) if e == "sensor.car_soc" else None

@@ -943,6 +943,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         self.hass, dashboard_config,
                     ) or {}
                     self._sensor_reader.set_pv_strings(pv_strings, vi_pairs)
+                    # (#566) user-chosen per-string display names from options
+                    if self.config_entry is not None:
+                        self._sensor_reader.set_pv_string_names(
+                            self.config_entry.options.get("pv_string_names", {})
+                        )
                     if pv_strings or vi_pairs:
                         _info(
                             "Per-PV-string discovery: %d direct power, "

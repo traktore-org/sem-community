@@ -104,6 +104,7 @@ class SensorReader:
         # hit), populated by ``set_pv_strings`` from
         # ``hardware_detection.discover_pv_strings_from_registry``.
         self._pv_strings: Dict[str, str] = {}
+        self._pv_string_names: Dict[str, str] = {}  # (#566) slot -> custom name
         self._grid_sign_inverted = False
         self._grid_sign_detected = False  # True once sign is reliably determined
         # #461: accumulated sign-of-correlation evidence. The old ±1 vote
@@ -342,6 +343,23 @@ class SensorReader:
                 continue
             if vi_pair and len(vi_pair) == 2 and all(vi_pair):
                 self._pv_strings[slot_label] = tuple(vi_pair)
+
+    def set_pv_string_names(self, names: "Optional[Dict[str, str]]") -> None:
+        """(#566) User-chosen display names per PV-string slot, e.g.
+        ``{"pv1": "East", "pv2": "West"}`` from the options flow. Blank/absent
+        slots fall back to the compact default (see ``pv_string_display_name``).
+        """
+        self._pv_string_names = {
+            str(k): str(v).strip()
+            for k, v in (names or {}).items()
+            if v and str(v).strip()
+        }
+
+    def pv_string_display_name(self, slot: str) -> str:
+        """(#566) Display name for a slot: the user's custom name, else the
+        compact default ``PV1`` / ``PV2`` / …"""
+        custom = getattr(self, "_pv_string_names", {}).get(slot)
+        return custom or f"PV{slot.replace('pv', '')}"
 
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""

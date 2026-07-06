@@ -1787,7 +1787,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_notifications()
+            return await self.async_step_pv_naming()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -1896,6 +1896,81 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.BooleanSelector(),
             }),
             errors=errors,
+        )
+
+    async def async_step_pv_naming(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """(#566) Name the per-PV-string sensors (East/South/West …).
+
+        Only shown when ≥ 2 strings were discovered. Each field is labelled
+        with its source sensor + live power so the user can tell which slot is
+        which physical panel (the slots are ordered by the Energy-Dashboard
+        solar-sensor list, not by compass direction).
+        """
+        # Reach the live coordinator's discovered slot -> source map.
+        coordinator = self.hass.data.get(DOMAIN, {}).get(
+            self.config_entry.entry_id
+        )
+        reader = getattr(coordinator, "_sensor_reader", None)
+        pv_strings = dict(getattr(reader, "_pv_strings", {}) or {})
+
+        # < 2 strings → nothing to name, skip straight on. Carry any
+        # previously-saved names forward so this save (which replaces the whole
+        # options dict via async_create_entry) does not erase them when the
+        # step is skipped (e.g. discovery hasn't run yet). Mirrors the
+        # ev_chargers carry-forward pattern above.
+        if len(pv_strings) < 2:
+            existing = self.config_entry.options.get("pv_string_names")
+            if existing:
+                self._data.setdefault("pv_string_names", existing)
+            return await self.async_step_notifications()
+
+        slots = sorted(pv_strings.keys())
+
+        if user_input is not None:
+            names = {
+                slot: str(user_input.get(f"pv_name_{slot}", "") or "").strip()
+                for slot in slots
+            }
+            # store only the non-empty ones; keep the key present so clearing
+            # a name reverts to default
+            self._data["pv_string_names"] = {
+                s: v for s, v in names.items() if v
+            }
+            return await self.async_step_notifications()
+
+        current = {**self.config_entry.data, **self.config_entry.options}
+        saved_names = current.get("pv_string_names", {}) or {}
+
+        # Build the "which slot is which" mapping shown in the description,
+        # and the per-slot text fields.
+        mapping_lines = []
+        schema_dict = {}
+        for slot in slots:
+            src = pv_strings[slot]
+            if isinstance(src, (tuple, list)):
+                src_label = " × ".join(str(x) for x in src) + " (V×I)"
+                watts = None
+            else:
+                src_label = str(src)
+                st = self.hass.states.get(src_label)
+                try:
+                    watts = float(st.state) if st else None
+                except (ValueError, TypeError):
+                    watts = None
+            w_txt = f" · {watts:.0f} W" if isinstance(watts, float) else ""
+            n = slot.replace("pv", "")
+            mapping_lines.append(f"• PV{n}  ←  {src_label}{w_txt}")
+            schema_dict[vol.Optional(
+                f"pv_name_{slot}",
+                default=saved_names.get(slot, ""),
+            )] = selector.TextSelector()
+
+        return self.async_show_form(
+            step_id="pv_naming",
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={"mapping": "\n".join(mapping_lines)},
         )
 
     async def async_step_notifications(

@@ -379,6 +379,18 @@
           "daily_ev_target_max": "Solarüberschuss lädt bis hierhin, dann Stopp. Auf Voll lassen, um frei aus der Sonne zu laden.",
           "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden."
         }
+      },
+      "pv_naming": {
+        "title": "PV-Strings benennen",
+        "description": "Gib jedem Solar-String einen Namen (z. B. Ost / Süd / West). Welcher Slot zu welchem Panel gehört — die Nummerierung folgt deiner Energie-Dashboard-Solarliste, nicht der Himmelsrichtung:\n\n{mapping}\n\nLeer lassen, um den Standard (PV1/PV2/…) zu behalten.",
+        "data": {
+          "pv_name_pv1": "Name PV1",
+          "pv_name_pv2": "Name PV2",
+          "pv_name_pv3": "Name PV3",
+          "pv_name_pv4": "Name PV4",
+          "pv_name_pv5": "Name PV5",
+          "pv_name_pv6": "Name PV6"
+        }
       }
     }
   },

@@ -285,7 +285,11 @@ class ControllableDevice(ABC):
             self._daily_runtime_last_check = now
         self._daily_runtime_meter_day = meter_day
 
-        if self._daily_runtime_last_check is not None and self.is_active:
+        # Don't accumulate the daily solar budget when SEM isn't managing the
+        # device (Off): a device switched to Off while running would otherwise
+        # keep counting minutes it no longer owns (#559 alex "Issue 6").
+        _managed = self.control_mode != DeviceControlMode.OFF
+        if self._daily_runtime_last_check is not None and self.is_active and _managed:
             elapsed = (now - self._daily_runtime_last_check).total_seconds()
             if 0 < elapsed <= 120:  # ignore jumps > 120s (restart recovery)
                 self._daily_runtime_accumulated_sec += elapsed

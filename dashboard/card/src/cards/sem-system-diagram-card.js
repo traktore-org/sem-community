@@ -621,7 +621,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                                  title="${s.entityId}"
                                  data-entity="${s.entityId}"
                                  @click=${() => this._fireMoreInfo?.(s.entityId)}>
-                                <span class="pv-chip-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                <span class="pv-chip-label">${s.name}</span>
                                 <span class="pv-chip-value">${(Math.abs(s.watts)/1000).toFixed(2)} kW</span>
                             </div>
                         `)}
