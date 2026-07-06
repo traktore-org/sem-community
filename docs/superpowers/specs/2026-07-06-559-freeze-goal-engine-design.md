@@ -47,15 +47,28 @@ uses. If a real user later needs deadlines/energy targets, we rebuild from a spe
 ### Deleted (speculative; carries both HIGH bugs + UX debt)
 | Item | Location | Note |
 |---|---|---|
-| `daily_target_energy_kwh` | `base.py:171` | no user asked; metered-target |
-| `daily_max_energy_kwh` | `base.py:172` | energy cap |
-| `daily_max_runtime_sec` | `base.py:170` | **HIGH-1 dies here** |
-| `target_deadline` + `deadline_pressure()` | `base.py:174,377,398` + deadline-force pass in `surplus_controller.py` | **HIGH-2 dies here** |
-| `top_up_policy` values `cheap_hours`/`always` | `base.py:175` + cheap/deadline force passes | collapses to `solar_only`-only → field drops off the surface |
+| `daily_target_energy_kwh` + energy accum/integration | `base.py:171,173,307`; energy branch of `daily_targets_met` | no user asked; metered-target |
+| `daily_max_energy_kwh` + `daily_max_energy_reached` | `base.py:172,338` | energy cap |
+| `daily_max_runtime_sec` + `daily_max_runtime_reached` | `base.py:170,330` | **HIGH-1 dies here** (un-persisted accumulator) |
+| `target_deadline`, `deadline_pressure`, `_seconds_until_deadline`, `_goal_now`, `daily_energy_budget_kwh`, `_deadline_forced` | `base.py:174,376,386,392,410` + the **deadline-critical pass** in `surplus_controller.py:672-720` | **HIGH-2 dies here** (un-gated battery drain) |
+| `top_up_policy` value `always` | `base.py:175` + services/init validation | the `always` grid-forcing path (drove the deadline pass) |
 
-With `cheap_hours`/`always`/deadline gone there is **no grid-forcing path left** —
-matching the honest story already given to alex ("solar-only, accept a miss on
-cloudy days").
+### Constraint — do NOT delete (entangled with HW/HP)
+The heat-pump (`heat_pump_controller.py:161`) and hot-water
+(`hot_water_controller.py:258`) controllers **override `needs_offpeak_activation`**
+and rely on the surplus-controller **off-peak activation pass**
+(`surplus_controller.py:628-670`), which is guarded by
+`top_up_policy == "solar_only"`. Therefore **keep**: `daily_min_runtime_sec`,
+`needs_offpeak_activation`, `remaining_daily_runtime_sec`, `_offpeak_forced`, the
+off-peak pass, and the `top_up_policy` field with values **`solar_only` (default)
+and `cheap_hours`** (`always` removed). These are the pre-#559 "Feature 2 daily
+runtime" mechanism, not #559's speculative surface.
+
+Net effect for a generic **switch** load (alex's pool pump / socket): it defaults
+to `solar_only`, so with `always`+deadline gone it has **no grid-forcing path** —
+matching the honest story already given ("solar-only, accept a miss on a dark
+day"). `cheap_hours` remains a backend option for HW/HP but is **not surfaced on
+the switch device card**.
 
 ## Footgun fix (affects even the core path)
 
