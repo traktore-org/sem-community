@@ -385,7 +385,9 @@
           "pv_name_pv1": "PV1 name",
           "pv_name_pv2": "PV2 name",
           "pv_name_pv3": "PV3 name",
-          "pv_name_pv4": "PV4 name"
+          "pv_name_pv4": "PV4 name",
+          "pv_name_pv5": "PV5 name",
+          "pv_name_pv6": "PV6 name"
         }
       }
     }

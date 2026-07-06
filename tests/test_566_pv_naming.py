@@ -114,6 +114,21 @@ async def test_pv_naming_skips_when_under_2(mock_hass, config_entry):
 
 
 @pytest.mark.asyncio
+async def test_skip_path_preserves_saved_names(mock_hass, config_entry):
+    """<2 strings must NOT wipe previously-saved names (async_create_entry
+    replaces the whole options dict)."""
+    flow = _flow_with_strings(
+        mock_hass, config_entry, {"pv1": "sensor.only"},
+        saved={"pv1": "East", "pv2": "West"},
+    )
+    with patch.object(type(flow), "config_entry", config_entry):
+        with patch.object(OptionsFlowHandler, "async_step_notifications",
+                          return_value={"type": "form", "step_id": "notifications"}):
+            await flow.async_step_pv_naming()
+    assert flow._data["pv_string_names"] == {"pv1": "East", "pv2": "West"}
+
+
+@pytest.mark.asyncio
 async def test_pv_naming_stores_names_on_submit(mock_hass, config_entry):
     flow = _flow_with_strings(
         mock_hass, config_entry,

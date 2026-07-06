@@ -2306,8 +2306,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if _key.startswith("pv_string_") and (
             _key.endswith("_power") or _key.endswith("_daily_energy")
         ):
-            slot = _key[len("pv_string_"):].rsplit("_power", 1)[0].rsplit(
-                "_daily_energy", 1)[0]
+            # key is pv_string_<slot>_power|_daily_energy; slot (pvN) is the
+            # first token after the prefix.
+            slot = _key[len("pv_string_"):].split("_", 1)[0]
             _sr = getattr(self.coordinator, "_sensor_reader", None)
             if _sr is not None:
                 attrs["string_name"] = _sr.pv_string_display_name(slot)

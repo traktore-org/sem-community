@@ -1915,10 +1915,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         reader = getattr(coordinator, "_sensor_reader", None)
         pv_strings = dict(getattr(reader, "_pv_strings", {}) or {})
 
-        # < 2 strings → nothing to name, skip straight on.
+        # < 2 strings → nothing to name, skip straight on. Carry any
+        # previously-saved names forward so this save (which replaces the whole
+        # options dict via async_create_entry) does not erase them when the
+        # step is skipped (e.g. discovery hasn't run yet). Mirrors the
+        # ev_chargers carry-forward pattern above.
         if len(pv_strings) < 2:
-            if user_input is not None:
-                self._data.update(user_input)
+            existing = self.config_entry.options.get("pv_string_names")
+            if existing:
+                self._data.setdefault("pv_string_names", existing)
             return await self.async_step_notifications()
 
         slots = sorted(pv_strings.keys())

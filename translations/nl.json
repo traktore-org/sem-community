@@ -387,7 +387,9 @@
           "pv_name_pv1": "Naam PV1",
           "pv_name_pv2": "Naam PV2",
           "pv_name_pv3": "Naam PV3",
-          "pv_name_pv4": "Naam PV4"
+          "pv_name_pv4": "Naam PV4",
+          "pv_name_pv5": "Naam PV5",
+          "pv_name_pv6": "Naam PV6"
         }
       }
     }
