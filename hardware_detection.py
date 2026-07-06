@@ -1672,6 +1672,11 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
         re.compile(r"batter.*temp.*1", re.IGNORECASE),  # battery_temperature_1 (JK BMS)
         re.compile(r"batter(?!.*2).*temp(?!.*2)", re.IGNORECASE),  # battery_temperature (single, not "2")
         re.compile(r"cell[_\s]*temp.*1", re.IGNORECASE),
+        # Battery brands that name the cell-temperature sensor WITHOUT a
+        # "battery"/"1" token — Fronius Reserva / BYD expose it as
+        # ``reserva_cell_temperature`` (#564). Match a bare cell temperature
+        # but keep the "2" out so it can't steal battery_temp2's sensor.
+        re.compile(r"cell[_\s]*temp(?!.*2)", re.IGNORECASE),
     ],
     # Battery temperature (secondary)
     "battery_temp2": [

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.20] — 06.07.2026
+
+> **Pre-release.** Battery temperature autodetect reaches the Fronius
+> Reserva / BYD naming.
+
+### 🌡️ Battery temperature — finds the bare `cell_temperature` (#564)
+- 🐛 **Fronius Reserva / BYD batteries showed *unknown*** after the beta.18
+  honest-temperature fix. Their cell-temperature sensor is named without a
+  `battery`/`1` token (e.g. `sensor.reserva_cell_temperature`), so the
+  autodetect matched nothing. SEM now recognises the bare `cell_temperature`
+  shape and picks up the real sensor (~24.5 °C) with no configuration —
+  guarded so it can't hijack a secondary `cell_temperature_2`.
+  (reported by @ebnerjoh)
+
 # [1.7.4-beta.19] — 06.07.2026
 
 > **Pre-release.** #559 load management — the goal engine, frozen to its
