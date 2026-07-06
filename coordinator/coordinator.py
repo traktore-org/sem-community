@@ -2317,6 +2317,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     except (AttributeError, ValueError):
                         pass
                 await self._storage.async_save_energy_delayed()
+                # Flush the daily store too (device runtimes, predictor, EV
+                # intelligence, flow/sign/per-charger state) on a throttled
+                # immediate write — previously it only reached disk on a
+                # graceful stop, so an unclean reboot lost the day's progress.
+                await self._storage.async_save_daily_throttled()
 
             self._initial_update_done = True
             result = sem_data.to_dict()

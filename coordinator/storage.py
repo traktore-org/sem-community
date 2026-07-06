@@ -8,6 +8,7 @@ Uses two storage strategies:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional, Callable
 
@@ -25,6 +26,12 @@ STORAGE_VERSION = 1
 
 # Delayed save interval for energy totals (seconds)
 ENERGY_SAVE_DELAY = 60
+# Throttle interval for periodic daily-state writes (seconds). The daily store
+# previously only reached disk on a graceful HA stop (async_delay_save resets
+# its timer on every call, so under the continuous coordinator loop it never
+# fired mid-run), so an unclean reboot lost the day's device-runtime progress.
+# async_save_daily_throttled writes immediately at most this often instead.
+DAILY_SAVE_INTERVAL = 120
 
 
 class SEMStorage:
@@ -50,6 +57,7 @@ class SEMStorage:
         # State tracking
         self._loaded = False
         self._shutdown_listener: Optional[Callable] = None
+        self._last_daily_save_ts: float = 0.0  # monotonic, for the throttle
 
     @property
     def is_loaded(self) -> bool:
@@ -441,6 +449,23 @@ class SEMStorage:
             _LOGGER.debug("Saved daily data to storage")
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to save daily data: %s", e)
+
+    async def async_save_daily_throttled(self) -> None:
+        """Write the daily store to disk immediately, at most once per
+        DAILY_SAVE_INTERVAL seconds.
+
+        Deliberately NOT async_delay_save: that resets its delay timer on
+        every call, so under the continuous coordinator update loop it never
+        fires until updates pause (i.e. only at shutdown). This throttle
+        guarantees a real mid-run write, bounding unclean-reboot loss of the
+        device-runtime counter (and the rest of the daily state) to one
+        interval instead of the whole day.
+        """
+        now = time.monotonic()
+        if now - self._last_daily_save_ts < DAILY_SAVE_INTERVAL:
+            return
+        self._last_daily_save_ts = now
+        await self.async_save_daily()
 
     async def async_save_all(self) -> None:
         """Save all data immediately (for shutdown)."""
