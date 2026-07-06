@@ -88,6 +88,50 @@ async def test_register_defaults_to_surplus(registry):
     assert device.control_mode == DeviceControlMode.SURPLUS
 
 
+CLIMATE_SPEC = {
+    "device_id": "living_ac",
+    "entity_id": "climate.living_room_ac",
+    "name": "Living Room AC",
+    "priority": 6,
+    "rated_power": 1800,
+    "power_entity_id": None,
+    "control_mode": "surplus",
+    "device_type": "climate",
+    "hvac_mode": "cool",
+    "target_temperature": 22.0,
+}
+
+
+@pytest.mark.asyncio
+async def test_register_climate_builds_climate_device(registry):
+    """(#569) A climate spec builds a ClimateDevice, not a SwitchDevice."""
+    from custom_components.solar_energy_management.devices.base import ClimateDevice
+    summary = await registry.async_register_service_device(dict(CLIMATE_SPEC))
+    device = registry._surplus_controller.get_device("living_ac")
+    assert isinstance(device, ClimateDevice)
+    assert device.hvac_mode == "cool"
+    assert device.target_temperature == 22.0
+    assert device.control_mode == DeviceControlMode.SURPLUS
+    assert summary["device_type"] == "climate"
+    # device_type persists so it rehydrates correctly after a restart
+    assert registry._service_registrations["living_ac"]["device_type"] == "climate"
+
+
+@pytest.mark.asyncio
+async def test_climate_rehydrates_as_climate_device_after_restart(registry):
+    """(#569) After a restart, the persisted climate spec re-owns as a
+    ClimateDevice (not a SwitchDevice)."""
+    from custom_components.solar_energy_management.devices.base import ClimateDevice
+    await registry.async_register_service_device(dict(CLIMATE_SPEC))
+    # Simulate restart: wipe live devices, keep persisted registrations.
+    registry._surplus_controller._devices.clear()
+    registry._register_service_devices()
+    device = registry._surplus_controller.get_device("living_ac")
+    assert isinstance(device, ClimateDevice)
+    assert device.hvac_mode == "cool"
+    assert device.target_temperature == 22.0
+
+
 @pytest.mark.asyncio
 async def test_register_respects_explicit_peak_only(registry):
     await registry.async_register_service_device({**SPEC, "control_mode": "peak_only"})

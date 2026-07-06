@@ -172,7 +172,7 @@ remove_device_control_mapping:
 
 register_surplus_device:
   name: Register Surplus Device
-  description: Register a device (switch, relay, smart plug) for solar surplus control. One call is enough — the registration is persisted across restarts and the device defaults to surplus mode (SEM switches it on when surplus power is available, based on its priority). Returns a summary of the registered device.
+  description: Register a device (switch, relay, smart plug, or a climate.* air-conditioner / heat pump) for solar surplus control. One call is enough — the registration is persisted across restarts and the device defaults to surplus mode (SEM switches it on when surplus power is available, based on its priority). Returns a summary of the registered device.
   fields:
     device_id:
       name: Device ID
@@ -182,13 +182,48 @@ register_surplus_device:
         text:
     entity_id:
       name: Entity ID
-      description: The switch entity to control (e.g., "switch.shelly_hot_water")
+      description: The entity to control — a switch/input_boolean, or a climate.* entity when Device Type is "climate" (e.g., "switch.shelly_hot_water" or "climate.living_room_ac").
       required: true
       selector:
         entity:
           domain:
             - switch
             - input_boolean
+            - climate
+    device_type:
+      name: Device Type
+      description: 'How SEM actuates the entity: switch (on/off via turn_on/off — the default) or climate (an AC / heat pump driven by hvac_mode + target temperature).'
+      required: false
+      default: switch
+      selector:
+        select:
+          options:
+            - switch
+            - climate
+    hvac_mode:
+      name: HVAC Mode (climate only)
+      description: For a climate device, the hvac_mode to set when SEM turns it ON (cool for an AC, heat/heat_cool for heating). Ignored for switch devices.
+      required: false
+      default: cool
+      selector:
+        select:
+          options:
+            - cool
+            - heat
+            - heat_cool
+            - dry
+            - fan_only
+            - auto
+    target_temperature:
+      name: Target Temperature (climate only)
+      description: For a climate device, the comfort target temperature to set when SEM turns it ON. Leave empty to keep the unit's current setpoint. Ignored for switch devices.
+      required: false
+      selector:
+        number:
+          min: 5
+          max: 35
+          step: 0.5
+          unit_of_measurement: "°C"
     name:
       name: Display Name
       description: Friendly name for the device

@@ -3123,6 +3123,10 @@ async def _async_register_phase_services(
             "power_entity_id": call.data.get("power_entity_id"),
             "control_mode": call.data.get("control_mode", "surplus"),
             "depends_on": call.data.get("depends_on") or [],
+            # (#569) climate device support
+            "device_type": call.data.get("device_type", "switch"),
+            "hvac_mode": call.data.get("hvac_mode", "cool"),
+            "target_temperature": call.data.get("target_temperature"),
         }
         goal_fields = {
             k: call.data[k]
@@ -3142,16 +3146,8 @@ async def _async_register_phase_services(
         else:
             # Registry not up (very early call) — register unpersisted so
             # the call still works; the user can re-run to persist.
-            from .devices.base import SwitchDevice, DeviceControlMode
-            device = SwitchDevice(
-                hass=hass,
-                device_id=spec["device_id"],
-                name=spec["name"],
-                rated_power=spec["rated_power"],
-                priority=spec["priority"],
-                entity_id=spec["entity_id"],
-                power_entity_id=spec["power_entity_id"],
-            )
+            from .devices.base import surplus_device_from_spec, DeviceControlMode
+            device = surplus_device_from_spec(hass, spec["device_id"], spec)
             try:
                 device.control_mode = DeviceControlMode(spec["control_mode"])
             except ValueError:
@@ -3182,6 +3178,14 @@ async def _async_register_phase_services(
                 ["off", "peak_only", "surplus"]
             ),
             vol.Optional("depends_on"): vol.All(cv.ensure_list, [cv.string]),
+            # (#569) climate device support
+            vol.Optional("device_type", default="switch"): vol.In(
+                ["switch", "climate"]
+            ),
+            vol.Optional("hvac_mode"): vol.In(
+                ["cool", "heat", "heat_cool", "dry", "fan_only", "auto"]
+            ),
+            vol.Optional("target_temperature"): vol.Coerce(float),
             # (#559) goal engine — grounded core (runtime target + policy)
             vol.Optional("daily_min_runtime_min"): vol.All(
                 vol.Coerce(float), vol.Range(min=0, max=1440)
