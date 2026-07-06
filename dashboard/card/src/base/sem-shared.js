@@ -206,6 +206,11 @@ export function semDiscoverPVStrings(hass, prefix) {
             entityId: eid,
             energyKwh: isNaN(eKwh) ? null : eKwh,
             energyEntityId: eSt ? eEid : null,
+            // (#566) user-chosen display name (East/South/…), published as a
+            // string_name attribute on the power sensor; falls back to the
+            // compact "PVn" when unset.
+            name: (st.attributes && st.attributes.string_name)
+                || ('PV' + slot.replace(/^pv/, '')),
         });
     }
     return found.length >= 2 ? found : [];

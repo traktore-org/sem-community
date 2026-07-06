@@ -379,6 +379,16 @@
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
           "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
         }
+      },
+      "pv_naming": {
+        "title": "PV-strings benoemen",
+        "description": "Geef elke zonne-string een naam (bijv. Oost / Zuid / West). Welke slot bij welk paneel hoort — de nummering volgt je Energie-Dashboard-zonnelijst, niet de windrichting:\n\n{mapping}\n\nLaat leeg om de standaard (PV1/PV2/…) te houden.",
+        "data": {
+          "pv_name_pv1": "Naam PV1",
+          "pv_name_pv2": "Naam PV2",
+          "pv_name_pv3": "Naam PV3",
+          "pv_name_pv4": "Naam PV4"
+        }
       }
     }
   },

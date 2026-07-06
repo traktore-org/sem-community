@@ -1649,13 +1649,20 @@ async def async_setup_entry(
     pv_strings = getattr(_sr, "_pv_strings", {}) if _sr is not None else {}
     pv_strings = pv_strings or {}
     if len(pv_strings) >= 2:
+        # (#566) user-chosen names from options — a custom name replaces the
+        # verbose default in the ENTITY name (so it shows in HA history / the
+        # Energy Dashboard). The compact chip label lives in the string_name
+        # attribute (see SEMSolarSensor.extra_state_attributes). Unnamed slots
+        # keep "PV String N" so existing installs are unchanged.
+        _pv_names = getattr(_sr, "_pv_string_names", {}) if _sr is not None else {}
         for slot in sorted(pv_strings.keys()):
             # ``slot`` is the normalised label ``pv1`` / ``pv2`` / ...
             n = slot.replace("pv", "")
+            base = _pv_names.get(slot) or f"PV String {n}"
             per_string_descriptions.extend([
                 SensorEntityDescription(
                     key=f"pv_string_{slot}_power",
-                    name=f"PV String {n} Power",
+                    name=f"{base} Power",
                     device_class=SensorDeviceClass.POWER,
                     state_class=SensorStateClass.MEASUREMENT,
                     native_unit_of_measurement=UnitOfPower.WATT,
@@ -1663,7 +1670,7 @@ async def async_setup_entry(
                 ),
                 SensorEntityDescription(
                     key=f"pv_string_{slot}_daily_energy",
-                    name=f"PV String {n} Daily Energy",
+                    name=f"{base} Daily Energy",
                     device_class=SensorDeviceClass.ENERGY,
                     state_class=SensorStateClass.TOTAL,
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -2292,6 +2299,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             schedule = self.coordinator.data.get("battery_scheduler_schedule", {})
             if schedule:
                 attrs["schedule"] = schedule
+
+        # (#566) per-PV-string display name — the cards read this to label the
+        # chip/diagram/legend (custom name from options, else compact "PVn").
+        _key = self.entity_description.key
+        if _key.startswith("pv_string_") and (
+            _key.endswith("_power") or _key.endswith("_daily_energy")
+        ):
+            slot = _key[len("pv_string_"):].rsplit("_power", 1)[0].rsplit(
+                "_daily_energy", 1)[0]
+            _sr = getattr(self.coordinator, "_sensor_reader", None)
+            if _sr is not None:
+                attrs["string_name"] = _sr.pv_string_display_name(slot)
 
         return attrs
 

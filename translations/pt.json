@@ -377,6 +377,16 @@
           "daily_ev_target_max": "O excedente solar carrega até este valor e depois para. Deixe no máximo para carregar livremente com o sol.",
           "ev_target_soc_max": "O excedente solar carrega até este SOC e depois para. Deixe a 100% para carregar livremente com o sol."
         }
+      },
+      "pv_naming": {
+        "title": "Name your PV strings",
+        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "data": {
+          "pv_name_pv1": "PV1 name",
+          "pv_name_pv2": "PV2 name",
+          "pv_name_pv3": "PV3 name",
+          "pv_name_pv4": "PV4 name"
+        }
       }
     }
   },
