@@ -77,6 +77,7 @@ class DeviceType(Enum):
     CURRENT_CONTROL = "current_control"
     SETPOINT = "setpoint"
     SCHEDULE = "schedule"
+    CLIMATE = "climate"
 
 
 class DeviceControlMode(Enum):
@@ -633,6 +634,189 @@ class SwitchDevice(ControllableDevice):
         if self.is_active:
             return self.rated_power
         return 0.0
+
+
+class ClimateDevice(ControllableDevice):
+    """On/off surplus control for a ``climate.*`` entity (#569).
+
+    An air-conditioner / heat pump exposed only as a ``climate.*`` entity has
+    no switch to flip and no ``number`` to write — you drive it with
+    ``climate.set_hvac_mode`` and ``climate.set_temperature``. This is the
+    on/off analog of :class:`SwitchDevice` for such units:
+
+    - surplus available → set the configured ``hvac_mode`` (e.g. ``cool``) and,
+      if given, a comfort ``target_temperature`` — i.e. turn the unit ON;
+    - surplus drops → ``hvac_mode: off`` — turn the unit OFF.
+
+    The active ``hvac_mode`` is configurable, so one type covers AC-cooling
+    (``cool``) and heating (``heat`` / ``heat_cool``). Unlike
+    :class:`SetpointDevice` (which only nudges a heat-pump setpoint and never
+    turns the unit off), this drives real on/off load shifting and so slots
+    into the priority / peak-shed / daily-goal machinery like a switch.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        device_id: str,
+        name: str,
+        rated_power: float,
+        priority: int = 5,
+        min_power_threshold: float = 0.0,
+        entity_id: Optional[str] = None,
+        power_entity_id: Optional[str] = None,
+        hvac_mode: str = "cool",
+        target_temperature: Optional[float] = None,
+        min_on_time: int = 300,
+        min_off_time: int = 60,
+        daily_min_runtime_sec: int = 0,
+    ):
+        super().__init__(
+            hass, device_id, name, priority,
+            min_power_threshold or rated_power,
+            entity_id, power_entity_id,
+        )
+        self.rated_power = rated_power
+        self.hvac_mode = hvac_mode or "cool"
+        self.target_temperature = target_temperature
+        self.min_on_time = min_on_time
+        self.min_off_time = min_off_time
+        self.daily_min_runtime_sec = daily_min_runtime_sec
+
+    @property
+    def device_type(self) -> DeviceType:
+        return DeviceType.CLIMATE
+
+    def adopt_if_running(self) -> bool:
+        """(#559) Re-own a climate unit that SEM is running at (re-)registration.
+
+        After a restart SEM's internal state is IDLE while the AC it turned on
+        is still cooling. A climate entity reports its active mode as the
+        state (``cool``/``heat``/…), or ``off`` when idle.
+
+        We only adopt when the entity's state matches **our** configured
+        ``hvac_mode`` — i.e. the unit is running in the mode SEM would have set.
+        A unit the user has manually put into a *different* mode (e.g. ``heat``
+        while we manage ``cool``) is left alone: adopting it would let a later
+        ``deactivate()`` send ``hvac_mode: off`` and kill the user's manual run.
+        """
+        if not self.entity_id or not self.hass or self.is_active:
+            return False
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state != self.hvac_mode:
+            return False
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        _LOGGER.info(
+            "%s: climate %s was %s at registration — re-owned as active",
+            self.name, self.entity_id, state.state,
+        )
+        return True
+
+    async def activate(self, available_watts: float) -> float:
+        if not self.entity_id:
+            return 0.0
+
+        # Anti-flicker: check minimum off time
+        if self._status.last_deactivated:
+            elapsed = (datetime.now() - self._status.last_deactivated).total_seconds()
+            if elapsed < self.min_off_time:
+                return 0.0
+
+        # Set the mode first. If THIS fails the unit never turned on — report
+        # ERROR and bail.
+        try:
+            await self.hass.services.async_call(
+                "climate", "set_hvac_mode",
+                {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode},
+                blocking=True,
+            )
+        except Exception as e:
+            _LOGGER.error("Failed to activate %s: %s", self.name, e)
+            self._status.state = DeviceState.ERROR
+            self._status.error_message = str(e)
+            return 0.0
+
+        # The mode is committed — the unit is now ON. Mark ACTIVE *before* the
+        # optional setpoint write so a set_temperature failure can't leave us
+        # thinking the unit is idle (which would re-issue set_hvac_mode every
+        # cycle — the unit would run uncontrolled). B1.
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        self._status.activation_count += 1
+
+        if self.target_temperature is not None:
+            try:
+                await self.hass.services.async_call(
+                    "climate", "set_temperature",
+                    {"entity_id": self.entity_id,
+                     "temperature": self.target_temperature},
+                    blocking=True,
+                )
+            except Exception as e:
+                # Non-fatal: the unit is running in the right mode, only the
+                # comfort setpoint didn't take. Stay ACTIVE.
+                _LOGGER.warning(
+                    "%s: set hvac_mode but not target temperature: %s",
+                    self.name, e,
+                )
+
+        if self.target_temperature is not None:
+            _LOGGER.info(
+                "Activated climate device %s → %s @ %.1f°C (%dW)",
+                self.name, self.hvac_mode, self.target_temperature,
+                self.rated_power,
+            )
+        else:
+            _LOGGER.info(
+                "Activated climate device %s → %s (%dW)",
+                self.name, self.hvac_mode, self.rated_power,
+            )
+        return self.rated_power
+
+    async def deactivate(self) -> None:
+        if not self.entity_id:
+            return
+
+        # Anti-flicker: check minimum on time
+        if self._status.last_activated:
+            elapsed = (datetime.now() - self._status.last_activated).total_seconds()
+            if elapsed < self.min_on_time:
+                return
+
+        try:
+            await self.hass.services.async_call(
+                "climate", "set_hvac_mode",
+                {"entity_id": self.entity_id, "hvac_mode": "off"},
+                blocking=True,
+            )
+            self._status.state = DeviceState.IDLE
+            self._status.current_consumption_w = 0.0
+            self._status.allocated_power_w = 0.0
+            self._status.last_deactivated = datetime.now()
+            _LOGGER.info("Deactivated climate device %s", self.name)
+        except Exception as e:
+            _LOGGER.error("Failed to deactivate %s: %s", self.name, e)
+            self._status.state = DeviceState.ERROR
+            self._status.error_message = str(e)
+
+    async def adjust_power(self, available_watts: float) -> float:
+        # Climate devices are on/off only — no proportional adjustment.
+        if self.is_active:
+            return self.rated_power
+        return 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        d.update({
+            "hvac_mode": self.hvac_mode,
+            "target_temperature": self.target_temperature,
+        })
+        return d
 
 
 class CurrentControlDevice(ControllableDevice):
@@ -1595,3 +1779,51 @@ class ScheduleDevice(ControllableDevice):
             "is_deadline_approaching": self.is_deadline_approaching,
         })
         return d
+
+
+def surplus_device_from_spec(
+    hass: HomeAssistant, device_id: str, spec: Dict[str, Any]
+) -> "ControllableDevice":
+    """Build a live surplus device from a stored/service spec (#569).
+
+    Single source of truth for the three service-device build sites (the
+    ``register_surplus_device`` handler, the registry's create path, and the
+    restart-rehydrate path) so a new device type only has to be added here.
+
+    ``spec["device_type"]`` selects the class (default ``"switch"``):
+
+    - ``"climate"`` → :class:`ClimateDevice` (reads ``hvac_mode`` /
+      ``target_temperature``);
+    - anything else → :class:`SwitchDevice`.
+
+    The caller still applies ``control_mode``, ``depends_on`` and goals — this
+    only constructs the object.
+    """
+    dtype = (spec.get("device_type") or "switch").lower()
+    name = spec.get("name") or device_id
+    rated_power = spec.get("rated_power", 1000)
+    priority = spec.get("priority", 5)
+    entity_id = spec.get("entity_id", "")
+    power_entity_id = spec.get("power_entity_id")
+    if dtype == "climate":
+        target = spec.get("target_temperature")
+        return ClimateDevice(
+            hass=hass,
+            device_id=device_id,
+            name=name,
+            rated_power=rated_power,
+            priority=priority,
+            entity_id=entity_id,
+            power_entity_id=power_entity_id,
+            hvac_mode=spec.get("hvac_mode", "cool"),
+            target_temperature=float(target) if target is not None else None,
+        )
+    return SwitchDevice(
+        hass=hass,
+        device_id=device_id,
+        name=name,
+        rated_power=rated_power,
+        priority=priority,
+        entity_id=entity_id,
+        power_entity_id=power_entity_id,
+    )

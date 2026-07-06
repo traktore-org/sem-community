@@ -201,6 +201,32 @@ power and OFF when the surplus is gone (anti-flicker: min 5 min on /
 1 min off). Remove it again with
 `solar_energy_management.unregister_surplus_device`.
 
+### Air-conditioners / heat pumps via `climate.*` (#569)
+
+A unit exposed only as a `climate.*` entity (no switch, no `number`) can be
+managed too — set `device_type: climate`. On surplus SEM sets the unit's
+`hvac_mode` (e.g. `cool`) and, optionally, a comfort target temperature; when
+the surplus is gone it sets `hvac_mode: off`. Same priority / peak-shed /
+daily-goal handling as any other surplus load, and the registration persists
+across restarts (it re-owns a running unit after a reboot).
+
+```yaml
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: living_ac
+  entity_id: climate.living_room_ac
+  name: Living Room AC
+  device_type: climate
+  hvac_mode: cool           # cool | heat | heat_cool | dry | fan_only | auto
+  target_temperature: 22    # °C to set when SEM turns it on (optional)
+  rated_power: 1800         # W the unit draws when running
+  priority: 6
+```
+
+Pick `hvac_mode: heat` (or `heat_cool`) to drive a heat pump the same way in
+winter. Leave `target_temperature` empty to keep the unit's own setpoint and
+only switch the mode.
+
 ### The mode ladder — who is in charge
 
 Every device row on the Control tab has **one mode picker** — a 3-step

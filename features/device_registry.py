@@ -30,7 +30,11 @@ from homeassistant.helpers import entity_registry as er
 
 from ..ha_energy_reader import read_energy_dashboard_config, get_all_individual_devices
 from .load_device_discovery import LoadDeviceDiscovery
-from ..devices.base import SwitchDevice, CurrentControlDevice
+from ..devices.base import (
+    SwitchDevice,
+    CurrentControlDevice,
+    surplus_device_from_spec,
+)
 from ..hardware_detection import discover_ev_charger_from_registry
 
 _LOGGER = logging.getLogger(__name__)
@@ -245,15 +249,7 @@ class UnifiedDeviceRegistry:
         surplus controller."""
         from ..devices.base import DeviceControlMode
         for device_id, spec in self._service_registrations.items():
-            device = SwitchDevice(
-                hass=self.hass,
-                device_id=device_id,
-                name=spec.get("name", device_id),
-                rated_power=spec.get("rated_power", 1000),
-                priority=spec.get("priority", 5),
-                entity_id=spec.get("entity_id", ""),
-                power_entity_id=spec.get("power_entity_id"),
-            )
+            device = surplus_device_from_spec(self.hass, device_id, spec)
             try:
                 device.control_mode = DeviceControlMode(
                     spec.get("control_mode", "surplus")
@@ -290,6 +286,11 @@ class UnifiedDeviceRegistry:
             "power_entity_id": spec.get("power_entity_id"),
             "control_mode": spec.get("control_mode", "surplus"),
             "depends_on": list(spec.get("depends_on") or []),
+            # (#569) device kind + climate params — persisted so a climate
+            # AC rehydrates as a ClimateDevice (not a SwitchDevice) on restart.
+            "device_type": (spec.get("device_type") or "switch").lower(),
+            "hvac_mode": spec.get("hvac_mode", "cool"),
+            "target_temperature": spec.get("target_temperature"),
         }
         self._service_registrations[device_id] = stored
         # keep the mode-overrides map consistent (same value, two readers)
@@ -297,15 +298,7 @@ class UnifiedDeviceRegistry:
         # (Re-)create the live device — replaces any previous instance
         # under the same id.
         from ..devices.base import DeviceControlMode
-        device = SwitchDevice(
-            hass=self.hass,
-            device_id=device_id,
-            name=stored["name"],
-            rated_power=stored["rated_power"],
-            priority=stored["priority"],
-            entity_id=stored["entity_id"],
-            power_entity_id=stored["power_entity_id"],
-        )
+        device = surplus_device_from_spec(self.hass, device_id, stored)
         try:
             device.control_mode = DeviceControlMode(stored["control_mode"])
         except ValueError:
@@ -320,15 +313,20 @@ class UnifiedDeviceRegistry:
         # driving one switch WILL fight. The explicit registration wins.
         self._drop_discovered_duplicates(device_id, stored["entity_id"])
         await self._save_storage()
-        return {
+        summary = {
             "device_id": device_id,
             "name": stored["name"],
             "entity_id": stored["entity_id"],
             "priority": stored["priority"],
             "rated_power": stored["rated_power"],
             "control_mode": stored["control_mode"],
+            "device_type": stored["device_type"],
             "total_devices": len(self._surplus_controller._devices),
         }
+        if stored["device_type"] == "climate":
+            summary["hvac_mode"] = stored["hvac_mode"]
+            summary["target_temperature"] = stored["target_temperature"]
+        return summary
 
     async def async_unregister_service_device(self, device_id: str) -> bool:
         """Remove a service registration (and its live device).
@@ -349,7 +347,7 @@ class UnifiedDeviceRegistry:
     def _drop_discovered_duplicates(
         self, service_device_id: str, entity_id: str
     ) -> None:
-        """Unregister ED-discovered devices that drive the same switch."""
+        """Unregister ED-discovered devices that drive the same entity."""
         if not entity_id:
             return
         for did, dev in list(self._surplus_controller._devices.items()):
@@ -357,7 +355,7 @@ class UnifiedDeviceRegistry:
                 continue
             if getattr(dev, "entity_id", None) == entity_id:
                 _LOGGER.info(
-                    "Dropping auto-discovered %s — switch %s is now "
+                    "Dropping auto-discovered %s — entity %s is now "
                     "explicitly registered as %s",
                     did, entity_id, service_device_id,
                 )
