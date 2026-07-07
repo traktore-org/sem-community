@@ -627,6 +627,9 @@ class UnifiedDeviceRegistry:
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
                 "control_mode": self._control_mode_overrides.get(did, "peak_only"),
+                # (arc Phase 3) is it on because SEM turned it on, or externally?
+                "sem_owned": bool(getattr(
+                    self._surplus_controller.get_device(did), "_sem_owned", False)),
                 **self._goal_payload(did),
             }
 
@@ -654,6 +657,8 @@ class UnifiedDeviceRegistry:
                 "has_manual_mapping": False,
                 "control": {"type": "switch", "entity": spec.get("entity_id")},
                 "control_mode": spec.get("control_mode", "surplus"),
+                # (arc Phase 3) is it on because SEM turned it on, or externally?
+                "sem_owned": bool(getattr(live, "_sem_owned", False)),
                 **self._goal_payload(did),
             }
         return result
