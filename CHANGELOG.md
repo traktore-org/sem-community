@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.30] — 08.07.2026
+
+> **Pre-release.** The device arc, completed: honest runtime, spike-proof surplus, visible ownership.
+
+### 🧭 Generic-device arc, phases 3+4 (completes the beta.29 foundation)
+- ⏱️ **Daily-runtime goals now count reality, not belief.** A load whose switch
+  actually reads *off* no longer accrues runtime toward its daily target while
+  SEM's record catches up — so a goal can't be "met" by a load that wasn't
+  actually running. Devices without a readable entity behave exactly as before.
+- 🛡️ **Single-cycle spikes can't flap loads anymore.** A one-cycle inverter
+  glitch or sensor blip used to nudge the smoothed surplus by 30% of its size;
+  a median pre-filter now drops any value not seen in at least 2 of the last 3
+  cycles before it reaches the smoothing, so marginal loads stop twitching on
+  glitches. Real changes pass with one extra cycle of latency.
+- 👁️ **You can now see *why* a load is on.** Every managed device reports its
+  intent (`off` / `idle` / `on`), its observed state, and **`sem_owned`** —
+  whether SEM turned it on or something external did — on the Control-tab data
+  and in diagnostics.
+
 # [1.7.4-beta.29] — 07.07.2026
 
 > **Pre-release.** SEM no longer fights a manually-toggled surplus load.
