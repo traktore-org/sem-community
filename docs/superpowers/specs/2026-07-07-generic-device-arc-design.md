@@ -115,6 +115,31 @@ Fixes gaps **5, 6, 7**.
 Each phase: TDD, full suite, ruflo review, live-verify on HA-TEST, one beta, PROD
 soak before the next phase.
 
+## Design refinement (2026-07-07, during Phase 2 implementation)
+
+**The reconciler is ADDITIVE, not a replacement for the allocation loop.** The
+original Phase 2 framing ("`SurplusController` calls the reconciler instead of
+activate/deactivate directly") implied rewriting the allocation loop. On close
+reading that loop is battle-tested and tuned (goal gates, cheap-hours force
+expiry, LIFO deficit shedding, peak-shed, dependency cascade, anti-flicker, and
+it *already* EMA-smooths surplus). Rewriting it — especially unsupervised — is
+disproportionate risk for the value.
+
+Revised Phase 2: `DeviceReconciler` runs **alongside** the loop each cycle and
+delivers the desired-vs-observed value additively:
+- **Ownership** (`_sem_owned` on the device) — set when SEM activates, cleared
+  when an external actor changes the physical state.
+- **Belief↔observed reconciliation** — SEM-believed-ON but entity-reads-OFF
+  (past a grace window) → correct the belief (accurate runtime accounting; stop
+  crediting a load that isn't drawing). Entity-reads-ON but SEM-believed-IDLE →
+  mark not-owned (external/user on) without fighting it.
+- **Respect a manual OFF** — an `_external_off_until` cooldown (wired into
+  `can_activate`) stops SEM re-activating a load the user just turned off.
+
+The tuned allocation loop is untouched; the reconciler only keeps belief in sync
+with reality and adds ownership-awareness. Phases 3–4 (context object, smoothing)
+remain optional refinements on top.
+
 ## Non-goals / guardrails
 - **No big-bang rewrite.** Each phase preserves current behavior for loads that
   already work; the arc is added underneath.

@@ -184,6 +184,19 @@ class ControllableDevice(ABC):
         self.dependency_mode: str = "must_active"  # must_active | must_inactive
         self._controller = None  # set by SurplusController after registration
 
+        # (arc) Ownership + observed-state reconciliation. `_sem_owned` is True
+        # while SEM is the reason the load is on (it called activate()). The
+        # DeviceReconciler clears it when an external actor (the user, another
+        # automation) changed the physical state, so SEM stops fighting a manual
+        # on/off and stops crediting runtime to a load it isn't actually driving.
+        self._sem_owned: bool = False
+        # Monotonic anchor for the "belief says on but the entity reads off"
+        # drift grace window (a transient unavailable/poll gap must not flip us).
+        self._observed_off_since: Optional[float] = None
+        # Wall-clock cooldown after an external OFF: don't immediately re-activate
+        # (respect a possible user turn-off) until it elapses.
+        self._external_off_until: Optional[datetime] = None
+
     @property
     def device_type(self) -> DeviceType:
         """Return the device type."""
@@ -385,6 +398,12 @@ class ControllableDevice(ABC):
         # Dependency check (#122): all depends_on devices must be in required state
         if not self._check_dependencies():
             return False
+        # (arc) Respect a recent EXTERNAL off — if the user (or another
+        # automation) just turned this load off, don't immediately turn it back
+        # on and fight them. The DeviceReconciler sets this window when it sees
+        # a SEM-active load go off at the entity.
+        if self._external_off_until and datetime.now() < self._external_off_until:
+            return False
         if self.min_off_seconds > 0 and self._last_deactivated:
             elapsed = (datetime.now() - self._last_deactivated).total_seconds()
             if elapsed < self.min_off_seconds:
@@ -445,10 +464,59 @@ class ControllableDevice(ABC):
     def record_activated(self) -> None:
         """Record activation timestamp for anti-cycling."""
         self._last_activated = datetime.now()
+        # (arc) SEM turned this on → SEM owns the on-state.
+        self._sem_owned = True
+        self._observed_off_since = None
 
     def record_deactivated(self) -> None:
         """Record deactivation timestamp for anti-cycling."""
         self._last_deactivated = datetime.now()
+        self._sem_owned = False
+        self._observed_off_since = None
+
+    def mark_reconciled_off(self, cooldown_until: "Optional[datetime]" = None) -> None:
+        """(arc) The reconciler observed this SEM-active load is physically OFF.
+
+        Flip the internal belief to IDLE **without** issuing a service call (the
+        load is already off), clear ownership + the drift anchor, stamp the
+        anti-flicker timer, and optionally hold a re-activate cooldown so SEM
+        doesn't immediately fight a user's manual off.
+        """
+        self._status.state = DeviceState.IDLE
+        self._status.current_consumption_w = 0.0
+        self._status.allocated_power_w = 0.0
+        # Stamp BOTH deactivation clocks: the base one (min_on / can_deactivate)
+        # and the DeviceStatus one that Switch/Climate ``activate()`` read for
+        # their own min_off anti-flicker — so re-activation is gated even on a
+        # path that skips can_activate().
+        now = datetime.now()
+        self._last_deactivated = now
+        self._status.last_deactivated = now
+        self._sem_owned = False
+        self._observed_off_since = None
+        if cooldown_until is not None:
+            self._external_off_until = cooldown_until
+
+    def observed_on(self):
+        """(arc) The device's observed on/off state from HA, or None when it
+        can't be read (no control entity, or unavailable/unknown).
+
+        On/off loads use the control entity's state; a ``climate`` entity is
+        "on" whenever its hvac_mode is not ``off``. Returning None means "don't
+        know" — the reconciler leaves the belief untouched rather than guessing.
+        """
+        if not self.entity_id or not self.hass:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return None
+        s = str(state.state).lower()
+        if s == "off":
+            return False
+        if s == "on":
+            return True
+        # climate.* reports its hvac_mode as the state — anything but "off" is on
+        return True
 
     def get_current_consumption(self) -> float:
         """Get current power consumption from HA entity or estimate."""
@@ -544,6 +612,7 @@ class SwitchDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
         _LOGGER.info(
             "%s: switch %s was ON at registration — re-owned as active",
             self.name, self.entity_id,
@@ -709,11 +778,25 @@ class ClimateDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
         _LOGGER.info(
             "%s: climate %s was %s at registration — re-owned as active",
             self.name, self.entity_id, state.state,
         )
         return True
+
+    def observed_on(self):
+        """(arc) A climate unit counts as "on" for reconciliation only when it's
+        in the mode SEM drives it in. A user switching it to a *different* active
+        mode (SEM=cool → user picks heat/fan) reads as OFF from SEM's view, so
+        the reconciler stops crediting SEM's goal and won't fight the manual
+        change — mirroring adopt_if_running's ``state == hvac_mode`` check."""
+        if not self.entity_id or not self.hass:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return None
+        return str(state.state).lower() == str(self.hvac_mode).lower()
 
     async def activate(self, available_watts: float) -> float:
         if not self.entity_id:

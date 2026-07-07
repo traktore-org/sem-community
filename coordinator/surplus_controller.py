@@ -345,6 +345,18 @@ class SurplusController:
         Returns:
             SurplusAllocationData with allocation results.
         """
+        # (arc) Reconcile belief vs observed reality BEFORE allocating, so a
+        # load that silently dropped off (failed turn_on) or was toggled by the
+        # user isn't counted as active / credited runtime this cycle, and SEM
+        # doesn't immediately re-fight a manual off. Scoped to on/off loads
+        # (switch + climate); EV / heat-pump / setpoint keep their own handling.
+        from ..devices.base import DeviceType
+        from .device_reconciler import reconcile_all
+        reconcile_all([
+            d for d in self._devices.values()
+            if getattr(d, "device_type", None) in (DeviceType.SWITCH, DeviceType.CLIMATE)
+        ])
+
         # #508 W2 — peak posture. WARNING freezes new activation (don't add
         # load while the peak is climbing); SHEDDING/EMERGENCY additionally
         # sheds the controller's own discretionary devices. EMERGENCY sheds
@@ -623,7 +635,11 @@ class SurplusController:
                     continue
                 if device.stop_condition_met:
                     continue
-                if device.needs_offpeak_activation:
+                # (arc) Respect can_activate() here too — otherwise a cheap-hours
+                # top-up would re-activate a load the user just turned off,
+                # bypassing the reconciler's user-respect cooldown (and the
+                # device min_off anti-flicker).
+                if device.needs_offpeak_activation and device.can_activate():
                     consumed = await device.activate(device.min_power_threshold)
                     if consumed > 0:
                         device._offpeak_forced = True
