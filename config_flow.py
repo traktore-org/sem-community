@@ -765,6 +765,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options."""
         return await self.async_step_ev_charger()
 
+    def _discovered_pv_strings(self) -> dict:
+        """(#566) Live coordinator's discovered PV-string slot->source map.
+
+        Same source the ``pv_naming`` step reads; used by the charger menu to
+        decide whether to offer the "Rename PV strings" shortcut. Empty when
+        the coordinator/reader isn't up or fewer than 2 strings were found.
+        """
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        reader = getattr(coordinator, "_sensor_reader", None)
+        return dict(getattr(reader, "_pv_strings", {}) or {})
+
     @staticmethod
     def _cfg(config: dict, key: str, fallback: Any) -> Any:
         """Null-safe config lookup.
@@ -920,6 +931,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return await self.async_step_ev_charger_add()
             if action == "remove_charger":
                 return await self.async_step_ev_charger_remove()
+            if action == "rename_pv":
+                # (#566) direct shortcut to PV-string naming — otherwise it's
+                # only reachable 7 forms deep via "Continue".
+                self._pv_naming_return = "menu"
+                return await self.async_step_pv_naming()
             if action.startswith("edit_charger:"):
                 self._edit_charger_id = action.split(":", 1)[1]
                 return await self.async_step_ev_charger_edit()
@@ -941,6 +957,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if charger_count > 1:
             options.append(
                 {"value": "remove_charger", "label": "Remove a charger"},
+            )
+        # (#566) Direct entry point to PV-string naming when ≥2 strings exist —
+        # so it's discoverable, not buried at the end of the settings chain.
+        if len(self._discovered_pv_strings()) >= 2:
+            options.append(
+                {"value": "rename_pv", "label": "Rename PV strings"},
             )
 
         return self.async_show_form(
@@ -1938,6 +1960,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             self._data["pv_string_names"] = {
                 s: v for s, v in names.items() if v
             }
+            # (#566) Reached via the charger-menu shortcut → finalize NOW,
+            # preserving every other saved option. The normal chain finishes
+            # at notifications() with the fully-accumulated self._data; the
+            # shortcut skipped those forms, so replacing options with self._data
+            # would wipe them. Merge onto the existing options instead.
+            if getattr(self, "_pv_naming_return", None) == "menu":
+                merged = {
+                    **self.config_entry.options,
+                    "pv_string_names": self._data["pv_string_names"],
+                }
+                return self.async_create_entry(data=merged)
             return await self.async_step_notifications()
 
         current = {**self.config_entry.data, **self.config_entry.options}
