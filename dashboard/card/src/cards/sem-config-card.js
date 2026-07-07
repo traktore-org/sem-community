@@ -667,6 +667,22 @@ class SEMConfigCard extends SEMLitBase {
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_surplus_priority`, 'surplus_priority', T, 'tile_help_surplus_priority')}
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_shed_priority`, 'shed_priority', T, 'tile_help_shed_priority')}
                     </div>
+                    ${/* (config-on-dashboard) the charge TARGET value — the
+                          select above only picks kWh vs SOC; these set the
+                          actual target + its ceiling (#245 range). */ ''}
+                    ${charger.ev_target_type === 'soc' ? html`
+                        <div class="stepper-pair">
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, null)}
+                        </div>` : html`
+                        <div class="stepper-pair">
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, null)}
+                        </div>`}
+                    <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_kwh_per_100km`, 'config_ev_kwh_per_100km', T, null)}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_phases`, 'config_ev_phases', T, null)}
+                    </div>
                 </div>
             `;})}
             <div class="section-footer">

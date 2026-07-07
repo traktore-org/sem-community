@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-07T19:37:35.065544+00:00
+// Generated: 2026-07-07T19:52:11.255284+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1164,7 +1164,13 @@
       "config_section_pv_strings": "PV Strings",
       "config_pv_strings_help": "Give each solar string a name (East, South, …). Leave a field blank to reset it to the default.",
       "config_pv_strings_save": "Save names",
-      "pv_strings_unit": "strings"
+      "pv_strings_unit": "strings",
+      "config_ev_target_soc": "Target SOC",
+      "config_ev_target_soc_max": "Max SOC",
+      "config_ev_daily_target": "Daily target",
+      "config_ev_daily_target_max": "Max daily",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Phases"
     },
     "de": {
       "charging": "Laden",
@@ -2325,7 +2331,13 @@
       "config_section_pv_strings": "PV-Strings",
       "config_pv_strings_help": "Benenne jeden Solar-String (Ost, Süd, …). Leeres Feld setzt auf Standard zurück.",
       "config_pv_strings_save": "Namen speichern",
-      "pv_strings_unit": "Strings"
+      "pv_strings_unit": "Strings",
+      "config_ev_target_soc": "Ziel-SOC",
+      "config_ev_target_soc_max": "Max. SOC",
+      "config_ev_daily_target": "Tagesziel",
+      "config_ev_daily_target_max": "Max. täglich",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Phasen"
     },
     "fr": {
       "charging": "En charge",
@@ -3486,7 +3498,13 @@
       "config_section_pv_strings": "Chaînes PV",
       "config_pv_strings_help": "Nommez chaque chaîne solaire (Est, Sud, …). Laissez vide pour réinitialiser.",
       "config_pv_strings_save": "Enregistrer",
-      "pv_strings_unit": "chaînes"
+      "pv_strings_unit": "chaînes",
+      "config_ev_target_soc": "SOC cible",
+      "config_ev_target_soc_max": "SOC max",
+      "config_ev_daily_target": "Objectif quotidien",
+      "config_ev_daily_target_max": "Max quotidien",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Phases"
     },
     "es": {
       "charging": "Cargando",
@@ -4647,7 +4665,13 @@
       "config_section_pv_strings": "Strings FV",
       "config_pv_strings_help": "Da un nombre a cada string solar (Este, Sur, …). Deja en blanco para restablecer.",
       "config_pv_strings_save": "Guardar nombres",
-      "pv_strings_unit": "strings"
+      "pv_strings_unit": "strings",
+      "config_ev_target_soc": "SOC objetivo",
+      "config_ev_target_soc_max": "SOC máx",
+      "config_ev_daily_target": "Objetivo diario",
+      "config_ev_daily_target_max": "Máx diario",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Fases"
     },
     "it": {
       "charging": "In carica",
@@ -5808,7 +5832,13 @@
       "config_section_pv_strings": "Stringhe FV",
       "config_pv_strings_help": "Assegna un nome a ogni stringa solare (Est, Sud, …). Lascia vuoto per ripristinare.",
       "config_pv_strings_save": "Salva nomi",
-      "pv_strings_unit": "stringhe"
+      "pv_strings_unit": "stringhe",
+      "config_ev_target_soc": "SOC obiettivo",
+      "config_ev_target_soc_max": "SOC max",
+      "config_ev_daily_target": "Obiettivo giorn.",
+      "config_ev_daily_target_max": "Max giorn.",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Fasi"
     },
     "nl": {
       "charging": "Laden",
@@ -6969,7 +6999,13 @@
       "config_section_pv_strings": "PV-strings",
       "config_pv_strings_help": "Geef elke zonnestring een naam (Oost, Zuid, …). Leeg veld zet terug naar standaard.",
       "config_pv_strings_save": "Namen opslaan",
-      "pv_strings_unit": "strings"
+      "pv_strings_unit": "strings",
+      "config_ev_target_soc": "Doel-SOC",
+      "config_ev_target_soc_max": "Max SOC",
+      "config_ev_daily_target": "Dagdoel",
+      "config_ev_daily_target_max": "Max dagelijks",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Fasen"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8130,7 +8166,13 @@
       "config_section_pv_strings": "PV řetězce",
       "config_pv_strings_help": "Pojmenujte každý solární řetězec (Východ, Jih, …). Prázdné pole obnoví výchozí.",
       "config_pv_strings_save": "Uložit názvy",
-      "pv_strings_unit": "řetězce"
+      "pv_strings_unit": "řetězce",
+      "config_ev_target_soc": "Cílové SOC",
+      "config_ev_target_soc_max": "Max. SOC",
+      "config_ev_daily_target": "Denní cíl",
+      "config_ev_daily_target_max": "Max. denně",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Fáze"
     },
     "da": {
       "charging": "Oplader",
@@ -9291,7 +9333,13 @@
       "config_section_pv_strings": "PV-strenge",
       "config_pv_strings_help": "Giv hver solstreng et navn (Øst, Syd, …). Lad feltet stå tomt for at nulstille.",
       "config_pv_strings_save": "Gem navne",
-      "pv_strings_unit": "strenge"
+      "pv_strings_unit": "strenge",
+      "config_ev_target_soc": "Mål-SOC",
+      "config_ev_target_soc_max": "Maks-SOC",
+      "config_ev_daily_target": "Dagligt mål",
+      "config_ev_daily_target_max": "Maks dagligt",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Faser"
     },
     "fi": {
       "charging": "Lataus",
@@ -10452,7 +10500,13 @@
       "config_section_pv_strings": "PV-ketjut",
       "config_pv_strings_help": "Anna kullekin aurinkoketjulle nimi (Itä, Etelä, …). Tyhjä kenttä palauttaa oletuksen.",
       "config_pv_strings_save": "Tallenna nimet",
-      "pv_strings_unit": "ketjut"
+      "pv_strings_unit": "ketjut",
+      "config_ev_target_soc": "Tavoite-SOC",
+      "config_ev_target_soc_max": "Maks-SOC",
+      "config_ev_daily_target": "Päivätavoite",
+      "config_ev_daily_target_max": "Maks päivä",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Vaiheet"
     },
     "hu": {
       "charging": "Töltés",
@@ -11613,7 +11667,13 @@
       "config_section_pv_strings": "PV-füzérek",
       "config_pv_strings_help": "Nevezd el az egyes napelemfüzéreket (Kelet, Dél, …). Üres mező visszaállít.",
       "config_pv_strings_save": "Nevek mentése",
-      "pv_strings_unit": "füzér"
+      "pv_strings_unit": "füzér",
+      "config_ev_target_soc": "Cél-SOC",
+      "config_ev_target_soc_max": "Max SOC",
+      "config_ev_daily_target": "Napi cél",
+      "config_ev_daily_target_max": "Max napi",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Fázisok"
     },
     "no": {
       "charging": "Lader",
@@ -12774,7 +12834,13 @@
       "config_section_pv_strings": "PV-strenger",
       "config_pv_strings_help": "Gi hver solstreng et navn (Øst, Sør, …). La feltet stå tomt for å tilbakestille.",
       "config_pv_strings_save": "Lagre navn",
-      "pv_strings_unit": "strenger"
+      "pv_strings_unit": "strenger",
+      "config_ev_target_soc": "Mål-SOC",
+      "config_ev_target_soc_max": "Maks-SOC",
+      "config_ev_daily_target": "Daglig mål",
+      "config_ev_daily_target_max": "Maks daglig",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Faser"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13935,7 +14001,13 @@
       "config_section_pv_strings": "Łańcuchy PV",
       "config_pv_strings_help": "Nazwij każdy łańcuch solarny (Wschód, Południe, …). Puste pole przywraca domyślne.",
       "config_pv_strings_save": "Zapisz nazwy",
-      "pv_strings_unit": "łańcuchy"
+      "pv_strings_unit": "łańcuchy",
+      "config_ev_target_soc": "Docelowy SOC",
+      "config_ev_target_soc_max": "Maks. SOC",
+      "config_ev_daily_target": "Cel dzienny",
+      "config_ev_daily_target_max": "Maks. dzienny",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Fazy"
     },
     "pt": {
       "charging": "A carregar",
@@ -15096,7 +15168,13 @@
       "config_section_pv_strings": "Strings FV",
       "config_pv_strings_help": "Dê um nome a cada string solar (Este, Sul, …). Deixe em branco para repor.",
       "config_pv_strings_save": "Guardar nomes",
-      "pv_strings_unit": "strings"
+      "pv_strings_unit": "strings",
+      "config_ev_target_soc": "SOC alvo",
+      "config_ev_target_soc_max": "SOC máx",
+      "config_ev_daily_target": "Meta diária",
+      "config_ev_daily_target_max": "Máx diário",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Fases"
     },
     "ro": {
       "charging": "Încărcare",
@@ -16257,7 +16335,13 @@
       "config_section_pv_strings": "Șiruri PV",
       "config_pv_strings_help": "Denumește fiecare șir solar (Est, Sud, …). Lasă gol pentru a reseta.",
       "config_pv_strings_save": "Salvează numele",
-      "pv_strings_unit": "șiruri"
+      "pv_strings_unit": "șiruri",
+      "config_ev_target_soc": "SOC țintă",
+      "config_ev_target_soc_max": "SOC max",
+      "config_ev_daily_target": "Țintă zilnică",
+      "config_ev_daily_target_max": "Max zilnic",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Faze"
     },
     "sv": {
       "charging": "Laddar",
@@ -17418,7 +17502,13 @@
       "config_section_pv_strings": "PV-strängar",
       "config_pv_strings_help": "Ge varje solsträng ett namn (Öst, Syd, …). Lämna tomt för att återställa.",
       "config_pv_strings_save": "Spara namn",
-      "pv_strings_unit": "strängar"
+      "pv_strings_unit": "strängar",
+      "config_ev_target_soc": "Mål-SOC",
+      "config_ev_target_soc_max": "Max-SOC",
+      "config_ev_daily_target": "Dagsmål",
+      "config_ev_daily_target_max": "Max dagligen",
+      "config_ev_kwh_per_100km": "kWh / 100 km",
+      "config_ev_phases": "Faser"
     }
   };
 

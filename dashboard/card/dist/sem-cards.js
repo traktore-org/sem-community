@@ -6229,6 +6229,20 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         ${this._renderStepper(`number.sem_charger_${a}_ev_surplus_priority`,"surplus_priority",e,"tile_help_surplus_priority")}
                         ${this._renderStepper(`number.sem_charger_${a}_ev_shed_priority`,"shed_priority",e,"tile_help_shed_priority")}
                     </div>
+                    ${""}
+                    ${"soc"===i.ev_target_type?W`
+                        <div class="stepper-pair">
+                            ${this._renderStepper(`number.sem_charger_${a}_target_soc`,"config_ev_target_soc",e,null)}
+                            ${this._renderStepper(`number.sem_charger_${a}_target_soc_max`,"config_ev_target_soc_max",e,null)}
+                        </div>`:W`
+                        <div class="stepper-pair">
+                            ${this._renderStepper(`number.sem_charger_${a}_daily_ev_target`,"config_ev_daily_target",e,null)}
+                            ${this._renderStepper(`number.sem_charger_${a}_daily_ev_target_max`,"config_ev_daily_target_max",e,null)}
+                        </div>`}
+                    <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${a}_ev_kwh_per_100km`,"config_ev_kwh_per_100km",e,null)}
+                        ${this._renderStepper(`number.sem_charger_${a}_ev_phases`,"config_ev_phases",e,null)}
+                    </div>
                 </div>
             `:K})}
             <div class="section-footer">
