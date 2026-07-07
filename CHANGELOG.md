@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.28] — 07.07.2026
+
+> **Pre-release.** A device's rated power now shows correctly on the Control tab.
+
+### 🔌 Explicit device rated power now shows (not 0 W) (#559)
+- 🐛 When you registered a surplus device with an explicit `rated_power` for a
+  switch SEM had *also* auto-discovered from the Energy Dashboard, the Control tab
+  showed the auto-discovered row (the live sensor = 0 W while the load is off)
+  instead of your value, and the explicit entry was dropped as a duplicate. The
+  explicit registration now always wins for that switch, so your rated power
+  shows. Auto-discovered devices also now show their self-calibrating rated power
+  rather than a bare 0 W when off. (reported by @alexmc1510)
+
 # [1.7.4-beta.27] — 07.07.2026
 
 > **Pre-release.** More setup lives on the dashboard Config tab now.
