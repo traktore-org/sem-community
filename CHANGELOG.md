@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.26] — 07.07.2026
+
+> **Pre-release.** Renaming your PV strings is now one click away.
+
+### ☀️ "Rename PV strings" is now easy to find (#566)
+- 🧭 Custom PV-string names shipped in beta.21, but the step was buried at the
+  very end of the options flow — you had to click **Submit** through seven
+  forms to reach it, so most people never found it. There's now a **"Rename PV
+  strings"** entry right on the first screen of **Configure** (shown when SEM
+  detects ≥2 strings) that jumps straight to the naming step. Saving from there
+  preserves all your other settings. (follow-up to @-reported #566)
+
 # [1.7.4-beta.25] — 07.07.2026
 
 > **Pre-release.** The Energy Costs chart legend now matches the summary card.
