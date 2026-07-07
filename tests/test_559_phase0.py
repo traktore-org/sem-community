@@ -10,6 +10,7 @@
   transitions only) for user automations of self-managed devices.
 """
 import pytest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.solar_energy_management.features.device_registry import (
@@ -62,6 +63,68 @@ SPEC = {
     "power_entity_id": None,
     "control_mode": "surplus",
 }
+
+
+# ---------------------------------------------------------------------------
+# #559 — explicit rated_power must show on the Control card, not the live 0 W
+# ---------------------------------------------------------------------------
+
+def _ud(energy, switch, power=None, name="Dev", prio=1):
+    from custom_components.solar_energy_management.features.device_registry import (
+        UnifiedDevice,
+    )
+    return UnifiedDevice(
+        energy_sensor=energy, power_sensor=power, name=name, priority=prio,
+        control={"type": "switch", "entity": switch},
+    )
+
+
+def test_explicit_rated_power_wins_over_autodiscovered(registry):
+    """A register_surplus_device rated_power must show on the card even when an
+    auto-discovered ED device covers the SAME switch (reporter: power_rating
+    stuck at 0 W because the live-sensor autodiscovered row shadowed it)."""
+    from custom_components.solar_energy_management.devices.base import SwitchDevice
+    ud = _ud("sensor.piscina_energy_2", "switch.piscina_2",
+             power="sensor.piscina_power", name="Pool")
+    registry._devices = [ud]
+    # power sensor reads 0 (pump off)
+    registry.hass.states.get = lambda e: SimpleNamespace(state="0")
+    # explicit registration for the same switch, rated_power 710
+    registry._service_registrations = {ud.device_id: {
+        "entity_id": "switch.piscina_2", "name": "Pool", "priority": 1,
+        "rated_power": 710, "control_mode": "surplus"}}
+    registry._surplus_controller._devices[ud.device_id] = SwitchDevice(
+        hass=registry.hass, device_id=ud.device_id, name="Pool",
+        rated_power=710, entity_id="switch.piscina_2")
+    result = registry.get_devices_for_sensor()
+    # exactly one row for the switch (no shadow duplicate), showing 710 W
+    assert len(result) == 1
+    assert result[ud.device_id]["power_rating"] == 710
+
+
+def test_autodiscovered_shows_calibrated_rating_not_live_zero(registry):
+    """An OFF auto-discovered device shows its device rated_power (self-
+    calibrated), not the raw 0 W live reading."""
+    from custom_components.solar_energy_management.devices.base import SwitchDevice
+    ud = _ud("sensor.heater_energy", "switch.heater", power="sensor.heater_power")
+    registry._devices = [ud]
+    registry.hass.states.get = lambda e: SimpleNamespace(state="0")  # off
+    registry._service_registrations = {}
+    registry._surplus_controller._devices[ud.device_id] = SwitchDevice(
+        hass=registry.hass, device_id=ud.device_id, name="Heater",
+        rated_power=1800, entity_id="switch.heater")
+    result = registry.get_devices_for_sensor()
+    assert result[ud.device_id]["power_rating"] == 1800
+
+
+def test_autodiscovered_falls_back_to_live_when_no_rating(registry):
+    """No live device / zero rating → fall back to the live sensor reading."""
+    ud = _ud("sensor.x_energy", "switch.x", power="sensor.x_power")
+    registry._devices = [ud]
+    registry.hass.states.get = lambda e: SimpleNamespace(state="42")
+    registry._service_registrations = {}
+    result = registry.get_devices_for_sensor()
+    assert result[ud.device_id]["power_rating"] == 42.0
 
 
 @pytest.mark.asyncio

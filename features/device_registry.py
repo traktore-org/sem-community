@@ -578,8 +578,22 @@ class UnifiedDeviceRegistry:
     def get_devices_for_sensor(self) -> Dict[str, Dict[str, Any]]:
         """Return dict formatted for the controllable_devices_count sensor attributes."""
         result = {}
+        # (#559) Entities that an explicit register_surplus_device call owns.
+        # An auto-discovered ED device for the SAME switch must not shadow that
+        # registration — otherwise the card showed the live sensor (0 W while
+        # the load is off) instead of the user's rated_power, and the explicit
+        # entry was skipped as a duplicate id. Suppress the auto-discovered row;
+        # the authoritative service registration is added below with its
+        # rated_power / priority / mode.
+        service_entities = {
+            spec.get("entity_id")
+            for spec in self._service_registrations.values()
+            if spec.get("entity_id")
+        }
         for device in self._devices:
             did = device.device_id
+            if device.control_entity and device.control_entity in service_entities:
+                continue
             # Get live power reading
             current_power = 0.0
             is_on = False
@@ -597,7 +611,12 @@ class UnifiedDeviceRegistry:
                 "priority": device.priority,
                 "is_controllable": device.is_controllable,
                 "is_critical": device.is_critical,
-                "power_rating": self._get_power_rating(device.power_sensor),
+                # (#559) rated_power, not the raw live sensor: the live
+                # ControllableDevice carries a self-calibrating rated_power
+                # (snapped to the real draw when the load runs), so an OFF
+                # device shows its rated power instead of a bare 0 W. Falls
+                # back to the live sensor when no device is registered yet.
+                "power_rating": self._rated_power_for(did, device.power_sensor),
                 "power_entity": device.power_sensor,
                 "energy_sensor": device.energy_sensor,
                 "switch_entity": device.control_entity,
@@ -798,3 +817,17 @@ class UnifiedDeviceRegistry:
             except (ValueError, TypeError):
                 pass
         return 0.0
+
+    def _rated_power_for(self, device_id: str, power_sensor: Optional[str]) -> float:
+        """(#559) The device's rated power for the Control card.
+
+        Prefers the live ControllableDevice's ``rated_power`` — a stable value
+        that self-calibrates to the real draw when the load runs — over the raw
+        power sensor, which reads 0 W whenever the load is off. Falls back to the
+        live sensor reading when no device is registered (or its rating is 0).
+        """
+        live = self._surplus_controller.get_device(device_id)
+        rated = float(getattr(live, "rated_power", 0) or 0) if live else 0.0
+        if rated > 0:
+            return rated
+        return self._get_power_rating(power_sensor)
