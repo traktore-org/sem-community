@@ -143,6 +143,32 @@ def test_reconcile_all_isolates_errors():
     assert any(r.device_id == "d1" for r in results)
 
 
+def test_mark_reconciled_off_stamps_both_deactivation_clocks():
+    """The device-level min_off anti-flicker reads _status.last_deactivated;
+    the reconcile-off path must stamp it too, not just the base clock."""
+    dev = _switch("off")
+    dev._status.state = DeviceState.ACTIVE
+    dev.mark_reconciled_off()
+    assert dev._status.last_deactivated is not None
+    assert dev._last_deactivated is not None
+    assert not dev.is_active
+
+
+@pytest.mark.asyncio
+async def test_climate_observed_on_matches_configured_mode():
+    from custom_components.solar_energy_management.devices.base import ClimateDevice
+    states = {"climate.ac": SimpleNamespace(state="cool", attributes={})}
+    dev = ClimateDevice(hass=_hass(states), device_id="ac", name="AC",
+                        rated_power=1500.0, entity_id="climate.ac", hvac_mode="cool")
+    assert dev.observed_on() is True                     # in SEM's mode
+    states["climate.ac"] = SimpleNamespace(state="heat", attributes={})
+    assert dev.observed_on() is False                    # user switched mode
+    states["climate.ac"] = SimpleNamespace(state="off", attributes={})
+    assert dev.observed_on() is False
+    states["climate.ac"] = SimpleNamespace(state="unavailable", attributes={})
+    assert dev.observed_on() is None
+
+
 # ── integration: SurplusController.update() runs the reconcile pass ──
 
 @pytest.mark.asyncio

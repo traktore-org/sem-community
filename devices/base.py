@@ -485,7 +485,13 @@ class ControllableDevice(ABC):
         self._status.state = DeviceState.IDLE
         self._status.current_consumption_w = 0.0
         self._status.allocated_power_w = 0.0
-        self._last_deactivated = datetime.now()
+        # Stamp BOTH deactivation clocks: the base one (min_on / can_deactivate)
+        # and the DeviceStatus one that Switch/Climate ``activate()`` read for
+        # their own min_off anti-flicker — so re-activation is gated even on a
+        # path that skips can_activate().
+        now = datetime.now()
+        self._last_deactivated = now
+        self._status.last_deactivated = now
         self._sem_owned = False
         self._observed_off_since = None
         if cooldown_until is not None:
@@ -778,6 +784,19 @@ class ClimateDevice(ControllableDevice):
             self.name, self.entity_id, state.state,
         )
         return True
+
+    def observed_on(self):
+        """(arc) A climate unit counts as "on" for reconciliation only when it's
+        in the mode SEM drives it in. A user switching it to a *different* active
+        mode (SEM=cool → user picks heat/fan) reads as OFF from SEM's view, so
+        the reconciler stops crediting SEM's goal and won't fight the manual
+        change — mirroring adopt_if_running's ``state == hvac_mode`` check."""
+        if not self.entity_id or not self.hass:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return None
+        return str(state.state).lower() == str(self.hvac_mode).lower()
 
     async def activate(self, available_watts: float) -> float:
         if not self.entity_id:

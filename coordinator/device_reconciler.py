@@ -42,6 +42,11 @@ _LOGGER = logging.getLogger(__name__)
 
 # A SEM-believed-ON load must read OFF at the entity for this long before we
 # correct the belief — rides out a transient poll gap / unavailable flicker.
+# Tuned for local integrations (Z-Wave/Zigbee/local Shelly, <5s state updates).
+# A slow *cloud* integration (30–60s poll) could still read "off" just after a
+# successful turn_on and trip a correction; harmless (the load is on; belief
+# flips idle, the cooldown holds, SEM re-activates after it) but costs the
+# cooldown. Raise this if a cloud device flaps.
 OFF_GRACE_S: float = 45.0
 
 # After an external OFF (SEM-active load went off at the entity), don't

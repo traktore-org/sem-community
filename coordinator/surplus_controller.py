@@ -635,7 +635,11 @@ class SurplusController:
                     continue
                 if device.stop_condition_met:
                     continue
-                if device.needs_offpeak_activation:
+                # (arc) Respect can_activate() here too — otherwise a cheap-hours
+                # top-up would re-activate a load the user just turned off,
+                # bypassing the reconciler's user-respect cooldown (and the
+                # device min_off anti-flicker).
+                if device.needs_offpeak_activation and device.can_activate():
                     consumed = await device.activate(device.min_power_threshold)
                     if consumed > 0:
                         device._offpeak_forced = True
