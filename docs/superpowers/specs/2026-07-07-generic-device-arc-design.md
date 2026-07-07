@@ -158,3 +158,17 @@ remain optional refinements on top.
 - Observed-power source per device: the configured/auto-detected power sensor.
   When absent, fall back to the control entity's on/off state alone (no drift
   detection on power, only on state).
+
+## Status (2026-07-08)
+
+- **Phase 1** — root-collapse of the three device collections: NOT done as a
+  structural rewrite; the #559 explicit-registration-wins fix (beta.28) resolves
+  the collision class at the query layer. A full single-collection refactor was
+  judged disproportionate risk unsupervised; revisit only if the class recurs.
+- **Phase 2** — DeviceReconciler: **SHIPPED v1.7.4-beta.29** (additive, live-verified).
+- **Phase 3** — desired-state model + ownership observability (`desired_state`,
+  `observed_on`, `sem_owned` in to_dict + Control payload): **SHIPPED v1.7.4-beta.30**.
+  A full PerDeviceContext object was deliberately skipped — the device object
+  already holds per-device state; the missing piece was the model + observability.
+- **Phase 4** — observed runtime credit + median-of-3 surplus pre-filter:
+  **SHIPPED v1.7.4-beta.30** (live-verified on HA-TEST).
