@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.25] — 07.07.2026
+
+> **Pre-release.** The Energy Costs chart legend now matches the summary card.
+
+### 💶 Energy Costs chart legend showed the wrong series' totals (#574)
+- 🐛 On the **Energy Costs** chart the legend printed numbers that
+  contradicted the costs summary card — e.g. `Import: 1.8` while the import
+  bars sat at ~0, and `Net: 0.1` while the net line was at −1.8. The bars and
+  the summary were right; only the legend text was wrong. The legend paired
+  each label with the wrong series because it indexed the datasets by the
+  legend item's *position*, but Chart.js sorts legend items by each series'
+  draw `order` — so on the mixed line+bar cost chart (net line before the
+  import/export bars) the order didn't line up and the values rotated by one.
+  It now indexes by the item's real dataset, so each label shows its own
+  series' latest value. Savings/energy charts were unaffected. (reported by
+  @ebnerjoh)
+
 # [1.7.4-beta.24] — 06.07.2026
 
 > **Pre-release.** The system diagram now shows the *inverter's* temperature.
