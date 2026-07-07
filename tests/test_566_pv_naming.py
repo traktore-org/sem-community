@@ -142,3 +142,67 @@ async def test_pv_naming_stores_names_on_submit(mock_hass, config_entry):
             )
     # East kept, blank dropped
     assert flow._data["pv_string_names"] == {"pv1": "East"}
+
+
+# ---------------------------------------------------------------------------
+# #566 follow-up — discoverable "Rename PV strings" charger-menu shortcut
+# ---------------------------------------------------------------------------
+
+def _menu_option_values(res):
+    """Pull the action-selector option values out of a shown menu form."""
+    schema = res["data_schema"].schema
+    for _key, sel in schema.items():
+        cfg = getattr(sel, "config", None)
+        if cfg and "options" in cfg:
+            return [o["value"] for o in cfg["options"]]
+    return []
+
+
+@pytest.mark.asyncio
+async def test_menu_offers_rename_when_2_plus(mock_hass, config_entry):
+    flow = _flow_with_strings(mock_hass, config_entry, {"pv1": "a", "pv2": "b"})
+    with patch.object(type(flow), "config_entry", config_entry):
+        res = await flow.async_step_ev_charger_menu()
+    assert "rename_pv" in _menu_option_values(res)
+
+
+@pytest.mark.asyncio
+async def test_menu_hides_rename_when_under_2(mock_hass, config_entry):
+    flow = _flow_with_strings(mock_hass, config_entry, {"pv1": "a"})
+    with patch.object(type(flow), "config_entry", config_entry):
+        res = await flow.async_step_ev_charger_menu()
+    assert "rename_pv" not in _menu_option_values(res)
+
+
+@pytest.mark.asyncio
+async def test_menu_rename_routes_straight_to_pv_naming(mock_hass, config_entry):
+    flow = _flow_with_strings(mock_hass, config_entry, {"pv1": "a", "pv2": "b"})
+    mock_hass.states.get = lambda e: SimpleNamespace(state="100")
+    with patch.object(type(flow), "config_entry", config_entry):
+        res = await flow.async_step_ev_charger_menu(user_input={"action": "rename_pv"})
+    assert res["step_id"] == "pv_naming"
+    assert flow._pv_naming_return == "menu"
+
+
+@pytest.mark.asyncio
+async def test_shortcut_finalize_preserves_other_options(mock_hass, config_entry):
+    """The menu shortcut must save names WITHOUT wiping the rest of the
+    options (it skips the settings forms, so it merges onto existing options
+    instead of replacing with the partial self._data)."""
+    flow = _flow_with_strings(mock_hass, config_entry, {"pv1": "a", "pv2": "b"})
+    config_entry.options = {"target_peak_limit": 7.0, "battery_buffer_soc": 55,
+                            "pv_string_names": {}}
+    flow._pv_naming_return = "menu"
+    captured = {}
+    with patch.object(type(flow), "config_entry", config_entry):
+        with patch.object(flow, "async_create_entry",
+                          side_effect=lambda data: captured.update(data=data)
+                          or {"type": "create_entry", "data": data}):
+            res = await flow.async_step_pv_naming(
+                user_input={"pv_name_pv1": "East", "pv_name_pv2": ""})
+    assert res["type"] == "create_entry"
+    saved = captured["data"]
+    # existing options preserved, only the names updated
+    assert saved["target_peak_limit"] == 7.0
+    assert saved["battery_buffer_soc"] == 55
+    assert saved["pv_string_names"] == {"pv1": "East"}
