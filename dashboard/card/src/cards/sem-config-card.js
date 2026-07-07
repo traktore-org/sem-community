@@ -187,8 +187,8 @@ class SEMConfigCard extends SEMLitBase {
             overview: false,
             ev_chargers: true, battery_zones: true, tariff: true,
             heat_pump: true, hot_water: true, battery_scheduler: true,
-            load_management: true, forecast: true, notifications: true,
-            advanced: true,
+            load_management: true, forecast: true, pv_strings: true,
+            notifications: true, advanced: true,
         };
         this._showHelp = false;
         this._entryId = '';
@@ -1557,7 +1557,10 @@ class SEMConfigCard extends SEMLitBase {
 
     async _savePvNames() {
         // Merge edits onto the saved names; a blank clears a name (reverts to
-        // the compact "PVn" default). Saved via set_option (tunable, no reload).
+        // the compact "PVn" default). Saved via set_option — pv_string_names is
+        // an unrouted key, so it triggers a coordinator reload (that's how the
+        // new names reach the per-string sensor attributes). Rename is rare, so
+        // the one-off reload on Save is acceptable.
         const names = { ...(this._options?.pv_string_names || {}) };
         const edits = this._pvNameEdits || {};
         for (const [slot, val] of Object.entries(edits)) {
