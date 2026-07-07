@@ -303,7 +303,13 @@ class ControllableDevice(ABC):
         # device (Off): a device switched to Off while running would otherwise
         # keep counting minutes it no longer owns (#559 alex "Issue 6").
         _managed = self.control_mode != DeviceControlMode.OFF
-        if self._daily_runtime_last_check is not None and self.is_active and _managed:
+        # (arc Phase 4) Credit runtime on OBSERVED reality, not just belief: a
+        # load whose entity reads OFF isn't running, even while the reconciler's
+        # 45s drift grace hasn't corrected the belief yet. Unobservable (None —
+        # no control entity / entity unavailable) falls back to belief, so
+        # devices without a readable entity behave exactly as before.
+        _really_on = self.is_active and self.observed_on() is not False
+        if self._daily_runtime_last_check is not None and _really_on and _managed:
             elapsed = (now - self._daily_runtime_last_check).total_seconds()
             if 0 < elapsed <= 120:  # ignore jumps > 120s (restart recovery)
                 self._daily_runtime_accumulated_sec += elapsed
@@ -515,7 +521,10 @@ class ControllableDevice(ABC):
             return False
         if s == "on":
             return True
-        # climate.* reports its hvac_mode as the state — anything but "off" is on
+        # climate.* and water_heater.* report their active MODE as the state
+        # string (e.g. "heat", "cool", "eco", "heat_pump") — anything but "off"
+        # means running. Don't add per-domain guards here; ClimateDevice
+        # overrides observed_on() where mode-matching matters.
         return True
 
     def get_current_consumption(self) -> float:
@@ -529,8 +538,24 @@ class ControllableDevice(ABC):
                     pass
         return self._status.current_consumption_w
 
+    @property
+    def desired_state(self) -> str:
+        """(arc Phase 3) SEM's intent for this device, as an explicit model.
+
+        - ``off``  — SEM never drives it (control_mode = off)
+        - ``on``   — SEM wants it drawing (it's active under SEM management)
+        - ``idle`` — SEM is not allocating to it right now
+
+        Formalizes the OFF / IDLE / ON trichotomy the EV reconciler uses, for
+        the card and diagnostics — so "why is this load on?" is answerable.
+        """
+        if self.control_mode == DeviceControlMode.OFF:
+            return "off"
+        return "on" if (self.is_active and self._sem_owned) else "idle"
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize device info for sensors/diagnostics."""
+        obs = self.observed_on()
         d = {
             "device_id": self.device_id,
             "name": self.name,
@@ -542,6 +567,11 @@ class ControllableDevice(ABC):
             "allocated_power_w": self._status.allocated_power_w,
             "enabled": self._enabled,
             "activation_count": self._status.activation_count,
+            # (arc Phase 3) intent + reality + ownership, for the card and
+            # field debugging: is it on because SEM wants it on, or externally?
+            "desired_state": self.desired_state,
+            "observed_on": obs,
+            "sem_owned": self._sem_owned,
         }
         if self.daily_min_runtime_sec > 0:
             d.update({

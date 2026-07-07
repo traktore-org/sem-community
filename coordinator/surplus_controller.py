@@ -101,6 +101,8 @@ class SurplusController:
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
+        # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
+        self._surplus_samples: List[float] = []
         # EV Intelligence: anticipated surplus from taper detection (#106)
         self._anticipated_surplus_w: float = 0.0
         self._anticipated_deadline: Optional[float] = None
@@ -373,11 +375,25 @@ class SurplusController:
             LoadManagementState.EMERGENCY,
         )
         peak_shed_all = peak_state == LoadManagementState.EMERGENCY
+        # (arc Phase 4) Median-of-3 pre-filter: a SINGLE-cycle spike/dropout
+        # (inverter glitch, sensor blip) still moves the EMA below by 30% of its
+        # magnitude — enough to flap a marginal load. The median passes only
+        # values seen in ≥2 of the last 3 cycles, so one bad sample never
+        # reaches the EMA at all. Real trends (2+ consistent cycles) pass with
+        # one cycle of extra latency, which the EMA's own inertia already dwarfs.
+        self._surplus_samples.append(available_power_w)
+        if len(self._surplus_samples) > 3:
+            self._surplus_samples.pop(0)
+        if len(self._surplus_samples) == 3:
+            filtered_w = sorted(self._surplus_samples)[1]
+        else:
+            filtered_w = available_power_w  # warm-up (first 2 cycles): raw
+
         # EMA smoothing to reduce oscillation from cloud transients
         if self._smoothed_surplus is None:
-            self._smoothed_surplus = available_power_w
+            self._smoothed_surplus = filtered_w
         else:
-            self._smoothed_surplus = 0.3 * available_power_w + 0.7 * self._smoothed_surplus
+            self._smoothed_surplus = 0.3 * filtered_w + 0.7 * self._smoothed_surplus
 
         # Apply regulation offset
         distributable = self._smoothed_surplus - self.regulation_offset

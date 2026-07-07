@@ -169,6 +169,105 @@ async def test_climate_observed_on_matches_configured_mode():
     assert dev.observed_on() is None
 
 
+# ── Phase 4: runtime credit on OBSERVED draw ──
+
+def test_runtime_not_credited_when_entity_reads_off():
+    """Belief ACTIVE but entity OFF (drift not yet corrected) → no runtime
+    credit. Before Phase 4 the goal engine credited belief."""
+    from datetime import date, timedelta as td
+    dev = _switch("off")
+    dev._status.state = DeviceState.ACTIVE
+    dev.daily_min_runtime_sec = 3600
+    dev._daily_runtime_last_check = datetime.now() - td(seconds=30)
+    dev._daily_runtime_meter_day = date.today()
+    dev.update_daily_runtime(date.today())
+    assert dev._daily_runtime_accumulated_sec == 0.0
+
+
+def test_runtime_credited_when_entity_reads_on():
+    from datetime import date, timedelta as td
+    dev = _switch("on")
+    dev._status.state = DeviceState.ACTIVE
+    dev.daily_min_runtime_sec = 3600
+    dev._daily_runtime_last_check = datetime.now() - td(seconds=30)
+    dev._daily_runtime_meter_day = date.today()
+    dev.update_daily_runtime(date.today())
+    assert 29 <= dev._daily_runtime_accumulated_sec <= 31
+
+
+def test_runtime_credited_when_unobservable():
+    """No readable entity (None) → behave exactly as before (belief)."""
+    from datetime import date, timedelta as td
+    dev = _switch("unavailable")
+    dev._status.state = DeviceState.ACTIVE
+    dev.daily_min_runtime_sec = 3600
+    dev._daily_runtime_last_check = datetime.now() - td(seconds=30)
+    dev._daily_runtime_meter_day = date.today()
+    dev.update_daily_runtime(date.today())
+    assert 29 <= dev._daily_runtime_accumulated_sec <= 31
+
+
+# ── Phase 4: median-of-3 surplus pre-filter ──
+
+@pytest.mark.asyncio
+async def test_median_filter_rejects_single_cycle_spike():
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        SurplusController,
+    )
+    sc = SurplusController(_hass())
+    # steady 0 W, then one 8 kW spike, then 0 W again
+    await sc.update(0.0)
+    await sc.update(0.0)
+    ema_before = sc._smoothed_surplus
+    await sc.update(8000.0)          # single-cycle spike
+    # median of [0, 0, 8000] = 0 → the spike never reaches the EMA
+    assert sc._smoothed_surplus == ema_before
+    # next 0 W sample: window [0, 8000, 0] — the spike ghost lingers one more
+    # cycle but the median stays 0 (two 0-samples dominate), EMA unaffected
+    await sc.update(0.0)
+    assert sc._smoothed_surplus == ema_before
+
+
+@pytest.mark.asyncio
+async def test_median_filter_passes_real_trend():
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        SurplusController,
+    )
+    sc = SurplusController(_hass())
+    await sc.update(0.0)
+    await sc.update(0.0)
+    await sc.update(3000.0)
+    # 2nd CONSECUTIVE 3000 W sample → window [0, 3000, 3000], median passes it
+    # (a step change reaches the EMA on its second consistent cycle)
+    await sc.update(3000.0)
+    assert sc._smoothed_surplus > 800   # EMA moving toward 3000
+
+
+# ── Phase 3: desired-state + ownership observability ──
+
+def test_desired_state_model():
+    from custom_components.solar_energy_management.devices.base import (
+        DeviceControlMode,
+    )
+    dev = _switch("on")
+    assert dev.desired_state == "idle"           # idle, not owned
+    dev._status.state = DeviceState.ACTIVE
+    dev.record_activated()
+    assert dev.desired_state == "on"             # SEM drives it
+    dev.control_mode = DeviceControlMode.OFF
+    assert dev.desired_state == "off"            # SEM hands off entirely
+
+
+def test_to_dict_exposes_arc_fields():
+    dev = _switch("on")
+    dev._status.state = DeviceState.ACTIVE
+    dev.record_activated()
+    d = dev.to_dict()
+    assert d["desired_state"] == "on"
+    assert d["observed_on"] is True
+    assert d["sem_owned"] is True
+
+
 # ── integration: SurplusController.update() runs the reconcile pass ──
 
 @pytest.mark.asyncio
