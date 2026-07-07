@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.29] — 07.07.2026
+
+> **Pre-release.** SEM no longer fights a manually-toggled surplus load.
+
+### 🧭 Generic surplus loads: SEM now tracks reality, not just its own belief
+- ✨ Switch and climate surplus loads gained a **reconciliation layer** (the same
+  desired-vs-observed idea the EV charger already uses). Each cycle SEM now checks
+  what the load is *actually* doing, instead of trusting its own record:
+  - If a load SEM turned on is **switched off** (by you, another automation, or a
+    failed command), SEM notices, updates its state (so daily-runtime isn't
+    credited to a load that isn't running), and — importantly — **won't
+    immediately turn it back on and fight you**; it waits a short cool-off first.
+  - If a load is running that SEM didn't turn on, SEM leaves it alone rather than
+    claiming or cutting it.
+- This is **additive** — the tuned surplus-allocation logic is unchanged; SEM just
+  keeps its picture of each load in sync with the real world. (foundation for
+  bringing generic devices up to the EV charger's robustness)
+
 # [1.7.4-beta.28] — 07.07.2026
 
 > **Pre-release.** A device's rated power now shows correctly on the Control tab.
