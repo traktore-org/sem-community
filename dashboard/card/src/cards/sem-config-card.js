@@ -90,6 +90,15 @@ const SECTIONS = [
         subtitleFn: (c) => c._forecastSubtitle(),
     },
     {
+        // (#566) rename PV strings inline — only rendered when ≥2 strings are
+        // detected (see the visibility filter in render()).
+        id: 'pv_strings',
+        icon: 'mdi:solar-panel',
+        color: '#ff9800',
+        titleKey: 'config_section_pv_strings',
+        subtitleFn: (c) => c._pvStringsSubtitle(),
+    },
+    {
         id: 'notifications',
         icon: 'mdi:bell-outline',
         color: '#96CAEE',
@@ -1502,6 +1511,79 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    // (#566) Discovered PV-string power sensors → [{slot, power, displayName}],
+    // ordered pv1, pv2, … . Drives both the subtitle count and the rename body.
+    _pvStrings() {
+        const st = this._hass?.states || {};
+        const out = [];
+        for (const id of Object.keys(st)) {
+            const m = id.match(/^sensor\.sem_pv_string_(pv\d+)_power$/);
+            if (!m) continue;
+            const s = st[id];
+            out.push({
+                slot: m[1],
+                power: parseFloat(s.state),
+                displayName: s.attributes?.string_name || m[1].toUpperCase(),
+            });
+        }
+        out.sort((a, b) => a.slot.localeCompare(b.slot, undefined, { numeric: true }));
+        return out;
+    }
+
+    _pvStringsSubtitle() {
+        const n = this._pvStrings().length;
+        return n ? `${n} ${this._t('pv_strings_unit') || 'strings'}` : '';
+    }
+
+    _onPvNameInput(slot, val) {
+        this._pvNameEdits = { ...(this._pvNameEdits || {}), [slot]: val };
+    }
+
+    async _savePvNames() {
+        // Merge edits onto the saved names; a blank clears a name (reverts to
+        // the compact "PVn" default). Saved via set_option (tunable, no reload).
+        const names = { ...(this._options?.pv_string_names || {}) };
+        const edits = this._pvNameEdits || {};
+        for (const [slot, val] of Object.entries(edits)) {
+            const v = (val || '').trim();
+            if (v) names[slot] = v; else delete names[slot];
+        }
+        await this._saveOption('pv_string_names', names, 'pv_string_names');
+        this._pvNameEdits = {};
+    }
+
+    _renderPvStrings(T) {
+        const strings = this._pvStrings();
+        const saved = this._options?.pv_string_names || {};
+        const edits = this._pvNameEdits || {};
+        const status = this._saveStatus?.pv_string_names;
+        return html`
+            <div class="setting-help-text">${this._t('config_pv_strings_help')}</div>
+            ${strings.map((s) => {
+                const cur = edits[s.slot] !== undefined ? edits[s.slot] : (saved[s.slot] || '');
+                const pw = Number.isFinite(s.power) ? `${s.power.toFixed(0)} W` : '';
+                return html`
+                    <div class="pv-name-row">
+                        <div class="pv-name-meta">
+                            <span class="pv-name-slot">${s.slot.toUpperCase()}</span>
+                            ${pw ? html`<span class="pv-name-power">${pw}</span>` : nothing}
+                        </div>
+                        <input type="text" class="pv-name-input"
+                            placeholder=${s.slot.toUpperCase()}
+                            .value=${cur}
+                            @input=${(ev) => this._onPvNameInput(s.slot, ev.target.value)} />
+                    </div>`;
+            })}
+            <div class="section-footer">
+                ${status === 'ok' ? html`<span class="pv-save-ok">✓</span>` : nothing}
+                <button class="pv-save-btn" ?disabled=${status === 'saving'}
+                        @click=${() => this._savePvNames()}>
+                    ${status === 'saving' ? '…' : this._t('config_pv_strings_save')}
+                </button>
+            </div>
+        `;
+    }
+
     _renderNotifications(T) {
         const opts = this._options || {};
         // Build the notify-service dropdown from hass.services.
@@ -1705,6 +1787,7 @@ class SEMConfigCard extends SEMLitBase {
             battery_scheduler: (T) => this._renderBatteryScheduler(T),
             load_management: (T) => this._renderLoadManagement(T),
             forecast: (T) => this._renderForecast(T),
+            pv_strings: (T) => this._renderPvStrings(T),
             notifications: (T) => this._renderNotifications(T),
             advanced: (T) => this._renderAdvanced(T),
         };
@@ -1785,7 +1868,36 @@ class SEMConfigCard extends SEMLitBase {
                 }
                 .section-content.expanded { max-height: 2000px; opacity: 1; }
                 .section-body { padding: 0 14px 14px; }
-                .section-footer { display: flex; justify-content: flex-end; margin-top: 10px; }
+                .section-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 10px; }
+
+                /* (#566) PV-string rename rows */
+                .pv-name-row {
+                    display: flex; align-items: center; gap: 12px;
+                    padding: 8px 0;
+                }
+                .pv-name-meta {
+                    display: flex; flex-direction: column; min-width: 64px;
+                }
+                .pv-name-slot { font-size: 0.9em; font-weight: 700; color: #ff9800; }
+                .pv-name-power {
+                    font-size: 0.7em; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .pv-name-input {
+                    flex: 1; min-width: 0;
+                    background: var(--secondary-background-color, ${T.surface});
+                    border: 1px solid var(--divider-color, ${T.surfaceBorder});
+                    border-radius: 8px; padding: 8px 10px;
+                    color: var(--primary-text-color, ${T.text});
+                    font-family: inherit; font-size: 0.9em;
+                }
+                .pv-name-input:focus { outline: none; border-color: #ff9800; }
+                .pv-save-btn {
+                    background: #ff9800; color: #1a1a1a; border: none;
+                    border-radius: 8px; padding: 7px 16px; cursor: pointer;
+                    font-weight: 600; font-size: 0.85em;
+                }
+                .pv-save-btn:disabled { opacity: 0.6; cursor: default; }
+                .pv-save-ok { color: #8DC892; font-weight: 700; }
 
                 /* Overview chips — same shape as the battery card's
                    daily chips (.chip / .chip-label / .chip-value). */
@@ -2155,7 +2267,9 @@ class SEMConfigCard extends SEMLitBase {
                         ></ha-icon>
                     </div>
                     ${this._renderApplyBar()}
-                    ${SECTIONS.map(s => this._renderSection(s, renderers[s.id], T))}
+                    ${SECTIONS
+                        .filter(s => s.id !== 'pv_strings' || this._pvStrings().length >= 2)
+                        .map(s => this._renderSection(s, renderers[s.id], T))}
                 </div>
             </ha-card>
         `;
