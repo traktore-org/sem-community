@@ -521,7 +521,10 @@ class ControllableDevice(ABC):
             return False
         if s == "on":
             return True
-        # climate.* reports its hvac_mode as the state — anything but "off" is on
+        # climate.* and water_heater.* report their active MODE as the state
+        # string (e.g. "heat", "cool", "eco", "heat_pump") — anything but "off"
+        # means running. Don't add per-domain guards here; ClimateDevice
+        # overrides observed_on() where mode-matching matters.
         return True
 
     def get_current_consumption(self) -> float:

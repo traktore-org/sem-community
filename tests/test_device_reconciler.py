@@ -222,6 +222,8 @@ async def test_median_filter_rejects_single_cycle_spike():
     await sc.update(8000.0)          # single-cycle spike
     # median of [0, 0, 8000] = 0 → the spike never reaches the EMA
     assert sc._smoothed_surplus == ema_before
+    # next 0 W sample: window [0, 8000, 0] — the spike ghost lingers one more
+    # cycle but the median stays 0 (two 0-samples dominate), EMA unaffected
     await sc.update(0.0)
     assert sc._smoothed_surplus == ema_before
 
@@ -235,7 +237,9 @@ async def test_median_filter_passes_real_trend():
     await sc.update(0.0)
     await sc.update(0.0)
     await sc.update(3000.0)
-    await sc.update(3000.0)          # 2nd consistent sample → median passes it
+    # 2nd CONSECUTIVE 3000 W sample → window [0, 3000, 3000], median passes it
+    # (a step change reaches the EMA on its second consistent cycle)
+    await sc.update(3000.0)
     assert sc._smoothed_surplus > 800   # EMA moving toward 3000
 
 
