@@ -11,9 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.4-beta.26] — 07.07.2026
+# [1.7.4-beta.27] — 07.07.2026
 
-> **Pre-release.** Renaming your PV strings is now one click away.
+> **Pre-release.** More setup lives on the dashboard Config tab now.
+
+### ⚙️ Rename PV strings & set the EV charge target on the Config tab
+- ☀️ **Rename PV strings on the dashboard.** A new **PV Strings** section on the
+  Configuration tab (shown when SEM detects ≥2 strings) lets you name each string
+  (East, South, …) with an inline field — no need to open Home Assistant's
+  integration settings. (#566)
+- 🚗 **Set the EV charge target on the card.** The per-charger block let you pick
+  the target *type* (kWh vs SOC) but not the actual value — now the target, its
+  ceiling, kWh/100 km and phase count are editable inline (the right pair shows for
+  the selected type). This continues moving setup out of the options flow onto the
+  dashboard, where most of it already lives.
 
 ### ☀️ "Rename PV strings" is now easy to find (#566)
 - 🧭 Custom PV-string names shipped in beta.21, but the step was buried at the
