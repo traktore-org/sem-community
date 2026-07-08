@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.32] — 08.07.2026
+
+> **Pre-release.** Registered surplus devices survive device re-discovery.
+
+### 🔌 A registered surplus load could silently stop being controlled (#559)
+- 🐛 A device registered via `register_surplus_device` under an
+  `energy_dashboard_…` id was **destroyed by every device re-discovery** —
+  including the one that runs ~35 s after each restart: the discovery sync wiped
+  all `energy_dashboard_*` devices, and the rebuild then (correctly) refused to
+  recreate one whose switch is service-owned — so the load vanished from control
+  entirely while the Control tab still showed its row. Reporter's pool pump never
+  ran despite 1.6 kW of export. Service registrations now **survive discovery
+  syncs by construction** — the live device object (with its accrued daily
+  runtime) is left untouched, and discovery can't shadow or overwrite it.
+  (reported by @alexmc1510)
+
 # [1.7.4-beta.31] — 08.07.2026
 
 > **Pre-release.** The "Forecast vs Actual" chart shows the forecast again.
