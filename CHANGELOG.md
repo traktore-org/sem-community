@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.31] — 08.07.2026
+
+> **Pre-release.** The "Forecast vs Actual" chart shows the forecast again.
+
+### 📈 "Forecast vs Actual" chart restored (#575)
+- 🐛 The **Forecast vs Actual** dashboard chart showed no forecast — just actual
+  solar/home/grid power under a misleading title. The LitElement card migration
+  had quietly repointed it at the plain power preset, dropping the forecast
+  series; a later sensor cleanup then removed `forecast_power_now_w` as "dead"
+  (dead only because the migration had already orphaned it). The forecast power
+  sensor is restored (its value was always computed, just no longer published)
+  and the card now plots **forecast vs actual solar** on a dedicated preset.
+  (reported by @ebnerjoh in #575)
+
 # [1.7.4-beta.30] — 08.07.2026
 
 > **Pre-release.** The device arc, completed: honest runtime, spike-proof surplus, visible ownership.
