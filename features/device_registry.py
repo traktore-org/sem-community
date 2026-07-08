@@ -436,10 +436,18 @@ class UnifiedDeviceRegistry:
         Skips EV charger — it's registered separately in __init__.py with
         special CurrentControlDevice config (phases, min/max current, service).
         """
-        # Unregister old registry-managed devices (prefix: energy_dashboard_)
+        # Unregister old registry-managed devices (prefix: energy_dashboard_).
+        # (#559) NEVER wipe a SERVICE-registered device, even when the user
+        # picked an energy_dashboard_* id: the wipe removed it and the rebuild
+        # below then SKIPPED recreating it (the entity-dedup correctly treats
+        # the switch as service-owned) — so the device vanished entirely on
+        # every re-discovery (the 35s delayed one after each restart included)
+        # and the load never ran again (alexmc1510's pool pump). Ownership by
+        # construction: service registrations survive discovery syncs with
+        # their live object (and accrued daily runtime) intact.
         existing_ids = list(self._surplus_controller._devices.keys())
         for did in existing_ids:
-            if did.startswith("energy_dashboard_"):
+            if did.startswith("energy_dashboard_") and did not in self._service_registrations:
                 self._surplus_controller.unregister_device(did)
 
         for device in self._devices:
@@ -450,6 +458,17 @@ class UnifiedDeviceRegistry:
 
             control = device.control
             control_type = control.get("type", "switch") if control else "switch"
+
+            # (#559) id collision: the discovery row's id is service-registered
+            # (user picked the energy_dashboard_* namespace) — the service
+            # device owns it; re-registering here would overwrite the explicit
+            # object (rated_power, goals, runtime) with a discovery snapshot.
+            if device.device_id in self._service_registrations:
+                _LOGGER.debug(
+                    "Skipping auto-discovered %s — id is service-registered",
+                    device.device_id,
+                )
+                continue
 
             if control_type in ("switch", "input_boolean"):
                 entity = control.get("entity", "")
