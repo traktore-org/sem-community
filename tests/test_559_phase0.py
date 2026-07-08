@@ -127,6 +127,56 @@ def test_autodiscovered_falls_back_to_live_when_no_rating(registry):
     assert result[ud.device_id]["power_rating"] == 42.0
 
 
+# ---------------------------------------------------------------------------
+# #559 — ED refresh must NOT destroy service registrations (alexmc1510:
+# pump registered under an energy_dashboard_* id never ran — the 35s delayed
+# re-discovery wiped the explicit device and discovery had no control for it)
+# ---------------------------------------------------------------------------
+
+def test_ed_sync_spares_service_registered_id(registry):
+    """_sync_to_surplus_controller must not unregister a live device whose id
+    is service-registered, even though it carries the energy_dashboard_ prefix."""
+    from custom_components.solar_energy_management.devices.base import SwitchDevice
+    did = "energy_dashboard_piscina_energy_2"
+    registry._service_registrations = {did: {
+        "entity_id": "switch.piscina_2", "name": "Pool", "priority": 1,
+        "rated_power": 710, "control_mode": "surplus"}}
+    live = SwitchDevice(hass=registry.hass, device_id=did, name="Pool",
+                        rated_power=710, entity_id="switch.piscina_2")
+    live._daily_runtime_accumulated_sec = 1234.0  # accrued state must survive
+    registry._surplus_controller._devices[did] = live
+    registry._devices = []          # discovery found nothing this round
+    registry._sync_to_load_manager = lambda: None
+    registry._sync_to_surplus_controller()
+    survivor = registry._surplus_controller.get_device(did)
+    assert survivor is live                      # same object — state preserved
+    assert survivor._daily_runtime_accumulated_sec == 1234.0
+
+
+def test_ed_sync_does_not_shadow_service_entity(registry):
+    """A discovery row whose control entity is service-registered under a
+    DIFFERENT id must not spawn a second device driving the same switch."""
+    from custom_components.solar_energy_management.devices.base import SwitchDevice
+    registry._service_registrations = {"pool": {
+        "entity_id": "switch.piscina_2", "name": "Pool", "priority": 1,
+        "rated_power": 710, "control_mode": "surplus"}}
+    live = SwitchDevice(hass=registry.hass, device_id="pool", name="Pool",
+                        rated_power=710, entity_id="switch.piscina_2")
+    registry._surplus_controller._devices["pool"] = live
+    # discovery maps the same switch under its energy_dashboard_* id
+    registry._devices = [_ud("sensor.piscina_energy_2", "switch.piscina_2",
+                             power="sensor.piscina_power", name="Piscina")]
+    registry.hass.states.get = lambda e: SimpleNamespace(state="0")
+    registry._sync_to_load_manager = lambda: None
+    registry._sync_to_surplus_controller()
+    ids_driving_switch = [
+        d for d in registry._surplus_controller._devices.values()
+        if getattr(d, "entity_id", None) == "switch.piscina_2"
+    ]
+    assert len(ids_driving_switch) == 1          # only the service device
+    assert ids_driving_switch[0] is live
+
+
 @pytest.mark.asyncio
 async def test_register_persists_and_registers(registry):
     summary = await registry.async_register_service_device(dict(SPEC))
