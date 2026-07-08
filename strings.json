@@ -742,6 +742,9 @@
       "forecast_remaining_today_kwh": {
         "name": "Forecast Remaining Today"
       },
+      "forecast_power_now_w": {
+        "name": "Forecast Power Now"
+      },
       "forecast_peak_power_today_w": {
         "name": "Forecast Peak Power Today"
       },

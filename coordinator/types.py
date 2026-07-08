@@ -1062,7 +1062,9 @@ class SEMData:
             "forecast_today_kwh": self.forecast.forecast_today_kwh,
             "forecast_tomorrow_kwh": self.forecast.forecast_tomorrow_kwh,
             "forecast_remaining_today_kwh": self.forecast.forecast_remaining_today_kwh,
-            # (#544) forecast_power_now_w / forecast_power_next_hour_w removed — dead.
+            # (#575) forecast_power_now_w restored — consumed by the "Forecast vs
+            # Actual" chart. forecast_power_next_hour_w stays removed (orphan).
+            "forecast_power_now_w": round(self.forecast.forecast_power_now_w, 0),
             "forecast_peak_power_today_w": self.forecast.forecast_peak_power_today_w,
             "forecast_peak_time_today": self.forecast.forecast_peak_time_today,
             "forecast_source": self.forecast.forecast_source,

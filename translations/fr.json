@@ -730,6 +730,9 @@
       "forecast_remaining_today_kwh": {
         "name": "Prévision Restante Aujourd'hui"
       },
+      "forecast_power_now_w": {
+        "name": "Puissance Prévue Maintenant"
+      },
       "forecast_source": {
         "name": "Source Prévision"
       },

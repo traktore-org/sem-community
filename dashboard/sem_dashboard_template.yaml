@@ -436,5 +436,5 @@ views:
           # 3. FORECAST SPARKLINE (sem-chart-card replaces apexcharts)
           # ══════════════════════════════════════════════════════
           - type: custom:sem-chart-card
-            preset: power
+            preset: forecast
             title: Forecast vs Actual

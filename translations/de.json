@@ -732,6 +732,9 @@
       "forecast_remaining_today_kwh": {
         "name": "Prognose Rest Heute"
       },
+      "forecast_power_now_w": {
+        "name": "Prognoseleistung Jetzt"
+      },
       "forecast_source": {
         "name": "Prognosequelle"
       },

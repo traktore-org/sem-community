@@ -97,6 +97,17 @@ const PRESETS = {
             { suffix: 'grid_power',              name: 'grid',        color: C.gridImport, type: 'area' },
         ],
     },
+    // #575: forecast vs actual solar power. The apexcharts original plotted
+    // ``forecast_power_now_w`` (recorder history = the forecast curve) against
+    // ``solar_power``; the LitElement migration lost it by pointing the card at
+    // ``preset: power`` (a plain solar/home/grid chart with no forecast series).
+    forecast: {
+        title: 'forecast_vs_actual', y_label: 'W', stacked: false,
+        hourly: [
+            { suffix: 'forecast_power_now_w', name: 'forecast', color: C.solar,      type: 'area' },
+            { suffix: 'solar_power',          name: 'actual',   color: C.batteryOut, type: 'line' },
+        ],
+    },
     battery: {
         title: 'battery', y_label: 'W', y2_label: '%', stacked: false,
         hourly: [
