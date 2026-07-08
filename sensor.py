@@ -914,7 +914,17 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
-    # (#544) forecast_power_now_w / forecast_power_next_hour_w removed — dead.
+    # (#575) forecast_power_now_w restored — the "Forecast vs Actual" dashboard
+    # chart is its consumer again (regressed to a no-op in the LitElement
+    # migration, then removed as "dead" by #544). forecast_power_next_hour_w
+    # stays removed — still an orphan with no consumer.
+    SensorEntityDescription(
+        key="forecast_power_now_w",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
     SensorEntityDescription(
         key="forecast_peak_power_today_w",
         device_class=SensorDeviceClass.POWER,

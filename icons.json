@@ -244,6 +244,9 @@
       "forecast_remaining_today_kwh": {
         "default": "mdi:sun-clock"
       },
+      "forecast_power_now_w": {
+        "default": "mdi:sun-wireless"
+      },
       "forecast_source": {
         "default": "mdi:cloud-search"
       },

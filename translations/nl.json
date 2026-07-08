@@ -732,6 +732,9 @@
       "forecast_remaining_today_kwh": {
         "name": "Voorspelling Resterend Vandaag"
       },
+      "forecast_power_now_w": {
+        "name": "Voorspeld Vermogen Nu"
+      },
       "forecast_source": {
         "name": "Voorspellingsbron"
       },
