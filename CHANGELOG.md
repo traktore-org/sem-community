@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.33] — 09.07.2026
+
+> **Pre-release.** SEM sensors no longer bloat the Home Assistant recorder database.
+
+### 💾 SEM entities dominated the recorder database (#581)
+- 🐛 On a 10 s refresh, SEM entities produced ~70% of all recorder state rows and
+  grew the database to ~9.6 GB in ~10 days. Two causes: (1) a per-cycle
+  `last_update` timestamp was stamped onto **all ~177 SEM entities** every tick,
+  forcing a recorder write for every entity every cycle — even sensors whose
+  value never changed; and (2) large UI-only maps (the ~9 KiB `devices` map on
+  `sem_controllable_devices_count` alone = 816 MiB of payload) were recorded on
+  every cycle. The volatile base attributes are removed, and the heavy UI-helper
+  maps are now marked `_unrecorded_attributes` — they stay on the live entity so
+  dashboard cards keep working, but are excluded from the recorder.
+  (reported by @Edsol)
+
 # [1.7.4-beta.32] — 08.07.2026
 
 > **Pre-release.** Registered surplus devices survive device re-discovery.
