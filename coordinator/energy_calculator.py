@@ -184,6 +184,7 @@ class EnergyCalculator:
         energy.daily_solar = self._get_daily("solar", today)
         energy.monthly_solar = self._get_monthly("solar", month_key)
         energy.yearly_solar = self._get_yearly("solar", year_key)
+        energy.lifetime_solar = self._get_lifetime("solar")  # #573
 
         # Home consumption
         if power.home_consumption_power >= MIN_POWER_THRESHOLD:
@@ -314,6 +315,7 @@ class EnergyCalculator:
         energy.daily_solar = self._get_daily("solar", today)
         energy.monthly_solar = self._get_monthly("solar", month_key)
         energy.yearly_solar = self._get_yearly("solar", year_key)
+        energy.lifetime_solar = self._get_lifetime("solar")  # #573
         energy.daily_home = self._get_daily("home", today)
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
