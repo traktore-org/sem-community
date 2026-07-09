@@ -354,6 +354,12 @@ class EnergyTotals:
     yearly_battery_discharge: float = 0.0
     yearly_ev: float = 0.0
 
+    # Lifetime total (kWh) — #573: all-time solar production, seeded from the
+    # hardware energy counter so it matches the inverter's own lifetime figure
+    # (TotalActiveProduction / Gesamtenergieertrag). Monthly/Yearly stay
+    # period-scoped; this is the apples-to-apples anchor vs the inverter.
+    lifetime_solar: float = 0.0
+
     # v1.7.0 arch follow-up — per-device runtime dicts.
     # Populated by sensor_reader on multi-device installs. Empty on
     # single-device installs → the view properties fall back to the
@@ -898,6 +904,8 @@ class SEMData:
 
             # Yearly energy
             "yearly_solar_yield_energy": self.energy.yearly_solar,
+            # #573 — lifetime solar production (matches the inverter counter)
+            "lifetime_solar_yield_energy": self.energy.lifetime_solar,
             "yearly_home_consumption_energy": self.energy.yearly_home,
             "yearly_grid_import_energy": self.energy.yearly_grid_import,
             "yearly_grid_export_energy": self.energy.yearly_grid_export,

@@ -350,6 +350,20 @@ SENSOR_TYPES = [
         suggested_display_precision=1,
     ),
     SensorEntityDescription(
+        # #573 — lifetime solar production; seeded from and reconciled against
+        # the inverter's own energy counter, so it matches TotalActiveProduction
+        # / Gesamtenergieertrag. state_class TOTAL (not TOTAL_INCREASING) to match
+        # the sibling monthly/yearly solar-yield sensors and to tolerate the rare
+        # one-time #551 downward self-heal re-seed (Wh-as-kWh correction) without
+        # tripping HA's "total_increasing went backwards" warning.
+        key="lifetime_solar_yield_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        icon="mdi:solar-power-variant",
+    ),
+    SensorEntityDescription(
         key="yearly_grid_import_energy",
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,

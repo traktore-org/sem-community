@@ -598,6 +598,9 @@
       "yearly_solar_yield_energy": {
         "name": "Yearly Solar"
       },
+      "lifetime_solar_yield_energy": {
+        "name": "Produção solar total"
+      },
       "yearly_grid_import_energy": {
         "name": "Yearly Grid Import"
       },

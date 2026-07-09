@@ -600,6 +600,9 @@
       "yearly_solar_yield_energy": {
         "name": "Jaarlijks Zon"
       },
+      "lifetime_solar_yield_energy": {
+        "name": "Totale zonneproductie"
+      },
       "yearly_grid_import_energy": {
         "name": "Jaarlijks Netimport"
       },
