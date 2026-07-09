@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4-beta.34] — 09.07.2026
+
+> **Pre-release.** A lifetime solar-production figure that matches your inverter.
+
+### ☀️ Lifetime solar production sensor (#573)
+- ✨ New `sensor.sem_lifetime_solar_yield_energy` ("Lifetime Solar Production")
+  surfaces SEM's all-time solar total — seeded from and reconciled against your
+  inverter's own energy counter (e.g. Deye `TotalActiveProduction`, Huawei
+  `Gesamtenergieertrag`), so it lines up with the hardware figure. The existing
+  **Monthly** and **Yearly** sensors stay period-scoped (they only cover
+  production since SEM started tracking), which is why they can read lower than
+  the inverter's lifetime counter — this gives you an apples-to-apples number to
+  compare. Names localized across all 15 languages. (reported by @hrdilshan)
+
 # [1.7.4-beta.33] — 09.07.2026
 
 > **Pre-release.** SEM sensors no longer bloat the Home Assistant recorder database.
