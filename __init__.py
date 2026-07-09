@@ -3824,7 +3824,10 @@ async def _async_register_phase_services(
     }
     _DIAGNOSE_ADVANCED_STATE = {
         "observer_mode", "update_interval", "minimum_solar_power",
-        "last_update", "delta_triggered",
+        # ``last_update`` still lives in coordinator.data (this reads from there,
+        # not entity attributes). ``delta_triggered`` was never populated and is
+        # gone as of #581 — dropped here too rather than leave a dead key.
+        "last_update",
     }
 
     _DIAGNOSE_SLICERS = {
