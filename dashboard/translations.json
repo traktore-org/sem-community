@@ -1164,7 +1164,8 @@
     "config_ev_daily_target": "Daily target",
     "config_ev_daily_target_max": "Max daily",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Phases"
+    "config_ev_phases": "Phases",
+    "rated_power_hint": "Rated power (off)"
   },
   "de": {
     "charging": "Laden",
@@ -2331,7 +2332,8 @@
     "config_ev_daily_target": "Tagesziel",
     "config_ev_daily_target_max": "Max. täglich",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Phasen"
+    "config_ev_phases": "Phasen",
+    "rated_power_hint": "Nennleistung (aus)"
   },
   "fr": {
     "charging": "En charge",
@@ -3498,7 +3500,8 @@
     "config_ev_daily_target": "Objectif quotidien",
     "config_ev_daily_target_max": "Max quotidien",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Phases"
+    "config_ev_phases": "Phases",
+    "rated_power_hint": "Puissance nominale (éteint)"
   },
   "es": {
     "charging": "Cargando",
@@ -4665,7 +4668,8 @@
     "config_ev_daily_target": "Objetivo diario",
     "config_ev_daily_target_max": "Máx diario",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Fases"
+    "config_ev_phases": "Fases",
+    "rated_power_hint": "Potencia nominal (apagado)"
   },
   "it": {
     "charging": "In carica",
@@ -5832,7 +5836,8 @@
     "config_ev_daily_target": "Obiettivo giorn.",
     "config_ev_daily_target_max": "Max giorn.",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Fasi"
+    "config_ev_phases": "Fasi",
+    "rated_power_hint": "Potenza nominale (spento)"
   },
   "nl": {
     "charging": "Laden",
@@ -6999,7 +7004,8 @@
     "config_ev_daily_target": "Dagdoel",
     "config_ev_daily_target_max": "Max dagelijks",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Fasen"
+    "config_ev_phases": "Fasen",
+    "rated_power_hint": "Nominaal vermogen (uit)"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -8166,7 +8172,8 @@
     "config_ev_daily_target": "Denní cíl",
     "config_ev_daily_target_max": "Max. denně",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Fáze"
+    "config_ev_phases": "Fáze",
+    "rated_power_hint": "Jmenovitý výkon (vyp.)"
   },
   "da": {
     "charging": "Oplader",
@@ -9333,7 +9340,8 @@
     "config_ev_daily_target": "Dagligt mål",
     "config_ev_daily_target_max": "Maks dagligt",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Faser"
+    "config_ev_phases": "Faser",
+    "rated_power_hint": "Nominel effekt (fra)"
   },
   "fi": {
     "charging": "Lataus",
@@ -10500,7 +10508,8 @@
     "config_ev_daily_target": "Päivätavoite",
     "config_ev_daily_target_max": "Maks päivä",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Vaiheet"
+    "config_ev_phases": "Vaiheet",
+    "rated_power_hint": "Nimellisteho (pois)"
   },
   "hu": {
     "charging": "Töltés",
@@ -11667,7 +11676,8 @@
     "config_ev_daily_target": "Napi cél",
     "config_ev_daily_target_max": "Max napi",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Fázisok"
+    "config_ev_phases": "Fázisok",
+    "rated_power_hint": "Névleges teljesítmény (ki)"
   },
   "no": {
     "charging": "Lader",
@@ -12834,7 +12844,8 @@
     "config_ev_daily_target": "Daglig mål",
     "config_ev_daily_target_max": "Maks daglig",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Faser"
+    "config_ev_phases": "Faser",
+    "rated_power_hint": "Nominell effekt (av)"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -14001,7 +14012,8 @@
     "config_ev_daily_target": "Cel dzienny",
     "config_ev_daily_target_max": "Maks. dzienny",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Fazy"
+    "config_ev_phases": "Fazy",
+    "rated_power_hint": "Moc znamionowa (wył.)"
   },
   "pt": {
     "charging": "A carregar",
@@ -15168,7 +15180,8 @@
     "config_ev_daily_target": "Meta diária",
     "config_ev_daily_target_max": "Máx diário",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Fases"
+    "config_ev_phases": "Fases",
+    "rated_power_hint": "Potência nominal (desligado)"
   },
   "ro": {
     "charging": "Încărcare",
@@ -16335,7 +16348,8 @@
     "config_ev_daily_target": "Țintă zilnică",
     "config_ev_daily_target_max": "Max zilnic",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Faze"
+    "config_ev_phases": "Faze",
+    "rated_power_hint": "Putere nominală (oprit)"
   },
   "sv": {
     "charging": "Laddar",
@@ -17502,6 +17516,7 @@
     "config_ev_daily_target": "Dagsmål",
     "config_ev_daily_target_max": "Max dagligen",
     "config_ev_kwh_per_100km": "kWh / 100 km",
-    "config_ev_phases": "Faser"
+    "config_ev_phases": "Faser",
+    "rated_power_hint": "Märkeffekt (av)"
   }
 }
