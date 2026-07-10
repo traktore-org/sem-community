@@ -302,6 +302,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     id,
                     name: info.name || id.replace(/^(load_device_|energy_dashboard_)/, '').replace(/_/g, ' '),
                     power: (info.current_power || 0) / 1000,
+                    // (#577) self-calibrated rated power (W) — shown dimmed when
+                    // the load is off so the row keeps a meaningful number
+                    // instead of a bare "OFF".
+                    rating: info.power_rating || 0,
                     priority: info.priority || 5,
                     isOn: info.is_on || false,
                     isShed: info.is_shed || false,
@@ -435,7 +439,13 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         </span>
                     </div>
                     <div class="device-power" data-field="power-${device.id}">
-                        ${onOff ? semFormatPower(device.power * 1000) : (device.isShed ? this._t('shed_label') : this._t('off'))}
+                        ${onOff
+                            ? semFormatPower(device.power * 1000)
+                            : (device.isShed
+                                ? this._t('shed_label')
+                                : (device.rating > 0
+                                    ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
+                                    : this._t('off')))}
                     </div>
                 </div>
                 ${device.blockedBy ? html`<div style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}

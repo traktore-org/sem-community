@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-07T19:52:11.255284+00:00
+// Generated: 2026-07-10T05:34:51.336036+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -56,8 +56,6 @@
       "co2": "CO₂",
       "self_use": "Self-Use",
       "forecast": "Forecast",
-      "actual": "Actual",
-      "forecast_vs_actual": "Forecast vs Actual",
       "loading": "Loading…",
       "mode": "Mode",
       "revenue": "Revenue",
@@ -1172,7 +1170,8 @@
       "config_ev_daily_target": "Daily target",
       "config_ev_daily_target_max": "Max daily",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Phases"
+      "config_ev_phases": "Phases",
+      "rated_power_hint": "Rated power (off)"
     },
     "de": {
       "charging": "Laden",
@@ -1225,8 +1224,6 @@
       "co2": "CO₂",
       "self_use": "Eigenverbrauch",
       "forecast": "Prognose",
-      "actual": "Ist",
-      "forecast_vs_actual": "Prognose vs. Ist",
       "loading": "Lade…",
       "mode": "Modus",
       "revenue": "Erlös",
@@ -2341,7 +2338,8 @@
       "config_ev_daily_target": "Tagesziel",
       "config_ev_daily_target_max": "Max. täglich",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Phasen"
+      "config_ev_phases": "Phasen",
+      "rated_power_hint": "Nennleistung (aus)"
     },
     "fr": {
       "charging": "En charge",
@@ -2394,8 +2392,6 @@
       "co2": "CO₂",
       "self_use": "Autoconsommation",
       "forecast": "Prévision",
-      "actual": "Réel",
-      "forecast_vs_actual": "Prévision vs Réel",
       "loading": "Chargement…",
       "mode": "Mode",
       "revenue": "Revenu",
@@ -3510,7 +3506,8 @@
       "config_ev_daily_target": "Objectif quotidien",
       "config_ev_daily_target_max": "Max quotidien",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Phases"
+      "config_ev_phases": "Phases",
+      "rated_power_hint": "Puissance nominale (éteint)"
     },
     "es": {
       "charging": "Cargando",
@@ -3563,8 +3560,6 @@
       "co2": "CO₂",
       "self_use": "Autoconsumo",
       "forecast": "Previsión",
-      "actual": "Real",
-      "forecast_vs_actual": "Previsión vs Real",
       "loading": "Cargando…",
       "mode": "Mode",
       "revenue": "Ingresos",
@@ -4679,7 +4674,8 @@
       "config_ev_daily_target": "Objetivo diario",
       "config_ev_daily_target_max": "Máx diario",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Fases"
+      "config_ev_phases": "Fases",
+      "rated_power_hint": "Potencia nominal (apagado)"
     },
     "it": {
       "charging": "In carica",
@@ -4732,8 +4728,6 @@
       "co2": "CO₂",
       "self_use": "Autoconsumo",
       "forecast": "Previsione",
-      "actual": "Effettivo",
-      "forecast_vs_actual": "Previsione vs Effettivo",
       "loading": "Caricamento…",
       "mode": "Mode",
       "revenue": "Ricavi",
@@ -5848,7 +5842,8 @@
       "config_ev_daily_target": "Obiettivo giorn.",
       "config_ev_daily_target_max": "Max giorn.",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Fasi"
+      "config_ev_phases": "Fasi",
+      "rated_power_hint": "Potenza nominale (spento)"
     },
     "nl": {
       "charging": "Laden",
@@ -5901,8 +5896,6 @@
       "co2": "CO₂",
       "self_use": "Eigenverbruik",
       "forecast": "Voorspelling",
-      "actual": "Werkelijk",
-      "forecast_vs_actual": "Voorspelling vs Werkelijk",
       "loading": "Laden…",
       "mode": "Modus",
       "revenue": "Opbrengst",
@@ -7017,7 +7010,8 @@
       "config_ev_daily_target": "Dagdoel",
       "config_ev_daily_target_max": "Max dagelijks",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Fasen"
+      "config_ev_phases": "Fasen",
+      "rated_power_hint": "Nominaal vermogen (uit)"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7070,8 +7064,6 @@
       "co2": "CO₂",
       "self_use": "Vlastní spotřeba",
       "forecast": "Předpověď",
-      "actual": "Skutečnost",
-      "forecast_vs_actual": "Předpověď vs Skutečnost",
       "loading": "Načítání…",
       "mode": "Mode",
       "revenue": "Příjmy",
@@ -8186,7 +8178,8 @@
       "config_ev_daily_target": "Denní cíl",
       "config_ev_daily_target_max": "Max. denně",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Fáze"
+      "config_ev_phases": "Fáze",
+      "rated_power_hint": "Jmenovitý výkon (vyp.)"
     },
     "da": {
       "charging": "Oplader",
@@ -8239,8 +8232,6 @@
       "co2": "CO₂",
       "self_use": "Egetforbrug",
       "forecast": "Prognose",
-      "actual": "Faktisk",
-      "forecast_vs_actual": "Prognose vs Faktisk",
       "loading": "Indlæser…",
       "mode": "Mode",
       "revenue": "Indtægt",
@@ -9355,7 +9346,8 @@
       "config_ev_daily_target": "Dagligt mål",
       "config_ev_daily_target_max": "Maks dagligt",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Faser"
+      "config_ev_phases": "Faser",
+      "rated_power_hint": "Nominel effekt (fra)"
     },
     "fi": {
       "charging": "Lataus",
@@ -9408,8 +9400,6 @@
       "co2": "CO₂",
       "self_use": "Omakäyttö",
       "forecast": "Ennuste",
-      "actual": "Toteutunut",
-      "forecast_vs_actual": "Ennuste vs Toteutunut",
       "loading": "Ladataan…",
       "mode": "Mode",
       "revenue": "Tuotto",
@@ -10524,7 +10514,8 @@
       "config_ev_daily_target": "Päivätavoite",
       "config_ev_daily_target_max": "Maks päivä",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Vaiheet"
+      "config_ev_phases": "Vaiheet",
+      "rated_power_hint": "Nimellisteho (pois)"
     },
     "hu": {
       "charging": "Töltés",
@@ -10577,8 +10568,6 @@
       "co2": "CO₂",
       "self_use": "Saját felhasználás",
       "forecast": "Előrejelzés",
-      "actual": "Tényleges",
-      "forecast_vs_actual": "Előrejelzés vs Tényleges",
       "loading": "Betöltés…",
       "mode": "Mode",
       "revenue": "Bevétel",
@@ -11693,7 +11682,8 @@
       "config_ev_daily_target": "Napi cél",
       "config_ev_daily_target_max": "Max napi",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Fázisok"
+      "config_ev_phases": "Fázisok",
+      "rated_power_hint": "Névleges teljesítmény (ki)"
     },
     "no": {
       "charging": "Lader",
@@ -11746,8 +11736,6 @@
       "co2": "CO₂",
       "self_use": "Egetforbruk",
       "forecast": "Prognose",
-      "actual": "Faktisk",
-      "forecast_vs_actual": "Prognose vs Faktisk",
       "loading": "Laster…",
       "mode": "Mode",
       "revenue": "Inntekt",
@@ -12862,7 +12850,8 @@
       "config_ev_daily_target": "Daglig mål",
       "config_ev_daily_target_max": "Maks daglig",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Faser"
+      "config_ev_phases": "Faser",
+      "rated_power_hint": "Nominell effekt (av)"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -12915,8 +12904,6 @@
       "co2": "CO₂",
       "self_use": "Zużycie własne",
       "forecast": "Prognoza",
-      "actual": "Rzeczywista",
-      "forecast_vs_actual": "Prognoza vs Rzeczywista",
       "loading": "Ładowanie…",
       "mode": "Mode",
       "revenue": "Przychód",
@@ -14031,7 +14018,8 @@
       "config_ev_daily_target": "Cel dzienny",
       "config_ev_daily_target_max": "Maks. dzienny",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Fazy"
+      "config_ev_phases": "Fazy",
+      "rated_power_hint": "Moc znamionowa (wył.)"
     },
     "pt": {
       "charging": "A carregar",
@@ -14084,8 +14072,6 @@
       "co2": "CO₂",
       "self_use": "Autoconsumo",
       "forecast": "Previsão",
-      "actual": "Real",
-      "forecast_vs_actual": "Previsão vs Real",
       "loading": "Carregando…",
       "mode": "Mode",
       "revenue": "Receita",
@@ -15200,7 +15186,8 @@
       "config_ev_daily_target": "Meta diária",
       "config_ev_daily_target_max": "Máx diário",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Fases"
+      "config_ev_phases": "Fases",
+      "rated_power_hint": "Potência nominal (desligado)"
     },
     "ro": {
       "charging": "Încărcare",
@@ -15253,8 +15240,6 @@
       "co2": "CO₂",
       "self_use": "Autoconsum",
       "forecast": "Prognoză",
-      "actual": "Real",
-      "forecast_vs_actual": "Prognoză vs Real",
       "loading": "Se încarcă…",
       "mode": "Mode",
       "revenue": "Venit",
@@ -16369,7 +16354,8 @@
       "config_ev_daily_target": "Țintă zilnică",
       "config_ev_daily_target_max": "Max zilnic",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Faze"
+      "config_ev_phases": "Faze",
+      "rated_power_hint": "Putere nominală (oprit)"
     },
     "sv": {
       "charging": "Laddar",
@@ -16422,8 +16408,6 @@
       "co2": "CO₂",
       "self_use": "Egenförbrukning",
       "forecast": "Prognos",
-      "actual": "Faktisk",
-      "forecast_vs_actual": "Prognos vs Faktisk",
       "loading": "Laddar…",
       "mode": "Mode",
       "revenue": "Intäkt",
@@ -17538,7 +17522,8 @@
       "config_ev_daily_target": "Dagsmål",
       "config_ev_daily_target_max": "Max dagligen",
       "config_ev_kwh_per_100km": "kWh / 100 km",
-      "config_ev_phases": "Faser"
+      "config_ev_phases": "Faser",
+      "rated_power_hint": "Märkeffekt (av)"
     }
   };
 
