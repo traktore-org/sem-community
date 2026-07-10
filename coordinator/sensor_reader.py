@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from typing import Any, Dict, Optional
 from dataclasses import dataclass
 
@@ -216,6 +217,18 @@ class SensorReader:
         self._sensor_repair_raised: set[str] = set()
         # Cache last valid SOC to avoid 0% during sensor gaps
         self._last_valid_soc: float = 0.0
+        # EV flap fix (2026-07-10): the KEBA charging-power sensor polls over
+        # UDP and blips to ~0 for a cycle while the car is really drawing 10 kW.
+        # ``ev_power`` feeds the home energy balance (``home = solar + grid −
+        # ev − …``), so a 0-blip while the grid meter (fast) still shows the
+        # import spikes ``home`` → crashes the EV surplus below the
+        # battery-assist gate → the budget collapses to 0 → IDLE → the
+        # contactor drops → the ~15 s flap seen on PROD. A median-of-3 kills
+        # the single-cycle blip at the source (a real start/stop is 2+ cycles
+        # and follows within one). Warm-up passes the raw value. Keyed per
+        # charger (plus a "_fleet" key) so the multi-charger per-charger dict
+        # stays consistent with the smoothed fleet sum.
+        self._ev_power_hist: Dict[str, deque] = {}
         # Split grid power sensors (Growatt, DSMR, etc.) — discovered on first read.
         # confidence: "same-device" picks are permanently cached; "any-device" picks
         # are re-evaluated each cycle so a late-loading DSMR meter wins once it shows
@@ -1398,19 +1411,25 @@ class SensorReader:
                 cid = charger_cfg.get("id")
                 cps = charger_cfg.get("ev_charging_power_sensor")
                 if cps:
-                    cw = self._read_sensor(cps, "ev")
+                    # Smooth per charger so the per-charger dict stays
+                    # consistent with the fleet sum (both blip-filtered).
+                    cw = self._smooth_ev_power(
+                        self._read_sensor(cps, "ev"), key=cid or cps,
+                    )
                     total_ev += cw
                     if cid:
                         # Per-charger draw in watts, exposed for
                         # ``flow_calculator`` per-charger split.
                         readings.ev_power_per_charger[cid] = cw
+            # total_ev is already the sum of smoothed per-charger values.
             readings.ev_power = FleetEvPower(total_ev)
         elif ed.ev_power:
-            readings.ev_power = FleetEvPower(self._read_sensor(ed.ev_power, "ev"))
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(
+                self._read_sensor(ed.ev_power, "ev")))
         elif self.config.ev_power_sensor:
-            readings.ev_power = FleetEvPower(
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(self.config.ev_power_sensor, "ev")
-            )
+            ))
 
         # EV connection status — per-charger OR'd for global (#193)
         ev_chargers = self._raw_config.get("ev_chargers", [])
@@ -2041,11 +2060,11 @@ class SensorReader:
                 cps = charger_cfg.get("ev_charging_power_sensor")
                 if cps:
                     total_ev += self._read_sensor(cps, "ev")
-            readings.ev_power = FleetEvPower(total_ev)
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(total_ev))
         elif self.config.ev_power_sensor:
-            readings.ev_power = FleetEvPower(
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(self.config.ev_power_sensor, "ev")
-            )
+            ))
 
         # EV connection status — per-charger OR'd for global (#193)
         ev_chargers_leg = self._raw_config.get("ev_chargers", [])
@@ -2083,6 +2102,30 @@ class SensorReader:
             readings.ev_connected = True
 
         return readings
+
+    def _smooth_ev_power(self, raw: float, key: str = "_fleet") -> float:
+        """Median-of-3 filter for EV power (2026-07-10 flap fix).
+
+        UDP-polled chargers (KEBA P30) blip to ~0 for a single cycle while
+        the car is really drawing. Left raw, that blip corrupts the home
+        energy balance and collapses the EV surplus/budget (see
+        ``__init__``). The median of the last three readings passes a
+        single-cycle blip through unchanged (``[10450, 0, 10450] → 10450``)
+        while still tracking a genuine start/stop within one cycle
+        (``[10450, 0, 0] → 0``). Warm-up (< 3 samples) returns raw.
+
+        ``key`` scopes the history: a per-charger id keeps each charger's
+        own median so the ``ev_power_per_charger`` dict stays consistent
+        with the smoothed fleet sum; the default ``"_fleet"`` key smooths a
+        single fleet-level sensor.
+        """
+        hist = self._ev_power_hist.get(key)
+        if hist is None:
+            hist = self._ev_power_hist[key] = deque(maxlen=3)
+        hist.append(float(raw))
+        if len(hist) < 3:
+            return float(raw)
+        return sorted(hist)[1]
 
     def _read_sensor(
         self, entity_id: Optional[str], name: str, *, allow_none: bool = False,
