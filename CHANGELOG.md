@@ -11,9 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.4-beta.34] — 09.07.2026
+# [1.7.4-beta.35] — 10.07.2026
 
-> **Pre-release.** A lifetime solar-production figure that matches your inverter.
+> **Pre-release.** Rock-steady EV charging on UDP-polled chargers (KEBA).
+
+### 🔌 EV charger no longer flaps on/off (KEBA UDP power blips)
+- 🐛 On a KEBA P30 in `min_plus_solar`, the charger cycled on/off every ~15 s.
+  Root cause: the KEBA reports charging power over UDP and blips to ~0 for a
+  single cycle while the car is really drawing ~10 kW. That reading feeds the
+  home energy balance, so while the (fast) grid meter still shows the import, a
+  0-blip momentarily spikes computed home consumption → the EV solar surplus
+  crashes below the battery-assist gate → the charge budget collapses to 0 →
+  the charger idles → the contactor opens → recovers → repeat. Fix: a
+  median-of-3 filter on `ev_power` in the reader absorbs the single-cycle blip
+  at the source (a genuine start/stop is 2+ cycles and still tracks within
+  one), so the budget stays steady and the car charges flat. (reported by Guido)
 
 ### ☀️ Lifetime solar production sensor (#573)
 - ✨ New `sensor.sem_lifetime_solar_yield_energy` ("Lifetime Solar Production")
