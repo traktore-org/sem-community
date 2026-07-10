@@ -127,11 +127,48 @@ entire EV state-machine/budget/reconciler stack.
 | Feature | Interaction | Resolution |
 |---|---|---|
 | **Battery reserve/zone** (`battery_priority_soc`, `battery_buffer_soc`) | the floor | below zone battery wins; above zone loads/EV win. The single real interaction. |
-| **Battery-assist / Solar Gate (#537)** — battery *discharges* to help EV | opposite direction | keep separate. This feature only redirects power that would **charge** the battery; it never triggers discharge. Two distinct switches. |
+| **Battery-assist / Solar Gate (#537)** — battery *discharges* to help EV | opposite direction + **redesign** | This feature only redirects power that would **charge** the battery; it never triggers discharge (two distinct switches). AND: the brittle surplus-threshold Solar Gate is **retired** in favour of `is_night` + `min_solar_w` + SOC floor — see **§6.5**. |
 | **Force-charge / force-discharge / scheduled / arbitrage** | explicit command | **no reclaim** while active (U6). Gate the reclaim on "battery in normal self-consumption charging". |
 | **Night charge scheduler** (cheap-grid) | none | night, grid-sourced; this is a daytime solar rule. |
 | **EV modes** (solar_only / min_plus_solar) | integration, not collision | modes keep their meaning; only the EV's surplus input grows above the zone. |
 | Home consumption, peak shedding | none | home always first; peak shed is a separate path. |
+
+## 6.5 Retire the battery-assist Solar Gate (`battery_assist_min_surplus_w`)
+
+**Motivation (Guido, 2026-07-10):** the v1.7.4-beta.35 EV flap traced to the
+battery-assist **Solar Gate** — `battery_assist_min_surplus_w` (default 1200 W)
+in `decide.py:battery_assist_budget_w`. Its *intent* is sound: "only let the
+battery discharge into the EV when the sun is actually producing — never drain
+the home battery into the car on a sunless evening." Its *mechanism* is brittle
+in two ways that caused the flap:
+
+1. **It's a cliff.** `surplus ≥ 1200 W` → the FULL battery potential (~11 kW) is
+   offered; `surplus < 1200 W` → **zero**. A one-cycle dip flips the entire
+   budget → IDLE → contactor drop.
+2. **It reads a self-referential, noisy signal.** It gates on
+   `surplus = solar − home`, and `home` is contaminated by the EV's own
+   (UDP-laggy) draw. So the gate asks "is the sun out?" using a number that
+   swings with the car — the beta.35 root cause.
+
+**Replacement — reuse signals SEM already trusts (no new machinery):**
+
+| Concern the gate served | Brittle today | Robust replacement (already in SEM) |
+|---|---|---|
+| Don't drain battery at night | `surplus < 1200 W` (cliff, noisy) | **`is_night`** — sunrise/sunset via astral (`utils/time_manager.py:is_night_mode`), the SAME signal overnight charging uses |
+| Only assist when sun is producing | same surplus threshold | **`solar_w ≥ min_solar_w`** — RAW solar (feedback-free; `decide.py:410` already uses it in `solar_only`) |
+| Protect the evening reserve | (not really handled) | **SOC reserve floor** (`battery_priority_soc`, §2) |
+| Size the assist | surplus (swings with the car) | **feedback-stable surplus** (§7) |
+
+**Outcome:** `battery_assist_min_surplus_w` is **retired**. Battery-assist gates
+on `not is_night AND solar_w ≥ min_solar_w AND soc ≥ reserve` — all
+noise-free, feedback-free, and (critically) making the battery-assist day/night
+definition **consistent with overnight charging** instead of a second, separate
+threshold. No cliff, no car-contaminated input, nothing to blip.
+
+**Note:** the beta.35 `ev_power` median-of-3 fix removes the *trigger* (sensor
+noise) and is the correct standalone fix; this section removes the *brittle
+mechanism* the trigger exploited. Ship order: beta.35 first (done), this
+redesign folds into the #576 build.
 
 ## 7. Anti-oscillation
 
