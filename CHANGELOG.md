@@ -11,6 +11,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4] — 11.07.2026
+
+> **Stable release.** Consolidates the 1.7.4 beta line (beta.1 → beta.35, detailed
+> below). Headline: the **generic-device control arc** (#559) — a belief-vs-observed
+> reconciler, desired-state observability and observed-runtime credit that bring
+> every surplus load up to the same discipline the EV controller already had —
+> plus **rock-steady EV charging on UDP-polled chargers** (#573's KEBA
+> median-of-3 flap fix), **config-on-the-dashboard** (settings apply live, no
+> reload), a **lifetime solar production sensor** (#573), and a **recorder-DB
+> diet** so SEM's per-cycle sensors no longer bloat history (#581). Battery→grid
+> arbitrage stays **deactivated** for stable (migration v14; tracked in #533).
+
+### 🧩 Generic-device control arc (#559)
+- ✨ **Surplus loads now get the same control discipline as the EV.** A
+  `DeviceReconciler` tracks belief-vs-observed per device, a desired-state model
+  makes ownership observable, and runtime is credited from *observed* on-time,
+  not assumed. A median-of-3 pre-filter smooths the surplus input the same way
+  the EV path is smoothed. Explicit device `rated_power` shows on the Control
+  card (was shadowed by autodiscovery), and Energy-Dashboard re-discovery no
+  longer destroys service-registered devices. (by @guidoeberle in #559)
+
+### 🔌 EV charger no longer flaps on/off (KEBA UDP power blips, #573)
+- 🐛 On a KEBA P30 in `min_plus_solar`, the charger cycled on/off every ~15 s —
+  a single-cycle UDP power blip to ~0 W spiked computed home consumption, crashed
+  the EV surplus below the battery-assist gate and collapsed the budget. A
+  median-of-3 filter on `ev_power` absorbs the blip at the source. PROD-confirmed
+  steady across solar_only ↔ min_plus_solar mode switches. (reported by Guido)
+
+### ⚙️ Config on the dashboard — settings apply live
+- ✨ PV-string rename, EV charge target / range / phases, and structural config
+  keys are reachable and editable from the dashboard Config card, applied without
+  an integration reload. (#550, #551, #566, #568)
+
+### ☀️ Lifetime solar production sensor (#573)
+- ✨ New `sensor.sem_lifetime_solar_yield_energy` reconciled against the
+  inverter's own lifetime counter, localized across all 15 languages.
+  (reported by @hrdilshan)
+
+### 🗃️ Recorder-DB diet (#581)
+- 🐛 SEM's high-frequency diagnostic sensors are no longer written to the HA
+  recorder database every cycle — they were dominating history rows. Now
+  in-memory / `_unrecorded_attributes` only. (autopilot)
+
+### 🌡️ Honest sensors & dashboard polish
+- ✨ Dedicated inverter-temperature sensor (the diagram had shown battery temp in
+  the inverter slot, #564), climate-device surplus type (#569), restored
+  Forecast-vs-Actual chart series (#575), dimmed rated power when a load is off
+  (#577), Home header hero + quick-controls (#572), and a UI pattern guide (#565).
+
 # [1.7.4-beta.35] — 10.07.2026
 
 > **Pre-release.** Rock-steady EV charging on UDP-polled chargers (KEBA).
