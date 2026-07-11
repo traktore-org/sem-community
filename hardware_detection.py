@@ -1694,6 +1694,11 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
         re.compile(r"temp\w*[_\s]*cell(?!.*2)", re.IGNORECASE),
         # BYD battery-management-unit temperature: ``bmu_temp`` (#564).
         re.compile(r"bmu[_\s]*temp", re.IGNORECASE),
+        # Enphase IQ Battery — each IQ Battery is exposed by the enphase_envoy
+        # integration as a child "Encharge {serial}" device whose cell-temp
+        # sensor is ``encharge_<serial>_temperature`` (#583). It carries no
+        # battery/cell/bms token, so the patterns above miss it entirely.
+        re.compile(r"encharge.*temp", re.IGNORECASE),
     ],
     # Battery temperature (secondary)
     "battery_temp2": [
@@ -1834,7 +1839,7 @@ def discover_battery_details_from_registry(
 # the INVERTER temperature (they belong to the battery, a cell, an ambient/room
 # probe, water/boiler, the grid meter, or a PV string).
 _NON_INVERTER_TEMP_TOKENS = re.compile(
-    r"batter|\bbat\b|_bat_|cell|bms|bmu|\bmos\b|\bair\b|ambient|environ|indoor|"
+    r"batter|\bbat\b|_bat_|encharge|cell|bms|bmu|\bmos\b|\bair\b|ambient|environ|indoor|"
     r"outdoor|outside|room|water|boiler|hot[_\s]*water|weather|dew|humid|grid|"
     r"meter|\bpv\d|string|module|panel|heatpump|heat[_\s]*pump|cpu|freezer|fridge",
     re.IGNORECASE,
