@@ -4028,6 +4028,18 @@ async def _async_register_phase_services(
             "recent_logs": recent_logs,
         }
 
+        # Layered-trace health summary (1.7.5) — tiny, so EVERY Diagnose
+        # button surfaces "is a control layer disagreeing right now?" at a
+        # glance. The FULL per-cycle chain is added to the trace / ev_chargers
+        # sections below. Best-effort, never raises.
+        try:
+            payload["trace_health"] = {
+                "health": coordinator.trace_health(),
+                "mismatch": coordinator.trace_latest_mismatch(),
+            }
+        except Exception as exc:  # noqa: BLE001
+            payload["trace_health"] = {"error": str(exc)}
+
         # ev_chargers storage split (#462/#464 follow-up). The merged
         # ``config`` block hides whether a charger entry lives in
         # entry.data or entry.options — the load-bearing fact when a
@@ -4066,13 +4078,15 @@ async def _async_register_phase_services(
             except Exception as exc:  # noqa: BLE001
                 payload["ev_actuation"] = {"error": str(exc)}
 
-        if section in ("all", "trace"):
+        if section in ("all", "trace", "ev_chargers"):
             # Layered-trace observability (1.7.5) — the recent
             # management→process→integration chain per cycle, plus the current
             # layer-boundary mismatch (acted but observed disagrees) if any.
             # This is the "pull the last 30 cycles and read the chain" tool
             # that would have made the 2026-07-10 EV flap a minutes-long
-            # debug. Read-only, best-effort, never raises.
+            # debug. Included on the EV Diagnose button (the primary debug
+            # case) as well as the dedicated trace section. Read-only,
+            # best-effort, never raises.
             try:
                 payload["trace"] = {
                     "health": coordinator.trace_health(),

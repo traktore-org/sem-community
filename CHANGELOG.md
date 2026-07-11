@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🔧 In the existing **Test/Observer mode** (Configuration → Advanced), the trace
   now shows each charger's integration layer as "observer mode — not commanding"
   so a read-only test instance never produces a false layer-mismatch.
+- 🔧 The dashboard **Diagnose buttons** now carry the trace: every section
+  includes a `trace_health` summary (is any control layer disagreeing right
+  now?), and the **EV** Diagnose button includes the full last-30-cycles chain —
+  so "why is the charger doing this?" is answerable straight from the button.
 
 # [1.7.4-beta.35] — 10.07.2026
 

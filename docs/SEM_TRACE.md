@@ -35,6 +35,12 @@ The response's `payload.trace` has:
 - **`mismatch`** — the current layer-boundary fault, if any.
 - **`recent`** — the last 30 cycles of the full chain (newest last).
 
+**From the dashboard:** the **Diagnose** buttons carry this too — every section's
+output includes a `trace_health` summary (is any layer disagreeing?), and the
+**EV** Diagnose button includes the full `trace` (the 30-cycle chain). So you can
+answer "why is the charger doing this?" straight from the EV Diagnose button
+without calling the service by hand.
+
 ## Reading a mismatch (the EV-flap example)
 
 ```
