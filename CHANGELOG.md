@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.1] — 11.07.2026
+
+> **Pre-release.** SEM can now explain itself — a layered trace for fast debugging.
+
+### 🔎 Layered-trace observability
+- ✨ SEM now records, every cycle, the **management → process → integration**
+  chain for each subsystem (EV, battery): *what policy wanted* (mode, SOC zone,
+  sun, tariff) → *what SEM decided and why* (intent, budget, the reason) →
+  *what it commanded and what it observed* (setpoint vs actual draw). A shared
+  status vocabulary (`ok / idle / blocked / degraded / error`) makes "why isn't
+  SEM charging?" answerable top-down at a glance.
+- ✨ **Automatic layer-mismatch detection** — when SEM decides to act but the
+  observed reality disagrees (e.g. commanded 16 A, drawing 0 W) for several
+  cycles, it's flagged. This is exactly the fault behind the recent EV-flap
+  incident; it would now be caught in seconds instead of hours.
+- 🔧 Surfaced via the **`diagnose` service** (`section: trace`) — the last 30
+  cycles of the chain plus the current health/mismatch. Read-only, in-memory,
+  and **never written to the recorder** (respects the beta.33 recorder fix).
+  It cannot affect any control decision.
+
 # [1.7.4-beta.35] — 10.07.2026
 
 > **Pre-release.** Rock-steady EV charging on UDP-polled chargers (KEBA).
