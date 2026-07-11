@@ -1077,6 +1077,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             trace = self._trace.current()
             self._trace_ev(trace, sem_data, power)
             self._trace_battery(trace, sem_data, power)
+            self._trace_loads(trace, sem_data)
+            self._trace_heat_pump(trace, sem_data)
         except Exception as e:  # pragma: no cover - defensive
             _LOGGER.debug("trace capture failed (non-fatal): %s", e)
         finally:
@@ -1143,6 +1145,50 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         st.integration = LayerRecord(
             LayerStatus.OK, "",
             {"charge_w": charge_w, "discharge_w": discharge_w, "match": None},
+        )
+
+    def _trace_loads(self, trace, sem_data) -> None:
+        sc = getattr(sem_data, "surplus_control", None)
+        if sc is None:
+            return
+        total_dev = int(getattr(sc, "surplus_total_devices", 0) or 0)
+        if total_dev == 0:
+            return  # no controllable loads registered — nothing to trace
+        st = trace.subsystem("loads")
+        active = int(getattr(sc, "surplus_active_devices", 0) or 0)
+        avail = bool(getattr(sc, "surplus_available", False))
+        total_w = round(float(getattr(sc, "surplus_total_w", 0.0) or 0.0))
+        dist_w = round(float(getattr(sc, "surplus_distributable_w", 0.0) or 0.0))
+        alloc_w = round(float(getattr(sc, "surplus_allocated_w", 0.0) or 0.0))
+        st.management = LayerRecord(
+            LayerStatus.OK, "surplus policy",
+            {"devices": total_dev, "surplus_available": avail},
+        )
+        p_status = LayerStatus.OK if active > 0 else LayerStatus.IDLE
+        st.process = LayerRecord(
+            p_status, f"{active}/{total_dev} active",
+            {"surplus_w": total_w, "distributable_w": dist_w, "allocated_w": alloc_w},
+        )
+        obs = "observer mode — not commanding" if getattr(
+            self, "_observer_mode", False) else f"{active} device(s) on"
+        st.integration = LayerRecord(
+            LayerStatus.OK, obs, {"active": active, "allocated_w": alloc_w, "match": None},
+        )
+
+    def _trace_heat_pump(self, trace, sem_data) -> None:
+        hp = getattr(sem_data, "heat_pump", None)
+        if hp is None or not bool(getattr(hp, "heat_pump_registered", False)):
+            return  # no heat pump configured — nothing to trace
+        st = trace.subsystem("heat_pump")
+        mode = str(getattr(hp, "heat_pump_mode", "normal") or "normal")
+        sg = int(getattr(hp, "heat_pump_sg_ready_state", 2) or 2)
+        boost = bool(getattr(hp, "heat_pump_solar_boost", False))
+        st.management = LayerRecord(LayerStatus.OK, "hp policy", {"registered": True})
+        st.process = LayerRecord(LayerStatus.OK, mode, {"solar_boost": boost})
+        obs = "observer mode — not commanding" if getattr(
+            self, "_observer_mode", False) else f"SG-Ready state {sg}"
+        st.integration = LayerRecord(
+            LayerStatus.OK, obs, {"sg_ready_state": sg, "match": None},
         )
 
     def trace_recent(self, n: int = 30):

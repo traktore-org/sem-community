@@ -17,11 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔎 Layered-trace observability
 - ✨ SEM now records, every cycle, the **management → process → integration**
-  chain for each subsystem (EV, battery): *what policy wanted* (mode, SOC zone,
-  sun, tariff) → *what SEM decided and why* (intent, budget, the reason) →
-  *what it commanded and what it observed* (setpoint vs actual draw). A shared
-  status vocabulary (`ok / idle / blocked / degraded / error`) makes "why isn't
-  SEM charging?" answerable top-down at a glance.
+  chain for each controlled subsystem — **EV, battery, surplus loads, and heat
+  pump**: *what policy wanted* (mode, SOC zone, sun, tariff) → *what SEM decided
+  and why* (intent, budget, the reason) → *what it commanded and what it
+  observed* (setpoint vs actual draw). A shared status vocabulary
+  (`ok / idle / blocked / degraded / error`) makes "why isn't SEM charging?" —
+  or "why did the pool pump stop early?" — answerable top-down at a glance.
 - ✨ **Automatic layer-mismatch detection** — when SEM decides to act but the
   observed reality disagrees (e.g. commanded 16 A, drawing 0 W) for several
   cycles, it's flagged. This is exactly the fault behind the recent EV-flap

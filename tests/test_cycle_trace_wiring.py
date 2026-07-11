@@ -25,6 +25,8 @@ class _Stub:
     _collect_trace = SEMCoordinator._collect_trace
     _trace_ev = SEMCoordinator._trace_ev
     _trace_battery = SEMCoordinator._trace_battery
+    _trace_loads = SEMCoordinator._trace_loads
+    _trace_heat_pump = SEMCoordinator._trace_heat_pump
     trace_recent = SEMCoordinator.trace_recent
     trace_latest_mismatch = SEMCoordinator.trace_latest_mismatch
 
@@ -45,12 +47,15 @@ def _power(*, ev_power, ev_connected=True, battery_soc=100.0,
     )
 
 
-def _semdata(*, calculated_current, reason, available_power, battery_status=""):
+def _semdata(*, calculated_current, reason, available_power, battery_status="",
+             surplus_control=None, heat_pump=None):
     return SimpleNamespace(
         calculated_current=calculated_current,
         charging_strategy_reason=reason,
         available_power=available_power,
         status=SimpleNamespace(battery_status=battery_status),
+        surplus_control=surplus_control,
+        heat_pump=heat_pump,
     )
 
 
@@ -122,6 +127,59 @@ class TestTraceWiring:
         assert ev["integration"]["data"]["match"] is None
         assert "observer mode" in ev["integration"]["detail"]
         assert s.trace_latest_mismatch() is None
+
+    def test_loads_subsystem_captured(self):
+        s = _Stub()
+        sc = SimpleNamespace(surplus_total_devices=3, surplus_active_devices=1,
+                             surplus_available=True, surplus_total_w=2400,
+                             surplus_distributable_w=1800, surplus_allocated_w=710)
+        sem = _semdata(calculated_current=0, reason="", available_power=0,
+                       surplus_control=sc)
+        s._collect_trace(sem, _power(ev_power=0.0), None)
+        loads = s.trace_recent(1)[0]["subsystems"]["loads"]
+        assert loads["process"]["status"] == "ok"          # 1 active
+        assert loads["process"]["data"]["allocated_w"] == 710
+        assert loads["integration"]["detail"] == "1 device(s) on"
+
+    def test_loads_absent_when_no_devices(self):
+        s = _Stub()
+        sc = SimpleNamespace(surplus_total_devices=0, surplus_active_devices=0,
+                             surplus_available=False, surplus_total_w=0,
+                             surplus_distributable_w=0, surplus_allocated_w=0)
+        sem = _semdata(calculated_current=0, reason="", available_power=0,
+                       surplus_control=sc)
+        s._collect_trace(sem, _power(ev_power=0.0), None)
+        assert "loads" not in s.trace_recent(1)[0]["subsystems"]
+
+    def test_heat_pump_subsystem_captured(self):
+        s = _Stub()
+        hp = SimpleNamespace(heat_pump_registered=True, heat_pump_mode="boost",
+                             heat_pump_sg_ready_state=3, heat_pump_solar_boost=True)
+        sem = _semdata(calculated_current=0, reason="", available_power=0,
+                       heat_pump=hp)
+        s._collect_trace(sem, _power(ev_power=0.0), None)
+        h = s.trace_recent(1)[0]["subsystems"]["heat_pump"]
+        assert h["process"]["detail"] == "boost"
+        assert h["integration"]["data"]["sg_ready_state"] == 3
+
+    def test_heat_pump_absent_when_not_registered(self):
+        s = _Stub()
+        hp = SimpleNamespace(heat_pump_registered=False)
+        sem = _semdata(calculated_current=0, reason="", available_power=0,
+                       heat_pump=hp)
+        s._collect_trace(sem, _power(ev_power=0.0), None)
+        assert "heat_pump" not in s.trace_recent(1)[0]["subsystems"]
+
+    def test_loads_observer_mode_in_integration(self):
+        s = _Stub(); s._observer_mode = True
+        sc = SimpleNamespace(surplus_total_devices=2, surplus_active_devices=0,
+                             surplus_available=True, surplus_total_w=1000,
+                             surplus_distributable_w=1000, surplus_allocated_w=0)
+        sem = _semdata(calculated_current=0, reason="", available_power=0,
+                       surplus_control=sc)
+        s._collect_trace(sem, _power(ev_power=0.0), None)
+        loads = s.trace_recent(1)[0]["subsystems"]["loads"]
+        assert loads["integration"]["detail"] == "observer mode — not commanding"
 
     def test_capture_never_raises_on_missing_fields(self):
         # observability must never break the cycle — a malformed sem_data
