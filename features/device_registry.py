@@ -680,7 +680,57 @@ class UnifiedDeviceRegistry:
                 "sem_owned": bool(getattr(live, "_sem_owned", False)),
                 **self._goal_payload(did),
             }
+
+        # (#576) the home battery — a draggable sink in the same priority list.
+        # Loads ABOVE it reclaim the power that would charge the battery; loads
+        # BELOW it yield. It's a passive device (no on/off, no mode): its only
+        # control is its position, so the card renders just the drag handle,
+        # name and priority. Live SOC / charge power come from the SEM sensors.
+        result[self._battery_device_id()] = self._battery_device_row()
         return result
+
+    def _battery_device_id(self) -> str:
+        from ..const import BATTERY_SURPLUS_DEVICE_ID
+        return BATTERY_SURPLUS_DEVICE_ID
+
+    def battery_surplus_priority(self) -> int:
+        """The battery's position in the surplus priority walk (drag-set)."""
+        from ..const import (
+            BATTERY_SURPLUS_DEVICE_ID, DEFAULT_BATTERY_SURPLUS_PRIORITY,
+        )
+        return int(self._priority_overrides.get(
+            BATTERY_SURPLUS_DEVICE_ID, DEFAULT_BATTERY_SURPLUS_PRIORITY))
+
+    def _battery_device_row(self) -> Dict[str, Any]:
+        def _num(entity: str) -> float:
+            st = self.hass.states.get(entity)
+            if st and st.state not in ("unknown", "unavailable"):
+                try:
+                    return float(st.state)
+                except (ValueError, TypeError):
+                    return 0.0
+            return 0.0
+        charge_w = _num("sensor.sem_battery_charge_power")
+        soc = _num("sensor.sem_battery_soc")
+        return {
+            "name": "Home battery",
+            "priority": self.battery_surplus_priority(),
+            "is_controllable": False,
+            "is_critical": False,
+            "power_rating": round(charge_w),
+            "power_entity": "sensor.sem_battery_charge_power",
+            "energy_sensor": None,
+            "switch_entity": None,
+            "is_available": True,
+            "is_on": charge_w > 0,          # "on" = currently charging
+            "current_power": round(charge_w) / 1000.0,
+            "device_type": "battery",
+            "has_manual_mapping": False,
+            "control": {"type": "none"},
+            "control_mode": "surplus",      # participates by position, no toggle
+            "sem_owned": False,
+            "soc": round(soc, 1),
+        }
 
     def _goal_payload(self, device_id: str) -> Dict[str, Any]:
         """Goal config + live progress for the card payload (#559)."""

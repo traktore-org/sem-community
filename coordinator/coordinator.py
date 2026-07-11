@@ -3186,11 +3186,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 priority_soc=float(self.config.get("battery_priority_soc", 30)),
                 battery_commanded=battery_commanded,
             )
+            # #576 — pass the export surplus and the reclaimable battery-charge
+            # power SEPARATELY (plus the battery's slot in the priority walk).
+            # The controller offers the reclaim only to loads ABOVE the battery
+            # and hands it back at the battery's slot, so its drag position
+            # decides who charges before the battery.
             true_surplus_w = (
                 float(getattr(power, "grid_export_power", 0.0) or 0.0)
                 + self._surplus_controller.active_surplus_draw_w()
-                + reclaim_w
             )
+            battery_priority = None
+            _reg = getattr(self, "_device_registry", None)
+            if _reg is not None:
+                try:
+                    battery_priority = _reg.battery_surplus_priority()
+                except Exception:  # pragma: no cover - never break the cycle
+                    battery_priority = None
             # #508 W2 — hand the load-manager's peak posture to the surplus
             # controller so it stops adding discretionary load (and backs
             # its own devices off) when grid import is at risk, instead of
@@ -3202,6 +3213,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 true_surplus_w,
                 price_level=tariff_data.tariff_price_level,
                 peak_state=peak_state,
+                reclaim_w=reclaim_w,
+                battery_priority=battery_priority,
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w

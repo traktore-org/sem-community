@@ -324,6 +324,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     goals: info.goals || null,
                     progress: info.progress || null,
                     blockedBy: info.blocked_by || null,
+                    soc: info.soc,   // (#576) battery row only
                     icon: this._resolveDeviceIcon(info),
                 }))
                 .sort((a, b) => a.priority - b.priority);
@@ -417,6 +418,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     _renderDevice(device, priority) {
         // Power-aware ON detection: if the switch reports OFF but the device draws > 10W, it's clearly on
         const onOff  = device.isOn || device.power > 0.01;
+        // (#576) the home battery is a positioned sink — draggable, but no
+        // on/off, no mode, no dependencies, no goals. Its position (and SOC)
+        // are the whole story.
+        const isBattery = device.deviceType === 'battery';
         const isChild = device.dependsOn.length > 0;
         const depth  = this._getDependencyDepth(device);
         const indentStyle = depth > 0
@@ -434,18 +439,21 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         ${isChild ? html`<span style="color:#ff9800;font-size:12px;margin-right:4px">&#8618;</span>` : nothing}
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
+                        ${isBattery ? nothing : html`
                         <span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}">
                             <ha-icon icon="mdi:${device.hasManualMapping ? 'wrench' : 'cog'}" style="--mdc-icon-size:14px"></ha-icon> ${device.isControllable ? this._t('configure_device') : this._t('configure')}
-                        </span>
+                        </span>`}
                     </div>
                     <div class="device-power" data-field="power-${device.id}">
-                        ${onOff
-                            ? semFormatPower(device.power * 1000)
-                            : (device.isShed
-                                ? this._t('shed_label')
-                                : (device.rating > 0
-                                    ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
-                                    : this._t('off')))}
+                        ${isBattery
+                            ? html`<span style="opacity:0.7">${device.soc != null ? device.soc + '% · ' : ''}${onOff ? semFormatPower(device.power * 1000) : this._t('off')}</span>`
+                            : (onOff
+                                ? semFormatPower(device.power * 1000)
+                                : (device.isShed
+                                    ? this._t('shed_label')
+                                    : (device.rating > 0
+                                        ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
+                                        : this._t('off'))))}
                     </div>
                 </div>
                 ${device.blockedBy ? html`<div style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}
@@ -456,7 +464,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
-                    ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
+                    ${isBattery ? html`<span class="dim" title="${this._t('help_device_priority')}">&#8593; ${this._t('mode_surplus')}</span>` : nothing}
+                    ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
                     <label class="toggle-label" title="${this._t('mode_tooltip')}">
                         <span class="dim">${this._t('mode')}</span>
                         <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
@@ -465,6 +474,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                             <option value="surplus" ?selected="${this._mergedMode(device) === 'surplus'}">${this._t('mode_surplus')}</option>
                         </select>
                     </label>`}
+                    ${isBattery ? nothing : html`
                     <label class="toggle-label" title="${this._t('requires_tooltip')}">
                         <span class="dim">${this._t('requires')}</span>
                         <select class="mode-select" data-action="depends_on" data-device="${device.id}">
@@ -473,12 +483,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
                                 html`<option value="${d.id}" ?selected="${device.dependsOn.includes(d.id)}">${d.name}</option>`
                             )}
                         </select>
-                    </label>
+                    </label>`}
                     <div class="arrows">
                         <button class="arrow-btn" data-action="move-up"   data-device="${device.id}" title="${this._t('move_up')}">&#9650;</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">&#9660;</button>
                     </div>
-                    ${(device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging'
+                    ${(device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery
                        || this._mergedMode(device) !== 'surplus') ? nothing : html`
                     <button class="goal-btn ${this._goalOpen[device.id] ? 'active' : ''}"
                             data-action="toggle-goal" data-device="${device.id}"
@@ -978,6 +988,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // Fall back to device_type mapping
         const map = {
             ev_charger: 'mdi:ev-station', ev_charging: 'mdi:ev-station',
+            battery: 'mdi:home-battery',
             heating: 'mdi:radiator', heat_pump: 'mdi:heat-pump',
             water_heater: 'mdi:water-boiler', hot_water: 'mdi:water-boiler',
             pool_pump: 'mdi:pool', appliance: 'mdi:washing-machine',

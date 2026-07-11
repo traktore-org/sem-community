@@ -27,6 +27,15 @@ DEFAULT_BATTERY_SAFETY_SOC: Final = 60  # % - Safety threshold for discharge cal
 DEFAULT_BATTERY_BUFFER_SOC: Final = 70  # % - Above: battery can discharge to help the EV (Zone 3 begins)
 DEFAULT_BATTERY_AUTO_START_SOC: Final = 90  # % - Above: EV starts even without solar surplus (Zone 4)
 
+# #576 — the home battery is a draggable device in the surplus priority list.
+# Its position decides who reclaims its charge: loads ABOVE it (lower number)
+# take the power that would charge the battery; loads BELOW it yield and the
+# battery charges first. Defaults to the bottom (a large number) so out of the
+# box every surplus load outranks the battery (the shipped "loads before
+# battery" behaviour) until the user drags it up. The synthetic device id.
+DEFAULT_BATTERY_SURPLUS_PRIORITY: Final = 100
+BATTERY_SURPLUS_DEVICE_ID: Final = "home_battery"
+
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
 DEFAULT_BATTERY_MAX_DISCHARGE_POWER: Final = 5000  # Watts - Maximum allowed discharge (caps 1:1 home consumption matching)
