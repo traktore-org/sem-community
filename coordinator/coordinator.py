@@ -3199,6 +3199,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _reg = getattr(self, "_device_registry", None)
             if _reg is not None:
                 try:
+                    # (#576) only surface the battery priority row on installs
+                    # that actually have a battery (reader → None otherwise).
+                    _reg._has_battery = getattr(power, "battery_soc", None) is not None
                     battery_priority = _reg.battery_surplus_priority()
                 except Exception:  # pragma: no cover - never break the cycle
                     battery_priority = None

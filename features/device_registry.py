@@ -128,6 +128,10 @@ class UnifiedDeviceRegistry:
         self._manual_mappings: Dict[str, Dict[str, Any]] = {}
         self._priority_overrides: Dict[str, int] = {}
         self._control_mode_overrides: Dict[str, str] = {}  # device_id → "off"/"peak_only"/"surplus"
+        # (#576) Only surface the home-battery priority row when the install
+        # actually has a battery. Set by the coordinator each cycle from
+        # ``power.battery_soc is not None``; batteryless systems never see it.
+        self._has_battery: bool = False
         # (#559 Phase 0) Devices registered via the register_surplus_device
         # service. Pre-fix these lived only in the surplus controller's
         # memory and silently vanished on every restart.
@@ -686,7 +690,9 @@ class UnifiedDeviceRegistry:
         # BELOW it yield. It's a passive device (no on/off, no mode): its only
         # control is its position, so the card renders just the drag handle,
         # name and priority. Live SOC / charge power come from the SEM sensors.
-        result[self._battery_device_id()] = self._battery_device_row()
+        # Only shown when the install actually has a battery.
+        if self._has_battery:
+            result[self._battery_device_id()] = self._battery_device_row()
         return result
 
     def _battery_device_id(self) -> str:
