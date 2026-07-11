@@ -87,3 +87,44 @@ class TestSurplusInputWiring:
             battery_charge_power=2400, soc=85, priority_soc=30,
             enabled=False, battery_commanded=False)
         assert 100.0 + 0.0 + reclaim == pytest.approx(100.0)  # today's value
+
+
+def _available(export, own, batt, soc, enabled, commanded=False, pri=30):
+    """The exact figure the coordinator feeds SurplusController.update()."""
+    return export + own + reclaimable_battery_w(
+        battery_charge_power=batt, soc=soc, priority_soc=pri,
+        enabled=enabled, battery_commanded=commanded)
+
+
+@pytest.mark.unit
+class TestLoadScenarios:
+    """Spec §3 acceptance scenarios U3–U6 (generic loads / reserve floor)."""
+
+    def test_u3_two_heaters_pool_pre_battery(self):
+        # 3.5 kW pool, 0 home, 85% SOC. Battery not charging in this instant
+        # (all solar is exporting) → nothing to reclaim; the 3.5 kW export IS
+        # the pre-battery surplus and both 1 kW heaters allocate from it.
+        avail = _available(export=3500, own=0, batt=0, soc=85, enabled=True)
+        assert avail == pytest.approx(3500)
+
+    def test_u4_below_reserve_no_reclaim(self):
+        # SOC 25% < zone → battery fills first, loads see export-only.
+        avail = _available(export=100, own=0, batt=2400, soc=25, enabled=True)
+        assert avail == pytest.approx(100)
+
+    def test_u5_discrete_load_below_rating_flows_to_battery(self):
+        # 0.8 kW pool < a 1 kW heater rating → heater stays off; 0.8 → battery.
+        avail = _available(export=800, own=0, batt=0, soc=85, enabled=True)
+        assert avail == pytest.approx(800)
+
+    def test_u6_commanded_charge_no_reclaim(self):
+        # Force / scheduled / arbitrage charge honored → no reclaim.
+        avail = _available(export=100, own=0, batt=2400, soc=85,
+                           enabled=True, commanded=True)
+        assert avail == pytest.approx(100)
+
+    def test_u_reclaim_when_battery_charging_above_zone(self):
+        # The core loads win: 100 W export + 2.4 kW battery charge reclaimed
+        # above the zone → 2.5 kW offered to the loads.
+        avail = _available(export=100, own=0, batt=2400, soc=85, enabled=True)
+        assert avail == pytest.approx(2500)
