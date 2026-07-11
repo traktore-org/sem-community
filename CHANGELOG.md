@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased] — loads charge before the battery (#576)
+
+> Opt-in, default OFF. On a `feature/576-load-priority` branch pending the 1.7.5
+> beta cut — not yet tagged.
+
+### 🔋 Loads charge before the battery (#576)
+- ✨ **New opt-in "Loads charge before the battery" (Victron-style priority).**
+  When on and the battery is at/above the reserve zone (`Battery priority SOC`,
+  default 30 %), power that would otherwise **charge** the home battery is
+  offered to your surplus loads first (in priority order); the battery becomes
+  the sink and absorbs the residual. Below the reserve zone the battery still
+  fills first, so the evening reserve is protected. Force-charge / scheduled /
+  arbitrage battery charges are honored — never reclaimed. Off by default →
+  behavior byte-identical to today. Docs: `docs/LOAD_PRIORITY.md`.
+  (reported by @alexmc1510 in #576)
+- ℹ️ This first cut covers **generic surplus loads**; extending the same
+  reserve-zone priority to EV charging is a separate follow-up (the EV already
+  reclaims battery charge above `auto_start_soc` via a forecast-scaled redirect).
+
 # [1.7.4] — 11.07.2026
 
 > **Stable release.** Consolidates the 1.7.4 beta line (beta.1 → beta.35, detailed
