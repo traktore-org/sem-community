@@ -4066,6 +4066,21 @@ async def _async_register_phase_services(
             except Exception as exc:  # noqa: BLE001
                 payload["ev_actuation"] = {"error": str(exc)}
 
+        if section in ("all", "trace"):
+            # Layered-trace observability (1.7.5) — the recent
+            # management→process→integration chain per cycle, plus the current
+            # layer-boundary mismatch (acted but observed disagrees) if any.
+            # This is the "pull the last 30 cycles and read the chain" tool
+            # that would have made the 2026-07-10 EV flap a minutes-long
+            # debug. Read-only, best-effort, never raises.
+            try:
+                payload["trace"] = {
+                    "recent": coordinator.trace_recent(30),
+                    "mismatch": coordinator.trace_latest_mismatch(),
+                }
+            except Exception as exc:  # noqa: BLE001
+                payload["trace"] = {"error": str(exc)}
+
         return {"section": section, "payload": payload}
 
     hass.services.async_register(

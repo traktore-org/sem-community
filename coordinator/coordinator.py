@@ -55,6 +55,7 @@ from .per_charger_context import PerChargerContext
 from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import SurplusController
+from .cycle_trace import TraceCollector, LayerRecord, LayerStatus
 from .forecast_reader import ForecastReader
 from .forecast_tracker import ForecastTracker
 from .ev_control import EVControlMixin
@@ -263,6 +264,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # they're unresolved (source integration registered after SEM), bounded.
         self._ed_resolve_pending: bool = False
         self._ed_resolve_attempts: int = 0
+
+        # Layered-trace observability (2026-07-11, 1.7.5). Read-only per-cycle
+        # ring buffer of the management→process→integration chain, dumped by
+        # the diagnose service. Never affects a decision; never a recorder row.
+        self._trace = TraceCollector(maxlen=30)
 
         # Phase 0: Surplus controller (always-on) & forecast reader
         regulation_offset = config.get("regulation_offset", 50)
@@ -1055,6 +1061,79 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """Get initial data with defaults."""
         sem_data = SEMData()
         return sem_data.to_dict()
+
+    # ── Layered-trace observability (1.7.5) ─────────────────────────────
+    #
+    # A READ-ONLY capture of this cycle's management→process→integration
+    # chain into the trace ring buffer (dumped by the diagnose service).
+    # It reads values the control layers already computed and NEVER feeds
+    # anything back — so it cannot change a decision. The whole thing is
+    # wrapped in try/except: observability must never break control.
+
+    def _collect_trace(self, sem_data, power, charging_context) -> None:
+        try:
+            trace = self._trace.begin(wall_iso=dt_util.now().isoformat())
+            self._trace_ev(trace, sem_data, power)
+            self._trace_battery(trace, sem_data, power)
+            self._trace.commit()
+        except Exception as e:  # pragma: no cover - defensive
+            _LOGGER.debug("trace capture failed (non-fatal): %s", e)
+
+    def _trace_ev(self, trace, sem_data, power) -> None:
+        st = trace.subsystem("ev")
+        soc = round(float(getattr(power, "battery_soc", 0.0) or 0.0), 1)
+        connected = bool(getattr(power, "ev_connected", False))
+        try:
+            night = bool(self.time_manager.is_night_mode())
+        except Exception:
+            night = None
+        st.management = LayerRecord(
+            LayerStatus.OK, "policy inputs",
+            {"soc": soc, "connected": connected, "night": night},
+        )
+
+        amps = int(getattr(sem_data, "calculated_current", 0) or 0)
+        reason = str(getattr(sem_data, "charging_strategy_reason", "") or "")
+        budget = round(float(getattr(sem_data, "available_power", 0.0) or 0.0))
+        p_status = LayerStatus.OK if amps > 0 else LayerStatus.IDLE
+        st.process = LayerRecord(
+            p_status, reason, {"commanded_amps": amps, "budget_w": budget},
+        )
+
+        observed = round(float(getattr(power, "ev_power", 0.0) or 0.0))
+        # match: we commanded a charge AND the car is plugged, but is it
+        # actually drawing? (the flap linchpin). Unknowable (None) when we
+        # aren't commanding or the car is disconnected.
+        match = None
+        if amps > 0 and connected:
+            commanded_w = amps * 3 * 230  # nominal 3φ; only a drawing/not test
+            match = observed > commanded_w * 0.3
+        i_status = LayerStatus.OK if match in (None, True) else LayerStatus.DEGRADED
+        st.integration = LayerRecord(
+            i_status, f"observed {observed:.0f}W",
+            {"observed_w": observed, "commanded_amps": amps, "match": match},
+        )
+
+    def _trace_battery(self, trace, sem_data, power) -> None:
+        st = trace.subsystem("battery")
+        soc = round(float(getattr(power, "battery_soc", 0.0) or 0.0), 1)
+        status = getattr(sem_data, "status", None)
+        reason = str(getattr(status, "battery_status", "") or "")
+        charge_w = round(float(getattr(power, "battery_charge_power", 0.0) or 0.0))
+        discharge_w = round(float(getattr(power, "battery_discharge_power", 0.0) or 0.0))
+        st.process = LayerRecord(LayerStatus.OK, reason, {"soc": soc})
+        st.integration = LayerRecord(
+            LayerStatus.OK, "",
+            {"charge_w": charge_w, "discharge_w": discharge_w, "match": None},
+        )
+
+    def trace_recent(self, n: int = 30):
+        """Serialised recent cycle traces for the diagnose service."""
+        return self._trace.recent(n)
+
+    def trace_latest_mismatch(self):
+        """Most recent layer-boundary fault, if any (health signal)."""
+        return self._trace.latest_mismatch()
 
     def _zero_charger_setpoints(self) -> None:
         """Observer mode: command nothing — zero every charger's setpoint.
@@ -2261,6 +2340,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 per_charger_daily_energy=self._per_charger_daily_report(energy),
                 last_update=dt_util.now(),
             )
+
+            # Layered-trace observability (1.7.5) — read-only capture of this
+            # cycle's management→process→integration chain. Wrapped so it can
+            # NEVER affect the control path or break the cycle.
+            self._collect_trace(sem_data, power, charging_context)
 
             # Step 11.5: Energy balance / calculation health check
             self._health_check.run_all_checks(
