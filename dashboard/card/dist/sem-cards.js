@@ -5643,7 +5643,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <span class="dim" data-field="onoff-${e.id}">${i?this._t("on"):e.isShed?this._t("shed_label"):this._t("off")}</span>
                     <span class="badge priority" data-field="pri-${e.id}">${t}</span>
                     <div class="spacer"></div>
-                    ${s?W`<span class="dim" title="${this._t("help_device_priority")}">&#8593; ${this._t("mode_surplus")}</span>`:K}
+                    ${s?W`<span class="dim" title="${this._t("battery_role_help")}">${this._t("battery_role_label")}</span>`:K}
                     ${"ev_charger"===e.deviceType||"ev_charging"===e.deviceType||s?K:W`
                     <label class="toggle-label" title="${this._t("mode_tooltip")}">
                         <span class="dim">${this._t("mode")}</span>

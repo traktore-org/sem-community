@@ -464,7 +464,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
-                    ${isBattery ? html`<span class="dim" title="${this._t('help_device_priority')}">&#8593; ${this._t('mode_surplus')}</span>` : nothing}
+                    ${isBattery ? html`<span class="dim" title="${this._t('battery_role_help')}">${this._t('battery_role_label')}</span>` : nothing}
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
                     <label class="toggle-label" title="${this._t('mode_tooltip')}">
                         <span class="dim">${this._t('mode')}</span>

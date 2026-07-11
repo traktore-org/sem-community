@@ -708,16 +708,16 @@ class UnifiedDeviceRegistry:
             BATTERY_SURPLUS_DEVICE_ID, DEFAULT_BATTERY_SURPLUS_PRIORITY))
 
     def _battery_device_row(self) -> Dict[str, Any]:
-        def _num(entity: str) -> float:
+        def _num(entity: str):
             st = self.hass.states.get(entity)
             if st and st.state not in ("unknown", "unavailable"):
                 try:
                     return float(st.state)
                 except (ValueError, TypeError):
-                    return 0.0
-            return 0.0
-        charge_w = _num("sensor.sem_battery_charge_power")
-        soc = _num("sensor.sem_battery_soc")
+                    return None
+            return None
+        charge_w = _num("sensor.sem_battery_charge_power") or 0.0
+        soc = _num("sensor.sem_battery_soc")   # None when momentarily unavailable
         return {
             "name": "Home battery",
             "priority": self.battery_surplus_priority(),
@@ -735,7 +735,7 @@ class UnifiedDeviceRegistry:
             "control": {"type": "none"},
             "control_mode": "surplus",      # participates by position, no toggle
             "sem_owned": False,
-            "soc": round(soc, 1),
+            "soc": round(soc, 1) if soc is not None else None,
         }
 
     def _goal_payload(self, device_id: str) -> Dict[str, Any]:

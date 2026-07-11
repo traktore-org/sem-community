@@ -3200,8 +3200,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if _reg is not None:
                 try:
                     # (#576) only surface the battery priority row on installs
-                    # that actually have a battery (reader → None otherwise).
-                    _reg._has_battery = getattr(power, "battery_soc", None) is not None
+                    # that actually have a battery. LATCH it: once we've seen a
+                    # real battery reading it stays shown — a transient SOC
+                    # "unavailable" must NOT flicker the row out of the list.
+                    if getattr(power, "battery_soc", None) is not None:
+                        _reg._has_battery = True
                     battery_priority = _reg.battery_surplus_priority()
                 except Exception:  # pragma: no cover - never break the cycle
                     battery_priority = None
