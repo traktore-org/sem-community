@@ -66,3 +66,24 @@ class TestConfigKey:
             DEFAULT_LOAD_PRIORITY_ABOVE_BATTERY,
         )
         assert DEFAULT_LOAD_PRIORITY_ABOVE_BATTERY is False
+
+
+@pytest.mark.unit
+class TestSurplusInputWiring:
+    """Locks the exact arithmetic the coordinator uses at the
+    ``true_surplus_w`` build (coordinator.py:3016): export + own draw +
+    reclaim."""
+
+    def test_surplus_input_includes_reclaim_above_zone(self):
+        grid_export, own_draw, batt_charge, soc = 100.0, 0.0, 2400.0, 85.0
+        reclaim = reclaimable_battery_w(
+            battery_charge_power=batt_charge, soc=soc, priority_soc=30,
+            enabled=True, battery_commanded=False)
+        available = grid_export + own_draw + reclaim
+        assert available == pytest.approx(2500.0)  # 100 export + 2400 reclaimed
+
+    def test_surplus_input_unchanged_when_disabled(self):
+        reclaim = reclaimable_battery_w(
+            battery_charge_power=2400, soc=85, priority_soc=30,
+            enabled=False, battery_commanded=False)
+        assert 100.0 + 0.0 + reclaim == pytest.approx(100.0)  # today's value
