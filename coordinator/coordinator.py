@@ -3006,10 +3006,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Surplus controller (Phase 0.2)
         surplus_data = SurplusControlData()
-        # #576 — reset the per-cycle EV-netting figure so a stale value can't
-        # leak if the surplus block raises before allocation (EV then gets the
-        # full reclaim, identical to Phase 1).
-        self._loads_reclaimed_w = 0.0
         try:
             # #508 W7 — feed the TRUE house surplus, not the EV budget.
             # ``grid_export_power`` is what the house is exporting after the
@@ -3022,10 +3018,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # would otherwise charge the battery (the inverter self-consumes
             # the residual). Battery control already ran this cycle (Step
             # 7.5c+d, above), so ``_last_battery_decisions`` reflects THIS
-            # cycle: an explicit/scheduled FORCE_CHARGE is honored (no reclaim).
+            # cycle: an explicit/scheduled FORCE_CHARGE (or FORCE_DISCHARGE
+            # arbitrage) is honored — no reclaim.
             _batt_decisions = getattr(self, "_last_battery_decisions", None) or {}
             battery_commanded = any(
-                d.get("intent") == "force_charge" for d in _batt_decisions.values()
+                d.get("intent") in ("force_charge", "force_discharge")
+                for d in _batt_decisions.values()
             )
             reclaim_w = reclaimable_battery_w(
                 battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
@@ -3034,11 +3032,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 enabled=bool(self.config.get("load_priority_above_battery", False)),
                 battery_commanded=battery_commanded,
             )
-            base_surplus_w = (
+            true_surplus_w = (
                 float(getattr(power, "grid_export_power", 0.0) or 0.0)
                 + self._surplus_controller.active_surplus_draw_w()
+                + reclaim_w
             )
-            true_surplus_w = base_surplus_w + reclaim_w
             # #508 W2 — hand the load-manager's peak posture to the surplus
             # controller so it stops adding discretionary load (and backs
             # its own devices off) when grid import is at risk, instead of
@@ -3058,17 +3056,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             surplus_data.surplus_unallocated_w = allocation.unallocated_w
             surplus_data.surplus_active_devices = allocation.active_devices
             surplus_data.surplus_total_devices = allocation.total_devices
-
-            # #576 Phase 2 — EV-vs-loads double-count guard. The loads run
-            # BEFORE the EV budget (built later this cycle); of the power the
-            # loads just allocated, anything beyond ``base_surplus_w`` came out
-            # of the reclaimed battery-charge pool. Cache that so the EV nets
-            # its own reclaim against it and the two paths can't both spend the
-            # same reclaimed watts in one cycle (a transient grid-import blip).
-            self._loads_reclaimed_w = min(
-                reclaim_w,
-                max(0.0, float(allocation.allocated_w) - base_surplus_w),
-            )
 
             # (#559 Phase 0) debounced surplus availability for user
             # automations (peak_only devices are self-managed — this is
@@ -4599,27 +4586,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Calculate excess solar
         excess_solar = power.solar_power - power.home_consumption_power - power.battery_charge_power
-        # #576 Phase 2 — above the reserve zone the EV, like the surplus loads,
-        # may reclaim power that would otherwise charge the battery, so a
-        # connected car outranks battery charging (spec U2 / Guido's live case).
-        # The loads run first this cycle; net against what they already
-        # committed so the two paths can't double-spend the same reclaimed
-        # watts. Below the zone / toggle off → reclaim is 0 (byte-identical to
-        # today), and the min-current gate already blocks the car below the
-        # zone regardless.
-        _ev_batt_decisions = getattr(self, "_last_battery_decisions", None) or {}
-        _ev_battery_commanded = any(
-            d.get("intent") == "force_charge" for d in _ev_batt_decisions.values()
-        )
-        _ev_reclaim_w = reclaimable_battery_w(
-            battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
-            soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
-            priority_soc=float(self.config.get("battery_priority_soc", 30)),
-            enabled=bool(self.config.get("load_priority_above_battery", False)),
-            battery_commanded=_ev_battery_commanded,
-        )
-        _ev_reclaim_w = max(0.0, _ev_reclaim_w - getattr(self, "_loads_reclaimed_w", 0.0))
-        excess_solar += _ev_reclaim_w
 
         # Build the FleetCycleState — the single source of truth for
         # fleet inputs this cycle. Both the primary view (built below)
