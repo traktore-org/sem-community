@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.1] — 11.07.2026
+
+> **Pre-release.** Enphase IQ Battery temperature now auto-detected.
+
+### 🔋 Battery temperature detected on Enphase IQ Batteries (#583)
+- 🐛 SEM showed no battery temperature on Enphase installs. The `enphase_envoy`
+  integration exposes each IQ Battery (e.g. IQ 5P) as a child "Encharge
+  {serial}" device whose cell-temperature sensor is
+  `encharge_<serial>_temperature` — a name with no `battery`/`cell`/`bms` token,
+  so every auto-detect pattern missed it. Added an `encharge` temperature
+  pattern (and guarded the inverter-temp fallback so it can never mis-claim an
+  Encharge temp), so the battery temperature is now discovered automatically.
+  (reported by @nicoziptous)
+
 # [1.7.4] — 11.07.2026
 
 > **Stable release.** Consolidates the 1.7.4 beta line (beta.1 → beta.35, detailed
