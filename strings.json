@@ -120,8 +120,7 @@
           "daily_ev_target_max": "Solar charge limit (kWh)",
           "ev_target_soc_max": "Solar charge limit (SOC %)",
           "vehicle_range_entity": "Vehicle range sensor",
-          "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)",
-          "ev_monitor_only": "Observation mode (read + trace only, never command)"
+          "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",

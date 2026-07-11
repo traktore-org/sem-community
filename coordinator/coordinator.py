@@ -1106,19 +1106,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         )
 
         observed = round(float(getattr(power, "ev_power", 0.0) or 0.0))
-        # Observation mode: SEM decided but did NOT command → there is no
-        # command to match against, so match is N/A (never a false mismatch).
-        # Check the global flag AND every EV device (multi-charger: _ev_device
-        # is rotated to the last charger, so iterate the fleet) — H2.
-        monitor = bool(self.config.get("ev_monitor_only", False))
-        if not monitor:
-            _devs = list(getattr(self, "_ev_devices", {}).values()) or [
-                getattr(self, "_ev_device", None)
-            ]
-            monitor = any(getattr(d, "monitor_only", False) for d in _devs if d)
-        if monitor:
+        # Observer mode (global): SEM decided but does NOT command anything, so
+        # there is no command to match against → match is N/A (never a false
+        # mismatch). Uses the existing ``observer_mode`` flag.
+        if getattr(self, "_observer_mode", False):
             st.integration = LayerRecord(
-                LayerStatus.OK, "observation mode — not commanding",
+                LayerStatus.OK, "observer mode — not commanding",
                 {"observed_w": observed, "commanded_amps": amps, "match": None},
             )
             return
@@ -4393,8 +4386,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._surplus_controller.register_device(ev_device)
         self._ev_device = ev_device
         ev_device.managed_externally = True
-        # Observation mode (2026-07-11): read + trace only, never command.
-        ev_device.monitor_only = bool(self.config.get("ev_monitor_only", False))
         self._ev_retry_count = 999  # Stop retrying
 
         # Update sensor reader with discovered entities

@@ -917,15 +917,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
-                # Observation mode (1.7.5): SEM reads + traces this charger but
-                # issues ZERO commands. Recognising it here makes it persist
-                # across option edits (otherwise the flow rebuilds options and
-                # drops the key). Lets a second/test instance safely share a
-                # physical charger, and is a general watch-without-control mode.
-                vol.Optional(
-                    "ev_monitor_only",
-                    default=_c("ev_monitor_only", False),
-                ): selector.BooleanSelector(),
             }),
             errors=errors
         )

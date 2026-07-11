@@ -30,13 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cycles of the chain plus the current health/mismatch. Read-only, in-memory,
   and **never written to the recorder** (respects the beta.33 recorder fix).
   It cannot affect any control decision.
-
-### 👁️ Observation mode for chargers
-- ✨ A charger can now be set to **observation mode** (`ev_monitor_only`, or
-  per-charger `monitor_only`): SEM **reads and traces** it but issues **zero
-  hardware commands**. Useful to watch a charger without controlling it — and
-  it lets a second/test SEM instance safely share a physical charger without
-  ever commanding it.
+- 🔧 In the existing **Test/Observer mode** (Configuration → Advanced), the trace
+  now shows each charger's integration layer as "observer mode — not commanding"
+  so a read-only test instance never produces a false layer-mismatch.
 
 # [1.7.4-beta.35] — 10.07.2026
 
