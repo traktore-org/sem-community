@@ -17,7 +17,6 @@ from .const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_PRIORITY_SOC,
-    DEFAULT_LOAD_PRIORITY_ABOVE_BATTERY,
     DEFAULT_BATTERY_BUFFER_SOC,
     DEFAULT_BATTERY_AUTO_START_SOC,
     DEFAULT_MIN_SOLAR_POWER,
@@ -1400,12 +1399,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=5, max=60, step=5, unit_of_measurement="%", mode="slider")
                 ),
-                # #576 — above the reserve zone, let surplus loads & the EV
-                # consume power that would otherwise charge the battery.
-                vol.Optional(
-                    "load_priority_above_battery",
-                    default=_c("load_priority_above_battery", DEFAULT_LOAD_PRIORITY_ABOVE_BATTERY),
-                ): selector.BooleanSelector(),
                 vol.Optional(
                     "battery_buffer_soc",
                     default=_c("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),

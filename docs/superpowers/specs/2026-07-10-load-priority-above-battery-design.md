@@ -69,6 +69,13 @@ Each is a test case. EV min ≈ 5.5 kW assumed (KEBA 3φ, 8 A); reserve zone
 
 ## 4. Config surface (minimal — reuse, don't invent)
 
+> **Build decision (2026-07-11, maintainer):** the opt-in toggle below was
+> **dropped** — "in no concept was a toggle; it is only the priority from the
+> devices." The feature is now always active, gated solely by the existing
+> **`battery_priority_soc`** reserve floor (below it → battery first; at/above →
+> loads first) plus the commanded-charge guard. The battery is simply the sink
+> at the bottom of the device-priority walk. No new config key.
+
 - **Reserve floor:** reuse existing **`battery_priority_soc`** (default 30). No new SOC knob.
 - **Opt-in:** one new toggle, default **OFF** (same cautious pattern as arbitrage) —
   e.g. `load_priority_above_battery` ("Loads & EV charge before battery, above the

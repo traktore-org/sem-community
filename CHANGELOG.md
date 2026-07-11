@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.2] — 11.07.2026
+
+> Loads charge before the battery — device priority now outranks battery charging.
+
+### 🔋 Loads charge before the battery (#576)
+- ✨ **Surplus loads now outrank home-battery charging above the reserve zone.**
+  On a self-consumption inverter, battery charging silently absorbed solar before
+  your discretionary loads could — so a pool pump or heater always lost to the
+  battery. Now, above the reserve zone (`Battery priority SOC`, default 30 %), the
+  power that would charge the battery is added to the surplus pool and shared
+  across your surplus devices in their own priority order; the battery is the
+  **sink** and absorbs the residual (the inverter self-consumes it — nothing is
+  force-commanded on the battery). Below the reserve zone the battery still fills
+  first, protecting the evening reserve. **No toggle** — this is simply how device
+  priority relates to the battery, gated by the existing reserve-SOC slider.
+  Force-charge / scheduled / arbitrage battery charges are honored (never
+  reclaimed). Docs: `docs/LOAD_PRIORITY.md`. (reported by @alexmc1510 in #576)
+- ℹ️ Covers **generic surplus loads**; extending the same reserve-zone priority to
+  EV charging is a separate follow-up (the EV already reclaims battery charge
+  above `auto_start_soc` via a forecast-scaled redirect).
+
 # [1.7.5-beta.1] — 11.07.2026
 
 > **Pre-release.** SEM can now explain itself — a layered trace for fast debugging.
@@ -86,7 +107,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the inverter slot, #564), climate-device surplus type (#569), restored
   Forecast-vs-Actual chart series (#575), dimmed rated power when a load is off
   (#577), Home header hero + quick-controls (#572), and a UI pattern guide (#565).
->>>>>>> feature/576-load-priority
 
 # [1.7.4-beta.35] — 10.07.2026
 

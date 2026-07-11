@@ -3168,9 +3168,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # spare solar instead of competing for the EV's allocation.
             # #576 — above the reserve zone, offer the loads the power that
             # would otherwise charge the battery (the inverter self-consumes
-            # the residual). Battery control already ran this cycle (Step
-            # 7.5c+d, above), so ``_last_battery_decisions`` reflects THIS
-            # cycle: an explicit/scheduled FORCE_CHARGE (or FORCE_DISCHARGE
+            # the residual), so the surplus loads — walked by their own
+            # priority — outrank battery charging and the battery is the sink.
+            # Gated only by the reserve floor (``battery_priority_soc``): below
+            # it the battery still fills first. Battery control already ran this
+            # cycle (Step 7.5c+d, above), so ``_last_battery_decisions`` reflects
+            # THIS cycle: an explicit/scheduled FORCE_CHARGE (or FORCE_DISCHARGE
             # arbitrage) is honored — no reclaim.
             _batt_decisions = getattr(self, "_last_battery_decisions", None) or {}
             battery_commanded = any(
@@ -3181,7 +3184,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
                 soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
                 priority_soc=float(self.config.get("battery_priority_soc", 30)),
-                enabled=bool(self.config.get("load_priority_above_battery", False)),
                 battery_commanded=battery_commanded,
             )
             true_surplus_w = (
