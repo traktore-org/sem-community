@@ -19,16 +19,24 @@ simply charges from the leftover solar (nothing is force-commanded on it).
 Below the reserve zone the battery still fills first, so your evening reserve is
 protected.
 
-## The only control is the reserve floor
+## Set the order by dragging the battery
 
-There is **no separate toggle**. The single control is the existing
-**`Battery priority SOC`** slider (Settings → SEM → Configure → battery step):
+The **home battery appears as a device in the Control-tab priority list** (the
+"Drag to reorder" card), right alongside the EV charger and your loads. Its
+position is the control:
 
-- **Below** it → the battery has priority; loads see export-leftover only.
-- **At/above** it → loads charge before the battery.
+- Loads **above** the battery **reclaim** its charge power (they charge first).
+- Loads **below** the battery **yield** — the battery charges first.
 
-Raise the slider to keep more battery headroom before loads start reclaiming;
-lower it to let loads reclaim sooner.
+Drag the battery up to protect it (fewer loads outrank it); drag it down to let
+more loads charge before it. By default it sits at the **bottom**, so every
+surplus load outranks it until you move it. The battery row shows its SOC and
+current charge power; it has no on/off or mode selector — its only control is
+where you put it.
+
+The **`Battery priority SOC`** slider (Settings → SEM → Configure → battery step)
+is still an **absolute floor**: below it the battery jumps to the top and charges
+first no matter where you dragged it, protecting your evening reserve.
 
 ## How the priority walk works
 

@@ -15,21 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Loads charge before the battery — device priority now outranks battery charging.
 
-### 🔋 Loads charge before the battery (#576)
-- ✨ **Surplus loads now outrank home-battery charging above the reserve zone.**
-  On a self-consumption inverter, battery charging silently absorbed solar before
-  your discretionary loads could — so a pool pump or heater always lost to the
-  battery. Now, above the reserve zone (`Battery priority SOC`, default 30 %), the
-  power that would charge the battery is added to the surplus pool and shared
-  across your surplus devices in their own priority order; the battery is the
-  **sink** and absorbs the residual (the inverter self-consumes it — nothing is
-  force-commanded on the battery). Below the reserve zone the battery still fills
-  first, protecting the evening reserve. **No toggle** — this is simply how device
-  priority relates to the battery, gated by the existing reserve-SOC slider.
-  Force-charge / scheduled / arbitrage battery charges are honored (never
-  reclaimed). Docs: `docs/LOAD_PRIORITY.md`. (reported by @alexmc1510 in #576)
-- ℹ️ Covers **generic surplus loads**; extending the same reserve-zone priority to
-  EV charging is a separate follow-up (the EV already reclaims battery charge
+### 🔋 The battery is now a device in the priority list (#576)
+- ✨ **Drag the home battery to set where surplus goes.** The battery appears as a
+  device in the Control-tab "Drag to reorder" list, alongside the EV charger and
+  your loads. Loads **above** it reclaim the power that would charge the battery
+  (they charge first); loads **below** it yield and the battery charges first. On
+  a self-consumption inverter this is the Victron-style "loads before battery"
+  order you set yourself — the battery is a passive **sink** (no on/off, no mode,
+  just a position), and the inverter self-consumes whatever the loads don't take
+  (nothing is force-commanded on it). Defaults to the bottom, so out of the box
+  every surplus load outranks it until you drag it up. Device modes are still
+  respected (an `off`/`peak_only` load never participates regardless of position).
+  Docs: `docs/LOAD_PRIORITY.md`. (reported by @alexmc1510 in #576)
+- ✨ The **`Battery priority SOC`** slider stays an absolute floor: below it the
+  battery charges first no matter where it's dragged, protecting the evening
+  reserve. Force-charge / scheduled / arbitrage charges are honored (never
+  reclaimed). Only shown on installs that actually have a battery.
+- ℹ️ Covers **generic surplus loads**; extending the same position-based priority
+  to EV charging is a separate follow-up (the EV already reclaims battery charge
   above `auto_start_soc` via a forecast-scaled redirect).
 
 # [1.7.5-beta.1] — 11.07.2026
