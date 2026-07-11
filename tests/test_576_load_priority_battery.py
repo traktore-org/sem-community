@@ -57,3 +57,12 @@ class TestReclaimableBatteryW:
         assert reclaimable_battery_w(
             battery_charge_power=1000, soc=30, priority_soc=30,
             enabled=True, battery_commanded=False) == 1000.0
+
+
+@pytest.mark.unit
+class TestConfigKey:
+    def test_config_default_is_off(self):
+        from custom_components.solar_energy_management.const import (
+            DEFAULT_LOAD_PRIORITY_ABOVE_BATTERY,
+        )
+        assert DEFAULT_LOAD_PRIORITY_ABOVE_BATTERY is False
