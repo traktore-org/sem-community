@@ -4075,8 +4075,9 @@ async def _async_register_phase_services(
             # debug. Read-only, best-effort, never raises.
             try:
                 payload["trace"] = {
-                    "recent": coordinator.trace_recent(30),
+                    "health": coordinator.trace_health(),
                     "mismatch": coordinator.trace_latest_mismatch(),
+                    "recent": coordinator.trace_recent(30),
                 }
             except Exception as exc:  # noqa: BLE001
                 payload["trace"] = {"error": str(exc)}

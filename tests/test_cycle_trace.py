@@ -121,3 +121,40 @@ class TestCollector:
             LayerStatus.OK, "drawing", {"match": True})
         c.commit()
         assert c.latest_mismatch() is None
+
+
+@pytest.mark.unit
+class TestHealthDebounce:
+    def _flap_cycle(self, c):
+        t = c.begin()
+        st = t.subsystem("ev")
+        st.process = LayerRecord(LayerStatus.OK, "charge 16A")
+        st.integration = LayerRecord(LayerStatus.DEGRADED, "0W", {"match": False})
+        c.commit()
+
+    def _healthy_cycle(self, c):
+        t = c.begin()
+        st = t.subsystem("ev")
+        st.process = LayerRecord(LayerStatus.OK, "charge 16A")
+        st.integration = LayerRecord(LayerStatus.OK, "drawing", {"match": True})
+        c.commit()
+
+    def test_single_cycle_mismatch_does_not_alarm(self):
+        c = TraceCollector()
+        self._flap_cycle(c)
+        assert c.health(threshold=3)["ok"] is True   # 1 < 3
+
+    def test_persistent_mismatch_alarms(self):
+        c = TraceCollector()
+        for _ in range(3):
+            self._flap_cycle(c)
+        h = c.health(threshold=3)
+        assert h["ok"] is False and h["subsystem"] == "ev" and h["cycles"] == 3
+
+    def test_recovery_clears_the_streak(self):
+        c = TraceCollector()
+        for _ in range(4):
+            self._flap_cycle(c)
+        assert c.health()["ok"] is False
+        self._healthy_cycle(c)                        # one good cycle
+        assert c.health()["ok"] is True               # streak reset

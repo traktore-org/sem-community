@@ -1135,6 +1135,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """Most recent layer-boundary fault, if any (health signal)."""
         return self._trace.latest_mismatch()
 
+    def trace_health(self):
+        """Debounced health: is a layer-boundary mismatch persistent?"""
+        return self._trace.health()
+
     def _zero_charger_setpoints(self) -> None:
         """Observer mode: command nothing — zero every charger's setpoint.
 

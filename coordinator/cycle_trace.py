@@ -116,6 +116,9 @@ class TraceCollector:
         self._buf: Deque[CycleTrace] = deque(maxlen=maxlen)
         self._seq: int = 0
         self._current: Optional[CycleTrace] = None
+        # subsystem → consecutive cycles with a layer-boundary mismatch.
+        # Debounces the health signal so a single-cycle blip doesn't alarm.
+        self._streak: Dict[str, int] = {}
 
     def begin(self, wall_iso: str = "") -> CycleTrace:
         """Open a fresh trace for this cycle. Returns it for capture writes."""
@@ -128,10 +131,40 @@ class TraceCollector:
         return self._current
 
     def commit(self) -> None:
-        """Push the in-progress trace into the ring buffer."""
-        if self._current is not None:
-            self._buf.append(self._current)
-            self._current = None
+        """Push the in-progress trace into the ring buffer + update the
+        per-subsystem mismatch streaks (the debounce behind ``health()``)."""
+        if self._current is None:
+            return
+        mismatched = {
+            k for k, st in self._current.subsystems.items() if st.has_mismatch
+        }
+        # reset streaks that recovered this cycle; increment the ones still bad
+        for k in list(self._streak):
+            if k not in mismatched:
+                del self._streak[k]
+        for k in mismatched:
+            self._streak[k] = self._streak.get(k, 0) + 1
+        self._buf.append(self._current)
+        self._current = None
+
+    def health(self, threshold: int = 3) -> Dict[str, Any]:
+        """Health summary: is a layer-boundary mismatch PERSISTENT?
+
+        ``ok`` unless some subsystem has mismatched for ≥ ``threshold``
+        consecutive cycles (a one-cycle blip never alarms). This is what the
+        ``binary_sensor.sem_layer_mismatch`` / ``diagnose`` health surface
+        read — it would have flagged the 2026-07-10 flap within ~3 cycles.
+        """
+        persistent = {k: v for k, v in self._streak.items() if v >= threshold}
+        if not persistent:
+            return {"ok": True, "subsystem": None, "cycles": 0}
+        worst = max(persistent, key=persistent.get)
+        return {
+            "ok": False,
+            "subsystem": worst,
+            "cycles": persistent[worst],
+            "mismatch": self.latest_mismatch(),
+        }
 
     def recent(self, n: Optional[int] = None) -> List[Dict[str, Any]]:
         """Serialised last ``n`` cycles (all if ``n`` is None) for diagnose."""
