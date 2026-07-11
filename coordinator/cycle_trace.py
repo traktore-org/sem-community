@@ -157,7 +157,7 @@ class TraceCollector:
         """
         persistent = {k: v for k, v in self._streak.items() if v >= threshold}
         if not persistent:
-            return {"ok": True, "subsystem": None, "cycles": 0}
+            return {"ok": True, "subsystem": None, "cycles": 0, "mismatch": None}
         worst = max(persistent, key=persistent.get)
         return {
             "ok": False,

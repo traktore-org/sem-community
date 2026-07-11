@@ -1071,13 +1071,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     # wrapped in try/except: observability must never break control.
 
     def _collect_trace(self, sem_data, power, charging_context) -> None:
+        # ``charging_context`` reserved for a future management-layer capture.
         try:
-            trace = self._trace.begin(wall_iso=dt_util.now().isoformat())
+            self._trace.begin(wall_iso=dt_util.now().isoformat())
+            trace = self._trace.current()
             self._trace_ev(trace, sem_data, power)
             self._trace_battery(trace, sem_data, power)
-            self._trace.commit()
         except Exception as e:  # pragma: no cover - defensive
             _LOGGER.debug("trace capture failed (non-fatal): %s", e)
+        finally:
+            # commit even if a capture raised — the partial trace + its
+            # mismatch streak still count (H1). commit() no-ops if no begin.
+            self._trace.commit()
 
     def _trace_ev(self, trace, sem_data, power) -> None:
         st = trace.subsystem("ev")
@@ -1103,9 +1108,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         observed = round(float(getattr(power, "ev_power", 0.0) or 0.0))
         # Observation mode: SEM decided but did NOT command → there is no
         # command to match against, so match is N/A (never a false mismatch).
-        monitor = bool(self.config.get("ev_monitor_only", False)) or bool(
-            getattr(getattr(self, "_ev_device", None), "monitor_only", False)
-        )
+        # Check the global flag AND every EV device (multi-charger: _ev_device
+        # is rotated to the last charger, so iterate the fleet) — H2.
+        monitor = bool(self.config.get("ev_monitor_only", False))
+        if not monitor:
+            _devs = list(getattr(self, "_ev_devices", {}).values()) or [
+                getattr(self, "_ev_device", None)
+            ]
+            monitor = any(getattr(d, "monitor_only", False) for d in _devs if d)
         if monitor:
             st.integration = LayerRecord(
                 LayerStatus.OK, "observation mode — not commanding",
@@ -1117,7 +1127,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # aren't commanding or the car is disconnected.
         match = None
         if amps > 0 and connected:
-            commanded_w = amps * 3 * 230  # nominal 3φ; only a drawing/not test
+            # real phases/voltage (M2 — a 1φ charger's nominal is far lower;
+            # a hardcoded 3φ threshold false-mismatches every 1-phase install).
+            phases = int(self.config.get("ev_phases", 3) or 3)
+            voltage = int(self.config.get("ev_voltage", 230) or 230)
+            commanded_w = amps * phases * voltage
             match = observed > commanded_w * 0.3
         i_status = LayerStatus.OK if match in (None, True) else LayerStatus.DEGRADED
         st.integration = LayerRecord(
