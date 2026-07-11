@@ -27,6 +27,13 @@ DEFAULT_BATTERY_SAFETY_SOC: Final = 60  # % - Safety threshold for discharge cal
 DEFAULT_BATTERY_BUFFER_SOC: Final = 70  # % - Above: battery can discharge to help the EV (Zone 3 begins)
 DEFAULT_BATTERY_AUTO_START_SOC: Final = 90  # % - Above: EV starts even without solar surplus (Zone 4)
 
+# #576 — Loads & EV charge before the battery (Victron-style priority).
+# Opt-in, default OFF (byte-identical to today when off). When on AND SOC is
+# at/above DEFAULT_BATTERY_PRIORITY_SOC, power that would otherwise charge the
+# battery is offered to higher-priority surplus loads / the EV instead. Below
+# the reserve zone the battery still fills first.
+DEFAULT_LOAD_PRIORITY_ABOVE_BATTERY: Final = False
+
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
 DEFAULT_BATTERY_MAX_DISCHARGE_POWER: Final = 5000  # Watts - Maximum allowed discharge (caps 1:1 home consumption matching)

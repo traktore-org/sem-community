@@ -329,7 +329,19 @@ git commit -m "test(#576): U3-U6 load scenarios (reserve floor, discrete thresho
 
 ---
 
-## PHASE 2 — EV (careful, NOT a merge)
+## PHASE 2 — EV (DEFERRED — re-spec needed)
+
+> **2026-07-11:** Tasks 5–7 below assumed `excess_solar` (coordinator ~4601)
+> drives the EV budget. It does **not** — it only feeds a debug log (ruflo
+> review B1). The real EV surplus is `decide.py:self_consumption_surplus_w`,
+> which already reclaims battery charge above `auto_start_soc` and adds
+> `flow_calculator.battery_redirect_w` in `solar_only`. Phase 2 must instead
+> **raise that existing redirect to full above `battery_priority_soc` when the
+> toggle is on** (not add a second reclaim — that double-counts). Tasks 5–7 as
+> written are void; Phase 2 needs its own design pass. **Phase 1 (Tasks 1–4,
+> 9–10) shipped standalone.**
+
+## PHASE 2 — EV (careful, NOT a merge) — ORIGINAL PLAN (void, see note above)
 
 ### Task 5: Determine cycle ordering + net the reclaimable
 

@@ -56,6 +56,7 @@ from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import SurplusController
 from .cycle_trace import TraceCollector, LayerRecord, LayerStatus
+from .energy_reclaim import reclaimable_battery_w
 from .forecast_reader import ForecastReader
 from .forecast_tracker import ForecastTracker
 from .ev_control import EVControlMixin
@@ -3165,9 +3166,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # device it turned on doesn't shrink the surplus it reads next
             # cycle and oscillate). Heat pump / hot water now boost on real
             # spare solar instead of competing for the EV's allocation.
+            # #576 — above the reserve zone, offer the loads the power that
+            # would otherwise charge the battery (the inverter self-consumes
+            # the residual). Battery control already ran this cycle (Step
+            # 7.5c+d, above), so ``_last_battery_decisions`` reflects THIS
+            # cycle: an explicit/scheduled FORCE_CHARGE (or FORCE_DISCHARGE
+            # arbitrage) is honored — no reclaim.
+            _batt_decisions = getattr(self, "_last_battery_decisions", None) or {}
+            battery_commanded = any(
+                d.get("intent") in ("force_charge", "force_discharge")
+                for d in _batt_decisions.values()
+            )
+            reclaim_w = reclaimable_battery_w(
+                battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
+                soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+                priority_soc=float(self.config.get("battery_priority_soc", 30)),
+                enabled=bool(self.config.get("load_priority_above_battery", False)),
+                battery_commanded=battery_commanded,
+            )
             true_surplus_w = (
                 float(getattr(power, "grid_export_power", 0.0) or 0.0)
                 + self._surplus_controller.active_surplus_draw_w()
+                + reclaim_w
             )
             # #508 W2 — hand the load-manager's peak posture to the surplus
             # controller so it stops adding discretionary load (and backs
