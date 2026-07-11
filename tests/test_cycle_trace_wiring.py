@@ -31,6 +31,8 @@ class _Stub:
     def __init__(self):
         self._trace = TraceCollector(maxlen=10)
         self.time_manager = SimpleNamespace(is_night_mode=lambda: False)
+        self.config = {}                 # not monitor-only
+        self._ev_device = None
 
 
 def _power(*, ev_power, ev_connected=True, battery_soc=100.0,
@@ -105,6 +107,19 @@ class TestTraceWiring:
         bat = s.trace_recent(1)[0]["subsystems"]["battery"]
         assert bat["process"]["detail"] == "charging"
         assert bat["integration"]["data"]["charge_w"] == 2400
+
+    def test_observation_mode_is_not_a_mismatch(self):
+        # monitor-only: commanded 16A on paper, observed 0W — but we never
+        # actually commanded, so it must NOT count as a layer-boundary fault.
+        s = _Stub()
+        s.config = {"ev_monitor_only": True}
+        sem = _semdata(calculated_current=16, reason="min_plus_solar → 16A",
+                       available_power=11000)
+        s._collect_trace(sem, _power(ev_power=0.0), None)
+        ev = s.trace_recent(1)[0]["subsystems"]["ev"]
+        assert ev["integration"]["data"]["match"] is None
+        assert "observation mode" in ev["integration"]["detail"]
+        assert s.trace_latest_mismatch() is None
 
     def test_capture_never_raises_on_missing_fields(self):
         # observability must never break the cycle — a malformed sem_data

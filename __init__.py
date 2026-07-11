@@ -1599,6 +1599,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             coordinator._surplus_controller.register_device(ev_device)
             coordinator._ev_devices[charger_id] = ev_device
             ev_device.managed_externally = True
+            # Observation mode (2026-07-11): read + trace only, never command.
+            # Per-charger ``monitor_only`` or the global ``ev_monitor_only``.
+            ev_device.monitor_only = bool(_cfg("ev_monitor_only", False))
             _LOGGER.info(
                 "EV charger '%s' registered as CurrentControlDevice "
                 "(priority %d, max %dA, service: %s)",

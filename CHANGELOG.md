@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and **never written to the recorder** (respects the beta.33 recorder fix).
   It cannot affect any control decision.
 
+### 👁️ Observation mode for chargers
+- ✨ A charger can now be set to **observation mode** (`ev_monitor_only`, or
+  per-charger `monitor_only`): SEM **reads and traces** it but issues **zero
+  hardware commands**. Useful to watch a charger without controlling it — and
+  it lets a second/test SEM instance safely share a physical charger without
+  ever commanding it.
+
 # [1.7.4-beta.35] — 10.07.2026
 
 > **Pre-release.** Rock-steady EV charging on UDP-polled chargers (KEBA).

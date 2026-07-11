@@ -1101,6 +1101,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         )
 
         observed = round(float(getattr(power, "ev_power", 0.0) or 0.0))
+        # Observation mode: SEM decided but did NOT command → there is no
+        # command to match against, so match is N/A (never a false mismatch).
+        monitor = bool(self.config.get("ev_monitor_only", False)) or bool(
+            getattr(getattr(self, "_ev_device", None), "monitor_only", False)
+        )
+        if monitor:
+            st.integration = LayerRecord(
+                LayerStatus.OK, "observation mode — not commanding",
+                {"observed_w": observed, "commanded_amps": amps, "match": None},
+            )
+            return
         # match: we commanded a charge AND the car is plugged, but is it
         # actually drawing? (the flap linchpin). Unknowable (None) when we
         # aren't commanding or the car is disconnected.
@@ -4368,6 +4379,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._surplus_controller.register_device(ev_device)
         self._ev_device = ev_device
         ev_device.managed_externally = True
+        # Observation mode (2026-07-11): read + trace only, never command.
+        ev_device.monitor_only = bool(self.config.get("ev_monitor_only", False))
         self._ev_retry_count = 999  # Stop retrying
 
         # Update sensor reader with discovered entities

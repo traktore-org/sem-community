@@ -44,4 +44,10 @@ async def actuate(
         reconciler: The per-charger :class:`ChargerReconciler` that
             owns the full convergence decision.
     """
+    # Observation mode (2026-07-11): SEM reads + traces this charger but
+    # issues ZERO hardware commands. ``decide`` has already run (the process
+    # trace is intact); we simply skip actuation. Isolates a shared charger
+    # (a test instance) and is a general "watch without controlling" mode.
+    if getattr(adapter, "monitor_only", False) is True:
+        return
     await reconciler.reconcile_and_apply(decision, adapter, power, time.monotonic())

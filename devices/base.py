@@ -190,6 +190,11 @@ class ControllableDevice(ABC):
         # automation) changed the physical state, so SEM stops fighting a manual
         # on/off and stops crediting runtime to a load it isn't actually driving.
         self._sem_owned: bool = False
+        # Monitor-only (2026-07-11): SEM reads + traces this device but issues
+        # ZERO hardware commands to it. Used to isolate a shared charger (a
+        # test instance that must never touch real hardware) and as a general
+        # "watch this device without controlling it" mode. Set from config.
+        self.monitor_only: bool = False
         # Monotonic anchor for the "belief says on but the entity reads off"
         # drift grace window (a transient unavailable/poll gap must not flip us).
         self._observed_off_since: Optional[float] = None

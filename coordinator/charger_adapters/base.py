@@ -64,6 +64,15 @@ class ChargerAdapter(ABC):
         """1 or 3. Used for W ↔ A conversion."""
 
     @property
+    def monitor_only(self) -> bool:
+        """When True the actuator issues NO hardware commands to this
+        charger — SEM observes + traces it only. Used to isolate a shared
+        charger (a test instance that must never touch real hardware) and as
+        a general 'watch without controlling' mode. Reads the wrapped device's
+        ``monitor_only`` flag (2026-07-11)."""
+        return bool(getattr(getattr(self, "_device", None), "monitor_only", False))
+
+    @property
     @abstractmethod
     def voltage(self) -> int:
         """Per-phase voltage. EU = 230, US = 120."""
