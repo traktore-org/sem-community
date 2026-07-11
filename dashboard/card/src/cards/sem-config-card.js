@@ -90,6 +90,15 @@ const SECTIONS = [
         subtitleFn: (c) => c._forecastSubtitle(),
     },
     {
+        // (#566) rename PV strings inline — only rendered when ≥2 strings are
+        // detected (see the visibility filter in render()).
+        id: 'pv_strings',
+        icon: 'mdi:solar-panel',
+        color: '#ff9800',
+        titleKey: 'config_section_pv_strings',
+        subtitleFn: (c) => c._pvStringsSubtitle(),
+    },
+    {
         id: 'notifications',
         icon: 'mdi:bell-outline',
         color: '#96CAEE',
@@ -131,6 +140,22 @@ const WATCHED = [
     'sensor.sem_diag_grid_sign',
 ];
 
+// #528 — entity-wiring keys that trigger an entry RELOAD when changed (mirror
+// of __init__.py:_SET_OPTION_STRUCTURAL_KEYS). Pickers for these stage their
+// edit and commit on one Apply, so the reload fires once for the whole batch.
+const STRUCTURAL_KEYS = new Set([
+    'battery_soc_sensor',
+    'heat_pump_relay1_entity', 'heat_pump_relay2_entity',
+    'heat_pump_climate_entity', 'heat_pump_power_sensor',
+    'heat_pump_temperature_sensor', 'heat_pump_invert_sg_ready',
+    'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
+    'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
+    'battery_discharge_control_entity',  // #528 — discharge-limit (protection) entity
+    // #550 — structural TOGGLES: reload the entry too, so they stage + commit on
+    // Apply like the pickers (a live flip would reload and discard staged edits).
+    'battery_discharge_protection_enabled', 'battery_setpoint_bidirectional',
+]);
+
 class SEMConfigCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
 
@@ -143,6 +168,14 @@ class SEMConfigCard extends SEMLitBase {
             // #461 grid-sign fix button transient UI state.
             _signBusy: { state: true },
             _signMsg: { state: true },
+            // #528 staged structural (entity-wiring) edits — committed in one
+            // Apply so a reload fires once for the whole batch, not per field.
+            _pending: { state: true },
+            _applying: { state: true },
+            // #528 Phase 4 — per-charger remove confirm (inline, no blocking
+            // window.confirm) + add/remove busy flag.
+            _pendingRemove: { state: true },
+            _chargerBusy: { state: true },
         };
     }
 
@@ -153,8 +186,9 @@ class SEMConfigCard extends SEMLitBase {
         this._collapsed = {
             overview: false,
             ev_chargers: true, battery_zones: true, tariff: true,
-            heat_pump: true, battery_scheduler: true, load_management: true,
-            forecast: true, notifications: true, advanced: true,
+            heat_pump: true, hot_water: true, battery_scheduler: true,
+            load_management: true, forecast: true, pv_strings: true,
+            notifications: true, advanced: true,
         };
         this._showHelp = false;
         this._entryId = '';
@@ -162,6 +196,10 @@ class SEMConfigCard extends SEMLitBase {
         this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
         this._signBusy = false;
         this._signMsg = '';
+        this._pending = {};   // { structuralKey: stagedValue }
+        this._applying = false;
+        this._pendingRemove = '';  // charger id awaiting remove-confirm
+        this._chargerBusy = false;
     }
 
     disconnectedCallback() {
@@ -347,6 +385,25 @@ class SEMConfigCard extends SEMLitBase {
     async _selectOption(entityId, value) {
         await this._hass.callService('select', 'select_option', { entity_id: entityId, option: value });
     }
+    // Direct-set a number entity to an exact value (slider drag), clamped to
+    // the entity's own min/max. Live tunable — no entry reload.
+    async _setNumber(entityId, value) {
+        const s = this._hass?.states[entityId];
+        if (!s) return;
+        const min = parseFloat(s.attributes.min);
+        const max = parseFloat(s.attributes.max);
+        let v = value;
+        if (!Number.isNaN(min)) v = Math.max(min, v);
+        if (!Number.isNaN(max)) v = Math.min(max, v);
+        await this._hass.callService('number', 'set_value', { entity_id: entityId, value: v });
+    }
+    // Read a full entity_id as a number (no prefix), fallback when unavailable.
+    _num(id, fb = null) {
+        const e = this._hass?.states[id];
+        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fb;
+        const n = parseFloat(e.state);
+        return Number.isNaN(n) ? fb : n;
+    }
 
     // ── Subtitles ──
 
@@ -423,27 +480,12 @@ class SEMConfigCard extends SEMLitBase {
 
     // ── Reusable inline primitives ──
 
+    // #528: every number setting now uses the colorful accent-slider knob
+    // (battery design language) instead of the flat −/+ row. ``_renderStepper``
+    // delegates to ``_renderZoneKnob`` so all sections (tariff, heat pump,
+    // hot water, advanced, per-charger) restyle uniformly with one change.
     _renderStepper(entityId, labelKey, T, helpKey) {
-        const entity = this._hass?.states[entityId];
-        if (!entity) return nothing;
-        const val = parseFloat(entity.state) || 0;
-        const step = parseFloat(entity.attributes.step) || 1;
-        const unit = entity.attributes.unit_of_measurement || '';
-        const decimals = step < 1 ? 1 : 0;
-        const displayVal = val.toFixed(decimals) + (unit ? ' ' + unit : '');
-        return html`
-            <div class="stepper-cell">
-                <div class="stepper-row">
-                    <span class="stepper-label">${this._t(labelKey)}</span>
-                    <div class="stepper-controls">
-                        <button class="stepper-minus" @click=${() => this._stepNumber(entityId, -1)}>−</button>
-                        <span class="stepper-value">${displayVal}</span>
-                        <button class="stepper-plus" @click=${() => this._stepNumber(entityId, 1)}>+</button>
-                    </div>
-                </div>
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
-            </div>
-        `;
+        return this._renderZoneKnob(entityId, labelKey, T, helpKey);
     }
 
     _renderToggle(entityId, labelKey, T, helpKey) {
@@ -493,27 +535,63 @@ class SEMConfigCard extends SEMLitBase {
 
     // ── Per-section content renderers ──
 
+    // #528 — first-run completeness guide. Lists the optional subsystems with
+    // their status; an unconfigured one is a clickable "Set up →" chip that
+    // expands its section. Core (Energy Dashboard) is guaranteed by the native
+    // flow so it's always ✓. Turns all-green and shows "All set up" when done.
+    _setupItems() {
+        const opts = this._options || {};
+        return [
+            { key: 'energy', labelKey: 'config_overview_energy_dashboard', icon: 'mdi:flash',
+              color: '#ff9800', sectionId: 'overview',
+              done: !!this._hass?.states['sensor.sem_charging_state'] },
+            { key: 'ev', labelKey: 'config_overview_chargers', icon: 'mdi:ev-station',
+              color: '#5BC8D8', sectionId: 'ev_chargers',
+              done: this._chargersList().length > 0 },
+            { key: 'hp', labelKey: 'heat_pump_title', icon: 'mdi:heat-pump',
+              color: '#4db6ac', sectionId: 'heat_pump',
+              done: this._bin('heat_pump_registered') },
+            { key: 'hw', labelKey: 'config_section_hot_water', icon: 'mdi:water-boiler',
+              color: '#5BC8D8', sectionId: 'hot_water',
+              done: !!opts.hot_water_entity },
+        ];
+    }
+
+    _openSection(id) {
+        this._collapsed = { ...this._collapsed, [id]: false };
+        this.requestUpdate();
+    }
+
     _renderOverview(T) {
-        const dashboardReady = !!this._hass?.states['sensor.sem_charging_state'];
-        const chargers = this._chargersList().length;
-        const heatpump = this._bin('heat_pump_registered');
+        const items = this._setupItems();
+        const done = items.filter(i => i.done).length;
+        const total = items.length;
+        const allDone = done === total;
+        const pct = total ? Math.round((done / total) * 100) : 100;
         return html`
+            <div class="setup-progress">
+                <div class="setup-progress-top">
+                    <span class="setup-progress-label">
+                        ${allDone
+                            ? this._t('config_setup_done')
+                            : this._t('config_setup_progress').replace(/\{done\}/g, String(done)).replace(/\{total\}/g, String(total))}
+                    </span>
+                    <span class="setup-progress-pct">${pct}%</span>
+                </div>
+                <div class="setup-progress-bar">
+                    <div class="setup-progress-fill ${allDone ? 'done' : ''}" style=${`width:${pct}%`}></div>
+                </div>
+            </div>
             <div class="chips">
-                <div class="chip">
-                    <ha-icon icon="mdi:flash" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
-                    <div class="chip-label">${this._t('config_overview_energy_dashboard')}</div>
-                    <div class="chip-value ${dashboardReady ? 'c-ok' : 'c-warn'}">${dashboardReady ? '✓' : '!'}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                    <div class="chip-label">${this._t('config_overview_chargers')}</div>
-                    <div class="chip-value" style="color:#5BC8D8">${chargers}</div>
-                </div>
-                <div class="chip">
-                    <ha-icon icon="mdi:heat-pump" style="--mdc-icon-size:16px;color:#4db6ac"></ha-icon>
-                    <div class="chip-label">${this._t('heat_pump_title')}</div>
-                    <div class="chip-value" style="color:#4db6ac">${heatpump ? this._t('configured') : this._t('not_configured')}</div>
-                </div>
+                ${items.map(i => html`
+                    <div class="chip ${i.done ? '' : 'chip-todo'}"
+                        @click=${i.done ? undefined : () => this._openSection(i.sectionId)}>
+                        <ha-icon icon="${i.icon}" style="--mdc-icon-size:16px;color:${i.color}"></ha-icon>
+                        <div class="chip-label">${this._t(i.labelKey)}</div>
+                        <div class="chip-value ${i.done ? 'c-ok' : 'c-warn'}">
+                            ${i.done ? '✓' : this._t('config_setup_action')}
+                        </div>
+                    </div>`)}
             </div>
             <div class="overview-help">${this._t('config_overview_help')}</div>
             <div class="overview-actions">
@@ -535,8 +613,10 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="empty-state">
                     <ha-icon icon="mdi:ev-station-outline" style="--mdc-icon-size:32px;color:#5BC8D8;opacity:0.7"></ha-icon>
                     <div class="empty-title">${this._t('config_ev_no_chargers')}</div>
-                    <div class="empty-help">${this._t('config_ev_add_via_settings')}</div>
-                    ${this._renderHaSettingsButton('config_ev_add_button')}
+                    <button class="add-charger-btn" ?disabled=${this._chargerBusy} @click=${() => this._addCharger()}>
+                        <ha-icon icon="mdi:plus" style="--mdc-icon-size:16px"></ha-icon>
+                        ${this._t('config_ev_add_charger')}
+                    </button>
                 </div>
             `;
         }
@@ -555,8 +635,18 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="charger-block">
                     <div class="charger-block-title">
                         <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:18px;color:#5BC8D8"></ha-icon>
-                        ${this._chargerFriendlyName(cid)}
+                        <span style="flex:1">${this._chargerFriendlyName(cid)}</span>
+                        ${this._pendingRemove === cid ? nothing : html`
+                            <button class="charger-remove-x" title="${this._t('config_ev_remove')}"
+                                ?disabled=${this._chargerBusy}
+                                @click=${() => { if (!this._chargerBusy) { this._pendingRemove = cid; this.requestUpdate(); } }}>✕</button>`}
                     </div>
+                    ${this._pendingRemove === cid ? html`
+                        <div class="charger-remove-confirm">
+                            <span>${this._t('config_ev_remove_confirm')}</span>
+                            <button class="charger-remove-cancel" @click=${() => { this._pendingRemove = ''; this.requestUpdate(); }}>${this._t('config_discard')}</button>
+                            <button class="charger-remove-go" @click=${() => this._removeCharger(cid)}>${this._t('config_ev_remove')}</button>
+                        </div>` : nothing}
                     ${this._renderPickerNested(idx, cid, 'ev_connected_sensor', 'config_ev_connected_sensor',
                         'binary_sensor', null, opts, 'config_help_ev_connected_sensor')}
                     ${this._renderPickerNested(idx, cid, 'ev_charging_power_sensor', 'config_ev_charging_power',
@@ -577,10 +667,29 @@ class SEMConfigCard extends SEMLitBase {
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_surplus_priority`, 'surplus_priority', T, 'tile_help_surplus_priority')}
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_shed_priority`, 'shed_priority', T, 'tile_help_shed_priority')}
                     </div>
+                    ${/* (config-on-dashboard) the charge TARGET value — the
+                          select above only picks kWh vs SOC; these set the
+                          actual target + its ceiling (#245 range). */ ''}
+                    ${charger.ev_target_type === 'soc' ? html`
+                        <div class="stepper-pair">
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, null)}
+                        </div>` : html`
+                        <div class="stepper-pair">
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, null)}
+                        </div>`}
+                    <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_kwh_per_100km`, 'config_ev_kwh_per_100km', T, null)}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_phases`, 'config_ev_phases', T, null)}
+                    </div>
                 </div>
             `;})}
             <div class="section-footer">
-                ${this._renderHaSettingsButton('config_ev_add_remove')}
+                <button class="add-charger-btn" ?disabled=${this._chargerBusy} @click=${() => this._addCharger()}>
+                    <ha-icon icon="mdi:plus" style="--mdc-icon-size:16px"></ha-icon>
+                    ${this._t('config_ev_add_charger')}
+                </button>
             </div>
         `;
     }
@@ -590,19 +699,97 @@ class SEMConfigCard extends SEMLitBase {
         return name.replace(/\s+Min Amps$/i, '');
     }
 
-    _renderBatteryZones(T) {
+    // Colorful accent slider + value chip + fine −/+ buttons (#528 — the
+    // battery-card design language restored to the config controls). Live
+    // tunable: drag → _setNumber, no entry reload. Themed via
+    // ``var(--section-accent)`` so each section keeps its colour.
+    _renderZoneKnob(entityId, labelKey, T, helpKey) {
+        const e = this._hass?.states[entityId];
+        if (!e) return nothing;
+        const val = parseFloat(e.state) || 0;
+        const _mn = parseFloat(e.attributes.min);
+        const _mx = parseFloat(e.attributes.max);
+        const min = Number.isNaN(_mn) ? 0 : _mn;
+        const max = Number.isNaN(_mx) ? 100 : _mx;
+        const step = parseFloat(e.attributes.step) || 1;
+        const unit = e.attributes.unit_of_measurement || '';
+        const decimals = step < 1 ? 1 : 0;
+        const pct = max > min ? Math.round(((val - min) / (max - min)) * 100) : 0;
         return html`
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
-                ${this._renderStepper('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
+            <div class="zone-knob">
+                <div class="zone-knob-top">
+                    <span class="zone-knob-label">${this._t(labelKey)}</span>
+                    <span class="zone-chip">${val.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                </div>
+                <div class="zone-knob-slider">
+                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, -1)}>−</button>
+                    <input type="range" class="zone-range"
+                        min=${min} max=${max} step=${step} .value=${String(val)}
+                        style=${`--fill:${pct}%`}
+                        @change=${(ev) => this._setNumber(entityId, parseFloat(ev.target.value))} />
+                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, 1)}>+</button>
+                </div>
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
-                ${this._renderStepper('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
+        `;
+    }
+
+    // SOC-zone strip — visualises the three thresholds on a 0–100 % bar so
+    // the priority/buffer/auto-start relationship is obvious at a glance
+    // (the "very nice and colorful" battery viz, #528).
+    _renderSocZoneStrip(T) {
+        const p = this._num('number.sem_battery_priority_soc');
+        const b = this._num('number.sem_battery_buffer_soc');
+        const a = this._num('number.sem_battery_auto_start_soc');
+        if (p == null || b == null || a == null) return nothing;
+        const soc = this._num('sensor.sem_battery_soc');
+        const clamp = (x) => Math.max(0, Math.min(100, x));
+        return html`
+            <div class="soc-strip">
+                <div class="soc-bar">
+                    <div class="soc-zone" style=${`width:${clamp(p)}%;background:#e57373`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(b - p)}%;background:#ffb74d`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(a - b)}%;background:#81c784`}></div>
+                    <div class="soc-zone" style=${`width:${clamp(100 - a)}%;background:#64b5f6`}></div>
+                    ${soc != null ? html`<div class="soc-now" style=${`left:${clamp(soc)}%`} title="SOC ${soc}%"></div>` : nothing}
+                    <div class="soc-tick" style=${`left:${clamp(p)}%`}><span>${p}</span></div>
+                    <div class="soc-tick" style=${`left:${clamp(b)}%`}><span>${b}</span></div>
+                    <div class="soc-tick" style=${`left:${clamp(a)}%`}><span>${a}</span></div>
+                </div>
+                <div class="soc-legend">
+                    <span><i style="background:#e57373"></i>${this._t('zone_legend_reserve')}</span>
+                    <span><i style="background:#ffb74d"></i>${this._t('zone_legend_buffer')}</span>
+                    <span><i style="background:#81c784"></i>${this._t('zone_legend_assist')}</span>
+                    <span><i style="background:#64b5f6"></i>${this._t('zone_legend_surplus')}</span>
+                </div>
             </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
-            </div>
+        `;
+    }
+
+    _renderBatteryZones(T) {
+        const opts = this._options || {};
+        return html`
+            ${this._renderSocZoneStrip(T)}
+            ${/* #550 — manual battery-SOC entity override. SEM auto-detects the
+                  SOC sensor from the battery-power entity, but some hardware
+                  (e.g. Deye + Seplos) isn't matched. This is the escape hatch:
+                  no device_class filter so ANY sensor can be picked. Structural
+                  → Apply-batched reload. */ ''}
+            ${this._renderPicker('battery_soc_sensor', 'config_battery_soc_sensor',
+                'sensor', null, opts, 'config_help_battery_soc_sensor')}
+            ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
+            ${this._renderZoneKnob('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
+            ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
+            ${this._renderZoneKnob('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
+            ${this._renderZoneKnob('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
+            ${/* #528 — battery discharge-protection settings, migrated from the
+                  options flow (async_step_settings). Visual separator only. */ ''}
+            <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
+            ${this._renderOptionToggle('battery_discharge_protection_enabled', 'config_batt_protection',
+                opts, 'config_help_batt_protection', true)}
+            ${this._renderZoneKnob('number.sem_battery_max_discharge_power', 'battery_max_discharge_power', T, 'config_help_batt_max_discharge')}
+            ${this._renderPicker('battery_discharge_control_entity', 'config_batt_discharge_entity',
+                'number', null, opts, 'config_help_batt_discharge_entity')}
         `;
     }
 
@@ -644,14 +831,16 @@ class SEMConfigCard extends SEMLitBase {
                 ${this._renderStepper('number.sem_cheap_price_threshold', 'cheap_threshold', T, 'setting_help_cheap_threshold')}
                 ${this._renderStepper('number.sem_expensive_price_threshold', 'expensive_threshold', T, 'setting_help_expensive_threshold')}
             </div>
+            ${/* #549: currency-agnostic max (covers high-denomination currencies
+                  like LKR/IDR/VND); fine step keeps decimal currencies exact. */ ''}
             ${this._renderOptionNumberInput('electricity_import_rate', 'config_import_rate',
-                { min: 0, max: 1, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_import_rate')}
+                { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_import_rate')}
             ${this._renderOptionNumberInput('electricity_off_peak_rate', 'config_off_peak_rate',
-                { min: 0, max: 1, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_off_peak_rate')}
+                { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_off_peak_rate')}
             ${this._renderOptionNumberInput('electricity_export_rate', 'config_export_rate',
-                { min: 0, max: 0.5, step: 0.001, unit: `${currency}/kWh`, default: 0.075 }, opts, 'config_help_export_rate')}
+                { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.075 }, opts, 'config_help_export_rate')}
             ${this._renderOptionNumberInput('demand_charge_rate', 'config_demand_charge_rate',
-                { min: 0, max: 20, step: 0.01, unit: `${currency}/kW/Mt`, default: 4.32 }, opts, 'config_help_demand_charge_rate')}
+                { min: 0, max: 100000, step: 0.01, unit: `${currency}/kW/Mt`, default: 4.32 }, opts, 'config_help_demand_charge_rate')}
             ${this._renderPicker('grid_import_power_entity', 'config_grid_import_entity',
                 'sensor', 'power', opts, 'config_help_grid_import_entity')}
             ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
@@ -717,14 +906,22 @@ class SEMConfigCard extends SEMLitBase {
         return html`
             ${statusBlock}
             <div class="hp-form">
-                ${this._renderPicker('heat_pump_relay1_entity', 'config_hp_relay1', 'switch',
+                ${this._renderPicker('heat_pump_relay1_entity', 'config_hp_relay1', ['switch', 'input_boolean'],
                     null, opts, 'config_help_hp_relay')}
-                ${this._renderPicker('heat_pump_relay2_entity', 'config_hp_relay2', 'switch',
+                ${this._renderPicker('heat_pump_relay2_entity', 'config_hp_relay2', ['switch', 'input_boolean'],
                     null, opts, 'config_help_hp_relay')}
+                ${/* #550: relay contact polarity — read at HeatPumpController
+                      construction (structural). Was only on the native flow. */ ''}
+                ${this._renderOptionToggle('heat_pump_invert_sg_ready', 'config_hp_invert_sg_ready',
+                    opts, 'config_help_hp_invert_sg_ready', false)}
                 ${this._renderPicker('heat_pump_climate_entity', 'config_hp_climate', 'climate',
                     null, opts, 'config_help_hp_climate')}
                 ${this._renderPicker('heat_pump_power_sensor', 'config_hp_power_sensor', 'sensor',
                     'power', opts, 'config_help_hp_power_sensor')}
+                ${/* #550: HP temperature sensor override — structural key that had
+                      no picker anywhere (unreachable). */ ''}
+                ${this._renderPicker('heat_pump_temperature_sensor', 'config_hp_temperature_sensor',
+                    'sensor', 'temperature', opts, 'config_help_hp_temperature_sensor')}
                 ${registered
                     ? this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T, 'config_help_hp_boost_offset')
                     : this._renderOptionSlider('heat_pump_boost_offset', 'heat_pump_boost_offset',
@@ -801,9 +998,12 @@ class SEMConfigCard extends SEMLitBase {
             ${statusBlock}
             <div class="hp-form">
                 ${this._renderPicker('hot_water_entity', 'config_hw_entity',
-                    null, null, opts, 'config_help_hw_entity')}
+                    ['switch', 'input_boolean', 'water_heater', 'climate'],
+                    null, opts, 'config_help_hw_entity')}
                 ${this._renderPicker('hot_water_temperature_sensor', 'config_hw_temp_sensor',
                     'sensor', 'temperature', opts, 'config_help_hw_temp_sensor')}
+                ${this._renderPicker('hot_water_power_sensor', 'config_hw_power_sensor',
+                    'sensor', 'power', opts, 'config_help_hw_power_sensor')}
                 ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
                     T, 'config_help_hw_solar_target')}
                 ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
@@ -832,6 +1032,60 @@ class SEMConfigCard extends SEMLitBase {
         if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
         newChargers[chargerIndex][key] = value;
         await this._saveOption('ev_chargers', newChargers, statusKey);
+    }
+
+    // #528 Phase 4 — add a charger from the dashboard. Sends ONLY the new
+    // skeleton; the backend smart-merge (#464) appends it by id and preserves
+    // siblings. The new charger appears as a block to wire via the per-charger
+    // pickers (it's inert until a power sensor + control entity are set).
+    async _addCharger() {
+        if (this._chargerBusy) return;
+        const existing = (this._options.ev_chargers || []);
+        // Uniqueness across BOTH the options list and the runtime charger ids
+        // (a stale _options could otherwise collide → smart-merge would UPDATE
+        // an existing charger instead of appending).
+        const ids = new Set([
+            ...existing.map(c => c && c.id).filter(Boolean),
+            ...this._chargersList(),
+        ]);
+        let id = 'ev_charger', n = 1;
+        while (ids.has(id)) { id = `ev_charger_${n++}`; }
+        const charger = {
+            id,
+            name: `${this._t('config_ev_new_charger')} ${existing.length + 1}`,
+            ev_min_current: 6,
+            max_charging_current: 32,
+            ev_surplus_priority: existing.length + 3,
+        };
+        this._chargerBusy = true;
+        this.requestUpdate();
+        try {
+            await this._saveOption('ev_chargers', [charger], 'ev_chargers_add');
+            // _saveOption optimistically set _options.ev_chargers to the
+            // single skeleton — re-read the merged list so siblings reappear.
+            await this._refreshOptions();
+        } finally {
+            this._chargerBusy = false;
+            this.requestUpdate();
+        }
+    }
+
+    async _removeCharger(cid) {
+        if (this._chargerBusy || !cid) return;
+        this._chargerBusy = true;
+        this._pendingRemove = '';
+        this.requestUpdate();
+        try {
+            await this._hass.callService('solar_energy_management', 'remove_charger',
+                { charger_id: cid });
+            // Re-read so the removed block disappears without a page refresh.
+            await this._refreshOptions();
+        } catch (err) {
+            console.error('[sem-config-card] remove_charger failed', err);
+        } finally {
+            this._chargerBusy = false;
+            this.requestUpdate();
+        }
     }
 
     // EV target-type select bound to ev_chargers[index].ev_target_type.
@@ -885,7 +1139,7 @@ class SEMConfigCard extends SEMLitBase {
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
-                        .includeDomains=${[domain]}
+                        .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
                         .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => onChange(e.detail?.value || '')}>
@@ -991,19 +1245,32 @@ class SEMConfigCard extends SEMLitBase {
     // Entity picker bound to an entry.options key. Auto-saves via WebSocket
     // on change → SEM update_listener reloads → registered=on within ~1s.
     _renderPicker(optionKey, labelKey, domain, deviceClass, opts, helpKey) {
-        const cur = opts[optionKey] || '';
         const status = this._saveStatus[optionKey];
+        // #528: structural (entity-wiring) keys reload the entry — stage the
+        // edit locally and commit on Apply so the reload fires once for the
+        // whole batch. Non-structural keys save live on change (unchanged).
+        const structural = STRUCTURAL_KEYS.has(optionKey);
+        const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
+        const cur = staged ? this._pending[optionKey] : (opts[optionKey] || '');
+        const onChange = (val) => {
+            if (structural) {
+                this._pending = { ...this._pending, [optionKey]: val || '' };
+                this.requestUpdate();
+            } else {
+                this._saveOption(optionKey, val, optionKey);
+            }
+        };
         return html`
             <div class="picker-cell">
                 <div class="picker-row">
-                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <span class="picker-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}</span>
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
-                        .includeDomains=${[domain]}
+                        .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
                         .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
                         .allowCustomEntity=${false}
-                        @value-changed=${(e) => this._saveOption(optionKey, e.detail?.value || '', optionKey)}>
+                        @value-changed=${(e) => onChange(e.detail?.value || '')}>
                     </ha-entity-picker>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
@@ -1014,27 +1281,62 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
-    // Toggle bound to an entry.options key. Use when no runtime
-    // ``switch.sem_*`` entity exists for the option.
-    _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal = false) {
-        const cur = opts[optionKey] != null ? !!opts[optionKey] : defaultVal;
-        const status = this._saveStatus[optionKey];
+    // #528 — commit all staged structural edits in ONE set_option call (one
+    // entry reload for the whole batch) and clear the buffer.
+    async _applyPending() {
+        const keys = Object.keys(this._pending);
+        if (!keys.length || this._applying) return;
+        const entryId = await this._ensureEntryId();
+        this._applying = true;
+        // Clear any prior apply error before retrying.
+        const ss = { ...this._saveStatus }; delete ss._apply; this._saveStatus = ss;
+        this.requestUpdate();
+        try {
+            const options = { ...this._pending };
+            await this._hass.callService('solar_energy_management', 'set_option', {
+                options, ...(entryId ? { entry_id: entryId } : {}),
+            });
+            // Reflect locally; the entry reload will re-publish authoritative state.
+            this._options = { ...this._options, ...options };
+            this._pending = {};
+        } catch (err) {
+            console.error('[sem-config-card] apply failed', err);
+            this._saveStatus = { ...this._saveStatus, _apply: err?.message || 'apply failed' };
+        } finally {
+            this._applying = false;
+            this.requestUpdate();
+        }
+    }
+
+    _discardPending() {
+        this._pending = {};
+        this.requestUpdate();
+    }
+
+    // Sticky bar shown whenever structural edits are staged.
+    _renderApplyBar() {
+        const n = Object.keys(this._pending).length;
+        if (!n && !this._applying) return nothing;
+        const err = this._saveStatus._apply;
         return html`
-            <div class="stepper-cell">
-                <div class="toggle-row">
-                    <span class="toggle-label">${this._t(labelKey)}</span>
-                    <div class="toggle-track ${cur ? 'on' : ''}"
-                         @click=${() => this._saveOption(optionKey, !cur, optionKey)}>
-                        <div class="toggle-thumb"></div>
-                    </div>
-                </div>
-                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
-                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            <div class="apply-bar ${err ? 'apply-err' : ''}">
+                <span class="apply-msg">
+                    ${this._applying
+                        ? html`<span class="apply-spin"></span>${this._t('config_applying')}`
+                        : (err
+                            ? html`⚠ ${err}`
+                            : this._t('config_pending_changes').replace(/\{n\}/g, String(n)))}
+                </span>
+                ${this._applying ? nothing : html`
+                    <button class="apply-discard" @click=${() => this._discardPending()}>${this._t('config_discard')}</button>
+                    <button class="apply-btn" @click=${() => this._applyPending()}>${this._t('config_apply')}</button>
+                `}
             </div>
         `;
     }
 
+    // Toggle bound to an entry.options key. Use when no runtime
+    // ``switch.sem_*`` entity exists for the option.
     // Native <select> bound to an entry.options key.
     _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
         const cur = opts[optionKey] != null ? opts[optionKey] : defaultVal;
@@ -1060,15 +1362,32 @@ class SEMConfigCard extends SEMLitBase {
 
     // Boolean toggle backed by an entry OPTION (not a switch entity) —
     // saves a real boolean via set_option (#523 arbitrage opt-in).
+    // #550: structural toggles (entity-wiring keys that reload the entry, e.g.
+    // heat_pump_invert_sg_ready, battery_discharge_protection_enabled) stage
+    // into _pending and commit on Apply — same as _renderPicker — so a flip
+    // doesn't fire its own reload and discard a sibling picker's staged edit.
+    // Non-structural toggles keep saving live on click (unchanged).
     _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal) {
-        const cur = opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal;
         const status = this._saveStatus[optionKey];
+        const structural = STRUCTURAL_KEYS.has(optionKey);
+        const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
+        const cur = staged
+            ? !!this._pending[optionKey]
+            : (opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal);
+        const onToggle = () => {
+            if (structural) {
+                this._pending = { ...this._pending, [optionKey]: !cur };
+                this.requestUpdate();
+            } else {
+                this._saveOption(optionKey, !cur, optionKey);
+            }
+        };
         return html`
             <div class="stepper-cell">
                 <div class="toggle-row">
-                    <span class="toggle-label">${this._t(labelKey)}</span>
+                    <span class="toggle-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}</span>
                     <div class="toggle-track ${cur ? 'on' : ''}"
-                         @click=${() => this._saveOption(optionKey, !cur, optionKey)}>
+                         @click=${onToggle}>
                         <div class="toggle-thumb"></div>
                     </div>
                 </div>
@@ -1114,26 +1433,31 @@ class SEMConfigCard extends SEMLitBase {
 
     // Slider that writes to entry.options on change. Use for option-only
     // numeric fields that don't have a runtime ``number.sem_*`` entity.
+    // #528: option-key slider in the same colorful accent style as the
+    // entity knob (saves an entry.option live via _saveOption).
     _renderOptionSlider(optionKey, labelKey, cfg, opts, helpKey) {
-        const cur = opts[optionKey] != null ? opts[optionKey] : cfg.default;
+        const cur = parseFloat(opts[optionKey] != null ? opts[optionKey] : cfg.default) || 0;
         const status = this._saveStatus[optionKey];
         const decimals = cfg.step < 1 ? 1 : 0;
-        const displayVal = parseFloat(cur).toFixed(decimals) + (cfg.unit ? ' ' + cfg.unit : '');
+        const unit = cfg.unit || '';
+        const pct = cfg.max > cfg.min ? Math.round(((cur - cfg.min) / (cfg.max - cfg.min)) * 100) : 0;
+        const stepBy = (d) => {
+            const next = Math.min(cfg.max, Math.max(cfg.min, cur + d * cfg.step));
+            this._saveOption(optionKey, next, optionKey);
+        };
         return html`
-            <div class="stepper-cell">
-                <div class="stepper-row">
-                    <span class="stepper-label">${this._t(labelKey)}</span>
-                    <div class="stepper-controls">
-                        <button class="stepper-minus" @click=${() => {
-                            const next = Math.max(cfg.min, parseFloat(cur) - cfg.step);
-                            this._saveOption(optionKey, next, optionKey);
-                        }}>−</button>
-                        <span class="stepper-value">${displayVal}</span>
-                        <button class="stepper-plus" @click=${() => {
-                            const next = Math.min(cfg.max, parseFloat(cur) + cfg.step);
-                            this._saveOption(optionKey, next, optionKey);
-                        }}>+</button>
-                    </div>
+            <div class="zone-knob">
+                <div class="zone-knob-top">
+                    <span class="zone-knob-label">${this._t(labelKey)}</span>
+                    <span class="zone-chip">${cur.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                </div>
+                <div class="zone-knob-slider">
+                    <button class="zone-mini" @click=${() => stepBy(-1)}>−</button>
+                    <input type="range" class="zone-range"
+                        min=${cfg.min} max=${cfg.max} step=${cfg.step} .value=${String(cur)}
+                        style=${`--fill:${pct}%`}
+                        @change=${(ev) => this._saveOption(optionKey, parseFloat(ev.target.value), optionKey)} />
+                    <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
@@ -1200,6 +1524,82 @@ class SEMConfigCard extends SEMLitBase {
                 <span class="readonly-value">${label}</span>
             </div>
             ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
+        `;
+    }
+
+    // (#566) Discovered PV-string power sensors → [{slot, power, displayName}],
+    // ordered pv1, pv2, … . Drives both the subtitle count and the rename body.
+    _pvStrings() {
+        const st = this._hass?.states || {};
+        const out = [];
+        for (const id of Object.keys(st)) {
+            const m = id.match(/^sensor\.sem_pv_string_(pv\d+)_power$/);
+            if (!m) continue;
+            const s = st[id];
+            out.push({
+                slot: m[1],
+                power: parseFloat(s.state),
+                displayName: s.attributes?.string_name || m[1].toUpperCase(),
+            });
+        }
+        out.sort((a, b) => a.slot.localeCompare(b.slot, undefined, { numeric: true }));
+        return out;
+    }
+
+    _pvStringsSubtitle() {
+        const n = this._pvStrings().length;
+        return n ? `${n} ${this._t('pv_strings_unit') || 'strings'}` : '';
+    }
+
+    _onPvNameInput(slot, val) {
+        this._pvNameEdits = { ...(this._pvNameEdits || {}), [slot]: val };
+    }
+
+    async _savePvNames() {
+        // Merge edits onto the saved names; a blank clears a name (reverts to
+        // the compact "PVn" default). Saved via set_option — pv_string_names is
+        // an unrouted key, so it triggers a coordinator reload (that's how the
+        // new names reach the per-string sensor attributes). Rename is rare, so
+        // the one-off reload on Save is acceptable.
+        const names = { ...(this._options?.pv_string_names || {}) };
+        const edits = this._pvNameEdits || {};
+        for (const [slot, val] of Object.entries(edits)) {
+            const v = (val || '').trim();
+            if (v) names[slot] = v; else delete names[slot];
+        }
+        await this._saveOption('pv_string_names', names, 'pv_string_names');
+        this._pvNameEdits = {};
+    }
+
+    _renderPvStrings(T) {
+        const strings = this._pvStrings();
+        const saved = this._options?.pv_string_names || {};
+        const edits = this._pvNameEdits || {};
+        const status = this._saveStatus?.pv_string_names;
+        return html`
+            <div class="setting-help-text">${this._t('config_pv_strings_help')}</div>
+            ${strings.map((s) => {
+                const cur = edits[s.slot] !== undefined ? edits[s.slot] : (saved[s.slot] || '');
+                const pw = Number.isFinite(s.power) ? `${s.power.toFixed(0)} W` : '';
+                return html`
+                    <div class="pv-name-row">
+                        <div class="pv-name-meta">
+                            <span class="pv-name-slot">${s.slot.toUpperCase()}</span>
+                            ${pw ? html`<span class="pv-name-power">${pw}</span>` : nothing}
+                        </div>
+                        <input type="text" class="pv-name-input"
+                            placeholder=${s.slot.toUpperCase()}
+                            .value=${cur}
+                            @input=${(ev) => this._onPvNameInput(s.slot, ev.target.value)} />
+                    </div>`;
+            })}
+            <div class="section-footer">
+                ${status === 'ok' ? html`<span class="pv-save-ok">✓</span>` : nothing}
+                <button class="pv-save-btn" ?disabled=${status === 'saving'}
+                        @click=${() => this._savePvNames()}>
+                    ${status === 'saving' ? '…' : this._t('config_pv_strings_save')}
+                </button>
+            </div>
         `;
     }
 
@@ -1406,6 +1806,7 @@ class SEMConfigCard extends SEMLitBase {
             battery_scheduler: (T) => this._renderBatteryScheduler(T),
             load_management: (T) => this._renderLoadManagement(T),
             forecast: (T) => this._renderForecast(T),
+            pv_strings: (T) => this._renderPvStrings(T),
             notifications: (T) => this._renderNotifications(T),
             advanced: (T) => this._renderAdvanced(T),
         };
@@ -1486,7 +1887,36 @@ class SEMConfigCard extends SEMLitBase {
                 }
                 .section-content.expanded { max-height: 2000px; opacity: 1; }
                 .section-body { padding: 0 14px 14px; }
-                .section-footer { display: flex; justify-content: flex-end; margin-top: 10px; }
+                .section-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 10px; }
+
+                /* (#566) PV-string rename rows */
+                .pv-name-row {
+                    display: flex; align-items: center; gap: 12px;
+                    padding: 8px 0;
+                }
+                .pv-name-meta {
+                    display: flex; flex-direction: column; min-width: 64px;
+                }
+                .pv-name-slot { font-size: 0.9em; font-weight: 700; color: #ff9800; }
+                .pv-name-power {
+                    font-size: 0.7em; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .pv-name-input {
+                    flex: 1; min-width: 0;
+                    background: var(--secondary-background-color, ${T.surface});
+                    border: 1px solid var(--divider-color, ${T.surfaceBorder});
+                    border-radius: 8px; padding: 8px 10px;
+                    color: var(--primary-text-color, ${T.text});
+                    font-family: inherit; font-size: 0.9em;
+                }
+                .pv-name-input:focus { outline: none; border-color: #ff9800; }
+                .pv-save-btn {
+                    background: #ff9800; color: #1a1a1a; border: none;
+                    border-radius: 8px; padding: 7px 16px; cursor: pointer;
+                    font-weight: 600; font-size: 0.85em;
+                }
+                .pv-save-btn:disabled { opacity: 0.6; cursor: default; }
+                .pv-save-ok { color: #8DC892; font-weight: 700; }
 
                 /* Overview chips — same shape as the battery card's
                    daily chips (.chip / .chip-label / .chip-value). */
@@ -1602,6 +2032,173 @@ class SEMConfigCard extends SEMLitBase {
                 .toggle-track.on .toggle-thumb { left: 20px; }
 
                 .stepper-cell { display: flex; flex-direction: column; }
+
+                /* ── #528: colorful zone controls (battery design language) ── */
+                .zone-knob { padding: 8px 2px 10px; }
+                .zone-knob-top {
+                    display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 7px;
+                }
+                .zone-knob-label { font-size: 14px; font-weight: 600; }
+                .zone-chip {
+                    background: color-mix(in srgb, var(--section-accent) 18%, transparent);
+                    color: var(--section-accent);
+                    font-weight: 700; font-size: 0.92em;
+                    padding: 2px 11px; border-radius: 11px;
+                    border: 1px solid color-mix(in srgb, var(--section-accent) 40%, transparent);
+                    min-width: 56px; text-align: center;
+                }
+                .zone-knob-slider { display: flex; align-items: center; gap: 10px; }
+                .zone-mini {
+                    width: 28px; height: 28px; flex-shrink: 0;
+                    border-radius: 8px; cursor: pointer;
+                    border: 1px solid color-mix(in srgb, var(--section-accent) 35%, ${T.surfaceBorder});
+                    background: color-mix(in srgb, var(--section-accent) 8%, transparent);
+                    color: var(--section-accent);
+                    font-size: 18px; line-height: 1; font-weight: 600;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: background 0.12s;
+                }
+                .zone-mini:hover { background: color-mix(in srgb, var(--section-accent) 20%, transparent); }
+                .zone-range {
+                    -webkit-appearance: none; appearance: none;
+                    flex: 1; min-width: 0; height: 6px; border-radius: 3px;
+                    cursor: pointer; outline: none;
+                    background: linear-gradient(to right,
+                        var(--section-accent) 0%, var(--section-accent) var(--fill, 0%),
+                        ${isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)'} var(--fill, 0%),
+                        ${isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)'} 100%);
+                }
+                .zone-range::-webkit-slider-thumb {
+                    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+                    background: var(--section-accent); border: 2px solid #fff;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.45); cursor: pointer;
+                }
+                .zone-range::-moz-range-thumb {
+                    width: 16px; height: 16px; border-radius: 50%;
+                    background: var(--section-accent); border: 2px solid #fff;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.45); cursor: pointer;
+                }
+
+                /* SOC-zone strip */
+                .soc-strip { padding: 4px 2px 12px; }
+                .soc-bar {
+                    position: relative; display: flex;
+                    height: 14px; border-radius: 7px; overflow: hidden;
+                    margin-bottom: 22px;
+                }
+                .soc-zone { height: 100%; }
+                .soc-now {
+                    position: absolute; top: -3px; width: 3px; height: 20px;
+                    background: #fff; border-radius: 2px;
+                    box-shadow: 0 0 4px rgba(0,0,0,0.6); transform: translateX(-50%);
+                }
+                .soc-tick {
+                    position: absolute; bottom: -20px; transform: translateX(-50%);
+                    font-size: 10px; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .soc-tick::before {
+                    content: ''; position: absolute; top: -7px; left: 50%;
+                    width: 1px; height: 6px; background: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.5; transform: translateX(-50%);
+                }
+                .soc-legend {
+                    display: flex; flex-wrap: wrap; gap: 4px 14px;
+                    font-size: 11px; color: var(--secondary-text-color, ${T.textSec});
+                }
+                .soc-legend span { display: inline-flex; align-items: center; gap: 5px; }
+                .soc-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+                /* #528 staged-changes Apply bar (sticky at top of the card) */
+                .apply-bar {
+                    position: sticky; top: 6px; z-index: 5;
+                    display: flex; align-items: center; gap: 10px;
+                    margin: 0 0 12px; padding: 9px 12px;
+                    border-radius: 10px;
+                    background: color-mix(in srgb, ${accent} 16%, ${T.surface});
+                    border: 1px solid color-mix(in srgb, ${accent} 45%, ${T.surfaceBorder});
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+                }
+                .apply-msg { flex: 1; font-size: 12.5px; font-weight: 600;
+                    display: inline-flex; align-items: center; gap: 8px; }
+                .apply-btn, .apply-discard {
+                    border: none; border-radius: 8px; cursor: pointer;
+                    font-size: 12.5px; font-weight: 700; padding: 6px 14px;
+                }
+                .apply-btn { background: ${accent}; color: #fff; }
+                .apply-discard {
+                    background: transparent; color: var(--secondary-text-color, ${T.textSec});
+                    border: 1px solid ${T.surfaceBorder};
+                }
+                .apply-spin {
+                    width: 13px; height: 13px; border-radius: 50%;
+                    border: 2px solid color-mix(in srgb, ${accent} 30%, transparent);
+                    border-top-color: ${accent}; display: inline-block;
+                    animation: applyspin 0.7s linear infinite;
+                }
+                @keyframes applyspin { to { transform: rotate(360deg); } }
+                .apply-bar.apply-err {
+                    background: color-mix(in srgb, #e57373 18%, ${T.surface});
+                    border-color: color-mix(in srgb, #e57373 55%, ${T.surfaceBorder});
+                }
+                .apply-bar.apply-err .apply-msg { color: #e57373; }
+                .pending-dot { color: ${accent}; font-size: 9px; margin-left: 6px; vertical-align: middle; }
+
+                /* #528 Phase 4 — add/remove charger */
+                .add-charger-btn {
+                    display: inline-flex; align-items: center; gap: 6px;
+                    margin-top: 8px; padding: 8px 16px; border-radius: 9px; cursor: pointer;
+                    background: color-mix(in srgb, #5BC8D8 16%, transparent);
+                    border: 1px dashed color-mix(in srgb, #5BC8D8 55%, ${T.surfaceBorder});
+                    color: #5BC8D8; font-size: 13px; font-weight: 700;
+                }
+                .add-charger-btn:hover { background: color-mix(in srgb, #5BC8D8 28%, transparent); }
+                .add-charger-btn[disabled] { opacity: 0.5; cursor: default; }
+                .charger-remove-x {
+                    border: none; background: transparent; cursor: pointer;
+                    color: var(--secondary-text-color, ${T.textSec}); font-size: 14px;
+                    padding: 2px 6px; border-radius: 6px; line-height: 1;
+                }
+                .charger-remove-x:hover { color: #e57373; background: color-mix(in srgb, #e57373 15%, transparent); }
+                .charger-remove-confirm {
+                    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+                    margin: 4px 0 8px; padding: 8px 10px; border-radius: 8px;
+                    background: color-mix(in srgb, #e57373 14%, ${T.surface});
+                    border: 1px solid color-mix(in srgb, #e57373 45%, ${T.surfaceBorder});
+                    font-size: 12.5px;
+                }
+                .charger-remove-confirm span { flex: 1; }
+                .charger-remove-go {
+                    border: none; border-radius: 7px; cursor: pointer; font-weight: 700;
+                    padding: 5px 12px; background: #e57373; color: #fff; font-size: 12px;
+                }
+                .charger-remove-cancel {
+                    border: 1px solid ${T.surfaceBorder}; border-radius: 7px; cursor: pointer;
+                    padding: 5px 12px; background: transparent;
+                    color: var(--secondary-text-color, ${T.textSec}); font-size: 12px;
+                }
+
+                /* #528 first-run completeness guide */
+                .setup-progress { margin: 2px 2px 12px; }
+                .setup-progress-top {
+                    display: flex; justify-content: space-between; align-items: baseline;
+                    margin-bottom: 6px;
+                }
+                .setup-progress-label { font-size: 13px; font-weight: 700; }
+                .setup-progress-pct { font-size: 12px; color: var(--secondary-text-color, ${T.textSec}); }
+                .setup-progress-bar {
+                    height: 7px; border-radius: 4px; overflow: hidden;
+                    background: ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'};
+                }
+                .setup-progress-fill {
+                    height: 100%; border-radius: 4px;
+                    background: #ffb74d; transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+                }
+                .setup-progress-fill.done { background: #81c784; }
+                .chip-todo { cursor: pointer; border-style: dashed !important; }
+                .chip-todo:hover { border-color: ${accent} !important; }
+                .chip-todo .c-warn { color: ${accent} !important; font-weight: 700; white-space: nowrap; }
+
                 .setting-help-text {
                     font-size: 11px; line-height: 1.35;
                     color: var(--secondary-text-color, ${T.textSec});
@@ -1688,7 +2285,10 @@ class SEMConfigCard extends SEMLitBase {
                             style="--mdc-icon-size:18px"
                         ></ha-icon>
                     </div>
-                    ${SECTIONS.map(s => this._renderSection(s, renderers[s.id], T))}
+                    ${this._renderApplyBar()}
+                    ${SECTIONS
+                        .filter(s => s.id !== 'pv_strings' || this._pvStrings().length >= 2)
+                        .map(s => this._renderSection(s, renderers[s.id], T))}
                 </div>
             </ha-card>
         `;

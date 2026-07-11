@@ -11,6 +11,774 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.4] — 11.07.2026
+
+> **Stable release.** Consolidates the 1.7.4 beta line (beta.1 → beta.35, detailed
+> below). Headline: the **generic-device control arc** (#559) — a belief-vs-observed
+> reconciler, desired-state observability and observed-runtime credit that bring
+> every surplus load up to the same discipline the EV controller already had —
+> plus **rock-steady EV charging on UDP-polled chargers** (#573's KEBA
+> median-of-3 flap fix), **config-on-the-dashboard** (settings apply live, no
+> reload), a **lifetime solar production sensor** (#573), and a **recorder-DB
+> diet** so SEM's per-cycle sensors no longer bloat history (#581). Battery→grid
+> arbitrage stays **deactivated** for stable (migration v14; tracked in #533).
+
+### 🧩 Generic-device control arc (#559)
+- ✨ **Surplus loads now get the same control discipline as the EV.** A
+  `DeviceReconciler` tracks belief-vs-observed per device, a desired-state model
+  makes ownership observable, and runtime is credited from *observed* on-time,
+  not assumed. A median-of-3 pre-filter smooths the surplus input the same way
+  the EV path is smoothed. Explicit device `rated_power` shows on the Control
+  card (was shadowed by autodiscovery), and Energy-Dashboard re-discovery no
+  longer destroys service-registered devices. (by @guidoeberle in #559)
+
+### 🔌 EV charger no longer flaps on/off (KEBA UDP power blips, #573)
+- 🐛 On a KEBA P30 in `min_plus_solar`, the charger cycled on/off every ~15 s —
+  a single-cycle UDP power blip to ~0 W spiked computed home consumption, crashed
+  the EV surplus below the battery-assist gate and collapsed the budget. A
+  median-of-3 filter on `ev_power` absorbs the blip at the source. PROD-confirmed
+  steady across solar_only ↔ min_plus_solar mode switches. (reported by Guido)
+
+### ⚙️ Config on the dashboard — settings apply live
+- ✨ PV-string rename, EV charge target / range / phases, and structural config
+  keys are reachable and editable from the dashboard Config card, applied without
+  an integration reload. (#550, #551, #566, #568)
+
+### ☀️ Lifetime solar production sensor (#573)
+- ✨ New `sensor.sem_lifetime_solar_yield_energy` reconciled against the
+  inverter's own lifetime counter, localized across all 15 languages.
+  (reported by @hrdilshan)
+
+### 🗃️ Recorder-DB diet (#581)
+- 🐛 SEM's high-frequency diagnostic sensors are no longer written to the HA
+  recorder database every cycle — they were dominating history rows. Now
+  in-memory / `_unrecorded_attributes` only. (autopilot)
+
+### 🌡️ Honest sensors & dashboard polish
+- ✨ Dedicated inverter-temperature sensor (the diagram had shown battery temp in
+  the inverter slot, #564), climate-device surplus type (#569), restored
+  Forecast-vs-Actual chart series (#575), dimmed rated power when a load is off
+  (#577), Home header hero + quick-controls (#572), and a UI pattern guide (#565).
+
+# [1.7.4-beta.35] — 10.07.2026
+
+> **Pre-release.** Rock-steady EV charging on UDP-polled chargers (KEBA).
+
+### 🔌 EV charger no longer flaps on/off (KEBA UDP power blips)
+- 🐛 On a KEBA P30 in `min_plus_solar`, the charger cycled on/off every ~15 s.
+  Root cause: the KEBA reports charging power over UDP and blips to ~0 for a
+  single cycle while the car is really drawing ~10 kW. That reading feeds the
+  home energy balance, so while the (fast) grid meter still shows the import, a
+  0-blip momentarily spikes computed home consumption → the EV solar surplus
+  crashes below the battery-assist gate → the charge budget collapses to 0 →
+  the charger idles → the contactor opens → recovers → repeat. Fix: a
+  median-of-3 filter on `ev_power` in the reader absorbs the single-cycle blip
+  at the source (a genuine start/stop is 2+ cycles and still tracks within
+  one), so the budget stays steady and the car charges flat. (reported by Guido)
+
+### ☀️ Lifetime solar production sensor (#573)
+- ✨ New `sensor.sem_lifetime_solar_yield_energy` ("Lifetime Solar Production")
+  surfaces SEM's all-time solar total — seeded from and reconciled against your
+  inverter's own energy counter (e.g. Deye `TotalActiveProduction`, Huawei
+  `Gesamtenergieertrag`), so it lines up with the hardware figure. The existing
+  **Monthly** and **Yearly** sensors stay period-scoped (they only cover
+  production since SEM started tracking), which is why they can read lower than
+  the inverter's lifetime counter — this gives you an apples-to-apples number to
+  compare. Names localized across all 15 languages. (reported by @hrdilshan)
+
+# [1.7.4-beta.33] — 09.07.2026
+
+> **Pre-release.** SEM sensors no longer bloat the Home Assistant recorder database.
+
+### 💾 SEM entities dominated the recorder database (#581)
+- 🐛 On a 10 s refresh, SEM entities produced ~70% of all recorder state rows and
+  grew the database to ~9.6 GB in ~10 days. Two causes: (1) a per-cycle
+  `last_update` timestamp was stamped onto **all ~177 SEM entities** every tick,
+  forcing a recorder write for every entity every cycle — even sensors whose
+  value never changed; and (2) large UI-only maps (the ~9 KiB `devices` map on
+  `sem_controllable_devices_count` alone = 816 MiB of payload) were recorded on
+  every cycle. The volatile base attributes are removed, and the heavy UI-helper
+  maps are now marked `_unrecorded_attributes` — they stay on the live entity so
+  dashboard cards keep working, but are excluded from the recorder.
+  (reported by @Edsol)
+
+# [1.7.4-beta.32] — 08.07.2026
+
+> **Pre-release.** Registered surplus devices survive device re-discovery.
+
+### 🔌 A registered surplus load could silently stop being controlled (#559)
+- 🐛 A device registered via `register_surplus_device` under an
+  `energy_dashboard_…` id was **destroyed by every device re-discovery** —
+  including the one that runs ~35 s after each restart: the discovery sync wiped
+  all `energy_dashboard_*` devices, and the rebuild then (correctly) refused to
+  recreate one whose switch is service-owned — so the load vanished from control
+  entirely while the Control tab still showed its row. Reporter's pool pump never
+  ran despite 1.6 kW of export. Service registrations now **survive discovery
+  syncs by construction** — the live device object (with its accrued daily
+  runtime) is left untouched, and discovery can't shadow or overwrite it.
+  (reported by @alexmc1510)
+
+# [1.7.4-beta.31] — 08.07.2026
+
+> **Pre-release.** The "Forecast vs Actual" chart shows the forecast again.
+
+### 📈 "Forecast vs Actual" chart restored (#575)
+- 🐛 The **Forecast vs Actual** dashboard chart showed no forecast — just actual
+  solar/home/grid power under a misleading title. The LitElement card migration
+  had quietly repointed it at the plain power preset, dropping the forecast
+  series; a later sensor cleanup then removed `forecast_power_now_w` as "dead"
+  (dead only because the migration had already orphaned it). The forecast power
+  sensor is restored (its value was always computed, just no longer published)
+  and the card now plots **forecast vs actual solar** on a dedicated preset.
+  (reported by @ebnerjoh in #575)
+
+# [1.7.4-beta.30] — 08.07.2026
+
+> **Pre-release.** The device arc, completed: honest runtime, spike-proof surplus, visible ownership.
+
+### 🧭 Generic-device arc, phases 3+4 (completes the beta.29 foundation)
+- ⏱️ **Daily-runtime goals now count reality, not belief.** A load whose switch
+  actually reads *off* no longer accrues runtime toward its daily target while
+  SEM's record catches up — so a goal can't be "met" by a load that wasn't
+  actually running. Devices without a readable entity behave exactly as before.
+- 🛡️ **Single-cycle spikes can't flap loads anymore.** A one-cycle inverter
+  glitch or sensor blip used to nudge the smoothed surplus by 30% of its size;
+  a median pre-filter now drops any value not seen in at least 2 of the last 3
+  cycles before it reaches the smoothing, so marginal loads stop twitching on
+  glitches. Real changes pass with one extra cycle of latency.
+- 👁️ **You can now see *why* a load is on.** Every managed device reports its
+  intent (`off` / `idle` / `on`), its observed state, and **`sem_owned`** —
+  whether SEM turned it on or something external did — on the Control-tab data
+  and in diagnostics.
+
+# [1.7.4-beta.29] — 07.07.2026
+
+> **Pre-release.** SEM no longer fights a manually-toggled surplus load.
+
+### 🧭 Generic surplus loads: SEM now tracks reality, not just its own belief
+- ✨ Switch and climate surplus loads gained a **reconciliation layer** (the same
+  desired-vs-observed idea the EV charger already uses). Each cycle SEM now checks
+  what the load is *actually* doing, instead of trusting its own record:
+  - If a load SEM turned on is **switched off** (by you, another automation, or a
+    failed command), SEM notices, updates its state (so daily-runtime isn't
+    credited to a load that isn't running), and — importantly — **won't
+    immediately turn it back on and fight you**; it waits a short cool-off first.
+  - If a load is running that SEM didn't turn on, SEM leaves it alone rather than
+    claiming or cutting it.
+- This is **additive** — the tuned surplus-allocation logic is unchanged; SEM just
+  keeps its picture of each load in sync with the real world. (foundation for
+  bringing generic devices up to the EV charger's robustness)
+
+# [1.7.4-beta.28] — 07.07.2026
+
+> **Pre-release.** A device's rated power now shows correctly on the Control tab.
+
+### 🔌 Explicit device rated power now shows (not 0 W) (#559)
+- 🐛 When you registered a surplus device with an explicit `rated_power` for a
+  switch SEM had *also* auto-discovered from the Energy Dashboard, the Control tab
+  showed the auto-discovered row (the live sensor = 0 W while the load is off)
+  instead of your value, and the explicit entry was dropped as a duplicate. The
+  explicit registration now always wins for that switch, so your rated power
+  shows. Auto-discovered devices also now show their self-calibrating rated power
+  rather than a bare 0 W when off. (reported by @alexmc1510)
+
+# [1.7.4-beta.27] — 07.07.2026
+
+> **Pre-release.** More setup lives on the dashboard Config tab now.
+
+### ⚙️ Rename PV strings & set the EV charge target on the Config tab
+- ☀️ **Rename PV strings on the dashboard.** A new **PV Strings** section on the
+  Configuration tab (shown when SEM detects ≥2 strings) lets you name each string
+  (East, South, …) with an inline field — no need to open Home Assistant's
+  integration settings. (#566)
+- 🚗 **Set the EV charge target on the card.** The per-charger block let you pick
+  the target *type* (kWh vs SOC) but not the actual value — now the target, its
+  ceiling, kWh/100 km and phase count are editable inline (the right pair shows for
+  the selected type). This continues moving setup out of the options flow onto the
+  dashboard, where most of it already lives.
+
+### ☀️ "Rename PV strings" is now easy to find (#566)
+- 🧭 Custom PV-string names shipped in beta.21, but the step was buried at the
+  very end of the options flow — you had to click **Submit** through seven
+  forms to reach it, so most people never found it. There's now a **"Rename PV
+  strings"** entry right on the first screen of **Configure** (shown when SEM
+  detects ≥2 strings) that jumps straight to the naming step. Saving from there
+  preserves all your other settings. (follow-up to @-reported #566)
+
+# [1.7.4-beta.25] — 07.07.2026
+
+> **Pre-release.** The Energy Costs chart legend now matches the summary card.
+
+### 💶 Energy Costs chart legend showed the wrong series' totals (#574)
+- 🐛 On the **Energy Costs** chart the legend printed numbers that
+  contradicted the costs summary card — e.g. `Import: 1.8` while the import
+  bars sat at ~0, and `Net: 0.1` while the net line was at −1.8. The bars and
+  the summary were right; only the legend text was wrong. The legend paired
+  each label with the wrong series because it indexed the datasets by the
+  legend item's *position*, but Chart.js sorts legend items by each series'
+  draw `order` — so on the mixed line+bar cost chart (net line before the
+  import/export bars) the order didn't line up and the values rotated by one.
+  It now indexes by the item's real dataset, so each label shows its own
+  series' latest value. Savings/energy charts were unaffected. (reported by
+  @ebnerjoh)
+
+# [1.7.4-beta.24] — 06.07.2026
+
+> **Pre-release.** The system diagram now shows the *inverter's* temperature.
+
+### 🌡️ Inverter temperature is the inverter's own, not the battery's (#564)
+- 🐛 On the Home system diagram the **inverter** node showed the *battery*
+  temperature — a Fronius user saw a constant ~25 °C in the inverter slot while
+  the real inverter ran at 40 °C. The card read `battery_temperature` for the
+  inverter label. Now there's a dedicated **`sensor.sem_inverter_temperature`**
+  (autodetected from your inverter's own temperature sensor, or *unknown* when
+  there's no source — never fabricated), and the diagram reads it.
+- 🔎 Inverter-temperature **autodetection now covers far more brands** — Fronius,
+  GoodWe, DEYE/Solis/Sofar, SolaX, KSTAR, FoxESS, SolarEdge-modbus, SENEC, GivTCP
+  and others that name the sensor without an "inverter" token (bare
+  `…_temperature`, `radiator_temperature`, `tempsink`, `invtemp`, …), with a
+  guarded fallback that won't mistake a battery/cell/ambient probe for the
+  inverter. Battery-temperature detection also gained `temperature_cell`
+  (Fronius core), `bmu_temp` (BYD) and `bms_bat_temperature` (GoodWe).
+  (reported by @ebnerjoh)
+
+# [1.7.4-beta.23] — 06.07.2026
+
+> **Pre-release.** Control air-conditioners from solar surplus, and a Home-tab cleanup.
+
+### ❄️ Drive `climate.*` air-conditioners / heat pumps from surplus (#569)
+- ✨ New **climate** surplus-device type: an AC or heat pump exposed only as a
+  `climate.*` entity (no switch, no `number`) can now be managed by SEM. On solar
+  surplus it sets the unit's `hvac_mode` (e.g. `cool`) and an optional comfort
+  target temperature; when the surplus is gone it turns the unit off. Same
+  priority / peak-shed / daily-goal handling as every other surplus load, and the
+  registration survives restarts (it re-owns a running unit after a reboot).
+  Register it with `device_type: climate` on
+  `solar_energy_management.register_surplus_device` — pick `hvac_mode: heat` to
+  drive a heat pump the same way in winter. (requested by @Edsol)
+
+### 🏠 Home tab: removed the leftover "Quick Controls" section (#572)
+- 🧹 The Home status card carried a **Quick Controls** heading with nothing left
+  to control — the observer-mode toggle moved to the **Config** card (#492, "Config
+  is the single settings home"), leaving only a read-only forecast-provider chip
+  under a controls heading. Removed the dead section (and its unused code/CSS); the
+  forecast provider is still shown on the Solar tab. (reported by @RienduPre)
+
+# [1.7.4-beta.22] — 06.07.2026
+
+> **Pre-release.** Two consistency/telemetry bug fixes.
+
+### 🌤️ Forecast numbers now match across pages (#568)
+- 🐛 The Home tab's system-diagram showed a *different* "Today's Forecast"
+  than the Solar tab (e.g. 23 vs 33.2 kWh). The Home glance was showing SEM's
+  **performance-corrected** estimate (Solcast × how your array actually performs
+  — ~0.69× on a cloudy day) while every other card shows the **raw** provider
+  forecast. Both were correct but sharing one label was confusing. The Home
+  glance now shows the same raw daily forecast as the Solar tab; the corrected
+  estimate stays on its own sensor. (reported by @hrdilshan)
+
+### 🔥 Heat-pump SG-Ready mode now reflects reality (#570)
+- 🐛 With a Nibe SG-Ready heat pump, the **Mode sensor was stuck at
+  "normal · 2"** even while SEM was correctly driving the SG-Ready relays into
+  BOOST. The relays flipped fine — only the telemetry was dead: the coordinator
+  never copied the controller's live SG-Ready state into its sensors. Now
+  `heat_pump_mode` / `_sg_ready_state` / `_solar_boost` track the real state,
+  and Boost / Force-on / Blocked modes are labelled in all 15 languages.
+  (reported by @RienduPre)
+
+# [1.7.4-beta.21] — 06.07.2026
+
+> **Pre-release.** Name your PV strings, and an Off-mode timer fix.
+
+### ☀️ Custom PV-string names (#566)
+- 🏷️ Your solar strings no longer have to read **PV1 / PV2 / PV3** — a new
+  **"Name your PV strings"** step in the integration options lets you call them
+  **East / South / West**. Each field shows its source sensor and live power so
+  you can tell which slot is which physical panel (the numbering follows your
+  Energy-Dashboard solar list, not compass order). The names flow through the
+  solar card chips, the system diagram, the flow card, and the entity names
+  themselves (so they also show in HA history / the Energy Dashboard).
+  (requested by @RienduPre)
+
+### ⚙️ Load management (#559)
+- 🐛 **Off-mode timer fix**: a surplus device switched to **Off** no longer keeps
+  showing — and counting — its daily solar-runtime timer. The row hides and the
+  counter freezes once SEM stops managing the device. (reported by @alexmc1510)
+
+# [1.7.4-beta.20] — 06.07.2026
+
+> **Pre-release.** Battery temperature autodetect reaches the Fronius
+> Reserva / BYD naming.
+
+### 🌡️ Battery temperature — finds the bare `cell_temperature` (#564)
+- 🐛 **Fronius Reserva / BYD batteries showed *unknown*** after the beta.18
+  honest-temperature fix. Their cell-temperature sensor is named without a
+  `battery`/`1` token (e.g. `sensor.reserva_cell_temperature`), so the
+  autodetect matched nothing. SEM now recognises the bare `cell_temperature`
+  shape and picks up the real sensor (~24.5 °C) with no configuration —
+  guarded so it can't hijack a secondary `cell_temperature_2`.
+  (reported by @ebnerjoh)
+
+# [1.7.4-beta.19] — 06.07.2026
+
+> **Pre-release.** #559 load management — the goal engine, frozen to its
+> honest core.
+
+### ⚙️ Generic surplus loads — simpler, safer (#559)
+- 🎯 The device **goal engine is back to its grounded core**: a mode ladder
+  (Off / Peak only / **Surplus**) plus one *"run up to N hours today"* solar
+  budget and an optional stop-condition (e.g. car SOC ≥ 80 %). Surplus loads
+  are **solar-only** — they never import from grid.
+- 🐛 **Removed two latent hazards** that shipped in the beta.18 engine: a
+  daily-runtime *safety cap* that reset on every restart, and a *finish-by
+  deadline* force that could drain the house battery at night with no
+  state-of-charge gate. Both are gone with the speculative surface (energy
+  targets, kWh caps, deadline ramp, "always" top-up) they lived in.
+- 🔧 **Auto-discovered switch footgun fixed**: an unconfigured socket that
+  read 0 W while off could switch on at almost any surplus and pull the rest
+  from grid. SEM now **auto-calibrates the device's rated power** from its
+  power sensor the first time it runs.
+- 🎨 **Card simplified to the EV-charger pattern**: the mode picker sits in
+  the goal panel (shown only in Surplus mode), a single hours slider replaces
+  the dual-handle min/kWh slider, the stop condition is a clean row, and each
+  mode has inline help. (requested by @alexmc1510)
+- 🏷️ **Honest label**: the runtime target reads *"Run up to N h"* — it's a
+  daily solar budget (the device rests once it hits N), not a guaranteed
+  minimum, so the old *"at least"* wording was misleading.
+- 📱 **Mobile fix**: the goal panel's "Stop when" row no longer overflows /
+  wraps its label on phone widths.
+- 💾 **Daily counters survive an unclean reboot**: device-runtime progress
+  (and the rest of SEM's daily state) is now written to disk every ~2 min
+  during runtime, not only on a graceful stop — a crash/power-loss reboot
+  loses at most a couple of minutes instead of the whole day.
+
+# [1.7.4-beta.18] — 05.07.2026
+
+> **Pre-release.** Honest temperatures and a cleaner Home header.
+
+### 🌡️ Battery temperature — never fabricated (#564)
+- 🐛 **Installs without a temperature source showed a constant 25 °C** —
+  that was an internal default published as if measured. The sensor now
+  honestly shows *unknown* when there is no source (cards hide it), and
+  SEM **autodetects the battery's real temperature sensor** via the same
+  brand-aware hardware discovery the System diagram uses — most setups
+  get their true cell temperature with zero configuration.
+  (reported by @ebnerjoh)
+
+### 🏠 Home header — the hero, once (maintainer UI review)
+- 🎨 The Home tab header chips (Solar/Autarky/Today) duplicated the
+  Today's-Production card right below it. The header itself is now the
+  hero: big orange production value + live solar power chip; the
+  separate KPI card is gone from the generated dashboard (it remains
+  available as a card for manual dashboards). Autarky/Self-Use stay on
+  the solar and home-status cards.
+
+### 🧪 Hardening
+- ✅ Regression lint: entity pickers can never again receive an empty
+  domain filter (the #560 class).
+
+# [1.7.4-beta.17] — 05.07.2026
+
+> **Pre-release.** Load management grows up: daily targets for any
+> household load, persisted registrations, a surplus event for your own
+> automations — plus counter-accurate daily solar and a Home-tab
+> production KPI.
+
+### 🎯 Load management — daily targets for household loads (#559)
+- ✨ **Give any switch a daily goal** — e.g. *pool pump at least 4 h/day*
+  (runtime) or *5 kWh/day* (energy), set on an EV-charger-style
+  dual-handle slider with a min ↔ kWh unit picker. The green *At least*
+  handle is the target, the orange *Up to* handle a safety cap (far
+  right = no cap ∞). (requested by @alexmc1510)
+- ✨ **One 5-step mode per device**: Off · Peak only · Surplus — solar
+  only · Surplus + cheap top-up · Surplus + finish by deadline. Solar
+  only never draws grid; cheap top-up completes the target in cheap
+  tariff windows; finish-by-deadline force-runs in time to meet it.
+  Peak protection always outranks the goal.
+- ✨ **Stop condition** — end a device's day early when an external
+  sensor reaches a value (charge a PHEV on a dumb socket, stop at the
+  car's 80 % SOC).
+- ✨ **Finish by** deadline per device (default: end of day); progress
+  bar on the Control tab; progress survives restarts.
+- 🐛 **Registrations now persist** — devices registered via
+  `register_surplus_device` used to silently vanish on every restart.
+  One call now does everything (defaults to surplus mode, returns a
+  response summary); new `unregister_surplus_device` service; explicit
+  registrations own their switch (auto-discovery duplicates are
+  dropped).
+- ✨ **Surplus event for your own automations** —
+  `binary_sensor.sem_surplus_available` (debounced: 60 s above the
+  threshold → on, 120 s below 80 % of it → off; threshold knob) plus a
+  `solar_energy_management_surplus` bus event on transitions. Built for
+  peak-only devices that keep their own schedules.
+- 🛡️ **Never orphaned ON**: a restart re-owns running surplus devices;
+  forces end with their reason (deadline passed target met, tariff left
+  the cheap window, day rollover).
+- 📖 The Control-tab device card gained a **? help panel** explaining
+  every option — modes, priority/shedding order, requires, configure,
+  target peak, daily targets — in all 15 languages.
+
+### ☀️ Daily solar — counter-accurate (#556)
+- 🐛 **Cloud-polled inverters (Deye Cloud & co.) undercounted daily solar
+  ~3×** — the power sensor sits at 0/unavailable between polls. SEM's
+  daily solar now reconciles against the inverter's own production
+  counters (upward-only; unit-aware; handles counter resets and
+  multi-string sums) and credits production while HA was restarting.
+  The previously inert *prefer hardware energy* option is the gate.
+  (reported by @hrdilshan)
+- ✨ **Today's Solar Production KPI** — a prominent hero card at the top
+  of the Home tab (large orange kWh + live power chip), ×15 languages.
+  (requested by @hrdilshan)
+
+### 🌍 Forecast — localized entity IDs (#562)
+- 🐛 **Solcast was never detected on non-English installs** — the
+  integration names its entities in your HA language
+  (`…_forecast_heute` on German), while SEM looked for the hardcoded
+  English IDs. Detection now resolves through the entity registry's
+  language-independent IDs, for Solcast and Forecast.Solar alike.
+  (reported by @ebnerjoh)
+
+### 🗄️ Storage — no more all-or-nothing (#563)
+- 🐛 **One bad value could wipe the whole energy store** — a single
+  out-of-range accumulator (e.g. a pre-beta.14 ×1000-inflated lifetime
+  counter) discarded ALL daily/monthly/cost data on the upgrade
+  restart. Validation now repairs per entry and keeps the rest; the
+  daily store (where the real accumulators live) is now validated at
+  all. (reported by @ebnerjoh)
+
+### 💰 Costs & grid polish (#557, #555, #560, #561)
+- ✨ System Investment Cost accepts direct numeric entry. (requested by @hrdilshan)
+- 🩹 Missing optional HACS cards (e.g. `sankey-chart`) show a friendly
+  translated install notice instead of a red error banner. (reported by @hrdilshan and @ebnerjoh)
+- 🐛 Entity pickers: hot-water accepts switch/input_boolean/water_heater/climate;
+  heat-pump relays accept input_boolean bridges (card + config flow). (reported by @covuser)
+- 🐛 Grid card "Net" row states its direction: **Net import** / **Net export**, ×15 languages.
+
+Thanks to @alexmc1510, @hrdilshan, @ebnerjoh and @covuser for the reports and ideas! 🙏
+
+# [1.7.4-beta.16] — 04.07.2026
+
+> **Pre-release.** Config-picker fixes, friendly missing-card notice, typed
+> investment input, unambiguous Net labels.
+
+### 🛠️ Configuration pickers (#560)
+- 🐛 **Hot-water switch (and several other entities) could not be selected** —
+  the dashboard Config card's entity pickers passed a broken domain filter
+  that excluded *every* entity when no domain was set. The hot-water picker
+  now accepts `switch`, `input_boolean`, `water_heater` and `climate`
+  entities. (reported by @covuser)
+- 🐛 Heat-pump relay 1/2 pickers (Config card **and** the native config flow)
+  only accepted `switch` — SG-Ready setups bridged through `input_boolean`
+  helpers couldn't be configured. Both now accept `input_boolean` too.
+
+### 🧩 Dashboard — friendly missing-card notice (#555, #558)
+- 🩹 A missing optional HACS card (e.g. `sankey-chart`) no longer shows a red
+  "Configuration Error" banner — a new wrapper renders a friendly, translated
+  notice naming the missing card and how to install it, and renders the real
+  card as soon as it's available. (reported by @hrdilshan and @ebnerjoh)
+
+### 💰 Costs — typed System Investment Cost (#557)
+- ✨ The System Investment Cost stepper now accepts **direct numeric entry**
+  (keyboard input next to the ± buttons), and the accepted range is wide
+  enough for any real installation. (requested by @hrdilshan)
+
+### ☀️ Forecast — Solcast no longer misses the bus (#562)
+- 🐛 **SEM latched onto Forecast.Solar even when Solcast was installed** — if
+  the Solcast integration finished loading after SEM's first source
+  detection, the cache stuck until the next restart. SEM now upgrades to
+  Solcast (its preferred source) as soon as the Solcast entities appear.
+  (reported by @ebnerjoh)
+
+### 📊 Grid card — Net direction spelled out (#561 follow-up)
+- 🐛 The grid card's "Net" row showed `|import − export|` with the direction
+  conveyed only by color. The label now states it: **Net import** /
+  **Net export** — translated in all 15 languages. (follow-up to @ebnerjoh's
+  report)
+
+# [1.7.4-beta.15] — 04.07.2026
+
+> **Pre-release.** Deye grid direction out-of-the-box.
+
+### ⚡ Grid — Deye brand sign seed (#554)
+- 🎯 **Deye installs (hass-deyecloud) get the correct grid import/export
+  direction from the first cycle** — the platform is now in SEM's brand sign
+  map (`totalgridpower` reports +=import, verified from reporter diagnostics),
+  so no Fix-grid-sign button or detection wait is needed. (thanks @hrdilshan)
+
+# [1.7.4-beta.14] — 04.07.2026
+
+> **Pre-release.** Feedback-round fixes: Wh counters + consistent Net display.
+
+### 🔋 Energy statistics — unit-aware hardware counters (#551)
+- 🐛 **Fronius (and any Wh-reporting) lifetime counters inflated the lifetime
+  statistics ×1000** — a 2-day-old install showed 21,350 battery "cycles" and
+  a health score pinned at 70% (real value: ~21). Counter reads are now
+  unit-aware (Wh/kWh/MWh), covering lifetime seeding and the EV daily-energy
+  reconciliation. (reported by @ebnerjoh)
+- 🩹 **Self-healing**: installs that already seeded the inflated values are
+  detected and re-seeded from the corrected counters automatically on the
+  first restart after updating — no manual cleanup.
+
+### 💰 Costs — consistent Net framing (#554)
+- 🐛 The Costs hero said "+1.71 net saving" while the Today/Month/Year rows
+  printed "−1.71" — the same cost-signed value in two contradictory framings.
+  All Costs surfaces now use the savings-positive framing ('+' and green when
+  earning; plain pink when a net cost). The math was always consistent:
+  Net = import cost − export revenue. (reported by @hrdilshan)
+
+# [1.7.4-beta.13] — 04.07.2026
+
+> **Pre-release.** Observability + contract-test pass (#553 wrap-up).
+
+### 🔎 Diagnostics & guardrails
+- 🧭 The `diagnose` action's `ev_actuation` block now reports
+  **`idle_guard_armed`** — SEM's belief that the KEBA runaway-cap energy
+  target is armed (stop arms, start releases). One service call to triage.
+- 🧪 **Silent-no-op contract extended to switches and selects**: the wiring
+  test that already guards number knobs now covers switch/select entities —
+  including a source-scan that fails CI when a new dynamic per-charger /
+  per-battery key isn't covered. (No dead knobs found today.)
+- 📖 Audit playbook: hardware-facing values require one live device
+  round-trip before tagging (the 1 Wh-vs-1 kWh KEBA lesson).
+
+# [1.7.4-beta.12] — 03.07.2026
+
+> **Pre-release.** KEBA guard correction — beta.11's tagged build carried a
+> silent no-op guard value.
+
+### 🔌 KEBA — runaway cap corrected (#553)
+- 🐛 beta.11 tagged the guard at ~1 Wh, which the KEBA library **rejects**
+  (minimum 1 kWh; the error is swallowed as a log line) — caught by a live
+  layer-check on a real P30. The guard now arms **1 kWh**: a runaway cap that
+  bounds a firmware auto-start session when SEM is down or restarting
+  (previously unbounded). Per-retry policing while SEM is alive is #552's job
+  and unchanged. Authorization-based approaches are explicitly out of scope.
+
+# [1.7.4-beta.11] — 03.07.2026
+
+> **Pre-release.** Improvement batch (#553): KEBA idle-guard, full grid schema, cleanup.
+
+### 🔌 KEBA — box-level runaway cap (#315)
+- 🛡️ **A KEBA auto-start that SEM isn't policing now stops itself at the box
+  after 1 kWh.** The firmware retries a stored session every ~10 min when a
+  hungry car is plugged; SEM kills each within a cycle (#552) — this guard
+  bounds the damage when SEM is down or restarting (previously unbounded).
+  SEM arms a 1 kWh session-energy target on every stop and releases it on
+  every start. (1 kWh is the KEBA library minimum — live-verified on the
+  real P30; the originally announced ~1 Wh value is rejected by the library.)
+
+### ⚡ Grid — full Energy-Dashboard schema (#551 sibling)
+- 🐛 Grid sources support the same `power_config` modes as batteries; the
+  Two-sensor mode is now consumed correctly as import/export split
+  (review-caught: the first draft read the import side as a combined sensor —
+  permanent phantom export). Inverted combined sensors defer to the #461
+  sign-detection stack.
+- 🔋 **Multiple two-sensor batteries** are now summed per-battery (previously
+  only the first pair fed real-time power).
+
+### 🧹 Cleanup & clarity
+- 🚀 A draw found at boot while SEM wants idle is disabled on the first cycle
+  (no wind-down grace for a session SEM never commanded).
+- 🏷️ **"Assist Max" → "Battery → EV assist limit"**, **"Max discharge power" →
+  "Battery total discharge limit"** — new help text explains the containment
+  (assist is a sub-limit of the total), 15 languages.
+- 🪦 Retired: the write-only "Vehicle Start Amps" knob (the start-kick
+  auto-discovers the latch current since beta.57), three dead legacy consts
+  maps, and the unused mid-session energy-target updater.
+
+# [1.7.4-beta.10] — 03.07.2026
+
+> **Pre-release.** Battery readings for every Energy-Dashboard battery mode.
+
+### 🔋 Battery — full Energy-Dashboard schema support (#551)
+- 🐛 **Batteries configured with HA's "Two sensors" power mode showed
+  "sensor unavailable" and SOC 0%** (reported with a Fronius Verto 15.0 Plus).
+  SEM only read the top-level `stat_rate` — which HA writes only for the
+  Standard mode — and never read the dialog's SOC field at all.
+- ✅ SEM now parses the complete battery `power_config` (**Standard /
+  Inverted / Two sensors**) and the explicit **`stat_soc`** state-of-charge
+  entity: real-time power is computed as charge − discharge for two-sensor
+  setups, inverted sensors are flipped on read, and SOC comes deterministically
+  from what you configured in HA — the auto-detect heuristics remain only as
+  fallback. No SEM-side reconfiguration needed. (reported by @ebnerjoh)
+- 🧪 Live-verified with the reporter's exact configuration shape; 9 new
+  regression tests including the full Fronius pipeline; 4016 tests green.
+
+# [1.7.4-beta.9] — 02.07.2026
+
+> **Pre-release.** Root-cause fix: SEM never starts or holds a charge it didn't command.
+
+### 🔋 EV charging — session ownership (#552)
+- 🐛 **`solar_only` no longer drains the home battery at night.** When a KEBA
+  auto-started at its stored setpoint (car retry, #315), the charge-stability
+  deficit-hold engaged for the un-owned draw — rewriting decide()'s correct
+  IDLE into a 10 A charge command and formally STARTing a session nobody
+  decided, pulling ~4.9 kW from the battery in 90 s–4 min bursts every ~10
+  minutes after sunset (~2 kWh per evening, observed on PROD 01.+02.07).
+- 🛡️ **Fix = session ownership**: the stability layer only bridges/holds
+  sessions it started itself, and the reconciler's idle grace applies only
+  while winding down SEM's own stop — a draw appearing after idle has settled
+  is disabled immediately, every cycle it persists.
+- ✅ **Live-verified on PROD**: 30-min watch, two box auto-starts on the old
+  cadence, both killed in ≤10 s with zero SEM starts (was 90–240 s each).
+  ruflo-reviewed (0 blocker/0 high); 10 new regression tests; 4007 tests green.
+
+# [1.7.4-beta.8] — 02.07.2026
+
+> **Pre-release.** Documentation overhaul — no code changes.
+
+### 📚 Documentation
+- 🏬 **README reworked for the HACS default store** — the competitor comparison
+  is gone (SEM speaks for itself), install instructions reflect the default
+  store with an "Open in HACS" button.
+- 📸 **All 8 dashboard tab screenshots recaptured** chrome-free (no side panel,
+  no header) — including the previously missing **Configuration tab** shot.
+- 🧹 **fold-entity-row retired from the required HACS cards** (zero uses since
+  the onboarding banner became a bundled card) — required set is now card-mod,
+  mushroom, apexcharts-card, sankey-chart.
+- 🛠️ **Repo-wide accuracy pass, every fix verified against code**: the KEBA
+  failsafe doc had its default inverted (managed-neutralize IS the default);
+  retired battery knobs removed from the User Guide; EV-intelligence sensor
+  list rewritten to the real per-charger entities; stale entity names,
+  defaults, ADR field names and broken links fixed across 14 files.
+
+# [1.7.4-beta.7] — 01.07.2026
+
+> **Pre-release.** Dashboard config reachability + dormant arbitrage hardening.
+
+### ⚙️ Configuration on the dashboard (#550)
+- 🔋 **Battery SOC sensor picker** on the Config tab — if SEM didn't auto-detect
+  your battery state-of-charge (e.g. Deye + Seplos: SOC is in the Energy
+  Dashboard but shows unavailable), you can now point SEM at the SOC entity
+  directly. No device-class filter, so any sensor is selectable. (reported by @praun)
+- 🔌 **Heat-pump temperature-sensor picker** and **Invert SG-Ready toggle** added
+  to the Config tab — both were structural settings with no UI (the toggle was
+  reachable only via the native options flow).
+- 🧭 **Structural toggles now batch through the Apply bar** like the entity
+  pickers, so flipping one no longer fires its own reload and discards a staged
+  edit. Full 15-language labels + help. ruflo-reviewed.
+
+### 🔧 Internal — battery→grid arbitrage hardening (#533, still DEACTIVATED)
+- 🛡️ The dormant arbitrage path was hardened ahead of a future v1.7.4 activation
+  (view-plumbed market signals, a peak-aware export cap, and a clean cross-brand
+  `STOP_FORCE_DISCHARGE` stop). **No behaviour change** — three gates keep it off
+  (`_any_allow_arb=False`, migration v14 forces the toggle off, `allow_arbitrage`
+  out of the selector). ruflo-reviewed; re-enable checklist documented.
+
+# [1.7.4-beta.6] — 30.06.2026
+
+> **Pre-release.** Completes the dashboard-first configuration work (#528).
+
+### ⚙️ Configuration on the dashboard — completion (#528)
+- 🔋 **Battery discharge-protection settings** now on the Config tab (Battery
+  zones): protection toggle, max-discharge-power knob, and the discharge-limit
+  entity picker — no more options-flow trip for these.
+- 🔌 **Add / remove EV chargers from the dashboard.** A "+ Add charger" button
+  appends a new charger (then wire it with the per-charger pickers), and each
+  charger has a "✕" with an inline confirm (new `remove_charger` service,
+  preserves siblings). The main reason to open the native flow is gone.
+- 🧭 The native options flow stays as a headless fallback and now **points to
+  the dashboard Config tab** (translated, 15 languages).
+- ruflo-reviewed; full suite green; add/remove live-verified on HA-TEST.
+
+# [1.7.4-beta.5] — 30.06.2026
+
+> **Pre-release.** Currency fix for high-denomination currencies.
+
+### 💱 Tariff — currency-agnostic price bounds (#549)
+- 🐛 **Price entities were unusable for high-denomination currencies.** With HA
+  currency set to LKR (or IDR/VND/JPY/…), the import/export rate, cheap/expensive
+  threshold and demand-charge entities showed the right unit (`LKR/kWh`) but kept
+  EUR/CHF-scale caps (export max 0.5), so a real 22 LKR/kWh tariff couldn't be
+  entered. The ceilings are now currency-agnostic (rates/thresholds 10000,
+  demand 100000) across all three surfaces — number entities, the Config-tab
+  inputs, and the OptionsFlow selectors. Fine steps kept, so decimal currencies
+  (CHF/EUR) are unchanged. (by @hrdilshan in #549)
+
+# [1.7.4-beta.4] — 30.06.2026
+
+> **Pre-release.** Dashboard-first configuration — the Config tab, made colorful and easy (#528).
+
+### ⚙️ Configuration on the dashboard (#528)
+- 🎨 **The Config tab is now the home for post-setup configuration, in the colorful
+  battery-card design language** — accent sliders with value chips, an SOC-zone
+  strip, and per-section accent theming across every section (no more flat
+  stepper rows). You rarely need HA's Settings → Devices → Configure flow.
+- 🔌 **Batched Apply for entity wiring** — entity pickers that reload the entry
+  now stage their edits and commit in **one** reload via a sticky Apply bar,
+  instead of a reload per field. Tunables still save live.
+- 🧭 **First-run completeness guide** — the Setup overview shows a progress bar +
+  "Set up →" chips that jump to the unconfigured section, and recedes to a green
+  "All set up" when done.
+- 🌍 Full **15-language** translations for the new UI; added the missing
+  hot-water power-sensor picker. ruflo-reviewed.
+
+# [1.7.4-beta.3] — 28.06.2026
+
+> **Pre-release.** Adds per-charger actuation diagnostics for the "SEM says stop but the box keeps charging" class (#548).
+
+### 🔌 EV — actuation diagnostics + stop-not-taking signal (#548)
+- 🔍 **The Diagnose button now shows the actuation truth.** A new per-charger
+  `ev_actuation` block reports the adapter, the status sensor's raw value +
+  classification, the enable-switch entity + state, whether SEM can drive it
+  (`enable_state`), the `actual_charging`/`is_self_charging` verdicts, the
+  believed setpoint vs live power, and the reconciler's last desired state +
+  actions + a `stop_commanded_while_drawing` counter. One screenshot now tells
+  "SEM never issued the stop" apart from "SEM issued it but the box ignored it"
+  — no more multi-round triage.
+- ⚠️ The reconciler now **logs a warning** ("commanded STOP N× but charger still
+  drawing") when a stop isn't taking, so an ignored stop is no longer silent.
+- Note: the decision/stop arc itself is verified sound — a max-SOC ceiling stops
+  promptly on a responsive charger (HA-TEST mock: 6 A → 0 A in ~20 s). When a
+  real charger keeps drawing, the cause is downstream of SEM (HA↔charger link or
+  the charger ignoring the stop), which this diagnostic now pinpoints.
+
+# [1.7.4-beta.2] — 27.06.2026
+
+> **Pre-release.** Generalises the Wallbox status-enum fix to every charger brand.
+
+### 🔌 EV — cross-brand status-enum classifier (#548)
+- ✨ **Every charger brand now uses its STATUS enum (authoritative) instead of the
+  cloud-lagged power reading** to decide "is it charging?" and "can SEM stop it?".
+  The Wallbox #548 fix is generalised into one shared classifier
+  (`coordinator/charger_adapters/status_enum.py`) mapping each brand's real
+  HA-integration status strings — Easee, Zaptec, go-e, Ohme, OCPP, Alfen,
+  Heidelberg, Wallbox — to charging / not_charging / locked. `GenericAdapter`
+  reads it over the already-configured status sensor; KEBA stays power-based.
+  Strictly additive: no status sensor / unrecognised string → unchanged
+  power-based behaviour. App/cloud-locked states (Eco-Smart, Easee smart-start,
+  Ohme pending-approval, Alfen in-operative) now surface "can't stop — leave
+  eco-smart" instead of spinning silently.
+- 📝 `docs/MULTI_CHARGER.md` gains a per-brand reference table (verified against
+  each HA integration source) + actuation caveats (Easee/Zaptec/go-e set-0≠stop;
+  Ohme is on/off only; Heidelberg reg-261 reboot revert).
+- ✅ Verified: per-brand classifier tests, every-mode KEBA parity, control-pattern
+  coverage, and a live HA-TEST mock walk (Zaptec/Alfen charging strings detected
+  over 0 W; Eco-Smart lock surfaced). Full suite 3986 green.
+
+# [1.7.4-beta.1] — 27.06.2026
+
+> **Pre-release.** Opens the 1.7.4 line. Headline: Wallbox now stops reliably in
+> OFF mode (and every other mode reacts exactly as KEBA does). Battery→grid
+> arbitrage remains **deactivated** (still tracked for 1.7.4 stable in #533).
+
+### 🔌 EV — Wallbox status-enum adapter (#548)
+- 🐛 **Wallbox kept charging in OFF mode.** The reconciler judged "still drawing?"
+  from the power reading, but Wallbox power arrives over a ~90 s cloud poll — so
+  OFF mode read "already stopped" on the first cycle and quit re-issuing the stop
+  while the box kept charging. The firmware **status enum** is now authoritative
+  for the Wallbox (evcc-connector concept, no cloud transport needed):
+  `actual_charging` trusts `Charging`/`Paused`/… over the lagging power, and
+  app-locked states (Eco-Smart / Scheduled / Power-Sharing / Locked) surface a
+  clear "can't stop — leave eco-smart" repair instead of spinning silently.
+  Strictly additive: no status sensor ⇒ unchanged power-based behaviour; KEBA
+  untouched.
+- ✅ **Parity:** all four charge modes (off / solar_only / min_plus_solar /
+  always_max) now react on the Wallbox exactly as they do on KEBA — verified by
+  `tests/test_548_mode_parity.py` and a live HA-TEST mock-Wallbox walk.
+- 📝 `docs/MULTI_CHARGER.md` documents the status-enum road for the next brands
+  to migrate (Easee / go-e / OCPP / Ohme / Alfen).
+
 # [1.7.3] — 27.06.2026
 
 > **Stable release.** Consolidates the 1.7.3 beta line (beta.1 → beta.65, detailed

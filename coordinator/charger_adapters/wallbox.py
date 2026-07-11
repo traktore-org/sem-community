@@ -29,13 +29,21 @@ from typing import TYPE_CHECKING, Optional
 
 from homeassistant.helpers import entity_registry as er
 
-from ..charger_types import ChargerIntent
 from .generic import GenericAdapter
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...devices.base import CurrentControlDevice
 
 _LOGGER = logging.getLogger(__name__)
+
+# #548 — the Wallbox status enum (HA core ``wallbox/const.py``
+# ChargerStatus) is now part of the shared cross-brand classifier in
+# ``status_enum.py``, read by ``GenericAdapter`` (which this adapter
+# extends). WallboxAdapter therefore inherits the status-enum-authoritative
+# ``actual_charging`` / ``enable_state`` for free — it only adds the
+# brand-specific pause-resume switch handling below. The evcc-connector
+# concept (status enum > cloud-lagged power) is the same; it just lives in
+# one place now so every brand benefits.
 
 
 def _looks_like_wallbox(device: "CurrentControlDevice") -> bool:

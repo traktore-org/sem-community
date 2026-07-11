@@ -7,6 +7,7 @@
 
 // Display cards
 import './cards/sem-title-card.js';
+import './cards/sem-require-card.js';
 import './cards/sem-tab-header.js';
 import './cards/sem-weather-card.js';
 import './cards/sem-period-selector-card.js';
@@ -16,6 +17,7 @@ import './cards/sem-gauge-card.js';
 
 // Hero / SVG cards
 import './cards/sem-solar-card.js';
+import './cards/sem-solar-kpi-card.js';
 import './cards/sem-solar-summary-card.js';
 import './cards/sem-battery-card.js';
 import './cards/sem-grid-card.js';

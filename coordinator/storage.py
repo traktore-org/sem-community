@@ -8,6 +8,7 @@ Uses two storage strategies:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional, Callable
 
@@ -25,6 +26,12 @@ STORAGE_VERSION = 1
 
 # Delayed save interval for energy totals (seconds)
 ENERGY_SAVE_DELAY = 60
+# Throttle interval for periodic daily-state writes (seconds). The daily store
+# previously only reached disk on a graceful HA stop (async_delay_save resets
+# its timer on every call, so under the continuous coordinator loop it never
+# fired mid-run), so an unclean reboot lost the day's device-runtime progress.
+# async_save_daily_throttled writes immediately at most this often instead.
+DAILY_SAVE_INTERVAL = 120
 
 
 class SEMStorage:
@@ -50,6 +57,7 @@ class SEMStorage:
         # State tracking
         self._loaded = False
         self._shutdown_listener: Optional[Callable] = None
+        self._last_daily_save_ts: float = 0.0  # monotonic, for the throttle
 
     @property
     def is_loaded(self) -> bool:
@@ -86,15 +94,26 @@ class SEMStorage:
             self._energy_data = self._get_default_energy_data()
 
     async def _load_daily_data(self) -> None:
-        """Load daily baselines from storage."""
+        """Load daily baselines from storage.
+
+        (#563) The calculator's accumulators (daily/monthly/yearly/
+        lifetime/cost) live in THIS store — apply the same per-entry
+        repair as the energy store so a single bad value (e.g. a
+        pre-#551 ×1000-inflated lifetime counter) can never take the
+        day's data down with it.
+        """
         try:
             stored = await self._daily_store.async_load()
             if stored:
-                self._daily_data = stored
-                _LOGGER.info(
-                    "Loaded daily data: %d baselines",
-                    len(stored.get("baselines", {})),
-                )
+                if not self._validate_daily_data(stored):
+                    _LOGGER.warning("Daily data failed validation, starting fresh")
+                    self._daily_data = self._get_default_daily_data()
+                else:
+                    self._daily_data = stored
+                    _LOGGER.info(
+                        "Loaded daily data: %d baselines",
+                        len(stored.get("baselines", {})),
+                    )
             else:
                 _LOGGER.info("No persisted daily data found, starting fresh")
                 self._daily_data = self._get_default_daily_data()
@@ -104,41 +123,30 @@ class SEMStorage:
 
     @staticmethod
     def _validate_energy_data(data: Dict[str, Any]) -> bool:
-        """Validate restored energy data is within sane ranges (#37).
+        """Validate + repair restored energy data (#37, #563).
 
         Catches corrupted storage (partial writes, disk errors) before
         the values propagate into energy sensors.
+
+        Returns False only for STRUCTURAL corruption (wrong types) —
+        that discards the store. Per-entry problems (non-numeric or
+        out-of-range values) are repaired in place by dropping just the
+        offending accumulator: #563 proved the all-or-nothing version
+        destroyed data — one ×1000-inflated lifetime counter (pre-#551
+        Wh-as-kWh reads) tripped the 100 MWh cap on the upgrade restart
+        and wiped every daily/monthly/cost accumulator with it. Dropped
+        lifetime entries are re-seeded from hardware counters by the
+        energy calculator; daily/monthly entries rebuild naturally.
         """
         if not isinstance(data, dict):
             return False
 
-        # Validate all accumulator dicts
-        for acc_key in ("accumulators", "daily_accumulators", "monthly_accumulators",
-                        "yearly_accumulators", "lifetime_accumulators"):
-            accumulators = data.get(acc_key)
-            if accumulators is None:
-                continue
-            if not isinstance(accumulators, dict):
-                _LOGGER.warning("Storage key '%s' is not a dict", acc_key)
-                return False
-            for key, value in accumulators.items():
-                if not isinstance(value, (int, float)):
-                    _LOGGER.warning("Non-numeric accumulator %s.%s=%s", acc_key, key, value)
-                    return False
-                # Daily accumulators should never be negative
-                if acc_key == "daily_accumulators" and value < -0.01:
-                    _LOGGER.warning(
-                        "Negative daily accumulator %s=%.2f kWh — resetting to 0",
-                        key, value,
-                    )
-                    accumulators[key] = 0.0
-                # Sane range: no single accumulator should exceed 100 MWh
-                if abs(value) > 100_000:
-                    _LOGGER.warning(
-                        "Accumulator %s.%s=%.1f kWh exceeds 100 MWh limit",
-                        acc_key, key, value,
-                    )
-                    return False
+        if not SEMStorage._repair_accumulator_dicts(
+            data,
+            ("accumulators", "daily_accumulators", "monthly_accumulators",
+             "yearly_accumulators", "lifetime_accumulators"),
+        ):
+            return False
 
         # Validate last_update timestamp if present
         last_update = data.get("last_update")
@@ -146,6 +154,71 @@ class SEMStorage:
             _LOGGER.warning("Invalid last_update type: %s", type(last_update))
             return False
 
+        return True
+
+    @staticmethod
+    def _validate_daily_data(data: Dict[str, Any]) -> bool:
+        """Validate + repair the daily store (#563).
+
+        This store holds the calculator's real accumulators; same
+        per-entry repair semantics as ``_validate_energy_data``.
+        ``solar_counter_baselines`` (#556) is deliberately NOT in the
+        whitelist — it holds nested dicts and a date string, which the
+        numeric-value repair would mangle."""
+        if not isinstance(data, dict):
+            return False
+        return SEMStorage._repair_accumulator_dicts(
+            data,
+            ("daily_accumulators", "monthly_accumulators",
+             "yearly_accumulators", "lifetime_accumulators",
+             "daily_cost_accumulators", "monthly_cost_accumulators",
+             "yearly_cost_accumulators"),
+        )
+
+    @staticmethod
+    def _repair_accumulator_dicts(data: Dict[str, Any], acc_keys) -> bool:
+        """Per-entry repair of accumulator dicts inside ``data``.
+
+        Returns False only on STRUCTURAL corruption (an accumulator
+        container that is not a dict). Bad entries are repaired in
+        place: non-numeric and >100 MWh values are dropped (dropped
+        lifetime entries get re-seeded from hardware counters by the
+        energy calculator; daily/monthly rebuild naturally), negative
+        daily values are clamped to 0."""
+        for acc_key in acc_keys:
+            accumulators = data.get(acc_key)
+            if accumulators is None:
+                continue
+            if not isinstance(accumulators, dict):
+                _LOGGER.warning("Storage key '%s' is not a dict", acc_key)
+                return False
+            dropped = []
+            for key, value in accumulators.items():
+                if not isinstance(value, (int, float)):
+                    _LOGGER.warning(
+                        "Non-numeric accumulator %s.%s=%s — dropping entry",
+                        acc_key, key, value,
+                    )
+                    dropped.append(key)
+                    continue
+                # Sane range: no single accumulator should exceed 100 MWh
+                if abs(value) > 100_000:
+                    _LOGGER.warning(
+                        "Accumulator %s.%s=%.1f kWh exceeds 100 MWh limit — "
+                        "dropping entry (rest of the store is kept)",
+                        acc_key, key, value,
+                    )
+                    dropped.append(key)
+                    continue
+                # Daily accumulators should never be negative
+                if acc_key == "daily_accumulators" and value < -0.01:
+                    _LOGGER.warning(
+                        "Negative daily accumulator %s=%.2f kWh — resetting to 0",
+                        key, value,
+                    )
+                    accumulators[key] = 0.0
+            for key in dropped:
+                del accumulators[key]
         return True
 
     def _get_default_energy_data(self) -> Dict[str, Any]:
@@ -239,12 +312,16 @@ class SEMStorage:
         """Get all persisted device runtimes."""
         return self._daily_data.get("device_runtimes", {})
 
-    def set_device_runtime(self, device_id: str, accumulated_sec: float, meter_day: str) -> None:
-        """Persist a device's daily runtime."""
+    def set_device_runtime(
+        self, device_id: str, accumulated_sec: float, meter_day: str,
+        accumulated_kwh: float = 0.0,
+    ) -> None:
+        """Persist a device's daily runtime (+ energy progress, #559)."""
         if "device_runtimes" not in self._daily_data:
             self._daily_data["device_runtimes"] = {}
         self._daily_data["device_runtimes"][device_id] = {
             "accumulated_sec": accumulated_sec,
+            "accumulated_kwh": accumulated_kwh,
             "meter_day": meter_day,
         }
 
@@ -373,6 +450,23 @@ class SEMStorage:
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to save daily data: %s", e)
 
+    async def async_save_daily_throttled(self) -> None:
+        """Write the daily store to disk immediately, at most once per
+        DAILY_SAVE_INTERVAL seconds.
+
+        Deliberately NOT async_delay_save: that resets its delay timer on
+        every call, so under the continuous coordinator update loop it never
+        fires until updates pause (i.e. only at shutdown). This throttle
+        guarantees a real mid-run write, bounding unclean-reboot loss of the
+        device-runtime counter (and the rest of the daily state) to one
+        interval instead of the whole day.
+        """
+        now = time.monotonic()
+        if now - self._last_daily_save_ts < DAILY_SAVE_INTERVAL:
+            return
+        self._last_daily_save_ts = now
+        await self.async_save_daily()
+
     async def async_save_all(self) -> None:
         """Save all data immediately (for shutdown)."""
         try:
@@ -427,6 +521,10 @@ class SEMStorage:
             "yearly_cost_accumulators": dict(self._daily_data.get("yearly_cost_accumulators", {})),
             "last_update": self._energy_data.get("last_update"),
             "yearly_seeded": self._daily_data.get("yearly_seeded", False),
+            # (#556) solar hardware-counter baselines
+            "solar_counter_baselines": dict(
+                self._daily_data.get("solar_counter_baselines", {})
+            ),
         }
 
     def import_energy_calculator_state(self, state: Dict[str, Any]) -> None:
@@ -448,6 +546,9 @@ class SEMStorage:
             self._daily_data["yearly_cost_accumulators"] = state["yearly_cost_accumulators"]
         if "yearly_seeded" in state:
             self._daily_data["yearly_seeded"] = state["yearly_seeded"]
+        # (#556) solar hardware-counter baselines
+        if "solar_counter_baselines" in state:
+            self._daily_data["solar_counter_baselines"] = state["solar_counter_baselines"]
 
     def export_forecast_tracker_state(self) -> Dict[str, Any]:
         """Export state for ForecastTracker."""

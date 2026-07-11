@@ -47,5 +47,5 @@ forbidden kwargs by a static allowlist; if a kwarg is misclassified as
 per-charger when it should be fleet state, the lint won't catch it. Review the
 allowlist when adding a new kwarg to `build_charger_view`.
 
-See `coordinator/charger_types.py:FleetCycleState` (line 541) and
+See `coordinator/charger_types.py:FleetCycleState` (line 640) and
 `coordinator/_build_fleet_cycle_state` for construction.

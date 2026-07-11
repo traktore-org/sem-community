@@ -6,20 +6,7 @@
 
 Complete reference for Solar Energy Management (SEM).
 
-![SEM Dashboard](docs/images/sem_dashboard_overview.png)
-
----
-
-## v1.6.0 — important note for users with custom automations or templates
-
-In v1.6.0, SEM unified its internal EV-budget calculation so that the dashboard, the state machine, and the EV charger all read from the same value (see [docs/ARCHITECTURE.md → EV Budget Calculation](docs/ARCHITECTURE.md#ev-budget-calculation) for the deep dive). As a result, **two published sensors now report a different number than they did in 1.5.x**:
-
-| Sensor | Pre-1.6.0 | Post-1.6.0 |
-|---|---|---|
-| `sensor.sem_available_power` | Raw solar surplus `max(0, solar − home − batt_charge) + batt_discharge` | Strategy-aware canonical budget (includes battery redirect when `solar_only`, includes battery-assist when `battery_assist`, applies grid floor when `min_pv`) |
-| `sensor.sem_calculated_current` | `round(available_power / (230 × 3))` | `floor(canonical_net_w / (230 × 3))`, clamped `[0, 16]` |
-
-The canonical value is the **more honest** number — it matches what the state machine actually decides with and what SEM commands on the charger. If your automation depended on the pre-1.6.0 raw-surplus formula, you'll see different (usually higher when the home battery is charging) numbers. The behavioural change is documented in [CHANGELOG.md](CHANGELOG.md) under the v1.6.0 entry; no migration steps are needed beyond updating any thresholds you may have hard-coded in your automations.
+![SEM Dashboard](docs/images/sem_home_tab.png)
 
 ---
 
@@ -83,9 +70,7 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `battery_priority_soc` | 30% | Below: all solar to battery, EV blocked |
-| `battery_minimum_soc` | — | Absolute minimum discharge floor |
-| `battery_resume_soc` | — | Hysteresis resume threshold |
-| `battery_buffer_soc` | 70% | Above: battery can discharge for EV |
+| `battery_buffer_soc` | 70% | Above: battery can discharge for EV. This is the single assist floor — below it, battery assist to the EV stops |
 | `battery_auto_start_soc` | 90% | Above: start EV even without surplus |
 | `battery_assist_max_power` | 4500W | Maximum battery discharge for EV (1000-10000W) |
 | `battery_assist_min_surplus` | 1200W | **Solar Gate (v1.7.3)** — battery only assists above this real solar surplus (0-5000W) |
@@ -282,9 +267,9 @@ The battery begins discharging to supplement solar for the EV. The assist power 
 
 Full battery assist (default 4500W). The EV starts charging even without solar surplus — the battery alone can push the EV above its minimum threshold.
 
-### Hysteresis
+### Assist floor
 
-Once battery-assist mode activates (Zone 3 or 4), it stays active even if SOC drops back into Zone 2, all the way down to `battery_assist_floor_soc` (default 60%). This prevents on/off cycling when the SOC hovers near a zone boundary.
+Battery assist to the EV is gated by the **buffer SOC** (default 70%): above it the battery may help charge the EV, below it assist stops. The buffer is the single assist floor — the separate `battery_assist_floor_soc` knob was removed and folded into it.
 
 ### Per-Battery Modes (Multi-Battery Systems, v1.7.3)
 
@@ -311,8 +296,7 @@ When you have multiple batteries (e.g. Huawei + Growatt, or split Huawei units),
 1. **SOC 30-69%** — Battery charges from solar. EV waits (surplus usually below 4140W minimum)
 2. **SOC hits 70%** — Battery assist kicks in (~2250W). Combined with surplus, EV may start charging
 3. **SOC hits 90%** — Full 4500W battery assist. EV charges near maximum
-4. **SOC drops below 70%** — Hysteresis keeps assist active (EV still charging)
-5. **SOC drops below 60%** — Assist stops. EV falls back to solar-only surplus
+4. **SOC drops below 70%** — Battery assist stops (buffer floor). EV falls back to solar-only surplus
 
 ### Tuning Tips
 
@@ -530,7 +514,7 @@ Consumption predictions adjust for outdoor temperature using Recurrent Auto flee
 
 ### Battery Health Tracking
 
-SEM compares energy accepted during full-cycle vs partial-charge sessions over months to estimate capacity degradation. Available as `sensor.sem_ev_battery_health`.
+SEM compares energy accepted during full-cycle vs partial-charge sessions over months to estimate EV capacity degradation, surfaced through the EV card's intelligence section. (The `sensor.sem_battery_health_score` sensor tracks your **home** battery, not the EV.)
 
 ### Multi-Device Aggregation
 
@@ -647,7 +631,7 @@ When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution bec
 
 ## Peak Load Management
 
-![Control Tab](docs/images/sem_control_panel.png)
+![Control Tab](docs/images/sem_control_tab.png)
 
 SEM monitors rolling 15-minute average power and progressively sheds loads to stay under your target peak limit. Only devices in `peak_only` or `surplus` mode can be shed. Devices in `off` mode are never touched.
 
@@ -803,17 +787,20 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_session_duration` — session duration (min)
 
 ### EV Intelligence Sensors
+
+Fleet-level:
 - `sensor.sem_ev_taper_trend` — taper state: "declining", "stable", "rising", "unknown"
-- `sensor.sem_ev_taper_ratio` — current power as % of session peak
-- `sensor.sem_ev_taper_minutes_to_full` — estimated minutes remaining to full charge
-- `sensor.sem_ev_estimated_soc` — virtual SOC estimate (0-100%)
-- `sensor.sem_ev_last_full_charge` — timestamp of last detected full charge
-- `sensor.sem_ev_energy_since_full` — kWh consumed since last full charge
-- `sensor.sem_ev_predicted_daily_consumption` — tomorrow's predicted EV consumption (kWh)
-- `sensor.sem_ev_nights_until_charge` — estimated nights before charging is needed
-- `sensor.sem_ev_charge_needed` — boolean: should charge tonight?
-- `sensor.sem_ev_battery_health` — estimated battery health (%)
-- `sensor.sem_ev_charge_skip_reason` — human-readable explanation of skip decision
+- `sensor.sem_ev_power` — total EV charging power across all chargers (W)
+- `sensor.sem_ev_remaining_range` — estimated range still to add (km)
+- `sensor.sem_ev_charger_count` — number of configured chargers
+
+Per charger (`{id}` = each charger's id):
+- `sensor.sem_charger_{id}_taper_trend` — taper state for this charger
+- `sensor.sem_charger_{id}_taper_ratio` — current power as % of session peak
+- `sensor.sem_charger_{id}_taper_minutes_to_full` — estimated minutes remaining to full charge
+- `sensor.sem_charger_{id}_estimated_soc` — virtual SOC estimate (0-100%), no car API needed
+- `sensor.sem_charger_{id}_vehicle_soc` — SOC from the car (when a `vehicle_soc_entity` is configured)
+- `sensor.sem_charger_{id}_session_energy` / `_session_solar_share` / `_daily_energy` — session + daily energy and solar share
 
 ### Forecast Sensors
 - `sensor.sem_forecast_today_kwh` — today's forecast (kWh)

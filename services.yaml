@@ -172,7 +172,7 @@ remove_device_control_mapping:
 
 register_surplus_device:
   name: Register Surplus Device
-  description: Register a device (switch, relay, smart plug) for solar surplus control. The device will be activated when surplus power is available, based on its priority.
+  description: Register a device (switch, relay, smart plug, or a climate.* air-conditioner / heat pump) for solar surplus control. One call is enough — the registration is persisted across restarts and the device defaults to surplus mode (SEM switches it on when surplus power is available, based on its priority). Returns a summary of the registered device.
   fields:
     device_id:
       name: Device ID
@@ -182,11 +182,48 @@ register_surplus_device:
         text:
     entity_id:
       name: Entity ID
-      description: The switch entity to control (e.g., "switch.shelly_hot_water")
+      description: The entity to control — a switch/input_boolean, or a climate.* entity when Device Type is "climate" (e.g., "switch.shelly_hot_water" or "climate.living_room_ac").
       required: true
       selector:
         entity:
-          domain: switch
+          domain:
+            - switch
+            - input_boolean
+            - climate
+    device_type:
+      name: Device Type
+      description: 'How SEM actuates the entity: switch (on/off via turn_on/off — the default) or climate (an AC / heat pump driven by hvac_mode + target temperature).'
+      required: false
+      default: switch
+      selector:
+        select:
+          options:
+            - switch
+            - climate
+    hvac_mode:
+      name: HVAC Mode (climate only)
+      description: For a climate device, the hvac_mode to set when SEM turns it ON (cool for an AC, heat/heat_cool for heating). Ignored for switch devices.
+      required: false
+      default: cool
+      selector:
+        select:
+          options:
+            - cool
+            - heat
+            - heat_cool
+            - dry
+            - fan_only
+            - auto
+    target_temperature:
+      name: Target Temperature (climate only)
+      description: For a climate device, the comfort target temperature to set when SEM turns it ON. Leave empty to keep the unit's current setpoint. Ignored for switch devices.
+      required: false
+      selector:
+        number:
+          min: 5
+          max: 35
+          step: 0.5
+          unit_of_measurement: "°C"
     name:
       name: Display Name
       description: Friendly name for the device
@@ -221,6 +258,62 @@ register_surplus_device:
         entity:
           domain: sensor
           device_class: power
+    control_mode:
+      name: Control Mode
+      description: "How SEM controls the device: surplus (SEM switches it on solar surplus — the default), peak_only (your own automations run it, SEM only sheds it to protect the grid peak), off (monitor only)."
+      required: false
+      default: surplus
+      selector:
+        select:
+          options:
+            - surplus
+            - peak_only
+            - "off"
+    daily_min_runtime_min:
+      name: Min Runtime per Day
+      description: Daily runtime target in minutes (e.g. 240 = pool pump runs at least 4h/day). SEM prefers solar surplus; the top-up policy decides what happens if the sun alone is not enough.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+    top_up_policy:
+      name: Top-up Policy
+      description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target on a dark day), cheap_hours (top up during cheap tariff windows)."
+      required: false
+      default: solar_only
+      selector:
+        select:
+          options:
+            - solar_only
+            - cheap_hours
+    stop_entity:
+      name: Stop Condition Sensor
+      description: Optional sensor that ends the device's day early (e.g. the car's SOC sensor).
+      required: false
+      selector:
+        entity:
+          domain: sensor
+    stop_at:
+      name: Stop Condition Value
+      description: The device stops once the stop sensor reaches this value (e.g. 80 for 80% SOC).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100000
+
+unregister_surplus_device:
+  name: Unregister Surplus Device
+  description: Remove a device previously registered with Register Surplus Device (also removes the persisted registration).
+  fields:
+    device_id:
+      name: Device ID
+      description: The device identifier used at registration
+      required: true
+      selector:
+        text:
 
 schedule_appliance:
   name: Schedule Appliance

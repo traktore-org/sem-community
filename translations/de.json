@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-Ladegerät",
-        "description": "Überprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
+        "description": "Tipp: Die meisten Einstellungen sind jetzt im SEM-Dashboard → Tab Konfiguration (farbig, live). Dieser Dialog bleibt für Setups ohne Dashboard.\n\nÜberprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
         "data": {
           "ev_connected_sensor": "EV-Verbindungsstatus",
           "ev_charging_sensor": "EV-Ladestatus",
@@ -379,6 +379,18 @@
           "daily_ev_target_max": "Solarüberschuss lädt bis hierhin, dann Stopp. Auf Voll lassen, um frei aus der Sonne zu laden.",
           "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden."
         }
+      },
+      "pv_naming": {
+        "title": "PV-Strings benennen",
+        "description": "Gib jedem Solar-String einen Namen (z. B. Ost / Süd / West). Welcher Slot zu welchem Panel gehört — die Nummerierung folgt deiner Energie-Dashboard-Solarliste, nicht der Himmelsrichtung:\n\n{mapping}\n\nLeer lassen, um den Standard (PV1/PV2/…) zu behalten.",
+        "data": {
+          "pv_name_pv1": "Name PV1",
+          "pv_name_pv2": "Name PV2",
+          "pv_name_pv3": "Name PV3",
+          "pv_name_pv4": "Name PV4",
+          "pv_name_pv5": "Name PV5",
+          "pv_name_pv6": "Name PV6"
+        }
       }
     }
   },
@@ -425,6 +437,9 @@
       },
       "battery_temperature": {
         "name": "Batterietemperatur"
+      },
+      "inverter_temperature": {
+        "name": "Wechselrichter-Temperatur"
       },
       "battery_cycles_estimated": {
         "name": "Batteriezyklen (geschätzt)"
@@ -585,6 +600,9 @@
       "yearly_solar_yield_energy": {
         "name": "Jährlich Solar"
       },
+      "lifetime_solar_yield_energy": {
+        "name": "Solarproduktion gesamt"
+      },
       "yearly_grid_import_energy": {
         "name": "Jährlich Netzimport"
       },
@@ -716,6 +734,9 @@
       },
       "forecast_remaining_today_kwh": {
         "name": "Prognose Rest Heute"
+      },
+      "forecast_power_now_w": {
+        "name": "Prognoseleistung Jetzt"
       },
       "forecast_source": {
         "name": "Prognosequelle"
@@ -932,6 +953,9 @@
       "solar_active": {
         "name": "Solar Aktiv"
       },
+      "surplus_available": {
+        "name": "Überschuss verfügbar"
+      },
       "forecast_available": {
         "name": "Prognose Verfügbar"
       },
@@ -1061,6 +1085,9 @@
       },
       "initial_current": {
         "name": "Fahrzeug Startstrom"
+      },
+      "surplus_event_threshold": {
+        "name": "Überschuss-Ereignis Schwelle"
       }
     },
     "select": {

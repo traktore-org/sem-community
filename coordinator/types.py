@@ -177,7 +177,12 @@ class PowerReadings:
     # Battery state
     battery_soc: float = 0.0
     battery_soc_unavailable: bool = False  # True when SOC sensor is offline
-    battery_temperature: float = 25.0
+    # (#564) None = no temperature source — published as unknown. The old
+    # 25.0 default was FABRICATED and shown as a real reading.
+    battery_temperature: Optional[float] = None
+    # (#564) inverter temperature — None = no source (shows unknown). The
+    # system diagram used to display battery_temperature in the inverter slot.
+    inverter_temperature: Optional[float] = None
 
     # Battery health (calculated from energy data)
     battery_cycles_estimated: float = 0.0
@@ -348,6 +353,12 @@ class EnergyTotals:
     yearly_battery_charge: float = 0.0
     yearly_battery_discharge: float = 0.0
     yearly_ev: float = 0.0
+
+    # Lifetime total (kWh) — #573: all-time solar production, seeded from the
+    # hardware energy counter so it matches the inverter's own lifetime figure
+    # (TotalActiveProduction / Gesamtenergieertrag). Monthly/Yearly stay
+    # period-scoped; this is the apples-to-apples anchor vs the inverter.
+    lifetime_solar: float = 0.0
 
     # v1.7.0 arch follow-up — per-device runtime dicts.
     # Populated by sensor_reader on multi-device installs. Empty on
@@ -552,6 +563,8 @@ class SurplusControlData:
     surplus_unallocated_w: float = 0.0
     surplus_active_devices: int = 0
     surplus_total_devices: int = 0
+    # (#559 Phase 0) debounced availability signal for user automations
+    surplus_available: bool = False
 
 
 @dataclass
@@ -855,6 +868,7 @@ class SEMData:
             "battery_discharge_power": self.power.battery_discharge_power,
             "battery_soc": None if self.power.battery_soc_unavailable else self.power.battery_soc,
             "battery_temperature": self.power.battery_temperature,
+            "inverter_temperature": self.power.inverter_temperature,
             "battery_cycles_estimated": self.power.battery_cycles_estimated,
             "battery_health_score": self.power.battery_health_score,
             "ev_connected": self.power.ev_connected,
@@ -890,6 +904,8 @@ class SEMData:
 
             # Yearly energy
             "yearly_solar_yield_energy": self.energy.yearly_solar,
+            # #573 — lifetime solar production (matches the inverter counter)
+            "lifetime_solar_yield_energy": self.energy.lifetime_solar,
             "yearly_home_consumption_energy": self.energy.yearly_home,
             "yearly_grid_import_energy": self.energy.yearly_grid_import,
             "yearly_grid_export_energy": self.energy.yearly_grid_export,
@@ -1047,13 +1063,16 @@ class SEMData:
             "surplus_allocated_w": self.surplus_control.surplus_allocated_w,
             "surplus_unallocated_w": self.surplus_control.surplus_unallocated_w,
             "surplus_active_devices": self.surplus_control.surplus_active_devices,
+            "surplus_available": self.surplus_control.surplus_available,
             "surplus_total_devices": self.surplus_control.surplus_total_devices,
 
             # Forecast (Phase 0)
             "forecast_today_kwh": self.forecast.forecast_today_kwh,
             "forecast_tomorrow_kwh": self.forecast.forecast_tomorrow_kwh,
             "forecast_remaining_today_kwh": self.forecast.forecast_remaining_today_kwh,
-            # (#544) forecast_power_now_w / forecast_power_next_hour_w removed — dead.
+            # (#575) forecast_power_now_w restored — consumed by the "Forecast vs
+            # Actual" chart. forecast_power_next_hour_w stays removed (orphan).
+            "forecast_power_now_w": round(self.forecast.forecast_power_now_w, 0),
             "forecast_peak_power_today_w": self.forecast.forecast_peak_power_today_w,
             "forecast_peak_time_today": self.forecast.forecast_peak_time_today,
             "forecast_source": self.forecast.forecast_source,

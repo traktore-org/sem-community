@@ -38,6 +38,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._sortable = null;
         this._interacting = false;
         this._lastDeviceSig = '';
+        this._showHelp = false;  // (#559) inline option help
+        this._goalOpen = {};      // (#559) device_id -> goal editor expanded
+        this._goalDrag = null;    // (#559) live drag state {id, which, value}
     }
 
     setConfig(config) {
@@ -159,6 +162,124 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.9em; }
             .configure-btn:hover { background:rgba(255,193,7,0.22); }
             .hint { text-align:center; font-size:0.95em; opacity:0.4; margin-top:10px; }
+            .help-btn {
+                width:24px; height:24px; border-radius:50%;
+                border:1px solid var(--divider-color, rgba(255,255,255,0.2));
+                background:transparent; color:var(--secondary-text-color,#999);
+                font-weight:700; cursor:pointer; margin-left:8px; flex:0 0 auto;
+            }
+            .help-btn.active { color:#ff9800; border-color:#ff9800; }
+            .help-panel {
+                margin:4px 0 14px; padding:12px 14px; border-radius:10px;
+                background:rgba(128,128,128,0.08);
+                font-size:0.9em; line-height:1.5;
+            }
+            .help-item { margin-bottom:8px; }
+            .help-item:last-child { margin-bottom:0; }
+            .help-item b { color:var(--primary-text-color,#e0e0e0); }
+            .goal-btn {
+                width:26px; height:26px; border-radius:8px;
+                border:1px solid var(--divider-color, rgba(255,255,255,0.15));
+                background:transparent; color:var(--secondary-text-color,#999);
+                cursor:pointer; display:flex; align-items:center; justify-content:center;
+                margin-left:6px; flex:0 0 auto;
+            }
+            .goal-btn.active { color:#ff9800; border-color:#ff9800; }
+            .goal-progress { display:flex; align-items:center; gap:8px; }
+            .goal-bar {
+                flex:1 1 auto; height:5px; border-radius:3px;
+                background:rgba(128,128,128,0.2); overflow:hidden; max-width:220px;
+            }
+            .goal-bar-fill { height:100%; border-radius:3px; transition:width 0.4s; }
+            .goal-progress-text { font-size:12px; color:var(--secondary-text-color,#999); white-space:nowrap; }
+            .ge-spacer { margin-left:auto; }
+            .ge-unit-select {
+                appearance:none; -webkit-appearance:none;
+                background-color:var(--secondary-background-color, rgba(255,255,255,0.07));
+                background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat:no-repeat; background-position:right 4px center;
+                background-size:12px;
+                color:var(--primary-text-color,#e0e0e0);
+                border:1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius:6px; padding:2px 20px 2px 8px;
+                font-size:11px; font-weight:600; cursor:pointer;
+                text-transform:none; letter-spacing:0;
+            }
+            .range-wrap { padding:6px 8px 10px; }
+            .range-labels {
+                display:flex; justify-content:space-between;
+                font-size:12px; color:var(--primary-text-color,#e0e0e0);
+                margin-bottom:10px;
+            }
+            .range-labels b { font-variant-numeric:tabular-nums; }
+            .range-track {
+                position:relative; height:6px; border-radius:3px;
+                background:rgba(255,255,255,0.14); margin:6px 9px;
+                touch-action:none; cursor:pointer;
+            }
+            .range-fill {
+                position:absolute; top:0; height:100%; border-radius:3px;
+                background:linear-gradient(90deg, #8DC892, #ff9800);
+            }
+            .range-handle {
+                position:absolute; top:50%; width:18px; height:18px;
+                border-radius:50%; transform:translate(-50%, -50%);
+                background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.5);
+                cursor:grab; touch-action:none; pointer-events:none;
+            }
+            .range-handle-min { border:3px solid #8DC892; }
+            .range-handle-max { border:3px solid #ff9800; }
+            /* EV charge-target look (#559 UI merge) */
+            .goal-editor {
+                margin:8px 0 4px 28px; padding:10px 12px;
+                border:1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius:10px; background:rgba(255,255,255,0.025);
+            }
+            .ge-title {
+                font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
+                color:var(--secondary-text-color,#999);
+                display:flex; align-items:center; gap:5px; margin-bottom:4px;
+            }
+            .ge-row {
+                display:flex; align-items:center; min-height:34px; padding:2px 0;
+            }
+            .ge-row + .ge-row { border-top:1px solid rgba(255,255,255,0.06); }
+            .ge-label { font-size:12px; color:var(--primary-text-color,#e0e0e0); }
+            .ge-ctl { margin-left:auto; display:flex; align-items:center; gap:7px; }
+            .ge-unit { font-size:12px; color:var(--secondary-text-color,#999); }
+            .ge-mode-select {
+                appearance:none; -webkit-appearance:none;
+                background-color:var(--secondary-background-color, rgba(255,255,255,0.07));
+                background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat:no-repeat; background-position:right 6px center;
+                background-size:14px;
+                color:var(--primary-text-color,#e0e0e0);
+                border:1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius:8px; padding:4px 24px 4px 10px;
+                font-size:12px; font-weight:600; cursor:pointer;
+            }
+            .goal-editor input[type=number], .goal-editor input[type=time], .goal-editor input[type=text] {
+                background:var(--secondary-background-color, rgba(255,255,255,0.07));
+                border:1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius:8px; color:var(--primary-text-color,#e0e0e0);
+                padding:4px 8px; width:72px; font-size:12px;
+                font-variant-numeric:tabular-nums;
+            }
+            .goal-editor input.ge-entity { width:160px; max-width:100%; }
+            /* Mobile: the stop-when row (entity + ≥ + number) overflows a
+               phone width and squeezes the label onto two lines. Stack the
+               label above the control and let the entity field flex. */
+            @media (max-width: 480px) {
+                .goal-editor { margin-left:6px; padding:10px; }
+                .ge-row { flex-wrap:wrap; align-items:flex-start; }
+                .ge-label { flex:1 0 100%; margin-bottom:4px; }
+                .ge-ctl { margin-left:0; width:100%; }
+                .goal-editor input.ge-entity { flex:1; width:auto; }
+            }
+            .ge-hint {
+                display:flex; align-items:center; gap:6px;
+                font-size:12px; color:#ff9800; padding:4px 0 6px;
+            }
             .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `;
     }
@@ -181,6 +302,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     id,
                     name: info.name || id.replace(/^(load_device_|energy_dashboard_)/, '').replace(/_/g, ' '),
                     power: (info.current_power || 0) / 1000,
+                    // (#577) self-calibrated rated power (W) — shown dimmed when
+                    // the load is off so the row keeps a meaningful number
+                    // instead of a bare "OFF".
+                    rating: info.power_rating || 0,
                     priority: info.priority || 5,
                     isOn: info.is_on || false,
                     isShed: info.is_shed || false,
@@ -196,6 +321,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     controlType: info.control?.type || 'switch',
                     controlMode: info.control_mode || 'peak_only',
                     dependsOn: info.depends_on || [],
+                    goals: info.goals || null,
+                    progress: info.progress || null,
                     blockedBy: info.blocked_by || null,
                     icon: this._resolveDeviceIcon(info),
                 }))
@@ -221,6 +348,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <span class="dim">${this._t('peak')}</span>
                         <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>
                         <span class="dim">/ ${this.targetPeakLimit.toFixed(1)}</span>
+                        <button class="help-btn ${this._showHelp ? 'active' : ''}" data-action="toggle-help"
+                                title="${this._t('help')}">?</button>
                     </div>
 
                     <div class="peak-box">
@@ -250,6 +379,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         </div>
                     </div>
 
+                    ${this._showHelp ? html`
+                    <div class="help-panel">
+                        <div class="help-item"><b>${this._t('off')}</b> — ${this._t('help_mode_off')}</div>
+                        <div class="help-item"><b>${this._t('peak_only')}</b> — ${this._t('help_mode_peak_only')}</div>
+                        <div class="help-item"><b>${this._t('mode_surplus')}</b> — ${this._t('help_mode_surplus')}</div>
+                        <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
+                        <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
+                        <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
+                        <div class="help-item"><b>${this._t('target_limit')}</b> — ${this._t('help_device_peak')}</div>
+                        <div class="help-item"><b>${this._t('daily_target')}</b> — ${this._t('help_device_target')}</div>
+                    </div>` : nothing}
+
                     <div class="section-label">
                         <ha-icon icon="mdi:drag-vertical" style="--mdc-icon-size:18px"></ha-icon>
                         ${this._t('drag_to_reorder')}
@@ -266,7 +407,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         : nothing}
 
                     <div class="hint" style="margin-top:12px;padding:10px;background:rgba(128,128,128,0.06);border-radius:10px">
-                        ${this._t('devices_auto_discovered')}
+                        ${this._t('devices_auto_discovered').replace(/<br\s*\/?>/g, ' — ')}
                     </div>
                 </div>
             </ha-card>
@@ -298,7 +439,13 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         </span>
                     </div>
                     <div class="device-power" data-field="power-${device.id}">
-                        ${onOff ? semFormatPower(device.power * 1000) : (device.isShed ? this._t('shed_label') : this._t('off'))}
+                        ${onOff
+                            ? semFormatPower(device.power * 1000)
+                            : (device.isShed
+                                ? this._t('shed_label')
+                                : (device.rating > 0
+                                    ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
+                                    : this._t('off')))}
                     </div>
                 </div>
                 ${device.blockedBy ? html`<div style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}
@@ -312,10 +459,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
                     <label class="toggle-label" title="${this._t('mode_tooltip')}">
                         <span class="dim">${this._t('mode')}</span>
-                        <select class="mode-select" data-action="control_mode" data-device="${device.id}">
-                            <option value="off" ?selected="${device.controlMode === 'off'}">${this._t('off')}</option>
-                            <option value="peak_only" ?selected="${device.controlMode === 'peak_only'}">${this._t('peak_only')}</option>
-                            <option value="surplus" ?selected="${device.controlMode === 'surplus'}">${this._t('surplus_mode')}</option>
+                        <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
+                            <option value="off" ?selected="${this._mergedMode(device) === 'off'}">${this._t('off')}</option>
+                            <option value="peak_only" ?selected="${this._mergedMode(device) === 'peak_only'}">${this._t('peak_only')}</option>
+                            <option value="surplus" ?selected="${this._mergedMode(device) === 'surplus'}">${this._t('mode_surplus')}</option>
                         </select>
                     </label>`}
                     <label class="toggle-label" title="${this._t('requires_tooltip')}">
@@ -331,9 +478,169 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <button class="arrow-btn" data-action="move-up"   data-device="${device.id}" title="${this._t('move_up')}">&#9650;</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">&#9660;</button>
                     </div>
+                    ${(device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging'
+                       || this._mergedMode(device) !== 'surplus') ? nothing : html`
+                    <button class="goal-btn ${this._goalOpen[device.id] ? 'active' : ''}"
+                            data-action="toggle-goal" data-device="${device.id}"
+                            title="${this._t('daily_target')}">
+                        <ha-icon icon="mdi:target" style="--mdc-icon-size:16px;pointer-events:none"></ha-icon>
+                    </button>`}
                 </div>
+                ${this._renderGoalProgress(device)}
+                ${this._goalOpen[device.id] ? this._renderGoalEditor(device) : nothing}
             </div>
         </div>`;
+    }
+
+    // ── (#559) goal engine UI — EV-charger look (one merged mode picker) ──
+
+    _mergedMode(device) {
+        // (#559 beta.19 freeze) three modes only — off / peak_only / surplus.
+        // Surplus = solar_only (never imports). cheap_hours stays a backend
+        // option for HW/HP but isn't surfaced here; the deadline/always mode
+        // was deleted.
+        const cm = device.controlMode || 'peak_only';
+        return cm === 'surplus' ? 'surplus' : cm;
+    }
+
+    _mergedModeLabel(device) {
+        const m = this._mergedMode(device);
+        const key = { off: 'off', peak_only: 'peak_only',
+                      surplus: 'mode_surplus' }[m] || m;
+        return this._t(key);
+    }
+
+    _applyMergedMode(device, merged) {
+        const map = {
+            off:       { control_mode: 'off' },
+            peak_only: { control_mode: 'peak_only' },
+            surplus:   { control_mode: 'surplus' },
+        }[merged];
+        if (!map) return;
+        device.controlMode = map.control_mode;
+        this._sendDeviceUpdate(device.id, 'control_mode', map.control_mode);
+        // migrate a legacy 'always' policy off the removed value
+        if (map.control_mode === 'surplus'
+            && device.goals?.top_up_policy === 'always') {
+            device.goals.top_up_policy = 'solar_only';
+            this._sendDeviceUpdate(device.id, 'top_up_policy', 'solar_only');
+        }
+        this.requestUpdate();
+    }
+
+    _hasTarget(device) {
+        return parseFloat((device.goals || {}).daily_min_runtime_min) > 0;
+    }
+
+    _goalPct(device) {
+        const g = device.goals, p = device.progress;
+        if (!g || !p) return null;
+        const target = parseFloat(g.daily_min_runtime_min);
+        if (!(target > 0)) return null;
+        return Math.min(100, (p.runtime_today_min / target) * 100);
+    }
+
+    // Single "at least" runtime slider, in hours (0 = no target, max 12h).
+    _renderGoalSlider(device) {
+        const SCALE_H = 12;
+        const g = device.goals || {};
+        const drag = this._goalDrag;
+        let hours = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
+        if (drag && drag.id === device.id) hours = drag.value;
+        const pct = Math.min(100, (hours / SCALE_H) * 100);
+        const fmt = (h) => (h % 1 === 0 ? String(h) : h.toFixed(1));
+        return html`
+            <div class="range-wrap">
+                <div class="range-labels">
+                    <span>${this._t('run_up_to')}
+                        <b style="color:#8DC892">${hours <= 0 ? this._t('no_target') : fmt(hours) + ' h'}</b>
+                    </span>
+                    <span style="color:var(--secondary-text-color,#999)">${this._t('goal_zero_hint')}</span>
+                </div>
+                <div class="range-track"
+                     @pointerdown=${(e) => this._goalSliderStart(e, device)}>
+                    <div class="range-fill" style="left:0;width:${pct}%;background:#8DC892"></div>
+                    <div class="range-handle range-handle-min" style="left:${pct}%"></div>
+                </div>
+            </div>`;
+    }
+
+    _goalSliderStart(e, device) {
+        e.stopPropagation();
+        e.preventDefault();
+        const SCALE_H = 12, STEP_H = 0.5;
+        const track = e.currentTarget;
+        const g = device.goals = device.goals || {};
+        const rect = track.getBoundingClientRect();
+        const toVal = (clientX) => {
+            let frac = (clientX - rect.left) / (rect.width || 1);
+            frac = Math.max(0, Math.min(1, frac));
+            return Math.round((frac * SCALE_H) / STEP_H) * STEP_H;
+        };
+        const apply = (clientX) => {
+            this._goalDrag = { id: device.id, value: toVal(clientX) };
+            this.requestUpdate();
+        };
+        apply(e.clientX);
+        const onMove = (ev) => apply(ev.clientX);
+        const onUp = (ev) => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            const minutes = Math.round(toVal(ev.clientX) * 60);
+            this._goalDrag = null;
+            g.daily_min_runtime_min = minutes;
+            this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
+            this.requestUpdate();
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+    }
+
+    _renderGoalProgress(device) {
+        // Only meaningful when SEM manages the device (Surplus). In Off /
+        // Peak-only the daily solar budget doesn't apply, so hide the row
+        // rather than show a stale/counting timer (#559 alex "Issue 6").
+        if (this._mergedMode(device) !== 'surplus') return nothing;
+        const pct = this._goalPct(device);
+        if (pct === null) return nothing;
+        const g = device.goals, p = device.progress;
+        const done = p.targets_met || pct >= 100;
+        const h = (min) => { const v = min / 60; return v % 1 === 0 ? String(v) : v.toFixed(1); };
+        const txt = h(p.runtime_today_min) + '/' + h(parseFloat(g.daily_min_runtime_min))
+            + ' ' + this._t('hours_on_solar_today');
+        return html`
+            <div class="goal-progress" style="padding:2px 0 0 28px">
+                <div class="goal-bar"><div class="goal-bar-fill" style="width:${pct}%;background:#8DC892"></div></div>
+                <span class="goal-progress-text">${txt}${done ? ' ✓' : ''}</span>
+            </div>`;
+    }
+
+    _renderGoalEditor(device) {
+        // Only meaningful in surplus mode — mode-gated disclosure.
+        if (this._mergedMode(device) !== 'surplus') return nothing;
+        const g = device.goals || {};
+        return html`
+            <div class="goal-editor">
+                <div class="ge-title">
+                    <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
+                    ${this._t('daily_target')}
+                </div>
+                ${this._renderGoalSlider(device)}
+                <div class="ge-row">
+                    <span class="ge-label">${this._t('stop_condition')}</span>
+                    <span class="ge-ctl">
+                        <input type="text" class="ge-entity" placeholder="${this._t('stop_entity_placeholder')}"
+                               .value="${g.stop_entity || ''}"
+                               data-goal="stop_entity" data-device="${device.id}">
+                        <span class="ge-unit">≥</span>
+                        <input type="number" min="0" step="1" style="width:56px"
+                               .value="${String(g.stop_at || 0)}"
+                               data-goal="stop_at" data-device="${device.id}">
+                    </span>
+                </div>
+            </div>`;
     }
 
     // ── SortableJS initialisation ──
@@ -415,18 +722,31 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 this._moveDevice(deviceId, action === 'move-up' ? -1 : 1);
             } else if (action === 'configure') {
                 this._showConfigureModal(target.dataset.energy, target.dataset.name);
+            } else if (action === 'toggle-help') {
+                this._showHelp = !this._showHelp;
+                this.requestUpdate();
+            } else if (action === 'toggle-goal') {
+                this._goalOpen[deviceId] = !this._goalOpen[deviceId];
+                this.requestUpdate();
             }
         };
 
         const delegateChange = (e) => {
-            const modeTarget = e.target.closest('[data-action="control_mode"]');
+            const modeTarget = e.target.closest('[data-action="combined_mode"]');
             if (modeTarget) {
                 const deviceId = modeTarget.dataset.device;
                 const device = this.devices.find(d => d.id === deviceId);
-                if (device) {
-                    device.controlMode = modeTarget.value;
-                    this._sendDeviceUpdate(deviceId, 'control_mode', modeTarget.value);
-                }
+                if (device) this._applyMergedMode(device, modeTarget.value);
+                return;
+            }
+            const goalTarget = e.target.closest('[data-goal]');
+            if (goalTarget) {
+                const deviceId = goalTarget.dataset.device;
+                const prop = goalTarget.dataset.goal;
+                let value = goalTarget.value;
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) { device.goals = device.goals || {}; device.goals[prop] = value; }
+                this._sendDeviceUpdate(deviceId, prop, String(value));
                 return;
             }
             const depTarget = e.target.closest('[data-action="depends_on"]');

@@ -158,6 +158,12 @@ SENSOR_TYPES = [
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
     ),
     SensorEntityDescription(
+        key="inverter_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+    ),
+    SensorEntityDescription(
         key="battery_cycles_estimated",
         state_class=SensorStateClass.TOTAL,
         suggested_display_precision=1,
@@ -342,6 +348,20 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        # #573 — lifetime solar production; seeded from and reconciled against
+        # the inverter's own energy counter, so it matches TotalActiveProduction
+        # / Gesamtenergieertrag. state_class TOTAL (not TOTAL_INCREASING) to match
+        # the sibling monthly/yearly solar-yield sensors and to tolerate the rare
+        # one-time #551 downward self-heal re-seed (Wh-as-kWh correction) without
+        # tripping HA's "total_increasing went backwards" warning.
+        key="lifetime_solar_yield_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        icon="mdi:solar-power-variant",
     ),
     SensorEntityDescription(
         key="yearly_grid_import_energy",
@@ -908,7 +928,17 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
-    # (#544) forecast_power_now_w / forecast_power_next_hour_w removed — dead.
+    # (#575) forecast_power_now_w restored — the "Forecast vs Actual" dashboard
+    # chart is its consumer again (regressed to a no-op in the LitElement
+    # migration, then removed as "dead" by #544). forecast_power_next_hour_w
+    # stays removed — still an orphan with no consumer.
+    SensorEntityDescription(
+        key="forecast_power_now_w",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
     SensorEntityDescription(
         key="forecast_peak_power_today_w",
         device_class=SensorDeviceClass.POWER,
@@ -1649,13 +1679,20 @@ async def async_setup_entry(
     pv_strings = getattr(_sr, "_pv_strings", {}) if _sr is not None else {}
     pv_strings = pv_strings or {}
     if len(pv_strings) >= 2:
+        # (#566) user-chosen names from options — a custom name replaces the
+        # verbose default in the ENTITY name (so it shows in HA history / the
+        # Energy Dashboard). The compact chip label lives in the string_name
+        # attribute (see SEMSolarSensor.extra_state_attributes). Unnamed slots
+        # keep "PV String N" so existing installs are unchanged.
+        _pv_names = getattr(_sr, "_pv_string_names", {}) if _sr is not None else {}
         for slot in sorted(pv_strings.keys()):
             # ``slot`` is the normalised label ``pv1`` / ``pv2`` / ...
             n = slot.replace("pv", "")
+            base = _pv_names.get(slot) or f"PV String {n}"
             per_string_descriptions.extend([
                 SensorEntityDescription(
                     key=f"pv_string_{slot}_power",
-                    name=f"PV String {n} Power",
+                    name=f"{base} Power",
                     device_class=SensorDeviceClass.POWER,
                     state_class=SensorStateClass.MEASUREMENT,
                     native_unit_of_measurement=UnitOfPower.WATT,
@@ -1663,7 +1700,7 @@ async def async_setup_entry(
                 ),
                 SensorEntityDescription(
                     key=f"pv_string_{slot}_daily_energy",
-                    name=f"PV String {n} Daily Energy",
+                    name=f"{base} Daily Energy",
                     device_class=SensorDeviceClass.ENERGY,
                     state_class=SensorStateClass.TOTAL,
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -1757,6 +1794,30 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
     _attr_should_poll = False
     _attr_has_entity_name = True
+
+    # #581 — recorder impact. Large UI-helper attributes (device maps, plan
+    # rows, hourly curves, peak history) exist purely to feed the live
+    # Lovelace cards; they have no historical/charting value but are
+    # re-serialised on every 10 s coordinator cycle. Recorded, they dominate
+    # the ``state_attributes`` table (the reporter measured 4.4 GB total, with
+    # the ``devices`` map on ``controllable_devices_count`` alone at ~9 KiB per
+    # write → 816 MiB in 10 days). ``_unrecorded_attributes`` keeps them on the
+    # live state (cards still read them) while excluding them from the recorder.
+    _unrecorded_attributes = frozenset({
+        "devices",
+        "device_list",
+        "per_charger_states",
+        "per_charger_plans",
+        "today_plan",
+        "upcoming",
+        "schedule_today",
+        "schedule_surplus_hours",
+        "schedule_ev_hours",
+        "energy_dashboard",
+        "schedule",
+        "top_5_peaks",
+        "top_5_peaks_formatted",
+    })
 
     # Sensors disabled by default (not used by dashboard template)
     DISABLED_BY_DEFAULT: set = set()
@@ -2068,11 +2129,23 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if not self.coordinator.data:
             return {}
 
-        # Base attributes
-        attrs = {
-            "last_update": self.coordinator.data.get("last_update"),
-            "delta_triggered": self.coordinator.data.get("delta_triggered"),
-        }
+        # Base attributes.
+        #
+        # #581 — ``last_update`` was stamped with ``dt_util.now()`` on every
+        # coordinator cycle (coordinator.py) and copied onto ALL ~177 SEM
+        # entities. Because HA fires ``state_changed`` whenever the state OR any
+        # attribute changes, this volatile timestamp forced a recorder write for
+        # every SEM entity every 10 s — even sensors whose real value never
+        # changed (e.g. ``yearly_co2_avoided``). That drove ~70% of all
+        # ``states`` rows in the reporter's DB (15.7 M rows / 1.9 GB). It was
+        # never consumed by any dashboard card, and the diagnostics service
+        # reads ``last_update``/``delta_triggered`` from ``coordinator.data``
+        # directly (not from entity attributes), so dropping them here has no
+        # user-visible effect. ``delta_triggered`` was additionally never even
+        # populated in coordinator data (always ``None``). Sensors that carry
+        # their own genuinely-changing attributes still record normally; static
+        # sensors now stop churning the recorder.
+        attrs: Dict[str, Any] = {}
 
         # Add specific attributes based on sensor type
         if self.entity_description.key == "charging_state":
@@ -2292,6 +2365,19 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             schedule = self.coordinator.data.get("battery_scheduler_schedule", {})
             if schedule:
                 attrs["schedule"] = schedule
+
+        # (#566) per-PV-string display name — the cards read this to label the
+        # chip/diagram/legend (custom name from options, else compact "PVn").
+        _key = self.entity_description.key
+        if _key.startswith("pv_string_") and (
+            _key.endswith("_power") or _key.endswith("_daily_energy")
+        ):
+            # key is pv_string_<slot>_power|_daily_energy; slot (pvN) is the
+            # first token after the prefix.
+            slot = _key[len("pv_string_"):].split("_", 1)[0]
+            _sr = getattr(self.coordinator, "_sensor_reader", None)
+            if _sr is not None:
+                attrs["string_name"] = _sr.pv_string_display_name(slot)
 
         return attrs
 

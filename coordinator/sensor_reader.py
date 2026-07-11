@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from typing import Any, Dict, Optional
 from dataclasses import dataclass
 
@@ -58,6 +59,11 @@ PLATFORM_GRID_SIGN_INVERT: dict[str, bool] = {
     "goodwe": False,
     # Pattern D — grid +=import, negate
     "solax": True,
+    # Deye via hass-deyecloud (#554): totalgridpower reports +=import /
+    # −=export — live-verified from the reporter's diagnostics + observed
+    # behavior (−4.9 kW while exporting, SEM read it as import until the
+    # manual flip). HIGH-CONFIDENCE: platform string from his diagnostics.
+    "deyecloud": True,
 }
 
 
@@ -76,6 +82,7 @@ class SensorConfig:
     # State sensors
     battery_soc_sensor: Optional[str] = None
     battery_temperature_sensor: Optional[str] = None
+    inverter_temperature_sensor: Optional[str] = None
 
     # Binary sensors
     ev_plug_sensor: Optional[str] = None
@@ -91,11 +98,18 @@ class SensorReader:
         self.config = self._parse_config(config)
         self._raw_config = config
         self._energy_dashboard_config = None
+        # (#564) autodetected battery temperature sibling (cached) + probe throttle
+        self._battery_temp_entity: Optional[str] = None
+        self._battery_temp_probe_mono: float = -1e9
+        # (#564) same for the inverter temperature sibling
+        self._inverter_temp_entity: Optional[str] = None
+        self._inverter_temp_probe_mono: float = -1e9
         # v1.7.0 / #312: per-PV-string sensors discovered at config-
         # flow time. Empty dict in single-string setups (no discovery
         # hit), populated by ``set_pv_strings`` from
         # ``hardware_detection.discover_pv_strings_from_registry``.
         self._pv_strings: Dict[str, str] = {}
+        self._pv_string_names: Dict[str, str] = {}  # (#566) slot -> custom name
         self._grid_sign_inverted = False
         self._grid_sign_detected = False  # True once sign is reliably determined
         # #461: accumulated sign-of-correlation evidence. The old ±1 vote
@@ -203,6 +217,18 @@ class SensorReader:
         self._sensor_repair_raised: set[str] = set()
         # Cache last valid SOC to avoid 0% during sensor gaps
         self._last_valid_soc: float = 0.0
+        # EV flap fix (2026-07-10): the KEBA charging-power sensor polls over
+        # UDP and blips to ~0 for a cycle while the car is really drawing 10 kW.
+        # ``ev_power`` feeds the home energy balance (``home = solar + grid −
+        # ev − …``), so a 0-blip while the grid meter (fast) still shows the
+        # import spikes ``home`` → crashes the EV surplus below the
+        # battery-assist gate → the budget collapses to 0 → IDLE → the
+        # contactor drops → the ~15 s flap seen on PROD. A median-of-3 kills
+        # the single-cycle blip at the source (a real start/stop is 2+ cycles
+        # and follows within one). Warm-up passes the raw value. Keyed per
+        # charger (plus a "_fleet" key) so the multi-charger per-charger dict
+        # stays consistent with the smoothed fleet sum.
+        self._ev_power_hist: Dict[str, deque] = {}
         # Split grid power sensors (Growatt, DSMR, etc.) — discovered on first read.
         # confidence: "same-device" picks are permanently cached; "any-device" picks
         # are re-evaluated each cycle so a late-loading DSMR meter wins once it shows
@@ -249,6 +275,7 @@ class SensorReader:
             ev_daily_energy_sensor=ev_daily_energy,
             battery_soc_sensor=config.get("battery_soc_sensor"),
             battery_temperature_sensor=config.get("battery_temperature_sensor"),
+            inverter_temperature_sensor=config.get("inverter_temperature_sensor"),
             ev_plug_sensor=config.get("ev_connected_sensor") or config.get("ev_plug_sensor", ""),
             ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
@@ -335,6 +362,23 @@ class SensorReader:
             if vi_pair and len(vi_pair) == 2 and all(vi_pair):
                 self._pv_strings[slot_label] = tuple(vi_pair)
 
+    def set_pv_string_names(self, names: "Optional[Dict[str, str]]") -> None:
+        """(#566) User-chosen display names per PV-string slot, e.g.
+        ``{"pv1": "East", "pv2": "West"}`` from the options flow. Blank/absent
+        slots fall back to the compact default (see ``pv_string_display_name``).
+        """
+        self._pv_string_names = {
+            str(k): str(v).strip()
+            for k, v in (names or {}).items()
+            if v and str(v).strip()
+        }
+
+    def pv_string_display_name(self, slot: str) -> str:
+        """(#566) Display name for a slot: the user's custom name, else the
+        compact default ``PV1`` / ``PV2`` / …"""
+        custom = getattr(self, "_pv_string_names", {}).get(slot)
+        return custom or f"PV{slot.replace('pv', '')}"
+
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""
         self._energy_dashboard_config = ed_config
@@ -402,10 +446,16 @@ class SensorReader:
         # Single-battery / combined-sensor installs fall back to the
         # legacy fleet-level path.
         ed = self._energy_dashboard_config
+        # #553 — units = combined entities + two-sensor pairs (#551). Pairs
+        # are convention-authoritative (the user declared charge/discharge
+        # directions in HA), so only combined units go through sign detect.
+        _n_units = 0 if ed is None else (
+            len(ed.battery_power_list) + len(ed.battery_power_pairs)
+        )
         per_battery_mode = (
             ed is not None
-            and len(ed.battery_power_list) >= 2
-            and len(readings.batteries) == len(ed.battery_power_list)
+            and _n_units >= 2
+            and len(readings.batteries) == _n_units
         )
 
         if per_battery_mode:
@@ -431,6 +481,14 @@ class SensorReader:
                     bp = replace(bp, power_w=-bp.power_w)
                     readings.batteries[bid] = bp
                 corrected_total += bp.power_w
+            # #553 — pair units join the total as-is (never sign-flipped:
+            # net = declared charge − declared discharge is already SEM
+            # convention by construction).
+            for k in range(len(ed.battery_power_pairs)):
+                bid = f"b{len(ed.battery_power_list) + k + 1}"
+                bp = readings.batteries.get(bid)
+                if bp is not None:
+                    corrected_total += bp.power_w
             readings.battery_power = corrected_total
             readings.calculate_derived()
         else:
@@ -1131,6 +1189,16 @@ class SensorReader:
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
             self._audit_manual_grid_sign(readings.grid_power, ed)
+        elif ed.grid_power_from and ed.grid_power_to:
+            # #553 — declared two-sensor pair from HA's grid dialog
+            # (power_config.stat_rate_from/to). Same semantics as the manual
+            # override above: grid_power = export − import, both sensors
+            # always positive; the convention is fixed BY DECLARATION so no
+            # sign auto-detection runs (nothing to detect).
+            import_w = self._read_sensor(ed.grid_power_from, "grid_import")
+            export_w = self._read_sensor(ed.grid_power_to, "grid_export")
+            readings.grid_power = export_w - import_w
+            self._grid_sign_detected = True
         elif len(ed.grid_power_list) > 1:
             # Multiple grid power sensors — sum all (e.g. multi-meter setups)
             readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")
@@ -1224,7 +1292,10 @@ class SensorReader:
         # uses the primary sensor and assumes all units share the same
         # sign convention.
         from .charger_types import BatteryPower
-        if len(ed.battery_power_list) > 1:
+        # #553 — a battery "unit" is either a combined power entity OR a
+        # two-sensor pair (#551). Multi-battery handling counts both.
+        n_units = len(ed.battery_power_list) + len(ed.battery_power_pairs)
+        if n_units > 1:
             total = 0.0
             # Phase A of per-battery card mirror: assign short stable
             # slugs (``b1``, ``b2`` …) keyed by the Energy Dashboard
@@ -1252,19 +1323,64 @@ class SensorReader:
                 readings.batteries[bid] = BatteryPower(
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=entity,
                 )
+            # #553 — two-sensor pair units, bids continue after the combined
+            # ones. net = charge(to) − discharge(from); the user-declared
+            # pair IS the sign convention, so these are never sign-flipped.
+            for k, (p_from, p_to) in enumerate(ed.battery_power_pairs):
+                bid = f"b{len(ed.battery_power_list) + k + 1}"
+                w = (self._read_sensor(p_to, "battery")
+                     - self._read_sensor(p_from, "battery"))
+                total += w
+                soc_val = 0.0
+                soc_entity = self._auto_detect_battery_soc(p_to)
+                if soc_entity:
+                    s = self._read_sensor(
+                        soc_entity, "battery_soc", allow_none=True,
+                    )
+                    if s is not None and s >= 0:
+                        soc_val = s
+                readings.batteries[bid] = BatteryPower(
+                    battery_id=bid, power_w=w, soc_pct=soc_val, name=p_to,
+                )
             readings.battery_power = total
         elif ed.battery_power:
-            readings.battery_power = self._read_sensor(ed.battery_power, "battery")
+            raw_batt = self._read_sensor(ed.battery_power, "battery")
+            # #551 — the user chose "Inverted" in HA's battery dialog
+            # (power_config.stat_rate_inverted): flip on read so the rest of
+            # the pipeline sees the declared convention.
+            if ed.battery_power_inverted:
+                raw_batt = -raw_batt
+            readings.battery_power = raw_batt
+        elif ed.battery_power_from and ed.battery_power_to:
+            # #551 — "Two sensors" battery power_config (e.g. Fronius Verto):
+            # separate charge/discharge sensors, NO combined entity exists.
+            # net = charge − discharge (SEM convention: positive = charging).
+            charge_w = self._read_sensor(ed.battery_power_to, "battery")
+            discharge_w = self._read_sensor(ed.battery_power_from, "battery")
+            readings.battery_power = charge_w - discharge_w
 
-        # Battery SOC — from config, or auto-detect and average across all units
+        # Battery SOC — precedence (#551): SEM's own explicit override
+        # (battery_soc_sensor option) > multi-battery average (the fleet SOC
+        # must not be dominated by ONE source's stat_soc) > the entity the
+        # user configured in HA's Energy Dashboard battery dialog (stat_soc —
+        # deterministic, no guessing) > device-registry auto-detect.
         # Use allow_none so 0% SOC is distinguishable from "unavailable"
         soc_val = None
+        ed_soc = ed.battery_soc
         if self.config.battery_soc_sensor:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
-        elif len(ed.battery_power_list) > 1:
-            soc_val = self._read_battery_soc_average(ed.battery_power_list) or None
+        elif n_units > 1:
+            # Multi-battery installs keep the per-battery average (a single
+            # stat_soc from one source must not masquerade as the fleet SOC).
+            # #553 — pair units contribute via their charge-power entity's
+            # device (same auto-detect heuristic).
+            soc_val = self._read_battery_soc_average(
+                ed.battery_power_list + [to for _, to in ed.battery_power_pairs]
+            ) or None
+        elif ed_soc:
+            soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
             soc_entity = self._auto_detect_battery_soc(ed.battery_power)
             if soc_entity:
@@ -1295,19 +1411,25 @@ class SensorReader:
                 cid = charger_cfg.get("id")
                 cps = charger_cfg.get("ev_charging_power_sensor")
                 if cps:
-                    cw = self._read_sensor(cps, "ev")
+                    # Smooth per charger so the per-charger dict stays
+                    # consistent with the fleet sum (both blip-filtered).
+                    cw = self._smooth_ev_power(
+                        self._read_sensor(cps, "ev"), key=cid or cps,
+                    )
                     total_ev += cw
                     if cid:
                         # Per-charger draw in watts, exposed for
                         # ``flow_calculator`` per-charger split.
                         readings.ev_power_per_charger[cid] = cw
+            # total_ev is already the sum of smoothed per-charger values.
             readings.ev_power = FleetEvPower(total_ev)
         elif ed.ev_power:
-            readings.ev_power = FleetEvPower(self._read_sensor(ed.ev_power, "ev"))
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(
+                self._read_sensor(ed.ev_power, "ev")))
         elif self.config.ev_power_sensor:
-            readings.ev_power = FleetEvPower(
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(self.config.ev_power_sensor, "ev")
-            )
+            ))
 
         # EV connection status — per-charger OR'd for global (#193)
         ev_chargers = self._raw_config.get("ev_chargers", [])
@@ -1356,13 +1478,119 @@ class SensorReader:
             )
             readings.ev_connected = True
 
-        # Battery temperature (from legacy config if available)
-        if self.config.battery_temperature_sensor:
-            readings.battery_temperature = self._read_sensor(
-                self.config.battery_temperature_sensor, "battery_temp"
-            )
+        # Battery temperature (#564: configured sensor, else device sibling)
+        self._read_battery_temperature(readings)
+        # Inverter temperature (#564: configured sensor, else device sibling)
+        self._read_inverter_temperature(readings)
 
         return readings
+
+    def _read_battery_temperature(self, readings) -> None:
+        """(#564) Fill battery_temperature honestly.
+
+        Priority: the configured sensor, else a temperature-class sibling
+        on the same device as the battery SOC/power sensor (Fronius & co.
+        expose a cell temperature there). NO source → stays None and the
+        entity shows *unknown* — the old fabricated 25.0 °C default was
+        displayed as a real reading.
+        """
+        entity = (
+            self.config.battery_temperature_sensor
+            or self._autodetect_battery_temperature()
+        )
+        if not entity:
+            return
+        state = self.hass.states.get(entity)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return
+        try:
+            readings.battery_temperature = float(state.state)
+        except (ValueError, TypeError):
+            return
+
+    def _autodetect_battery_temperature(self) -> Optional[str]:
+        """Find a temperature sensor on the battery's own device.
+
+        Cached once found; a miss retries every 5 minutes (source
+        integrations load late at boot).
+        """
+        if self._battery_temp_entity:
+            return self._battery_temp_entity
+        import time as _time
+        now = _time.monotonic()
+        if now - self._battery_temp_probe_mono < 300:
+            return None
+        self._battery_temp_probe_mono = now
+
+        # Reuse the battle-tested hardware detection the dashboard's K-Flow
+        # card already relies on (brand-aware battery_temp1 regexes) —
+        # ONE source of truth instead of a parallel scan.
+        ed = getattr(self, "_energy_dashboard_config", None)
+        if ed is None:
+            return None
+        try:
+            from ..hardware_detection import discover_battery_details_from_registry
+            details = discover_battery_details_from_registry(self.hass, ed)
+        except Exception as e:  # noqa: BLE001 — registry absent in tests
+            _LOGGER.debug("Battery temperature autodetect skipped: %s", e)
+            return None
+        entity = details.get("battery_temp1")
+        if entity:
+            self._battery_temp_entity = entity
+            _LOGGER.info("Battery temperature autodetected: %s", entity)
+        return entity
+
+    def _read_inverter_temperature(self, readings) -> None:
+        """(#564) Fill inverter_temperature honestly.
+
+        Priority: the configured sensor, else the ``inv_temp`` sibling on the
+        inverter's device (brand-aware detection). NO source → stays None and
+        the entity shows *unknown*. Previously the system diagram showed the
+        BATTERY temperature in the inverter slot (a fabricated ~25 °C).
+        """
+        entity = (
+            self.config.inverter_temperature_sensor
+            or self._autodetect_inverter_temperature()
+        )
+        if not entity:
+            return
+        state = self.hass.states.get(entity)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return
+        try:
+            readings.inverter_temperature = float(state.state)
+        except (ValueError, TypeError):
+            return
+
+    def _autodetect_inverter_temperature(self) -> Optional[str]:
+        """Find the inverter temperature sensor via hardware detection.
+
+        Cached once found; a miss retries every 5 minutes (source
+        integrations load late at boot). Shares the ``inv_temp`` result from
+        the same detection the battery temperature uses.
+        """
+        if self._inverter_temp_entity:
+            return self._inverter_temp_entity
+        import time as _time
+        now = _time.monotonic()
+        if now - self._inverter_temp_probe_mono < 300:
+            return None
+        self._inverter_temp_probe_mono = now
+
+        ed = getattr(self, "_energy_dashboard_config", None)
+        if ed is None:
+            return None
+        try:
+            from ..hardware_detection import discover_battery_details_from_registry
+            details = discover_battery_details_from_registry(self.hass, ed)
+        except Exception as e:  # noqa: BLE001 — registry absent in tests
+            _LOGGER.debug("Inverter temperature autodetect skipped: %s", e)
+            return None
+        entity = details.get("inv_temp")
+        if entity:
+            self._inverter_temp_entity = entity
+            _LOGGER.info("Inverter temperature autodetected: %s", entity)
+        return entity
 
     def _validate_manual_grid_config(
         self, ed, manual_import: Optional[str], manual_export: Optional[str],
@@ -1819,11 +2047,10 @@ class SensorReader:
                 readings.battery_soc = self._last_valid_soc
                 readings.battery_soc_unavailable = True
 
-        # Battery temperature
-        if self.config.battery_temperature_sensor:
-            readings.battery_temperature = self._read_sensor(
-                self.config.battery_temperature_sensor, "battery_temp"
-            )
+        # Battery temperature (#564: configured sensor, else device sibling)
+        self._read_battery_temperature(readings)
+        # Inverter temperature (#564: configured sensor, else device sibling)
+        self._read_inverter_temperature(readings)
 
         # EV power — sum all chargers if multi-charger (#193)
         ev_chargers = self._raw_config.get("ev_chargers", [])
@@ -1833,11 +2060,11 @@ class SensorReader:
                 cps = charger_cfg.get("ev_charging_power_sensor")
                 if cps:
                     total_ev += self._read_sensor(cps, "ev")
-            readings.ev_power = FleetEvPower(total_ev)
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(total_ev))
         elif self.config.ev_power_sensor:
-            readings.ev_power = FleetEvPower(
+            readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(self.config.ev_power_sensor, "ev")
-            )
+            ))
 
         # EV connection status — per-charger OR'd for global (#193)
         ev_chargers_leg = self._raw_config.get("ev_chargers", [])
@@ -1875,6 +2102,30 @@ class SensorReader:
             readings.ev_connected = True
 
         return readings
+
+    def _smooth_ev_power(self, raw: float, key: str = "_fleet") -> float:
+        """Median-of-3 filter for EV power (2026-07-10 flap fix).
+
+        UDP-polled chargers (KEBA P30) blip to ~0 for a single cycle while
+        the car is really drawing. Left raw, that blip corrupts the home
+        energy balance and collapses the EV surplus/budget (see
+        ``__init__``). The median of the last three readings passes a
+        single-cycle blip through unchanged (``[10450, 0, 10450] → 10450``)
+        while still tracking a genuine start/stop within one cycle
+        (``[10450, 0, 0] → 0``). Warm-up (< 3 samples) returns raw.
+
+        ``key`` scopes the history: a per-charger id keeps each charger's
+        own median so the ``ev_power_per_charger`` dict stays consistent
+        with the smoothed fleet sum; the default ``"_fleet"`` key smooths a
+        single fleet-level sensor.
+        """
+        hist = self._ev_power_hist.get(key)
+        if hist is None:
+            hist = self._ev_power_hist[key] = deque(maxlen=3)
+        hist.append(float(raw))
+        if len(hist) < 3:
+            return float(raw)
+        return sorted(hist)[1]
 
     def _read_sensor(
         self, entity_id: Optional[str], name: str, *, allow_none: bool = False,

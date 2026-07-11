@@ -308,9 +308,11 @@ class TestForecastDataSerialization:
         assert d["forecast_today_kwh"] == 25.5
         assert d["forecast_tomorrow_kwh"] == 20.0
         assert d["forecast_remaining_today_kwh"] == 15.0
-        # (#544) forecast_power_now_w / forecast_power_next_hour_w removed from
-        # to_dict — dead sensors. The dataclass fields stay for internal use.
-        assert "forecast_power_now_w" not in d
+        # (#575) forecast_power_now_w restored to to_dict — consumed by the
+        # "Forecast vs Actual" chart. forecast_power_next_hour_w stays removed
+        # (still an orphan; the dataclass field stays for internal use).
+        assert d["forecast_power_now_w"] == 5200.0
+        assert "forecast_power_next_hour_w" not in d
         assert d["forecast_peak_power_today_w"] == 8500.0
         assert d["forecast_peak_time_today"] == "13:30"
         assert d["forecast_source"] == "solcast"
@@ -322,3 +324,250 @@ class TestForecastDataSerialization:
         assert d["forecast_today_kwh"] == 0.0
         assert d["forecast_source"] == "none"
         assert d["forecast_available"] is False
+
+
+# ---------------------------------------------------------------------------
+# #562 — cached-source upgrade to Solcast
+# ---------------------------------------------------------------------------
+
+class TestSourceUpgradeToSolcast:
+    """Solcast > Forecast.Solar priority must survive the source cache.
+
+    Integration start order is arbitrary: if Solcast loads after SEM's
+    first detection, SEM used to latch onto Forecast.Solar until the
+    next restart (#562, reported by ebnerjoh — Solcast installed and
+    active, SEM stuck on a misconfigured Forecast.Solar).
+    """
+
+    def _forecast_solar_only(self, entity_id):
+        if entity_id == FORECAST_SOLAR_ENTITIES["forecast_today"]:
+            return _make_state("18.0")
+        if entity_id == FORECAST_SOLAR_ENTITIES["forecast_tomorrow"]:
+            return _make_state("16.0")
+        return None
+
+    def _both_sources(self, entity_id):
+        if entity_id == SOLCAST_ENTITIES["forecast_today"]:
+            return _make_state("25.5")
+        if entity_id == SOLCAST_ENTITIES["forecast_tomorrow"]:
+            return _make_state("20.0")
+        return self._forecast_solar_only(entity_id)
+
+    def test_upgrades_when_solcast_appears(self, mock_hass):
+        mock_hass.states.get = self._forecast_solar_only
+        reader = ForecastReader(mock_hass)
+        data = reader.read_forecast()
+        assert data.source == "forecast_solar"
+
+        # Solcast integration finishes loading later
+        mock_hass.states.get = self._both_sources
+        data = reader.read_forecast()
+        assert reader.source == "solcast"
+        assert data.source == "solcast"
+        assert data.forecast_today_kwh == 25.5
+
+    def test_no_upgrade_without_solcast(self, mock_hass):
+        mock_hass.states.get = self._forecast_solar_only
+        reader = ForecastReader(mock_hass)
+        reader.read_forecast()
+        reader.read_forecast()
+        assert reader.source == "forecast_solar"
+
+    def test_no_upgrade_on_unavailable_solcast(self, mock_hass):
+        def get(entity_id):
+            if entity_id == SOLCAST_ENTITIES["forecast_today"]:
+                return _unavailable_state()
+            return self._forecast_solar_only(entity_id)
+        mock_hass.states.get = get
+        reader = ForecastReader(mock_hass)
+        reader.read_forecast()
+        reader.read_forecast()
+        assert reader.source == "forecast_solar"
+
+    def test_cycle_after_upgrade_is_stable(self, mock_hass):
+        mock_hass.states.get = self._forecast_solar_only
+        reader = ForecastReader(mock_hass)
+        reader.read_forecast()
+        mock_hass.states.get = self._both_sources
+        reader.read_forecast()
+        assert reader.source == "solcast"
+        # Next cycle: normal cached-source validation, no re-upgrade churn
+        data = reader.read_forecast()
+        assert reader.source == "solcast"
+        assert data.source == "solcast"
+
+    def test_custom_source_never_upgrades(self, mock_hass):
+        custom = {"forecast_today": "sensor.custom_solar"}
+
+        def get(entity_id):
+            if entity_id == "sensor.custom_solar":
+                return _make_state("12.0")
+            if entity_id == SOLCAST_ENTITIES["forecast_today"]:
+                return _make_state("25.5")
+            return None
+        mock_hass.states.get = get
+        reader = ForecastReader(mock_hass, custom_entities=custom)
+        reader.read_forecast()
+        reader.read_forecast()
+        assert reader.source == "custom"
+
+
+# ---------------------------------------------------------------------------
+# #562 — localized entity IDs resolved via entity registry
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace
+from custom_components.solar_energy_management.coordinator.forecast_reader import (
+    SOLCAST_PLATFORM,
+    FORECAST_SOLAR_PLATFORM,
+)
+
+
+def _reg_entry(platform, unique_id, entity_id):
+    return SimpleNamespace(
+        platform=platform, unique_id=unique_id, entity_id=entity_id,
+        disabled_by=None,
+    )
+
+
+class TestLocalizedEntityResolution:
+    """Solcast/Forecast.Solar entity IDs are localized (German install:
+    ``sensor.solcast_pv_forecast_forecast_heute``) — SEM must resolve by
+    registry unique_id, not hardcoded English entity_ids (#562)."""
+
+    GERMAN_SOLCAST = {
+        "total_kwh_forecast_today": "sensor.solcast_pv_forecast_forecast_heute",
+        "total_kwh_forecast_tomorrow": "sensor.solcast_pv_forecast_forecast_morgen",
+        "get_remaining_today": "sensor.solcast_pv_forecast_verbleibende_prognose_heute",
+        "peak_w_today": "sensor.solcast_pv_forecast_spitzenleistung_heute",
+    }
+
+    def _registry(self, entries):
+        reg = MagicMock()
+        reg.entities.values.return_value = entries
+        return reg
+
+    def _hass_with_states(self, mock_hass, states):
+        def get(entity_id):
+            if entity_id in states:
+                return _make_state(states[entity_id])
+            return None
+        mock_hass.states.get = get
+        return mock_hass
+
+    def test_detects_german_solcast(self, mock_hass):
+        entries = [
+            _reg_entry(SOLCAST_PLATFORM, uid, eid)
+            for uid, eid in self.GERMAN_SOLCAST.items()
+        ]
+        self._hass_with_states(mock_hass, {
+            "sensor.solcast_pv_forecast_forecast_heute": "25.5",
+            "sensor.solcast_pv_forecast_forecast_morgen": "20.0",
+        })
+        reader = ForecastReader(mock_hass)
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            return_value=self._registry(entries),
+        ):
+            assert reader.detect_source() == "solcast"
+            data = reader.read_forecast()
+        assert data.source == "solcast"
+        assert data.forecast_today_kwh == 25.5
+        assert data.forecast_tomorrow_kwh == 20.0
+
+    def test_detects_localized_forecast_solar(self, mock_hass):
+        entries = [
+            _reg_entry(FORECAST_SOLAR_PLATFORM, "abc123_energy_production_today",
+                       "sensor.energieproduktion_heute"),
+            _reg_entry(FORECAST_SOLAR_PLATFORM, "abc123_energy_production_tomorrow",
+                       "sensor.energieproduktion_morgen"),
+        ]
+        self._hass_with_states(mock_hass, {
+            "sensor.energieproduktion_heute": "18.0",
+            "sensor.energieproduktion_morgen": "16.5",
+        })
+        reader = ForecastReader(mock_hass)
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            return_value=self._registry(entries),
+        ):
+            assert reader.detect_source() == "forecast_solar"
+            data = reader.read_forecast()
+        assert data.forecast_today_kwh == 18.0
+
+    def test_remaining_today_not_confused_with_today(self, mock_hass):
+        # endswith('_energy_production_today') must NOT match the
+        # '..._today_remaining' unique_id
+        entries = [
+            _reg_entry(FORECAST_SOLAR_PLATFORM,
+                       "abc123_energy_production_today_remaining",
+                       "sensor.remaining_x"),
+            _reg_entry(FORECAST_SOLAR_PLATFORM, "abc123_energy_production_today",
+                       "sensor.today_x"),
+        ]
+        self._hass_with_states(mock_hass, {"sensor.today_x": "18.0",
+                                           "sensor.remaining_x": "7.0"})
+        reader = ForecastReader(mock_hass)
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            return_value=self._registry(entries),
+        ):
+            reader.detect_source()
+        assert reader._entities["forecast_today"] == "sensor.today_x"
+        assert reader._entities["forecast_remaining"] == "sensor.remaining_x"
+
+    def test_disabled_registry_entries_skipped(self, mock_hass):
+        entry = _reg_entry(SOLCAST_PLATFORM, "total_kwh_forecast_today",
+                           "sensor.solcast_disabled")
+        entry.disabled_by = "user"
+        self._hass_with_states(mock_hass, {"sensor.solcast_disabled": "25.5"})
+        reader = ForecastReader(mock_hass)
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            return_value=self._registry([entry]),
+        ):
+            assert reader.detect_source() is None
+
+    def test_fallback_to_hardcoded_ids_without_registry(self, mock_hass):
+        # Registry unavailable (raises) → hardcoded English IDs still work
+        self._hass_with_states(mock_hass, {
+            SOLCAST_ENTITIES["forecast_today"]: "25.5",
+        })
+        reader = ForecastReader(mock_hass)
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            side_effect=RuntimeError("no registry"),
+        ):
+            assert reader.detect_source() == "solcast"
+
+    def test_upgrade_uses_registry_resolution(self, mock_hass):
+        # Cached forecast_solar; GERMAN solcast appears → upgrade picks
+        # the localized entity ids
+        self._hass_with_states(mock_hass, {
+            FORECAST_SOLAR_ENTITIES["forecast_today"]: "18.0",
+            FORECAST_SOLAR_ENTITIES["forecast_tomorrow"]: "16.0",
+        })
+        reader = ForecastReader(mock_hass)
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            side_effect=RuntimeError("no registry"),
+        ):
+            reader.read_forecast()
+        assert reader.source == "forecast_solar"
+
+        entries = [
+            _reg_entry(SOLCAST_PLATFORM, uid, eid)
+            for uid, eid in self.GERMAN_SOLCAST.items()
+        ]
+        self._hass_with_states(mock_hass, {
+            FORECAST_SOLAR_ENTITIES["forecast_today"]: "18.0",
+            "sensor.solcast_pv_forecast_forecast_heute": "25.5",
+            "sensor.solcast_pv_forecast_forecast_morgen": "20.0",
+        })
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get",
+            return_value=self._registry(entries),
+        ):
+            data = reader.read_forecast()
+        assert reader.source == "solcast"
+        assert data.forecast_today_kwh == 25.5

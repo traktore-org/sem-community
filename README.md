@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon@2x.png" alt="SEM Logo" width="200">
+  <img src="https://raw.githubusercontent.com/traktore-org/sem-community/main/icon@2x.png" alt="SEM Logo" width="200">
 </p>
 
 # Solar Energy Management (SEM)
@@ -15,12 +15,10 @@
 
 SEM monitors your solar production, battery, grid, EV charger, and household devices every 10 seconds and distributes surplus power by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
 
-> **v1.6.0 note** — `sensor.sem_available_power` and `sensor.sem_calculated_current` now publish the **canonical** EV budget (the same value the state machine and actuator read) instead of the raw solar surplus. If you have automations or templates that read either sensor directly, the numbers may be slightly different than under 1.5.x — the canonical value is the more accurate one. Full details in [CHANGELOG.md](CHANGELOG.md) and [docs/ARCHITECTURE.md → EV Budget Calculation](docs/ARCHITECTURE.md#ev-budget-calculation).
-
-![SEM Dashboard Overview](docs/images/sem_home_tab.png)
+![SEM Dashboard Overview](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_home_tab.png)
 
 <p align="center">
-  <img src="docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
+  <img src="https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
 </p>
 
 ---
@@ -38,6 +36,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Battery export arbitrage** — on a dynamic/spot tariff, opt-in sell the home battery to the grid when the export price beats the cost of recharging later (round-trip + wear accounted for); never below your reserve SOC, brand-agnostic, shown live as a "Selling to grid" state. See [docs/BATTERY_EXPORT_ARBITRAGE.md](docs/BATTERY_EXPORT_ARBITRAGE.md)
 - **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)
+- **Daily targets for household loads** — give any switch a daily goal (e.g. *pool pump ≥ 4 h/day* or *5 kWh/day*, set on an EV-style dual slider): runs on surplus first, then per policy — solar-only, cheap-hours top-up, or guaranteed by a deadline. Optional stop condition (e.g. car SOC ≥ 80 % on a dumb socket) and a surplus event interface for your own automations
 - **Peak load management** — automatic device shedding to stay under your grid limit
 - **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
 - **Dynamic tariff support** — Tibber, Nordpool, aWATTar, Amber Electric, Octopus Energy price-responsive charging
@@ -58,41 +57,33 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 
 ## Why SEM?
 
-There are many solar/EV tools for Home Assistant — evcc, emhass, Predbat, PV Excess Control, and more. Each is great at one thing. SEM is the only **all-in-one HACS integration** that covers everything in a single install:
+**One integration, your whole energy system.** Install SEM and you get EV charging, battery strategy, multi-device surplus distribution, tariff optimization, peak-load management, cost analytics, and a full dashboard — all from a single HACS download.
 
-|  | SEM | evcc | emhass | Predbat | PV Excess Control |
-|---|:---:|:---:|:---:|:---:|:---:|
-| EV solar surplus charging | :white_check_mark: | :white_check_mark: | :x: | :x: | :white_check_mark: |
-| Battery management | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | partial |
-| Multi-device surplus control | :white_check_mark: | :x: | :x: | :x: | :white_check_mark: |
-| Auto-generated dashboard | :white_check_mark: | own UI | :x: | :x: | :x: |
-| Cost tracking & savings | :white_check_mark: | :x: | :x: | :x: | :x: |
-| Push notifications | :white_check_mark: | :x: | :x: | :x: | :x: |
-| Smart recommendations | :white_check_mark: | :x: | :x: | :x: | :x: |
-| Multi-language (15) | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
-| Pure HACS integration | :white_check_mark: | standalone Go | Docker/Add-on | AppDaemon | :white_check_mark: |
-| Zero-config auto-detect | :white_check_mark: | config file | complex setup | config file | manual |
+- **Local-first** — everything runs inside Home Assistant. No cloud, no subscription, no account.
+- **No extra moving parts** — no separate services, no Docker containers, no YAML config files, no AppDaemon.
+- **Works out of the box** — SEM auto-detects your inverter, battery, grid, and charger from the Energy Dashboard, then exposes every knob on its own dashboard when you want to tune it.
+- **Built for real hardware** — every supported inverter and charger combination is verified in CI, and the whole system is designed around locally-controlled devices.
 
-**SEM's approach:** Install one integration, get everything — EV charging, battery zones, cost analytics, 7-tab dashboard, and smart notifications. No separate services, no Docker containers, no YAML configuration files.
-
-**When to use something else:**
-- **evcc** if you need support for 100+ charger brands or vehicle SoC from car APIs
-- **emhass** if you want mathematical optimization with linear programming
-- **Predbat** if you only need battery charge/discharge scheduling with ML prediction
-- **PV Excess Control** if you only need simple appliance on/off switching
+If you can see it in your Home Assistant Energy Dashboard, SEM can orchestrate it.
 
 ---
 
 ## Installation
 
-> **New to custom integrations?** See the [Step-by-Step Setup Guide](docs/SETUP_GUIDE.md) for a beginner-friendly walkthrough with checklist and FAQ.
+> **New to Home Assistant integrations?** See the [Step-by-Step Setup Guide](docs/SETUP_GUIDE.md) for a beginner-friendly walkthrough with checklist and FAQ.
 
 ### Via HACS (Recommended)
 
-1. Open **HACS** > **Integrations** > **Custom repositories**
-2. Add `https://github.com/traktore-org/sem-community` as an **Integration**
-3. Search for **Solar Energy Management** and click **Download**
-4. **Restart Home Assistant**
+SEM is in the default HACS store — no custom repository needed.
+
+[![Open your Home Assistant instance and open the SEM repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=traktore-org&repository=sem-community&category=integration)
+
+1. Open **HACS** and search for **Solar Energy Management**
+2. Click **Download**
+3. **Restart Home Assistant**
+4. Go to **Settings → Devices & Services → + Add Integration** and add **Solar Energy Management**
+
+(Or click the button above to jump straight to it in HACS.)
 
 ### Beta Releases
 
@@ -100,7 +91,7 @@ Want to help test new features before they go stable? Enable beta updates in HAC
 
 1. Open **HACS** > **Integrations** > find **Solar Energy Management**
 2. Click the three-dot menu > **Redownload** > enable **Show beta versions**
-3. Select the latest beta (e.g. `v1.5.0-beta.1`) and install
+3. Select the latest beta and install
 
 Beta releases are tested on real hardware before publishing but may contain rough edges. Your feedback helps us ship stable releases faster — report issues on [GitHub](https://github.com/traktore-org/sem-community/issues).
 
@@ -188,7 +179,7 @@ Enable peak load management if your utility bills based on peak demand:
 | Warning level | — | Early warning threshold |
 | Emergency level | — | All non-critical loads shed |
 
-![SEM Integration Page](docs/images/sem_integration_detail.png)
+![SEM Integration Page](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_integration_detail.png)
 
 ---
 
@@ -239,7 +230,7 @@ When the battery SOC is above the buffer threshold (default 70%), SEM supplement
 
 ## Dashboard
 
-SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark theme:
+SEM includes a built-in dashboard with 8 views and a unified glassmorphism dark theme:
 
 | View | Description |
 |------|-------------|
@@ -247,15 +238,17 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 | **Energy** | Sankey diagram, self-consumption/autarky gauges, donut chart, 24h power, CO2 avoided, trees saved |
 | **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
 | **EV** | Charging status, session stats, solar share gauge, lifetime totals, EV Intelligence (taper trend, virtual SOC, charge skip reasoning, battery health) |
-| **Control** | Load priority drag-and-drop, surplus allocation, battery/EV/tariff settings |
+| **Control** | Live surplus allocation, load-priority drag-and-drop, per-device control modes, today's schedule |
+| **Configuration** | All post-setup configuration in one place — colorful SOC-zone controls, entity pickers, EV charger add/remove, tariff, heat pump, hot water, battery scheduler. Rarely need HA's native config flow |
 | **Costs** | Today/month/year KPIs, period selector, cost & savings charts, demand charge, tariff rates |
 | **System** | Health diagnostics, sensor status, charging state, peak management |
 
 | | |
 |---|---|
-| ![Energy](docs/images/sem_energy_tab.png) | ![Costs](docs/images/sem_costs_tab.png) |
-| ![Battery](docs/images/sem_battery_tab.png) | ![EV](docs/images/sem_ev_tab.png) |
-| ![Control](docs/images/sem_control_tab.png) | ![System](docs/images/sem_system_tab.png) |
+| ![Energy](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_energy_tab.png) | ![Costs](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_costs_tab.png) |
+| ![Battery](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_battery_tab.png) | ![EV](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_ev_tab.png) |
+| ![Control](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_control_tab.png) | ![System](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_system_tab.png) |
+| ![Configuration](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_config_tab.png) | |
 
 ### Dashboard Features
 - **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects

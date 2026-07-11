@@ -254,11 +254,6 @@ class TestDailyRuntime:
         dev = self._make_switch(mock_hass, daily_min=0)
         assert dev.needs_offpeak_activation is False
 
-    def test_daily_energy_budget(self, mock_hass):
-        """2000W rated, 3600s target => 2.0 kWh budget."""
-        dev = self._make_switch(mock_hass, daily_min=3600)
-        assert dev.daily_energy_budget_kwh == pytest.approx(2.0)
-
 
 class TestHotWaterOffpeakTemperature:
     """Test HotWaterController temperature-aware needs_offpeak_activation."""

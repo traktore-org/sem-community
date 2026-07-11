@@ -335,7 +335,7 @@ class SEMSolarCard extends SEMLitBase {
                                      title="${s.entityId}"
                                      data-entity="${s.entityId}"
                                      @click=${() => this._fireMoreInfo?.(s.entityId)}>
-                                    <span class="pv-chip-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                    <span class="pv-chip-label">${s.name}</span>
                                     <span class="pv-chip-value">${(Math.abs(s.watts)/1000).toFixed(2)} kW</span>
                                 </div>
                             `)}
@@ -434,7 +434,7 @@ class SEMSolarCard extends SEMLitBase {
                                          style="cursor:pointer"
                                          @click=${() => this._fireMoreInfo?.(s.entityId)}>
                                         <div class="flow-dot" style="background:#ff9800"></div>
-                                        <span class="flow-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                        <span class="flow-label">${s.name}</span>
                                         <div class="flow-vals">
                                             <div class="flow-power">${semFormatPower(s.watts)}</div>
                                             <div class="flow-energy">${

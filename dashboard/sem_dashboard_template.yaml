@@ -3,15 +3,14 @@
 # ============================================================
 # Version: 6.1 (2026-04)
 #
-# 7 views: Home, Energy, Battery, EV, Control, Costs, System
+# 8 views: Home, Energy, Battery, EV, Control, Configuration, Costs, System
 # Dark glassmorphism theme, mobile-first responsive design
 #
-# Required HACS cards (only 5):
+# Required HACS cards (only 4):
 #   mushroom         — chips, entity, template, number, title cards
 #   card-mod         — *glass_card YAML anchor for unified styling
 #   apexcharts-card  — all trend / power / cost charts
 #   sankey-chart     — Energy flow diagram on Energy tab
-#   fold-entity-row  — collapsible Welcome intro on Home tab
 #
 # Optional HACS cards:
 #   k-flow-card      — animated energy flow visualization (#206)
@@ -52,6 +51,9 @@ views:
           - type: custom:sem-tab-header
             tab: home
 
+          # ── Solar hero lives in the tab header (#556 → merged into
+          # sem-tab-header per maintainer UI review; the standalone
+          # sem-solar-kpi-card remains available for manual dashboards) ──
           # ── Configuration tab welcome banner (#442) ──
           # Self-hides via localStorage once dismissed (one-time only)
           - type: custom:sem-onboarding-banner
@@ -121,15 +123,23 @@ views:
           - type: custom:sem-tab-header
             tab: energy
           # ── Sankey Energy Flow ──
-          - type: custom:sankey-chart
-            show_names: true
-            show_icons: true
-            show_states: true
-            wide: true
-            height: 280
-            unit_prefix: k
-            round: 2
-            sections:
+          # #555 — wrapped so a missing sankey-chart HACS install shows a
+          # friendly "install via HACS" notice instead of HA's cryptic
+          # collapsed "Configuration error" bar. Renders sankey unchanged
+          # when the card is present.
+          - type: custom:sem-require
+            requires: sankey-chart
+            name: Sankey Chart
+            card:
+              type: custom:sankey-chart
+              show_names: true
+              show_icons: true
+              show_states: true
+              wide: true
+              height: 280
+              unit_prefix: k
+              round: 2
+              sections:
               - entities:
                   - entity_id: sensor.sem_daily_solar_energy
                     color: "#ff9800"
@@ -211,7 +221,7 @@ views:
                   - entity_id: sensor.sem_daily_grid_export_energy
                     color: "#8353d1"
                     name: Export
-            card_mod:
+              card_mod:
               style: *glass_card
 
           # ── Self-Consumption & Autarky Gauges ──
@@ -426,5 +436,5 @@ views:
           # 3. FORECAST SPARKLINE (sem-chart-card replaces apexcharts)
           # ══════════════════════════════════════════════════════
           - type: custom:sem-chart-card
-            preset: power
+            preset: forecast
             title: Forecast vs Actual

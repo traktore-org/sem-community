@@ -62,6 +62,13 @@ class SEMCostsCard extends SEMLitBase {
         const exp = this._val(`${period}_export_revenue`);
         const net = this._val(`${period}_net_cost`);
         const netColor = this._netColor(net);
+        // #554 — net_cost is COST-signed (import − export; negative = you
+        // earned). The hero already presents it savings-positive ("+1.71
+        // net saving"); the rows printed the raw −1.71 next to it — same
+        // number, contradictory signs on one page. Render rows with the
+        // hero's framing: '+' and green when earning, plain and pink when
+        // it's a cost.
+        const netText = (net <= 0 ? '+' : '') + this._fmtCurr(Math.abs(net), curr);
 
         return html`
             <div class="section">
@@ -83,8 +90,8 @@ class SEMCostsCard extends SEMLitBase {
                     <span class="metric-val c-export">${this._fmtCurr(exp, curr)}</span>
                 </div>
                 <div class="metric-row net-row">
-                    <span class="metric-label"><strong>${this._t('net')}</strong></span>
-                    <span class="metric-val" style="color:${netColor}">${this._fmtCurr(net, curr)}</span>
+                    <span class="metric-label"><strong>${this._t(net <= 0 ? 'net_saving' : 'net_cost')}</strong></span>
+                    <span class="metric-val" style="color:${netColor}">${netText}</span>
                 </div>
             </div>
         `;

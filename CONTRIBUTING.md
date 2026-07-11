@@ -29,7 +29,7 @@ Open an issue with the `enhancement` label. Describe the use case, not just the 
 
 1. Fork the repo and create a feature branch: `feature/your-feature`
 2. Make your changes
-3. Ensure tests pass: `python -m pytest tests/ -v`
+3. Ensure tests pass (see the namespaced test-runner note under [Development Setup](#development-setup) — a direct `pytest` from the repo root fails because `select.py` shadows the stdlib module)
 4. Update documentation if your change affects user-facing behavior
 5. Submit a PR to `develop` (not `main`)
 
@@ -72,8 +72,14 @@ cd sem-community
 # Install test dependencies
 pip install -r tests/requirements_test.txt
 
-# Run tests
-python -m pytest tests/ -v
+# Run tests — IMPORTANT: run from a namespaced copy, NOT the repo root.
+# The repo-root select.py shadows the stdlib `select` module, which breaks a
+# direct `pytest` from the repo root. CI copies the repo into a package path
+# and runs from there; replicate that layout locally:
+rsync -a --delete --exclude=.git --exclude=node_modules \
+  ./ /tmp/ha-config/custom_components/solar_energy_management/
+cd /tmp/ha-config && PYTHONPATH=/tmp/ha-config \
+  python3.12 -m pytest custom_components/solar_energy_management/tests/ -q
 
 # Deploy to test HA instance
 rsync -av --delete --exclude='__pycache__' --exclude='.git' \

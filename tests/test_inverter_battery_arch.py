@@ -70,6 +70,10 @@ def _sched(state, **kw):
     """Build a synthetic SchedulerDecision-shaped object."""
     m = MagicMock()
     m.state = MagicMock(value=state)
+    # Faithful to the real dataclass default (#533): a bare MagicMock would
+    # make getattr(m, "from_arbitrage") a truthy auto-attr, wrongly routing the
+    # night-charge stop to STOP_FORCE_DISCHARGE. Default False; kwargs override.
+    m.from_arbitrage = False
     for k, v in kw.items():
         setattr(m, k, v)
     return m

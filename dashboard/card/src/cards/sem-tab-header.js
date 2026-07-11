@@ -162,7 +162,7 @@ class SEMTabHeader extends SEMLitBase {
         if (!hass) return '';
         const g = (s) => hass.states[`${this._prefix}${s}`]?.state || '';
         const tab = this._tab;
-        if (tab === 'home') return [g('solar_power'), g('autarky_rate'), g('self_consumption_rate'), g('daily_solar_energy')].join(',');
+        if (tab === 'home') return [g('solar_power'), g('daily_solar_energy')].join(',');
         if (tab === 'energy') return [g('daily_solar_energy'), g('daily_home_energy'), g('self_consumption_rate')].join(',');
         if (tab === 'battery') return [g('battery_soc'), g('battery_power'), g('battery_health_score')].join(',');
         if (tab === 'ev') return [g('ev_power'), g('daily_ev_energy'), g('charging_state')].join(',');
@@ -237,7 +237,9 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'costs') return [
             this._getState('daily_costs', 0).toFixed(2) + ' ' + _c,
             this._getState('daily_savings', 0).toFixed(2) + ' ' + _c,
-            this._getState('daily_net_cost', 0).toFixed(2) + ' ' + _c,
+            // #554 — savings-positive framing, consistent with the costs card
+            (() => { const n = this._getState('daily_net_cost', 0);
+                     return (n <= 0 ? '+' : '') + Math.abs(n).toFixed(2) + ' ' + _c; })(),
         ];
         if (tab === 'system') return [
             this._getState('energy_optimization_score', 0).toFixed(0),
@@ -245,6 +247,23 @@ class SEMTabHeader extends SEMLitBase {
             this._getState('lifetime_co2_avoided', 0).toFixed(0) + ' kg',
         ];
         return ['—', '—', '—'];
+    }
+
+    _renderHomeHero() {
+        const today = this._getState('daily_solar_energy', 0);
+        const power = this._getState('solar_power', 0);
+        return html`
+            <div class="hero">
+                <div class="hero-main">
+                    <div class="hero-value">${today.toFixed(1)}<span class="unit">kWh</span></div>
+                    <div class="hero-label">${_t('todays_solar_production', this._hass)}</div>
+                </div>
+                ${power > 0 ? html`
+                <div class="hero-now">
+                    <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
+                    <span>${semFormatPower(power)}</span>
+                </div>` : nothing}
+            </div>`;
     }
 
     render() {
@@ -307,6 +326,32 @@ class SEMTabHeader extends SEMLitBase {
                     font-size: 11px; color: var(--secondary-text-color, ${T.textTertiary});
                     font-weight: 500; margin-top: 1px;
                 }
+                /* Home hero — Today's production merged from the KPI card
+                   (maintainer UI review: chips duplicated the KPI below) */
+                .hero { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+                .hero-main { text-align: left; }
+                .hero-value {
+                    font-size: 26px; font-weight: 700; line-height: 1.05;
+                    color: #ff9800; letter-spacing: -0.5px;
+                    font-variant-numeric: tabular-nums; white-space: nowrap;
+                }
+                .hero-value .unit { font-size: 14px; font-weight: 500; opacity: 0.85; margin-left: 3px; }
+                .hero-label {
+                    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+                    color: var(--secondary-text-color, ${T.textTertiary});
+                    margin-top: 2px;
+                }
+                .hero-now {
+                    display: flex; align-items: center; gap: 5px;
+                    padding: 5px 10px; border-radius: 999px;
+                    background: var(--secondary-background-color, rgba(255,255,255,0.06));
+                    font-size: 12px; color: var(--primary-text-color, ${T.text});
+                    white-space: nowrap;
+                }
+                .hero-now ha-icon { color: #ff9800; --mdc-icon-size: 14px; }
+                @media (max-width: 500px) {
+                    .hero-value { font-size: 21px; }
+                }
                 @media (max-width: 500px) {
                     .header-wrap { padding: 12px 14px; gap: 8px 12px; flex-wrap: wrap; }
                     .icon-ring { width: 48px; height: 48px; }
@@ -341,6 +386,7 @@ class SEMTabHeader extends SEMLitBase {
                         <div class="tab-title">${title}</div>
                         <div class="tab-subtitle">${subtitle}</div>
                     </div>
+                    ${this._tab === 'home' ? this._renderHomeHero() : html`
                     <div class="stats">
                         ${labels.map((label, i) => html`
                             <div class="stat">
@@ -348,7 +394,7 @@ class SEMTabHeader extends SEMLitBase {
                                 <div class="stat-label">${label}</div>
                             </div>
                         `)}
-                    </div>
+                    </div>`}
                 </div>
             </ha-card>
         `;

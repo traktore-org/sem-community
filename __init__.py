@@ -206,6 +206,15 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #523 Tier 3: the forced-discharge entity is read at battery-adapter
     # construction, so changing it must reload to rebuild the adapter.
     "battery_force_discharge_control_entity",
+    # #528: the discharge-LIMIT control entity (battery protection) is read
+    # from the coordinator's config snapshot, so a change must reload to take
+    # effect (the snapshot is rebuilt on reload).
+    "battery_discharge_control_entity",
+    # #528: the discharge-protection toggle has no runtime switch entity, so a
+    # set_option would otherwise hit the "unrouted → reload" path silently.
+    # Declare it structural so the reload is explicit (battery_protection reads
+    # it from the config snapshot, which is rebuilt on reload). Rarely changed.
+    "battery_discharge_protection_enabled",
     # #523 multi-battery: per-battery control-entity lists are read at
     # adapter construction too, so a change must reload.
     "battery_force_discharge_entities",
@@ -1563,6 +1572,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             ev_device.steady_failsafe = bool(_cfg("keba_steady_failsafe", True))
             # #546 — live offered-current sensor for the EV-OFFER-PROBE.
             ev_device.current_sensor_entity_id = str(_cfg("ev_current_sensor", "") or "")
+            # #548 — charger STATUS enum (Wallbox: sensor.*_status). The
+            # WallboxAdapter reads this as the authoritative "actually
+            # charging?" signal (cloud power lags ~90 s) and to detect
+            # app-lock (Eco-Smart / Scheduled / Power-Sharing) so SEM can
+            # surface "can't stop" instead of silently failing OFF mode.
+            ev_device.charging_status_entity = str(_cfg("ev_charging_sensor", "") or "")
             # Per-integration charger profile (#82)
             if _cfg("ev_service_param_name"):
                 ev_device.service_param_name = _cfg("ev_service_param_name")
@@ -2707,6 +2722,25 @@ async def _async_register_services(
                     translation_key="device_not_found",
                     translation_placeholders={"device_id": device_id},
                 )
+        elif prop in (
+            "daily_min_runtime_min", "top_up_policy", "stop_entity", "stop_at",
+        ):
+            # (#559) goal engine — grounded core, persisted + applied live
+            registry = getattr(coordinator, "_device_registry", None)
+            if not registry:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_registry_not_initialized",
+                )
+            if prop == "top_up_policy" and str(value) not in (
+                "solar_only", "cheap_hours"
+            ):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_device_property",
+                    translation_placeholders={"property": f"{prop}={value}"},
+                )
+            await registry.async_update_device_goal(device_id, prop, value)
         else:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -2723,7 +2757,12 @@ async def _async_register_services(
             async_update_device_config,
             schema=vol.Schema({
                 vol.Required("device_id"): cv.string,
-                vol.Required("property"): vol.In(["controllable", "critical", "control_mode", "depends_on"]),
+                vol.Required("property"): vol.In([
+                    "controllable", "critical", "control_mode", "depends_on",
+                    # (#559) goal engine — grounded core
+                    "daily_min_runtime_min", "top_up_policy",
+                    "stop_entity", "stop_at",
+                ]),
                 vol.Required("value"): cv.string,
             }),
         )
@@ -3068,27 +3107,61 @@ async def _async_register_phase_services(
         return
 
     # Phase 0: Register/unregister surplus devices
-    async def async_register_surplus_device(call) -> None:
-        """Register a device for surplus control."""
-        from .devices.base import SwitchDevice
-        device_id = call.data.get("device_id")
-        entity_id = call.data.get("entity_id")
-        name = call.data.get("name", device_id)
-        priority = call.data.get("priority", 5)
-        rated_power = call.data.get("rated_power", 1000)
-        power_entity = call.data.get("power_entity_id")
+    async def async_register_surplus_device(call):
+        """Register a device for surplus control (#559 Phase 0).
 
-        device = SwitchDevice(
-            hass=hass,
-            device_id=device_id,
-            name=name,
-            rated_power=rated_power,
-            priority=priority,
-            entity_id=entity_id,
-            power_entity_id=power_entity,
+        One call does everything: persisted across restarts, defaults to
+        control_mode=surplus (that's what you register a device FOR;
+        auto-discovered devices keep peak_only), and returns a summary.
+        """
+        spec = {
+            "device_id": call.data.get("device_id"),
+            "entity_id": call.data.get("entity_id"),
+            "name": call.data.get("name") or call.data.get("device_id"),
+            "priority": call.data.get("priority", 5),
+            "rated_power": call.data.get("rated_power", 1000),
+            "power_entity_id": call.data.get("power_entity_id"),
+            "control_mode": call.data.get("control_mode", "surplus"),
+            "depends_on": call.data.get("depends_on") or [],
+            # (#569) climate device support
+            "device_type": call.data.get("device_type", "switch"),
+            "hvac_mode": call.data.get("hvac_mode", "cool"),
+            "target_temperature": call.data.get("target_temperature"),
+        }
+        goal_fields = {
+            k: call.data[k]
+            for k in (
+                "daily_min_runtime_min", "top_up_policy",
+                "stop_entity", "stop_at",
+            )
+            if k in call.data
+        }
+        registry = getattr(coordinator, "_device_registry", None)
+        if registry:
+            if goal_fields:
+                registry.seed_goals(spec["device_id"], goal_fields)
+            summary = await registry.async_register_service_device(spec)
+            if goal_fields:
+                summary["goals"] = goal_fields
+        else:
+            # Registry not up (very early call) — register unpersisted so
+            # the call still works; the user can re-run to persist.
+            from .devices.base import surplus_device_from_spec, DeviceControlMode
+            device = surplus_device_from_spec(hass, spec["device_id"], spec)
+            try:
+                device.control_mode = DeviceControlMode(spec["control_mode"])
+            except ValueError:
+                device.control_mode = DeviceControlMode.SURPLUS
+            coordinator._surplus_controller.register_device(device)
+            summary = {**spec, "persisted": False,
+                       "total_devices": len(coordinator._surplus_controller._devices)}
+        _LOGGER.info(
+            "Registered surplus device: %s (priority %d, mode %s)",
+            spec["name"], spec["priority"], spec["control_mode"],
         )
-        coordinator._surplus_controller.register_device(device)
-        _LOGGER.info("Registered surplus device: %s (priority %d)", name, priority)
+        if call.return_response:
+            return summary
+        return None
 
     hass.services.async_register(
         DOMAIN,
@@ -3101,7 +3174,64 @@ async def _async_register_phase_services(
             vol.Optional("priority", default=5): vol.All(int, vol.Range(min=1, max=10)),
             vol.Optional("rated_power", default=1000): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
+            vol.Optional("control_mode", default="surplus"): vol.In(
+                ["off", "peak_only", "surplus"]
+            ),
+            vol.Optional("depends_on"): vol.All(cv.ensure_list, [cv.string]),
+            # (#569) climate device support
+            vol.Optional("device_type", default="switch"): vol.In(
+                ["switch", "climate"]
+            ),
+            vol.Optional("hvac_mode", default="cool"): vol.In(
+                ["cool", "heat", "heat_cool", "dry", "fan_only", "auto"]
+            ),
+            vol.Optional("target_temperature"): vol.Coerce(float),
+            # (#559) goal engine — grounded core (runtime target + policy)
+            vol.Optional("daily_min_runtime_min"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=1440)
+            ),
+            vol.Optional("top_up_policy"): vol.In(
+                ["solar_only", "cheap_hours"]
+            ),
+            vol.Optional("stop_entity"): cv.string,
+            vol.Optional("stop_at"): vol.Coerce(float),
         }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    async def async_unregister_surplus_device(call):
+        """Remove a service-registered surplus device (#559 Phase 0)."""
+        device_id = call.data.get("device_id")
+        registry = getattr(coordinator, "_device_registry", None)
+        removed = False
+        if registry:
+            removed = await registry.async_unregister_service_device(device_id)
+        elif coordinator._surplus_controller.get_device(device_id):
+            coordinator._surplus_controller.unregister_device(device_id)
+            removed = True
+        if not removed:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_found",
+                translation_placeholders={"device_id": device_id},
+            )
+        _LOGGER.info("Unregistered surplus device: %s", device_id)
+        if call.return_response:
+            return {
+                "device_id": device_id,
+                "removed": True,
+                "total_devices": len(coordinator._surplus_controller._devices),
+            }
+        return None
+
+    hass.services.async_register(
+        DOMAIN,
+        "unregister_surplus_device",
+        async_unregister_surplus_device,
+        schema=vol.Schema({
+            vol.Required("device_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     # Phase 4: Schedule appliance
@@ -3342,6 +3472,52 @@ async def _async_register_phase_services(
         async_set_option,
         schema=vol.Schema({
             vol.Required("options"): dict,
+            vol.Optional("entry_id"): cv.string,
+        }),
+    )
+
+    # #528 Phase 4 — remove an EV charger from the dashboard. ``set_option``
+    # smart-merges ``ev_chargers`` (additive, keeps siblings — #464), so it
+    # can't express a removal. This service drops the charger by id and
+    # reloads. Explicit-intent + id-keyed so it can never accidentally clobber
+    # a sibling the way a full-list replace could.
+    async def async_remove_charger(call):
+        charger_id = (call.data.get("charger_id") or "").strip()
+        if not charger_id:
+            return
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return
+        target_entry = sem_entries[0]
+        if len(sem_entries) > 1 and call.data.get("entry_id"):
+            for e in sem_entries:
+                if e.entry_id == call.data["entry_id"]:
+                    target_entry = e
+                    break
+        existing = (
+            (target_entry.options or {}).get("ev_chargers")
+            or (target_entry.data or {}).get("ev_chargers")
+            or []
+        )
+        dicts = [c for c in existing if isinstance(c, dict)]
+        kept = [c for c in dicts if c.get("id") != charger_id]
+        if len(kept) == len(dicts):
+            _LOGGER.warning("remove_charger: id %s not found — nothing removed", charger_id)
+            return
+        new_options = {**(target_entry.options or {}), "ev_chargers": kept}
+        coordinator = getattr(target_entry, "runtime_data", None)
+        if coordinator is not None:
+            coordinator._skip_options_reload = dict(new_options)
+        hass.config_entries.async_update_entry(target_entry, options=new_options)
+        await hass.config_entries.async_reload(target_entry.entry_id)
+        _LOGGER.info("Removed EV charger '%s' (%d remain)", charger_id, len(kept))
+
+    hass.services.async_register(
+        DOMAIN,
+        "remove_charger",
+        async_remove_charger,
+        schema=vol.Schema({
+            vol.Required("charger_id"): cv.string,
             vol.Optional("entry_id"): cv.string,
         }),
     )
@@ -3648,7 +3824,10 @@ async def _async_register_phase_services(
     }
     _DIAGNOSE_ADVANCED_STATE = {
         "observer_mode", "update_interval", "minimum_solar_power",
-        "last_update", "delta_triggered",
+        # ``last_update`` still lives in coordinator.data (this reads from there,
+        # not entity attributes). ``delta_triggered`` was never populated and is
+        # gone as of #581 — dropped here too rather than leave a dead key.
+        "last_update",
     }
 
     _DIAGNOSE_SLICERS = {
@@ -3678,6 +3857,99 @@ async def _async_register_phase_services(
         "advanced": (),
         "overview": (),
     }
+
+    def _charger_actuation_diag(hass, coordinator) -> dict:
+        """Per-charger actuation truth for the #548 stop-not-taking class.
+
+        For each live charger: the adapter type, the status sensor + raw value
+        + classification, the enable switch + its state + whether SEM can drive
+        it (``enable_state``), the actual_charging / self_charging verdicts, the
+        live power vs the believed setpoint, and the reconciler's last desired
+        state + actions + the stop-not-taking counter. This is exactly what's
+        needed to tell "SEM never issued the stop" from "SEM issued it but the
+        box ignored it" without another round-trip.
+        """
+        from .coordinator.charger_types import ChargerPower
+        from .coordinator.charger_adapters import adapter_for
+
+        out: dict = {}
+        devs = getattr(coordinator, "_ev_devices", {}) or {}
+        adapters = getattr(coordinator, "_charger_adapters", {}) or {}
+        recs = getattr(coordinator, "_charger_reconcilers", {}) or {}
+        live = (coordinator.data or {}) if coordinator else {}
+
+        def _state(eid):
+            if not eid:
+                return None
+            st = hass.states.get(eid)
+            return st.state if st else "<missing>"
+
+        for cid, dev in devs.items():
+            adapter = adapters.get(cid)
+            rec = recs.get(cid)
+            # In observer mode (or before the first per-charger cycle) the
+            # adapter isn't cached — build a transient one so the status /
+            # enable / actual_charging verdicts are still reported. The
+            # reconciler memory (last_actions) only exists when cached.
+            adapter_cached = adapter is not None
+            if adapter is None:
+                try:
+                    adapter = adapter_for(dev)
+                except Exception:  # noqa: BLE001
+                    adapter = None
+            entry = {
+                "adapter": type(adapter).__name__ if adapter else None,
+                "adapter_cached": adapter_cached,
+                "charger_service": getattr(dev, "charger_service", None),
+                "current_entity": getattr(dev, "current_entity_id", None),
+                "current_entity_state": _state(getattr(dev, "current_entity_id", None)),
+                "start_stop_entity": getattr(dev, "start_stop_entity", None),
+                "start_stop_state": _state(getattr(dev, "start_stop_entity", None)),
+                "status_entity": getattr(dev, "charging_status_entity", None),
+                "status_raw": _state(getattr(dev, "charging_status_entity", None)),
+                "believed_setpoint_a": getattr(dev, "_current_setpoint", None),
+                "session_active": getattr(dev, "_session_active", None),
+                # #553 — SEM's belief that the KEBA runaway-cap energy target
+                # is armed (stop arms, start releases).
+                "idle_guard_armed": getattr(dev, "_idle_guard_armed", None),
+                "power_entity": getattr(dev, "power_entity_id", None),
+                "power_w": _state(getattr(dev, "power_entity_id", None)),
+            }
+            # Adapter verdicts (status class, enable_state, actual_charging).
+            if adapter is not None:
+                try:
+                    if hasattr(adapter, "_status_class"):
+                        entry["status_class"] = adapter._status_class()
+                except Exception as e:  # noqa: BLE001
+                    entry["status_class"] = f"err:{e}"
+                try:
+                    en, ctrl = adapter.enable_state()
+                    entry["enable_state"] = {"enabled": en, "controllable": ctrl}
+                except Exception as e:  # noqa: BLE001
+                    entry["enable_state"] = f"err:{e}"
+                try:
+                    pw = float(entry["power_w"])
+                except (TypeError, ValueError):
+                    pw = 0.0
+                try:
+                    p = ChargerPower(charger_id=cid, power_w=pw)
+                    entry["actual_charging"] = adapter.actual_charging(p)
+                    entry["is_self_charging"] = adapter.is_self_charging(p)
+                except Exception as e:  # noqa: BLE001
+                    entry["actual_charging"] = f"err:{e}"
+            # Reconciler memory: what SEM last decided + did, and the
+            # stop-not-taking counter (the smoking gun for #548).
+            if rec is not None:
+                entry["reconciler"] = {
+                    "last_desired": getattr(rec, "_last_desired", None),
+                    "last_actions": getattr(rec, "_last_actions", None),
+                    "consecutive_idle": getattr(rec, "_consecutive_idle_count", None),
+                    "charging_intent_active": getattr(rec, "_charging_intent_active", None),
+                    "enable_attempts": getattr(rec, "_enable_attempts", None),
+                    "stop_commanded_while_drawing": getattr(rec, "_stop_commanded_while_drawing", None),
+                }
+            out[cid] = entry
+        return out
 
     async def async_diagnose(call):
         """Return a focused diagnose payload for a section.
@@ -3781,6 +4053,18 @@ async def _async_register_phase_services(
                 "data": _chargers_brief(target.data),
                 "options": _chargers_brief(target.options),
             }
+
+            # #548 actuation truth — the load-bearing facts for "SEM says
+            # stop but the charger keeps charging": per charger, the adapter's
+            # status read + classification, the enable-switch state SEM sees,
+            # whether SEM thinks it can control it, the actual_charging verdict,
+            # and what the reconciler last DID. Without this every triage round
+            # needs another screenshot. Computed live from the cached
+            # adapters/reconcilers/devices — never raises (best-effort).
+            try:
+                payload["ev_actuation"] = _charger_actuation_diag(hass, coordinator)
+            except Exception as exc:  # noqa: BLE001
+                payload["ev_actuation"] = {"error": str(exc)}
 
         return {"section": section, "payload": payload}
 

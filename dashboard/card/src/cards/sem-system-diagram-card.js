@@ -39,7 +39,7 @@ const WATCHED_SUFFIXES = [
     'home_consumption_power',  // card reads the held sensor, not a residual
     'daily_solar_energy', 'daily_battery_charge_energy', 'daily_battery_discharge_energy',
     'daily_ev_energy', 'daily_home_energy', 'daily_grid_import_energy', 'daily_grid_export_energy',
-    'forecast_corrected_today', 'controllable_devices_count',
+    'forecast_today_kwh', 'controllable_devices_count',
 ];
 
 class SEMSystemDiagramCard extends SEMLitBase {
@@ -132,7 +132,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
             daily_home_energy: e.home?.daily_energy,
             autarky_rate: e.home?.autarky,
             self_consumption_rate: e.home?.self_consumption,
-            forecast_corrected_today: e.solar?.forecast_remaining,
+            forecast_today_kwh: e.solar?.forecast_remaining,
             controllable_devices_count: e.devices?.count_entity,
         };
         return map[suffix] || null;
@@ -556,16 +556,28 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // Daily kWh chips
         const todayLbl = this._t('today');
         const solarKwh   = `${todayLbl} ${this._valStr('daily_solar_energy')} kWh`;
-        const forecast   = this._val('forecast_corrected_today');
-        const solarFcst  = forecast > 0 ? `☀ ${forecast.toFixed(0)} kWh ${this._t('forecast') || 'Forecast'}` : '';
+        // #568 — the Home glance uses the raw provider full-day forecast
+        // (forecast_today_kwh), matching every sibling card (solar / summary /
+        // system / schedule). It previously read the performance-corrected
+        // value, so the Home number differed from the Solar tab's "Forecast".
+        // One decimal to match those cards.
+        const forecast   = this._val('forecast_today_kwh');
+        const solarFcst  = forecast > 0 ? `☀ ${forecast.toFixed(1)} kWh ${this._t('forecast') || 'Forecast'}` : '';
         const evKwh      = `${todayLbl} ${this._valStr('daily_ev_energy')} kWh`;
         const homeKwh    = `${todayLbl} ${this._val('daily_home_energy').toFixed(1)} kWh`;
         const battKwh    = `+${this._val('daily_battery_charge_energy').toFixed(1)} / -${this._val('daily_battery_discharge_energy').toFixed(1)} kWh`;
         const gridKwh    = `↓${this._val('daily_grid_import_energy').toFixed(1)} / ↑${this._val('daily_grid_export_energy').toFixed(1)} kWh`;
 
-        // Inverter status
-        const battTemp = this._val('battery_temperature');
-        const invTempStr = battTemp > 0 ? `${battTemp.toFixed(0)}°C` : '';
+        // Inverter status. #564 — this is the INVERTER node, so show the
+        // inverter's own temperature (sensor.sem_inverter_temperature). It
+        // used to read battery_temperature, so a Fronius etc. showed the
+        // battery's ~25°C in the inverter slot regardless of the real value.
+        // Blank when there is no inverter-temp source (never fabricated).
+        // Use the raw state so a legitimate ≤0 °C reading (cold climates)
+        // still shows; blank only when the source is unknown/unavailable.
+        const invTempRaw = this._valStr('inverter_temperature');
+        const invTempStr = invTempRaw !== '' && !isNaN(parseFloat(invTempRaw))
+            ? `${parseFloat(invTempRaw).toFixed(0)}°C` : '';
         const chargingState = this._valStr('charging_state');
         const maxLen = c ? 22 : 30;
         const invStatusStr = chargingState.length > maxLen
@@ -621,7 +633,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                                  title="${s.entityId}"
                                  data-entity="${s.entityId}"
                                  @click=${() => this._fireMoreInfo?.(s.entityId)}>
-                                <span class="pv-chip-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                <span class="pv-chip-label">${s.name}</span>
                                 <span class="pv-chip-value">${(Math.abs(s.watts)/1000).toFixed(2)} kW</span>
                             </div>
                         `)}
@@ -811,7 +823,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           text-anchor="middle" font-family="${F}" font-size="${fs + 1}"
                           fill="#ff9800" opacity="0.6" font-weight="600">${solarKwh}</text>
                     <text x="${L.S.cx}" y="${L.S.labelY + fv * 1.1 + (fs + 3) * 2}" class="clickable"
-                          @click=${() => this._showMoreInfo('forecast_corrected_today')}
+                          @click=${() => this._showMoreInfo('forecast_today_kwh')}
                           text-anchor="middle" font-family="${F}" font-size="${fs}"
                           fill="#ff9800" opacity="0.4" font-weight="500">${solarFcst}</text>
 

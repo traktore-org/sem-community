@@ -143,6 +143,17 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.SLIDER,
     ),
+    # (#559 Phase 0) threshold for the surplus-availability signal
+    # (binary_sensor.sem_surplus_available + the surplus event) that user
+    # automations of self-managed (peak_only) devices subscribe to.
+    NumberEntityDescription(
+        key="surplus_event_threshold",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=100,
+        native_max_value=20000,
+        native_step=100,
+        mode=NumberMode.SLIDER,
+    ),
     # EV Charging Parameters — global night_initial_current + minimum_current
     # removed as per-charger duplicates (#255). ev_stall_cooldown removed
     # (dead: the entity value was never read; the stall detector uses a
@@ -173,7 +184,12 @@ NUMBER_TYPES = [
         key="electricity_import_rate",
         native_unit_of_measurement="CHF/kWh",  # CHF replaced dynamically with HA currency
         native_min_value=0.0,
-        native_max_value=1.0,
+        # #549: max must fit ANY currency's per-kWh magnitude (e.g. LKR ~70,
+        # VND/IDR ~2500), not just CHF/EUR decimals — a hardcoded 1.0 cap made
+        # the entity unusable for high-denomination currencies. The fine step
+        # is kept (decimal currencies unaffected; whole values like 22 already
+        # divide evenly), so this is purely a wider ceiling. BOX = free entry.
+        native_max_value=10000.0,
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
@@ -181,7 +197,7 @@ NUMBER_TYPES = [
         key="electricity_export_rate",
         native_unit_of_measurement="CHF/kWh",  # CHF replaced dynamically with HA currency
         native_min_value=0.0,
-        native_max_value=0.50,
+        native_max_value=10000.0,  # #549 — currency-agnostic ceiling
         native_step=0.005,
         mode=NumberMode.BOX,
     ),
@@ -199,7 +215,7 @@ NUMBER_TYPES = [
         key="demand_charge_rate",
         native_unit_of_measurement="CHF/kW/Mt",
         native_min_value=0.0,
-        native_max_value=20.0,
+        native_max_value=100000.0,  # #549 — per kW/month can be large in high-denom currencies
         native_step=0.5,
         mode=NumberMode.BOX,
     ),
@@ -208,7 +224,7 @@ NUMBER_TYPES = [
         key="cheap_price_threshold",
         native_unit_of_measurement="CHF/kWh",
         native_min_value=0.0,
-        native_max_value=5.0,
+        native_max_value=10000.0,  # #549 — currency-agnostic ceiling
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
@@ -216,7 +232,7 @@ NUMBER_TYPES = [
         key="expensive_price_threshold",
         native_unit_of_measurement="CHF/kWh",
         native_min_value=0.0,
-        native_max_value=5.0,
+        native_max_value=10000.0,  # #549 — currency-agnostic ceiling
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
@@ -274,7 +290,10 @@ NUMBER_TYPES = [
     NumberEntityDescription(
         key="system_investment_cost",
         native_min_value=0,
-        native_max_value=200000,
+        # #557 — currency-agnostic ceiling (same class as #549): a solar
+        # system costs 1,000,000+ in LKR/IDR/VND; the old 200k cap made the
+        # entity unusable there. BOX mode = direct typed entry.
+        native_max_value=100000000,
         native_step=100,
         mode=NumberMode.BOX,
     ),
@@ -331,20 +350,14 @@ async def async_setup_entry(
                     native_min_value=0, native_max_value=200, native_step=0.5,
                     mode=NumberMode.SLIDER,
                 ), "daily_ev_target", full_config.get("daily_ev_target", 10)),
-                # (#441) Renamed from ``night_initial_current`` to
-                # ``initial_current`` (display "Vehicle Start Amps") to
-                # group with the new per-vehicle Min Amps and decouple
-                # from the now-misleading "night" prefix — the value is
-                # the session-start ramp current, used at any time the
-                # session begins, not strictly tied to nighttime.
-                (NumberEntityDescription(
-                    key=f"charger_{cid}_initial_current",
-                    name=f"{cname} Vehicle Start Amps",
-                    native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-                    native_min_value=6, native_max_value=32, native_step=1,
-                    mode=NumberMode.SLIDER,
-                    icon="mdi:car-clock",
-                ), "initial_current", full_config.get("initial_current", 10)),
+                # #553 — "Vehicle Start Amps" (``initial_current``, ex
+                # ``night_initial_current`` #441) RETIRED: since the
+                # auto-discovering start-kick (beta.57, charge_stability)
+                # no decision code reads it — the filter climbs from Min
+                # Amps until the car latches. The entity was a silent
+                # no-op (#542 class), so it is removed rather than left
+                # as a dead knob. The stale registry entry is purged by
+                # the orphan-entity cleanup on setup.
                 (NumberEntityDescription(
                     key=f"charger_{cid}_minimum_current",
                     name=f"{cname} Min Amps",
@@ -644,7 +657,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_HEAT_PUMP_BOOST_OFFSET,
             DEFAULT_HOT_WATER_MAX_TEMP,
             DEFAULT_SYSTEM_SIZE_KWP,
-            DEFAULT_EV_INITIAL_CURRENT,
             DEFAULT_EV_MIN_CURRENT,
             DEFAULT_BATTERY_CAPACITY_KWH,
         )
@@ -659,6 +671,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "ev_target_soc_max": 100,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
             "battery_assist_min_surplus": DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
+            "surplus_event_threshold": 1500,
             "regulation_offset": DEFAULT_REGULATION_OFFSET,
             "demand_charge_rate": DEFAULT_DEMAND_CHARGE_RATE,
             "cheap_price_threshold": DEFAULT_CHEAP_PRICE_THRESHOLD,
@@ -669,7 +682,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "legionella_target_temp": 65.0,
             "legionella_interval_hours": 72,
             "system_size_kwp": DEFAULT_SYSTEM_SIZE_KWP,
-            "initial_current": DEFAULT_EV_INITIAL_CURRENT,
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
             "ev_enable_delay_seconds": 60,
             "ev_disable_delay_seconds": 300,

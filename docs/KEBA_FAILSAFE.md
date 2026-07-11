@@ -1,34 +1,50 @@
-# Disabling the KEBA failsafe (for steady charging)
-
-If SEM raised the Repair *"KEBA failsafe is enabled"*, this page explains what
-it is and how to turn it off.
+# KEBA failsafe & steady charging
 
 ## What the failsafe is
 
 The **failsafe** is a safety watchdog **built into your KEBA charger** (not into
 SEM). It's a dead-man's switch: *if the controller setting the charge current
 goes silent (crash, network drop), fall back to a safe current after a timeout.*
-Its fallback default is **6 A**.
+Its built-in fallback default is **6 A**.
 
 It exists to protect house wiring when a load-management controller disappears.
 On a typical single-car installation it protects against very little.
 
-## Why it causes a problem with SEM (and evcc)
+## Why it can cause a problem
 
-SEM dynamically sets the charge current. While the failsafe is on, the charger
-keeps **reverting to its 6 A fallback** between SEM's commands, and SEM re-asserts
-the target — producing a **6↔9 A oscillation**. A steady-needing car (e.g. a
-Renault Zoe) sees the shaking offer and refuses to charge, sitting in standby.
+SEM dynamically sets the charge current. If the charger's own short failsafe is
+active, the charger keeps **reverting to its 6 A fallback** between SEM's
+commands while SEM re-asserts the target — producing a **6↔9 A oscillation**. A
+steady-needing car (e.g. a Renault Zoe) sees the shaking offer and refuses to
+charge, sitting in standby.
 
-This is a known issue: **evcc** (the widely-used reference EV charge controller)
-also recommends **disabling the KEBA failsafe** for exactly this reason — with it
-on, evcc gets recurring "out of sync" errors. SEM follows the same approach: it
-**no longer arms the failsafe**, and holds the current it sets, like a simple
-script. But the charger keeps its *own* failsafe until you turn it off, and Home
-Assistant's `keba.set_failsafe` service **cannot** disable it (it rejects a
-timeout of `0`). So you disable it once, at the charger.
+## How SEM handles it by default (you usually do nothing)
 
-## How to disable it (timeout = 0)
+By default (`keba_arm_failsafe = true`), SEM uses **managed-neutralize**: it arms
+its own **long, non-tripping** failsafe that overwrites the box's short built-in
+one, and re-writes it every cycle so it never fires during normal operation. The
+result is a steady offer and a smooth charge — **with no action required from
+you**, and no Repair. This is the recommended default and needs nothing at the
+charger.
+
+> The real KEBA P30 built-in failsafe generally **cannot** be disabled over UDP
+> or via Home Assistant's `keba.set_failsafe` service (it rejects a timeout of
+> `0`), which is exactly why SEM neutralizes it by overwriting rather than trying
+> to switch it off.
+
+## The opt-out: "don't-arm" mode (evcc-style)
+
+If you set `keba_arm_failsafe = false`, SEM leaves the box's failsafe alone (the
+approach **evcc** uses). In that mode, if your charger's built-in failsafe reads
+**on**, SEM raises the Repair *"KEBA failsafe is enabled"* to guide you to disable
+it at the charger — because in don't-arm mode SEM won't neutralize it for you.
+Only use this mode if your box **can** actually have its failsafe disabled at the
+hardware level. The steps below are for that case.
+
+`keba_arm_failsafe` has no UI toggle yet — it's a config-entry option for advanced
+users. If you need to set it, ask in the project's issues for the current way.
+
+## How to disable it at the charger (don't-arm mode only, timeout = 0)
 
 Pick whichever you can do:
 
@@ -56,17 +72,13 @@ set the **failsafe timeout to 0**.
 Once the charger reports the failsafe **off**, this Repair clears automatically,
 SEM holds a steady offer, and the car charges smoothly. No SEM restart needed.
 
-## If you can't disable it at the charger
+## Which mode should I use?
 
-There's an **advanced** opt-in, `keba_arm_failsafe` (default **off**). When on,
-SEM arms a *managed* failsafe that drops to your **charging floor** (not 6 A) and
-persists, so it can't cause the flap — keeping a controller-death safety net at
-the cost of an extra moving part.
-
-It has **no UI toggle yet** — it's a config-entry option for advanced users. The
-recommended path is still to disable the failsafe at the charger (above), which
-matches evcc. If you need the managed option, ask in the project's issues for the
-current way to set it.
+For almost everyone, **leave the default** (`keba_arm_failsafe = true`): SEM
+neutralizes the flap by managing a long non-tripping failsafe itself, so charging
+is steady out of the box with nothing to configure. Only switch to don't-arm mode
+(and disable the failsafe at the charger) if you specifically want the evcc-style
+setup and your box supports disabling its failsafe at the hardware level.
 
 ---
 References: [evcc — KEBA failsafe out-of-sync](https://github.com/evcc-io/evcc/discussions/21093) ·

@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "Carregador EV",
-        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Dica: a maioria das definições está agora no painel SEM → separador Configuração (a cores, ao vivo). Este fluxo permanece para instalações sem painel.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "Estado de conexão VE",
           "ev_charging_sensor": "Estado de carregamento VE",
@@ -377,6 +377,18 @@
           "daily_ev_target_max": "O excedente solar carrega até este valor e depois para. Deixe no máximo para carregar livremente com o sol.",
           "ev_target_soc_max": "O excedente solar carrega até este SOC e depois para. Deixe a 100% para carregar livremente com o sol."
         }
+      },
+      "pv_naming": {
+        "title": "Name your PV strings",
+        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "data": {
+          "pv_name_pv1": "PV1 name",
+          "pv_name_pv2": "PV2 name",
+          "pv_name_pv3": "PV3 name",
+          "pv_name_pv4": "PV4 name",
+          "pv_name_pv5": "PV5 name",
+          "pv_name_pv6": "PV6 name"
+        }
       }
     }
   },
@@ -423,6 +435,9 @@
       },
       "battery_temperature": {
         "name": "Battery Temperature"
+      },
+      "inverter_temperature": {
+        "name": "Temperatura do inversor"
       },
       "battery_cycles_estimated": {
         "name": "Battery Cycles (Estimated)"
@@ -583,6 +598,9 @@
       "yearly_solar_yield_energy": {
         "name": "Yearly Solar"
       },
+      "lifetime_solar_yield_energy": {
+        "name": "Produção solar total"
+      },
       "yearly_grid_import_energy": {
         "name": "Yearly Grid Import"
       },
@@ -714,6 +732,9 @@
       },
       "forecast_remaining_today_kwh": {
         "name": "Forecast Remaining Today"
+      },
+      "forecast_power_now_w": {
+        "name": "Forecast Power Now"
       },
       "forecast_source": {
         "name": "Forecast Source"
@@ -930,6 +951,9 @@
       "solar_active": {
         "name": "Solar Active"
       },
+      "surplus_available": {
+        "name": "Excedente disponível"
+      },
       "forecast_available": {
         "name": "Forecast Available"
       },
@@ -1059,6 +1083,9 @@
       },
       "initial_current": {
         "name": "Corrente inicial do VE"
+      },
+      "surplus_event_threshold": {
+        "name": "Limiar de evento de excedente"
       }
     },
     "select": {

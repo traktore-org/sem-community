@@ -54,7 +54,10 @@ _BRAND_WATCHDOG_REFRESH_S = {
 # Persisted so it overwrites the box's short built-in failsafe.
 FAILSAFE_TIMEOUT_S = 600
 
+from ..consts.core import KEBA_IDLE_GUARD_KWH
+
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +77,7 @@ class DeviceType(Enum):
     CURRENT_CONTROL = "current_control"
     SETPOINT = "setpoint"
     SCHEDULE = "schedule"
+    CLIMATE = "climate"
 
 
 class DeviceControlMode(Enum):
@@ -162,10 +166,36 @@ class ControllableDevice(ABC):
         self._daily_runtime_meter_day: Optional[date] = None
         self._offpeak_forced: bool = False
 
+        # (#559) Goal engine — grounded core. daily_min_runtime_sec (above,
+        # pre-#559 "Feature 2") is the only target; solar_only default means
+        # a switch load never grid-forces. cheap_hours is kept for the HW/HP
+        # off-peak pass. Opt-in (0/empty = disabled); only meaningful in SURPLUS.
+        self.top_up_policy: str = "solar_only"         # solar_only | cheap_hours
+        # (#559 Phase 3) external completion condition (e.g. car SOC sensor)
+        self.stop_entity: str = ""
+        self.stop_at: float = 0.0
+        # Off-peak force bookkeeping: a cheap-hours force expires at day
+        # rollover (the deficit was YESTERDAY's) so it can't re-fill the new
+        # day's target from grid overnight.
+        self._offpeak_forced_date: Optional[date] = None
+
         # Appliance dependencies (#122): device only activates when dependencies are met
         self.depends_on: List[str] = []  # device_ids that must be active
         self.dependency_mode: str = "must_active"  # must_active | must_inactive
         self._controller = None  # set by SurplusController after registration
+
+        # (arc) Ownership + observed-state reconciliation. `_sem_owned` is True
+        # while SEM is the reason the load is on (it called activate()). The
+        # DeviceReconciler clears it when an external actor (the user, another
+        # automation) changed the physical state, so SEM stops fighting a manual
+        # on/off and stops crediting runtime to a load it isn't actually driving.
+        self._sem_owned: bool = False
+        # Monotonic anchor for the "belief says on but the entity reads off"
+        # drift grace window (a transient unavailable/poll gap must not flip us).
+        self._observed_off_since: Optional[float] = None
+        # Wall-clock cooldown after an external OFF: don't immediately re-activate
+        # (respect a possible user turn-off) until it elapses.
+        self._external_off_until: Optional[datetime] = None
 
     @property
     def device_type(self) -> DeviceType:
@@ -269,12 +299,30 @@ class ControllableDevice(ABC):
             self._daily_runtime_last_check = now
         self._daily_runtime_meter_day = meter_day
 
-        if self._daily_runtime_last_check is not None and self.is_active:
+        # Don't accumulate the daily solar budget when SEM isn't managing the
+        # device (Off): a device switched to Off while running would otherwise
+        # keep counting minutes it no longer owns (#559 alex "Issue 6").
+        _managed = self.control_mode != DeviceControlMode.OFF
+        # (arc Phase 4) Credit runtime on OBSERVED reality, not just belief: a
+        # load whose entity reads OFF isn't running, even while the reconciler's
+        # 45s drift grace hasn't corrected the belief yet. Unobservable (None —
+        # no control entity / entity unavailable) falls back to belief, so
+        # devices without a readable entity behave exactly as before.
+        _really_on = self.is_active and self.observed_on() is not False
+        if self._daily_runtime_last_check is not None and _really_on and _managed:
             elapsed = (now - self._daily_runtime_last_check).total_seconds()
             if 0 < elapsed <= 120:  # ignore jumps > 120s (restart recovery)
                 self._daily_runtime_accumulated_sec += elapsed
 
+        if self.is_active:
+            self.calibrate_rated_power()
+
         self._daily_runtime_last_check = now
+
+    def calibrate_rated_power(self) -> None:
+        """(#559) Hook: devices that can learn their real draw override this.
+        Base is a no-op."""
+        return
 
     @property
     def remaining_daily_runtime_sec(self) -> float:
@@ -292,11 +340,30 @@ class ControllableDevice(ABC):
             return False
         return self.remaining_daily_runtime_sec > 0
 
+    # --- (#559) goal engine — grounded core (runtime target + stop condition) ---
+
     @property
-    def daily_energy_budget_kwh(self) -> float:
-        """Energy budget implied by rated power and runtime target."""
-        rated = getattr(self, "rated_power", 0)
-        return rated * self.daily_min_runtime_sec / 3_600_000
+    def daily_targets_met(self) -> bool:
+        """Runtime minimum target achieved. No target configured = False —
+        the stop condition is an independent gate, not a target."""
+        if self.daily_min_runtime_sec <= 0:
+            return False
+        return self._daily_runtime_accumulated_sec >= self.daily_min_runtime_sec
+
+    @property
+    def stop_condition_met(self) -> bool:
+        """(#559 Phase 3) external completion condition — e.g. the car's SOC
+        sensor reached the target %. Unavailable sensor = condition NOT met
+        (the surplus/target bounds still limit the device)."""
+        if not self.stop_entity or self.stop_at <= 0 or not self.hass:
+            return False
+        state = self.hass.states.get(self.stop_entity)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return False
+        try:
+            return float(state.state) >= self.stop_at
+        except (ValueError, TypeError):
+            return False
 
     def enable(self) -> None:
         """Enable device for surplus control."""
@@ -336,6 +403,12 @@ class ControllableDevice(ABC):
         """Check if device can be activated (respects dependencies, min_off, activation_delay)."""
         # Dependency check (#122): all depends_on devices must be in required state
         if not self._check_dependencies():
+            return False
+        # (arc) Respect a recent EXTERNAL off — if the user (or another
+        # automation) just turned this load off, don't immediately turn it back
+        # on and fight them. The DeviceReconciler sets this window when it sees
+        # a SEM-active load go off at the entity.
+        if self._external_off_until and datetime.now() < self._external_off_until:
             return False
         if self.min_off_seconds > 0 and self._last_deactivated:
             elapsed = (datetime.now() - self._last_deactivated).total_seconds()
@@ -397,10 +470,62 @@ class ControllableDevice(ABC):
     def record_activated(self) -> None:
         """Record activation timestamp for anti-cycling."""
         self._last_activated = datetime.now()
+        # (arc) SEM turned this on → SEM owns the on-state.
+        self._sem_owned = True
+        self._observed_off_since = None
 
     def record_deactivated(self) -> None:
         """Record deactivation timestamp for anti-cycling."""
         self._last_deactivated = datetime.now()
+        self._sem_owned = False
+        self._observed_off_since = None
+
+    def mark_reconciled_off(self, cooldown_until: "Optional[datetime]" = None) -> None:
+        """(arc) The reconciler observed this SEM-active load is physically OFF.
+
+        Flip the internal belief to IDLE **without** issuing a service call (the
+        load is already off), clear ownership + the drift anchor, stamp the
+        anti-flicker timer, and optionally hold a re-activate cooldown so SEM
+        doesn't immediately fight a user's manual off.
+        """
+        self._status.state = DeviceState.IDLE
+        self._status.current_consumption_w = 0.0
+        self._status.allocated_power_w = 0.0
+        # Stamp BOTH deactivation clocks: the base one (min_on / can_deactivate)
+        # and the DeviceStatus one that Switch/Climate ``activate()`` read for
+        # their own min_off anti-flicker — so re-activation is gated even on a
+        # path that skips can_activate().
+        now = datetime.now()
+        self._last_deactivated = now
+        self._status.last_deactivated = now
+        self._sem_owned = False
+        self._observed_off_since = None
+        if cooldown_until is not None:
+            self._external_off_until = cooldown_until
+
+    def observed_on(self):
+        """(arc) The device's observed on/off state from HA, or None when it
+        can't be read (no control entity, or unavailable/unknown).
+
+        On/off loads use the control entity's state; a ``climate`` entity is
+        "on" whenever its hvac_mode is not ``off``. Returning None means "don't
+        know" — the reconciler leaves the belief untouched rather than guessing.
+        """
+        if not self.entity_id or not self.hass:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return None
+        s = str(state.state).lower()
+        if s == "off":
+            return False
+        if s == "on":
+            return True
+        # climate.* and water_heater.* report their active MODE as the state
+        # string (e.g. "heat", "cool", "eco", "heat_pump") — anything but "off"
+        # means running. Don't add per-domain guards here; ClimateDevice
+        # overrides observed_on() where mode-matching matters.
+        return True
 
     def get_current_consumption(self) -> float:
         """Get current power consumption from HA entity or estimate."""
@@ -413,8 +538,24 @@ class ControllableDevice(ABC):
                     pass
         return self._status.current_consumption_w
 
+    @property
+    def desired_state(self) -> str:
+        """(arc Phase 3) SEM's intent for this device, as an explicit model.
+
+        - ``off``  — SEM never drives it (control_mode = off)
+        - ``on``   — SEM wants it drawing (it's active under SEM management)
+        - ``idle`` — SEM is not allocating to it right now
+
+        Formalizes the OFF / IDLE / ON trichotomy the EV reconciler uses, for
+        the card and diagnostics — so "why is this load on?" is answerable.
+        """
+        if self.control_mode == DeviceControlMode.OFF:
+            return "off"
+        return "on" if (self.is_active and self._sem_owned) else "idle"
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize device info for sensors/diagnostics."""
+        obs = self.observed_on()
         d = {
             "device_id": self.device_id,
             "name": self.name,
@@ -426,13 +567,18 @@ class ControllableDevice(ABC):
             "allocated_power_w": self._status.allocated_power_w,
             "enabled": self._enabled,
             "activation_count": self._status.activation_count,
+            # (arc Phase 3) intent + reality + ownership, for the card and
+            # field debugging: is it on because SEM wants it on, or externally?
+            "desired_state": self.desired_state,
+            "observed_on": obs,
+            "sem_owned": self._sem_owned,
         }
         if self.daily_min_runtime_sec > 0:
             d.update({
                 "daily_min_runtime_sec": self.daily_min_runtime_sec,
                 "daily_runtime_accumulated_sec": round(self._daily_runtime_accumulated_sec, 1),
+                "top_up_policy": self.top_up_policy,
                 "remaining_daily_runtime_sec": round(self.remaining_daily_runtime_sec, 1),
-                "daily_energy_budget_kwh": round(self.daily_energy_budget_kwh, 3),
                 "offpeak_forced": self._offpeak_forced,
             })
         # Dependency info (#122)
@@ -478,6 +624,54 @@ class SwitchDevice(ControllableDevice):
     @property
     def device_type(self) -> DeviceType:
         return DeviceType.SWITCH
+
+    def adopt_if_running(self) -> bool:
+        """(#559) Re-own a switch that is physically ON at (re-)registration.
+
+        After an HA restart SEM's internal state is IDLE while the switch
+        it turned on is still ON — orphaned: no goal gate, force expiry or
+        surplus logic would ever stop it. Adopting it as ACTIVE puts it
+        back under normal control (and its runtime counts again).
+        """
+        if not self.entity_id or not self.hass or self.is_active:
+            return False
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state != "on":
+            return False
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
+        _LOGGER.info(
+            "%s: switch %s was ON at registration — re-owned as active",
+            self.name, self.entity_id,
+        )
+        return True
+
+    def calibrate_rated_power(self) -> None:
+        """(#559) Self-heal an unknown rated_power. Auto-discovered switches
+        snapshot the power sensor's reading at discovery (often 0 W while the
+        load is off), which leaves min_power_threshold tiny — the switch then
+        turns on at almost any surplus and imports the rest from grid. When
+        the switch is ON and its power sensor reports a larger real draw,
+        adopt it as both the rated power and the surplus threshold."""
+        if not self.power_entity_id or not self.hass or not self.is_active:
+            return
+        state = self.hass.states.get(self.power_entity_id)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return
+        try:
+            observed = float(state.state)
+        except (ValueError, TypeError):
+            return
+        if observed > self.rated_power:
+            _LOGGER.info(
+                "%s: calibrated rated_power %.0fW -> %.0fW from %s",
+                self.name, self.rated_power, observed, self.power_entity_id,
+            )
+            self.rated_power = observed
+            self.min_power_threshold = observed
 
     async def activate(self, available_watts: float) -> float:
         if not self.entity_id:
@@ -539,6 +733,203 @@ class SwitchDevice(ControllableDevice):
         if self.is_active:
             return self.rated_power
         return 0.0
+
+
+class ClimateDevice(ControllableDevice):
+    """On/off surplus control for a ``climate.*`` entity (#569).
+
+    An air-conditioner / heat pump exposed only as a ``climate.*`` entity has
+    no switch to flip and no ``number`` to write — you drive it with
+    ``climate.set_hvac_mode`` and ``climate.set_temperature``. This is the
+    on/off analog of :class:`SwitchDevice` for such units:
+
+    - surplus available → set the configured ``hvac_mode`` (e.g. ``cool``) and,
+      if given, a comfort ``target_temperature`` — i.e. turn the unit ON;
+    - surplus drops → ``hvac_mode: off`` — turn the unit OFF.
+
+    The active ``hvac_mode`` is configurable, so one type covers AC-cooling
+    (``cool``) and heating (``heat`` / ``heat_cool``). Unlike
+    :class:`SetpointDevice` (which only nudges a heat-pump setpoint and never
+    turns the unit off), this drives real on/off load shifting and so slots
+    into the priority / peak-shed / daily-goal machinery like a switch.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        device_id: str,
+        name: str,
+        rated_power: float,
+        priority: int = 5,
+        min_power_threshold: float = 0.0,
+        entity_id: Optional[str] = None,
+        power_entity_id: Optional[str] = None,
+        hvac_mode: str = "cool",
+        target_temperature: Optional[float] = None,
+        min_on_time: int = 300,
+        min_off_time: int = 60,
+        daily_min_runtime_sec: int = 0,
+    ):
+        super().__init__(
+            hass, device_id, name, priority,
+            min_power_threshold or rated_power,
+            entity_id, power_entity_id,
+        )
+        self.rated_power = rated_power
+        self.hvac_mode = hvac_mode or "cool"
+        self.target_temperature = target_temperature
+        self.min_on_time = min_on_time
+        self.min_off_time = min_off_time
+        self.daily_min_runtime_sec = daily_min_runtime_sec
+
+    @property
+    def device_type(self) -> DeviceType:
+        return DeviceType.CLIMATE
+
+    def adopt_if_running(self) -> bool:
+        """(#559) Re-own a climate unit that SEM is running at (re-)registration.
+
+        After a restart SEM's internal state is IDLE while the AC it turned on
+        is still cooling. A climate entity reports its active mode as the
+        state (``cool``/``heat``/…), or ``off`` when idle.
+
+        We only adopt when the entity's state matches **our** configured
+        ``hvac_mode`` — i.e. the unit is running in the mode SEM would have set.
+        A unit the user has manually put into a *different* mode (e.g. ``heat``
+        while we manage ``cool``) is left alone: adopting it would let a later
+        ``deactivate()`` send ``hvac_mode: off`` and kill the user's manual run.
+        """
+        if not self.entity_id or not self.hass or self.is_active:
+            return False
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state != self.hvac_mode:
+            return False
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
+        _LOGGER.info(
+            "%s: climate %s was %s at registration — re-owned as active",
+            self.name, self.entity_id, state.state,
+        )
+        return True
+
+    def observed_on(self):
+        """(arc) A climate unit counts as "on" for reconciliation only when it's
+        in the mode SEM drives it in. A user switching it to a *different* active
+        mode (SEM=cool → user picks heat/fan) reads as OFF from SEM's view, so
+        the reconciler stops crediting SEM's goal and won't fight the manual
+        change — mirroring adopt_if_running's ``state == hvac_mode`` check."""
+        if not self.entity_id or not self.hass:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return None
+        return str(state.state).lower() == str(self.hvac_mode).lower()
+
+    async def activate(self, available_watts: float) -> float:
+        if not self.entity_id:
+            return 0.0
+
+        # Anti-flicker: check minimum off time
+        if self._status.last_deactivated:
+            elapsed = (datetime.now() - self._status.last_deactivated).total_seconds()
+            if elapsed < self.min_off_time:
+                return 0.0
+
+        # Set the mode first. If THIS fails the unit never turned on — report
+        # ERROR and bail.
+        try:
+            await self.hass.services.async_call(
+                "climate", "set_hvac_mode",
+                {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode},
+                blocking=True,
+            )
+        except Exception as e:
+            _LOGGER.error("Failed to activate %s: %s", self.name, e)
+            self._status.state = DeviceState.ERROR
+            self._status.error_message = str(e)
+            return 0.0
+
+        # The mode is committed — the unit is now ON. Mark ACTIVE *before* the
+        # optional setpoint write so a set_temperature failure can't leave us
+        # thinking the unit is idle (which would re-issue set_hvac_mode every
+        # cycle — the unit would run uncontrolled). B1.
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        self._status.activation_count += 1
+
+        if self.target_temperature is not None:
+            try:
+                await self.hass.services.async_call(
+                    "climate", "set_temperature",
+                    {"entity_id": self.entity_id,
+                     "temperature": self.target_temperature},
+                    blocking=True,
+                )
+            except Exception as e:
+                # Non-fatal: the unit is running in the right mode, only the
+                # comfort setpoint didn't take. Stay ACTIVE.
+                _LOGGER.warning(
+                    "%s: set hvac_mode but not target temperature: %s",
+                    self.name, e,
+                )
+
+        if self.target_temperature is not None:
+            _LOGGER.info(
+                "Activated climate device %s → %s @ %.1f°C (%dW)",
+                self.name, self.hvac_mode, self.target_temperature,
+                self.rated_power,
+            )
+        else:
+            _LOGGER.info(
+                "Activated climate device %s → %s (%dW)",
+                self.name, self.hvac_mode, self.rated_power,
+            )
+        return self.rated_power
+
+    async def deactivate(self) -> None:
+        if not self.entity_id:
+            return
+
+        # Anti-flicker: check minimum on time
+        if self._status.last_activated:
+            elapsed = (datetime.now() - self._status.last_activated).total_seconds()
+            if elapsed < self.min_on_time:
+                return
+
+        try:
+            await self.hass.services.async_call(
+                "climate", "set_hvac_mode",
+                {"entity_id": self.entity_id, "hvac_mode": "off"},
+                blocking=True,
+            )
+            self._status.state = DeviceState.IDLE
+            self._status.current_consumption_w = 0.0
+            self._status.allocated_power_w = 0.0
+            self._status.last_deactivated = datetime.now()
+            _LOGGER.info("Deactivated climate device %s", self.name)
+        except Exception as e:
+            _LOGGER.error("Failed to deactivate %s: %s", self.name, e)
+            self._status.state = DeviceState.ERROR
+            self._status.error_message = str(e)
+
+    async def adjust_power(self, available_watts: float) -> float:
+        # Climate devices are on/off only — no proportional adjustment.
+        if self.is_active:
+            return self.rated_power
+        return 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        d.update({
+            "hvac_mode": self.hvac_mode,
+            "target_temperature": self.target_temperature,
+        })
+        return d
 
 
 class CurrentControlDevice(ControllableDevice):
@@ -609,6 +1000,14 @@ class CurrentControlDevice(ControllableDevice):
         # Plumbed from the ``ev_current_sensor`` config; read by the
         # EV-OFFER-PROBE (observe-only). "" = no live source (probe shows "?").
         self.current_sensor_entity_id: str = ""
+        # #548 — HA entity reporting the charger's STATUS enum (e.g.
+        # sensor.wallbox_pulsar_status). For status-rich chargers (Wallbox)
+        # this is authoritative for "is it actually charging?" — the cloud
+        # power reading lags ~90 s, so a power-only ``actual_charging`` makes
+        # the reconciler wrongly read "converged" and stop re-issuing the
+        # stop (OFF mode never takes). The adapter reads this enum directly.
+        # Plumbed from the ``ev_charging_sensor`` config; "" = power-only.
+        self.charging_status_entity: str = ""
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
@@ -644,6 +1043,10 @@ class CurrentControlDevice(ControllableDevice):
         # persistent Repair left by a previous device instance.
         self._stale_repair_checked: bool = False
         self._session_active: bool = False
+        # #553 — SEM's belief that the KEBA runaway-cap energy target is
+        # armed (set by stop_session, cleared by start_session). Surfaced in
+        # the diagnose service's ev_actuation block.
+        self._idle_guard_armed: bool = False
         self._min_power_change_interval = min_power_change_interval
 
     @property
@@ -1073,11 +1476,19 @@ class CurrentControlDevice(ControllableDevice):
                 # the box). Only arms when opted in via ``keba_arm_failsafe``.
                 await self.arm_failsafe()
 
-                # Set energy target if supported (KEBA)
-                if energy_target_kwh > 0 and self.hass.services.has_service(domain, "set_energy"):
+                # Set energy target if supported (KEBA). #553: when SEM has
+                # no target, EXPLICITLY clear the register (0 = no limit) —
+                # stop_session() arms a ~1 Wh idle-guard there so a firmware
+                # auto-start (#315) self-terminates at the box; every real
+                # SEM start must release that guard or the session would end
+                # at 1 Wh. SEM owns the KEBA session-energy register.
+                if self.hass.services.has_service(domain, "set_energy"):
                     await self.hass.services.async_call(
-                        domain, "set_energy", {"energy": energy_target_kwh}, blocking=True,
+                        domain, "set_energy",
+                        {"energy": energy_target_kwh if energy_target_kwh > 0 else 0},
+                        blocking=True,
                     )
+                    self._idle_guard_armed = False
 
                 # Pilot cycle: disable/enable for cars that need fresh signal
                 if self.needs_pilot_cycle and self.hass.services.has_service(domain, "disable"):
@@ -1155,6 +1566,41 @@ class CurrentControlDevice(ControllableDevice):
                 if self.hass.services.has_service(domain, "disable"):
                     await self.hass.services.async_call(domain, "disable", {}, blocking=True)
                     stop_method = f"{domain}.disable"
+                    # #553 — BOX-LEVEL runaway cap (#315): KEBA firmware
+                    # auto-restarts a session at its stored setpoint when the
+                    # car retries (~every 10 min), even after keba.disable.
+                    # While SEM is alive its policing (#552) kills each rogue
+                    # start within a cycle; this 1 kWh session-energy target
+                    # (the keba library MINIMUM — smaller values are rejected,
+                    # live-verified) bounds the damage when SEM is NOT
+                    # policing (down/restarting): the box then ends a rogue
+                    # session itself at 1 kWh instead of charging unbounded.
+                    # Every SEM start releases the guard (start_session writes
+                    # the real target, or 0 = no limit). Note: SEM owns this
+                    # register — user-set box limits are overwritten.
+                    #
+                    # Own try (review H1): a set_energy failure must neither
+                    # skip the _session_active reset below nor mask that the
+                    # disable itself succeeded.
+                    if self.hass.services.has_service(domain, "set_energy"):
+                        try:
+                            await self.hass.services.async_call(
+                                domain, "set_energy",
+                                {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
+                            )
+                            self._idle_guard_armed = True
+                            _LOGGER.debug(
+                                "stop_session(%s): armed %.1f kWh runaway-cap "
+                                "energy target (#553)", self.name,
+                                KEBA_IDLE_GUARD_KWH,
+                            )
+                        except Exception as guard_err:  # noqa: BLE001
+                            _LOGGER.warning(
+                                "stop_session(%s): idle-guard set_energy "
+                                "failed (%s) — box auto-start protection "
+                                "not armed this stop (#553)",
+                                self.name, guard_err,
+                            )
                 else:
                     _LOGGER.warning(
                         "stop_session(%s): charger_service=%s configured but "
@@ -1193,20 +1639,9 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as e:
             _LOGGER.error("Failed to stop session on %s: %s", self.name, e)
 
-    async def update_energy_target(self, remaining_kwh: float) -> None:
-        """Update KEBA energy target mid-session (for accurate auto-stop)."""
-        if not self._session_active:
-            return
-        try:
-            if self.charger_service and "keba" in (self.charger_service or ""):
-                domain = self.charger_service.split(".", 1)[0]
-                await self.hass.services.async_call(
-                    domain, "set_energy",
-                    {"energy": max(0, remaining_kwh)},
-                    blocking=True,
-                )
-        except Exception as e:
-            _LOGGER.debug("Failed to update energy target on %s: %s", self.name, e)
+    # update_energy_target() removed (#553 review L1): zero callers, and a
+    # mid-session set_energy write would overwrite the idle-guard register.
+
 
     def to_dict(self) -> Dict[str, Any]:
         d = super().to_dict()
@@ -1457,3 +1892,51 @@ class ScheduleDevice(ControllableDevice):
             "is_deadline_approaching": self.is_deadline_approaching,
         })
         return d
+
+
+def surplus_device_from_spec(
+    hass: HomeAssistant, device_id: str, spec: Dict[str, Any]
+) -> "ControllableDevice":
+    """Build a live surplus device from a stored/service spec (#569).
+
+    Single source of truth for the three service-device build sites (the
+    ``register_surplus_device`` handler, the registry's create path, and the
+    restart-rehydrate path) so a new device type only has to be added here.
+
+    ``spec["device_type"]`` selects the class (default ``"switch"``):
+
+    - ``"climate"`` → :class:`ClimateDevice` (reads ``hvac_mode`` /
+      ``target_temperature``);
+    - anything else → :class:`SwitchDevice`.
+
+    The caller still applies ``control_mode``, ``depends_on`` and goals — this
+    only constructs the object.
+    """
+    dtype = (spec.get("device_type") or "switch").lower()
+    name = spec.get("name") or device_id
+    rated_power = spec.get("rated_power", 1000)
+    priority = spec.get("priority", 5)
+    entity_id = spec.get("entity_id", "")
+    power_entity_id = spec.get("power_entity_id")
+    if dtype == "climate":
+        target = spec.get("target_temperature")
+        return ClimateDevice(
+            hass=hass,
+            device_id=device_id,
+            name=name,
+            rated_power=rated_power,
+            priority=priority,
+            entity_id=entity_id,
+            power_entity_id=power_entity_id,
+            hvac_mode=spec.get("hvac_mode", "cool"),
+            target_temperature=float(target) if target is not None else None,
+        )
+    return SwitchDevice(
+        hass=hass,
+        device_id=device_id,
+        name=name,
+        rated_power=rated_power,
+        priority=priority,
+        entity_id=entity_id,
+        power_entity_id=power_entity_id,
+    )

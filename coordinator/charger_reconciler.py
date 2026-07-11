@@ -128,6 +128,30 @@ class ChargerReconciler:
         self._enable_retry_interval_s: float = float(enable_retry_interval_s)
         self._enable_attempts: int = 0
         self._enable_gave_up_at: float = 0.0
+        # #548 actuation observability — record what the reconciler last DID
+        # and whether the charger kept drawing against a stop, so the
+        # ``diagnose`` service can show "SEM commanded stop N× but the box
+        # is still drawing" without another triage round.
+        self._last_desired: "str | None" = None
+        self._last_actions: List[str] = []
+        self._last_apply_at: float = 0.0
+        self._stop_commanded_while_drawing: int = 0
+        """Consecutive cycles SEM has issued DISABLE while the charger is
+        still drawing — a non-zero value means the stop is not taking
+        (charger ignoring the command / re-enabled externally)."""
+        # #552 — idle-settled marker. The IDLE flicker-grace (N cycles before
+        # DISABLE) exists ONLY to absorb actuator lag while a session SEM just
+        # stopped winds down. Once idle has SETTLED (contactor observed open,
+        # no draw), a newly-appearing draw is a rogue self-start (KEBA
+        # auto-start at its stored setpoint, #315) — it gets DISABLE
+        # immediately, same as the user-explicit OFF row. Without this every
+        # box self-start earned a fresh grace window (~3 cycles × 4.9 kW from
+        # the home battery, every car-retry, all night).
+        # #553 — initialized True: at boot SEM has commanded NOTHING, so a
+        # draw found while desired=IDLE is by definition not our wind-down —
+        # policy says idle, disable immediately. The grace re-arms on every
+        # genuine CHARGE→IDLE transition (the only wind-down there is).
+        self._idle_settled: bool = True
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
@@ -138,6 +162,10 @@ class ChargerReconciler:
         if desired in (DesiredState.OFF, DesiredState.IDLE):
             # Leaving CHARGE — the next CHARGE episode must START + re-arm,
             # and gets a fresh round of enable re-asserts (#536 backoff).
+            # #552: a fresh CHARGE→IDLE transition begins a WIND-DOWN — the
+            # flicker-grace below applies until idle settles.
+            if self._charging_intent_active:
+                self._idle_settled = False
             self._charging_intent_active = False
             self._enable_attempts = 0
             self._enable_gave_up_at = 0.0
@@ -145,9 +173,23 @@ class ChargerReconciler:
             if not drawing:
                 # Row 2 — already converged. THE spam fix: issue nothing.
                 self._consecutive_idle_count = 0
+                self._idle_settled = True  # #552 — wind-down complete
                 return [Action(ActionKind.NONE)]
             if desired is DesiredState.OFF:
+                if not observed.enable_controllable:
+                    # #548 — the contactor is app/cloud-locked (Wallbox
+                    # Eco-Smart / Scheduled / Power-Sharing): SEM cannot
+                    # open it. Issuing DISABLE every cycle is futile and
+                    # hides the real cause from the user. Surface it.
+                    return [Action(ActionKind.REPORT_ENABLE_BLOCKED)]
                 # Row 1 — user-explicit OFF: open immediately, no grace.
+                return [Action(ActionKind.DISABLE)]
+            # #552 — draw appeared AFTER idle had settled: not our wind-down
+            # but a rogue self-start (KEBA auto-start, #315). Open the
+            # contactor immediately, re-asserted every cycle it persists —
+            # parity with the OFF row. The grace below stays reserved for
+            # winding down a session SEM itself just stopped.
+            if self._idle_settled:
                 return [Action(ActionKind.DISABLE)]
             # IDLE + drawing — flicker hold then confirm (rows 3-4).
             self._consecutive_idle_count += 1
@@ -245,6 +287,27 @@ class ChargerReconciler:
             amps = int(getattr(adapter, "max_current_a", 0)) or amps
         observed = observe(adapter, power)
         actions = self.reconcile(desired, amps, observed, now)
+
+        # #548 actuation observability — record desired + actions + whether a
+        # stop is failing to take (charger still drawing while we DISABLE).
+        self._last_desired = desired.name
+        self._last_actions = [a.kind.name for a in actions]
+        self._last_apply_at = now
+        _drawing = bool(observed.charging or observed.self_charging)
+        if any(a.kind is ActionKind.DISABLE for a in actions) and _drawing:
+            self._stop_commanded_while_drawing += 1
+            if self._stop_commanded_while_drawing in (3, 12, 60):
+                _LOGGER.warning(
+                    "reconcile(%s): commanded STOP %d× but charger still drawing "
+                    "%.0f W (status/power says charging) — the stop is not taking. "
+                    "Check the charger's stop control (enable switch %s, status %s).",
+                    self.charger_id, self._stop_commanded_while_drawing,
+                    float(getattr(power, "power_w", 0.0) or 0.0),
+                    getattr(getattr(adapter, "_device", None), "start_stop_entity", None),
+                    getattr(getattr(adapter, "_device", None), "charging_status_entity", None),
+                )
+        elif not _drawing:
+            self._stop_commanded_while_drawing = 0
 
         # ── #546 OFFER-STEADINESS PROBE (observe-only, DEBUG) ────────────
         # Diagnostic that pinned the 6↔9 A KEBA flap (#546, now resolved by

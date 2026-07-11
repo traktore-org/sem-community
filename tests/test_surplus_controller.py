@@ -51,6 +51,12 @@ def _make_device(
     device.needs_offpeak_activation = False
     device.remaining_daily_runtime_sec = 0
     device.daily_min_runtime_sec = 0
+    # (#559) goal-engine fields — pin to defaults (MagicMock auto-attrs are
+    # truthy and would trip the goal gates)
+    device.daily_targets_met = False
+    device.stop_condition_met = False
+    device.top_up_policy = "solar_only"
+    device._offpeak_forced_date = None
 
     # Ensure it is not a ScheduleDevice (prevent isinstance check from matching)
     device.__class__ = MagicMock
@@ -502,6 +508,9 @@ class TestOffpeakActivation:
         dev.needs_offpeak_activation = True
         dev._offpeak_forced = False
         dev.remaining_daily_runtime_sec = 1800
+        # (#559) cheap-hours top-up is now policy-gated; the default
+        # solar_only never grid-forces.
+        dev.top_up_policy = "cheap_hours"
         dev.activate = AsyncMock(return_value=2000.0)
         sc.register_device(dev)
 

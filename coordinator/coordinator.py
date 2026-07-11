@@ -14,6 +14,7 @@ This is a slim orchestrator that delegates to specialized modules:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 from typing import Any, Dict, Optional
 
@@ -45,6 +46,7 @@ from .types import (
     UtilitySignalSensorData, SessionData, BatterySessionData,
 )
 from .health_check import HealthCheck
+from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
 from .flow_calculator import FlowCalculator
@@ -265,6 +267,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Phase 0: Surplus controller (always-on) & forecast reader
         regulation_offset = config.get("regulation_offset", 50)
         self._surplus_controller = SurplusController(hass, regulation_offset=regulation_offset)
+        # (#559 Phase 0) debounced surplus availability signal
+        self._surplus_availability = SurplusAvailability()
         self._surplus_controller.max_export_w = config.get("max_export_power", 0)  # 0 = no limit
         self._forecast_reader = ForecastReader(
             hass,
@@ -506,7 +510,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         for key in (
             "daily_ev_target", "daily_ev_target_max",
             "ev_target_soc", "ev_target_soc_max",
-            "ev_min_current", "initial_current",
+            "ev_min_current",
             "ev_kwh_per_100km", "ev_target_type",
             # ``ev_charging_mode`` removed in #277 Phase C — the v6→v7
             # migration drops the field; there's nothing to mirror.
@@ -901,6 +905,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     f"battery={dashboard_config.battery_power}"
                 )
 
+                # (#556) daily-solar reconciliation against the inverter's
+                # production counters — gated by prefer_hardware_energy.
+                solar_counters = list(dashboard_config.solar_energy_list) or (
+                    [dashboard_config.solar_energy] if dashboard_config.solar_energy else []
+                )
+                self._energy_calculator.configure_solar_counters(
+                    self.hass,
+                    solar_counters,
+                    self.config.get("prefer_hardware_energy", True),
+                )
+
                 # v1.7.0 / #312: auto-discover per-PV-string sensors and
                 # plumb them to the sensor reader so every cycle populates
                 # ``readings.solar_power_per_string``. Discovery is a
@@ -928,6 +943,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         self.hass, dashboard_config,
                     ) or {}
                     self._sensor_reader.set_pv_strings(pv_strings, vi_pairs)
+                    # (#566) user-chosen per-string display names from options
+                    if self.config_entry is not None:
+                        self._sensor_reader.set_pv_string_names(
+                            self.config_entry.options.get("pv_string_names", {})
+                        )
                     if pv_strings or vi_pairs:
                         _info(
                             "Per-PV-string discovery: %d direct power, "
@@ -943,6 +963,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         except Exception as e:
             _LOGGER.warning("Failed to read Energy Dashboard: %s", e)
+
+        # (#556) No Energy Dashboard — fall back to the explicitly
+        # configured solar energy counter for daily-solar reconciliation.
+        if not self._energy_dashboard_config:
+            manual_counter = self.config.get("solar_energy_sensor")
+            if manual_counter:
+                self._energy_calculator.configure_solar_counters(
+                    self.hass,
+                    [manual_counter],
+                    self.config.get("prefer_hardware_energy", True),
+                )
 
         # EV energy reconciliation disabled — keba_p30_charging_daily resets at
         # midnight but daily_ev resets at sunrise, causing misalignment after sunrise
@@ -2291,6 +2322,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     except (AttributeError, ValueError):
                         pass
                 await self._storage.async_save_energy_delayed()
+                # Flush the daily store too (device runtimes, predictor, EV
+                # intelligence, flow/sign/per-charger state) on a throttled
+                # immediate write — previously it only reached disk on a
+                # graceful stop, so an unclean reboot lost the day's progress.
+                await self._storage.async_save_daily_throttled()
 
             self._initial_update_done = True
             result = sem_data.to_dict()
@@ -2840,6 +2876,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _LOGGER.error("Error updating SEM data: %s", e, exc_info=True)
             raise UpdateFailed(f"Update failed: {e}") from e
 
+    @staticmethod
+    def _heat_pump_sensor_state(hp_controller) -> tuple[str, int, bool]:
+        """Extract (mode, sg_ready_state_value, solar_boost) from a
+        registered HeatPumpController for the sensor surface (#570).
+
+        Returns the NORMAL defaults (``"normal"``, 2, ``False``) when no
+        controller is registered — matching HeatPumpSensorData's own
+        dataclass defaults. Before #570 the coordinator never copied the
+        controller's live SG-Ready state into HeatPumpSensorData (the
+        override promised in the pipeline comment was never implemented),
+        so heat_pump_mode / heat_pump_sg_ready_state / heat_pump_solar_boost
+        stayed frozen at those defaults even while the controller drove the
+        relays to BOOST/FORCE_ON — RienduPre's Nibe read "normal · 2"
+        with relay2 physically closed.
+        """
+        if hp_controller is None:
+            return "normal", 2, False
+        sg = getattr(hp_controller, "sg_ready_state", None)
+        mode, sg_value = "normal", 2
+        if sg is not None:
+            sg_value = int(getattr(sg, "value", sg))
+            mode = str(getattr(sg, "name", "normal")).lower()
+        hp_stat = getattr(hp_controller, "hp_status", None)
+        solar_boost = bool(getattr(hp_stat, "is_solar_boosted", False))
+        return mode, sg_value, solar_boost
+
     async def _update_analytics_phases(
         self,
         power: PowerReadings,
@@ -2974,6 +3036,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             surplus_data.surplus_unallocated_w = allocation.unallocated_w
             surplus_data.surplus_active_devices = allocation.active_devices
             surplus_data.surplus_total_devices = allocation.total_devices
+
+            # (#559 Phase 0) debounced surplus availability for user
+            # automations (peak_only devices are self-managed — this is
+            # their interface to the surplus). Event fires on transitions
+            # only, so flapping clouds can't storm the automation bus.
+            threshold_w = float(self.config.get("surplus_event_threshold", 1500))
+            transition = self._surplus_availability.update(
+                allocation.unallocated_w, threshold_w, time.monotonic()
+            )
+            surplus_data.surplus_available = self._surplus_availability.available
+            if transition:
+                self.hass.bus.async_fire(
+                    f"{DOMAIN}_surplus",
+                    {
+                        "available": transition.available,
+                        "surplus_w": round(transition.surplus_w),
+                        "unallocated_w": round(allocation.unallocated_w),
+                        "threshold_w": round(transition.threshold_w),
+                    },
+                )
+                _LOGGER.info(
+                    "Surplus %s (unallocated %.0fW vs threshold %.0fW) — "
+                    "event fired",
+                    "available" if transition.available else "gone",
+                    allocation.unallocated_w, threshold_w,
+                )
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Surplus controller update failed: %s", e)
 
@@ -3116,8 +3204,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             except (ValueError, TypeError, AttributeError):
                 hp_current_temp = None
 
+        # #570: wire the registered controller's LIVE SG-Ready state into
+        # the sensor surface — the override the comment above promised but
+        # that was never implemented. Without this, heat_pump_mode /
+        # heat_pump_sg_ready_state / heat_pump_solar_boost stayed at the
+        # dataclass defaults (normal / 2 / False) forever.
+        hp_mode, hp_sg_state, hp_solar_boost = self._heat_pump_sensor_state(
+            hp_controller
+        )
+
         heat_pump_data = HeatPumpSensorData(
             heat_pump_registered=registered_flag,
+            heat_pump_mode=hp_mode,
+            heat_pump_sg_ready_state=hp_sg_state,
+            heat_pump_solar_boost=hp_solar_boost,
             heat_pump_registration_status=_hp_status,
             heat_pump_relay1_entity=hp_relay1,
             heat_pump_relay2_entity=hp_relay2,
@@ -3490,6 +3590,56 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             else:
                 seen[ent] = battery_id
 
+    def _compute_arbitrage_signals(self, power) -> "ArbitrageSignals":
+        """Compute the battery→grid arbitrage market signals in ONE place
+        (#533) so the arbitrage decision reads them off the view instead of
+        ad-hoc tariff/power reads scattered in the pipeline. Pure-ish: reads
+        the tariff provider + power, no side effects. Only called when
+        arbitrage is being evaluated (the block stays dormant until v1.7.4).
+        """
+        from .charger_types import ArbitrageSignals
+        solar_w = float(getattr(power, "solar_power", 0.0) or 0.0)
+        home_w = float(getattr(power, "home_consumption_power", 0.0) or 0.0)
+        soc_now = float(getattr(power, "battery_soc", 0.0) or 0.0)
+        surplus_w = solar_w - home_w
+        # #531 charge-first: storable solar surplus the battery could absorb →
+        # don't sell (storing free solar avoids a future ~retail import, worth
+        # far more than the export price).
+        storable = surplus_w > 200.0 and soc_now < 98.0
+        export_rate = 0.0
+        import_forecast_min = None
+        provider = getattr(self, "_tariff_provider", None)
+        if provider is not None:
+            try:
+                export_rate = float(provider.get_current_export_rate())
+            except Exception:  # noqa: BLE001
+                export_rate = 0.0
+            try:
+                ups = getattr(
+                    provider.get_tariff_data(), "upcoming_prices", None
+                ) or []
+                prices = [
+                    float(p.price) for p in ups
+                    if getattr(p, "price", None) is not None
+                ]
+                if prices:
+                    # Correct the raw spot min up to the all-in import floor so
+                    # the break-even basis matches what the user pays to recharge
+                    # (no-op for all-in providers like Tibber). #531.
+                    raw_min = min(prices)
+                    floor = getattr(provider, "effective_import_floor", None)
+                    import_forecast_min = (
+                        floor(raw_min) if callable(floor) else raw_min
+                    )
+            except Exception:  # noqa: BLE001
+                import_forecast_min = None
+        return ArbitrageSignals(
+            export_rate=export_rate,
+            import_forecast_min=import_forecast_min,
+            storable_surplus_w=max(0.0, surplus_w),
+            storable=storable,
+        )
+
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
         """Per-cycle battery control via decide_battery + actuate_battery.
 
@@ -3524,7 +3674,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         from .actuate_battery import actuate_battery
         from .battery_adapters import adapter_for, _integration_loaded
         from .charger_types import (
-            BatteryIntent, BatteryRuntime, BatteryView, FleetContext,
+            ArbitrageSignals, BatteryIntent, BatteryRuntime, BatteryView,
+            FleetContext,
         )
         from .decide_battery import decide_battery
 
@@ -3570,56 +3721,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``allow_arbitrage`` config goes dormant (behaves like ``auto`` — no
         # selling) rather than quietly selling to grid. Restored in v1.7.4.
         _any_allow_arb = False  # v1.7.3: per-battery arbitrage opt-in disabled (#533)
-        # #531 charge-first: never sell while there's storable solar surplus the
-        # battery could absorb. Storing free solar avoids a future import (~full
-        # retail price) which is worth far more than the export price — so we
-        # only arbitrage from stored energy when there's no surplus to soak OR
-        # the battery is effectively full. (Surplus = solar above home load.)
-        _solar_w = float(getattr(power, "solar_power", 0.0) or 0.0)
-        _home_w = float(getattr(power, "home_consumption_power", 0.0) or 0.0)
-        _soc_now = float(getattr(power, "battery_soc", 0.0) or 0.0)
-        _storable_surplus = (_solar_w - _home_w) > 200.0 and _soc_now < 98.0
-        if _storable_surplus and (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb):
-            _LOGGER.debug(
-                "Arbitrage held: %0.0f W storable solar surplus, SOC %.0f%% — "
-                "charge-first (#531)", _solar_w - _home_w, _soc_now,
-            )
-        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb) \
-                and not _charge_active and not _storable_surplus:
-            export_rate_per_kwh = 0.0
-            import_forecast_min = None
-            _provider = getattr(self, "_tariff_provider", None)
-            if _provider is not None:
-                try:
-                    export_rate_per_kwh = float(_provider.get_current_export_rate())
-                except Exception:  # noqa: BLE001
-                    export_rate_per_kwh = 0.0
-                try:
-                    _ups = getattr(
-                        _provider.get_tariff_data(), "upcoming_prices", None
-                    ) or []
-                    _prices = [
-                        float(p.price) for p in _ups
-                        if getattr(p, "price", None) is not None
-                    ]
-                    if _prices:
-                        # #531: the curve may be raw spot (Nord Pool/ENTSO-E)
-                        # while the user pays all-in to recharge — correct the
-                        # break-even basis up to the live all-in import rate so
-                        # arbitrage doesn't sell at a loss. No-op for all-in
-                        # providers (Tibber) where the factor is ≈1.0.
-                        _raw_min = min(_prices)
-                        _floor = getattr(_provider, "effective_import_floor", None)
-                        import_forecast_min = (
-                            _floor(_raw_min) if callable(_floor) else _raw_min
-                        )
-                except Exception:  # noqa: BLE001
-                    import_forecast_min = None
+        # Market signals are computed ONCE here (#533) and carried on the
+        # FleetContext below — single source of truth, no ad-hoc tariff/power
+        # reads in the decision. ``None`` unless arbitrage is being evaluated
+        # (the whole block is dormant while the toggle + _any_allow_arb are off).
+        arb_signals = None
+        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb):
+            arb_signals = self._compute_arbitrage_signals(power)
+            # #531 charge-first: never sell while there's storable solar surplus
+            # the battery could absorb — storing free solar avoids a future
+            # ~retail import, worth far more than the export price.
+            if arb_signals.storable:
+                _LOGGER.debug(
+                    "Arbitrage held: %0.0f W storable solar surplus — "
+                    "charge-first (#531)", arb_signals.storable_surplus_w,
+                )
+        if arb_signals is not None and not _charge_active and not arb_signals.storable:
             try:
                 _arb = scheduler.evaluate_arbitrage(
                     current_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
-                    export_rate=export_rate_per_kwh,
-                    import_forecast_min=import_forecast_min,
+                    export_rate=arb_signals.export_rate,
+                    import_forecast_min=arb_signals.import_forecast_min,
                     # Run the economic check when globally enabled OR any
                     # battery is in allow_arbitrage mode (#523); decide_battery
                     # gates per battery which units actually sell.
@@ -3670,6 +3792,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # clamp keys on it so Zone 1/2 protect the battery regardless of
             # surplus — the surplus gate alone left it draining below buffer).
             buffer_soc=float(self.config.get("battery_buffer_soc", 70)),
+            # #533: arbitrage market signals, computed once above (None unless
+            # arbitrage is being evaluated → dormant until v1.7.4).
+            arbitrage=arb_signals,
         )
 
         # 2. Source per-battery iteration. Multi-battery installs

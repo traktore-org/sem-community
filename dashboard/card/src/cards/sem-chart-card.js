@@ -16,6 +16,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semGetCurrency, semDefineCard, SEM_COLORS } from '../base/sem-shared.js';
 import { startOfDayInHaTz } from '../util/time-zone.js';
+import { formatLegendLabels } from '../util/legend-format.js';
 
 /* ── Chart.js CDN singleton loader ── */
 let _chartJsReady = null;
@@ -94,6 +95,17 @@ const PRESETS = {
             { suffix: 'solar_power',             name: 'solar',       color: C.solar,      type: 'area' },
             { suffix: 'home_consumption_power',  name: 'home',        color: C.home,       type: 'area' },
             { suffix: 'grid_power',              name: 'grid',        color: C.gridImport, type: 'area' },
+        ],
+    },
+    // #575: forecast vs actual solar power. The apexcharts original plotted
+    // ``forecast_power_now_w`` (recorder history = the forecast curve) against
+    // ``solar_power``; the LitElement migration lost it by pointing the card at
+    // ``preset: power`` (a plain solar/home/grid chart with no forecast series).
+    forecast: {
+        title: 'forecast_vs_actual', y_label: 'W', stacked: false,
+        hourly: [
+            { suffix: 'forecast_power_now_w', name: 'forecast', color: C.solar,      type: 'area' },
+            { suffix: 'solar_power',          name: 'actual',   color: C.batteryOut, type: 'line' },
         ],
     },
     battery: {
@@ -540,20 +552,11 @@ class SEMChartCard extends SEMLitBase {
                             color: T.textSec || '#9e9e9e',
                             font: { size: 11, weight: '500', family: "'Segoe UI','Roboto',sans-serif" },
                             boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true, padding: 14,
-                            generateLabels: (chart) => {
-                                const orig = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                                return orig.map((label, i) => {
-                                    const ds = chart.data.datasets[i];
-                                    if (!ds) return label;
-                                    const last = ds.data[ds.data.length - 1];
-                                    const val = last?.y ?? 0;
-                                    const unit = ds.yAxisID === 'y1' ? '%' : (yLabel || '');
-                                    const abs = Math.abs(val);
-                                    const fmt = abs >= 1000 ? (val / 1000).toFixed(1) + 'k' : abs < 10 ? val.toFixed(1) : val.toFixed(0);
-                                    label.text = `${label.text}: ${fmt} ${unit}`;
-                                    return label;
-                                });
-                            },
+                            generateLabels: (chart) => formatLegendLabels(
+                                Chart.defaults.plugins.legend.labels.generateLabels(chart),
+                                chart.data.datasets,
+                                yLabel,
+                            ),
                         },
                     },
                     tooltip: {

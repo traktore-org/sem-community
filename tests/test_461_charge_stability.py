@@ -171,6 +171,7 @@ class TestDisableDelay:
     def test_idle_holds_min_current_until_deficit_persists(self):
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+        st._sem_session.add("wb")  # #552 — bridge only protects owned sessions
         view = _view(power_w=4500.0)
         d0 = st.filter(_idle(), view, adapter,
                        enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
@@ -190,6 +191,7 @@ class TestDisableDelay:
         # full 300 s bridge, NOT the no_assist_deficit short grace.
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+        st._sem_session.add("wb")  # #552
         view = _view(power_w=4500.0, solar_w=3000.0, home_w=2500.0,
                      battery_soc=75.0, buffer_soc=70.0)
         for t in (0.0, 150.0, 290.0):
@@ -207,6 +209,7 @@ class TestDisableDelay:
         # bridge still stops at disable_delay.
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=None)  # charging follows actual draw
+        st._sem_session.add("wb")  # #552
         drawing = _view(power_w=4500.0)
         blip = _view(power_w=0.0)
         st.filter(_idle(), drawing, adapter,
@@ -234,6 +237,7 @@ class TestDisableDelay:
         # longer than LATCH_HOLD_S → the deficit resets and it idles.
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=None)
+        st._sem_session.add("wb")  # #552
         drawing = _view(power_w=4500.0)
         stopped = _view(power_w=0.0)
         st.filter(_idle(), drawing, adapter,
@@ -246,6 +250,7 @@ class TestDisableDelay:
     def test_surplus_recovery_resets_deficit_window(self):
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+        st._sem_session.add("wb")  # #552
         view = _view(power_w=4500.0)
         st.filter(_idle(), view, adapter,
                   enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
@@ -266,19 +271,23 @@ class TestDisableDelay:
                       enable_delay_s=60, disable_delay_s=300, now_ts=501.0)
         assert d.intent is ChargerIntent.IDLE
 
-    def test_restart_mid_session_counts_as_charging(self):
-        # Coordinator restart: adapter.last_intent is None but the EV is
-        # measurably drawing → the deficit hold must still protect it.
+    def test_restart_mid_deficit_is_not_bridged(self):
+        # #552 INVERSION of the old test_restart_mid_session_counts_as_charging:
+        # after a coordinator restart SEM cannot vouch for a session it doesn't
+        # remember starting. If decide() says IDLE (deficit), the bridge must
+        # NOT hold an unknown draw — pass the IDLE through so the reconciler
+        # stops it. (Restart mid-SURPLUS still adopts via the charge path.)
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=None)
         view = _view(power_w=4500.0)
         d = st.filter(_idle(), view, adapter,
                       enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
-        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.intent is ChargerIntent.IDLE
 
     def test_hold_respects_vehicle_min_current(self):
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+        st._sem_session.add("wb")  # #552
         view = ChargerView(
             power=ChargerPower(charger_id="wb", power_w=6000.0,
                                connected=True, charging=True),
@@ -307,13 +316,17 @@ class TestStructuralIdleBridge:
     tested in ``test_decide.py::TestIdleBridgeable``.
     """
 
-    def _charging(self):
+    def _charging(self, st=None):
+        # #552 — the bridge only protects sessions the filter itself started;
+        # passing ``st`` marks the session SEM-owned like production would.
+        if st is not None:
+            st._sem_session.add("wb")
         return FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
 
     def test_structural_idle_stops_after_grace_not_full_window(self):
         # bridgeable=False: the hold lasts only the short grace, NOT 300 s.
         st = ChargeStability()
-        adapter = self._charging()
+        adapter = self._charging(st)
         view = _view(power_w=4500.0)
         d0 = st.filter(_idle_structural(), view, adapter, enable_delay_s=60,
                        disable_delay_s=300, deep_deficit_grace_s=45, now_ts=0.0)
@@ -331,7 +344,7 @@ class TestStructuralIdleBridge:
         # bridgeable=True (the default): the cloud-bridge hold survives past
         # the short grace — full disable-delay behaviour.
         st = ChargeStability()
-        adapter = self._charging()
+        adapter = self._charging(st)
         view = _view(power_w=4500.0)
         for t in (0.0, 50.0, 150.0, 290.0):
             d = st.filter(_idle(), view, adapter, enable_delay_s=60,
@@ -346,7 +359,7 @@ class TestStructuralIdleBridge:
         # deficit must NOT end the session: the grace outlives it and a
         # bridgeable=True cycle clears the short timer.
         st = ChargeStability()
-        adapter = self._charging()
+        adapter = self._charging(st)
         view = _view(power_w=4500.0)
         st.filter(_idle(), view, adapter, deep_deficit_grace_s=45, now_ts=0.0)
         st.filter(_idle_structural(), view, adapter, deep_deficit_grace_s=45, now_ts=10.0)
@@ -359,7 +372,7 @@ class TestStructuralIdleBridge:
         # vehicle_min_current (9 A) > ev_min (6 A): the in-grace hold
         # respects the vehicle floor, then the structural stop drops to 0 A.
         st = ChargeStability()
-        adapter = self._charging()
+        adapter = self._charging(st)
         view = ChargerView(
             power=ChargerPower(charger_id="wb", power_w=6000.0,
                                connected=True, charging=True),
@@ -380,7 +393,7 @@ class TestStructuralIdleBridge:
         # is_night already stops immediately (filter is transparent); the
         # bridge is the DAY guard for the dusk/overcast window.
         st = ChargeStability()
-        adapter = self._charging()
+        adapter = self._charging(st)
         view = _view(power_w=4500.0, is_night=True)
         d = st.filter(_idle(), view, adapter, deep_deficit_grace_s=45, now_ts=0.0)
         assert d.intent is ChargerIntent.IDLE  # decide()'s IDLE passes straight through

@@ -65,6 +65,7 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "battery_soc": {"sem_battery", "sem_core", "sem_realtime", "sem_graph", "sem_mobile"},
     "battery_status": {"sem_status", "sem_battery", "sem_primary"},
     "battery_temperature": {"sem_battery", "sem_secondary", "sem_realtime"},
+    "inverter_temperature": {"sem_solar", "sem_secondary", "sem_realtime"},
     "battery_voltage": {"sem_battery", "sem_advanced", "sem_realtime"},
     "battery_current": {"sem_battery", "sem_advanced", "sem_realtime"},
     "battery_cycles": {"sem_battery", "sem_advanced"},
@@ -171,6 +172,7 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "forecast_today_kwh": {"sem_energy", "sem_solar", "sem_daily", "sem_primary"},
     "forecast_tomorrow_kwh": {"sem_energy", "sem_solar", "sem_daily", "sem_primary"},
     "forecast_remaining_today_kwh": {"sem_energy", "sem_solar", "sem_daily", "sem_primary", "sem_mobile"},
+    "forecast_power_now_w": {"sem_power", "sem_solar", "sem_realtime", "sem_secondary"},
     "charging_recommendation": {"sem_status", "sem_ev", "sem_primary"},
 
     # Tariff (Phase 1)

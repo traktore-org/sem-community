@@ -154,7 +154,14 @@ class ChargerAdapter(ABC):
         Prefers ``power.power_w > handshake_power_w`` over the
         brand's binary sensor (KEBA's ``charging_state`` lags real
         draw by ~5 s per #289). The actuator and dashboard sensors
-        read this method, not ``power.charging``."""
+        read this method, not ``power.charging``.
+
+        #548: for brands whose POWER reading lags the contactor
+        (cloud-polled — Wallbox ~90 s), override this to read the
+        brand's STATUS enum (authoritative, immediate) and fall back
+        to the power heuristic only on unknown/unconfigured. See
+        ``WallboxAdapter`` for the template + ``docs/MULTI_CHARGER.md``
+        "prefer the STATUS enum" for which brands to migrate next."""
 
     # ─── Helpers ───────────────────────────────────────────────
 

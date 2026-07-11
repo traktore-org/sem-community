@@ -227,6 +227,68 @@ class TestExtractSolarConfig:
 class TestExtractGridConfig:
     """Test _extract_grid_config()."""
 
+    def test_extract_grid_power_config_standard(self):
+        """#553 — grid power_config.stat_rate (authoritative over legacy)."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.grid_import_e",
+            "power_config": {"stat_rate": "sensor.grid_power"},
+        }
+        _extract_grid_config(source, config)
+        assert config.grid_import_power == "sensor.grid_power"
+        assert config.grid_power_list == ["sensor.grid_power"]
+
+    def test_extract_grid_power_config_two_sensors(self):
+        """#553 — grid Two-sensor mode maps onto split-grid support:
+        from=import, to=export."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.grid_import_e",
+            "stat_energy_to": "sensor.grid_export_e",
+            "power_config": {
+                "stat_rate_from": "sensor.grid_import_power",
+                "stat_rate_to": "sensor.grid_export_power",
+            },
+        }
+        _extract_grid_config(source, config)
+        # #553 review B1 — dedicated pair fields, NOT grid_import_power
+        # (that field is consumed as a COMBINED sensor by the reader) and
+        # NOT grid_power_list (that feeds the multi-meter sum).
+        assert config.grid_power_from == "sensor.grid_import_power"
+        assert config.grid_power_to == "sensor.grid_export_power"
+        assert config.grid_import_power is None
+        assert config.grid_power_list == []
+        assert config.has_grid is True
+
+    def test_extract_grid_power_config_inverted_reads_as_combined(self):
+        """#553 — inverted combined grid sensor is read as combined; the
+        #461 sign-detection stack owns polarity."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.grid_import_e",
+            "power_config": {"stat_rate_inverted": "sensor.grid_power_inv"},
+        }
+        _extract_grid_config(source, config)
+        assert config.grid_import_power == "sensor.grid_power_inv"
+
+    def test_extract_battery_two_pairs_collected(self):
+        """#553 — two two-sensor batteries: BOTH pairs collected."""
+        config = EnergyDashboardConfig()
+        for i in (1, 2):
+            _extract_battery_config({
+                "stat_energy_from": f"sensor.b{i}_discharge_e",
+                "stat_energy_to": f"sensor.b{i}_charge_e",
+                "power_config": {
+                    "stat_rate_from": f"sensor.b{i}_discharge_p",
+                    "stat_rate_to": f"sensor.b{i}_charge_p",
+                },
+            }, config)
+        assert config.battery_power_pairs == [
+            ("sensor.b1_discharge_p", "sensor.b1_charge_p"),
+            ("sensor.b2_discharge_p", "sensor.b2_charge_p"),
+        ]
+        assert config.battery_power_from == "sensor.b1_discharge_p"
+
     def test_extract_grid_config(self):
         config = EnergyDashboardConfig()
         source = {
@@ -317,6 +379,73 @@ class TestExtractBatteryConfig:
         assert config.battery_charge_energy == "sensor.battery_charge"
         assert config.battery_power == "sensor.battery_power"
         assert config.has_battery is True
+
+    def test_extract_battery_power_config_standard(self):
+        """#551 — power_config.stat_rate (Standard mode). HA duplicates it at
+        top level for back-compat; power_config is authoritative."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.batt_discharge_e",
+            "stat_energy_to": "sensor.batt_charge_e",
+            "power_config": {"stat_rate": "sensor.batt_power"},
+            "stat_rate": "sensor.batt_power",
+        }
+        _extract_battery_config(source, config)
+        assert config.battery_power == "sensor.batt_power"
+        assert config.battery_power_inverted is False
+        assert config.battery_power_from is None
+
+    def test_extract_battery_power_config_inverted(self):
+        """#551 — power_config.stat_rate_inverted flags the sign flip."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.batt_discharge_e",
+            "power_config": {"stat_rate_inverted": "sensor.batt_power_inv"},
+        }
+        _extract_battery_config(source, config)
+        assert config.battery_power == "sensor.batt_power_inv"
+        assert config.battery_power_inverted is True
+
+    def test_extract_battery_power_config_two_sensors(self):
+        """#551 — the Fronius Verto shape (issue reporter): Two-sensor
+        power_config + stat_soc, NO top-level stat_rate. Previously SEM saw
+        no battery power at all ('sensor unavailable') and no SOC."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.fronius_storage_discharging_lifetime_energy",
+            "stat_energy_to": "sensor.fronius_storage_charging_lifetime_energy",
+            "power_config": {
+                "stat_rate_from": "sensor.fronius_storage_discharging_power",
+                "stat_rate_to": "sensor.fronius_storage_charging_power",
+            },
+            "stat_soc": "sensor.fronius_ladezustand",
+        }
+        _extract_battery_config(source, config)
+        assert config.battery_power is None  # no combined entity exists
+        assert config.battery_power_from == "sensor.fronius_storage_discharging_power"
+        assert config.battery_power_to == "sensor.fronius_storage_charging_power"
+        assert config.battery_soc == "sensor.fronius_ladezustand"
+        assert config.battery_soc_list == ["sensor.fronius_ladezustand"]
+        assert config.has_battery is True
+        # Two-sensor power is fully resolved — must not trip the #274
+        # re-derivation canary.
+        config.has_solar = True
+        config.has_grid = True
+        config.solar_power = "sensor.pv"
+        config.solar_energy = "sensor.pv_e"
+        assert config.power_resolution_incomplete() is False
+
+    def test_extract_battery_stat_soc_without_power_config(self):
+        """#551 — stat_soc parsed independently of the power mode."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.b_discharge",
+            "stat_rate": "sensor.b_power",
+            "stat_soc": "sensor.b_soc",
+        }
+        _extract_battery_config(source, config)
+        assert config.battery_soc == "sensor.b_soc"
+        assert config.battery_power == "sensor.b_power"
 
     def test_extract_battery_config_fallback_stat_power(self):
         config = EnergyDashboardConfig()

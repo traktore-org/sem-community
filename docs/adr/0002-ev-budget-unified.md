@@ -24,9 +24,9 @@ Defined in `coordinator/flow_calculator.py` (line 95). Computed once per coordin
 cycle, consumed by:
 
 - the publish path (sensor reports exactly what's in the dataclass)
-- the state machine (modes branch off `EVBudget.intent`, not their own
+- the state machine (modes branch off `EVBudget.strategy`, not their own
   recompute)
-- the actuator (amps come from `EVBudget.amps`, no second rounding)
+- the actuator (amps come from `EVBudget.current_a`, no second rounding)
 
 Multi-charger power allocation is a separate decision — see
 [ADR 0009](0009-ev-budget-multi-charger-distribution.md). Today the
@@ -40,10 +40,9 @@ slices, but that change is intentionally not in scope of this ADR.
 what the actuator will command. Mode transitions are deterministic
 from the dataclass.
 
-**Open.** Phase D.2 cleanup (legacy `_calculate_ev_budget` method
-removal, demotion-guard removal) deferred to v1.7.0 after sustained
-soak — completed in v1.6.2 (PR #282). The unification phases
-A + B + B.5 + C + D.1 shipped in v1.6.0.
+**Resolved.** The unification phases A + B + B.5 + C + D.1 shipped in
+v1.6.0. Phase D.2 cleanup (legacy `_calculate_ev_budget` method removal,
+demotion-guard removal) completed in v1.6.2 (PR #282).
 
 See `coordinator/flow_calculator.py` for the dataclass shape and helper
 predicates.

@@ -55,6 +55,17 @@ def _make_energy_dashboard_config(
     ed.battery_power_list = battery_power_list or ([battery_power] if battery_power else [])
     ed.battery_charge_energy = battery_charge_energy
     ed.battery_discharge_energy = battery_discharge_energy
+    # #551 — mock fidelity: a bare MagicMock auto-attr is TRUTHY, which would
+    # silently negate battery power (battery_power_inverted) or hijack the
+    # read path (battery_power_from). Pin the dataclass defaults explicitly.
+    ed.battery_power_from = None
+    ed.battery_power_to = None
+    ed.battery_power_inverted = False
+    ed.battery_soc = None
+    ed.battery_soc_list = []
+    ed.battery_power_pairs = []
+    ed.grid_power_from = None
+    ed.grid_power_to = None
     ed.ev_power = None
     ed.has_solar = bool(solar_power)
     ed.has_grid = bool(grid_import_energy or grid_import_power or grid_power_list)
@@ -931,6 +942,184 @@ class TestManualGridConfig:
         energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
         energy_out = power.home_consumption_power + power.grid_export_power + power.battery_charge_power + power.ev_power
         assert abs(energy_in - energy_out) < 1, f"Balance off: in={energy_in}, out={energy_out}"
+
+
+# ════════════════════════════════════════════
+# #551 — battery power_config Two-sensor + stat_soc (Fronius Verto)
+# ════════════════════════════════════════════
+
+class TestBatteryPowerConfigPipeline:
+    """#551 full pipeline: HA battery dialog 'Two sensors' + explicit SOC.
+
+    The reporter's Fronius Verto 15.0 Plus: power_config carries separate
+    discharge (stat_rate_from) / charge (stat_rate_to) sensors and stat_soc;
+    there is NO combined battery power entity and no top-level stat_rate.
+    Pre-fix SEM saw no battery power ('sensor unavailable') and SOC 0%.
+    """
+
+    def test_fronius_verto_two_sensor_battery_with_soc(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.fronius_pv_power",
+            grid_import_power="sensor.fronius_meter_power",
+            battery_power=None,  # two-sensor mode: no combined entity
+        )
+        ed.battery_power_from = "sensor.fronius_storage_discharging_power"
+        ed.battery_power_to = "sensor.fronius_storage_charging_power"
+        ed.battery_soc = "sensor.fronius_ladezustand"
+        ed.battery_soc_list = ["sensor.fronius_ladezustand"]
+        ed.has_battery = True
+        states = {
+            "sensor.fronius_pv_power": _state(6000),
+            "sensor.fronius_meter_power": _state(0),
+            "sensor.fronius_storage_charging_power": _state(2500),
+            "sensor.fronius_storage_discharging_power": _state(0),
+            "sensor.fronius_ladezustand": _state(63, unit="%"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # net = charge − discharge → +2500 (SEM convention: + = charging)
+        assert power.battery_power == 2500
+        assert power.battery_charge_power == 2500
+        assert power.battery_discharge_power == 0
+        # SOC comes from stat_soc, deterministically — no heuristics
+        assert power.battery_soc == 63
+        assert power.battery_soc_unavailable is False
+
+    def test_fronius_verto_two_sensor_discharging(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.fronius_pv_power",
+            grid_import_power="sensor.fronius_meter_power",
+            battery_power=None,
+        )
+        ed.battery_power_from = "sensor.fronius_storage_discharging_power"
+        ed.battery_power_to = "sensor.fronius_storage_charging_power"
+        ed.battery_soc = "sensor.fronius_ladezustand"
+        ed.battery_soc_list = ["sensor.fronius_ladezustand"]
+        ed.has_battery = True
+        states = {
+            "sensor.fronius_pv_power": _state(0),
+            "sensor.fronius_meter_power": _state(0),
+            "sensor.fronius_storage_charging_power": _state(0),
+            "sensor.fronius_storage_discharging_power": _state(1800),
+            "sensor.fronius_ladezustand": _state(40, unit="%"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.battery_power == -1800  # − = discharging (SEM)
+        assert power.battery_discharge_power == 1800
+        assert power.battery_soc == 40
+
+    def test_inverted_battery_power_config(self):
+        """power_config.stat_rate_inverted: sensor reports +=discharge;
+        the reader flips it to SEM convention on read."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power="sensor.batt_inverted",
+        )
+        ed.battery_power_inverted = True
+        states = {
+            "sensor.pv": _state(4000),
+            "sensor.grid": _state(0),
+            "sensor.batt_inverted": _state(1200),  # raw: +1200 = discharge
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.battery_power == -1200  # flipped → discharge
+
+    def test_two_sensor_grid_power_config_pipeline(self):
+        """#553 review B1 — declared two-sensor GRID pair must be consumed
+        as export − import (manual-override semantics), not read as a
+        combined sensor. Pre-fix the import side landed in
+        grid_import_power and was read as combined (always-positive =
+        phantom export)."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power=None,
+            battery_power="sensor.batt",
+        )
+        ed.grid_power_from = "sensor.grid_import_p"
+        ed.grid_power_to = "sensor.grid_export_p"
+        states = {
+            "sensor.pv": _state(1000),
+            "sensor.batt": _state(0),
+            "sensor.grid_import_p": _state(1500),  # importing 1.5 kW
+            "sensor.grid_export_p": _state(0),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_power == -1500  # SEM convention: − = import
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
+
+    def test_two_two_sensor_batteries_summed(self):
+        """#553 — a fleet of TWO two-sensor batteries: per-battery nets
+        computed and summed; pairs are never sign-flipped."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power=None,
+        )
+        ed.battery_power_pairs = [
+            ("sensor.b1_discharge_p", "sensor.b1_charge_p"),
+            ("sensor.b2_discharge_p", "sensor.b2_charge_p"),
+        ]
+        ed.battery_power_from = "sensor.b1_discharge_p"
+        ed.battery_power_to = "sensor.b1_charge_p"
+        ed.has_battery = True
+        states = {
+            "sensor.pv": _state(5000),
+            "sensor.grid": _state(0),
+            "sensor.b1_charge_p": _state(2000),
+            "sensor.b1_discharge_p": _state(0),
+            "sensor.b2_charge_p": _state(0),
+            "sensor.b2_discharge_p": _state(500),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # b1 charging 2000, b2 discharging 500 → fleet net +1500
+        assert power.battery_power == 1500
+        assert power.batteries["b1"].power_w == 2000
+        assert power.batteries["b2"].power_w == -500
+
+    def test_soc_precedence_sem_option_beats_stat_soc(self):
+        """SEM's explicit battery_soc_sensor option outranks the Energy
+        Dashboard's stat_soc (#550 manual override stays authoritative)."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power="sensor.batt",
+        )
+        ed.battery_soc = "sensor.ed_soc"
+        states = {
+            "sensor.pv": _state(1000),
+            "sensor.grid": _state(0),
+            "sensor.batt": _state(0),
+            "sensor.ed_soc": _state(50, unit="%"),
+            "sensor.user_soc": _state(77, unit="%"),
+        }
+        reader = _make_reader_with_states(
+            hass, states, ed,
+            extra_config={"battery_soc_sensor": "sensor.user_soc"},
+        )
+        power = reader.read_power()
+        assert power.battery_soc == 77
 
 
 # ════════════════════════════════════════════

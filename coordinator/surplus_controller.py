@@ -101,6 +101,8 @@ class SurplusController:
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
+        # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
+        self._surplus_samples: List[float] = []
         # EV Intelligence: anticipated surplus from taper detection (#106)
         self._anticipated_surplus_w: float = 0.0
         self._anticipated_deadline: Optional[float] = None
@@ -345,6 +347,18 @@ class SurplusController:
         Returns:
             SurplusAllocationData with allocation results.
         """
+        # (arc) Reconcile belief vs observed reality BEFORE allocating, so a
+        # load that silently dropped off (failed turn_on) or was toggled by the
+        # user isn't counted as active / credited runtime this cycle, and SEM
+        # doesn't immediately re-fight a manual off. Scoped to on/off loads
+        # (switch + climate); EV / heat-pump / setpoint keep their own handling.
+        from ..devices.base import DeviceType
+        from .device_reconciler import reconcile_all
+        reconcile_all([
+            d for d in self._devices.values()
+            if getattr(d, "device_type", None) in (DeviceType.SWITCH, DeviceType.CLIMATE)
+        ])
+
         # #508 W2 — peak posture. WARNING freezes new activation (don't add
         # load while the peak is climbing); SHEDDING/EMERGENCY additionally
         # sheds the controller's own discretionary devices. EMERGENCY sheds
@@ -361,11 +375,25 @@ class SurplusController:
             LoadManagementState.EMERGENCY,
         )
         peak_shed_all = peak_state == LoadManagementState.EMERGENCY
+        # (arc Phase 4) Median-of-3 pre-filter: a SINGLE-cycle spike/dropout
+        # (inverter glitch, sensor blip) still moves the EMA below by 30% of its
+        # magnitude — enough to flap a marginal load. The median passes only
+        # values seen in ≥2 of the last 3 cycles, so one bad sample never
+        # reaches the EMA at all. Real trends (2+ consistent cycles) pass with
+        # one cycle of extra latency, which the EMA's own inertia already dwarfs.
+        self._surplus_samples.append(available_power_w)
+        if len(self._surplus_samples) > 3:
+            self._surplus_samples.pop(0)
+        if len(self._surplus_samples) == 3:
+            filtered_w = sorted(self._surplus_samples)[1]
+        else:
+            filtered_w = available_power_w  # warm-up (first 2 cycles): raw
+
         # EMA smoothing to reduce oscillation from cloud transients
         if self._smoothed_surplus is None:
-            self._smoothed_surplus = available_power_w
+            self._smoothed_surplus = filtered_w
         else:
-            self._smoothed_surplus = 0.3 * available_power_w + 0.7 * self._smoothed_surplus
+            self._smoothed_surplus = 0.3 * filtered_w + 0.7 * self._smoothed_surplus
 
         # Apply regulation offset
         distributable = self._smoothed_surplus - self.regulation_offset
@@ -385,22 +413,38 @@ class SurplusController:
         remaining_surplus = distributable
         active_count = 0
 
-        # Off-peak deactivation: turn off forced devices when tariff switches to HT
-        if price_level not in ("cheap", "very_cheap", "negative"):
-            for device in devices:
-                if device._offpeak_forced and device.is_active:
-                    await device.deactivate()
-                    if not device.is_active:
-                        device._offpeak_forced = False
-                        _LOGGER.info(
-                            "Off-peak deactivated %s (tariff now %s)",
-                            device.name, price_level,
-                        )
-                    else:
-                        _LOGGER.debug(
-                            "Off-peak deactivation of %s blocked by anti-flicker",
-                            device.name,
-                        )
+        # Force expiry: a cheap-hours force ends with its reason (#559 review) —
+        # the tariff left the cheap window, OR the day rolled over (the deficit
+        # it served was YESTERDAY's — without the date check a device forced
+        # into a cheap midnight window would re-fill the NEW day's target from
+        # grid all night).
+        from homeassistant.util import dt as dt_util
+        today_local = dt_util.now().date()
+        for device in devices:
+            if not device.is_active:
+                continue
+            reason = None
+            if device._offpeak_forced:
+                stale = (
+                    device._offpeak_forced_date is not None
+                    and device._offpeak_forced_date != today_local
+                )
+                if stale:
+                    reason = "cheap-hours force expired (day rollover)"
+                elif price_level not in ("cheap", "very_cheap", "negative"):
+                    reason = f"tariff now {price_level}"
+            if reason:
+                await device.deactivate()
+                if not device.is_active:
+                    device._offpeak_forced = False
+                    device._offpeak_forced_date = None
+                    _LOGGER.info(
+                        "Force ended for %s (%s)", device.name, reason,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Force-end of %s blocked by anti-flicker", device.name,
+                    )
 
         # Import control mode enum
         from ..devices.base import DeviceControlMode
@@ -413,6 +457,46 @@ class SurplusController:
             # Skip devices in "off" mode — SEM never touches these
             if device.control_mode == DeviceControlMode.OFF:
                 continue
+
+            # (#559) Goal gates — a device that is DONE for the day (its
+            # daily runtime target met, or the external stop condition like
+            # the car's SOC target) is stopped and stays off until the day
+            # rolls over. Only SURPLUS-mode devices: peak_only devices are
+            # user-managed, SEM never proactively stops them.
+            if device.control_mode == DeviceControlMode.SURPLUS:
+                done_reason = None
+                if device.daily_targets_met:
+                    done_reason = "daily target met"
+                elif device.stop_condition_met:
+                    done_reason = (
+                        f"stop condition met ({device.stop_entity} >= "
+                        f"{device.stop_at:g})"
+                    )
+                if done_reason:
+                    if device.is_active and device.can_deactivate():
+                        await device.deactivate()
+                        if not device.is_active:
+                            device.record_deactivated()
+                            device._offpeak_forced = False
+                            device._offpeak_forced_date = None
+                            _LOGGER.info(
+                                "%s: %s — deactivated for the rest of the day",
+                                device.name, done_reason,
+                            )
+                    elif device.is_active:
+                        _LOGGER.debug(
+                            "%s: %s — deactivation waiting for anti-flicker",
+                            device.name, done_reason,
+                        )
+                    allocations.append(SurplusAllocation(
+                        device_id=device.device_id,
+                        device_name=device.name,
+                        priority=device.priority,
+                        allocated_watts=0.0,
+                        actual_consumption_watts=device.get_current_consumption() if device.is_active else 0.0,
+                        state=DeviceState.ACTIVE.value if device.is_active else DeviceState.IDLE.value,
+                    ))
+                    continue
 
             if remaining_surplus >= device.min_power_threshold and not device.is_active:
                 # Only activate if device is in "surplus" mode
@@ -455,6 +539,11 @@ class SurplusController:
             for device in reversed(devices):
                 if remaining_surplus >= 0:
                     break
+                # (#559) off-peak-forced devices run WITHOUT surplus by
+                # design — the force-expiry section and the peak shed pass
+                # own their lifecycle; the deficit LIFO must not flap them off.
+                if device._offpeak_forced:
+                    continue
                 if device.is_active and device.can_deactivate():
                     consumption = device.get_current_consumption()
                     await device.deactivate()
@@ -556,10 +645,21 @@ class SurplusController:
             for device in devices:
                 if device.control_mode != DeviceControlMode.SURPLUS:
                     continue
-                if device.needs_offpeak_activation:
+                # (#559) solar_only devices NEVER grid-force — they accept
+                # missing the target on a dark day (logged once per day).
+                if device.top_up_policy == "solar_only":
+                    continue
+                if device.stop_condition_met:
+                    continue
+                # (arc) Respect can_activate() here too — otherwise a cheap-hours
+                # top-up would re-activate a load the user just turned off,
+                # bypassing the reconciler's user-respect cooldown (and the
+                # device min_off anti-flicker).
+                if device.needs_offpeak_activation and device.can_activate():
                     consumed = await device.activate(device.min_power_threshold)
                     if consumed > 0:
                         device._offpeak_forced = True
+                        device._offpeak_forced_date = today_local
                         active_count += 1
                         remaining_surplus -= consumed
                         # Update or add allocation entry
@@ -584,6 +684,11 @@ class SurplusController:
                             "Off-peak forced %s (%.0fW, deficit %.0fs)",
                             device.name, consumed, device.remaining_daily_runtime_sec,
                         )
+
+        # (#559 beta.19) The deadline-critical pass was removed: it grid/
+        # battery-forced with no SOC gate (HIGH-2) to hit a per-device
+        # deadline. solar_only (the switch-load default) never grid-forces;
+        # cheap_hours devices still top up via the off-peak pass above.
 
         # Build allocation data
         total_allocated = sum(a.actual_consumption_watts for a in allocations)

@@ -97,10 +97,10 @@ build_charger_view(charger_id) ──► ChargerView (frozen, pure input)
                                   ChargerDecision (frozen, pure output)
                                           │
                                           ▼
-                                   actuate(decision, adapter, power)
+                             actuate(decision, adapter, power, reconciler)
                                           │
                                           ▼
-                                  adapter.command_X()   ← brand-aware
+                          reconciler.reconcile_and_apply() → adapter.command_X()  ← brand-aware
                                           │
                                           ▼
                                     HA service call
@@ -115,10 +115,12 @@ build_charger_view(charger_id) ──► ChargerView (frozen, pure input)
   self-resume detection, and the ~5 s `charging_state` sensor lag.
   `GenericAdapter` covers brands whose firmware handles 0 A as stop
   (Wallbox, Easee, go-eCharger, OCPP).
-- **`actuate(decision, adapter, power)`** dispatches by intent —
-  one method call per `ChargerIntent`. The self-resume guard
-  (#315/#346/#353) is one `adapter.is_self_charging()` check before
-  applying the new intent.
+- **`actuate(decision, adapter, power, reconciler)`** is a thin delegation:
+  it hands the `ChargerDecision` to the **`ChargerReconciler`**, which owns
+  convergence (desired-vs-observed) and is the sole actuation path (v1.7.3).
+  The reconciler dispatches by intent — one adapter call per `ChargerIntent` —
+  and the self-resume guard (#315/#346/#353) is one `adapter.is_self_charging()`
+  check before applying the new intent.
 
 ### Decide → actuate → adapter (battery side)
 
@@ -191,7 +193,7 @@ coordinator/
 ├── battery_adapters/       — Per-brand battery control surface (Huawei, GoodWe, Generic)
 ├── decide.py               — Pure decide(view) → ChargerDecision (5 ModeStrategy classes)
 ├── decide_battery.py       — Pure decide_battery(view) → BatteryDecision
-├── actuate.py              — Intent dispatch onto ChargerAdapter
+├── actuate.py              — Thin delegation of ChargerDecision to ChargerReconciler
 ├── actuate_battery.py      — Intent dispatch onto BatteryControlAdapter
 ├── build_view.py           — Builds ChargerView from PowerReadings + config
 ├── charging_control.py     — ChargingStateMachine (legacy; produces sensor display
@@ -668,7 +670,7 @@ removes them in v1.7.0 after additional soak.
 |----------|-------|----------|
 | `DEFAULT_DAILY_EV_TARGET` | 10 kWh | `const.py` |
 | `DEFAULT_EV_RAMP_RATE_AMPS` | 2 | config |
-| `DEFAULT_EV_CHARGING_MODE` | `"pv"` | config |
+| `DEFAULT_EV_CHARGING_MODE` | `"auto"` | config |
 | `battery_capacity_kwh` | auto-detected from inverter, fallback to config | coordinator |
 | Update interval | 10s | coordinator |
 | Regulation offset | 50W | surplus controller |
@@ -896,7 +898,7 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All YAML-based card content — mushroom titles, labels, tab names, template strings
 
 **How it works:**
-1. Loads `dashboard/translations.json` (single source of truth, 759 keys × 15 languages)
+1. Loads `dashboard/translations.json` (single source of truth, 1116 keys × 15 languages)
 2. Builds a reverse lookup: English text → translated text
 3. Walks the entire dashboard YAML tree
 4. Replaces exact-match English strings in translatable fields: `title`, `subtitle`, `primary`, `secondary`, `name`, `label`, `content`
@@ -917,7 +919,7 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All SEM custom card content (labels, status text, error messages)
 
 **How it works:**
-1. `sem-localize.js` is auto-generated from `translations.json` — contains all 759 keys × 15 languages as a JS object
+1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1116 keys × 15 languages as a JS object
 2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`
 3. Fires `sem-localize-ready` CustomEvent when loaded
 4. SEM cards extend `SEMBaseCard` (in `sem-shared.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
@@ -955,7 +957,7 @@ A household may have the system set to German, but one user's profile set to Eng
 Both layers read from the same file: **`dashboard/translations.json`**
 
 ```
-dashboard/translations.json          ← single source (759 keys × 15 languages)
+dashboard/translations.json          ← single source (1116 keys × 15 languages)
     │
     ├──→ dashboard_generator.py      reads at generation time (server-side)
     │
@@ -970,7 +972,7 @@ Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), 
 
 ### Adding a New Language
 
-1. Add the language code and all 759 keys to `dashboard/translations.json`
+1. Add the language code and all 1116 keys to `dashboard/translations.json`
 2. Create `translations/{lang}.json` with config flow and entity translations (mirror `strings.json` structure)
 3. Regenerate `sem-localize.js` from `translations.json`
 4. Deploy and call `generate_dashboard` to apply server-side translations

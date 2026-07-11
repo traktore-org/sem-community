@@ -30,6 +30,15 @@ def _ed_config(grid_power="sensor.grid_power"):
     ed.solar_power_list = []
     ed.battery_power = None
     ed.battery_power_list = []
+    # #551 mock fidelity — Mock auto-attrs are truthy.
+    ed.battery_power_from = None
+    ed.battery_power_to = None
+    ed.battery_power_inverted = False
+    ed.battery_soc = None
+    ed.battery_soc_list = []
+    ed.battery_power_pairs = []
+    ed.grid_power_from = None
+    ed.grid_power_to = None
     ed.battery_charge_energy = None
     ed.battery_discharge_energy = None
     ed.battery_charge_energy_list = []

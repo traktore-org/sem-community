@@ -85,7 +85,6 @@ Each charger gets its own EV charging configuration:
 |--------|-------------|
 | `number.sem_charger_{id}_daily_ev_target` | Night charging target (kWh) per charger |
 | `number.sem_charger_{id}_daily_ev_target_max` | Solar-surplus ceiling (kWh) per charger |
-| `number.sem_charger_{id}_night_initial_current` | Start amps for night charging |
 | `number.sem_charger_{id}_minimum_current` | Minimum charging current (A) |
 | `select.sem_charger_{id}_charge_mode` | Per-charger Charge mode (Solar only / Solar + cheapest hours / Min + Solar / Always (max) / Off). v1.6.3 replacement for the legacy `night_charging`, `smart_night_charging`, `tariff_optimized` switches. |
 
@@ -103,9 +102,8 @@ Each configured charger creates its own sensor entities:
 | `sensor.sem_charger_{id}_taper_trend` | BMS taper detection (stable/declining) |
 | `sensor.sem_charger_{id}_taper_ratio` | Taper ratio (%) |
 | `sensor.sem_charger_{id}_estimated_soc` | EV battery SOC estimate (%) |
-| `sensor.sem_charger_{id}_nights_until_charge` | Estimated nights before charge needed |
-| `sensor.sem_charger_{id}_charge_needed` | Whether tonight's charge is needed |
 | `sensor.sem_charger_{id}_taper_minutes_to_full` | Estimated minutes to full charge |
+| `sensor.sem_charger_{id}_daily_energy` | Energy delivered today by this charger (kWh) |
 
 ### Surplus Priority
 
@@ -181,6 +179,160 @@ On the **System tab** of the dashboard, the Diagnostics section shows:
 - Verify the charger's power sensor is configured correctly
 
 ---
+
+## Generic Surplus Loads (switches, sockets, pumps)
+
+Any switchable load — pool pump, heater rod, a dumb EV socket — can be
+driven by SEM. One service call is enough; the registration **persists
+across restarts** and returns a summary response:
+
+```yaml
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: kia_socket
+  entity_id: switch.kia_socket
+  name: Kia Socket
+  rated_power: 2300        # W the load draws when on
+  priority: 5              # lower = gets surplus first
+```
+
+SEM then switches the load ON when the solar surplus covers its rated
+power and OFF when the surplus is gone (anti-flicker: min 5 min on /
+1 min off). Remove it again with
+`solar_energy_management.unregister_surplus_device`.
+
+### Air-conditioners / heat pumps via `climate.*` (#569)
+
+A unit exposed only as a `climate.*` entity (no switch, no `number`) can be
+managed too — set `device_type: climate`. On surplus SEM sets the unit's
+`hvac_mode` (e.g. `cool`) and, optionally, a comfort target temperature; when
+the surplus is gone it sets `hvac_mode: off`. Same priority / peak-shed /
+daily-goal handling as any other surplus load, and the registration persists
+across restarts (it re-owns a running unit after a reboot).
+
+```yaml
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: living_ac
+  entity_id: climate.living_room_ac
+  name: Living Room AC
+  device_type: climate
+  hvac_mode: cool           # cool | heat | heat_cool | dry | fan_only | auto
+  target_temperature: 22    # °C to set when SEM turns it on (optional)
+  rated_power: 1800         # W the unit draws when running
+  priority: 6
+```
+
+Pick `hvac_mode: heat` (or `heat_cool`) to drive a heat pump the same way in
+winter. Leave `target_temperature` empty to keep the unit's own setpoint and
+only switch the mode.
+
+### The mode ladder — who is in charge
+
+Every device row on the Control tab has **one mode picker** — a 3-step
+ladder:
+
+| Mode (UI) | Behavior |
+|---|---|
+| **Off** | SEM monitors only, never switches the device |
+| **Peak only** | **Your own automations** run the device; SEM only sheds it to protect the grid peak and restores it afterwards (catch the surplus via the event interface below) |
+| **Surplus** | SEM runs the device on solar surplus; **never grid power** — on a dark day the daily target is simply missed |
+
+(Services and automations see `control_mode` = `off`/`peak_only`/`surplus`.
+Surplus devices default to `top_up_policy: solar_only` — never grid. A
+`cheap_hours` policy also exists for hot-water/heat-pump off-peak top-up
+but is not surfaced on the generic device card.)
+
+Devices auto-discovered from the Energy Dashboard default to
+`peak_only`; devices you register via the service default to
+`surplus` (solar-only) — that's what you register them for.
+
+### Catching the surplus in your own automations (`peak_only`)
+
+If you prefer to keep your own schedules (e.g. a 3×/day pump
+automation) and just want them to land on solar surplus, subscribe to
+SEM's surplus signal:
+
+- **`binary_sensor.sem_surplus_available`** — ON once the unallocated
+  surplus has stayed above the threshold
+  (`number.sem_surplus_event_threshold`, default 1500 W) for 60 s; OFF
+  once it has stayed below 80 % of the threshold for 120 s. The
+  debounce means clouds can not flap your automations.
+- **`solar_energy_management_surplus` event** — fired on every
+  transition with `available`, `surplus_w`, `unallocated_w`,
+  `threshold_w` in the payload.
+
+```yaml
+automation:
+  - alias: Pump on solar surplus
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sem_surplus_available
+        to: "on"
+    actions:
+      - action: switch.turn_on
+        target: { entity_id: switch.pool_pump }
+```
+
+### Daily targets — the goal engine
+
+A surplus-mode device can be given a **daily goal**. On the Control tab
+each surplus device row has a target 🞋 button opening the **Daily Target**
+panel — the same look as the EV charger's Charge Target:
+
+- A single **"Run up to N h today"** slider (green handle; `0` = no
+  target, up to 12 h). This is a **daily solar-runtime budget**: SEM runs
+  the device on surplus until it has clocked N hours, then rests it for the
+  day (pool pump: run up to 4 h on solar). Because a surplus device never
+  draws grid, a dark day may not reach N — the budget is a ceiling, not a
+  guarantee.
+- **Stop when** — an optional external completion condition: a sensor and
+  a value (e.g. the car's SOC sensor ≥ 80) that ends the device's day
+  early once reached.
+- A **progress bar** under the row (e.g. `2.1/4 h on solar today ✓`) —
+  progress survives restarts.
+
+The same goal can be set in the registration call or per field via
+`update_device_config`:
+
+```yaml
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: pool_pump
+  entity_id: switch.pool_pump
+  rated_power: 800
+  daily_min_runtime_min: 240      # ≥ 4h/day, on solar
+  stop_entity: sensor.car_soc     # optional…
+  stop_at: 80                     # …stop at 80 %
+```
+
+| Field | Meaning |
+|---|---|
+| `daily_min_runtime_min` | Daily solar-runtime budget in minutes — the device rests once it has run this long today (the green slider handle) |
+| `top_up_policy` | `solar_only` (default, never grid) or `cheap_hours` (HW/HP off-peak top-up) |
+| `stop_entity` + `stop_at` | External completion condition |
+
+> **Tip — `rated_power`:** give a real value at registration. SEM also
+> **auto-calibrates** it from the switch's power sensor the first time the
+> load runs, so an auto-discovered socket that read 0 W while off won't
+> switch on at a tiny surplus and import the rest from grid.
+
+#### What happens when the budget is NOT reached?
+
+**Surplus (solar only):** nothing is forced. On a dark day the device
+simply runs less than its budget and progress resets at midnight — this
+mode **never draws grid power**. The budget is a *ceiling*, not a floor:
+SEM will not run the device from grid to "catch up." If you need a
+*guaranteed* minimum runtime even on cloudy days, run the device from your
+own automation triggered on `binary_sensor.sem_surplus_available` (see
+above), where you control the grid-vs-solar trade-off.
+
+In every mode: **peak protection outranks the goal** (a device chasing
+its target still sheds for a grid peak), the anti-flicker minimums (5 min
+on / 1 min off) shape the switching, and once the target or the stop
+condition is reached the device is done for the day. A restart never
+orphans a device SEM switched on — running surplus devices are re-owned
+at boot.
 
 ## Appliance Dependencies
 

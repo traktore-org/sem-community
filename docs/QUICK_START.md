@@ -4,7 +4,7 @@
 
 # Quick Start Guide
 
-Get Solar Energy Management (SEM) v1.4.7 running in your Home Assistant in about 10 minutes.
+Get Solar Energy Management (SEM) running in your Home Assistant in about 10 minutes.
 
 ---
 
@@ -99,7 +99,6 @@ Go to **HACS > Frontend** and install each one:
 | **card-mod** | Applies the glass card styling -- without this, all tabs are blank |
 | **apexcharts-card** | Renders all power and energy charts |
 | **sankey-chart** | Energy flow diagram on the Energy tab |
-| **fold-entity-row** | Collapsible welcome section on the Home tab (optional but recommended) |
 
 After installing all cards, hard-refresh your browser: **Ctrl+Shift+R** (Windows/Linux) or **Cmd+Shift+R** (Mac).
 

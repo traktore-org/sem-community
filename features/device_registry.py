@@ -30,7 +30,11 @@ from homeassistant.helpers import entity_registry as er
 
 from ..ha_energy_reader import read_energy_dashboard_config, get_all_individual_devices
 from .load_device_discovery import LoadDeviceDiscovery
-from ..devices.base import SwitchDevice, CurrentControlDevice
+from ..devices.base import (
+    SwitchDevice,
+    CurrentControlDevice,
+    surplus_device_from_spec,
+)
 from ..hardware_detection import discover_ev_charger_from_registry
 
 _LOGGER = logging.getLogger(__name__)
@@ -124,6 +128,16 @@ class UnifiedDeviceRegistry:
         self._manual_mappings: Dict[str, Dict[str, Any]] = {}
         self._priority_overrides: Dict[str, int] = {}
         self._control_mode_overrides: Dict[str, str] = {}  # device_id → "off"/"peak_only"/"surplus"
+        # (#559 Phase 0) Devices registered via the register_surplus_device
+        # service. Pre-fix these lived only in the surplus controller's
+        # memory and silently vanished on every restart.
+        # device_id → {entity_id, name, priority, rated_power,
+        #              power_entity_id, control_mode}
+        self._service_registrations: Dict[str, Dict[str, Any]] = {}
+        # (#559 Phases 1-3) per-device goal config (targets, deadline,
+        # top-up policy, stop condition) — device_id → dict. Applies to
+        # BOTH auto-discovered and service-registered devices.
+        self._device_goals: Dict[str, Dict[str, Any]] = {}
 
     @property
     def devices(self) -> List[UnifiedDevice]:
@@ -142,6 +156,8 @@ class UnifiedDeviceRegistry:
                 self._manual_mappings = data.get("mappings", {})
                 self._priority_overrides = data.get("priority_overrides", {})
                 self._control_mode_overrides: Dict[str, str] = data.get("control_modes", {})
+                self._service_registrations = data.get("service_registrations", {})
+                self._device_goals = data.get("device_goals", {})
                 # Migrate the removed "surplus_target" mode (#235): a device set to
                 # surplus_target in v1.5.9 keeps surplus charging (rather than silently
                 # falling back to peak_only). The "stop at target" intent is now the
@@ -163,6 +179,10 @@ class UnifiedDeviceRegistry:
 
         await self.async_refresh_devices()
 
+        # (#559 Phase 0) Re-register persisted service devices — pre-fix a
+        # restart silently dropped everything the user registered.
+        self._register_service_devices()
+
         # Schedule delayed re-discovery after entities are fully loaded
         async def _delayed_rediscovery():
             await asyncio.sleep(35)
@@ -170,6 +190,176 @@ class UnifiedDeviceRegistry:
             await self.async_refresh_devices()
 
         self.hass.async_create_task(_delayed_rediscovery())
+
+    # (#559) goal properties settable via update_device_config / register.
+    # Grounded core after the beta.19 freeze: runtime target + top-up policy
+    # (solar_only|cheap_hours) + external stop condition. Deleted keys from
+    # beta.18 (daily_max_runtime_min, daily_target_energy_kwh, daily_max_energy_kwh,
+    # target_deadline) are ignored on load — see _apply_goals.
+    GOAL_PROPERTIES = (
+        "daily_min_runtime_min", "top_up_policy",
+        "stop_entity", "stop_at",
+    )
+
+    def _apply_goals(self, device) -> None:
+        """Apply the persisted goal config onto a live device object.
+
+        Only the surviving grounded-core keys are read; any extra keys from
+        beta.18-persisted devices (daily_max_*, daily_target_energy_kwh,
+        target_deadline) are silently ignored so upgrades load cleanly."""
+        goals = self._device_goals.get(device.device_id)
+        if not goals:
+            return
+        device.daily_min_runtime_sec = int(
+            float(goals.get("daily_min_runtime_min", 0)) * 60
+        )
+        policy = str(goals.get("top_up_policy", "solar_only") or "solar_only")
+        if policy not in ("solar_only", "cheap_hours"):
+            # migrate a legacy 'always' off the removed value AND clean the
+            # stored dict so the next _save_storage doesn't roundtrip it back
+            policy = "solar_only"
+            goals["top_up_policy"] = "solar_only"
+        device.top_up_policy = policy
+        device.stop_entity = str(goals.get("stop_entity", "") or "")
+        device.stop_at = float(goals.get("stop_at", 0.0) or 0.0)
+
+    def seed_goals(self, device_id: str, goals: "Dict[str, Any]") -> None:
+        """Stage goal fields before registration (register_surplus_device
+        one-call path). Unknown properties are dropped."""
+        clean = {k: v for k, v in goals.items() if k in self.GOAL_PROPERTIES}
+        if clean:
+            self._device_goals.setdefault(device_id, {}).update(clean)
+
+    async def async_update_device_goal(
+        self, device_id: str, prop: str, value: Any
+    ) -> None:
+        """Set one goal property, persist it, and apply it live (#559)."""
+        if prop not in self.GOAL_PROPERTIES:
+            raise ValueError(f"Unknown goal property: {prop}")
+        goals = self._device_goals.setdefault(device_id, {})
+        goals[prop] = value
+        device = self._surplus_controller.get_device(device_id)
+        if device:
+            self._apply_goals(device)
+        await self._save_storage()
+        _LOGGER.info("Device goal updated: %s.%s = %s", device_id, prop, value)
+
+    def _register_service_devices(self) -> None:
+        """(Re-)register all persisted service registrations with the
+        surplus controller."""
+        from ..devices.base import DeviceControlMode
+        for device_id, spec in self._service_registrations.items():
+            device = surplus_device_from_spec(self.hass, device_id, spec)
+            try:
+                device.control_mode = DeviceControlMode(
+                    spec.get("control_mode", "surplus")
+                )
+            except ValueError:
+                device.control_mode = DeviceControlMode.SURPLUS
+            if spec.get("depends_on"):
+                device.depends_on = list(spec["depends_on"])
+            self._apply_goals(device)
+            if device.control_mode == DeviceControlMode.SURPLUS:
+                device.adopt_if_running()  # (#559) re-own after restart
+            self._surplus_controller.register_device(device)
+        if self._service_registrations:
+            _LOGGER.info(
+                "Re-registered %d persisted service device(s): %s",
+                len(self._service_registrations),
+                ", ".join(self._service_registrations),
+            )
+
+    async def async_register_service_device(
+        self, spec: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Register a surplus device from the register_surplus_device
+        service — persisted, so it survives restarts (#559 Phase 0).
+
+        Returns a summary dict for the service response.
+        """
+        device_id = spec["device_id"]
+        stored = {
+            "entity_id": spec.get("entity_id", ""),
+            "name": spec.get("name") or device_id,
+            "priority": spec.get("priority", 5),
+            "rated_power": spec.get("rated_power", 1000),
+            "power_entity_id": spec.get("power_entity_id"),
+            "control_mode": spec.get("control_mode", "surplus"),
+            "depends_on": list(spec.get("depends_on") or []),
+            # (#569) device kind + climate params — persisted so a climate
+            # AC rehydrates as a ClimateDevice (not a SwitchDevice) on restart.
+            "device_type": (spec.get("device_type") or "switch").lower(),
+            "hvac_mode": spec.get("hvac_mode", "cool"),
+            "target_temperature": spec.get("target_temperature"),
+        }
+        self._service_registrations[device_id] = stored
+        # keep the mode-overrides map consistent (same value, two readers)
+        self._control_mode_overrides[device_id] = stored["control_mode"]
+        # (Re-)create the live device — replaces any previous instance
+        # under the same id.
+        from ..devices.base import DeviceControlMode
+        device = surplus_device_from_spec(self.hass, device_id, stored)
+        try:
+            device.control_mode = DeviceControlMode(stored["control_mode"])
+        except ValueError:
+            device.control_mode = DeviceControlMode.SURPLUS
+            stored["control_mode"] = "surplus"
+        if stored["depends_on"]:
+            device.depends_on = list(stored["depends_on"])
+        self._apply_goals(device)
+        self._surplus_controller.register_device(device)
+        # Dedupe: if auto-discovery already registered this switch under an
+        # energy_dashboard_* id, drop that instance — two device objects
+        # driving one switch WILL fight. The explicit registration wins.
+        self._drop_discovered_duplicates(device_id, stored["entity_id"])
+        await self._save_storage()
+        summary = {
+            "device_id": device_id,
+            "name": stored["name"],
+            "entity_id": stored["entity_id"],
+            "priority": stored["priority"],
+            "rated_power": stored["rated_power"],
+            "control_mode": stored["control_mode"],
+            "device_type": stored["device_type"],
+            "total_devices": len(self._surplus_controller._devices),
+        }
+        if stored["device_type"] == "climate":
+            summary["hvac_mode"] = stored["hvac_mode"]
+            summary["target_temperature"] = stored["target_temperature"]
+        return summary
+
+    async def async_unregister_service_device(self, device_id: str) -> bool:
+        """Remove a service registration (and its live device).
+
+        Returns True when something was removed."""
+        if device_id not in self._service_registrations:
+            # Auto-discovered devices are owned by ED discovery — removing
+            # them here would be silently undone by the next refresh.
+            return False
+        self._service_registrations.pop(device_id, None)
+        self._control_mode_overrides.pop(device_id, None)
+        self._device_goals.pop(device_id, None)
+        if self._surplus_controller.get_device(device_id):
+            self._surplus_controller.unregister_device(device_id)
+        await self._save_storage()
+        return True
+
+    def _drop_discovered_duplicates(
+        self, service_device_id: str, entity_id: str
+    ) -> None:
+        """Unregister ED-discovered devices that drive the same entity."""
+        if not entity_id:
+            return
+        for did, dev in list(self._surplus_controller._devices.items()):
+            if did == service_device_id or not did.startswith("energy_dashboard_"):
+                continue
+            if getattr(dev, "entity_id", None) == entity_id:
+                _LOGGER.info(
+                    "Dropping auto-discovered %s — entity %s is now "
+                    "explicitly registered as %s",
+                    did, entity_id, service_device_id,
+                )
+                self._surplus_controller.unregister_device(did)
 
     async def async_refresh_devices(self) -> None:
         """Read Energy Dashboard, discover controls, build device list, sync."""
@@ -246,10 +436,18 @@ class UnifiedDeviceRegistry:
         Skips EV charger — it's registered separately in __init__.py with
         special CurrentControlDevice config (phases, min/max current, service).
         """
-        # Unregister old registry-managed devices (prefix: energy_dashboard_)
+        # Unregister old registry-managed devices (prefix: energy_dashboard_).
+        # (#559) NEVER wipe a SERVICE-registered device, even when the user
+        # picked an energy_dashboard_* id: the wipe removed it and the rebuild
+        # below then SKIPPED recreating it (the entity-dedup correctly treats
+        # the switch as service-owned) — so the device vanished entirely on
+        # every re-discovery (the 35s delayed one after each restart included)
+        # and the load never ran again (alexmc1510's pool pump). Ownership by
+        # construction: service registrations survive discovery syncs with
+        # their live object (and accrued daily runtime) intact.
         existing_ids = list(self._surplus_controller._devices.keys())
         for did in existing_ids:
-            if did.startswith("energy_dashboard_"):
+            if did.startswith("energy_dashboard_") and did not in self._service_registrations:
                 self._surplus_controller.unregister_device(did)
 
         for device in self._devices:
@@ -261,8 +459,31 @@ class UnifiedDeviceRegistry:
             control = device.control
             control_type = control.get("type", "switch") if control else "switch"
 
+            # (#559) id collision: the discovery row's id is service-registered
+            # (user picked the energy_dashboard_* namespace) — the service
+            # device owns it; re-registering here would overwrite the explicit
+            # object (rated_power, goals, runtime) with a discovery snapshot.
+            if device.device_id in self._service_registrations:
+                _LOGGER.debug(
+                    "Skipping auto-discovered %s — id is service-registered",
+                    device.device_id,
+                )
+                continue
+
             if control_type in ("switch", "input_boolean"):
                 entity = control.get("entity", "")
+                # (#559 Phase 0) dedupe: an explicitly service-registered
+                # device owns its switch — don't spawn a second controller
+                # for the same entity from auto-discovery.
+                if entity and any(
+                    spec.get("entity_id") == entity
+                    for spec in self._service_registrations.values()
+                ):
+                    _LOGGER.debug(
+                        "Skipping auto-discovered %s — %s is service-registered",
+                        device.device_id, entity,
+                    )
+                    continue
                 surplus_device = SwitchDevice(
                     hass=self.hass,
                     device_id=device.device_id,
@@ -279,6 +500,9 @@ class UnifiedDeviceRegistry:
                     surplus_device.control_mode = DeviceControlMode(mode_str)
                 except ValueError:
                     surplus_device.control_mode = DeviceControlMode.PEAK_ONLY
+                self._apply_goals(surplus_device)
+                if surplus_device.control_mode == DeviceControlMode.SURPLUS:
+                    surplus_device.adopt_if_running()  # (#559) re-own after restart
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
@@ -328,7 +552,10 @@ class UnifiedDeviceRegistry:
         # Remove old non-registry, non-EV devices
         old_ids = [
             did for did in list(self._load_manager._devices.keys())
-            if not did.startswith("energy_dashboard_") and not did.startswith("load_device_")
+            if not did.startswith("energy_dashboard_")
+            and not did.startswith("load_device_")
+            # (#559 Phase 0) never prune service-registered devices
+            and did not in self._service_registrations
         ]
         for did in old_ids:
             del self._load_manager._devices[did]
@@ -370,8 +597,22 @@ class UnifiedDeviceRegistry:
     def get_devices_for_sensor(self) -> Dict[str, Dict[str, Any]]:
         """Return dict formatted for the controllable_devices_count sensor attributes."""
         result = {}
+        # (#559) Entities that an explicit register_surplus_device call owns.
+        # An auto-discovered ED device for the SAME switch must not shadow that
+        # registration — otherwise the card showed the live sensor (0 W while
+        # the load is off) instead of the user's rated_power, and the explicit
+        # entry was skipped as a duplicate id. Suppress the auto-discovered row;
+        # the authoritative service registration is added below with its
+        # rated_power / priority / mode.
+        service_entities = {
+            spec.get("entity_id")
+            for spec in self._service_registrations.values()
+            if spec.get("entity_id")
+        }
         for device in self._devices:
             did = device.device_id
+            if device.control_entity and device.control_entity in service_entities:
+                continue
             # Get live power reading
             current_power = 0.0
             is_on = False
@@ -389,7 +630,12 @@ class UnifiedDeviceRegistry:
                 "priority": device.priority,
                 "is_controllable": device.is_controllable,
                 "is_critical": device.is_critical,
-                "power_rating": self._get_power_rating(device.power_sensor),
+                # (#559) rated_power, not the raw live sensor: the live
+                # ControllableDevice carries a self-calibrating rated_power
+                # (snapped to the real draw when the load runs), so an OFF
+                # device shows its rated power instead of a bare 0 W. Falls
+                # back to the live sensor when no device is registered yet.
+                "power_rating": self._rated_power_for(did, device.power_sensor),
                 "power_entity": device.power_sensor,
                 "energy_sensor": device.energy_sensor,
                 "switch_entity": device.control_entity,
@@ -400,8 +646,63 @@ class UnifiedDeviceRegistry:
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
                 "control_mode": self._control_mode_overrides.get(did, "peak_only"),
+                # (arc Phase 3) is it on because SEM turned it on, or externally?
+                "sem_owned": bool(getattr(
+                    self._surplus_controller.get_device(did), "_sem_owned", False)),
+                **self._goal_payload(did),
+            }
+
+        # (#559) service-registered devices — pre-fix they never appeared
+        # on the Control tab at all.
+        for did, spec in self._service_registrations.items():
+            if did in result:
+                continue
+            live = self._surplus_controller.get_device(did)
+            is_on = bool(live and live.is_active)
+            current_power = live.get_current_consumption() / 1000 if is_on and live else 0.0
+            result[did] = {
+                "name": spec.get("name", did),
+                "priority": spec.get("priority", 5),
+                "is_controllable": True,
+                "is_critical": False,
+                "power_rating": spec.get("rated_power", 1000),
+                "power_entity": spec.get("power_entity_id"),
+                "energy_sensor": None,
+                "switch_entity": spec.get("entity_id"),
+                "is_available": True,
+                "is_on": is_on,
+                "current_power": current_power,
+                "device_type": "service_device",
+                "has_manual_mapping": False,
+                "control": {"type": "switch", "entity": spec.get("entity_id")},
+                "control_mode": spec.get("control_mode", "surplus"),
+                # (arc Phase 3) is it on because SEM turned it on, or externally?
+                "sem_owned": bool(getattr(live, "_sem_owned", False)),
+                **self._goal_payload(did),
             }
         return result
+
+    def _goal_payload(self, device_id: str) -> Dict[str, Any]:
+        """Goal config + live progress for the card payload (#559)."""
+        goals = self._device_goals.get(device_id, {})
+        live = self._surplus_controller.get_device(device_id)
+        runtime_min = 0.0
+        targets_met = False
+        if live is not None:
+            runtime_min = live._daily_runtime_accumulated_sec / 60
+            targets_met = bool(live.daily_targets_met)
+        return {
+            "goals": {
+                "daily_min_runtime_min": goals.get("daily_min_runtime_min", 0),
+                "top_up_policy": goals.get("top_up_policy", "solar_only"),
+                "stop_entity": goals.get("stop_entity", ""),
+                "stop_at": goals.get("stop_at", 0),
+            },
+            "progress": {
+                "runtime_today_min": round(runtime_min, 1),
+                "targets_met": targets_met,
+            },
+        }
 
     async def async_set_manual_mapping(
         self,
@@ -490,6 +791,10 @@ class UnifiedDeviceRegistry:
             return
 
         self._control_mode_overrides[device_id] = mode
+        # (#559 Phase 0) mode changes on service-registered devices persist
+        # in their registration spec so the re-register at boot applies them.
+        if device_id in self._service_registrations:
+            self._service_registrations[device_id]["control_mode"] = mode
 
         # Apply to running surplus device if registered
         surplus_device = self._surplus_controller.get_device(device_id)
@@ -507,6 +812,8 @@ class UnifiedDeviceRegistry:
             "mappings": self._manual_mappings,
             "priority_overrides": self._priority_overrides,
             "control_modes": self._control_mode_overrides,
+            "service_registrations": self._service_registrations,
+            "device_goals": self._device_goals,
         }
         await self._store.async_save(data)
         _LOGGER.debug("Saved device mappings to storage")
@@ -534,3 +841,17 @@ class UnifiedDeviceRegistry:
             except (ValueError, TypeError):
                 pass
         return 0.0
+
+    def _rated_power_for(self, device_id: str, power_sensor: Optional[str]) -> float:
+        """(#559) The device's rated power for the Control card.
+
+        Prefers the live ControllableDevice's ``rated_power`` — a stable value
+        that self-calibrates to the real draw when the load runs — over the raw
+        power sensor, which reads 0 W whenever the load is off. Falls back to the
+        live sensor reading when no device is registered (or its rating is 0).
+        """
+        live = self._surplus_controller.get_device(device_id)
+        rated = float(getattr(live, "rated_power", 0) or 0) if live else 0.0
+        if rated > 0:
+            return rated
+        return self._get_power_rating(power_sensor)

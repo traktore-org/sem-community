@@ -765,6 +765,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options."""
         return await self.async_step_ev_charger()
 
+    def _discovered_pv_strings(self) -> dict:
+        """(#566) Live coordinator's discovered PV-string slot->source map.
+
+        Same source the ``pv_naming`` step reads; used by the charger menu to
+        decide whether to offer the "Rename PV strings" shortcut. Empty when
+        the coordinator/reader isn't up or fewer than 2 strings were found.
+        """
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        reader = getattr(coordinator, "_sensor_reader", None)
+        return dict(getattr(reader, "_pv_strings", {}) or {})
+
     @staticmethod
     def _cfg(config: dict, key: str, fallback: Any) -> Any:
         """Null-safe config lookup.
@@ -920,6 +931,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return await self.async_step_ev_charger_add()
             if action == "remove_charger":
                 return await self.async_step_ev_charger_remove()
+            if action == "rename_pv":
+                # (#566) direct shortcut to PV-string naming — otherwise it's
+                # only reachable 7 forms deep via "Continue".
+                self._pv_naming_return = "menu"
+                return await self.async_step_pv_naming()
             if action.startswith("edit_charger:"):
                 self._edit_charger_id = action.split(":", 1)[1]
                 return await self.async_step_ev_charger_edit()
@@ -941,6 +957,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if charger_count > 1:
             options.append(
                 {"value": "remove_charger", "label": "Remove a charger"},
+            )
+        # (#566) Direct entry point to PV-string naming when ≥2 strings exist —
+        # so it's discoverable, not buried at the end of the settings chain.
+        if len(self._discovered_pv_strings()) >= 2:
+            options.append(
+                {"value": "rename_pv", "label": "Rename PV strings"},
             )
 
         return self.async_show_form(
@@ -1574,25 +1596,25 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
                     default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "electricity_export_rate",
                     default=_c("electricity_export_rate", 0.075),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "demand_charge_rate",
                     default=_c("demand_charge_rate", 4.32),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=20.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=100000.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "update_interval",
@@ -1727,13 +1749,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "heat_pump_relay1_entity",
                     description={"suggested_value": _opt("heat_pump_relay1_entity")},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="switch")
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
                 ),
                 vol.Optional(
                     "heat_pump_relay2_entity",
                     description={"suggested_value": _opt("heat_pump_relay2_entity")},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="switch")
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
                 ),
                 vol.Optional(
                     "heat_pump_invert_sg_ready",
@@ -1787,7 +1809,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_notifications()
+            return await self.async_step_pv_naming()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -1896,6 +1918,92 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.BooleanSelector(),
             }),
             errors=errors,
+        )
+
+    async def async_step_pv_naming(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """(#566) Name the per-PV-string sensors (East/South/West …).
+
+        Only shown when ≥ 2 strings were discovered. Each field is labelled
+        with its source sensor + live power so the user can tell which slot is
+        which physical panel (the slots are ordered by the Energy-Dashboard
+        solar-sensor list, not by compass direction).
+        """
+        # Reach the live coordinator's discovered slot -> source map.
+        coordinator = self.hass.data.get(DOMAIN, {}).get(
+            self.config_entry.entry_id
+        )
+        reader = getattr(coordinator, "_sensor_reader", None)
+        pv_strings = dict(getattr(reader, "_pv_strings", {}) or {})
+
+        # < 2 strings → nothing to name, skip straight on. Carry any
+        # previously-saved names forward so this save (which replaces the whole
+        # options dict via async_create_entry) does not erase them when the
+        # step is skipped (e.g. discovery hasn't run yet). Mirrors the
+        # ev_chargers carry-forward pattern above.
+        if len(pv_strings) < 2:
+            existing = self.config_entry.options.get("pv_string_names")
+            if existing:
+                self._data.setdefault("pv_string_names", existing)
+            return await self.async_step_notifications()
+
+        slots = sorted(pv_strings.keys())
+
+        if user_input is not None:
+            names = {
+                slot: str(user_input.get(f"pv_name_{slot}", "") or "").strip()
+                for slot in slots
+            }
+            # store only the non-empty ones; keep the key present so clearing
+            # a name reverts to default
+            self._data["pv_string_names"] = {
+                s: v for s, v in names.items() if v
+            }
+            # (#566) Reached via the charger-menu shortcut → finalize NOW,
+            # preserving every other saved option. The normal chain finishes
+            # at notifications() with the fully-accumulated self._data; the
+            # shortcut skipped those forms, so replacing options with self._data
+            # would wipe them. Merge onto the existing options instead.
+            if getattr(self, "_pv_naming_return", None) == "menu":
+                merged = {
+                    **self.config_entry.options,
+                    "pv_string_names": self._data["pv_string_names"],
+                }
+                return self.async_create_entry(data=merged)
+            return await self.async_step_notifications()
+
+        current = {**self.config_entry.data, **self.config_entry.options}
+        saved_names = current.get("pv_string_names", {}) or {}
+
+        # Build the "which slot is which" mapping shown in the description,
+        # and the per-slot text fields.
+        mapping_lines = []
+        schema_dict = {}
+        for slot in slots:
+            src = pv_strings[slot]
+            if isinstance(src, (tuple, list)):
+                src_label = " × ".join(str(x) for x in src) + " (V×I)"
+                watts = None
+            else:
+                src_label = str(src)
+                st = self.hass.states.get(src_label)
+                try:
+                    watts = float(st.state) if st else None
+                except (ValueError, TypeError):
+                    watts = None
+            w_txt = f" · {watts:.0f} W" if isinstance(watts, float) else ""
+            n = slot.replace("pv", "")
+            mapping_lines.append(f"• PV{n}  ←  {src_label}{w_txt}")
+            schema_dict[vol.Optional(
+                f"pv_name_{slot}",
+                default=saved_names.get(slot, ""),
+            )] = selector.TextSelector()
+
+        return self.async_show_form(
+            step_id="pv_naming",
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={"mapping": "\n".join(mapping_lines)},
         )
 
     async def async_step_notifications(

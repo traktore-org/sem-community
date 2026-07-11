@@ -172,6 +172,8 @@ Entity types use a searchable entity picker filtered to the right domain. **Rese
 
 ### Configuration
 
+![Configuration Tab](images/sem_config_tab.png)
+
 The single home for **every changeable setting** (`sem-config-card`),
 organized in collapsible sections: Setup overview, EV chargers, Battery
 zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load
@@ -224,13 +226,12 @@ Install these via HACS > Frontend before the dashboard will render:
 
 | Card | HACS Repository | Purpose |
 |------|-----------------|---------|
-| `mushroom` | `piitaya/lovelace-mushroom` | Chips, entity, template, number, title cards (~96 uses) |
 | `card-mod` | `thomasloven/lovelace-card-mod` | Glass card styling via `*glass_card` anchor. **Missing = blank tabs.** |
+| `mushroom` | `piitaya/lovelace-mushroom` | Chips, entity, template, number, and title sub-cards used inside SEM cards |
 | `apexcharts-card` | `RomRider/apexcharts-card` | All trend, power, and cost charts |
-| `sankey-chart` | `MindFreeze/sankey-chart` | Energy flow diagram on Energy tab |
-| `fold-entity-row` | `thomasloven/lovelace-fold-entity-row` | Collapsible "Welcome to SEM" intro |
+| `sankey-chart` | `MindFreeze/sankey-chart` | Energy flow diagram on the Energy tab |
 
-**4 required HACS cards** (mushroom, card-mod, apexcharts-card, sankey-chart) + **1 optional** (fold-entity-row).
+**4 required HACS cards** (card-mod, mushroom, apexcharts-card, sankey-chart). Everything else on the dashboard is a bundled `sem-*` card or a native HA type. Optional: `k-flow-card` for the animated flow diagram on the Home tab (SEM falls back to its built-in system diagram if absent).
 
 ---
 

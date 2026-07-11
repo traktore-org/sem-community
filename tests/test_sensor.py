@@ -218,9 +218,13 @@ class TestEMSSensors:
 
         attributes = sensor.extra_state_attributes
 
-        # Check that relevant attributes are included
-        assert "last_update" in attributes
-        assert attributes["last_update"] == "2024-01-15 12:00:00"
+        # #581 — the volatile per-cycle ``last_update``/``delta_triggered`` base
+        # attributes were removed: stamped with dt_util.now() every 10 s cycle
+        # they forced a recorder write on all ~177 SEM entities every cycle,
+        # even for static sensors. They are no longer surfaced on the entity.
+        assert isinstance(attributes, dict)
+        assert "last_update" not in attributes
+        assert "delta_triggered" not in attributes
 
     @pytest.mark.asyncio
     async def test_price_sensor_exposes_curve_attributes(self, mock_coordinator):

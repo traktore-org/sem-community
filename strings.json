@@ -106,7 +106,7 @@
     "step": {
       "ev_charger": {
         "title": "EV Charger",
-        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Tip: most settings now live on the SEM dashboard → Configuration tab (colorful, live). This flow remains for headless setups and entity wiring.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",
@@ -448,6 +448,9 @@
       "battery_temperature": {
         "name": "Battery Temperature"
       },
+      "inverter_temperature": {
+        "name": "Inverter Temperature"
+      },
       "battery_cycles_estimated": {
         "name": "Battery Cycles (Estimated)"
       },
@@ -607,6 +610,9 @@
       "yearly_solar_yield_energy": {
         "name": "Yearly Solar"
       },
+      "lifetime_solar_yield_energy": {
+        "name": "Lifetime Solar Production"
+      },
       "yearly_grid_import_energy": {
         "name": "Yearly Grid Import"
       },
@@ -738,6 +744,9 @@
       },
       "forecast_remaining_today_kwh": {
         "name": "Forecast Remaining Today"
+      },
+      "forecast_power_now_w": {
+        "name": "Forecast Power Now"
       },
       "forecast_peak_power_today_w": {
         "name": "Forecast Peak Power Today"
@@ -968,6 +977,9 @@
       },
       "utility_signal_active": {
         "name": "Utility Signal Active"
+      },
+      "surplus_available": {
+        "name": "Surplus Available"
       }
     },
     "switch": {
@@ -1077,6 +1089,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Vehicle consumption (kWh/100km)"
+      },
+      "surplus_event_threshold": {
+        "name": "Surplus Event Threshold"
       }
     },
     "select": {

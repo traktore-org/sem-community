@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Optional
 
 from ..charger_types import ChargerIntent, ChargerPower
 from .base import ChargerAdapter
+from .status_enum import classify_charger_status
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...devices.base import CurrentControlDevice
@@ -112,8 +113,51 @@ class GenericAdapter(ChargerAdapter):
             return True  # cold start: any power = self-resume
         return self._last_intent in (ChargerIntent.IDLE, ChargerIntent.DISABLE)
 
+    # ── #548 (generalised) — status-enum-authoritative observation ─────
+    #
+    # For cloud-polled brands the power reading lags the contactor (Wallbox
+    # ~90 s, Easee ~60 s, Zaptec/Ohme/go-e/OCPP similar). A power-only
+    # ``actual_charging`` makes the reconciler read OFF/IDLE as "already
+    # converged" while the box still charges (#548). The user already
+    # configures the charger's status sensor (``ev_charging_sensor`` →
+    # ``charging_status_entity``); the shared classifier
+    # (``status_enum.classify_charger_status``) maps every supported brand's
+    # status strings to a control class. Strictly additive: no status sensor
+    # / unrecognised state → fall back to the power heuristic.
+
+    def _status_raw(self) -> str:
+        """Lower-cased charger status-sensor state, or '' when unreadable."""
+        eid = getattr(self._device, "charging_status_entity", "") or ""
+        hass = getattr(self._device, "hass", None)
+        if not eid or hass is None:
+            return ""
+        st = hass.states.get(eid)
+        if st is None or st.state in (None, "", "unavailable", "unknown"):
+            return ""
+        return str(st.state).strip().lower()
+
+    def _status_class(self) -> str:
+        """Control class of the status sensor: charging / not_charging /
+        locked / unknown (see ``status_enum``)."""
+        return classify_charger_status(self._status_raw())
+
     def actual_charging(self, power: ChargerPower) -> bool:
+        cls = self._status_class()
+        if cls == "charging":
+            return True
+        if cls in ("not_charging", "locked"):
+            return False
+        # unknown / no status sensor → power-based fallback (unchanged).
         return power.power_w > self.handshake_power_w
+
+    def enable_state(self):
+        """App/cloud/schedule-locked brands (Eco-Smart, Easee smart-start,
+        Ohme pending-approval, OCPP unavailable, Alfen in-operative) report
+        uncontrollable so the reconciler surfaces it instead of fighting a
+        contactor it can't drive. Otherwise defer to the switch-based default."""
+        if self._status_class() == "locked":
+            return (None, False)
+        return super().enable_state()
 
     @property
     def last_intent(self) -> Optional[ChargerIntent]:

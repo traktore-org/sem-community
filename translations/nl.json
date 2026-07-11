@@ -109,7 +109,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-lader",
-        "description": "Controleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
+        "description": "Tip: de meeste instellingen staan nu op het SEM-dashboard → tabblad Configuratie (kleurrijk, live). Deze flow blijft voor installaties zonder dashboard.\n\nControleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
         "data": {
           "ev_connected_sensor": "EV-verbindingsstatus",
           "ev_charging_sensor": "EV-laadstatus",
@@ -379,6 +379,18 @@
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
           "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
         }
+      },
+      "pv_naming": {
+        "title": "PV-strings benoemen",
+        "description": "Geef elke zonne-string een naam (bijv. Oost / Zuid / West). Welke slot bij welk paneel hoort — de nummering volgt je Energie-Dashboard-zonnelijst, niet de windrichting:\n\n{mapping}\n\nLaat leeg om de standaard (PV1/PV2/…) te houden.",
+        "data": {
+          "pv_name_pv1": "Naam PV1",
+          "pv_name_pv2": "Naam PV2",
+          "pv_name_pv3": "Naam PV3",
+          "pv_name_pv4": "Naam PV4",
+          "pv_name_pv5": "Naam PV5",
+          "pv_name_pv6": "Naam PV6"
+        }
       }
     }
   },
@@ -425,6 +437,9 @@
       },
       "battery_temperature": {
         "name": "Batterijtemperatuur"
+      },
+      "inverter_temperature": {
+        "name": "Omvormertemperatuur"
       },
       "battery_cycles_estimated": {
         "name": "Batterijcycli (Geschat)"
@@ -585,6 +600,9 @@
       "yearly_solar_yield_energy": {
         "name": "Jaarlijks Zon"
       },
+      "lifetime_solar_yield_energy": {
+        "name": "Totale zonneproductie"
+      },
       "yearly_grid_import_energy": {
         "name": "Jaarlijks Netimport"
       },
@@ -716,6 +734,9 @@
       },
       "forecast_remaining_today_kwh": {
         "name": "Voorspelling Resterend Vandaag"
+      },
+      "forecast_power_now_w": {
+        "name": "Voorspeld Vermogen Nu"
       },
       "forecast_source": {
         "name": "Voorspellingsbron"
@@ -932,6 +953,9 @@
       "solar_active": {
         "name": "Zon Actief"
       },
+      "surplus_available": {
+        "name": "Overschot beschikbaar"
+      },
       "forecast_available": {
         "name": "Voorspelling Beschikbaar"
       },
@@ -1061,6 +1085,9 @@
       },
       "initial_current": {
         "name": "Voertuig Startstroom"
+      },
+      "surplus_event_threshold": {
+        "name": "Overschot-event drempel"
       }
     },
     "select": {
