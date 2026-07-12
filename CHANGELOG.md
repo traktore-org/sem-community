@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.2] — 12.07.2026
+
+> **Pre-release.** Forecast chart no longer spikes at dawn/dusk.
+
+### ☀️ Forecast power spikes fixed on "Forecast vs Production" chart (#575)
+- 🐛 The forecast series spiked to ~80 kW at dawn and dusk while real midday
+  solar peaked at ~8 kW. `forecast_reader` converted Solcast power kW→W using
+  a magnitude heuristic (`< 100 → ×1000`), but Solcast publishes Watts — so
+  every genuine sub-100 W dawn/dusk reading was inflated 1000×. Conversion is
+  now driven by the sensor's declared unit, not its magnitude. (by @traktore-org in #575)
+
 # [1.7.5-beta.1] — 11.07.2026
 
 > **Pre-release.** Enphase IQ Battery temperature now auto-detected.
