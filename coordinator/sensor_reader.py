@@ -1431,18 +1431,41 @@ class SensorReader:
                 self._read_sensor(self.config.ev_power_sensor, "ev")
             ))
 
-        # EV connection status — per-charger OR'd for global (#193)
+        # EV connection status — per-charger OR'd for global (#193), plus
+        # per-charger maps so ``build_charger_view`` can gate each charger's
+        # ``decide()`` on ITS OWN plug state (#584). Without the per-charger
+        # maps, build_view falls back to the fleet OR — so a car on ONE
+        # charger made SEM command a solar charge (and fire a "charging
+        # started" push) on every OTHER car-less charger in the fleet.
         ev_chargers = self._raw_config.get("ev_chargers", [])
         if len(ev_chargers) > 1:
             any_connected = False
             any_charging = False
             for charger_cfg in ev_chargers:
+                cid = charger_cfg.get("id")
                 conn_sensor = charger_cfg.get("ev_connected_sensor")
                 chrg_sensor = charger_cfg.get("ev_charging_sensor")
-                if conn_sensor and self._read_binary_sensor(conn_sensor, "ev_plug"):
+                # Read each sensor exactly once (avoid double side-effects /
+                # log spam), then feed both the fleet OR and the per-charger
+                # map from the same value.
+                pc_connected = bool(
+                    conn_sensor and self._read_binary_sensor(conn_sensor, "ev_plug")
+                )
+                pc_charging = bool(
+                    chrg_sensor and self._read_binary_sensor(chrg_sensor, "ev_charging")
+                )
+                if pc_connected:
                     any_connected = True
-                if chrg_sensor and self._read_binary_sensor(chrg_sensor, "ev_charging"):
+                if pc_charging:
                     any_charging = True
+                # Only populate the map when a per-charger sensor is
+                # configured — an absent sensor means we can't know THIS
+                # charger's individual state, so leave it unset and let
+                # build_view keep the documented fleet-OR fallback.
+                if cid and conn_sensor:
+                    readings.ev_connected_per_charger[cid] = pc_connected
+                if cid and chrg_sensor:
+                    readings.ev_charging_per_charger[cid] = pc_charging
             readings.ev_connected = any_connected
             readings.ev_charging = any_charging
         else:
@@ -1477,6 +1500,12 @@ class SensorReader:
                 readings.ev_power, readings.ev_charging,
             )
             readings.ev_connected = True
+
+        # #584 follow-up: mirror the physics defence into the per-charger
+        # map. build_charger_view now reads that map FIRST, so a fleet-only
+        # correction wouldn't reach the specific charger whose plug sensor
+        # lies — re-exposing #285+1 for multi-charger installs.
+        self._infer_per_charger_connection_from_physics(readings)
 
         # Battery temperature (#564: configured sensor, else device sibling)
         self._read_battery_temperature(readings)
@@ -2066,18 +2095,31 @@ class SensorReader:
                 self._read_sensor(self.config.ev_power_sensor, "ev")
             ))
 
-        # EV connection status — per-charger OR'd for global (#193)
-        ev_chargers_leg = self._raw_config.get("ev_chargers", [])
-        if len(ev_chargers_leg) > 1:
+        # EV connection status — per-charger OR'd for global (#193), plus
+        # per-charger maps so build_charger_view gates each charger on its
+        # OWN plug state (#584). Mirror of the energy-dashboard path above.
+        # ``ev_chargers`` is still in scope from the EV-power block above.
+        if len(ev_chargers) > 1:
             any_connected = False
             any_charging = False
-            for charger_cfg in ev_chargers_leg:
+            for charger_cfg in ev_chargers:
+                cid = charger_cfg.get("id")
                 conn_sensor = charger_cfg.get("ev_connected_sensor")
                 chrg_sensor = charger_cfg.get("ev_charging_sensor")
-                if conn_sensor and self._read_binary_sensor(conn_sensor, "ev_plug"):
+                pc_connected = bool(
+                    conn_sensor and self._read_binary_sensor(conn_sensor, "ev_plug")
+                )
+                pc_charging = bool(
+                    chrg_sensor and self._read_binary_sensor(chrg_sensor, "ev_charging")
+                )
+                if pc_connected:
                     any_connected = True
-                if chrg_sensor and self._read_binary_sensor(chrg_sensor, "ev_charging"):
+                if pc_charging:
                     any_charging = True
+                if cid and conn_sensor:
+                    readings.ev_connected_per_charger[cid] = pc_connected
+                if cid and chrg_sensor:
+                    readings.ev_charging_per_charger[cid] = pc_charging
             readings.ev_connected = any_connected
             readings.ev_charging = any_charging
         else:
@@ -2100,6 +2142,9 @@ class SensorReader:
                 readings.ev_power, readings.ev_charging,
             )
             readings.ev_connected = True
+
+        # #584 follow-up — see the energy-dashboard path for the rationale.
+        self._infer_per_charger_connection_from_physics(readings)
 
         return readings
 
@@ -2251,6 +2296,37 @@ class SensorReader:
         except (ValueError, TypeError):
             pass
         return False
+
+    def _infer_per_charger_connection_from_physics(
+        self, readings: PowerReadings,
+    ) -> None:
+        """Mirror the fleet-level physics defence into the per-charger map (#584).
+
+        The fleet ``ev_connected`` correction (a lying plug sensor that
+        reports "off" while current flows — #285+1) must also reach the
+        per-charger map, because ``build_charger_view`` now gates each
+        charger on ITS OWN entry first. Without this, a charger whose plug
+        sensor lies during an HA restart would stop being supervised on
+        multi-charger fleets — the exact bug #285+1 fixed.
+
+        Attribution is per-charger: only flip a charger whose own power
+        sensor shows draw (>100 W rules out standby) or whose own charging
+        sensor reads on. The legacy reader path doesn't populate
+        ``ev_power_per_charger``, so there it relies on the charging map.
+        """
+        for cid, connected in list(readings.ev_connected_per_charger.items()):
+            if connected:
+                continue
+            pc_power = readings.ev_power_per_charger.get(cid, 0.0) or 0.0
+            pc_charging = readings.ev_charging_per_charger.get(cid, False)
+            if pc_power > 100 or pc_charging:
+                _LOGGER.warning(
+                    "ev_connected_per_charger[%s] inferred from physics: plug "
+                    "sensor reported off but power=%.0fW / charging=%s. Treating "
+                    "as connected. (#285+1 multi-charger protection.)",
+                    cid, pc_power, pc_charging,
+                )
+                readings.ev_connected_per_charger[cid] = True
 
     def _auto_detect_battery_soc(self, battery_power_entity: str) -> Optional[str]:
         """Auto-detect battery SOC sensor from the same device as the power sensor.

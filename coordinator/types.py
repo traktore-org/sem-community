@@ -131,6 +131,23 @@ class PowerReadings:
     # per-charger flow attribution that closes the #316 family.
     ev_power_per_charger: "Dict[str, float]" = field(default_factory=dict)
 
+    # Per-charger EV plug / charging state (#584). The boolean mirror of
+    # ``ev_power_per_charger`` — populated by ``sensor_reader`` for
+    # multi-charger setups from each charger's ``ev_connected_sensor`` /
+    # ``ev_charging_sensor``. ``build_charger_view`` reads these to gate
+    # each charger's ``decide()`` on ITS OWN plug state; a charger absent
+    # from the map falls back to the fleet OR (``ev_connected`` /
+    # ``ev_charging``) — the documented single-/sensorless-charger
+    # behaviour. Empty in single-charger setups.
+    #
+    # Pre-#584 these maps existed only in ``build_charger_view``'s
+    # defensive ``getattr(..., None) or {}`` reads and were NEVER
+    # populated: every multi-charger fleet silently degraded to the fleet
+    # OR, so a car on ONE charger made SEM command a solar charge (and
+    # fire a "charging started" push) on every OTHER car-less charger.
+    ev_connected_per_charger: "Dict[str, bool]" = field(default_factory=dict)
+    ev_charging_per_charger: "Dict[str, bool]" = field(default_factory=dict)
+
     # Per-PV-string solar power (v1.7.0 / #312). Populated by
     # ``sensor_reader`` when the entity registry auto-discovery (see
     # ``hardware_detection.discover_pv_strings_from_registry``) found
