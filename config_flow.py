@@ -146,7 +146,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     ``initial_current`` (decouples from the misleading "night"
     #     prefix — the value is the session-start ramp current, applied
     #     whenever a session begins). Display: "Vehicle Start Amps".
-    VERSION = 14
+    VERSION = 15
 
     @staticmethod
     @callback
@@ -553,7 +553,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ev_start_service", "ev_start_service_data",
                         "ev_stop_service", "ev_stop_service_data",
                         "ev_charger_needs_cycle", "ev_surplus_priority",
-                        "ev_shed_priority",
                         # Wallbox-style control path (#384 Part 2 kept). The
                         # other 8 per-charger fields from #390 reverted to
                         # OptionsFlow-only in #397 — they were tunables with
@@ -1052,14 +1051,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),
-                # #470: independent shed order under peak; defaults to the
-                # surplus priority above.
-                vol.Optional(
-                    "ev_shed_priority",
-                    default=5,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
-                ),
                 # Per-charger night charging settings (#193)
                 vol.Optional(
                     "daily_ev_target",
@@ -1220,18 +1211,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_surplus_priority",
                     default=charger.get("ev_surplus_priority", 5),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
-                ),
-                # #470: shed order under peak — independent of the surplus
-                # order above. Lower number = charges first on surplus;
-                # higher number = shed first under peak. Defaults to the
-                # surplus priority so they coincide until deliberately split.
-                vol.Optional(
-                    "ev_shed_priority",
-                    default=charger.get(
-                        "ev_shed_priority", charger.get("ev_surplus_priority", 5),
-                    ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),

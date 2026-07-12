@@ -27,6 +27,29 @@ DEFAULT_BATTERY_SAFETY_SOC: Final = 60  # % - Safety threshold for discharge cal
 DEFAULT_BATTERY_BUFFER_SOC: Final = 70  # % - Above: battery can discharge to help the EV (Zone 3 begins)
 DEFAULT_BATTERY_AUTO_START_SOC: Final = 90  # % - Above: EV starts even without solar surplus (Zone 4)
 
+# #576 — the home battery is a draggable device in the surplus priority list.
+# Its position decides who reclaims its charge: loads ABOVE it (lower number)
+# take the power that would charge the battery; loads BELOW it yield and the
+# battery charges first. #576 default order is EV → battery → loads: the
+# battery sits in the MIDDLE band (100), EV chargers above it (ev_surplus_
+# priority, 1-10), and loads below it (LOAD_PRIORITY_BASE + ED position, 101+).
+# So out of the box the EV charges before the battery and the battery charges
+# before the loads — the user drags a load ABOVE the battery to make it reclaim.
+# (The drag list renumbers everything 1..N, so the bands only seed the fresh,
+# never-dragged order.) The synthetic device id.
+DEFAULT_BATTERY_SURPLUS_PRIORITY: Final = 100
+BATTERY_SURPLUS_DEVICE_ID: Final = "home_battery"
+
+# #576 — loads seed below the battery band (100) by default so they yield to
+# battery charging until dragged above it. Non-EV Energy-Dashboard devices seed
+# at ``LOAD_PRIORITY_BASE + ED position``.
+LOAD_PRIORITY_BASE: Final = 100
+
+# #576 — default expected draw (W) for a surplus device with no power sensor to
+# learn from (a plain relay). A saner floor than 0 W-at-discovery. When a power
+# sensor IS present, ``calibrate_rated_power()`` learns the real draw from here.
+DEFAULT_DEVICE_RATED_POWER: Final = 1000
+
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
 DEFAULT_BATTERY_MAX_DISCHARGE_POWER: Final = 5000  # Watts - Maximum allowed discharge (caps 1:1 home consumption matching)

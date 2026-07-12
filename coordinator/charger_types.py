@@ -635,6 +635,19 @@ class FleetContext:
     ``solar_plus_cheap`` mode falls back to pure self-consumption
     during ``expensive`` / ``very_expensive`` windows."""
 
+    # ─── #576 priority list ────────────────────────────────────
+    battery_priority: "Optional[int]" = None
+    """The home battery's slot in the ONE device-priority list
+    (``registry.battery_surplus_priority()``). ``None`` when the install
+    has no battery. An EV reclaims battery-charge power (charges before the
+    battery) only when it sits ABOVE this slot — see
+    ``energy_reclaim.ev_reclaims_battery_charge``."""
+
+    battery_commanded: bool = False
+    """The battery is under an explicit charge/discharge command this cycle
+    (force_charge / scheduled / arbitrage). While commanded the EV never
+    reclaims — the battery command is honored (#576 U6)."""
+
 
 @dataclass(frozen=True)
 class FleetCycleState:
@@ -678,6 +691,10 @@ class FleetCycleState:
     is_night: bool = False
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
+    # #576 — fleet-level priority-list inputs (one home battery). Threaded
+    # here so every charger's view sees the same slot + command state.
+    battery_priority: "Optional[int]" = None
+    battery_commanded: bool = False
 
 
 @dataclass(frozen=True)
@@ -722,6 +739,14 @@ class ChargerView:
     Default ``inf`` (floor never engages) so call sites that don't
     compute it get the self-consumption-maximizing behaviour rather
     than silent grid pull."""
+
+    ev_priority: int = 999
+    """This charger's slot in the ONE device-priority list
+    (``registry.priority_for(cid)`` == the drag position). Compared against
+    ``fleet.battery_priority``: this charger reclaims battery-charge power
+    (charges before the battery) only when ``ev_priority <
+    fleet.battery_priority`` AND SOC ≥ reserve floor (#576 P2.2). Defaults to
+    999 (bottom) so a view built without it never spuriously reclaims."""
 
     soc_ceiling_reached: bool = False
     """The car has reached its configured MAX target (SOC % ceiling, or

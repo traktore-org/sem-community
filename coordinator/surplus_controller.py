@@ -317,11 +317,45 @@ class SurplusController:
             if d.is_active
         )
 
+    def observe_only(
+        self,
+        available_power_w: float,
+        reclaim_w: float = 0.0,
+    ) -> SurplusAllocationData:
+        """Read-only surplus allocation for OBSERVER MODE — reports the surplus
+        figures and CURRENTLY-active devices WITHOUT commanding anything.
+
+        No ``reconcile_all``, no ``activate`` / ``deactivate`` / ``adjust_power``
+        — this method physically cannot issue a device command. The coordinator
+        calls it INSTEAD of :meth:`update` when ``_observer_mode`` is on, so
+        observation mode cuts every surplus command (loads / heat pump / hot
+        water / climate) the same way the battery pipeline and EV control are
+        already cut. The trace's integration layer then reports "observer mode
+        — not commanding".
+        """
+        total = float(available_power_w) + max(0.0, float(reclaim_w))
+        active = [d for d in self._devices.values()
+                  if getattr(d, "is_active", False)]
+        allocated = sum(
+            float(d.get_current_consumption() or 0.0) for d in active
+        )
+        data = SurplusAllocationData()
+        data.total_surplus_w = total
+        data.distributable_surplus_w = max(0.0, total - self.regulation_offset)
+        data.regulation_offset_w = self.regulation_offset
+        data.allocated_w = allocated
+        data.unallocated_w = max(0.0, total - allocated)
+        data.active_devices = len(active)
+        data.total_devices = len(self._devices)
+        return data
+
     async def update(
         self,
         available_power_w: float,
         price_level: Optional[str] = None,
         peak_state: Optional[str] = None,
+        reclaim_w: float = 0.0,
+        battery_priority: Optional[int] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -410,7 +444,14 @@ class SurplusController:
 
         devices = self.get_devices_sorted()
         allocations: List[SurplusAllocation] = []
-        remaining_surplus = distributable
+        # (#576) The home battery sits at ``battery_priority`` in this walk.
+        # ``reclaim_w`` (the power that would charge it) is offered at the TOP;
+        # when the walk crosses the battery's slot it is handed back to the
+        # battery, so loads ABOVE the battery reclaim it and loads BELOW see
+        # only the export surplus. ``max(0, …)`` yields exactly the export
+        # surplus the higher-priority loads left unconsumed (see #576 tests).
+        remaining_surplus = distributable + max(0.0, reclaim_w)
+        _reclaim_handed_back = False
         active_count = 0
 
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —
@@ -454,6 +495,13 @@ class SurplusController:
         # Devices in "peak_only" mode are tracked but never proactively turned on.
         # Devices in "off" mode are skipped entirely.
         for device in devices:
+            # (#576) Cross the home battery's slot: hand the reclaim back so
+            # every load from here down (lower priority than the battery) sees
+            # only the export surplus and the battery charges first.
+            if (not _reclaim_handed_back and battery_priority is not None
+                    and reclaim_w > 0 and device.priority >= battery_priority):
+                remaining_surplus = max(0.0, remaining_surplus - reclaim_w)
+                _reclaim_handed_back = True
             # Skip devices in "off" mode — SEM never touches these
             if device.control_mode == DeviceControlMode.OFF:
                 continue

@@ -42,8 +42,22 @@ from .charger_types import (
     ChargerIntent,
     ChargerView,
 )
+from .energy_reclaim import ev_reclaims_battery_charge
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _ev_reclaims(view: ChargerView) -> bool:
+    """#576 P2.2 — does this charger reclaim battery-charge power? (Above the
+    battery in the one list, SOC ≥ reserve floor, battery not commanded.)"""
+    f = view.fleet
+    return ev_reclaims_battery_charge(
+        soc=f.battery_soc,
+        priority_soc=f.priority_soc,
+        ev_priority=view.ev_priority,
+        battery_priority=f.battery_priority,
+        battery_commanded=f.battery_commanded,
+    )
 
 
 def solar_charge_display_override(intent, drawing: bool,
@@ -115,7 +129,12 @@ def self_consumption_surplus_w(view: ChargerView) -> float:
     """
     f = view.fleet
     available = f.solar_w - f.home_w - f.solar_committed_w
-    if f.battery_soc < f.auto_start_soc:
+    # #576 P2.2 — the EV reclaims battery-charge power (charges BEFORE the
+    # battery) iff it sits above the battery in the one priority list AND SOC
+    # ≥ the reserve floor AND the battery isn't under a command. Otherwise the
+    # battery keeps its charge (subtract it). Replaces the old fixed
+    # ``auto_start_soc`` (90 %) gate with the position rule the loads use.
+    if not _ev_reclaims(view):
         available -= f.battery_charge_w
     return max(0.0, available)
 
@@ -432,8 +451,13 @@ class SolarOnlyMode(ModeStrategy):
         # to run — the regression
         # ``tests/scenarios/2026-05-29_budget_unify_redirect.yaml``
         # pins.
+        # #576 P2.2 — avoid the double-count: when the position rule already
+        # reclaims the battery charge (bare_surplus stops subtracting it), the
+        # forecast redirect must NOT add it a second time. The redirect stays
+        # only as the fallback for when the EV does NOT reclaim by position
+        # (below the battery, or below the reserve floor) — its original role.
         from .flow_calculator import battery_redirect_w as _redirect
-        redirect_w = _redirect(
+        redirect_w = 0.0 if _ev_reclaims(view) else _redirect(
             f.battery_charge_w, f.battery_soc,
             f.battery_capacity_kwh, f.forecast_remaining_kwh,
         )

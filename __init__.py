@@ -1113,6 +1113,45 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 15:
+        # v14 → v15 (#576): the per-charger ``ev_shed_priority`` knob is
+        # retired. Surplus order AND shed order are now the single drag-list
+        # position (shed = the reverse walk — latest-to-charge sheds first),
+        # so the separate field is dead. Strip it from every stored charger so
+        # upgraded installs don't carry an ignored value. ``ev_surplus_priority``
+        # is kept — it seeds the drag order at boot.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            stripped = 0
+            for bag in (new_data, new_options):
+                chargers = bag.get("ev_chargers")
+                if not isinstance(chargers, list):
+                    continue
+                rebuilt = []
+                for c in chargers:
+                    if isinstance(c, dict) and "ev_shed_priority" in c:
+                        c = {k: v for k, v in c.items() if k != "ev_shed_priority"}
+                        stripped += 1
+                    rebuilt.append(c)
+                bag["ev_chargers"] = rebuilt
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=15, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if stripped:
+                _LOGGER.info(
+                    "#576: removed the retired ev_shed_priority from %d "
+                    "charger(s) — shed order now follows the drag list", stripped,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v15 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -1508,15 +1547,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             ev_service_entity = _cfg("ev_charger_service_entity_id")
             ev_current_entity = _cfg("ev_current_control_entity")
             ev_priority = int(_cfg("ev_surplus_priority", _cfg("ev_load_priority", 3 + idx)))
-            # #470: shed priority is independent of surplus priority. A
-            # mixed fleet wants e.g. the long-range EV to charge FIRST on
-            # surplus (big battery soaks watts) yet shed FIRST under peak
-            # (range cushion absorbs a throttle). ``ev_shed_priority``
-            # carries the load-manager order; it falls back to the surplus
-            # priority so single-charger / homogeneous installs are
-            # behaviour-identical (the v12→v13 migration seeds it
-            # explicitly per charger so flips are deliberate).
-            ev_shed_priority = int(_cfg("ev_shed_priority", ev_priority))
 
             # Also auto-fill sensor reader config from first charger
             if idx == 0:
@@ -1649,7 +1679,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 await coordinator._load_manager.register_ev_charger(
                     current_control_entity=ev_current_entity,
                     power_entity=ev_power_entity,
-                    priority=ev_shed_priority,  # #470: shed order, not surplus order
+                    # #576: shed order = the ONE list position. The retired
+                    # ``ev_shed_priority`` knob is gone; ``refresh_runtime_config``
+                    # already overwrites this every cycle with the drag slot, so
+                    # seed it with the same list position here (was a boot-only
+                    # discrepancy). Latest-to-charge (highest number) sheds first.
+                    priority=ev_priority,
                     is_critical=False,
                     charger_service=ev_charger_service,
                     charger_id=charger_id,
@@ -2702,20 +2737,20 @@ async def _async_register_services(
                     translation_key="device_registry_not_initialized",
                 )
         elif prop == "depends_on":
-            # Update device dependency (#122)
+            # Update device dependency (#122). Persist via the REGISTRY so a
+            # rebuild (drag / re-discovery / restart) re-applies it — pre-fix it
+            # lived only on the transient device and got wiped ("separated all
+            # the time"). #576.
+            reg = getattr(coordinator, "_device_registry", None)
             device = coordinator._surplus_controller.get_device(device_id)
-            if device:
+            if reg is not None and (device or value):
+                await reg.async_set_dependency(device_id, [str(value)] if value else [])
+                _LOGGER.info("Updated %s depends_on = %s", device_id,
+                             [str(value)] if value else [])
+            elif device:
                 device.depends_on = [str(value)] if value else []
-                _LOGGER.info("Updated %s depends_on = %s", device_id, device.depends_on)
-                # Persist to storage
-                if coordinator._load_manager and hasattr(coordinator._load_manager, '_store'):
-                    try:
-                        store_data = await coordinator._load_manager._store.async_load() or {"devices": {}}
-                        dev_data = store_data.setdefault("devices", {}).setdefault(device_id, {})
-                        dev_data["depends_on"] = device.depends_on
-                        await coordinator._load_manager._store.async_save(store_data)
-                    except Exception as e:
-                        _LOGGER.debug("Could not persist dependency: %s", e)
+                _LOGGER.info("Updated %s depends_on = %s (no registry)", device_id,
+                             device.depends_on)
             else:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
@@ -4028,6 +4063,18 @@ async def _async_register_phase_services(
             "recent_logs": recent_logs,
         }
 
+        # Layered-trace health summary (1.7.5) — tiny, so EVERY Diagnose
+        # button surfaces "is a control layer disagreeing right now?" at a
+        # glance. The FULL per-cycle chain is added to the trace / ev_chargers
+        # sections below. Best-effort, never raises.
+        try:
+            payload["trace_health"] = {
+                "health": coordinator.trace_health(),
+                "mismatch": coordinator.trace_latest_mismatch(),
+            }
+        except Exception as exc:  # noqa: BLE001
+            payload["trace_health"] = {"error": str(exc)}
+
         # ev_chargers storage split (#462/#464 follow-up). The merged
         # ``config`` block hides whether a charger entry lives in
         # entry.data or entry.options — the load-bearing fact when a
@@ -4065,6 +4112,24 @@ async def _async_register_phase_services(
                 payload["ev_actuation"] = _charger_actuation_diag(hass, coordinator)
             except Exception as exc:  # noqa: BLE001
                 payload["ev_actuation"] = {"error": str(exc)}
+
+        if section in ("all", "trace", "ev_chargers"):
+            # Layered-trace observability (1.7.5) — the recent
+            # management→process→integration chain per cycle, plus the current
+            # layer-boundary mismatch (acted but observed disagrees) if any.
+            # This is the "pull the last 30 cycles and read the chain" tool
+            # that would have made the 2026-07-10 EV flap a minutes-long
+            # debug. Included on the EV Diagnose button (the primary debug
+            # case) as well as the dedicated trace section. Read-only,
+            # best-effort, never raises.
+            try:
+                payload["trace"] = {
+                    "health": coordinator.trace_health(),
+                    "mismatch": coordinator.trace_latest_mismatch(),
+                    "recent": coordinator.trace_recent(30),
+                }
+            except Exception as exc:  # noqa: BLE001
+                payload["trace"] = {"error": str(exc)}
 
         return {"section": section, "payload": payload}
 

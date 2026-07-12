@@ -55,6 +55,12 @@ from .per_charger_context import PerChargerContext
 from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import SurplusController
+from .cycle_trace import (
+    TraceCollector, LayerRecord, LayerStatus,
+    ev_layer_match, battery_layer_match, device_layer_match, battery_list_role,
+    heat_pump_layer_match,
+)
+from .energy_reclaim import reclaimable_battery_w
 from .forecast_reader import ForecastReader
 from .forecast_tracker import ForecastTracker
 from .ev_control import EVControlMixin
@@ -263,6 +269,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # they're unresolved (source integration registered after SEM), bounded.
         self._ed_resolve_pending: bool = False
         self._ed_resolve_attempts: int = 0
+
+        # Layered-trace observability (2026-07-11, 1.7.5). Read-only per-cycle
+        # ring buffer of the management→process→integration chain, dumped by
+        # the diagnose service. Never affects a decision; never a recorder row.
+        self._trace = TraceCollector(maxlen=30)
+        # (#576) priority-walk inputs for the 3-layer trace, refreshed each
+        # cycle in the surplus block (battery slot / reclaim / commanded).
+        self._cycle_reclaim: dict = {}
 
         # Phase 0: Surplus controller (always-on) & forecast reader
         regulation_offset = config.get("regulation_offset", 50)
@@ -569,6 +583,111 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             getattr(self, "config", {}) or {},
             charger_cfg,
         )
+
+    def _device_run_rows(self, now, peak_t) -> "List[Dict[str, Any]]":
+        """(#576) Project each surplus device's run window for Today's Plan.
+
+        MVP: a SURPLUS-mode device that hasn't met its daily goal is expected
+        to run around the solar peak (when spare solar is most likely); a
+        device that HAS met its goal shows a 'done' row at ``now``. EV and
+        battery have their own rows. Coarse-but-honest — a precise per-device
+        forecast simulation is a future refinement. Best-effort: never raises
+        (the caller's cycle must not break on a plan detail).
+        """
+        rows: "List[Dict[str, Any]]" = []
+        sc = getattr(self, "_surplus_controller", None)
+        if sc is None:
+            return rows
+        # Resolve the solar peak to a datetime today (reuse compose's formats).
+        anchor = None
+        if peak_t is not None:
+            try:
+                s = str(peak_t)
+                if "T" in s:
+                    anchor = datetime.fromisoformat(s.replace("Z", "+00:00"))
+                    if anchor.tzinfo and now.tzinfo:
+                        anchor = anchor.astimezone(now.tzinfo)
+                elif ":" in s:
+                    h, m = s.split(":")[:2]
+                    anchor = now.replace(hour=int(h), minute=int(m),
+                                         second=0, microsecond=0)
+            except (ValueError, TypeError):
+                anchor = None
+        try:
+            from ..devices.base import DeviceControlMode
+            for dev in sc.get_devices_sorted():
+                if getattr(dev, "is_ev", False):
+                    continue  # EV has its own rows
+                if getattr(dev, "control_mode", None) != DeviceControlMode.SURPLUS:
+                    continue  # only proactively-run devices
+                done = bool(getattr(dev, "daily_targets_met", False))
+                when = now if done else anchor
+                if when is None or when < now:
+                    when = now if done else None
+                if when is None:
+                    continue
+                rows.append({"name": getattr(dev, "name", ""), "when": when,
+                             "done": done})
+        except Exception:  # pragma: no cover - never break the cycle
+            return rows
+        return rows
+
+    def _ev_priority_for(self, cid: str) -> int:
+        """(#576) This charger's authoritative list slot for decide()'s reclaim
+        gate — a drag override wins IMMEDIATELY (read straight from the priority
+        store), else the charger's config-seeded priority. Reading the store
+        directly (not the cached ``dev.priority``, refreshed only on config
+        events) means a drag takes effect next cycle, not after the next config
+        change (ruflo review HIGH)."""
+        dev = (self._ev_devices or {}).get(cid)
+        seed = int(getattr(dev, "priority", 3) or 3)
+        reg = getattr(self, "_device_registry", None)
+        return reg.priority_for(cid, seed=seed) if reg is not None else seed
+
+    def _charger_priority_rows(self) -> "List[Dict[str, Any]]":
+        """(#576 P2.1) Priority-list rows for every configured EV charger,
+        keyed by CONTROL id, for the device registry.
+
+        The registry emits these (suppressing the ED ``is_ev`` naming guess)
+        so a charger's list position is its single authoritative priority —
+        the same id the drag store, ``distribute_ev_budget`` and the reclaim
+        gate use. Live power is best-effort from the charger's power sensor;
+        the priority itself comes from ``dev.priority`` (already resolved from
+        the drag store this cycle).
+        """
+        rows: "List[Dict[str, Any]]" = []
+        for cid, dev in (self._ev_devices or {}).items():
+            ent = getattr(dev, "power_entity_id", None)
+            pw = 0.0
+            if ent and getattr(self, "hass", None) is not None:
+                st = self.hass.states.get(ent)
+                if st and st.state not in ("unknown", "unavailable"):
+                    try:
+                        pw = float(st.state)
+                    except (ValueError, TypeError):
+                        pw = 0.0
+            ph = int(getattr(dev, "phases", 3) or 3)
+            volt = float(getattr(dev, "voltage", 230) or 230)
+            max_a = float(getattr(dev, "max_current", 32) or 32)
+            min_a = float(getattr(dev, "min_current", 6) or 6)
+            connected = False
+            per = getattr(self, "_last_ev_connected_per_charger", None)
+            if isinstance(per, dict):
+                connected = bool(per.get(cid, False))
+            rows.append({
+                "id": cid,
+                "name": getattr(dev, "name", cid),
+                "priority_seed": int(getattr(dev, "priority", 3) or 3),
+                "power_entity": ent,
+                "current_power_w": pw,
+                "is_on": pw > 50.0,
+                # min = the surplus threshold to start (the meaningful "rating");
+                # max kept for the EV status card.
+                "min_power_w": min_a * ph * volt,
+                "max_power_w": max_a * ph * volt,
+                "connected": connected,
+            })
+        return rows
 
     # ─────────────────────────────────────────────────────────────────
     # Mode-driven adapters — #277 Phase B
@@ -1055,6 +1174,224 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """Get initial data with defaults."""
         sem_data = SEMData()
         return sem_data.to_dict()
+
+    # ── Layered-trace observability (1.7.5) ─────────────────────────────
+    #
+    # A READ-ONLY capture of this cycle's management→process→integration
+    # chain into the trace ring buffer (dumped by the diagnose service).
+    # It reads values the control layers already computed and NEVER feeds
+    # anything back — so it cannot change a decision. The whole thing is
+    # wrapped in try/except: observability must never break control.
+
+    def _collect_trace(self, sem_data, power, charging_context) -> None:
+        # ``charging_context`` reserved for a future management-layer capture.
+        try:
+            self._trace.begin(wall_iso=dt_util.now().isoformat())
+            trace = self._trace.current()
+            self._trace_ev(trace, sem_data, power)
+            self._trace_battery(trace, sem_data, power)
+            self._trace_loads(trace, sem_data)
+            self._trace_heat_pump(trace, sem_data)
+        except Exception as e:  # pragma: no cover - defensive
+            _LOGGER.debug("trace capture failed (non-fatal): %s", e)
+        finally:
+            # commit even if a capture raised — the partial trace + its
+            # mismatch streak still count (H1). commit() no-ops if no begin.
+            self._trace.commit()
+
+    def _trace_ev(self, trace, sem_data, power) -> None:
+        st = trace.subsystem("ev")
+        soc = round(float(getattr(power, "battery_soc", 0.0) or 0.0), 1)
+        connected = bool(getattr(power, "ev_connected", False))
+        try:
+            night = bool(self.time_manager.is_night_mode())
+        except Exception:
+            night = None
+        st.management = LayerRecord(
+            LayerStatus.OK, "policy inputs",
+            {"soc": soc, "connected": connected, "night": night},
+        )
+
+        amps = int(getattr(sem_data, "calculated_current", 0) or 0)
+        reason = str(getattr(sem_data, "charging_strategy_reason", "") or "")
+        budget = round(float(getattr(sem_data, "available_power", 0.0) or 0.0))
+        p_status = LayerStatus.OK if amps > 0 else LayerStatus.IDLE
+        st.process = LayerRecord(
+            p_status, reason, {"commanded_amps": amps, "budget_w": budget},
+        )
+
+        observed = round(float(getattr(power, "ev_power", 0.0) or 0.0))
+        # Observer mode (global): SEM decided but does NOT command anything, so
+        # there is no command to match against → match is N/A (never a false
+        # mismatch). Uses the existing ``observer_mode`` flag.
+        if getattr(self, "_observer_mode", False):
+            st.integration = LayerRecord(
+                LayerStatus.OK, "observer mode — not commanding",
+                {"observed_w": observed, "commanded_amps": amps, "match": None},
+            )
+            return
+        # match: we commanded a charge AND the car is plugged, but is it
+        # actually drawing? (the flap linchpin). Unknowable (None) when we
+        # aren't commanding or the car is disconnected.
+        # real phases/voltage (M2 — a 1φ charger's nominal is far lower; a
+        # hardcoded 3φ threshold false-mismatches every 1-phase install).
+        match = ev_layer_match(
+            amps, observed,
+            int(self.config.get("ev_phases", 3) or 3),
+            int(self.config.get("ev_voltage", 230) or 230),
+            connected,
+        )
+        i_status = LayerStatus.OK if match in (None, True) else LayerStatus.DEGRADED
+        st.integration = LayerRecord(
+            i_status, f"observed {observed:.0f}W",
+            {"observed_w": observed, "commanded_amps": amps, "match": match},
+        )
+
+    def _trace_battery(self, trace, sem_data, power) -> None:
+        st = trace.subsystem("battery")
+        soc = round(float(getattr(power, "battery_soc", 0.0) or 0.0), 1)
+        status = getattr(sem_data, "status", None)
+        reason = str(getattr(status, "battery_status", "") or "")
+        charge_w = round(float(getattr(power, "battery_charge_power", 0.0) or 0.0))
+        discharge_w = round(float(getattr(power, "battery_discharge_power", 0.0) or 0.0))
+        # (#576) management layer — the battery's role in the ONE priority list,
+        # so the trace explains who charges before whom this cycle.
+        cr = getattr(self, "_cycle_reclaim", {}) or {}
+        bp = cr.get("battery_priority")
+        commanded = bool(cr.get("battery_commanded", False))
+        prio_soc = float(self.config.get("battery_priority_soc", 30))
+        role = battery_list_role(
+            battery_priority=bp, battery_commanded=commanded,
+            soc=soc, priority_soc=prio_soc, discharge_w=discharge_w,
+        )
+        st.management = LayerRecord(
+            LayerStatus.OK, role,
+            {"list_priority": bp, "reserve_soc": prio_soc,
+             "reclaim_yielded_w": cr.get("reclaim_w", 0)},
+        )
+        st.process = LayerRecord(LayerStatus.OK, reason, {"soc": soc})
+        # match: an explicit force command must be observed (force_charge →
+        # charging, force_discharge → discharging). Normal/idle → None.
+        _bd = getattr(self, "_last_battery_decisions", None) or {}
+        _intents = {d.get("intent") for d in _bd.values()}
+        b_intent = ("force_discharge" if "force_discharge" in _intents
+                    else "force_charge" if "force_charge" in _intents else "normal")
+        b_match = battery_layer_match(b_intent, charge_w, discharge_w)
+        i_status = LayerStatus.OK if b_match in (None, True) else LayerStatus.DEGRADED
+        st.integration = LayerRecord(
+            i_status, "" if b_match in (None, True) else f"commanded {b_intent}, not observed",
+            {"charge_w": charge_w, "discharge_w": discharge_w, "match": b_match},
+        )
+
+    def _trace_loads(self, trace, sem_data) -> None:
+        sc = getattr(sem_data, "surplus_control", None)
+        if sc is None:
+            return
+        total_dev = int(getattr(sc, "surplus_total_devices", 0) or 0)
+        if total_dev == 0:
+            return  # no controllable loads registered — nothing to trace
+        st = trace.subsystem("loads")
+        active = int(getattr(sc, "surplus_active_devices", 0) or 0)
+        avail = bool(getattr(sc, "surplus_available", False))
+        total_w = round(float(getattr(sc, "surplus_total_w", 0.0) or 0.0))
+        dist_w = round(float(getattr(sc, "surplus_distributable_w", 0.0) or 0.0))
+        alloc_w = round(float(getattr(sc, "surplus_allocated_w", 0.0) or 0.0))
+        st.management = LayerRecord(
+            LayerStatus.OK, "surplus policy",
+            {"devices": total_dev, "surplus_available": avail},
+        )
+        p_status = LayerStatus.OK if active > 0 else LayerStatus.IDLE
+        # (#576) show the battery-charge power the loads above the battery
+        # reclaimed this cycle — the extra pool that let a pump run.
+        reclaim_w = int((getattr(self, "_cycle_reclaim", {}) or {}).get("reclaim_w", 0) or 0)
+        st.process = LayerRecord(
+            p_status, f"{active}/{total_dev} active",
+            {"surplus_w": total_w, "distributable_w": dist_w,
+             "allocated_w": alloc_w, "reclaim_w": reclaim_w},
+        )
+        obs_mode = getattr(self, "_observer_mode", False)
+        obs = "observer mode — not commanding" if obs_mode else f"{active} device(s) on"
+        st.integration = LayerRecord(
+            LayerStatus.OK, obs, {"active": active, "allocated_w": alloc_w, "match": None},
+        )
+
+        # (#576) per-device detail — "why didn't THIS device run?" answerable,
+        # and each device's own commanded-vs-observed match feeds the watchdog.
+        # Keyed "load:<name>". Skip the EV / heat pump (own subsystems) and
+        # off-and-idle devices (noise). observed_on() reads the relay/mode, NOT
+        # power — so a thermostat-satisfied heater (on @ 0 W) is not a fault.
+        for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
+            if getattr(dev, "is_ev", False) or did == "heat_pump":
+                continue
+            mode = getattr(getattr(dev, "control_mode", None), "value", "surplus")
+            is_active = bool(getattr(dev, "is_active", False))
+            if mode == "off" and not is_active:
+                continue
+            dst = trace.subsystem(f"load:{getattr(dev, 'name', did)}")
+            prio = int(getattr(dev, "priority", 0) or 0)
+            dst.management = LayerRecord(
+                LayerStatus.OK, f"prio {prio} · {mode}", {"priority": prio, "mode": mode},
+            )
+            try:
+                draw = round(float(dev.get_current_consumption() or 0))
+            except Exception:
+                draw = 0
+            pst = LayerStatus.OK if is_active else (
+                LayerStatus.BLOCKED if mode == "off" else LayerStatus.IDLE)
+            blocked = getattr(dev, "blocked_by_dependency", None)
+            pdetail = ("on" if is_active else "mode off" if mode == "off"
+                       else f"blocked: needs {blocked}" if blocked else "idle — no surplus / not its turn")
+            dst.process = LayerRecord(
+                pst, pdetail,
+                {"rated_w": round(float(getattr(dev, "rated_power", 0) or 0)),
+                 "sem_owned": bool(getattr(dev, "_sem_owned", False))},
+            )
+            try:
+                observed_on = dev.observed_on() if hasattr(dev, "observed_on") else None
+            except Exception:
+                observed_on = None
+            desired_on = is_active and bool(getattr(dev, "_sem_owned", False))
+            d_match = None if obs_mode else device_layer_match(desired_on, observed_on)
+            ist = LayerStatus.OK if d_match in (None, True) else LayerStatus.DEGRADED
+            idetail = ("observer mode — not commanding" if obs_mode
+                       else "commanded on, relay off" if d_match is False
+                       else f"{'on' if observed_on else 'off'} · {draw}W")
+            dst.integration = LayerRecord(
+                ist, idetail,
+                {"observed_on": observed_on, "draw_w": draw, "match": d_match},
+            )
+
+    def _trace_heat_pump(self, trace, sem_data) -> None:
+        hp = getattr(sem_data, "heat_pump", None)
+        if hp is None or not bool(getattr(hp, "heat_pump_registered", False)):
+            return  # no heat pump configured — nothing to trace
+        st = trace.subsystem("heat_pump")
+        mode = str(getattr(hp, "heat_pump_mode", "normal") or "normal")
+        sg = int(getattr(hp, "heat_pump_sg_ready_state", 2) or 2)
+        boost = bool(getattr(hp, "heat_pump_solar_boost", False))
+        st.management = LayerRecord(LayerStatus.OK, "hp policy", {"registered": True})
+        st.process = LayerRecord(LayerStatus.OK, mode, {"solar_boost": boost})
+        obs_mode = getattr(self, "_observer_mode", False)
+        hp_match = None if obs_mode else heat_pump_layer_match(boost, sg)
+        i_status = LayerStatus.OK if hp_match in (None, True) else LayerStatus.DEGRADED
+        obs = ("observer mode — not commanding" if obs_mode
+               else "boost commanded, relay not set" if hp_match is False
+               else f"SG-Ready state {sg}")
+        st.integration = LayerRecord(
+            i_status, obs, {"sg_ready_state": sg, "match": hp_match},
+        )
+
+    def trace_recent(self, n: int = 30):
+        """Serialised recent cycle traces for the diagnose service."""
+        return self._trace.recent(n)
+
+    def trace_latest_mismatch(self):
+        """Most recent layer-boundary fault, if any (health signal)."""
+        return self._trace.latest_mismatch()
+
+    def trace_health(self):
+        """Debounced health: is a layer-boundary mismatch persistent?"""
+        return self._trace.health()
 
     def _zero_charger_setpoints(self) -> None:
         """Observer mode: command nothing — zero every charger's setpoint.
@@ -1897,6 +2234,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         view = build_charger_view(
                             self._cycle_fleet_state,
                             charger_id=cid,
+                            # #576 — this charger's slot in the one list (drag
+                            # override wins immediately via the priority store).
+                            ev_priority=self._ev_priority_for(cid),
                             charger_cfg=charger_cfg,
                             mode=per_mode,
                             daily_ev_kwh=self._daily_ev_per_charger.get(cid, 0.0),
@@ -2083,6 +2423,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 view = build_charger_view(
                     self._cycle_fleet_state,
                     charger_id=cid,
+                    # #576 — this charger's slot in the one priority list.
+                    ev_priority=self._ev_priority_for(cid),
                     charger_cfg={},
                     mode=per_mode,
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
@@ -2261,6 +2603,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 per_charger_daily_energy=self._per_charger_daily_report(energy),
                 last_update=dt_util.now(),
             )
+
+            # Layered-trace observability (1.7.5) — read-only capture of this
+            # cycle's management→process→integration chain. Wrapped so it can
+            # NEVER affect the control path or break the cycle.
+            self._collect_trace(sem_data, power, charging_context)
 
             # Step 11.5: Energy balance / calculation health check
             self._health_check.run_all_checks(
@@ -2688,6 +3035,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     battery_full_eta=_battery_full_eta,
                     battery_empty_eta=_battery_empty_eta,
                     currency=result.get("tariff_currency", ""),
+                    device_runs=self._device_run_rows(_now, _peak_t),
                 )
                 _primary_cid = (_dl_pcfg or {}).get("id")
                 # Legacy flat-config installs have no ev_chargers list —
@@ -3013,10 +3361,54 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # device it turned on doesn't shrink the surplus it reads next
             # cycle and oscillate). Heat pump / hot water now boost on real
             # spare solar instead of competing for the EV's allocation.
+            # #576 — above the reserve zone, offer the loads the power that
+            # would otherwise charge the battery (the inverter self-consumes
+            # the residual), so the surplus loads — walked by their own
+            # priority — outrank battery charging and the battery is the sink.
+            # Gated only by the reserve floor (``battery_priority_soc``): below
+            # it the battery still fills first. Battery control already ran this
+            # cycle (Step 7.5c+d, above), so ``_last_battery_decisions`` reflects
+            # THIS cycle: an explicit/scheduled FORCE_CHARGE (or FORCE_DISCHARGE
+            # arbitrage) is honored — no reclaim.
+            # Same definition the EV reclaim gate uses — one source of truth.
+            battery_commanded = self._battery_commanded()
+            reclaim_w = reclaimable_battery_w(
+                battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
+                soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+                priority_soc=float(self.config.get("battery_priority_soc", 30)),
+                battery_commanded=battery_commanded,
+            )
+            # #576 — pass the export surplus and the reclaimable battery-charge
+            # power SEPARATELY (plus the battery's slot in the priority walk).
+            # The controller offers the reclaim only to loads ABOVE the battery
+            # and hands it back at the battery's slot, so its drag position
+            # decides who charges before the battery.
             true_surplus_w = (
                 float(getattr(power, "grid_export_power", 0.0) or 0.0)
                 + self._surplus_controller.active_surplus_draw_w()
             )
+            battery_priority = None
+            _reg = getattr(self, "_device_registry", None)
+            if _reg is not None:
+                try:
+                    # (#576) only surface the battery priority row on installs
+                    # that actually have a battery. LATCH it: once we've seen a
+                    # real battery reading it stays shown — a transient SOC
+                    # "unavailable" must NOT flicker the row out of the list.
+                    if getattr(power, "battery_soc", None) is not None:
+                        _reg._has_battery = True
+                    battery_priority = _reg.battery_surplus_priority()
+                    # (#576 P2.1) hand the configured chargers to the registry
+                    # so each is a first-class list row keyed by its CONTROL id
+                    # (mirrors _has_battery). The ED is_ev guess is suppressed
+                    # for these — one identity across row/drag/distribution.
+                    _reg.set_ev_chargers(self._charger_priority_rows())
+                    # (#576) make the drag store authoritative for directly-
+                    # registered surplus devices (heat pump / hot water /
+                    # climate) too, so their list slot governs the walk below.
+                    _reg.refresh_direct_device_priorities()
+                except Exception:  # pragma: no cover - never break the cycle
+                    battery_priority = None
             # #508 W2 — hand the load-manager's peak posture to the surplus
             # controller so it stops adding discretionary load (and backs
             # its own devices off) when grid import is at risk, instead of
@@ -3024,11 +3416,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             peak_state = (
                 self._load_manager.get_state() if self._load_manager else None
             )
-            allocation = await self._surplus_controller.update(
-                true_surplus_w,
-                price_level=tariff_data.tariff_price_level,
-                peak_state=peak_state,
-            )
+            # (#576) stash the priority-walk inputs for the 3-layer trace so
+            # "why did the pool pump stop early?" is answerable: the battery's
+            # slot, how much charge power it yielded, and whether it's commanded.
+            self._cycle_reclaim = {
+                "reclaim_w": round(float(reclaim_w)),
+                "battery_priority": battery_priority,
+                "battery_commanded": battery_commanded,
+            }
+            if self._observer_mode:
+                # Observer mode cuts EVERY surplus command (loads / heat pump /
+                # hot water / climate): the read-only path never actuates —
+                # matching the battery pipeline + EV control already being cut.
+                allocation = self._surplus_controller.observe_only(
+                    true_surplus_w, reclaim_w=reclaim_w,
+                )
+            else:
+                allocation = await self._surplus_controller.update(
+                    true_surplus_w,
+                    price_level=tariff_data.tariff_price_level,
+                    peak_state=peak_state,
+                    reclaim_w=reclaim_w,
+                    battery_priority=battery_priority,
+                )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
             surplus_data.surplus_regulation_offset_w = allocation.regulation_offset_w
@@ -4088,7 +4498,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         }
         per_charger_states = getattr(self, "_effective_states_per_charger", None) or {}
         if per_charger_states:
+            # (#584) Don't push charging notifications for a charger with no car
+            # connected. A charger with its own plug sensor uses its real state;
+            # one without falls back to the fleet ``ev_connected`` (unchanged) —
+            # so RienduPre's car-less "Laadpaal Links" stops firing a false
+            # "solar charging started" whenever the OTHER charger has a car.
+            conn_map = getattr(power, "ev_connected_per_charger", None) or {}
             for cid, (eff_state, name) in per_charger_states.items():
+                if not conn_map.get(cid, power.ev_connected):
+                    continue
                 await self._notification_manager.notify_state_change(
                     eff_state, common_data, charger_id=cid, charger_name=name,
                 )
@@ -4495,12 +4913,53 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except Exception:
             tariff_level = None
 
+        # #576 — the home battery's slot in the ONE priority list + whether
+        # it's under an explicit command this cycle. The EV reclaim gate
+        # (energy_reclaim.ev_reclaims_battery_charge) compares each charger's
+        # ev_priority against battery_priority, and never reclaims while the
+        # battery is commanded (force/scheduled/arbitrage — U6).
+        battery_priority: Optional[int] = None
+        # Known whenever there's a live battery reading (not the card's latched
+        # flag — this must be right from cycle 1). When SOC is momentarily
+        # unavailable → None → the EV yields (matches the pre-#576 default of
+        # subtracting battery_charge when SOC reads as 0).
+        reg = getattr(self, "_device_registry", None)
+        if reg is not None and getattr(power, "battery_soc", None) is not None:
+            try:
+                battery_priority = reg.battery_surplus_priority()
+            except Exception:
+                battery_priority = None
+
         return FleetCycleState(
             power=power,
             config=self.config,
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
+            battery_priority=battery_priority,
+            battery_commanded=self._battery_commanded(),
+        )
+
+    def _battery_commanded(self) -> bool:
+        """True iff the home battery is under an explicit charge/discharge
+        command (force_charge / scheduled / arbitrage). A commanded battery is
+        honored, never reclaimed (#576 U6).
+
+        Read by TWO callers with DIFFERENT timing — both correct:
+        - ``_build_fleet_cycle_state`` (Step 6, BEFORE the battery pipeline):
+          reads the PREVIOUS cycle's decision — the committed hardware state
+          going into this cycle. The EV must decide before the battery runs, so
+          guarding on last cycle's command is right (the battery is still under
+          it).
+        - the surplus/loads block (Step 8, AFTER battery control at 7.5c+d):
+          reads THIS cycle's decision.
+        Reads ``_last_battery_decisions`` (intent stored as its ``.value``
+        string). ``scheduled`` night charge emits ``force_charge`` — covered,
+        no U6 leak."""
+        decisions = getattr(self, "_last_battery_decisions", None) or {}
+        return any(
+            d.get("intent") in ("force_charge", "force_discharge")
+            for d in decisions.values()
         )
 
     def _build_charging_context(
@@ -4625,6 +5084,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         _primary_view = build_charger_view(
             fleet_state,
             charger_id=(_primary_cfg.get("id") or "ev_charger"),
+            # #576 — the primary charger's slot in the one priority list.
+            ev_priority=self._ev_priority_for(_primary_cfg.get("id") or "ev_charger"),
             charger_cfg=_primary_cfg,
             mode=self._effective_charge_mode_for(_primary_cfg),
             daily_ev_kwh=self._daily_ev_per_charger.get(
@@ -5635,7 +6096,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         ccfg, "ev_surplus_priority",
                         _cfg_charger(ccfg, "ev_load_priority", dev.priority),
                     ))
-                    dev.priority = max(1, min(10, surplus_prio))
+                    # (#576 P2.1) the drag list is the single authoritative
+                    # priority axis: a drag override wins over the config seed,
+                    # so distribute_ev_budget honours where the charger sits in
+                    # the one list. ev_surplus_priority is now the seed default.
+                    seed_prio = max(1, min(10, surplus_prio))
+                    reg = getattr(self, "_device_registry", None)
+                    dev.priority = (
+                        reg.priority_for(cid, seed=seed_prio) if reg is not None
+                        else seed_prio
+                    )
                     dev.min_current = float(_cfg_charger(ccfg, "ev_min_current", 6))
                     dev.max_current = float(
                         _cfg_charger(ccfg, "max_charging_current", 32)
@@ -5652,17 +6122,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     dev.min_power_threshold = dev.min_current * ph * volt
                 except (TypeError, ValueError):
                     surplus_prio = dev.priority
-                # Shed priority lives in the load manager's device dict
-                # (load_device_<id>), independent of surplus order (#470).
+                # (#576) Shed order = the ONE list position (reverse of charge
+                # order under the load manager's "higher number sheds first").
+                # ``dev.priority`` is the drag-authoritative slot (resolved from
+                # the priority store above), so the latest-to-charge charger
+                # (highest list number) sheds first — the #470 default coupling,
+                # now driven by the single list. The separate ``ev_shed_priority``
+                # knob (config field / number entity / v15 config data) was
+                # removed entirely. Lives in the load manager's device dict
+                # (load_device_<id>).
                 if lm is not None and isinstance(
                     getattr(lm, "_devices", None), dict
                 ):
                     ld = lm._devices.get(f"load_device_{cid}")
                     if isinstance(ld, dict):
                         try:
-                            ld["priority"] = int(
-                                _cfg_charger(ccfg, "ev_shed_priority", surplus_prio)
-                            )
+                            ld["priority"] = int(dev.priority)
                         except (TypeError, ValueError):
                             pass
 

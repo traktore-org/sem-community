@@ -54,7 +54,7 @@ _BRAND_WATCHDOG_REFRESH_S = {
 # Persisted so it overwrites the box's short built-in failsafe.
 FAILSAFE_TIMEOUT_S = 600
 
-from ..consts.core import KEBA_IDLE_GUARD_KWH
+from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -320,9 +320,37 @@ class ControllableDevice(ABC):
         self._daily_runtime_last_check = now
 
     def calibrate_rated_power(self) -> None:
-        """(#559) Hook: devices that can learn their real draw override this.
-        Base is a no-op."""
-        return
+        """(#559/#576) Learn the device's real draw from its power sensor.
+
+        Runs every cycle while the device is ON: if the sensor reports a
+        larger draw than the current ``rated_power``, adopt it as both the
+        rated power and the surplus-activation threshold. Promoted from
+        ``SwitchDevice`` to the base (#576) so EVERY device type — switch,
+        heat pump, climate — "sees where it goes", not just switches.
+
+        No-op for devices without a power sensor or a ``rated_power`` (e.g. the
+        modulating EV, which measures draw its own way): those keep their
+        default rating (1 kW for a sensor-less surplus device — a saner floor
+        than the old 0 W-at-discovery, which made a switch turn on at any
+        surplus and import the rest from grid)."""
+        rated = getattr(self, "rated_power", None)
+        if (rated is None or not self.power_entity_id
+                or not self.hass or not self.is_active):
+            return
+        state = self.hass.states.get(self.power_entity_id)
+        if not state or state.state in ("unknown", "unavailable", None):
+            return
+        try:
+            observed = float(state.state)
+        except (ValueError, TypeError):
+            return
+        if observed > self.rated_power:
+            _LOGGER.info(
+                "%s: calibrated rated_power %.0fW -> %.0fW from %s",
+                self.name, self.rated_power, observed, self.power_entity_id,
+            )
+            self.rated_power = observed
+            self.min_power_threshold = observed
 
     @property
     def remaining_daily_runtime_sec(self) -> float:
@@ -611,12 +639,18 @@ class SwitchDevice(ControllableDevice):
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
     ):
+        # (#576) 1 kW default for a sensor-less / discovery-zero switch: a saner
+        # floor than 0 W (which left the activation threshold tiny, so the
+        # switch turned on at any surplus and imported the rest from grid).
+        # When a power sensor IS present, calibrate_rated_power() learns the
+        # real draw and snaps up from here.
+        rp = rated_power if (rated_power and rated_power > 0) else DEFAULT_DEVICE_RATED_POWER
         super().__init__(
             hass, device_id, name, priority,
-            min_power_threshold or rated_power,
+            min_power_threshold or rp,
             entity_id, power_entity_id,
         )
-        self.rated_power = rated_power
+        self.rated_power = rp
         self.min_on_time = min_on_time
         self.min_off_time = min_off_time
         self.daily_min_runtime_sec = daily_min_runtime_sec
@@ -648,30 +682,6 @@ class SwitchDevice(ControllableDevice):
             self.name, self.entity_id,
         )
         return True
-
-    def calibrate_rated_power(self) -> None:
-        """(#559) Self-heal an unknown rated_power. Auto-discovered switches
-        snapshot the power sensor's reading at discovery (often 0 W while the
-        load is off), which leaves min_power_threshold tiny — the switch then
-        turns on at almost any surplus and imports the rest from grid. When
-        the switch is ON and its power sensor reports a larger real draw,
-        adopt it as both the rated power and the surplus threshold."""
-        if not self.power_entity_id or not self.hass or not self.is_active:
-            return
-        state = self.hass.states.get(self.power_entity_id)
-        if not state or state.state in ("unknown", "unavailable", None):
-            return
-        try:
-            observed = float(state.state)
-        except (ValueError, TypeError):
-            return
-        if observed > self.rated_power:
-            _LOGGER.info(
-                "%s: calibrated rated_power %.0fW -> %.0fW from %s",
-                self.name, self.rated_power, observed, self.power_entity_id,
-            )
-            self.rated_power = observed
-            self.min_power_threshold = observed
 
     async def activate(self, available_watts: float) -> float:
         if not self.entity_id:

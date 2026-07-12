@@ -69,6 +69,13 @@ Each is a test case. EV min ≈ 5.5 kW assumed (KEBA 3φ, 8 A); reserve zone
 
 ## 4. Config surface (minimal — reuse, don't invent)
 
+> **Build decision (2026-07-11, maintainer):** the opt-in toggle below was
+> **dropped** — "in no concept was a toggle; it is only the priority from the
+> devices." The feature is now always active, gated solely by the existing
+> **`battery_priority_soc`** reserve floor (below it → battery first; at/above →
+> loads first) plus the commanded-charge guard. The battery is simply the sink
+> at the bottom of the device-priority walk. No new config key.
+
 - **Reserve floor:** reuse existing **`battery_priority_soc`** (default 30). No new SOC knob.
 - **Opt-in:** one new toggle, default **OFF** (same cautious pattern as arbitrage) —
   e.g. `load_priority_above_battery` ("Loads & EV charge before battery, above the
@@ -92,6 +99,21 @@ two paths:
 - Feed that to the existing `SurplusController.update(available_power_w)` — its
   priority walk, discrete-load thresholds, LIFO shed and anti-flicker are already
   battle-tested and unchanged.
+
+> **Build note (2026-07-11, ruflo review):** Path B as originally sketched
+> (add reclaim to `excess_solar`) is a **no-op** — `excess_solar` only feeds a
+> debug log; the real EV surplus is `decide.py:self_consumption_surplus_w`,
+> which **already** stops subtracting `battery_charge_w` above `auto_start_soc`
+> (90 %) AND, in `solar_only`, adds `flow_calculator.battery_redirect_w` (a
+> forecast/SOC-scaled reclaim of battery charge) on top. So the EV *already*
+> reclaims battery charge — just gated at `auto_start_soc` and scaled by
+> forecast, not the `battery_priority_soc` reserve zone. **#576-for-EV is
+> therefore: lower/raise that existing `battery_redirect_w` gate to full above
+> the reserve zone when the toggle is on — a careful modification of the
+> battle-tested redirect, not a second parallel reclaim** (which would
+> double-count). Deferred to a separate specced pass. **Phase 1 (generic loads)
+> ships independently** and is unaffected — the loads path genuinely lacked any
+> reclaim (it reads export-only), which is exactly what the reporter asked for.
 
 **Path B — EV (careful, but NOT a merge).**
 - The EV keeps its **entire own control stack** — state machine

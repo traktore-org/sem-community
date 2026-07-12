@@ -380,3 +380,33 @@ async def test_register_with_depends_on(registry):
     registry._register_service_devices()
     device = registry._surplus_controller.get_device("kia_socket")
     assert device.depends_on == ["pool_pump"]
+
+
+# ---------------------------------------------------------------------------
+# #576 — the home-battery priority row is gated on the install having a battery
+# ---------------------------------------------------------------------------
+def test_battery_row_hidden_without_battery(registry):
+    registry.hass.states.get = lambda e: SimpleNamespace(state="0")
+    registry._devices = []
+    registry._service_registrations = {}
+    registry._has_battery = False
+    result = registry.get_devices_for_sensor()
+    assert "home_battery" not in result
+
+
+def test_battery_row_shown_with_battery(registry):
+    registry.hass.states.get = lambda e: SimpleNamespace(state="55")
+    registry._devices = []
+    registry._service_registrations = {}
+    registry._has_battery = True
+    result = registry.get_devices_for_sensor()
+    assert "home_battery" in result
+    row = result["home_battery"]
+    assert row["device_type"] == "battery"
+    assert row["priority"] == 100          # default bottom
+    assert row["soc"] == 55.0
+
+
+def test_battery_priority_reflects_override(registry):
+    registry._priority_overrides = {"home_battery": 3}
+    assert registry.battery_surplus_priority() == 3
