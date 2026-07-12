@@ -67,6 +67,10 @@ def _fleet_state(power_readings):
         is_night=False,
         tariff_level=None,
         forecast_remaining_kwh=0.0,
+        # #576 reclaim-gate inputs build_charger_view now reads (None/False =
+        # no battery in the priority walk → no reclaim gating, backward-compat).
+        battery_priority=None,
+        battery_commanded=False,
     )
 
 
