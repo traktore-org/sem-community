@@ -14,12 +14,15 @@ so neither the sensor nor the wiring can silently regress again.
 """
 import json
 import os
+from unittest.mock import MagicMock
 
 import yaml
 
 from custom_components.solar_energy_management.coordinator.types import SEMData
 from custom_components.solar_energy_management.coordinator.forecast_reader import (
     ForecastData,
+    ForecastReader,
+    SOLCAST_ENTITIES,
 )
 from custom_components.solar_energy_management.consts.labels import (
     SENSOR_LABEL_MAPPING,
@@ -102,3 +105,53 @@ def test_forecast_preset_defined_in_card_bundle():
     dist = os.path.join(_ROOT, "dashboard", "card", "dist", "sem-cards.js")
     with open(dist, encoding="utf-8") as f:
         assert _SENSOR in f.read()
+
+
+# ──────────────────────────────────────────────────────────────────────
+# #575 (round 2) — spurious dawn/dusk spikes in "Forecast vs Actual"
+#
+# After the chart was rewired, the reporter saw the forecast series spike
+# to ~80 kW at ~05:00 and ~20:00 while midday peaked at ~8 kW. Root cause:
+# forecast_reader multiplied any Solcast power reading < 100 by 1000,
+# assuming kW. Solcast actually publishes Watts (UnitOfPower.WATT), so a
+# real ~80 W dawn reading became 80 kW. Conversion is now unit-aware.
+# ──────────────────────────────────────────────────────────────────────
+
+def _power_state(value, unit):
+    s = MagicMock()
+    s.state = str(value)
+    s.attributes = {"unit_of_measurement": unit}
+    return s
+
+
+def _solcast_reader(state):
+    r = ForecastReader(hass=MagicMock())
+    r._source = "solcast"
+    r._entities = dict(SOLCAST_ENTITIES)
+    r.hass.states.get = MagicMock(return_value=state)
+    return r
+
+
+def test_low_watt_dawn_reading_is_not_inflated():
+    """A genuine 80 W dawn reading must stay 80 W — not ×1000 into a spike."""
+    r = _solcast_reader(_power_state("80.0", "W"))
+    data = r.read_forecast()
+    assert data.power_now_w == 80.0
+    assert data.power_next_hour_w == 80.0
+    assert data.peak_power_today_w == 80.0
+    assert r.get_diagnostics()["unit_conversion_count"] == 0
+
+
+def test_watt_daytime_reading_unchanged():
+    """Daytime W readings were always fine (> 100) and must stay fine."""
+    r = _solcast_reader(_power_state("8000.0", "W"))
+    data = r.read_forecast()
+    assert data.power_now_w == 8000.0
+
+
+def test_kw_source_is_converted_to_watts():
+    """A source that truly declares kW is still converted deterministically."""
+    r = _solcast_reader(_power_state("8.0", "kW"))
+    data = r.read_forecast()
+    assert data.power_now_w == 8000.0
+    assert r.get_diagnostics()["unit_conversion_count"] == 3

@@ -137,11 +137,13 @@ def test_read_path_cached_source_lost_redetected():
 # ──────────────────────────────────────────────
 
 
-def test_unit_conversion_count_fires_on_solcast_low_values():
-    """Solcast reports kW; values < 100 trigger the *1000 conversion.
-    Counter exposes how many of the 3 readings fired the conversion."""
+def test_unit_conversion_count_fires_on_kw_declared_unit():
+    """Conversion fires off the *declared* unit, not magnitude (#575).
+    A source that publishes power in kW triggers the ×1000 on all 3 reads."""
     hass = MagicMock()
-    hass.states.get = MagicMock(return_value=_state("5.0"))  # 5 kW → triggers
+    hass.states.get = MagicMock(
+        return_value=_state("5.0", attributes={"unit_of_measurement": "kW"})
+    )
     r = ForecastReader(hass=hass)
     r.read_forecast()
     # 3 conversions: power_now, power_next_hour, peak_power_today
@@ -149,9 +151,15 @@ def test_unit_conversion_count_fires_on_solcast_low_values():
 
 
 def test_unit_conversion_count_zero_when_already_watts():
-    """Solcast reporting values >= 100 are already in watts."""
+    """Solcast publishes Watts — no conversion, even for low dawn/dusk values.
+
+    Regression for #575: the old magnitude heuristic (< 100 → ×1000) blew a
+    real 80 W dawn reading up to 80 kW. With unit-aware conversion a low W
+    value stays put and the counter never fires."""
     hass = MagicMock()
-    hass.states.get = MagicMock(return_value=_state("5000.0"))
+    hass.states.get = MagicMock(
+        return_value=_state("80.0", attributes={"unit_of_measurement": "W"})
+    )
     r = ForecastReader(hass=hass)
     r.read_forecast()
     assert r.get_diagnostics()["unit_conversion_count"] == 0
