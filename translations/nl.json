@@ -1174,8 +1174,8 @@
       "description": "De geconfigureerde warmwater-temperatuursensor `{entity_id}` is al {minutes}+ minuten niet beschikbaar of onbekend. SEM gedraagt zich faalveilig — de boiler wordt NIET geactiveerd door overschot totdat de sensor weer een geldige meting levert, om te voorkomen dat de boiler zonder feedback verder verwarmt. Controleer de bovenliggende integratie van de sensor. De melding verdwijnt automatisch zodra de sensor weer werkt."
     },
     "keba_failsafe_active": {
-      "title": "KEBA failsafe is enabled — disable it for steady charging",
-      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+      "title": "KEBA failsafe is ingeschakeld — schakel deze uit voor stabiel laden",
+      "description": "Je KEBA-lader \"{name}\" heeft de failsafe-watchdog ingeschakeld. SEM (zoals evcc) is hier niet meer van afhankelijk, maar zolang deze aanstaat, valt de aangeboden laadstroom tussen commando's steeds terug naar de fallback van 6 A. Hierdoor gaat het laden oscilleren (6↔9 A) en weigeren sommige auto's (bijv. Renault Zoe) om stabiel te laden.\n\nDe KEBA-service van Home Assistant kan de failsafe niet uitschakelen (een timeout van 0 wordt niet geaccepteerd), dus je moet dit op de lader zelf doen: zet de **failsafe-timeout op 0** (KEBA UDP `failsafe 0 0 1`, of via KEBA's KeContact-tooling). Zie de gekoppelde handleiding voor stapsgewijze instructies. Deze Reparatie verdwijnt automatisch zodra de failsafe is uitgeschakeld."
     }
   }
 }
