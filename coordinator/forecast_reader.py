@@ -144,7 +144,7 @@ class ForecastReader:
         self._last_source_detection_path: str = "uninitialized"
         self._last_read_path: str = "uninitialized"
         self._last_recommendation_path: str = "uninitialized"
-        self._last_unit_conversion_count: int = 0  # Solcast kW→W bumps
+        self._last_unit_conversion_count: int = 0  # kW→W conversions (by declared unit)
 
     @property
     def forecast_data(self) -> ForecastData:
@@ -373,30 +373,17 @@ class ForecastReader:
                 0, data.forecast_today_kwh * self._remaining_day_fraction()
             )
 
-        # Read power now
-        data.power_now_w = self._read_float(
+        # Read power now / next hour / peak — normalized to Watts off the
+        # sensor's declared unit (see _read_power_w).
+        data.power_now_w = self._read_power_w(
             self._entities.get("power_now"), 0.0
         )
-        # Solcast reports in kW, convert if needed
-        if self._source == "solcast" and data.power_now_w < 100:
-            data.power_now_w *= 1000
-            self._last_unit_conversion_count += 1
-
-        # Read power next hour
-        data.power_next_hour_w = self._read_float(
+        data.power_next_hour_w = self._read_power_w(
             self._entities.get("power_next_hour"), 0.0
         )
-        if self._source == "solcast" and data.power_next_hour_w < 100:
-            data.power_next_hour_w *= 1000
-            self._last_unit_conversion_count += 1
-
-        # Peak power
-        data.peak_power_today_w = self._read_float(
+        data.peak_power_today_w = self._read_power_w(
             self._entities.get("peak_power_today"), 0.0
         )
-        if self._source == "solcast" and data.peak_power_today_w < 100:
-            data.peak_power_today_w *= 1000
-            self._last_unit_conversion_count += 1
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
         # and dashboard consumers expect "HH:MM" local time.
@@ -429,6 +416,33 @@ class ForecastReader:
             except (ValueError, TypeError):
                 pass
         return default
+
+    def _read_power_w(self, entity_id: Optional[str], default: float) -> float:
+        """Read a forecast power sensor and normalize it to Watts.
+
+        Solcast (``UnitOfPower.WATT``) and Forecast.Solar both publish their
+        power sensors in Watts natively. SEM historically assumed Solcast was
+        kW and multiplied any reading < 100 by 1000 (a magnitude heuristic).
+        That silently inflated every genuine sub-100 W value — most visibly the
+        near-zero dawn/dusk readings, which it blew up into ~80 kW spikes on the
+        "Forecast vs Actual" chart (#575). Convert off the *declared* unit
+        instead: only kW → ×1000; W (or a missing/other unit) passes through
+        unchanged, so a real 80 W dawn reading stays 80 W.
+        """
+        if not entity_id:
+            return default
+        state = self.hass.states.get(entity_id)
+        if not state or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
+            return default
+        try:
+            value = float(state.state)
+        except (ValueError, TypeError):
+            return default
+        unit = str(state.attributes.get("unit_of_measurement", "") or "").strip().lower()
+        if unit in ("kw", "kilowatt", "kilowatts"):
+            value *= 1000
+            self._last_unit_conversion_count += 1
+        return value
 
     def _remaining_day_fraction(self) -> float:
         """Estimate fraction of daylight remaining (rough)."""
