@@ -12,6 +12,44 @@ the evening: below it, the battery still fills first.
 """
 from __future__ import annotations
 
+from typing import Optional
+
+
+def ev_reclaims_battery_charge(
+    *,
+    soc: float,
+    priority_soc: float,
+    ev_priority: int,
+    battery_priority: Optional[int],
+    battery_commanded: bool,
+) -> bool:
+    """Whether the EV may reclaim battery-charge power on its surplus path
+    (#576 P2.2).
+
+    The EV path stops subtracting ``battery_charge_w`` from its surplus — i.e.
+    the EV charges *before* the battery — iff ALL hold:
+
+    * the battery is NOT under an explicit command (force/scheduled/arbitrage
+      charge is honored — the battery keeps its power),
+    * a battery exists in the priority list (``battery_priority`` is not None),
+    * SOC is at/above the reserve floor (``battery_priority_soc``),
+    * the EV sits **above** the battery in the one list
+      (``ev_priority < battery_priority``).
+
+    This is the same rule the loads use (see the hand-back in
+    ``SurplusController.update``), applied on the EV path — the position-based
+    reclaim that replaces the old fixed ``auto_start_soc`` (90 %) gate. Below
+    the floor, below the battery, or while the battery is commanded → the
+    battery keeps its charge (today's behaviour).
+    """
+    if battery_commanded:
+        return False
+    if battery_priority is None:
+        return False
+    if soc < priority_soc:
+        return False
+    return ev_priority < battery_priority
+
 
 def reclaimable_battery_w(
     *,

@@ -71,7 +71,7 @@ async def test_v1_to_v2_remaps_legacy_battery_priority_soc(hass) -> None:
     # Re-read from the registry, not the local var — the entry registry
     # owns the post-migration truth.
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14  # all hops compose (#446 bumped target)
+    assert updated.version == 15  # all hops compose (#446 bumped target)
     assert updated.data["battery_priority_soc"] == 30
 
 
@@ -260,7 +260,7 @@ async def test_full_chain_v1_to_v7(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     # v1→v2 effect
     assert updated.data["battery_priority_soc"] == 30
     # v2→v3 effect — flat → list
@@ -306,7 +306,7 @@ async def test_v7_to_v8_flips_static_to_percentile_for_dynamic_tariff(hass) -> N
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     assert updated.options["tariff_classification_mode"] == "percentile"
 
 
@@ -328,7 +328,7 @@ async def test_v7_to_v8_keeps_static_when_tariff_mode_is_not_dynamic(hass) -> No
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     assert updated.options["tariff_classification_mode"] == "static"
 
 
@@ -361,7 +361,7 @@ async def test_v8_to_v9_seeds_vehicle_min_current(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     chargers = updated.options["ev_chargers"]
     assert chargers[0]["vehicle_min_current"] is None
     assert chargers[1]["vehicle_min_current"] == 9
@@ -397,7 +397,7 @@ async def test_v9_to_v10_renames_night_initial_current(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     # Top-level legacy global key renamed
     assert "ev_night_initial_current" not in updated.data
     assert updated.data["initial_current"] == 12
@@ -409,18 +409,19 @@ async def test_v9_to_v10_renames_night_initial_current(hass) -> None:
 
 
 @pytest.mark.asyncio
-async def test_v14_already_current_is_noop(hass) -> None:
-    """An entry already at v14 (the current target) sails through every
-    ``if version < N`` gate untouched."""
+async def test_v15_already_current_is_noop(hass) -> None:
+    """An entry already at v15 (the current target) sails through every
+    ``if version < N`` gate untouched. A clean v15 charger carries no
+    ``ev_shed_priority`` (that field is retired)."""
     payload_data = {"battery_priority_soc": 30}
     payload_options = {"ev_chargers": [
         {"id": "ev_charger", "charge_mode": "solar_only",
          "vehicle_min_current": None, "initial_current": 10,
-         "ev_surplus_priority": 5, "ev_shed_priority": 5}
+         "ev_surplus_priority": 5}
     ]}
     entry = MockConfigEntry(
         domain=DOMAIN,
-        version=14,
+        version=15,
         data=payload_data,
         options=payload_options,
     )
@@ -429,9 +430,35 @@ async def test_v14_already_current_is_noop(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     assert updated.data == payload_data
     assert updated.options == payload_options
+
+
+@pytest.mark.asyncio
+async def test_v14_to_v15_strips_retired_shed_priority(hass) -> None:
+    """v14 → v15 (#576): the retired ``ev_shed_priority`` knob is stripped
+    from every charger (surplus + shed order are now the one drag-list
+    position). ``ev_surplus_priority`` — the boot seed — is preserved."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=14,
+        data={"battery_priority_soc": 30},
+        options={"ev_chargers": [
+            {"id": "wb1", "ev_surplus_priority": 2, "ev_shed_priority": 8},
+            {"id": "wb2", "ev_surplus_priority": 5},   # already clean
+        ]},
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.version == 15
+    chargers = {c["id"]: c for c in updated.options["ev_chargers"]}
+    assert "ev_shed_priority" not in chargers["wb1"]     # stripped
+    assert "ev_shed_priority" not in chargers["wb2"]     # was never there
+    assert chargers["wb1"]["ev_surplus_priority"] == 2   # seed preserved
+    assert chargers["wb2"]["ev_surplus_priority"] == 5
 
 
 @pytest.mark.asyncio
@@ -448,22 +475,22 @@ async def test_v13_to_v14_forces_arbitrage_off(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     assert updated.options["battery_grid_arbitrage_enabled"] is False
     assert updated.data["battery_grid_arbitrage_enabled"] is False
 
 
 @pytest.mark.asyncio
-async def test_v12_to_v13_seeds_shed_priority_from_surplus(hass) -> None:
-    """v12 → v13 (#470): each charger's ``ev_shed_priority`` is seeded from
-    its ``ev_surplus_priority`` so the decoupling is behaviour-neutral until
-    the user deliberately diverges them. A charger that already carries an
-    explicit shed priority is left untouched."""
+async def test_v12_upgrade_ends_with_shed_priority_removed(hass) -> None:
+    """A v12 install migrated through the full chain ends at v15 with
+    ``ev_shed_priority`` gone from every charger (#576 retired it — the
+    v12→v13 seed is now stripped again at v14→v15). ``ev_surplus_priority``,
+    the boot seed, survives untouched."""
     payload_options = {"ev_chargers": [
-        {"id": "wb1", "ev_surplus_priority": 2},               # seed → 2
-        {"id": "wb2", "ev_surplus_priority": 4, "ev_shed_priority": 9},  # keep 9
-        {"id": "wb3", "ev_load_priority": 7},                  # legacy alias → 7
-        {"id": "wb4"},                                         # no priority at all
+        {"id": "wb1", "ev_surplus_priority": 2},
+        {"id": "wb2", "ev_surplus_priority": 4, "ev_shed_priority": 9},
+        {"id": "wb3", "ev_load_priority": 7},
+        {"id": "wb4"},
     ]}
     entry = MockConfigEntry(
         domain=DOMAIN, version=12,
@@ -474,16 +501,14 @@ async def test_v12_to_v13_seeds_shed_priority_from_surplus(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     chargers = {c["id"]: c for c in updated.options["ev_chargers"]}
-    assert chargers["wb1"]["ev_shed_priority"] == 2     # seeded from surplus
-    assert chargers["wb2"]["ev_shed_priority"] == 9     # explicit value preserved
-    assert chargers["wb3"]["ev_shed_priority"] == 7     # seeded from legacy alias
-    # No priority source anywhere → nothing written; runtime fallback
-    # (ev_priority = 3 + idx) covers it. Migration must not crash or invent.
-    assert "ev_shed_priority" not in chargers["wb4"]
-    # Surplus priority itself is never mutated.
+    # The retired knob is gone from every charger, however it got there.
+    for cid in ("wb1", "wb2", "wb3", "wb4"):
+        assert "ev_shed_priority" not in chargers[cid]
+    # Surplus priority (the seed) is never mutated.
     assert chargers["wb1"]["ev_surplus_priority"] == 2
+    assert chargers["wb2"]["ev_surplus_priority"] == 4
 
 
 @pytest.mark.asyncio
@@ -514,7 +539,7 @@ async def test_v11_to_v12_drops_stale_global_ev_session_energy_sensor(hass) -> N
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     # Top-level stale key dropped
     assert "ev_session_energy_sensor" not in updated.data
     # Per-charger value preserved untouched
@@ -546,7 +571,7 @@ async def test_v11_to_v12_preserves_top_level_when_no_per_charger_value(hass) ->
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     # Defensive: kept the top-level value because no per-charger override exists
     assert updated.data["ev_session_energy_sensor"] == "sensor.keba_p30_session_energy"
 
@@ -583,7 +608,7 @@ async def test_v10_to_v11_clears_bad_ev_target_type_per_charger(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     chargers = updated.options["ev_chargers"]
     # Bad charger reset to kwh
     assert chargers[0]["ev_target_type"] == "kwh"
@@ -618,7 +643,7 @@ async def test_v10_to_v11_clears_legacy_ev_target_mode(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     assert updated.data["ev_target_mode"] == "kwh"
 
 
@@ -643,5 +668,5 @@ async def test_v10_to_v11_preserves_kwh_mode(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 14
+    assert updated.version == 15
     assert updated.options["ev_chargers"][0]["ev_target_type"] == "kwh"

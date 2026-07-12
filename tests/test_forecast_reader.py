@@ -13,10 +13,11 @@ from custom_components.solar_energy_management.coordinator.forecast_reader impor
 DT_UTIL_PATH = "custom_components.solar_energy_management.coordinator.forecast_reader.dt_util"
 
 
-def _make_state(value):
-    """Create a mock HA state with the given value."""
+def _make_state(value, unit=None):
+    """Create a mock HA state with the given value (+ optional declared unit)."""
     s = MagicMock()
     s.state = str(value)
+    s.attributes = {"unit_of_measurement": unit} if unit else {}
     return s
 
 
@@ -111,9 +112,10 @@ class TestReadForecast:
             SOLCAST_ENTITIES["forecast_today"]: _make_state("25.5"),
             SOLCAST_ENTITIES["forecast_tomorrow"]: _make_state("20.0"),
             SOLCAST_ENTITIES["forecast_remaining"]: _make_state("15.0"),
-            SOLCAST_ENTITIES["power_now"]: _make_state("5.2"),  # kW for solcast
-            SOLCAST_ENTITIES["power_next_hour"]: _make_state("6.0"),
-            SOLCAST_ENTITIES["peak_power_today"]: _make_state("8.5"),
+            # Solcast publishes power sensors in WATTS (#575) — declared unit W
+            SOLCAST_ENTITIES["power_now"]: _make_state("5200", "W"),
+            SOLCAST_ENTITIES["power_next_hour"]: _make_state("6000", "W"),
+            SOLCAST_ENTITIES["peak_power_today"]: _make_state("8500", "W"),
             SOLCAST_ENTITIES["peak_time_today"]: _make_state("13:30"),
         }
 
@@ -129,11 +131,30 @@ class TestReadForecast:
         assert data.forecast_today_kwh == 25.5
         assert data.forecast_tomorrow_kwh == 20.0
         assert data.forecast_remaining_today_kwh == 15.0
-        # Solcast reports kW, values < 100 get *1000
+        # Solcast reports WATTS — passed through unchanged (#575)
         assert data.power_now_w == 5200.0
         assert data.power_next_hour_w == 6000.0
         assert data.peak_power_today_w == 8500.0
         assert data.peak_time_today == "13:30"
+
+    def test_low_dawn_reading_is_not_inflated(self, mock_hass):
+        # #575 regression: a genuine ~80 W dawn/dusk Solcast reading must stay
+        # 80 W, not be multiplied to 80 kW (the sunrise/sunset spike bug — the
+        # old ``value < 100 → ×1000`` magnitude heuristic).
+        states = self._solcast_states()
+        states[SOLCAST_ENTITIES["power_now"]] = _make_state("80", "W")
+        mock_hass.states.get = lambda eid: states.get(eid)
+        data = ForecastReader(mock_hass).read_forecast()
+        assert data.power_now_w == 80.0        # NOT 80000
+
+    def test_kw_declared_sensor_is_converted(self, mock_hass):
+        # A sensor that DECLARES kW is still converted to W (robust for any
+        # source that genuinely emits kW).
+        states = self._solcast_states()
+        states[SOLCAST_ENTITIES["power_now"]] = _make_state("5.2", "kW")
+        mock_hass.states.get = lambda eid: states.get(eid)
+        data = ForecastReader(mock_hass).read_forecast()
+        assert data.power_now_w == 5200.0
 
     def test_read_forecast_solar(self, mock_hass):
         states = {

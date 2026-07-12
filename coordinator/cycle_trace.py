@@ -22,6 +22,85 @@ from enum import Enum
 from typing import Any, Deque, Dict, List, Optional
 
 
+def battery_list_role(
+    *,
+    battery_priority,
+    battery_commanded: bool,
+    soc: float,
+    priority_soc: float,
+    discharge_w: float,
+) -> str:
+    """The home battery's role in the ONE priority walk, for the trace's
+    management layer (#576). Pure so it's unit-testable.
+
+    Precedence (matches the reclaim gates): an explicit command wins, then the
+    reserve floor, then the drag position:
+      * commanded + discharging → "discharging — feeding (out of the walk)"
+      * commanded (charging)    → "charging first — commanded"
+      * SOC < reserve floor     → "charging first — below reserve zone"
+      * no battery in the list  → "no battery in the priority list"
+      * otherwise               → "sink at list position N" (the drag slot)
+    """
+    if battery_commanded and discharge_w > 0:
+        return "discharging — feeding (out of the walk)"
+    if battery_commanded:
+        return "charging first — commanded"
+    if soc < priority_soc:
+        return "charging first — below reserve zone"
+    if battery_priority is None:
+        return "no battery in the priority list"
+    return f"sink at list position {battery_priority}"
+
+
+def ev_layer_match(commanded_amps, observed_w, phases, voltage, connected,
+                   threshold: float = 0.3):
+    """Did the car actually draw what we commanded? The flap linchpin.
+
+    ``None`` (nothing to verify) when we're not commanding a charge or the car
+    is unplugged; else True iff observed draw is at least ``threshold`` of the
+    commanded power (allows for ramp / a 1φ charger's lower nominal)."""
+    if not (commanded_amps and commanded_amps > 0 and connected):
+        return None
+    return observed_w > commanded_amps * phases * voltage * threshold
+
+
+def battery_layer_match(intent, charge_w: float, discharge_w: float):
+    """Is an explicit battery COMMAND actually happening? ``None`` in normal /
+    idle (nothing commanded). force_charge → must be charging; force_discharge
+    → must be discharging.
+
+    A freshly-commanded force_charge/discharge reads False for the cycle or two
+    the inverter takes to ramp (charge_w still 0). That single-cycle blip is
+    *intentionally* not suppressed here — ``TraceCollector.health`` debounces it
+    (needs ≥3 consecutive mismatched cycles to alarm), so the ramp never trips
+    the health signal while a genuinely stuck command still does after ~3."""
+    if intent == "force_charge":
+        return charge_w > 0
+    if intent == "force_discharge":
+        return discharge_w > 0
+    return None
+
+
+def heat_pump_layer_match(boost: bool, sg_ready_state: int):
+    """Did the SG-Ready relay follow a commanded boost? ``None`` when not
+    boosting; else True iff the relay reached BOOST (3) or FORCE_ON (4)."""
+    if not boost:
+        return None
+    return sg_ready_state >= 3
+
+
+def device_layer_match(desired_on: bool, observed_on):
+    """Did a surplus device SEM turned on actually turn on? Uses the RELAY /
+    mode reality (``observed_on``), NOT power — a thermostat-satisfied heater
+    is legitimately on at 0 W and must not read as a fault.
+
+    ``None`` when SEM isn't driving it (desired off) or it's unobservable;
+    else False = SEM commanded it on but the relay is off (the real fault)."""
+    if not desired_on or observed_on is None:
+        return None
+    return bool(observed_on)
+
+
 class LayerStatus(str, Enum):
     """Shared status vocabulary across all three layers.
 

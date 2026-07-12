@@ -3,8 +3,9 @@
 *Added in 1.7.5. Design: `docs/superpowers/specs/2026-07-11-sem-layered-trace-observability-design.md`.*
 
 SEM records, every control cycle, the **three-layer chain** for each subsystem
-(EV, battery). When something misbehaves, this answers "what is SEM doing and
-**why**?" in one lookup instead of piecing it together from raw sensors.
+— the **EV** charger(s), the **battery**, each **surplus load** (`load:<name>`),
+and the **heat pump**. When something misbehaves, this answers "what is SEM doing
+and **why**?" in one lookup instead of piecing it together from raw sensors.
 
 ## The three layers
 
@@ -58,6 +59,21 @@ SEM correctly idled — pointing upstream at the surplus/measurement input.
 
 The **`match` field** is the linchpin: `true` = observed matches the command,
 `false` = a layer-boundary fault, `null` = not applicable (idle / disconnected).
+
+Each subsystem defines `match` in terms of the reality that matters for *it*, so
+a legitimate zero never reads as a fault:
+
+| Subsystem | `match` is False when… | `null` (not checked) when… |
+|---|---|---|
+| **EV** | commanded amps > 0 but observed draw < 30 % of it | not charging / car unplugged |
+| **battery** | `force_charge` but not charging (or `force_discharge` but not discharging) | no explicit command (normal / idle) |
+| **heat pump** | boost commanded but the SG-Ready relay didn't reach BOOST/FORCE_ON | not boosting |
+| **load** (`load:<name>`) | SEM turned it on but the **relay** is still off | SEM isn't driving it, or it's unobservable |
+
+The load check reads the **relay / mode**, not power — a thermostat-satisfied
+heater is legitimately *on at 0 W* and must not alarm. The battery check ignores
+the ramp: a freshly-commanded charge reads False for a cycle or two while the
+inverter spins up, and the health debounce (≥ 3 consecutive cycles) absorbs it.
 
 ## Guarantees
 

@@ -1431,18 +1431,31 @@ class SensorReader:
                 self._read_sensor(self.config.ev_power_sensor, "ev")
             ))
 
-        # EV connection status — per-charger OR'd for global (#193)
+        # EV connection status — per-charger, OR'd for the fleet global (#193).
+        # (#584) ALSO record each charger's OWN plug/charging state so build_view
+        # uses the real per-charger status instead of the fleet OR — else a
+        # car-less charger looked connected whenever a SIBLING had a car and
+        # fired a false "solar charging started" push.
         ev_chargers = self._raw_config.get("ev_chargers", [])
         if len(ev_chargers) > 1:
             any_connected = False
             any_charging = False
             for charger_cfg in ev_chargers:
+                cid = charger_cfg.get("id")
                 conn_sensor = charger_cfg.get("ev_connected_sensor")
                 chrg_sensor = charger_cfg.get("ev_charging_sensor")
-                if conn_sensor and self._read_binary_sensor(conn_sensor, "ev_plug"):
-                    any_connected = True
-                if chrg_sensor and self._read_binary_sensor(chrg_sensor, "ev_charging"):
-                    any_charging = True
+                if conn_sensor:
+                    c = self._read_binary_sensor(conn_sensor, "ev_plug")
+                    if cid:
+                        readings.ev_connected_per_charger[cid] = c
+                    if c:
+                        any_connected = True
+                if chrg_sensor:
+                    ch = self._read_binary_sensor(chrg_sensor, "ev_charging")
+                    if cid:
+                        readings.ev_charging_per_charger[cid] = ch
+                    if ch:
+                        any_charging = True
             readings.ev_connected = any_connected
             readings.ev_charging = any_charging
         else:
@@ -2072,12 +2085,21 @@ class SensorReader:
             any_connected = False
             any_charging = False
             for charger_cfg in ev_chargers_leg:
+                cid = charger_cfg.get("id")
                 conn_sensor = charger_cfg.get("ev_connected_sensor")
                 chrg_sensor = charger_cfg.get("ev_charging_sensor")
-                if conn_sensor and self._read_binary_sensor(conn_sensor, "ev_plug"):
-                    any_connected = True
-                if chrg_sensor and self._read_binary_sensor(chrg_sensor, "ev_charging"):
-                    any_charging = True
+                if conn_sensor:
+                    c = self._read_binary_sensor(conn_sensor, "ev_plug")
+                    if cid:
+                        readings.ev_connected_per_charger[cid] = c
+                    if c:
+                        any_connected = True
+                if chrg_sensor:
+                    ch = self._read_binary_sensor(chrg_sensor, "ev_charging")
+                    if cid:
+                        readings.ev_charging_per_charger[cid] = ch
+                    if ch:
+                        any_charging = True
             readings.ev_connected = any_connected
             readings.ev_charging = any_charging
         else:

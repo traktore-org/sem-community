@@ -663,10 +663,10 @@ class SEMConfigCard extends SEMLitBase {
                         ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'min_amps', T, 'tile_help_min_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
                     </div>
-                    <div class="stepper-pair">
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_surplus_priority`, 'surplus_priority', T, 'tile_help_surplus_priority')}
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_shed_priority`, 'shed_priority', T, 'tile_help_shed_priority')}
-                    </div>
+                    ${/* (#576) The Surplus/Shed priority steppers were removed —
+                          drag the charger in the Control-tab device-priority
+                          list instead (surplus order = list position, shed =
+                          reverse walk). One priority axis, one editor. */ ''}
                     ${/* (config-on-dashboard) the charge TARGET value — the
                           select above only picks kWh vs SOC; these set the
                           actual target + its ceiling (#245 range). */ ''}

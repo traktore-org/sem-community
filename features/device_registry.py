@@ -36,6 +36,8 @@ from ..devices.base import (
     surplus_device_from_spec,
 )
 from ..hardware_detection import discover_ev_charger_from_registry
+from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
+from ..const import DEFAULT_DEVICE_RATED_POWER as _DEFAULT_RATED_POWER
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,10 +130,33 @@ class UnifiedDeviceRegistry:
         self._manual_mappings: Dict[str, Dict[str, Any]] = {}
         self._priority_overrides: Dict[str, int] = {}
         self._control_mode_overrides: Dict[str, str] = {}  # device_id → "off"/"peak_only"/"surplus"
+        # (#122/#576) device_id → [parent_id] "Requires" link. Persisted HERE so
+        # a device rebuild (drag → async_refresh_devices, the 35s re-discovery,
+        # config change, restart) re-applies it — pre-fix it lived only on the
+        # transient live device and got wiped on every re-sync ("separated all
+        # the time").
+        self._dependency_overrides: Dict[str, list] = {}
+        # (#576) device_id → learned rated_power (W). A sensor-equipped load
+        # self-calibrates its real draw at runtime (calibrate_rated_power); we
+        # PERSIST that here so it survives a restart instead of resetting to the
+        # 1 kW default floor, and re-apply it when the device is rebuilt. Seeded
+        # once from the power sensor's recorder history so a fresh device shows
+        # its real rating immediately rather than the placeholder.
+        self._rated_power_overrides: Dict[str, float] = {}
+        # device_ids we've already tried to seed from history this session — so
+        # a device with no history yet isn't re-queried on every 35 s refresh.
+        self._rating_seed_attempted: set = set()
         # (#576) Only surface the home-battery priority row when the install
         # actually has a battery. Set by the coordinator each cycle from
         # ``power.battery_soc is not None``; batteryless systems never see it.
         self._has_battery: bool = False
+        # (#576 P2.1) Configured EV chargers, handed over each cycle by the
+        # coordinator (mirrors ``_has_battery``). Each is the authoritative
+        # source for that charger's priority-list row, keyed by its CONTROL
+        # id — so the card row, the drag store, ``distribute_ev_budget`` and
+        # the reclaim gate all share ONE identity. The ED ``is_ev`` naming
+        # guess is suppressed when chargers are configured (no double-add).
+        self._ev_charger_rows: List[Dict[str, Any]] = []
         # (#559 Phase 0) Devices registered via the register_surplus_device
         # service. Pre-fix these lived only in the surplus controller's
         # memory and silently vanished on every restart.
@@ -160,6 +185,12 @@ class UnifiedDeviceRegistry:
                 self._manual_mappings = data.get("mappings", {})
                 self._priority_overrides = data.get("priority_overrides", {})
                 self._control_mode_overrides: Dict[str, str] = data.get("control_modes", {})
+                self._dependency_overrides = data.get("dependencies", {})
+                self._rated_power_overrides = {
+                    k: float(v) for k, v in
+                    data.get("rated_power_overrides", {}).items()
+                    if v is not None
+                }
                 self._service_registrations = data.get("service_registrations", {})
                 self._device_goals = data.get("device_goals", {})
                 # Migrate the removed "surplus_target" mode (#235): a device set to
@@ -404,8 +435,13 @@ class UnifiedDeviceRegistry:
                     energy_sensor, power_sensor
                 )
 
-            # Priority override from drag-and-drop
-            priority = self._priority_overrides.get(device_id, position)
+            # Priority override from drag-and-drop wins; else the default seed.
+            # (#576) non-EV loads seed BELOW the battery band so the default
+            # order is EV → battery → loads (loads yield to battery charging
+            # until dragged above it). EV rows are suppressed here (sourced from
+            # the charger config), so their seed is immaterial — leave as-is.
+            seed = position if is_ev else position + _LOAD_PRIORITY_BASE
+            priority = self._priority_overrides.get(device_id, seed)
 
             device = UnifiedDevice(
                 energy_sensor=energy_sensor,
@@ -430,9 +466,21 @@ class UnifiedDeviceRegistry:
             sum(1 for d in devices if d.has_manual_mapping),
         )
 
+        # (#576) Preserve any rating the live loads self-calibrated to BEFORE
+        # the rebuild replaces them (else the learned value resets to the 1 kW
+        # floor and the card drops back to a 1 kW placeholder after every drag /
+        # 35 s re-discovery / restart).
+        dirty = self._capture_calibrated_ratings()
+
         # Sync to both systems
         self._sync_to_surplus_controller()
         self._sync_to_load_manager()
+
+        # (#576) Re-apply the learned rating to the rebuilt devices, and seed a
+        # rating from the power sensor's history for any load we haven't learned
+        # yet. Persist once if anything changed.
+        if (await self._seed_and_apply_ratings()) or dirty:
+            await self._save_storage()
 
     def _sync_to_surplus_controller(self) -> None:
         """Create ControllableDevice objects and register with SurplusController.
@@ -492,7 +540,11 @@ class UnifiedDeviceRegistry:
                     hass=self.hass,
                     device_id=device.device_id,
                     name=device.name,
-                    rated_power=self._get_power_rating(device.power_sensor),
+                    # (#576) persisted self-calibrated rating wins over the raw
+                    # sensor (0 W when off → the 1 kW default), so the learned
+                    # value survives the rebuild.
+                    rated_power=self._initial_rated_power(
+                        device.device_id, device.power_sensor),
                     priority=device.priority,
                     entity_id=entity,
                     power_entity_id=device.power_sensor,
@@ -504,6 +556,12 @@ class UnifiedDeviceRegistry:
                     surplus_device.control_mode = DeviceControlMode(mode_str)
                 except ValueError:
                     surplus_device.control_mode = DeviceControlMode.PEAK_ONLY
+                # (#122/#576) re-apply the persisted "Requires" link so a
+                # rebuild doesn't wipe it — the root cause of "separated all
+                # the time" (every drag/discovery/restart rebuilds the device).
+                deps = self._dependency_overrides.get(device.device_id)
+                if deps:
+                    surplus_device.depends_on = list(deps)
                 self._apply_goals(surplus_device)
                 if surplus_device.control_mode == DeviceControlMode.SURPLUS:
                     surplus_device.adopt_if_running()  # (#559) re-own after restart
@@ -613,9 +671,20 @@ class UnifiedDeviceRegistry:
             for spec in self._service_registrations.values()
             if spec.get("entity_id")
         }
+        # (#576 P2.1) When chargers are configured, they are the authoritative
+        # source of EV rows (emitted below by control id). Suppress the ED
+        # ``is_ev`` naming-guess rows so a charger never appears twice — root
+        # cause of the drag-writes-a-dead-key split (card row id != control id).
+        chargers_configured = bool(self._ev_charger_rows)
+        charger_entities = self._configured_charger_entities()
         for device in self._devices:
             did = device.device_id
             if device.control_entity and device.control_entity in service_entities:
+                continue
+            if device.is_ev and (
+                chargers_configured
+                or (device.power_sensor and device.power_sensor in charger_entities)
+            ):
                 continue
             # Get live power reading
             current_power = 0.0
@@ -650,6 +719,10 @@ class UnifiedDeviceRegistry:
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
                 "control_mode": self._control_mode_overrides.get(did, "peak_only"),
+                # (#122/#576) the "Requires" link — read from the persistent
+                # store so it both survives rebuilds AND shows on the card
+                # (pre-fix it was never emitted, so the card couldn't display it).
+                "depends_on": self._dependency_overrides.get(did, []),
                 # (arc Phase 3) is it on because SEM turned it on, or externally?
                 "sem_owned": bool(getattr(
                     self._surplus_controller.get_device(did), "_sem_owned", False)),
@@ -663,7 +736,9 @@ class UnifiedDeviceRegistry:
                 continue
             live = self._surplus_controller.get_device(did)
             is_on = bool(live and live.is_active)
-            current_power = live.get_current_consumption() / 1000 if is_on and live else 0.0
+            # WATTS — the card divides by 1000 then formats (ruflo HIGH: was
+            # kW here, so a 2 kW draw rendered as "2 W"). Matches the ED rows.
+            current_power = round(live.get_current_consumption()) if is_on and live else 0.0
             result[did] = {
                 "name": spec.get("name", did),
                 "priority": spec.get("priority", 5),
@@ -685,6 +760,22 @@ class UnifiedDeviceRegistry:
                 **self._goal_payload(did),
             }
 
+        # (#576) surplus-controller devices registered DIRECTLY (heat pump,
+        # hot water, climate — not via the ED list or a service call) — emit
+        # them so they're draggable too. Dedup by id: skip anything already
+        # surfaced above (ED / service rows), so a device never appears twice.
+        for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
+            if did in result or getattr(dev, "is_ev", False):
+                continue
+            result[did] = self._surplus_device_row(did, dev)
+
+        # (#576 P2.1) configured EV chargers — first-class rows keyed by their
+        # CONTROL id, sourced from the coordinator (not the ED is_ev guess).
+        for charger in self._ev_charger_rows:
+            cid = charger.get("id")
+            if cid:
+                result[cid] = self._ev_charger_row(charger)
+
         # (#576) the home battery — a draggable sink in the same priority list.
         # Loads ABOVE it reclaim the power that would charge the battery; loads
         # BELOW it yield. It's a passive device (no on/off, no mode): its only
@@ -699,13 +790,32 @@ class UnifiedDeviceRegistry:
         from ..const import BATTERY_SURPLUS_DEVICE_ID
         return BATTERY_SURPLUS_DEVICE_ID
 
+    def priority_for(self, device_id: str, seed: Optional[int] = None) -> int:
+        """Authoritative priority for ANY device in the one list (#576 P2.1).
+
+        A drag override always wins; else the caller's per-device ``seed``
+        (e.g. config ``ev_surplus_priority`` for a charger, the ED position
+        for a load, ``DEFAULT_BATTERY_SURPLUS_PRIORITY`` for the battery);
+        else a large default that sinks unknown devices to the bottom.
+
+        This is the SINGLE priority axis — loads, the battery, AND every EV
+        charger read their slot from here, so the drag list is the one control.
+        ``ev_surplus_priority`` is now just the boot seed for a charger's slot;
+        the separate ``ev_shed_priority`` knob was removed (shed = reverse walk).
+        """
+        if device_id in self._priority_overrides:
+            return int(self._priority_overrides[device_id])
+        if seed is not None:
+            return int(seed)
+        return 999
+
     def battery_surplus_priority(self) -> int:
         """The battery's position in the surplus priority walk (drag-set)."""
         from ..const import (
             BATTERY_SURPLUS_DEVICE_ID, DEFAULT_BATTERY_SURPLUS_PRIORITY,
         )
-        return int(self._priority_overrides.get(
-            BATTERY_SURPLUS_DEVICE_ID, DEFAULT_BATTERY_SURPLUS_PRIORITY))
+        return self.priority_for(
+            BATTERY_SURPLUS_DEVICE_ID, seed=DEFAULT_BATTERY_SURPLUS_PRIORITY)
 
     def _battery_device_row(self) -> Dict[str, Any]:
         def _num(entity: str):
@@ -729,13 +839,119 @@ class UnifiedDeviceRegistry:
             "switch_entity": None,
             "is_available": True,
             "is_on": charge_w > 0,          # "on" = currently charging
-            "current_power": round(charge_w) / 1000.0,
+            # WATTS — the card divides by 1000 then formats. Emitting kW here
+            # showed a 2 kW charge as "2 W" (ruflo HIGH; matches the ED rows).
+            "current_power": round(charge_w),
             "device_type": "battery",
             "has_manual_mapping": False,
             "control": {"type": "none"},
             "control_mode": "surplus",      # participates by position, no toggle
             "sem_owned": False,
             "soc": round(soc, 1) if soc is not None else None,
+        }
+
+    def _surplus_device_row(self, did: str, dev: Any) -> Dict[str, Any]:
+        """(#576) Priority-list payload for a directly-registered surplus
+        device (heat pump / hot water / climate), keyed by its id, with its
+        drag-set (or config-seeded) priority so it's positionable like the
+        loads, EV and battery."""
+        is_on = bool(getattr(dev, "is_active", False))
+        current_w = 0.0
+        if is_on and hasattr(dev, "get_current_consumption"):
+            try:
+                current_w = float(dev.get_current_consumption() or 0.0)
+            except (TypeError, ValueError):
+                current_w = 0.0
+        dtype = getattr(getattr(dev, "device_type", None), "value", None) or "individual_device"
+        mode = getattr(getattr(dev, "control_mode", None), "value", None) or "surplus"
+        return {
+            "name": getattr(dev, "name", did),
+            "priority": self.priority_for(
+                did, seed=int(getattr(dev, "priority", 5) or 5)),
+            "is_controllable": True,
+            "is_critical": False,
+            "power_rating": round(float(getattr(dev, "rated_power", 0) or 0)),
+            "power_entity": getattr(dev, "power_entity_id", None),
+            "energy_sensor": None,
+            "switch_entity": getattr(dev, "entity_id", None),
+            "is_available": True,
+            "is_on": is_on,
+            # WATTS (ruflo HIGH — the card divides by 1000; kW here showed
+            # milliwatts). Matches the battery / ED rows.
+            "current_power": round(current_w),
+            "device_type": dtype,
+            "has_manual_mapping": False,
+            "control": {"type": "surplus"},
+            "control_mode": mode,
+            "sem_owned": bool(getattr(dev, "_sem_owned", False)),
+        }
+
+    def refresh_direct_device_priorities(self) -> None:
+        """(#576) Make the drag store authoritative for directly-registered
+        surplus devices (heat pump / hot water / climate) too — mirrors the EV
+        charger refresh. ED / service devices already resolve via the registry
+        sync; this covers the ones registered straight into the controller so
+        their list position governs the walk (not just the card row)."""
+        for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
+            if did.startswith("energy_dashboard_") or getattr(dev, "is_ev", False):
+                continue
+            if did in self._service_registrations:
+                continue
+            dev.priority = self.priority_for(
+                did, seed=int(getattr(dev, "priority", 5) or 5))
+
+    def set_ev_chargers(self, chargers: List[Dict[str, Any]]) -> None:
+        """(#576 P2.1) The coordinator hands its configured chargers here each
+        cycle, so each appears in the ONE priority list keyed by its CONTROL id.
+
+        Each dict: ``{id, name, priority_seed, power_entity, current_power_w,
+        is_on, max_power_w, connected}``. This is the single authoritative
+        source for the EV rows — the ED ``is_ev`` naming guess is suppressed
+        in :meth:`get_devices_for_sensor` while any charger is configured.
+        """
+        self._ev_charger_rows = list(chargers or [])
+
+    def _configured_charger_entities(self) -> set:
+        """Power entities of configured chargers — used to suppress the ED
+        ``is_ev`` duplicate row for the same physical charger."""
+        return {
+            c.get("power_entity") for c in self._ev_charger_rows
+            if c.get("power_entity")
+        }
+
+    def _ev_charger_row(self, charger: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the priority-list payload for one configured charger, keyed
+        by its control id, with its drag-set (or seeded) priority."""
+        cid = charger["id"]
+        power_w = float(charger.get("current_power_w", 0.0) or 0.0)
+        return {
+            "name": charger.get("name", cid),
+            "priority": self.priority_for(
+                cid, seed=int(charger.get("priority_seed", 3))),
+            "is_controllable": True,
+            "is_critical": False,
+            # Rating = the charger's MIN power (min_A × phases × voltage) — the
+            # surplus THRESHOLD to start charging, the real analog of a heater's
+            # rating (and far more meaningful than the 32A×3φ ~22 kW max, which
+            # read as "the EV draws 22 kW"). The card shows the live draw while
+            # charging and this threshold when idle. Falls back to the live draw
+            # if min isn't available.
+            "power_rating": round(float(charger.get("min_power_w", power_w) or power_w)),
+            "power_entity": charger.get("power_entity"),
+            "energy_sensor": None,
+            "switch_entity": None,
+            "is_available": True,
+            "is_on": bool(charger.get("is_on", False)),
+            # WATTS (ruflo HIGH — the card divides by 1000; kW here showed
+            # milliwatts). Matches the battery / ED rows.
+            "current_power": round(power_w),
+            "device_type": "ev_charger",
+            "has_manual_mapping": False,
+            "control": {"type": "current"},
+            "control_mode": "surplus",
+            "sem_owned": False,
+            "connected": bool(charger.get("connected", False)),
+            "is_ev": True,
         }
 
     def _goal_payload(self, device_id: str) -> Dict[str, Any]:
@@ -862,12 +1078,71 @@ class UnifiedDeviceRegistry:
 
         await self._save_storage()
 
+    async def async_set_dependency(self, device_id: str, depends_on) -> None:
+        """Set (or clear) a device's "Requires" link and persist it (#122/#576).
+
+        Stored in the registry (``_dependency_overrides``) so it survives every
+        device rebuild — a drag, the 35s re-discovery, a config change, or a
+        restart — instead of only living on the transient live device (which
+        got wiped on each re-sync). Applied live immediately too.
+        """
+        # Guard against self-dependency (device requires itself) — it would
+        # deadlock activation forever and persist across restarts (ruflo HIGH).
+        deps = [str(d) for d in (
+            depends_on if isinstance(depends_on, (list, tuple)) else [depends_on]
+        ) if d and str(d) != device_id]
+        # Guard against a TRANSITIVE cycle (A requires B, B requires A) — a
+        # multi-hop self-dependency that the single-hop guard above misses. It
+        # would deadlock BOTH devices (each waits on the other) and persist
+        # across restarts (ruflo MEDIUM). Reject the write, keep the old link.
+        cyclic = [d for d in deps
+                  if self._dependency_would_cycle(device_id, d)]
+        if cyclic:
+            _LOGGER.warning(
+                "Rejected circular dependency: %s requires %s (would form a "
+                "cycle); keeping the existing link", device_id, cyclic,
+            )
+            deps = [d for d in deps if d not in cyclic]
+        if deps:
+            self._dependency_overrides[device_id] = deps
+        else:
+            self._dependency_overrides.pop(device_id, None)
+        # Service-registered devices carry depends_on in their spec too.
+        if device_id in self._service_registrations:
+            self._service_registrations[device_id]["depends_on"] = deps
+        live = self._surplus_controller.get_device(device_id)
+        if live is not None:
+            live.depends_on = list(deps)
+        await self._save_storage()
+        _LOGGER.info("Device dependency set: %s requires %s", device_id, deps or "nothing")
+
+    def _dependency_would_cycle(self, device_id: str, new_parent: str) -> bool:
+        """Would making ``device_id`` require ``new_parent`` close a cycle?
+
+        True iff ``device_id`` is already reachable UP the existing "requires"
+        graph from ``new_parent`` (so the new edge would loop back). Walks ALL
+        parents (a device can require several) with a visited-set, so it's
+        bounded even if the stored graph already contains a stray cycle."""
+        stack = [new_parent]
+        seen = set()
+        while stack:
+            node = stack.pop()
+            if node == device_id:
+                return True
+            if node in seen:
+                continue
+            seen.add(node)
+            stack.extend(self._dependency_overrides.get(node, []))
+        return False
+
     async def _save_storage(self) -> None:
         """Persist manual mappings, priority overrides, and control modes."""
         data = {
             "mappings": self._manual_mappings,
             "priority_overrides": self._priority_overrides,
             "control_modes": self._control_mode_overrides,
+            "dependencies": self._dependency_overrides,
+            "rated_power_overrides": self._rated_power_overrides,
             "service_registrations": self._service_registrations,
             "device_goals": self._device_goals,
         }
@@ -911,3 +1186,94 @@ class UnifiedDeviceRegistry:
         if rated > 0:
             return rated
         return self._get_power_rating(power_sensor)
+
+    def _initial_rated_power(self, device_id: str, power_sensor: Optional[str]) -> float:
+        """(#576) The rated power to hand a freshly-built device.
+
+        A persisted, self-calibrated value wins — so a sensor-equipped load
+        keeps its learned rating across a restart / rebuild instead of dropping
+        back to the 1 kW floor. Else the live sensor reading (0 when the load is
+        off), which ``SwitchDevice.__init__`` turns into the 1 kW default."""
+        override = float(self._rated_power_overrides.get(device_id, 0) or 0)
+        if override > 0:
+            return override
+        return self._get_power_rating(power_sensor)
+
+    def _capture_calibrated_ratings(self) -> bool:
+        """(#576) Snapshot any rating a live device self-calibrated UP to, into
+        the persistent overrides — BEFORE ``_sync_to_surplus_controller`` rebuilds
+        the devices and resets ``rated_power`` to the default. Only records real,
+        above-floor values; returns True if anything changed."""
+        dirty = False
+        for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
+            if getattr(dev, "is_ev", False) or not getattr(dev, "power_entity_id", None):
+                continue
+            rated = getattr(dev, "rated_power", None)
+            if rated is None:
+                continue
+            rated = float(rated)
+            prev = float(self._rated_power_overrides.get(did, 0) or 0)
+            if rated > _DEFAULT_RATED_POWER and rated > prev:
+                self._rated_power_overrides[did] = rated
+                dirty = True
+        return dirty
+
+    async def _seed_and_apply_ratings(self) -> bool:
+        """(#576) After the rebuild: (a) apply a persisted override to any live
+        device that came back at a lower rating, and (b) for a sensor-equipped
+        device we haven't learned yet, seed its rating from the power sensor's
+        recorder-history running max. Returns True if anything changed."""
+        dirty = False
+        for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
+            sensor = getattr(dev, "power_entity_id", None)
+            if getattr(dev, "is_ev", False) or not sensor:
+                continue
+            if getattr(dev, "rated_power", None) is None:
+                continue
+            override = float(self._rated_power_overrides.get(did, 0) or 0)
+            # (b) one-shot history seed for a device we've never learned.
+            if override <= 0 and did not in self._rating_seed_attempted:
+                self._rating_seed_attempted.add(did)
+                hist_max = await self._history_max_power(sensor)
+                if hist_max > _DEFAULT_RATED_POWER:
+                    override = hist_max
+                    self._rated_power_overrides[did] = hist_max
+                    dirty = True
+            # (a) apply the learned rating if the rebuilt device is below it.
+            if override > 0 and override > float(getattr(dev, "rated_power", 0) or 0):
+                dev.rated_power = override
+                if hasattr(dev, "min_power_threshold"):
+                    dev.min_power_threshold = override
+        return dirty
+
+    async def _history_max_power(self, power_sensor: str, days: int = 7) -> float:
+        """(#576) Largest numeric value the power sensor reported in the last
+        ``days`` — the load's real running draw. 0.0 if the recorder is
+        unavailable or has no usable history (best-effort, never raises)."""
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import (
+                state_changes_during_period,
+            )
+            from homeassistant.util import dt as dt_util
+            from datetime import timedelta as _timedelta
+
+            end = dt_util.utcnow()
+            start = end - _timedelta(days=days)
+            history = await get_instance(self.hass).async_add_executor_job(
+                state_changes_during_period, self.hass, start, end, str(power_sensor),
+            )
+            mx = 0.0
+            for st in history.get(power_sensor, []):
+                try:
+                    v = float(st.state)
+                except (ValueError, TypeError):
+                    continue
+                if v > mx:
+                    mx = v
+            return mx
+        except Exception as e:  # noqa: BLE001 — best-effort seed, never blocks setup
+            _LOGGER.debug(
+                "rated-power history seed for %s unavailable: %s", power_sensor, e,
+            )
+            return 0.0

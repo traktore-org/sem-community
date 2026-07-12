@@ -191,6 +191,14 @@ class PowerReadings:
     # EV state
     ev_connected: bool = False
     ev_charging: bool = False
+    # (#584) Per-charger plug/charging state, keyed by charger control id.
+    # Only chargers that HAVE their own sensor get an entry; build_view falls
+    # back to the fleet ``ev_connected``/``ev_charging`` for the rest. Without
+    # this, every charger inherited the fleet OR — so a car-less charger looked
+    # connected whenever a sibling had a car and fired a false "charging
+    # started" push.
+    ev_connected_per_charger: "Dict[str, bool]" = field(default_factory=dict)
+    ev_charging_per_charger: "Dict[str, bool]" = field(default_factory=dict)
 
     # Timestamps
     timestamp: Optional[datetime] = None

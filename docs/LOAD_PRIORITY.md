@@ -73,11 +73,55 @@ Reserve zone = 30 %, two 1 kW heaters at priorities 2 and 3.
   the pool shrinks it by exactly what was consumed and converges. Existing
   median/EMA smoothing and anti-flicker guard the residual jitter.
 
-## Scope
+## The EV and every device honour the same list (1.7.5-beta.3, #576 Phase 2)
 
-This covers **generic surplus loads** (switches / heaters / pumps in `surplus`
-mode). Extending the same reserve-zone priority to **EV charging** is a separate,
-carefully-specced follow-up — the EV already reclaims battery charge above
-`auto_start_soc` via a forecast-scaled redirect, so lowering *that* gate (rather
-than adding a second reclaim) is the correct EV mechanism. See the design spec's
-Path B build-note.
+The priority list is now the **single control for everything** — not just the loads
+and the battery:
+
+- **The EV charger is a first-class row**, keyed by its own control id. Above the
+  battery → it reclaims the battery-charge power (charges first, above the reserve
+  zone); below → it yields. This replaced the old fixed 90 % SOC gate. Your list
+  position also drives the **multi-charger distribution order** (the old
+  `ev_surplus_priority` is now just the seeded default).
+- **Every device type participates by position** — surplus switches, modulating
+  loads, climate/AC, the heat pump (SG-Ready) and hot water are all walked by their
+  list slot and share the reclaimed battery-charge power the same way.
+- **Default order is EV → battery → loads.** Loads yield to battery charging until
+  you drag one above the battery; the `Battery priority SOC` reserve floor stays an
+  absolute override (below it, the battery charges first regardless of position).
+
+### How position interacts with battery mode
+
+| Battery mode | Effect |
+|---|---|
+| `auto` / `self_consumption`, SOC ≥ reserve | passive sink — your dragged position governs |
+| `auto` / `self_consumption`, SOC < reserve | jumps to the top (reserve floor) |
+| `force_charge` | jumps to the top — commanded charge, loads/EV yield |
+| `force_discharge` / arbitrage | leaves the walk — it's feeding, not drawing |
+
+### "Requires" links (dependency chains)
+
+A device can **require** another (the "Requires" link on its Configure dialog): a
+towel rail that should only run when the pool pump does, for example. A required
+child always sits **immediately below its parent** in the list and moves with it —
+drag the parent and the child follows, so the chain never separates. The link is
+persisted, so it survives a drag, the periodic re-discovery, and a restart.
+
+SEM **rejects a link that would form a loop** — a device can't require itself, and
+it can't require something that (directly or transitively) already requires it.
+A rejected link is logged and the previous link is kept, so two devices can never
+deadlock each other waiting to start.
+
+### The EV row's rating
+
+The EV charger row shows its **minimum** power (min amps × phases × voltage) as its
+rating — the surplus *threshold* to start charging — not the theoretical 32 A × 3-phase
+maximum (which read as "the EV draws 22 kW"). While charging it shows the live draw;
+idle, it shows that start threshold.
+
+### Seeing the plan
+
+The layered trace (`diagnose`, `section: trace`) reports each device's list role
+— e.g. *"sink at list position 2"*, *"charging first — below reserve"* — so you can
+see who charges before whom each cycle. **Today's Plan** shows the pool pump / heat
+pump / hot water in the same forward timeline as the battery and EV.

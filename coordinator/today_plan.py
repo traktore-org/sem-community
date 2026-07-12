@@ -42,6 +42,8 @@ KIND_EV_DEADLINE = "ev_deadline"
 KIND_EV_WAIT = "ev_wait"
 KIND_BATTERY_FULL = "battery_full"   # #298: home battery charging → full ETA
 KIND_BATTERY_EMPTY = "battery_empty"  # #298: home battery discharging → floor ETA
+KIND_DEVICE_RUN = "device_run"       # #576: a surplus device's expected run window
+KIND_DEVICE_DONE = "device_done"     # #576: a surplus device met its daily goal
 
 
 @dataclass
@@ -124,6 +126,14 @@ def compose_today_plan(
     ev_target_kwh: Optional[float] = None,
     battery_full_eta: Optional[datetime] = None,
     battery_empty_eta: Optional[datetime] = None,
+    # #576 — the OTHER surplus devices (pump / heat pump / hot water / climate)
+    # in the same forward timeline as the battery/EV. Each dict:
+    #   {"name": str, "when": datetime, "done": bool, "detail": str|None}
+    # ``done`` → the device met its daily goal (a KIND_DEVICE_DONE row); else a
+    # KIND_DEVICE_RUN "expected to run" row. The coordinator computes ``when``
+    # from the solar forecast + the device's list position; this pure function
+    # just formats them so it stays unit-testable.
+    device_runs: Optional[List[Dict[str, Any]]] = None,
     currency: str = "",
 ) -> List[Dict[str, Any]]:
     """Build the forward-looking plan as a list of row dicts.
@@ -292,6 +302,23 @@ def compose_today_plan(
         rows.append(PlanRow(
             when=battery_empty_eta, kind=KIND_BATTERY_EMPTY,
             label="plan_battery_empty",
+        ))
+
+    # === #576 — the other surplus devices (pump / heat pump / hot water /
+    # climate) in the same forward timeline. A "done" device shows a
+    # goal-met row; the rest show an "expected to run" row at the projected
+    # time. ``when`` is clamped into the horizon by the caller; we guard here.
+    for dev in device_runs or []:
+        when = dev.get("when")
+        if not isinstance(when, datetime) or not (now <= when < horizon):
+            continue
+        done = bool(dev.get("done"))
+        rows.append(PlanRow(
+            when=when,
+            kind=KIND_DEVICE_DONE if done else KIND_DEVICE_RUN,
+            label="plan_device_done" if done else "plan_device_run",
+            detail=dev.get("detail"),
+            values={"name": str(dev.get("name", ""))},
         ))
 
     # Sort + return as dicts. Cap at 8 rows so the card stays glanceable.

@@ -317,6 +317,38 @@ class SurplusController:
             if d.is_active
         )
 
+    def observe_only(
+        self,
+        available_power_w: float,
+        reclaim_w: float = 0.0,
+    ) -> SurplusAllocationData:
+        """Read-only surplus allocation for OBSERVER MODE — reports the surplus
+        figures and CURRENTLY-active devices WITHOUT commanding anything.
+
+        No ``reconcile_all``, no ``activate`` / ``deactivate`` / ``adjust_power``
+        — this method physically cannot issue a device command. The coordinator
+        calls it INSTEAD of :meth:`update` when ``_observer_mode`` is on, so
+        observation mode cuts every surplus command (loads / heat pump / hot
+        water / climate) the same way the battery pipeline and EV control are
+        already cut. The trace's integration layer then reports "observer mode
+        — not commanding".
+        """
+        total = float(available_power_w) + max(0.0, float(reclaim_w))
+        active = [d for d in self._devices.values()
+                  if getattr(d, "is_active", False)]
+        allocated = sum(
+            float(d.get_current_consumption() or 0.0) for d in active
+        )
+        data = SurplusAllocationData()
+        data.total_surplus_w = total
+        data.distributable_surplus_w = max(0.0, total - self.regulation_offset)
+        data.regulation_offset_w = self.regulation_offset
+        data.allocated_w = allocated
+        data.unallocated_w = max(0.0, total - allocated)
+        data.active_devices = len(active)
+        data.total_devices = len(self._devices)
+        return data
+
     async def update(
         self,
         available_power_w: float,

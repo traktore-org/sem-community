@@ -446,30 +446,11 @@ async def async_setup_entry(
                     entity_category=EntityCategory.CONFIG,
                 ), "ev_phases",
                     charger_cfg.get("ev_phases", full_config.get("ev_phases", 3))),
-                # Surplus-allocation order (#470) — lower = charges first
-                # when solar surplus is distributed across the fleet.
-                (NumberEntityDescription(
-                    key=f"charger_{cid}_ev_surplus_priority",
-                    name=f"{cname} Surplus Priority",
-                    native_min_value=1, native_max_value=10, native_step=1,
-                    mode=NumberMode.SLIDER,
-                    icon="mdi:sort-numeric-ascending",
-                    entity_category=EntityCategory.CONFIG,
-                ), "ev_surplus_priority",
-                    charger_cfg.get("ev_surplus_priority", 5)),
-                # Load-shed order under peak (#470) — independent of surplus
-                # order; higher = shed first when grid import nears the peak
-                # limit. Defaults to the surplus priority.
-                (NumberEntityDescription(
-                    key=f"charger_{cid}_ev_shed_priority",
-                    name=f"{cname} Shed Priority",
-                    native_min_value=1, native_max_value=10, native_step=1,
-                    mode=NumberMode.SLIDER,
-                    icon="mdi:sort-numeric-descending",
-                    entity_category=EntityCategory.CONFIG,
-                ), "ev_shed_priority",
-                    charger_cfg.get("ev_shed_priority",
-                                    charger_cfg.get("ev_surplus_priority", 5))),
+                # (#576) The per-charger Surplus/Shed priority steppers were
+                # retired — the drag-orderable device-priority list is now the
+                # single editor (surplus order = list position, shed order = the
+                # reverse walk). The ``ev_surplus_priority`` CONFIG value is kept
+                # as the seed read at boot; ``ev_shed_priority`` is gone entirely.
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(

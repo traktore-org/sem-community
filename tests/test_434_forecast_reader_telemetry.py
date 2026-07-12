@@ -137,21 +137,24 @@ def test_read_path_cached_source_lost_redetected():
 # ──────────────────────────────────────────────
 
 
-def test_unit_conversion_count_fires_on_solcast_low_values():
-    """Solcast reports kW; values < 100 trigger the *1000 conversion.
-    Counter exposes how many of the 3 readings fired the conversion."""
+def test_unit_conversion_count_fires_on_kw_declared_sensor():
+    """#575: conversion is driven by the DECLARED unit, not a magnitude guess.
+    A sensor declaring kW converts all 3 power readings to W."""
     hass = MagicMock()
-    hass.states.get = MagicMock(return_value=_state("5.0"))  # 5 kW → triggers
+    hass.states.get = MagicMock(
+        return_value=_state("5.0", {"unit_of_measurement": "kW"}))
     r = ForecastReader(hass=hass)
     r.read_forecast()
     # 3 conversions: power_now, power_next_hour, peak_power_today
     assert r.get_diagnostics()["unit_conversion_count"] == 3
 
 
-def test_unit_conversion_count_zero_when_already_watts():
-    """Solcast reporting values >= 100 are already in watts."""
+def test_unit_conversion_count_zero_when_declared_watts():
+    """#575: a Watt-declared sensor (Solcast) never converts — even a genuine
+    low dawn/dusk value passes through, so no false ~80 kW spike."""
     hass = MagicMock()
-    hass.states.get = MagicMock(return_value=_state("5000.0"))
+    hass.states.get = MagicMock(
+        return_value=_state("80.0", {"unit_of_measurement": "W"}))
     r = ForecastReader(hass=hass)
     r.read_forecast()
     assert r.get_diagnostics()["unit_conversion_count"] == 0

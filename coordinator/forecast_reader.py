@@ -373,30 +373,18 @@ class ForecastReader:
                 0, data.forecast_today_kwh * self._remaining_day_fraction()
             )
 
-        # Read power now
-        data.power_now_w = self._read_float(
-            self._entities.get("power_now"), 0.0
-        )
-        # Solcast reports in kW, convert if needed
-        if self._source == "solcast" and data.power_now_w < 100:
-            data.power_now_w *= 1000
-            self._last_unit_conversion_count += 1
-
-        # Read power next hour
-        data.power_next_hour_w = self._read_float(
-            self._entities.get("power_next_hour"), 0.0
-        )
-        if self._source == "solcast" and data.power_next_hour_w < 100:
-            data.power_next_hour_w *= 1000
-            self._last_unit_conversion_count += 1
-
-        # Peak power
-        data.peak_power_today_w = self._read_float(
-            self._entities.get("peak_power_today"), 0.0
-        )
-        if self._source == "solcast" and data.peak_power_today_w < 100:
-            data.peak_power_today_w *= 1000
-            self._last_unit_conversion_count += 1
+        # Power readings, normalised to WATTS by the sensor's DECLARED unit
+        # (#575). The old ``source == solcast and value < 100 → ×1000`` magnitude
+        # heuristic wrongly inflated a genuine sub-100 W dawn/dusk reading 1000×
+        # (Solcast publishes Watts, not kW), which showed as ~80 kW spikes at
+        # sunrise/sunset on the Forecast-vs-Production chart. Converting on the
+        # declared unit instead is correct for Solcast (W, passes through) AND a
+        # kW-declared sensor from any source (converts), with no magnitude guess.
+        data.power_now_w = self._read_power_w(self._entities.get("power_now"))
+        data.power_next_hour_w = self._read_power_w(
+            self._entities.get("power_next_hour"))
+        data.peak_power_today_w = self._read_power_w(
+            self._entities.get("peak_power_today"))
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
         # and dashboard consumers expect "HH:MM" local time.
@@ -429,6 +417,28 @@ class ForecastReader:
             except (ValueError, TypeError):
                 pass
         return default
+
+    def _read_power_w(self, entity_id: Optional[str], default: float = 0.0) -> float:
+        """Read a power sensor and normalise to WATTS by its DECLARED unit (#575).
+
+        Converts only when the sensor's ``unit_of_measurement`` is kW — never on
+        a magnitude guess, which mis-fired on genuine low dawn/dusk readings and
+        produced ~80 kW spikes on the Forecast-vs-Production chart. A sensor that
+        declares W (Solcast) or no unit passes through unchanged."""
+        if not entity_id:
+            return default
+        state = self.hass.states.get(entity_id)
+        if not state or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
+            return default
+        try:
+            value = float(state.state)
+        except (ValueError, TypeError):
+            return default
+        unit = str(state.attributes.get("unit_of_measurement", "") or "").strip().lower()
+        if unit in ("kw", "kwp"):
+            value *= 1000.0
+            self._last_unit_conversion_count += 1
+        return value
 
     def _remaining_day_fraction(self) -> float:
         """Estimate fraction of daylight remaining (rough)."""

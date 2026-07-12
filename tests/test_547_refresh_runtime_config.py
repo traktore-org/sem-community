@@ -105,6 +105,8 @@ class TestRefreshRuntimeConfig:
         # global ev_surplus_priority + per-charger override for min/max
         cfg = {
             "ev_surplus_priority": 4,
+            # ev_shed_priority is RETIRED (#576) — set here to prove it's now
+            # ignored: shed order follows the ONE list position instead.
             "ev_chargers": [{"id": "wb", "ev_min_current": 10,
                              "max_charging_current": 16, "ev_shed_priority": 8}],
         }
@@ -114,7 +116,10 @@ class TestRefreshRuntimeConfig:
         assert dev.priority == 4          # global surplus priority
         assert dev.min_current == 10.0    # per-charger override
         assert dev.max_current == 16.0
-        assert lm._devices["load_device_wb"]["priority"] == 8  # shed priority
+        # #576 — shed priority = the list position (dev.priority), NOT the
+        # retired ev_shed_priority=8. Latest-to-charge (highest list number)
+        # sheds first under the load manager's "higher number sheds first".
+        assert lm._devices["load_device_wb"]["priority"] == 4
 
     def test_min_power_threshold_re_derived(self):
         # HIGH (review): the surplus-activation gate must follow min_current,

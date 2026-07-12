@@ -42,6 +42,9 @@ const KINDS = {
     // the floor", not "literally zero".
     battery_full:       { icon: 'mdi:battery-charging-100', color: '#f06292' },
     battery_empty:      { icon: 'mdi:battery-low',       color: '#4db6ac' },
+    // #576 — other surplus devices in the same timeline
+    device_run:         { icon: 'mdi:power-plug',        color: '#5BC8D8' },
+    device_done:        { icon: 'mdi:check-circle',      color: '#8DC892' },
 };
 
 class SEMTodayPlanCard extends SEMLitBase {

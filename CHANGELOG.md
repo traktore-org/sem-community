@@ -11,6 +11,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.3] — 12.07.2026
+
+> The **EV and every device** now honour the one priority list — not just the loads and the battery.
+
+### 🐛 Fixes
+
+- 🔌 **No more phantom "solar charging started" push for a car-less charger** (#584, by @RienduPre) —
+  in a multi-charger setup a charger without a car looked "connected" whenever a *sibling* had one
+  (it inherited the fleet-wide plug flag), so it entered solar-charging and fired a push. Each
+  charger now uses its **own** plug/charging sensor, and the notification dispatcher skips any
+  charger SEM doesn't see connected. (A charger with no plug sensor still falls back to the fleet.)
+- ☀️ **Forecast chart no longer spikes at sunrise/sunset** (#575, by @ebnerjoh) — a genuine low
+  dawn/dusk Solcast reading (~80 W) was multiplied ×1000 into an ~80 kW spike by a magnitude
+  guess. Power is now normalised by the sensor's **declared unit** (Solcast Watts pass through; a
+  kW-declared sensor still converts) — no more guessing.
+
+### 📖 Docs
+
+- 🕒 **Pool pump "4 h/day on solar only"** is answered by the goal engine (#559, by @alexmc1510):
+  register the pump as a surplus device with `daily_min_runtime_min: 240` + `top_up_policy: solar_only`
+  — it runs on surplus toward the 4 h target any time of day and never grid-forces. See
+  `docs/MULTI_DEVICE_GUIDE.md` → "Daily targets — the goal engine".
+
+### ⚡ The EV charges before the battery when you put it there (#576 Phase 2)
+- ✨ **The EV charger is now a first-class device in the priority list**, keyed by its own
+  control id. Drag it above the home battery and it reclaims the solar that would otherwise
+  charge the battery (above the reserve zone); drag it below and it yields — the same rule
+  the loads follow. This replaces the old fixed 90 % SOC gate with your list position.
+- ✨ **One priority axis for everything.** The list position now drives the multi-charger
+  distribution order too; `ev_surplus_priority` becomes the seeded default. Out of the box
+  the order is **EV → battery → loads** (loads yield to the battery until you drag one above
+  it), with the **`Battery priority SOC`** reserve floor still an absolute override.
+- ✨ **Every device type participates by position** — surplus switches, modulating loads,
+  climate/AC, heat pump (SG-Ready) and hot water are all walked by their list slot and share
+  the reclaimed battery-charge power accordingly.
+- 🔎 **Self-explaining trace.** The layered trace now reports each device's list role
+  ("sink at list position 2", "charging first — below reserve", "discharging — feeding") and
+  how much battery-charge power the loads reclaimed — so "why did the pump stop early?" is
+  answerable top-down.
+- 🗓️ **Today's Plan covers every device** — the pool pump / heat pump / hot water now appear
+  in the same forward timeline as the battery and EV ("expected to run", "done for today").
+- 🖱️ **Rock-solid drag-and-drop.** The priority list was rebuilt on Lit-native pointer-drag
+  (no more SortableJS fighting the render): the badge number always equals the position, a
+  drop line shows where a card will land, and dependency ("Requires") children stay attached
+  to their parent across any reorder — the number/order desync and the "connection got lost"
+  bugs can't recur (locked by 43 drag/reorder unit tests).
+- 🔗 **"Requires" links are loop-proof.** A dependency that would form a cycle (a device
+  requiring itself, directly or transitively) is rejected and logged — two devices can never
+  deadlock each other waiting to start. Links now persist across every rebuild and restart.
+- 🩹 **Fixes from a full review:** the EV/battery/load/heat-pump power readouts on the card
+  are back to correct units (a 2 kW charge no longer showed as "2 W"); the EV row's rating is
+  its start threshold (min amps), not the misleading 22 kW theoretical max; mid-drag tab
+  navigation no longer leaks the card.
+- 🧹 **Retired the old per-charger priority knobs.** The Config-tab **Surplus Priority** and
+  **Shed Priority** steppers (and their number entities) are gone — the drag list is the one
+  editor now (surplus order = list position, shed order = the reverse walk). `ev_shed_priority`
+  is removed entirely and stripped from existing configs on upgrade (schema v15); the
+  `ev_surplus_priority` value is kept as the seed for a charger's initial list slot.
+- 🔌 **Sensor-equipped loads show their real rating, not a 1 kW placeholder.** A switch/plug
+  with a power sensor now **remembers** the draw it self-calibrated to (it survives restarts and
+  the periodic device rebuild instead of resetting to the 1 kW default), and a freshly-added one
+  is **seeded from its power sensor's recent history** so it shows its true rating right away.
+  Loads that really draw under 1 kW keep the conservative 1 kW surplus-activation floor.
+- ✅ Full test suite green (4300+ Python + 43 card tests); every new guard mutation-tested;
+  force-charge / scheduled / arbitrage battery commands are honored (never reclaimed).
+
 # [1.7.5-beta.2] — 11.07.2026
 
 > Loads charge before the battery — device priority now outranks battery charging.
