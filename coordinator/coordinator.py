@@ -1448,8 +1448,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             predictor_state = self._storage._daily_data.get("predictor", {})
             self._predictor.restore_state(predictor_state)
 
-            # Restore device runtimes from storage
-            self._restore_device_runtimes()
+            # (#586) Device-runtime restore is deliberately NOT done here.
+            # This first-refresh runs before the UnifiedDeviceRegistry is
+            # initialised (see __init__.py:async_setup_entry), so no surplus
+            # device exists yet and get_device() would find nothing — the
+            # accrued "X/Y u op zon vandaag" progress would silently reset to
+            # 0 on every restart. __init__ calls _restore_device_runtimes()
+            # explicitly once the registry has (re-)registered the devices.
 
             # Restore EV session state (survives restarts)
             self._restore_ev_session_state()
