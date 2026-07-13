@@ -441,6 +441,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - **Multi-battery control + per-battery modes** (#523) — per-battery control entities and five modes (`auto`, `self-consumption`, `force-charge`, `force-discharge`, `off`), zero-config Huawei forcible discharge, corrected SG-Ready relay map.
 - **Smarter EV control** — no draining the battery to hold a dead solar session, no charging from expensive grid after the cheap window ends (#461/#524); EV target by daily **kWh** *or* **vehicle SOC %**; per-charger independent surplus vs shed priority (#470).
 - **Robust grid-sign autodetection + one-tap fix** (#461) — solar-anchored detector with `Fix grid sign` / `Reset` buttons and a `flip_grid_sign` service; locks survive restarts (#476).
+- **Battery-sign autodetection + one-tap fix** (#588) — brand-seeded (deterministic for known inverters) + counter-correlation detector with a `Fix battery sign` button and a `flip_battery_sign` service, at parity with the grid-sign handling; per-battery on multi-battery installs, locks survive restarts.
 - **Idempotent Huawei Modbus write** (#538), **dashboard time labels in the home timezone** (#539), and **full 15-locale dashboard translations** (parity-tested).
 - Battery → grid export arbitrage shipped in beta but is **off in this stable**, pending more soak (#533, re-enable targeted for v1.7.4).
 

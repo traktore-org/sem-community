@@ -888,6 +888,9 @@
       "diag_grid_sign": {
         "name": "Netzvorzeichen"
       },
+      "diag_battery_sign": {
+        "name": "Batterievorzeichen"
+      },
       "diag_charger_control": {
         "name": "Lader-Steuerungsmethode"
       },

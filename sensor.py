@@ -1317,6 +1317,10 @@ SENSOR_TYPES = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
+        key="diag_battery_sign",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
         key="diag_charger_control",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),

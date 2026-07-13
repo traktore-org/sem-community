@@ -888,6 +888,9 @@
       "diag_grid_sign": {
         "name": "Net Verbruik of Productie"
       },
+      "diag_battery_sign": {
+        "name": "Batterij Laden of Ontladen"
+      },
       "diag_charger_control": {
         "name": "Lader Besturings Methode"
       },

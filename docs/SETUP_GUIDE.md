@@ -320,6 +320,7 @@ The options flow is organized into these pages:
 | Max assist power (W) | 4500 W | Maximum battery discharge power allowed for EV charging. Set it to the lower of your battery's rated discharge power and your charger's maximum input. |
 | Assist gate / Solar Gate (v1.7.3) (W) | 1200 W | **Battery assist threshold** — battery only supplements EV charging when real solar surplus is at least this value (0–5000 W). Set to 0 to allow battery assist everywhere, including overnight. Prevents battery draining into the car at dusk/dawn. |
 | Grid sign flip | Off | Manual override for grid power polarity (v1.7.3). SEM auto-detects at startup whether `positive = import` or `positive = export`. Flip this on only if import/export are inverted in your system diagram. Use the **Fix grid sign** button on the Control tab (simpler). When enabled, auto-detect is bypassed. |
+| Battery sign flip | Off | Manual override for battery power polarity (v1.7.5, #588). SEM auto-detects whether `positive = charge` or `positive = discharge` — from your inverter's brand (deterministic for known brands) and from the Energy-Dashboard charge/discharge counters. Flip this on only if charge/discharge look inverted (battery shows charging when it's really discharging). Use the **Fix battery sign** button in Config → Advanced (simpler — it also copies a paste-ready report for the GitHub issue). `Reset` re-learns and clears both grid and battery flips. When enabled, auto-detect is bypassed. |
 
 ### Tariff and Pricing settings
 

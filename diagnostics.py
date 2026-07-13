@@ -206,6 +206,15 @@ async def async_get_config_entry_diagnostics(
             },
         }
 
+    # #588 — battery sign detection state (mirrors grid sign block above).
+    battery_sign_info: dict[str, Any] = {}
+    reader_pre = getattr(coordinator, "_sensor_reader", None)
+    if reader_pre is not None:
+        try:
+            battery_sign_info = reader_pre.battery_sign_diagnostics()
+        except Exception:  # noqa: BLE001 — diagnostics must never raise
+            battery_sign_info = {"error": "diagnostics_failed"}
+
     # Split-grid discovery state (issue #166): surface which import/export
     # sensors auto-discovery picked and how confident it is. A "split-lowconf"
     # value means same-device filtering failed and re-discovery is still active.
@@ -420,6 +429,7 @@ async def async_get_config_entry_diagnostics(
         "surplus": surplus_info,
         "load_management": load_info,
         "energy_dashboard": ed_info,
+        "battery_sign": battery_sign_info,
         "split_grid_discovery": split_grid_info,
         "pv_strings_discovery": pv_strings_info,
         "charger_adapters": charger_adapter_info,

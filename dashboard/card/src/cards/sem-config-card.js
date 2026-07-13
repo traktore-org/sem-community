@@ -138,6 +138,8 @@ const WATCHED = [
     'switch.sem_observer_mode',
     // #461: grid-sign fix lives in the Advanced section now.
     'sensor.sem_diag_grid_sign',
+    // #588: battery-sign fix, same section.
+    'sensor.sem_diag_battery_sign',
 ];
 
 // #528 — entity-wiring keys that trigger an entry RELOAD when changed (mirror
@@ -168,6 +170,9 @@ class SEMConfigCard extends SEMLitBase {
             // #461 grid-sign fix button transient UI state.
             _signBusy: { state: true },
             _signMsg: { state: true },
+            // #588 battery-sign fix button transient UI state.
+            _battSignBusy: { state: true },
+            _battSignMsg: { state: true },
             // #528 staged structural (entity-wiring) edits — committed in one
             // Apply so a reload fires once for the whole batch, not per field.
             _pending: { state: true },
@@ -196,6 +201,8 @@ class SEMConfigCard extends SEMLitBase {
         this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
         this._signBusy = false;
         this._signMsg = '';
+        this._battSignBusy = false;
+        this._battSignMsg = '';
         this._pending = {};   // { structuralKey: stagedValue }
         this._applying = false;
         this._pendingRemove = '';  // charger id awaiting remove-confirm
@@ -1649,6 +1656,7 @@ class SEMConfigCard extends SEMLitBase {
     // user can correct it here without Developer Tools → Actions.
     _renderGridSignFix(T) {
         const gridSign = this._val('diag_grid_sign') || '—';
+        const battSign = this._val('diag_battery_sign') || '—';
         return html`
             <div class="grid-sign-block">
                 <div class="readonly-row">
@@ -1671,6 +1679,23 @@ class SEMConfigCard extends SEMLitBase {
                     : nothing}
                 ${this._showHelp
                     ? html`<div class="setting-help-text">${this._t('fix_grid_sign_help')}</div>`
+                    : nothing}
+                <div class="readonly-row" style="margin-top:8px">
+                    <span class="ctrl-label">${this._t('battery_sign')}</span>
+                    <span class="readonly-value">${battSign}</span>
+                </div>
+                <div class="action-row">
+                    <button class="action-btn" ?disabled=${this._battSignBusy}
+                            @click=${() => this._flipBatterySign()}>
+                        <ha-icon icon="mdi:swap-vertical-bold" style="--mdc-icon-size:16px"></ha-icon>
+                        ${this._t('fix_battery_sign')}
+                    </button>
+                </div>
+                ${this._battSignMsg
+                    ? html`<div class="sign-feedback">${this._battSignMsg}</div>`
+                    : nothing}
+                ${this._showHelp
+                    ? html`<div class="setting-help-text">${this._t('fix_battery_sign_help')}</div>`
                     : nothing}
             </div>
         `;
@@ -1713,6 +1738,71 @@ class SEMConfigCard extends SEMLitBase {
             : this._t('sign_flipped');
         this.requestUpdate();
         setTimeout(() => { this._signMsg = ''; this.requestUpdate(); }, 6000);
+    }
+
+    // #588 — battery charge/discharge sign flip, mirrors _flipGridSign.
+    async _flipBatterySign() {
+        if (!this._hass || this._battSignBusy) return;
+        this._battSignBusy = true;
+        this._battSignMsg = '';
+        this.requestUpdate();
+        let payload = null;
+        try {
+            const res = await this._hass.callService(
+                'solar_energy_management', 'flip_battery_sign', {},
+                undefined, false, true,
+            );
+            payload = (res && res.response) ? res.response : res;
+        } catch (e) {
+            payload = null;
+        }
+        const report = this._buildBatterySignReport(payload);
+        let copied = false;
+        try {
+            await navigator.clipboard.writeText(report);
+            copied = true;
+        } catch (e) {
+            copied = false;
+        }
+        this._battSignBusy = false;
+        this._battSignMsg = copied
+            ? this._t('sign_flipped_copied')
+            : this._t('sign_flipped');
+        this.requestUpdate();
+        setTimeout(() => { this._battSignMsg = ''; this.requestUpdate(); }, 6000);
+    }
+
+    // Build the markdown battery-sign support report copied on flip.
+    _buildBatterySignReport(payload) {
+        const d = (payload && payload.diagnostics) || {};
+        const flip = (payload && typeof payload.user_flip === 'boolean')
+            ? String(payload.user_flip) : '?';
+        const j = (v) => (v === undefined || v === null) ? '?' : String(v);
+        const arr = (v) => (Array.isArray(v) && v.length) ? v.join(', ') : '(none)';
+        const bt = String.fromCharCode(96); // backtick — kept out of source
+        const code = (s) => bt + s + bt;
+        const perBid = d.per_bid || {};
+        const bidLines = Object.entries(perBid).map(([bid, info]) =>
+            '  ' + bid + ': ' + j(info.inverted ? 'negated' : 'normal')
+            + ' (detected=' + j(info.detected) + ', confidence=' + j(info.confidence)
+            + ', samples=' + j(info.samples) + ')'
+        );
+        return [
+            '### SEM battery-sign report (#588)',
+            '',
+            'I tapped **Fix battery sign** in the Configuration tab.',
+            'battery_sign_user_flip is now ' + code(flip) + '.',
+            '',
+            '- Battery sensor: ' + code(j(d.battery_power_sensor)) + ' = ' + j(d.battery_power_raw_state) + ' (raw)',
+            '- Battery integration: ' + j(d.battery_platform) + ' (brand-seeded: ' + j(d.brand_seeded) + ')',
+            '- Per-battery sign state:',
+            ...bidLines,
+            '- Charge counters: ' + arr(d.charge_counters),
+            '- Discharge counters: ' + arr(d.discharge_counters),
+            '',
+            'My hardware (please fill in): inverter / battery brand.',
+            'After the flip, does battery charge/discharge show the correct direction?',
+        ].join('\n');
     }
 
     // Build the markdown support report copied on flip. Plain string
