@@ -14,12 +14,25 @@ from custom_components.solar_energy_management.utils.log_buffer import (
 
 @pytest.fixture
 def clean_logger():
-    """Detach any buffers the tests (or prior tests) attached."""
+    """Detach any buffers the tests (or prior tests) attached.
+
+    Detach BEFORE the test too, not just after: ``ensure_attached()`` reuses a
+    module-global buffer, so a prior test (real setup path) that left a
+    populated buffer attached would make ``ensure_attached()`` here return that
+    polluted buffer. Under xdist this is ordering- (worker-) dependent, so the
+    test passed locally but flooded (80 records) in CI. Starting clean makes it
+    deterministic regardless of what ran before on this worker.
+    """
     logger = logging.getLogger(SEM_LOGGER_NAME)
+
+    def _detach():
+        for handler in list(logger.handlers):
+            if isinstance(handler, SEMLogBuffer):
+                logger.removeHandler(handler)
+
+    _detach()
     yield logger
-    for handler in list(logger.handlers):
-        if isinstance(handler, SEMLogBuffer):
-            logger.removeHandler(handler)
+    _detach()
 
 
 @pytest.mark.unit
