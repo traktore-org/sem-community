@@ -3613,11 +3613,20 @@ async def _async_register_phase_services(
             return
         target = sem_entries[0]
         requested = call.data.get("entry_id") if call.data else None
-        if requested and len(sem_entries) > 1:
-            for e in sem_entries:
-                if e.entry_id == requested:
-                    target = e
-                    break
+        # #588 L1 — fix the entry_id guard: the old ``len > 1`` condition
+        # silently fell through to entry[0] when requested was set but the
+        # install only had one entry (stale/wrong entry_id). Now ANY non-None
+        # requested must match, else fail loudly.
+        if requested:
+            matched = next((e for e in sem_entries if e.entry_id == requested), None)
+            if matched is None:
+                _LOGGER.warning(
+                    "reset_sign_detection: requested entry_id %r not found "
+                    "(known: %s)",
+                    requested, [e.entry_id for e in sem_entries],
+                )
+                return
+            target = matched
         coordinator = getattr(target, "runtime_data", None)
         if coordinator is None:
             _LOGGER.warning("reset_sign_detection: no coordinator on entry %s", target.entry_id)
@@ -3630,11 +3639,14 @@ async def _async_register_phase_services(
             storage.set_sign_state({})
             await storage.async_save_energy_delayed()
         # A re-learn must start clean: drop any prior one-tap user flip
-        # (#461) so the freshly-learned sign isn't silently re-inverted on
-        # top. Only touches the entry — and reloads — when a flip was
+        # (#461 / #588) so the freshly-learned sign isn't silently re-inverted
+        # on top. Only touches the entry — and reloads — when a flip was
         # actually set, so the common reset path stays reload-free.
-        if bool((target.options or {}).get("grid_sign_user_flip", False)):
-            cleared = {**(target.options or {}), "grid_sign_user_flip": False}
+        opts = target.options or {}
+        grid_flip = bool(opts.get("grid_sign_user_flip", False))
+        batt_flip = bool(opts.get("battery_sign_user_flip", False))  # #588 H3
+        if grid_flip or batt_flip:
+            cleared = {**opts, "grid_sign_user_flip": False, "battery_sign_user_flip": False}
             if coordinator is not None:
                 coordinator._skip_options_reload = dict(cleared)
             hass.config_entries.async_update_entry(target, options=cleared)
@@ -3665,11 +3677,15 @@ async def _async_register_phase_services(
             return {"ok": False, "error": "no_entry"}
         target = sem_entries[0]
         requested = call.data.get("entry_id") if call.data else None
-        if requested and len(sem_entries) > 1:
-            for e in sem_entries:
-                if e.entry_id == requested:
-                    target = e
-                    break
+        # #588 L1 — same entry_id fix as reset/flip_battery
+        if requested:
+            matched = next((e for e in sem_entries if e.entry_id == requested), None)
+            if matched is None:
+                _LOGGER.warning(
+                    "flip_grid_sign: requested entry_id %r not found", requested,
+                )
+                return {"ok": False, "error": "entry_not_found"}
+            target = matched
         coordinator = getattr(target, "runtime_data", None)
         # Snapshot diagnostics BEFORE the flip — captures the state the
         # user is reporting as wrong (raw meter value, counters, evidence).
@@ -3702,6 +3718,64 @@ async def _async_register_phase_services(
         DOMAIN,
         "flip_grid_sign",
         async_flip_grid_sign,
+        schema=vol.Schema({
+            vol.Optional("entry_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    # #588 B1 — battery sign flip, mirrors async_flip_grid_sign exactly.
+    # When the battery charge/discharge appears inverted and the auto-detect
+    # or brand seed locked the wrong sign, the user taps "Fix battery sign"
+    # on the Config tab: this toggles the persisted ``battery_sign_user_flip``
+    # option, reloads so the corrected sign takes effect immediately, and
+    # returns a diagnostics dict for a GitHub issue.
+    async def async_flip_battery_sign(call):
+        """Flip the battery-power sign and return a #588 support payload."""
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return {"ok": False, "error": "no_entry"}
+        target = sem_entries[0]
+        requested = call.data.get("entry_id") if call.data else None
+        # #588 L1 — entry_id must match exactly (not silently fall through)
+        if requested:
+            matched = next((e for e in sem_entries if e.entry_id == requested), None)
+            if matched is None:
+                _LOGGER.warning(
+                    "flip_battery_sign: requested entry_id %r not found", requested,
+                )
+                return {"ok": False, "error": "entry_not_found"}
+            target = matched
+        coordinator = getattr(target, "runtime_data", None)
+        # Snapshot diagnostics BEFORE the flip — captures the state the
+        # user is reporting as wrong (raw battery value, counters, evidence).
+        diag = {}
+        reader = getattr(coordinator, "_sensor_reader", None) if coordinator else None
+        if reader is not None:
+            try:
+                diag = reader.battery_sign_diagnostics()
+            except Exception:  # noqa: BLE001 — diag must never block the flip
+                _LOGGER.debug("flip_battery_sign: diagnostics snapshot failed", exc_info=True)
+
+        current = bool((target.options or {}).get("battery_sign_user_flip", False))
+        new_flip = not current
+        new_options = {**(target.options or {}), "battery_sign_user_flip": new_flip}
+        # Suppress the update-listener reload; one explicit reload issued below.
+        if coordinator is not None:
+            coordinator._skip_options_reload = dict(new_options)
+        hass.config_entries.async_update_entry(target, options=new_options)
+        await hass.config_entries.async_reload(target.entry_id)
+        _LOGGER.info(
+            "flip_battery_sign: user_flip %s -> %s on entry %s",
+            current, new_flip, target.entry_id,
+        )
+        diag["user_flip_now"] = new_flip
+        return {"ok": True, "user_flip": new_flip, "diagnostics": diag}
+
+    hass.services.async_register(
+        DOMAIN,
+        "flip_battery_sign",
+        async_flip_battery_sign,
         schema=vol.Schema({
             vol.Optional("entry_id"): cv.string,
         }),

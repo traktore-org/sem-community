@@ -421,3 +421,22 @@ flip_grid_sign:
       required: false
       selector:
         text:
+
+flip_battery_sign:
+  name: Flip battery sign
+  description: >
+    Flip the battery charge/discharge convention by one tap and return a
+    support report. Toggles the persisted battery_sign_user_flip override
+    (sits on top of the auto-detect / brand-seed decision), reloads so the
+    corrected sign takes effect immediately, and returns a diagnostics
+    payload (raw battery value, configured counters, accumulator evidence)
+    that the Config-tab button copies for a GitHub issue. Use when battery
+    charge/discharge appears inverted and a re-learn can't fix it.
+    Calling it again flips back.
+  fields:
+    entry_id:
+      name: Config entry
+      description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:

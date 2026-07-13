@@ -886,6 +886,9 @@
       "diag_grid_sign": {
         "name": "Znaménková konvence sítě"
       },
+      "diag_battery_sign": {
+        "name": "Znaménková konvence baterie"
+      },
       "diag_charger_control": {
         "name": "Metoda ovládání nabíječky"
       },

@@ -96,6 +96,28 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
     return default
 
 
+def _format_battery_sign_diag(inverted: dict, detected: dict) -> str:
+    """Serialise the per-bid battery-sign state to a SCALAR string for the
+    ``diag_battery_sign`` sensor (#588 M-2).
+
+    HA sensor state must be a scalar — a raw dict is an invalid state and
+    renders as ``[object Object]`` in the config card. Mirrors the plain-string
+    ``diag_grid_sign``. Single battery → bare value; multi-battery →
+    ``"b1: negated, b2: normal (learning)"``.
+    """
+    if not inverted:
+        return "learning"
+
+    def _fmt(bid):
+        return ("negated" if inverted.get(bid) else "normal") + (
+            "" if detected.get(bid) else " (learning)"
+        )
+
+    if len(inverted) == 1:
+        return _fmt(next(iter(inverted)))
+    return ", ".join(f"{bid}: {_fmt(bid)}" for bid in sorted(inverted))
+
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMixin):
     """Coordinator for Solar Energy Management.
 
@@ -2876,6 +2898,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             else:
                 result["diag_grid_mode"] = "combined"
             result["diag_grid_sign"] = "negated" if self._sensor_reader._grid_sign_inverted else "normal"
+            # #588 — battery sign summary per bid (mirrors diag_grid_sign).
+            _batt_inv = getattr(self._sensor_reader, "_battery_sign_inverted", {})
+            _batt_det = getattr(self._sensor_reader, "_battery_sign_detected", {})
+            result["diag_battery_sign"] = _format_battery_sign_diag(_batt_inv, _batt_det)
             result["diag_charger_count"] = len(self._ev_devices)
             result["diag_charger_control"] = "number" if any(
                 getattr(d, 'current_entity_id', None) for d in self._ev_devices.values()

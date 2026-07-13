@@ -66,6 +66,24 @@ PLATFORM_GRID_SIGN_INVERT: dict[str, bool] = {
     "deyecloud": True,
 }
 
+# #588 battery-sign brand-lookup tier — same semantics as PLATFORM_GRID_SIGN_INVERT
+# but for the battery power sensor. Value = ``needs_negate``:
+#   False → battery +=charge (SEM convention, no negation)
+#   True  → battery +=discharge (opposite convention, negate to SEM)
+# Only HIGH-CONFIDENCE entries belong here — same lesson as grid: a wrong
+# entry here mis-seeds a real user, so when in doubt leave a brand out.
+# The seed is overridable by the counter detector and the manual user flip.
+PLATFORM_BATTERY_SIGN_INVERT: dict[str, bool] = {
+    # SEM convention (+=charge): no negation
+    "huawei_solar": False,
+    "sma": False,
+    # Opposite convention (+=discharge): negate
+    "goodwe": True,
+    "powerwall": True,
+    "enphase_envoy": True,
+    "solax": True,
+}
+
 
 @dataclass
 class SensorConfig:
@@ -197,9 +215,26 @@ class SensorReader:
         # threshold heuristic — only the input scope differs.
         self._battery_sign_inverted: Dict[str, bool] = {}
         self._battery_sign_detected: Dict[str, bool] = {}
+        # #588: per-bid magnitude-weighted accumulator — mirrors the grid
+        # voter introduced in #461. Replaces the old ±1 consecutive-run
+        # counter (_battery_sign_votes) with a confidence-gated approach:
+        #   +weight → SEM convention (+=charge, no negate)
+        #   −weight → opposite (+=discharge, negate)
+        #   weight = |power_w|
+        # Lock only when samples >= MIN_SAMPLES AND confidence >= MIN_CONFIDENCE.
+        self._battery_sign_evidence: Dict[str, float] = {}
+        self._battery_sign_total_mag: Dict[str, float] = {}
+        self._battery_sign_samples: Dict[str, int] = {}
+        # Keep legacy _battery_sign_votes so older serialised storage blobs
+        # from pre-#588 builds don't crash on restore (the field is just unused).
         self._battery_sign_votes: Dict[str, int] = {}
         self._battery_charge_baseline: Dict[str, Optional[float]] = {}
         self._battery_discharge_baseline: Dict[str, Optional[float]] = {}
+        # #588: per-bid brand-seed flag — attempt the deterministic platform
+        # seed exactly once per bid (the battery sensor/registry is stable).
+        self._battery_brand_seed_done: Dict[str, bool] = {}
+        self._BATTERY_SIGN_MIN_SAMPLES: int = 3
+        self._BATTERY_SIGN_MIN_CONFIDENCE: float = 0.75
         # Sentinel key for the legacy single-battery / fleet-sensor path.
         # Keeps the per-battery and fleet paths in one data model
         # without spreading two parallel sets of state across the class.
@@ -476,6 +511,7 @@ class SensorReader:
                 )
                 needs_negate = self._detect_battery_sign_for(
                     bid, bp.power_w, charge_entity, discharge_entity,
+                    power_entity=entity,
                 )
                 if needs_negate:
                     bp = replace(bp, power_w=-bp.power_w)
@@ -491,9 +527,27 @@ class SensorReader:
                     corrected_total += bp.power_w
             readings.battery_power = corrected_total
             readings.calculate_derived()
+            # #588 B1 — one-tap user battery sign flip. Applied AFTER the
+            # per-battery auto-detect loop so it corrects the corrected total.
+            # Mirrors the grid user flip at line ~431. Negates BOTH the fleet
+            # total AND every per-battery ``power_w`` (H-1): the battery
+            # actuator sources ``BatteryRuntime.last_known_w`` from the
+            # per-battery dict, not the fleet scalar — flipping only the total
+            # would desync the arbitrage/force-discharge direction on
+            # multi-battery installs.
+            if bool(self._raw_config.get("battery_sign_user_flip", False)):
+                for bid, bp in list(readings.batteries.items()):
+                    readings.batteries[bid] = replace(bp, power_w=-bp.power_w)
+                readings.battery_power = -readings.battery_power
+                readings.calculate_derived()
         else:
             battery_needs_negate = self._detect_battery_sign(readings)
             if battery_needs_negate:
+                readings.battery_power = -readings.battery_power
+                readings.calculate_derived()
+            # #588 B1 — one-tap user battery sign flip, same as per_battery_mode
+            # branch. Sits on top of the auto-detect / manual-invert path.
+            if bool(self._raw_config.get("battery_sign_user_flip", False)):
                 readings.battery_power = -readings.battery_power
                 readings.calculate_derived()
 
@@ -581,6 +635,69 @@ class SensorReader:
             ),
         }
 
+    def battery_sign_diagnostics(self) -> dict:
+        """#588 battery-sign support payload, mirroring grid_sign_diagnostics.
+
+        Returns everything a maintainer needs to judge a wrong-sign
+        battery report: per-bid sign state, accumulator evidence, the
+        battery power sensor entity, its platform (for brand-seed audit),
+        and the user-flip state. Surfaced by the ``flip_battery_sign``
+        service so the Config-tab button can copy it into a GitHub issue.
+        """
+        ed = self._energy_dashboard_config
+        battery_entity = self.config.battery_power_sensor
+        # In ED mode, the primary battery power entity is the first in the list
+        if not battery_entity and ed is not None:
+            lst = getattr(ed, "battery_power_list", None) or []
+            battery_entity = lst[0] if lst else getattr(ed, "battery_power", None)
+
+        raw_state = None
+        battery_platform = None
+        if battery_entity and self.hass is not None:
+            st = self.hass.states.get(battery_entity)
+            if st is not None:
+                raw_state = st.state
+            try:
+                entry = er.async_get(self.hass).async_get(battery_entity)
+                pf = entry.platform if entry else None
+                battery_platform = pf if isinstance(pf, str) else None
+            except Exception:  # noqa: BLE001 — diagnostics must never raise
+                battery_platform = None
+
+        per_bid = {}
+        for bid in set(self._battery_sign_inverted) | set(self._battery_sign_detected):
+            mag = self._battery_sign_total_mag.get(bid, 0.0)
+            ev = self._battery_sign_evidence.get(bid, 0.0)
+            per_bid[bid] = {
+                "detected": self._battery_sign_detected.get(bid, False),
+                "inverted": self._battery_sign_inverted.get(bid, False),
+                "evidence": round(ev, 1),
+                "total_magnitude": round(mag, 1),
+                "samples": self._battery_sign_samples.get(bid, 0),
+                "confidence": round(abs(ev) / mag if mag > 0 else 0.0, 3),
+                "brand_seed_done": self._battery_brand_seed_done.get(bid, False),
+            }
+
+        return {
+            "battery_power_sensor": battery_entity,
+            "battery_power_raw_state": raw_state,
+            "battery_platform": battery_platform,
+            "brand_seeded": battery_platform in PLATFORM_BATTERY_SIGN_INVERT
+            if battery_platform else False,
+            "user_flip": bool(self._raw_config.get("battery_sign_user_flip", False)),
+            "per_bid": per_bid,
+            "charge_counters": (
+                [ed.battery_charge_energy] if ed and ed.battery_charge_energy
+                else list(getattr(ed, "battery_charge_energy_list", None) or [])
+                if ed else []
+            ),
+            "discharge_counters": (
+                [ed.battery_discharge_energy] if ed and ed.battery_discharge_energy
+                else list(getattr(ed, "battery_discharge_energy_list", None) or [])
+                if ed else []
+            ),
+        }
+
     def export_sign_state(self) -> dict:
         """Snapshot the LOCKED sign-detection state for persistence."""
         return {
@@ -652,9 +769,13 @@ class SensorReader:
         self._grid_export_baseline = None
         self._battery_sign_inverted.clear()
         self._battery_sign_detected.clear()
+        self._battery_sign_evidence.clear()
+        self._battery_sign_total_mag.clear()
+        self._battery_sign_samples.clear()
         self._battery_sign_votes.clear()
         self._battery_charge_baseline.clear()
         self._battery_discharge_baseline.clear()
+        self._battery_brand_seed_done.clear()
         self._sign_vote_warmup = 12
         _LOGGER.info(
             "Sign-detection state reset — grid and battery signs will be "
@@ -707,6 +828,51 @@ class SensorReader:
             "override if it disagrees",
             platform, entity_id,
             "negating (HA convention)" if self._grid_sign_inverted
+            else "no correction (SEM convention)",
+        )
+
+    def _seed_battery_sign_from_platform(self, bid: str, power_entity: Optional[str]) -> None:
+        """#588: deterministic battery-sign seed from the battery power sensor's
+        integration, mirroring ``_seed_grid_sign_from_platform``.
+
+        Runs once per bid: if the platform is a known brand AND the sign is
+        not already locked for this bid, seeds + locks the sign immediately
+        (sets ``detected=True``). Precedence: user_flip > manual > this seed.
+
+        NOTE (H-2): unlike the grid path — where the solar detector provides a
+        physical ground-truth override — the battery has no equivalent
+        override, so once this seed locks, the counter voter is gated off and
+        can NOT change it. A wrong brand mapping is therefore corrected only by
+        the user flip (``flip_battery_sign``) or ``reset_sign_detection``. This
+        is why the brand map must stay conservative and well-tested.
+
+        An unknown platform simply falls through to the statistical detector.
+        """
+        if self._battery_brand_seed_done.get(bid) or self._battery_sign_detected.get(bid):
+            self._battery_brand_seed_done[bid] = True
+            return
+        self._battery_brand_seed_done[bid] = True
+
+        if not power_entity:
+            return
+        try:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(power_entity)
+            platform = entry.platform if entry else None
+        except Exception as e:  # noqa: BLE001 — registry hiccup must not block reads
+            _LOGGER.debug("Battery-sign brand lookup failed for %s (%s): %s", bid, power_entity, e)
+            return
+        if not isinstance(platform, str) or platform not in PLATFORM_BATTERY_SIGN_INVERT:
+            return
+
+        self._battery_sign_inverted[bid] = PLATFORM_BATTERY_SIGN_INVERT[platform]
+        self._battery_sign_detected[bid] = True
+        _LOGGER.info(
+            "Battery sign seeded from integration '%s' (%s, bid=%s): %s — "
+            "deterministic brand lookup; hard-locked (only a user flip / "
+            "reset_sign_detection can change it)",
+            platform, power_entity, bid,
+            "negating (opposite convention)" if self._battery_sign_inverted[bid]
             else "no correction (SEM convention)",
         )
 
@@ -1003,6 +1169,7 @@ class SensorReader:
             readings.battery_power,
             charge_entity,
             discharge_entity,
+            power_entity=getattr(ed, "battery_power", None),
         )
 
     def _detect_battery_sign_for(
@@ -1011,14 +1178,22 @@ class SensorReader:
         power: float,
         charge_entity: Optional[str],
         discharge_entity: Optional[str],
+        power_entity: Optional[str] = None,
     ) -> bool:
         """Run the sign-autodetect correlation against one (battery_id,
         power, charge_counter, discharge_counter) tuple.
 
         Used both by the legacy fleet path (``bid = _FLEET_BID``) and by
         the per-battery loop introduced in #404. Each ``bid`` gets its
-        own voting deque + baselines, so dual-brand multi-battery installs
-        end up with each battery independently corrected.
+        own voting accumulator + baselines, so dual-brand multi-battery
+        installs end up with each battery independently corrected.
+
+        #588 — voter upgraded to magnitude-weighted accumulator (mirrors
+        the grid path from #461): old ±1 consecutive-run voter could lock
+        the wrong sign on any 3-in-a-row run (jitter / come-up burst).
+        New accumulator locks only when ALL of:
+          * samples >= BATTERY_SIGN_MIN_SAMPLES (3)
+          * confidence (|evidence| / total_mag) >= BATTERY_SIGN_MIN_CONFIDENCE (0.75)
 
         Returns True if ``power`` should be negated for this ``bid``.
         """
@@ -1027,17 +1202,41 @@ class SensorReader:
         # battery added mid-session).
         self._battery_sign_inverted.setdefault(bid, False)
         self._battery_sign_detected.setdefault(bid, False)
-        self._battery_sign_votes.setdefault(bid, 0)
+        self._battery_sign_evidence.setdefault(bid, 0.0)
+        self._battery_sign_total_mag.setdefault(bid, 0.0)
+        self._battery_sign_samples.setdefault(bid, 0)
         self._battery_charge_baseline.setdefault(bid, None)
         self._battery_discharge_baseline.setdefault(bid, None)
 
         if not charge_entity or not discharge_entity:
             return self._battery_sign_inverted[bid]
 
-        # Startup warm-up (#487 follow-up) — same restart-window
-        # protection as the grid voter; baselines refresh below on
-        # the first post-warmup cycle.
+        # #588 H2/B-1 — brand seed: attempt once per bid before the
+        # statistical inference; seeds the pre-lock default for known brands.
+        # Prefer the battery POWER sensor for the platform lookup (mirrors the
+        # grid seed's use of ``grid_power_sensor``): its integration is always
+        # the inverter brand, whereas the Energy-Dashboard charge/discharge
+        # counters are frequently helper-derived (utility_meter / Riemann sum)
+        # and would resolve to the wrong platform. Fall back to the charge
+        # counter only when no power entity is known.
+        self._seed_battery_sign_from_platform(bid, power_entity or charge_entity)
+
+        # Startup warm-up (#487 follow-up / #588 H1) — same restart-window
+        # protection as the grid voter; also REFRESH the baselines here so
+        # the first post-warmup delta is fresh (mirror grid warmup ~line 921).
         if self._sign_vote_warmup > 0:
+            charge_state = self.hass.states.get(charge_entity)
+            discharge_state = self.hass.states.get(discharge_entity)
+            if charge_state and charge_state.state not in ("unknown", "unavailable"):
+                try:
+                    self._battery_charge_baseline[bid] = float(charge_state.state)
+                except (ValueError, TypeError):
+                    pass
+            if discharge_state and discharge_state.state not in ("unknown", "unavailable"):
+                try:
+                    self._battery_discharge_baseline[bid] = float(discharge_state.state)
+                except (ValueError, TypeError):
+                    pass
             return self._battery_sign_inverted[bid]
 
         # Need meaningful power to detect (ignore noise)
@@ -1103,27 +1302,48 @@ class SensorReader:
         if detected is None:
             return self._battery_sign_inverted[bid]
 
-        # Require 3 consecutive consistent detections before locking in.
-        # This prevents false sign flips from transient energy counter
-        # jitter after reboots (e.g. both counters ticking simultaneously
-        # during HA recorder settling).
+        # #588 B2 — magnitude-weighted accumulator (mirrors grid path from #461).
+        # Each clear single-direction cycle adds |power| toward SEM (+) or
+        # opposite (−). Lock only when enough directional cycles have contributed
+        # AND the dominant direction holds a strong majority of ALL accumulated
+        # magnitude — so a mixed/transient burst that the old 3-consecutive vote
+        # could lock through now stays diluted and never locks.
         if not self._battery_sign_detected[bid]:
-            if detected == (self._battery_sign_votes[bid] > 0):
-                # Same direction as previous votes (True=negate votes positive)
-                self._battery_sign_votes[bid] += 1 if detected else -1
-            else:
-                # Direction changed — reset
-                self._battery_sign_votes[bid] = 1 if detected else -1
+            # Sign encoding (M-3): evidence accumulates NEGATIVE when the cycle
+            # says "needs negate" (detected=True) and POSITIVE for SEM
+            # convention. So a net-negative evidence → lock inverted=True below.
+            weight = abs(power)
+            self._battery_sign_evidence[bid] += -weight if detected else weight
+            self._battery_sign_total_mag[bid] += weight
+            self._battery_sign_samples[bid] += 1
 
-            if abs(self._battery_sign_votes[bid]) >= 3:
-                self._battery_sign_inverted[bid] = detected
+            confidence = (
+                abs(self._battery_sign_evidence[bid]) / self._battery_sign_total_mag[bid]
+                if self._battery_sign_total_mag[bid] > 0 else 0.0
+            )
+            if (
+                self._battery_sign_samples[bid] >= self._BATTERY_SIGN_MIN_SAMPLES
+                and confidence >= self._BATTERY_SIGN_MIN_CONFIDENCE
+            ):
+                self._battery_sign_inverted[bid] = self._battery_sign_evidence[bid] < 0
                 self._battery_sign_detected[bid] = True
+                # #N1 — include counter entity IDs in the lock log so a wrong
+                # lock is diagnosable from the log alone (mirrors grid lock log).
                 _LOGGER.info(
-                    "Battery sign detected for %s from Energy Dashboard counters: %s "
-                    "(power=%.0fW, charge_delta=%.3f, discharge_delta=%.3f)",
+                    "Battery sign detected for '%s' from Energy Dashboard counters: %s "
+                    "(confidence=%.2f, evidence=%.0f, total_mag=%.0f, samples=%d, "
+                    "power=%.0fW, charge_delta=%.3f, discharge_delta=%.3f, "
+                    "charge_counter=%s, discharge_counter=%s)",
                     bid,
-                    "negating (opposite convention)" if detected else "no correction (SEM convention)",
+                    "negating (opposite convention)"
+                    if self._battery_sign_inverted[bid]
+                    else "no correction (SEM convention)",
+                    confidence,
+                    self._battery_sign_evidence[bid],
+                    self._battery_sign_total_mag[bid],
+                    self._battery_sign_samples[bid],
                     power, charge_delta, discharge_delta,
+                    charge_entity, discharge_entity,
                 )
 
         return self._battery_sign_inverted[bid]

@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.5] — 13.07.2026
+
+### 📊 Enhancements
+
+- 🔋 **Battery sign auto-detection + one-tap fix, at parity with grid** (#588, by @uberberben) —
+  the battery charge/discharge polarity now gets the same hardening the grid sign got in #461/#476:
+  - **Brand seed** — for known inverters (Huawei, SMA, GoodWe, Tesla Powerwall, Enphase, SolaX) the
+    correct convention is seeded deterministically from the battery **power sensor's** integration, so
+    a fresh install is right from the first cycle instead of waiting for counter movement.
+  - **`Fix battery sign` button** (Config → Advanced) + **`flip_battery_sign`** service — one tap flips
+    the polarity and copies a paste-ready report to the clipboard for a GitHub issue.
+  - **`Reset`** now re-learns and clears **both** the grid and battery user flips.
+  - **Magnitude-weighted voter** — a lock needs ≥ 3 samples and ≥ 0.75 confidence, so a come-up jitter
+    burst can no longer flip the sign the way the old ±1 counter could.
+  - **`diag_battery_sign`** sensor mirrors `diag_grid_sign`; per-battery on multi-battery installs.
+  - The user flip is applied to **both** the fleet total and every per-battery reading, so the
+    arbitrage / force-discharge actuator never sees a desynced sign on multi-battery installs.
+
 # [1.7.5-beta.4] — 13.07.2026
 
 ### 📊 Enhancements
