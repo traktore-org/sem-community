@@ -17,9 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🔋 **Battery sign auto-detection + one-tap fix, at parity with grid** (#588, by @uberberben) —
   the battery charge/discharge polarity now gets the same hardening the grid sign got in #461/#476:
-  - **Brand seed** — for known inverters (Huawei, SMA, GoodWe, Tesla Powerwall, Enphase, SolaX) the
-    correct convention is seeded deterministically from the battery **power sensor's** integration, so
-    a fresh install is right from the first cycle instead of waiting for counter movement.
+  - **Brand seed (soft)** — for known inverters (Huawei, SMA, GoodWe, Tesla Powerwall, Enphase, SolaX)
+    the convention is seeded from the battery **power sensor's** integration, so a fresh install is
+    right from the first cycle instead of waiting for counter movement. It's a *soft* default: the
+    counter-correlation voter can still confirm or **override** it, so a brand-deviant install (e.g. a
+    Huawei battery whose Energy-Dashboard mapping is reversed — the reporter's exact case) self-heals
+    from the counters instead of being pinned to the wrong default.
   - **`Fix battery sign` button** (Config → Advanced) + **`flip_battery_sign`** service — one tap flips
     the polarity and copies a paste-ready report to the clipboard for a GitHub issue.
   - **`Reset`** now re-learns and clears **both** the grid and battery user flips.

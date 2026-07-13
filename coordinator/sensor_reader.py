@@ -832,19 +832,26 @@ class SensorReader:
         )
 
     def _seed_battery_sign_from_platform(self, bid: str, power_entity: Optional[str]) -> None:
-        """#588: deterministic battery-sign seed from the battery power sensor's
-        integration, mirroring ``_seed_grid_sign_from_platform``.
+        """#588: deterministic battery-sign SOFT seed from the battery power
+        sensor's integration, mirroring ``_seed_grid_sign_from_platform``.
 
         Runs once per bid: if the platform is a known brand AND the sign is
-        not already locked for this bid, seeds + locks the sign immediately
-        (sets ``detected=True``). Precedence: user_flip > manual > this seed.
+        not already locked for this bid, seeds a good STARTING default so a
+        fresh install of a known brand is correct from the first cycle instead
+        of waiting for counter deltas. Precedence: user_flip > manual > this
+        seed > counter-vote.
 
-        NOTE (H-2): unlike the grid path — where the solar detector provides a
-        physical ground-truth override — the battery has no equivalent
-        override, so once this seed locks, the counter voter is gated off and
-        can NOT change it. A wrong brand mapping is therefore corrected only by
-        the user flip (``flip_battery_sign``) or ``reset_sign_detection``. This
-        is why the brand map must stay conservative and well-tested.
+        SOFT seed (H-2): unlike a hard lock, this sets the sign hint but leaves
+        ``detected=False`` so the counter-correlation voter still runs and can
+        CONFIRM or OVERRIDE the seed. This is the battery's analogue to the
+        grid's solar override: a brand-deviant install (e.g. a Huawei battery
+        whose Energy-Dashboard mapping happens to be reversed — the #588
+        reporter's case) self-heals from the counters instead of being pinned
+        to the wrong brand default and forced to use the manual flip. The
+        magnitude-weighted voter (>=3 samples, >=0.75 confidence) guards
+        against a bad override. The user flip / reset is still the ultimate
+        backstop for a swapped-counter install where the counters themselves
+        lie.
 
         An unknown platform simply falls through to the statistical detector.
         """
@@ -865,12 +872,13 @@ class SensorReader:
         if not isinstance(platform, str) or platform not in PLATFORM_BATTERY_SIGN_INVERT:
             return
 
+        # SOFT default only — do NOT set detected=True, so the counter voter
+        # remains free to confirm or override this hint.
         self._battery_sign_inverted[bid] = PLATFORM_BATTERY_SIGN_INVERT[platform]
-        self._battery_sign_detected[bid] = True
         _LOGGER.info(
             "Battery sign seeded from integration '%s' (%s, bid=%s): %s — "
-            "deterministic brand lookup; hard-locked (only a user flip / "
-            "reset_sign_detection can change it)",
+            "soft brand default; the counter voter can still confirm/override, "
+            "and a user flip / reset is the final backstop",
             platform, power_entity, bid,
             "negating (opposite convention)" if self._battery_sign_inverted[bid]
             else "no correction (SEM convention)",

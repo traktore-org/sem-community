@@ -358,7 +358,11 @@ class TestB2WeightedVoter:
 # ── H2: brand seed sets pre-lock default ─────────────────────────────────────
 
 class TestH2BrandSeed:
-    """_seed_battery_sign_from_platform seeds sign from integration platform."""
+    """_seed_battery_sign_from_platform seeds sign from integration platform.
+
+    SOFT seed (H-2): sets the sign hint but leaves detected=False so the
+    counter voter can still confirm/override — this is what lets a reversed
+    Huawei (the #588 reporter's case) self-heal from the counters."""
 
     def test_goodwe_seeded_as_inverted(self):
         r = _make_reader()
@@ -373,7 +377,8 @@ class TestH2BrandSeed:
         ):
             r._seed_battery_sign_from_platform("b1", "sensor.goodwe_battery")
         assert r._battery_sign_inverted.get("b1") is True
-        assert r._battery_sign_detected.get("b1") is True
+        # SOFT seed — detected stays False so the counter voter can override.
+        assert r._battery_sign_detected.get("b1", False) is False
 
     def test_huawei_seeded_as_normal(self):
         r = _make_reader()
@@ -388,7 +393,43 @@ class TestH2BrandSeed:
         ):
             r._seed_battery_sign_from_platform("b1", "sensor.huawei_battery")
         assert r._battery_sign_inverted.get("b1") is False
-        assert r._battery_sign_detected.get("b1") is True
+        assert r._battery_sign_detected.get("b1", False) is False
+
+    def test_soft_seed_can_be_overridden_by_counter(self):
+        """H-2 core: a reversed-Huawei install (brand seed says 'normal' but the
+        counters say 'negate') must self-heal — the counter voter overrides the
+        soft seed instead of being gated off."""
+        r = _make_reader()
+        r.set_energy_dashboard_config(_make_ed())
+        r._sign_vote_warmup = 0
+        registry_mock = MagicMock()
+        entry_mock = MagicMock()
+        entry_mock.platform = "huawei_solar"  # seeds inverted=False (normal)
+        registry_mock.async_get.return_value = entry_mock
+
+        # Prime baseline, then feed 3 clear "negate" votes (discharge growing,
+        # power positive → opposite convention) despite the Huawei soft seed.
+        with patch(
+            "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
+            return_value=registry_mock,
+        ):
+            r.hass.states.get = lambda eid: {
+                "sensor.batt_charge": _make_state(10.0),
+                "sensor.batt_discharge": _make_state(5.0),
+            }.get(eid)
+            r._detect_battery_sign(PowerReadings(battery_power=500.0))
+            # soft seed applied → normal, not yet detected
+            assert r._battery_sign_inverted[r._FLEET_BID] is False
+            assert r._battery_sign_detected.get(r._FLEET_BID, False) is False
+            for i in range(3):
+                r.hass.states.get = lambda eid, _i=i: {
+                    "sensor.batt_charge": _make_state(10.0),
+                    "sensor.batt_discharge": _make_state(5.0 + (_i + 1) * 0.5),
+                }.get(eid)
+                r._detect_battery_sign(PowerReadings(battery_power=500.0))
+        # Counter override wins — the reversed Huawei self-heals.
+        assert r._battery_sign_detected[r._FLEET_BID] is True
+        assert r._battery_sign_inverted[r._FLEET_BID] is True
 
     def test_unknown_platform_does_not_seed(self):
         r = _make_reader()
@@ -460,12 +501,13 @@ class TestH2BrandSeed:
             "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
             return_value=registry_mock,
         ):
-            # fleet path threads ed.battery_power as power_entity
+            # fleet path threads ed.battery_power as power_entity. Flat counters
+            # (1.0/1.0, no delta) → the counter voter casts no vote, so the soft
+            # seed's default is what remains.
             r._detect_battery_sign(PowerReadings(battery_power=500.0))
-        # goodwe → inverted True; if it had used the utility_meter charge
-        # counter it would have fallen through and stayed unlocked.
+        # goodwe → soft-seeded inverted True; if it had used the utility_meter
+        # charge counter it would have fallen through and stayed at default False.
         assert r._battery_sign_inverted.get(r._FLEET_BID) is True
-        assert r._battery_sign_detected.get(r._FLEET_BID) is True
 
     def test_platform_battery_sign_invert_map_contents(self):
         """Verify the brand map has the expected entries."""
