@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a profitable period reads **positive/up** instead of dipping below zero. Money in = up, money out
   = down. Chart-only; legend totals stay consistent.
 
+### 🐛 Fixes
+
+- 🕒 **Daily-runtime goal survives an HA restart** (#586, by @RienduPre) — a load's "day target"
+  progress (accrued minutes toward its minimum-runtime goal) reset to 0 on every restart while the
+  target itself survived. The restore ran before the device registry was initialised, so no devices
+  existed to restore into; it now runs after registration. (autopilot fix)
+- 🔤 **"Home battery" name is now translated** (#587, by @RienduPre) — the synthetic battery device
+  added in 1.7.5 (#576) showed a hardcoded English tile; its name is localized to your language now.
+
 # [1.7.5-beta.3] — 12.07.2026
 
 > The **EV and every device** now honour the one priority list — not just the loads and the battery.
