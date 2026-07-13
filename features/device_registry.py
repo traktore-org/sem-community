@@ -472,9 +472,20 @@ class UnifiedDeviceRegistry:
         # 35 s re-discovery / restart).
         dirty = self._capture_calibrated_ratings()
 
+        # (#586) Snapshot each live device's accrued daily runtime BEFORE the
+        # rebuild resets it. _sync_to_surplus_controller recreates every
+        # auto-discovered (energy_dashboard_*) device as a fresh object with
+        # _daily_runtime_accumulated_sec = 0.0, so without this the DAGDOEL
+        # progress bar ("X/Y u op zon vandaag") reset to 0 on every 35 s
+        # re-discovery / drag — not just the startup restore fixed in __init__.
+        runtime_snapshot = self._capture_accrued_runtimes()
+
         # Sync to both systems
         self._sync_to_surplus_controller()
         self._sync_to_load_manager()
+
+        # (#586) Re-apply the runtime snapshot onto the rebuilt devices.
+        self._restore_accrued_runtimes(runtime_snapshot)
 
         # (#576) Re-apply the learned rating to the rebuilt devices, and seed a
         # rating from the power sensor's history for any load we haven't learned
@@ -1217,6 +1228,38 @@ class UnifiedDeviceRegistry:
                 self._rated_power_overrides[did] = rated
                 dirty = True
         return dirty
+
+    def _capture_accrued_runtimes(self) -> "Dict[str, tuple]":
+        """(#586) Snapshot each live device's accrued daily runtime + meter day
+        BEFORE ``_sync_to_surplus_controller`` rebuilds the auto-discovered
+        devices (which resets ``_daily_runtime_accumulated_sec`` to 0.0).
+
+        Only records devices that have actually accrued something for a known
+        meter day — a fresh device (0.0) has nothing worth preserving. Paired
+        with :meth:`_restore_accrued_runtimes`."""
+        snapshot: Dict[str, tuple] = {}
+        for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
+            meter_day = getattr(dev, "_daily_runtime_meter_day", None)
+            accrued = float(getattr(dev, "_daily_runtime_accumulated_sec", 0.0) or 0.0)
+            if meter_day is not None and accrued > 0.0:
+                snapshot[did] = (accrued, meter_day)
+        return snapshot
+
+    def _restore_accrued_runtimes(self, snapshot: "Dict[str, tuple]") -> None:
+        """(#586) Re-apply a pre-rebuild runtime snapshot onto the rebuilt
+        devices. A freshly rebuilt auto-discovered device starts at 0.0; this
+        refills it so its DAGDOEL progress survives the rebuild.
+
+        Only fills a device that came back EMPTY — never clobbers runtime that
+        already accrued (a service-registered device keeps its live object
+        across the sync, so its value is intact and must be left alone)."""
+        for did, (accrued, meter_day) in snapshot.items():
+            dev = self._surplus_controller.get_device(did)
+            if dev is None:
+                continue
+            if float(getattr(dev, "_daily_runtime_accumulated_sec", 0.0) or 0.0) <= 0.0:
+                dev._daily_runtime_accumulated_sec = accrued
+                dev._daily_runtime_meter_day = meter_day
 
     async def _seed_and_apply_ratings(self) -> bool:
         """(#576) After the rebuild: (a) apply a persisted override to any live

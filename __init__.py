@@ -1456,6 +1456,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             )
             await registry.async_initialize()
             coordinator._device_registry = registry
+            # (#586) Restore each device's accrued daily runtime NOW — the
+            # registry has just (re-)registered the surplus devices, so
+            # get_device() can find them. Doing this during
+            # async_config_entry_first_refresh (above) was too early: no
+            # device existed yet, so on a mid-day restart the accrued
+            # "X/Y u op zon vandaag" progress reset to 0 while the target
+            # (applied at registration via _apply_goals) survived.
+            coordinator._restore_device_runtimes()
             # Tell load manager to skip its own discovery — registry owns the device list
             if coordinator._load_manager:
                 coordinator._load_manager._unified_registry_active = True
