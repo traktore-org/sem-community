@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.4] — 13.07.2026
+
+### 📊 Enhancements
+
+- 💶 **Energy Costs chart now reads as cash-flow** (#585, follow-up to #574 by @ebnerjoh) — spending
+  (Import) is drawn **below** the axis and earnings (Export) **above**, and the **Net** line is signed
+  so a profitable period reads **positive/up** instead of dipping below zero. Money in = up, money out
+  = down. Chart-only; legend totals stay consistent.
+
 # [1.7.5-beta.3] — 12.07.2026
 
 > The **EV and every device** now honour the one priority list — not just the loads and the battery.

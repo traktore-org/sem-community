@@ -50,14 +50,17 @@ const PRESETS = {
     costs: {
         title: 'energy_costs', y_label: '_currency_', stacked: false,
         daily:   [
-            { suffix: 'daily_costs',           name: 'Import',  color: C.gridImport, type: 'bar'  },
+            // (#585) cash-flow sign convention: Import (spending) drawn NEGATIVE
+            // / below the axis, Export (earnings) positive, Net signed so a
+            // net earning reads positive (up) — see _fetchStatistics negate.
+            { suffix: 'daily_costs',           name: 'Import',  color: C.gridImport, type: 'bar',  negate: true },
             { suffix: 'daily_export_revenue',   name: 'export',  color: C.gridExport, type: 'bar'  },
-            { suffix: 'daily_net_cost',         name: 'net',     color: C.solar,      type: 'line' },
+            { suffix: 'daily_net_cost',         name: 'net',     color: C.solar,      type: 'line', negate: true },
         ],
         monthly: [
-            { suffix: 'monthly_costs',          name: 'Import',  color: C.gridImport, type: 'bar'  },
+            { suffix: 'monthly_costs',          name: 'Import',  color: C.gridImport, type: 'bar',  negate: true },
             { suffix: 'monthly_export_revenue', name: 'export',  color: C.gridExport, type: 'bar'  },
-            { suffix: 'monthly_net_cost',       name: 'net',     color: C.solar,      type: 'line' },
+            { suffix: 'monthly_net_cost',       name: 'net',     color: C.solar,      type: 'line', negate: true },
         ],
     },
     savings: {
@@ -363,6 +366,7 @@ class SEMChartCard extends SEMLitBase {
             entity: `${this._prefix}${d.suffix}`,
             name:   this._t(d.name),
             color:  d.color, type: d.type, y_axis: d.y_axis || 0,
+            negate: d.negate || false,
         }));
     }
 
@@ -451,12 +455,17 @@ class SEMChartCard extends SEMLitBase {
         const stacked = this._config?.stacked ?? this._preset?.stacked ?? false;
         const stackedPower = stacked && period === 'hour';
         return series.map(s => ({
-            data: (stats[s.entity] || []).map(p => ({
-                x: new Date(p.start),
-                y: stackedPower
+            data: (stats[s.entity] || []).map(p => {
+                let y = stackedPower
                     ? (p.mean ?? p.state ?? 0)
-                    : (p.max ?? p.state ?? p.mean ?? 0),
-            })),
+                    : (p.max ?? p.state ?? p.mean ?? 0);
+                // (#585) cash-flow sign: negated series (Import / Net cost) are
+                // drawn below the axis, so spending points down and a net
+                // earning reads positive. Legend totals read the same y, so
+                // they stay consistent with the bars/line.
+                if (s.negate) y = -y;
+                return { x: new Date(p.start), y };
+            }),
         }));
     }
 
