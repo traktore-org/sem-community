@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-12T10:54:37.510148+00:00
+// Generated: 2026-07-13T10:58:54.530183+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1171,7 +1171,8 @@
       "config_ev_phases": "Phases",
       "rated_power_hint": "Rated power (off)",
       "plan_device_run": "{name} — expected to run",
-      "plan_device_done": "{name} — done for today"
+      "plan_device_done": "{name} — done for today",
+      "home_battery": "Home battery"
     },
     "de": {
       "charging": "Laden",
@@ -2339,7 +2340,8 @@
       "config_ev_phases": "Phasen",
       "rated_power_hint": "Nennleistung (aus)",
       "plan_device_run": "{name} — läuft voraussichtlich",
-      "plan_device_done": "{name} — heute erledigt"
+      "plan_device_done": "{name} — heute erledigt",
+      "home_battery": "Heimspeicher"
     },
     "fr": {
       "charging": "En charge",
@@ -3507,7 +3509,8 @@
       "config_ev_phases": "Phases",
       "rated_power_hint": "Puissance nominale (éteint)",
       "plan_device_run": "{name} — devrait fonctionner",
-      "plan_device_done": "{name} — terminé pour aujourd'hui"
+      "plan_device_done": "{name} — terminé pour aujourd'hui",
+      "home_battery": "Batterie domestique"
     },
     "es": {
       "charging": "Cargando",
@@ -4675,7 +4678,8 @@
       "config_ev_phases": "Fases",
       "rated_power_hint": "Potencia nominal (apagado)",
       "plan_device_run": "{name} — se espera que funcione",
-      "plan_device_done": "{name} — hecho por hoy"
+      "plan_device_done": "{name} — hecho por hoy",
+      "home_battery": "Batería doméstica"
     },
     "it": {
       "charging": "In carica",
@@ -5843,7 +5847,8 @@
       "config_ev_phases": "Fasi",
       "rated_power_hint": "Potenza nominale (spento)",
       "plan_device_run": "{name} — dovrebbe funzionare",
-      "plan_device_done": "{name} — completato per oggi"
+      "plan_device_done": "{name} — completato per oggi",
+      "home_battery": "Batteria di casa"
     },
     "nl": {
       "charging": "Laden",
@@ -7011,7 +7016,8 @@
       "config_ev_phases": "Fasen",
       "rated_power_hint": "Nominaal vermogen (uit)",
       "plan_device_run": "{name} — draait naar verwachting",
-      "plan_device_done": "{name} — klaar voor vandaag"
+      "plan_device_done": "{name} — klaar voor vandaag",
+      "home_battery": "Thuisbatterij"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8179,7 +8185,8 @@
       "config_ev_phases": "Fáze",
       "rated_power_hint": "Jmenovitý výkon (vyp.)",
       "plan_device_run": "{name} — očekává se spuštění",
-      "plan_device_done": "{name} — pro dnešek hotovo"
+      "plan_device_done": "{name} — pro dnešek hotovo",
+      "home_battery": "Domácí baterie"
     },
     "da": {
       "charging": "Oplader",
@@ -9347,7 +9354,8 @@
       "config_ev_phases": "Faser",
       "rated_power_hint": "Nominel effekt (fra)",
       "plan_device_run": "{name} — forventes at køre",
-      "plan_device_done": "{name} — færdig for i dag"
+      "plan_device_done": "{name} — færdig for i dag",
+      "home_battery": "Hjemmebatteri"
     },
     "fi": {
       "charging": "Lataus",
@@ -10515,7 +10523,8 @@
       "config_ev_phases": "Vaiheet",
       "rated_power_hint": "Nimellisteho (pois)",
       "plan_device_run": "{name} — käynnistyy odotetusti",
-      "plan_device_done": "{name} — valmis tälle päivälle"
+      "plan_device_done": "{name} — valmis tälle päivälle",
+      "home_battery": "Kotiakku"
     },
     "hu": {
       "charging": "Töltés",
@@ -11683,7 +11692,8 @@
       "config_ev_phases": "Fázisok",
       "rated_power_hint": "Névleges teljesítmény (ki)",
       "plan_device_run": "{name} — várhatóan működik",
-      "plan_device_done": "{name} — mára kész"
+      "plan_device_done": "{name} — mára kész",
+      "home_battery": "Otthoni akkumulátor"
     },
     "no": {
       "charging": "Lader",
@@ -12851,7 +12861,8 @@
       "config_ev_phases": "Faser",
       "rated_power_hint": "Nominell effekt (av)",
       "plan_device_run": "{name} — forventes å kjøre",
-      "plan_device_done": "{name} — ferdig for i dag"
+      "plan_device_done": "{name} — ferdig for i dag",
+      "home_battery": "Hjemmebatteri"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14019,7 +14030,8 @@
       "config_ev_phases": "Fazy",
       "rated_power_hint": "Moc znamionowa (wył.)",
       "plan_device_run": "{name} — powinno działać",
-      "plan_device_done": "{name} — gotowe na dziś"
+      "plan_device_done": "{name} — gotowe na dziś",
+      "home_battery": "Bateria domowa"
     },
     "pt": {
       "charging": "A carregar",
@@ -15187,7 +15199,8 @@
       "config_ev_phases": "Fases",
       "rated_power_hint": "Potência nominal (desligado)",
       "plan_device_run": "{name} — deve funcionar",
-      "plan_device_done": "{name} — concluído por hoje"
+      "plan_device_done": "{name} — concluído por hoje",
+      "home_battery": "Bateria doméstica"
     },
     "ro": {
       "charging": "Încărcare",
@@ -16355,7 +16368,8 @@
       "config_ev_phases": "Faze",
       "rated_power_hint": "Putere nominală (oprit)",
       "plan_device_run": "{name} — se așteaptă să funcționeze",
-      "plan_device_done": "{name} — gata pentru azi"
+      "plan_device_done": "{name} — gata pentru azi",
+      "home_battery": "Baterie de casă"
     },
     "sv": {
       "charging": "Laddar",
@@ -17523,7 +17537,8 @@
       "config_ev_phases": "Faser",
       "rated_power_hint": "Märkeffekt (av)",
       "plan_device_run": "{name} — förväntas köra",
-      "plan_device_done": "{name} — klart för idag"
+      "plan_device_done": "{name} — klart för idag",
+      "home_battery": "Hembatteri"
     }
   };
 

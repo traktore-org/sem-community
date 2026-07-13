@@ -839,8 +839,11 @@ class UnifiedDeviceRegistry:
             return None
         charge_w = _num("sensor.sem_battery_charge_power") or 0.0
         soc = _num("sensor.sem_battery_soc")   # None when momentarily unavailable
+        # (#587) the synthetic battery row name is localized to the server
+        # language — RienduPre saw a hardcoded English "Home battery" tile.
+        from ..utils.translate import get_text
         return {
-            "name": "Home battery",
+            "name": get_text(self.hass, "home_battery", "Home battery"),
             "priority": self.battery_surplus_priority(),
             "is_controllable": False,
             "is_critical": False,
