@@ -159,12 +159,53 @@ class SubsystemTrace:
 
 
 @dataclass
+class CrossCheck:
+    """A Perception-layer two-view reality check for one input signal (#589).
+
+    Unlike ``SubsystemTrace`` (a control chain that decides → acts → confirms),
+    a cross-check compares a sign-corrected *reading* against ground truth
+    (the energy counters) with NO actuation — it's a two-view check, not the
+    three-layer act-and-confirm. ``data["agree"] is False`` is a *perception*
+    fault (the sign is wrong, or the counters are swapped) — the class the
+    control layers structurally cannot catch, because Management → Process →
+    Integration all cohere on a mis-signed input. Foldes into the same
+    mismatch/streak/health engine as the control faults (see ``commit``), so
+    ``binary_sensor.sem_layer_mismatch`` becomes a true "is SEM's whole view of
+    reality sound?" signal — perception + control.
+    """
+
+    signal: str                                # "grid_sign" | "battery_sign"
+    status: LayerStatus = LayerStatus.OK
+    detail: str = ""
+    data: Dict[str, Any] = field(default_factory=dict)  # {"agree": bool|None, …}
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "signal": self.signal,
+            "status": self.status.value,
+            "detail": self.detail,
+            "data": dict(self.data),
+        }
+
+    @property
+    def is_fault(self) -> bool:
+        """A perception fault: judging (not idle) AND the reading disagrees
+        with the counters. ``agree is None`` (nothing to judge this cycle)
+        never faults."""
+        judging = self.status in (LayerStatus.OK, LayerStatus.DEGRADED)
+        return judging and self.data.get("agree") is False
+
+
+@dataclass
 class CycleTrace:
     """All subsystems' three-layer chains for one coordinator cycle."""
 
     seq: int
     wall_iso: str = ""
     subsystems: Dict[str, SubsystemTrace] = field(default_factory=dict)
+    # #589 — Perception-layer two-view checks (sign/counter integrity),
+    # peers of the three-layer subsystems, keyed by signal.
+    cross_checks: Dict[str, CrossCheck] = field(default_factory=dict)
 
     def subsystem(self, key: str) -> SubsystemTrace:
         """Get-or-create the trace for ``key`` (e.g. ``"ev:keba"``,
@@ -180,6 +221,7 @@ class CycleTrace:
             "seq": self.seq,
             "wall": self.wall_iso,
             "subsystems": {k: v.to_dict() for k, v in self.subsystems.items()},
+            "cross_checks": {k: v.to_dict() for k, v in self.cross_checks.items()},
         }
 
 
@@ -216,6 +258,16 @@ class TraceCollector:
             return
         mismatched = {
             k for k, st in self._current.subsystems.items() if st.has_mismatch
+        }
+        # #589 — perception cross-check faults ride the SAME streak/health
+        # engine as control faults, tagged ``perception:<signal>``. A persistent
+        # sign/counter contradiction now trips binary_sensor.sem_layer_mismatch,
+        # closing the blind spot where all three control layers cohere on a
+        # mis-signed input.
+        mismatched |= {
+            f"perception:{cc.signal}"
+            for cc in self._current.cross_checks.values()
+            if cc.is_fault
         }
         # reset streaks that recovered this cycle; increment the ones still bad
         for k in list(self._streak):
@@ -268,5 +320,15 @@ class TraceCollector:
                     "cycle": trace.seq,
                     "process": st.process.to_dict(),
                     "integration": st.integration.to_dict(),
+                }
+        # #589 — surface a perception fault too, so the health detail names the
+        # mis-signed input rather than staying silent while the control layers
+        # all read green.
+        for cc in trace.cross_checks.values():
+            if cc.is_fault:
+                return {
+                    "subsystem": f"perception:{cc.signal}",
+                    "cycle": trace.seq,
+                    "cross_check": cc.to_dict(),
                 }
         return None

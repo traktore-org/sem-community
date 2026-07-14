@@ -56,7 +56,7 @@ from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import SurplusController
 from .cycle_trace import (
-    TraceCollector, LayerRecord, LayerStatus,
+    TraceCollector, LayerRecord, LayerStatus, CrossCheck,
     ev_layer_match, battery_layer_match, device_layer_match, battery_list_role,
     heat_pump_layer_match,
 )
@@ -1216,12 +1216,41 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._trace_battery(trace, sem_data, power)
             self._trace_loads(trace, sem_data)
             self._trace_heat_pump(trace, sem_data)
+            self._trace_perception(trace)
         except Exception as e:  # pragma: no cover - defensive
             _LOGGER.debug("trace capture failed (non-fatal): %s", e)
         finally:
             # commit even if a capture raised — the partial trace + its
             # mismatch streak still count (H1). commit() no-ops if no begin.
             self._trace.commit()
+
+    def _trace_perception(self, trace) -> None:
+        """#589 — Perception-layer cross-checks (Layer 0): do the sign-corrected
+        readings agree with the energy counters? Reads the observe-only sign
+        audits (which already ran in read_power) and files one CrossCheck per
+        signal, so a persistent sign/counter contradiction trips
+        sem_layer_mismatch — the fault the three control layers cohere straight
+        past because they all execute on the same mis-signed input. Read-only;
+        never changes a reading or a decision.
+        """
+        reader = self._sensor_reader
+        grid_fault = bool(
+            getattr(reader, "_grid_sign_lock_contradiction", False)
+            or getattr(reader, "_manual_grid_mismatch", False)
+        )
+        batt_fault = bool(getattr(reader, "_battery_sign_contradiction", False))
+        trace.cross_checks["grid_sign"] = CrossCheck(
+            signal="grid_sign",
+            status=LayerStatus.OK,
+            detail="grid sign vs import/export counters",
+            data={"agree": (not grid_fault)},
+        )
+        trace.cross_checks["battery_sign"] = CrossCheck(
+            signal="battery_sign",
+            status=LayerStatus.OK,
+            detail="battery sign vs charge/discharge counters",
+            data={"agree": (not batt_fault)},
+        )
 
     def _trace_ev(self, trace, sem_data, power) -> None:
         st = trace.subsystem("ev")
