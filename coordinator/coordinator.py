@@ -521,6 +521,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Tracking flags
         self._initial_update_done = False
+        # #589 3a — warn-once-per-episode flag for enrichment-tail degradation.
+        self._enrich_degraded = False
         self._load_manager = None  # Load management coordinator (external)
         self._device_registry = None  # UnifiedDeviceRegistry (set by __init__.py)
 

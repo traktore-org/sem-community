@@ -330,6 +330,24 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         if await self._maybe_clear_startup_orphan():
             self._last_intent = BatteryIntent.NORMAL
             return
+        # #589 3b (review HIGH): command_normal is the teardown / return-to-
+        # normal primitive, but a forcible CHARGE is stopped via the charge
+        # adapter — NOT _stop_forcible (which only cancels a forcible DISCHARGE).
+        # Without this, a reload mid-force-charge left the LUNA2000 charging
+        # until the next boot's orphan-clear (~45s). Guarded on _forcible_charging
+        # so it's a no-op in the common NORMAL cycle; defer other writes this
+        # cycle (back-to-back Modbus writes after a stop block the LUNA2000).
+        # Honest-retry: on failure leave the flag + intent so the next cycle
+        # re-issues instead of falsely reporting NORMAL.
+        if self._forcible_charging:
+            try:
+                await self._charge_adapter.stop_forced_charge()
+            except Exception as e:  # noqa: BLE001
+                self._last_error = f"stop_forced_charge failed: {e}"
+                return
+            self._forcible_charging = False
+            self._last_intent = BatteryIntent.NORMAL
+            return
         if await self._stop_forcible():
             self._last_intent = BatteryIntent.NORMAL
             return

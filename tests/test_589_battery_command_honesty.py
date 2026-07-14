@@ -323,6 +323,39 @@ class TestHuaweiForceChargeHonesty:
         assert "start_forced_charge" in adapter.last_error
 
     @pytest.mark.asyncio
+    async def test_fc_h3_command_normal_stops_forcible_charge(self) -> None:
+        """FC_H3 (review HIGH): command_normal (teardown/return-to-normal) must
+        stop an active forcible CHARGE — not only a forcible discharge — so a
+        reload mid-force-charge doesn't strand the LUNA2000 charging."""
+        adapter = _make_huawei()
+        adapter._startup_orphan_checked = True
+        adapter._forcible_charging = True
+        adapter._charge_adapter.stop_forced_charge = AsyncMock()
+
+        await adapter.command_normal()
+
+        adapter._charge_adapter.stop_forced_charge.assert_awaited_once()
+        assert adapter._forcible_charging is False
+        assert adapter.last_intent is BatteryIntent.NORMAL
+
+    @pytest.mark.asyncio
+    async def test_fc_h4_command_normal_charge_stop_fails_retries(self) -> None:
+        """FC_H4: if the forcible-charge stop fails, command_normal must NOT
+        report NORMAL and must leave _forcible_charging set so it retries."""
+        adapter = _make_huawei()
+        adapter._startup_orphan_checked = True
+        adapter._forcible_charging = True
+        adapter._charge_adapter.stop_forced_charge = AsyncMock(
+            side_effect=RuntimeError("modbus timeout"),
+        )
+
+        await adapter.command_normal()
+
+        assert adapter._forcible_charging is True          # unchanged → retry
+        assert adapter.last_intent is not BatteryIntent.NORMAL
+        assert adapter.last_error is not None
+
+    @pytest.mark.asyncio
     async def test_fc_h2_charging_status_records_intent(self) -> None:
         """FC_H2: delegate returns CHARGING → FORCE_CHARGE recorded."""
         adapter = _make_huawei()
