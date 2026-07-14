@@ -46,9 +46,12 @@ class PerChargerState:
     """
 
     stalled_since: Optional[float] = None
-    # (remaining Surface-A fields migrate here field-by-field:
-    #  enable_surplus_since, charge_started_at, last_change_time,
-    #  reenable_attempts, charge_refused, last_set_amps_ts)
+    enable_surplus_since: Optional[float] = None
+    charge_started_at: Optional[float] = None
+    last_change_time: Optional[Any] = None
+    reenable_attempts: int = 0
+    charge_refused: bool = False
+    last_set_amps_ts: Optional[float] = None
 
 
 @dataclass
@@ -278,29 +281,20 @@ class PerChargerContext:
         # ``self.state``.)
         self._saved = {
             "dev": coord._ev_device,
-            "enable": coord._ev_enable_surplus_since,
-            "started": coord._ev_charge_started_at,
-            "change": coord._ev_last_change_time,
-            "reenable_attempts": coord._ev_reenable_attempts,
-            "charge_refused": coord._ev_charge_refused,
             "current_charger_budget": coord._current_charger_budget,
-            # v1.7.1-beta.14 — solar stability layer per-charger state.
-            "last_set_amps_ts": coord._ev_last_set_amps_ts,
+            # budget_history is the shared-list path; NOT migrated to PerChargerState.
             "budget_history": coord._ev_budget_history,
         }
         self._saved_vehicle_soc = coord._cycle_vehicle_soc
 
         # Push this charger's state onto the coordinator.
-        # ``_ev_stalled_since`` is migrated (#589 Surface-A) — it is now a
-        # property reading ``self.state.stalled_since``; nothing to push here.
+        # ``_ev_stalled_since``, ``_ev_enable_surplus_since``,
+        # ``_ev_charge_started_at``, ``_ev_last_change_time``,
+        # ``_ev_reenable_attempts``, ``_ev_charge_refused``, and
+        # ``_ev_last_set_amps_ts`` are all migrated (#589 Surface-A) — they
+        # are now properties reading ``self.state.<field>``; nothing to push.
         coord._ev_device = self.ev_dev
-        coord._ev_enable_surplus_since = coord._ev_enable_surplus_per_charger.get(self.cid)
-        coord._ev_charge_started_at = coord._ev_charge_started_per_charger.get(self.cid)
-        coord._ev_last_change_time = coord._ev_last_change_per_charger.get(self.cid)
-        coord._ev_reenable_attempts = coord._ev_reenable_attempts_per_charger.get(self.cid, 0)
-        coord._ev_charge_refused = coord._ev_charge_refused_per_charger.get(self.cid, False)
         coord._current_charger_budget = self.budget_w
-        coord._ev_last_set_amps_ts = coord._ev_last_set_amps_ts_per_charger.get(self.cid)
         # Budget history list is mutated in place by the actuator (appends
         # the cycle's budget_w sample, pops the oldest). Setdefault keeps
         # the same list reference across __enter__/__exit__ cycles so the
@@ -349,16 +343,13 @@ class PerChargerContext:
         assert coord is not None, "PerChargerContext._coord must be set"
         try:
             # Save back this charger's per-charger state.
-            # ``_ev_stalled_since`` is migrated (#589 Surface-A): it lives on
-            # ``self.state`` (the durable _pcc_store object), already persisted
-            # by reference — no write-back needed.
-            coord._ev_enable_surplus_per_charger[self.cid] = coord._ev_enable_surplus_since
-            coord._ev_charge_started_per_charger[self.cid] = coord._ev_charge_started_at
-            coord._ev_last_change_per_charger[self.cid] = coord._ev_last_change_time
-            coord._ev_reenable_attempts_per_charger[self.cid] = coord._ev_reenable_attempts
-            coord._ev_charge_refused_per_charger[self.cid] = coord._ev_charge_refused
-            # v1.7.1-beta.14 — solar stability layer per-charger state.
-            coord._ev_last_set_amps_ts_per_charger[self.cid] = coord._ev_last_set_amps_ts
+            # All 7 Surface-A fields (``_ev_stalled_since``,
+            # ``_ev_enable_surplus_since``, ``_ev_charge_started_at``,
+            # ``_ev_last_change_time``, ``_ev_reenable_attempts``,
+            # ``_ev_charge_refused``, ``_ev_last_set_amps_ts``) are migrated
+            # (#589 Surface-A): they live on ``self.state`` (the durable
+            # _pcc_store object), already persisted by reference — no
+            # write-back needed.
             # ``budget_history`` is the same list reference setdefault returned
             # at __enter__; mutations done by the actuator persist naturally,
             # so no explicit write-back is needed. The setdefault on the next
@@ -379,15 +370,10 @@ class PerChargerContext:
             if getattr(coord, "_current_pcc", None) is self:
                 coord._current_pcc = None
 
-            # Restore primary view. (``_ev_stalled_since`` is migrated — it
-            # lives on ``self.state``, nothing to restore.)
+            # Restore primary view. All 7 Surface-A fields live on
+            # ``self.state`` (the durable _pcc_store object) and are accessed
+            # via coordinator properties — nothing to restore for them.
             coord._ev_device = self._saved["dev"]
-            coord._ev_enable_surplus_since = self._saved["enable"]
-            coord._ev_charge_started_at = self._saved["started"]
-            coord._ev_last_change_time = self._saved["change"]
-            coord._ev_reenable_attempts = self._saved["reenable_attempts"]
-            coord._ev_charge_refused = self._saved["charge_refused"]
-            coord._ev_last_set_amps_ts = self._saved["last_set_amps_ts"]
             coord._ev_budget_history = self._saved["budget_history"]
             # ``_current_charger_budget`` is cleared to ``None`` in the
             # legacy code rather than restored to its pre-loop value —

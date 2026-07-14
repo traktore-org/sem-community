@@ -246,11 +246,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._state_machine = ChargingStateMachine(hass, config, self.time_manager)
         self._ev_device = None  # Primary charger — set by __init__.py (backward compat)
         self._ev_devices: Dict[str, Any] = {}  # All chargers keyed by charger_id (#112)
-        self._ev_last_change_time = None  # Reactive control timing
-        self._ev_charge_started_at = None  # Disable delay: min hold timer to prevent cycling
-        self._ev_enable_surplus_since = None  # Enable delay: surplus must persist before starting
-        # Solar stability primary view (swapped per-charger by PerChargerContext).
-        self._ev_last_set_amps_ts: Optional[float] = None
+        # #589 Surface-A: these three are PROPERTIES backed by the current
+        # PerChargerContext's durable state; the _default variants back them
+        # out-of-loop (no active pcc). Kept as plain assignments so that the
+        # swap-attrs-initialized lint (which walks AST assignments) still fires
+        # on accidental re-introduction of uninitialized attributes.
+        self._ev_last_change_time_default: Optional[Any] = None
+        self._ev_charge_started_at_default: Optional[float] = None
+        self._ev_enable_surplus_since_default: Optional[float] = None
+        # Solar stability primary view — also migrated (#589 Surface-A).
+        self._ev_last_set_amps_ts_default: Optional[float] = None
         self._ev_budget_history: list = []
         # #589 Surface-A — durable per-charger state objects (replacing the
         # parallel _ev_*_per_charger dicts field-by-field). Held by the loop's
@@ -258,21 +263,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # write it, so a field can't leak between chargers.
         self._pcc_store: Dict[str, PerChargerState] = {}
         # Per-charger state dicts for multi-charger (#112)
-        # (_ev_stalled_since_per_charger removed — migrated to _pcc_store #589)
-        self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
-        self._ev_charge_started_per_charger: Dict[str, Optional[float]] = {}
-        self._ev_last_change_per_charger: Dict[str, Any] = {}
-        # False-stall guard per charger (#243)
-        self._ev_reenable_attempts_per_charger: Dict[str, int] = {}
-        self._ev_charge_refused_per_charger: Dict[str, bool] = {}
+        # All 7 scalar Surface-A fields are migrated to _pcc_store (#589):
+        #   _ev_stalled_since, _ev_enable_surplus_since, _ev_charge_started_at,
+        #   _ev_last_change_time, _ev_reenable_attempts, _ev_charge_refused,
+        #   _ev_last_set_amps_ts.
+        # Their _per_charger dicts are retired; they are now coordinator
+        # PROPERTIES backed by the durable PerChargerState object.
         # Solar stability layer (v1.7.1-beta.14): per-charger guard state.
-        # last_set_amps_ts is the wall-clock of the most recent ``_set_current``
-        # call so the time-debounce in ``ev_control.py`` knows when it's been
-        # long enough to issue another one. budget_history is the rolling-median
-        # window over recent budget_w samples so a single-cycle Huawei modbus
-        # flicker (e.g. 8000 / 0 / 8000 W) does not propagate into a current
-        # change. Mutated in place inside the per-charger loop.
-        self._ev_last_set_amps_ts_per_charger: Dict[str, Optional[float]] = {}
+        # budget_history is the rolling-median window over recent budget_w
+        # samples so a single-cycle Huawei modbus flicker (e.g. 8000/0/8000 W)
+        # does not propagate into a current change. Mutated in place; the
+        # shared-list strategy means it is NOT migrated to PerChargerState.
         self._ev_budget_history_per_charger: Dict[str, list] = {}
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
         # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
@@ -477,13 +478,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._current_charger_budget: Optional[float] = None
 
         # EV stall detection for self-healing.
-        # #589 Surface-A: _ev_stalled_since is a PROPERTY backed by the current
-        # PerChargerContext's durable state (self._current_pcc.state) so it can't
-        # leak between chargers; this default backs it out-of-loop (no active pcc).
+        # #589 Surface-A: ALL of these are PROPERTIES backed by the current
+        # PerChargerContext's durable state (self._current_pcc.state) so they
+        # can't leak between chargers. The _default variants back them when
+        # there is no active PerChargerContext (out-of-loop / single-charger).
         self._ev_stalled_since_default: Optional[float] = None
         # False-stall guard: consecutive failed re-enables + "car full" latch (#243)
-        self._ev_reenable_attempts: int = 0
-        self._ev_charge_refused: bool = False
+        self._ev_reenable_attempts_default: int = 0
+        self._ev_charge_refused_default: bool = False
         # Highest commanded amps across all chargers in the most recent
         # decide() cycle. Gates the fleet-level "0W means full" stall
         # path so it can't fire when SEM itself decided not to charge
@@ -1269,6 +1271,102 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pcc.state.stalled_since = value
         else:
             self._ev_stalled_since_default = value
+
+    @property
+    def _ev_enable_surplus_since(self) -> Optional[float]:
+        """#589 Surface-A — enable-delay timer, backed by _current_pcc.state."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            return pcc.state.enable_surplus_since
+        return self._ev_enable_surplus_since_default
+
+    @_ev_enable_surplus_since.setter
+    def _ev_enable_surplus_since(self, value: Optional[float]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            pcc.state.enable_surplus_since = value
+        else:
+            self._ev_enable_surplus_since_default = value
+
+    @property
+    def _ev_charge_started_at(self) -> Optional[float]:
+        """#589 Surface-A — disable-delay hold timer, backed by _current_pcc.state."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            return pcc.state.charge_started_at
+        return self._ev_charge_started_at_default
+
+    @_ev_charge_started_at.setter
+    def _ev_charge_started_at(self, value: Optional[float]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            pcc.state.charge_started_at = value
+        else:
+            self._ev_charge_started_at_default = value
+
+    @property
+    def _ev_last_change_time(self) -> Optional[Any]:
+        """#589 Surface-A — reactive control timing, backed by _current_pcc.state."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            return pcc.state.last_change_time
+        return self._ev_last_change_time_default
+
+    @_ev_last_change_time.setter
+    def _ev_last_change_time(self, value: Optional[Any]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            pcc.state.last_change_time = value
+        else:
+            self._ev_last_change_time_default = value
+
+    @property
+    def _ev_reenable_attempts(self) -> int:
+        """#589 Surface-A — consecutive failed re-enables, backed by _current_pcc.state."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            return pcc.state.reenable_attempts
+        return self._ev_reenable_attempts_default
+
+    @_ev_reenable_attempts.setter
+    def _ev_reenable_attempts(self, value: int) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            pcc.state.reenable_attempts = value
+        else:
+            self._ev_reenable_attempts_default = value
+
+    @property
+    def _ev_charge_refused(self) -> bool:
+        """#589 Surface-A — "car full" latch, backed by _current_pcc.state."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            return pcc.state.charge_refused
+        return self._ev_charge_refused_default
+
+    @_ev_charge_refused.setter
+    def _ev_charge_refused(self, value: bool) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            pcc.state.charge_refused = value
+        else:
+            self._ev_charge_refused_default = value
+
+    @property
+    def _ev_last_set_amps_ts(self) -> Optional[float]:
+        """#589 Surface-A — solar stability timestamp, backed by _current_pcc.state."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            return pcc.state.last_set_amps_ts
+        return self._ev_last_set_amps_ts_default
+
+    @_ev_last_set_amps_ts.setter
+    def _ev_last_set_amps_ts(self, value: Optional[float]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            pcc.state.last_set_amps_ts = value
+        else:
+            self._ev_last_set_amps_ts_default = value
 
     def _collect_trace(self, sem_data, power, charging_context) -> None:
         # ``charging_context`` reserved for a future management-layer capture.

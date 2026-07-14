@@ -236,3 +236,198 @@ class TestSurfaceAStalledSinceIsolation:
         coord._ev_stalled_since = 42.0
         assert coord._ev_stalled_since == 42.0
         assert coord._ev_stalled_since_default == 42.0
+
+
+class TestSurfaceAEnableSurplusSinceIsolation:
+    """#589 Surface-A — _ev_enable_surplus_since must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_enable_surplus_since is None
+            coord._ev_enable_surplus_since = 111.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_enable_surplus_since is None, "a leaked into b"
+            coord._ev_enable_surplus_since = 222.0
+        with self._ctx(coord, "a"):
+            assert coord._ev_enable_surplus_since == 111.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_enable_surplus_since == 222.0
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_enable_surplus_since is None
+        coord._ev_enable_surplus_since = 50.0
+        assert coord._ev_enable_surplus_since == 50.0
+        assert coord._ev_enable_surplus_since_default == 50.0
+
+
+class TestSurfaceAChargeStartedAtIsolation:
+    """#589 Surface-A — _ev_charge_started_at must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_started_at is None
+            coord._ev_charge_started_at = 300.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_charge_started_at is None, "a leaked into b"
+            coord._ev_charge_started_at = 400.0
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_started_at == 300.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_charge_started_at == 400.0
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_charge_started_at is None
+        coord._ev_charge_started_at = 99.0
+        assert coord._ev_charge_started_at == 99.0
+        assert coord._ev_charge_started_at_default == 99.0
+
+
+class TestSurfaceALastChangeTimeIsolation:
+    """#589 Surface-A — _ev_last_change_time must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_change_time is None
+            coord._ev_last_change_time = "ts_a"
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_change_time is None, "a leaked into b"
+            coord._ev_last_change_time = "ts_b"
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_change_time == "ts_a"
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_change_time == "ts_b"
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_last_change_time is None
+        coord._ev_last_change_time = "ts_x"
+        assert coord._ev_last_change_time == "ts_x"
+        assert coord._ev_last_change_time_default == "ts_x"
+
+
+class TestSurfaceAReenableAttemptsIsolation:
+    """#589 Surface-A — _ev_reenable_attempts must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_reenable_attempts == 0
+            coord._ev_reenable_attempts = 5
+        with self._ctx(coord, "b"):
+            assert coord._ev_reenable_attempts == 0, "a leaked into b"
+            coord._ev_reenable_attempts = 2
+        with self._ctx(coord, "a"):
+            assert coord._ev_reenable_attempts == 5
+        with self._ctx(coord, "b"):
+            assert coord._ev_reenable_attempts == 2
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_reenable_attempts == 0
+        coord._ev_reenable_attempts = 7
+        assert coord._ev_reenable_attempts == 7
+        assert coord._ev_reenable_attempts_default == 7
+
+
+class TestSurfaceAChargeRefusedIsolation:
+    """#589 Surface-A — _ev_charge_refused must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_refused is False
+            coord._ev_charge_refused = True
+        with self._ctx(coord, "b"):
+            assert coord._ev_charge_refused is False, "a leaked into b"
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_refused is True
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_charge_refused is False
+        coord._ev_charge_refused = True
+        assert coord._ev_charge_refused is True
+        assert coord._ev_charge_refused_default is True
+
+
+class TestSurfaceALastSetAmpsTsIsolation:
+    """#589 Surface-A — _ev_last_set_amps_ts must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_set_amps_ts is None
+            coord._ev_last_set_amps_ts = 500.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_set_amps_ts is None, "a leaked into b"
+            coord._ev_last_set_amps_ts = 600.0
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_set_amps_ts == 500.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_set_amps_ts == 600.0
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_last_set_amps_ts is None
+        coord._ev_last_set_amps_ts = 123.4
+        assert coord._ev_last_set_amps_ts == 123.4
+        assert coord._ev_last_set_amps_ts_default == 123.4

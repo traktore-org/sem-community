@@ -27,28 +27,26 @@ def _make_coord(ev_chargers=None):
     """A minimal coordinator stub with only the per-charger swap surface.
 
     Keeping the fixture small means future coordinator refactors won't
-    flake these tests — we only depend on the 8 ``_ev_*`` attributes the
-    swap touches.
+    flake these tests — we only depend on the attributes the swap touches.
+
+    Note: The 7 Surface-A scalars (_ev_stalled_since, _ev_enable_surplus_since,
+    _ev_charge_started_at, _ev_last_change_time, _ev_reenable_attempts,
+    _ev_charge_refused, _ev_last_set_amps_ts) are PROPERTIES on the real
+    coordinator backed by _pcc_store, so MagicMock lets them be set/read as
+    plain attributes here — the property logic runs on the real coordinator.
+    We add _pcc_store = {} so __enter__'s setdefault call works correctly.
     """
     coord = MagicMock()
     coord.config = {"ev_chargers": ev_chargers or [{"id": "left"}, {"id": "right"}]}
     # Primary view (the "fleet" attributes that get swapped per iteration).
     coord._ev_device = None
-    coord._ev_stalled_since = None
-    coord._ev_enable_surplus_since = None
-    coord._ev_charge_started_at = None
-    coord._ev_last_change_time = None
-    coord._ev_reenable_attempts = 0
-    coord._ev_charge_refused = False
     coord._current_charger_budget = None
     coord._cycle_vehicle_soc = None
-    # Per-charger storage dicts (populated/read by the context manager).
-    coord._ev_stalled_since_per_charger = {}
-    coord._ev_enable_surplus_per_charger = {}
-    coord._ev_charge_started_per_charger = {}
-    coord._ev_last_change_per_charger = {}
-    coord._ev_reenable_attempts_per_charger = {}
-    coord._ev_charge_refused_per_charger = {}
+    # #589 Surface-A: _pcc_store is the durable per-charger state store.
+    coord._pcc_store = {}
+    # Per-charger storage dicts still in use (budget_history).
+    coord._ev_budget_history_per_charger = {}
+    coord._ev_budget_history = []
     # v1.6.14: parallel dict written by ``__exit__`` from ``pcc.effective_state``.
     coord._effective_states_per_charger = {}
     # v1.6.14: cache pointer ``__enter__`` sets, ``__exit__`` clears.
@@ -64,10 +62,16 @@ class TestSwapInvariant:
     """The primary view must be restored exactly after the ``with`` block."""
 
     def test_restores_primary_after_clean_exit(self):
-        """No mutation, clean exit: primary view unchanged."""
+        """No mutation, clean exit: primary view unchanged.
+
+        #589 Surface-A: _ev_stalled_since and the other 6 migrated scalars
+        are PROPERTIES on the real coordinator backed by _pcc_store; they
+        are NOT in the _saved snapshot and are tested via the real-coordinator
+        isolation tests in test_589_followup.py. This test covers the still-
+        swap-based fields: _ev_device, _current_charger_budget, _cycle_vehicle_soc.
+        """
         coord = _make_coord()
         coord._ev_device = "FLEET_DEV"
-        coord._ev_stalled_since = "FLEET_STALL"
         coord._cycle_vehicle_soc = 42.0
 
         ev_dev = MagicMock(name="left_dev")
@@ -78,7 +82,6 @@ class TestSwapInvariant:
 
         # Outside: primary view restored.
         assert coord._ev_device == "FLEET_DEV"
-        assert coord._ev_stalled_since == "FLEET_STALL"
         assert coord._cycle_vehicle_soc == 42.0
 
     def test_restores_primary_after_exception(self):
@@ -101,36 +104,42 @@ class TestSwapInvariant:
         assert coord._current_charger_budget is None  # legacy semantic
 
     def test_per_charger_state_persists_across_iterations(self):
-        """Mutations to ``_ev_stalled_since`` inside the context land in
-        the per-charger dict so the next iteration of THIS charger sees
-        them."""
-        coord = _make_coord()
-        ev_dev_left = MagicMock(name="left_dev")
-        ev_dev_right = MagicMock(name="right_dev")
+        """Mutations to Surface-A fields inside the context are durable across
+        iterations via the _pcc_store (real coordinator required — properties
+        don't work on a MagicMock stub).
 
-        # #589 Surface-A: _ev_stalled_since was migrated off the swap onto the
-        # durable _pcc_store (it's a coordinator PROPERTY now, exercised with a
-        # REAL coordinator in test_589_followup.py::TestSurfaceAStalledSinceIsolation).
-        # This mock-coordinator test covers the still-swap-based fields.
-        with PerChargerContext.for_charger(coord, "left", ev_dev_left, {}):
+        #589 Surface-A: ALL 7 scalars are properties backed by the durable
+        _pcc_store; per-charger dicts are retired. This test uses a real
+        SEMCoordinator so the property getter/setter logic runs correctly.
+        Comprehensive cross-charger isolation is in
+        test_589_followup.py::TestSurfaceA* — this test is the minimal
+        in-file sanity check that the still-non-Surface-A swap fields
+        (_ev_device) + the migrated scalar fields (_ev_reenable_attempts,
+        _ev_charge_refused) both behave correctly together.
+        """
+        from unittest.mock import MagicMock as MM
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        coord = SEMCoordinator(MM(), {})
+        ev_dev_left = MM(name="left_dev")
+        ev_dev_right = MM(name="right_dev")
+
+        with PerChargerContext(cid="left", ev_dev=ev_dev_left, charger_cfg={}, _coord=coord):
             coord._ev_reenable_attempts = 3
             coord._ev_charge_refused = True
 
-        # Persisted to the per-charger dicts.
-        assert coord._ev_reenable_attempts_per_charger["left"] == 3
-        assert coord._ev_charge_refused_per_charger["left"] is True
-
-        # Primary view back to its pre-entry default.
+        # Primary view back to default (out-of-loop falls back to _default).
         assert coord._ev_reenable_attempts == 0
         assert coord._ev_charge_refused is False
 
         # Second iteration over a DIFFERENT charger: does not see left's state.
-        with PerChargerContext.for_charger(coord, "right", ev_dev_right, {}):
+        with PerChargerContext(cid="right", ev_dev=ev_dev_right, charger_cfg={}, _coord=coord):
             assert coord._ev_reenable_attempts == 0
             assert coord._ev_charge_refused is False
 
-        # Third iteration over left again: sees its own state.
-        with PerChargerContext.for_charger(coord, "left", ev_dev_left, {}):
+        # Third iteration over left again: sees its own persisted state.
+        with PerChargerContext(cid="left", ev_dev=ev_dev_left, charger_cfg={}, _coord=coord):
             assert coord._ev_reenable_attempts == 3
             assert coord._ev_charge_refused is True
 
