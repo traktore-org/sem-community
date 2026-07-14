@@ -31,6 +31,27 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class PerChargerState:
+    """Durable per-charger state (#589 Surface-A migration).
+
+    ONE instance per charger id, held on ``coord._pcc_store[cid]``. The
+    per-charger loop's ``PerChargerContext`` holds it **by reference** (``.state``),
+    so the ``ev_control`` read sites — via the coordinator's ``_ev_*`` PROPERTIES
+    — read and MUTATE the stored object directly. There is no snapshot/restore
+    and no write-back, so a field added here CANNOT leak charger[0]'s value into
+    charger[1] the way the old primary-scalar swap could when a write-back was
+    forgotten (#284/#315/#318 class). Fields are migrated off the swap one at a
+    time; each lands here + a coordinator property + a cross-charger isolation
+    test.
+    """
+
+    stalled_since: Optional[float] = None
+    # (remaining Surface-A fields migrate here field-by-field:
+    #  enable_surplus_since, charge_started_at, last_change_time,
+    #  reenable_attempts, charge_refused, last_set_amps_ts)
+
+
+@dataclass
 class PerChargerContext:
     """Per-charger state for ONE iteration of the multi-charger loop.
 
@@ -139,6 +160,11 @@ class PerChargerContext:
     _coord: "Optional[SEMCoordinator]" = field(default=None, repr=False)
     """The coordinator. Held so ``__enter__/__exit__`` can mutate it."""
 
+    state: "Optional[PerChargerState]" = field(default=None, repr=False)
+    """#589 Surface-A — this charger's DURABLE state object (``_pcc_store[cid]``),
+    held by reference. Migrated ``_ev_*`` fields read/write it via coordinator
+    properties; no snapshot/write-back, so they can't leak between chargers."""
+
     _saved: dict = field(default_factory=dict, repr=False)
     """Coordinator attributes captured at ``__enter__``, restored at
     ``__exit__``. Mirrors the pre-v1.6.7 ``saved = {...}`` dict."""
@@ -239,12 +265,19 @@ class PerChargerContext:
         coord = self._coord
         assert coord is not None, "PerChargerContext._coord must be set"
 
+        # #589 Surface-A — bind this charger's DURABLE state object by reference.
+        # Migrated fields (``stalled_since`` …) live here; reads/writes via the
+        # coordinator properties mutate this object directly — no swap, no
+        # write-back to forget.
+        self.state = coord._pcc_store.setdefault(self.cid, PerChargerState())
+
         # Snapshot the primary attributes BEFORE swapping in this charger's
         # values. The same set of fields the legacy ``saved = {...}`` dict
         # captured at coordinator.py:1136-1144 in the pre-v1.6.7 code.
+        # (Migrated Surface-A fields are NOT snapshotted here — they live on
+        # ``self.state``.)
         self._saved = {
             "dev": coord._ev_device,
-            "stalled": coord._ev_stalled_since,
             "enable": coord._ev_enable_surplus_since,
             "started": coord._ev_charge_started_at,
             "change": coord._ev_last_change_time,
@@ -258,8 +291,9 @@ class PerChargerContext:
         self._saved_vehicle_soc = coord._cycle_vehicle_soc
 
         # Push this charger's state onto the coordinator.
+        # ``_ev_stalled_since`` is migrated (#589 Surface-A) — it is now a
+        # property reading ``self.state.stalled_since``; nothing to push here.
         coord._ev_device = self.ev_dev
-        coord._ev_stalled_since = coord._ev_stalled_since_per_charger.get(self.cid)
         coord._ev_enable_surplus_since = coord._ev_enable_surplus_per_charger.get(self.cid)
         coord._ev_charge_started_at = coord._ev_charge_started_per_charger.get(self.cid)
         coord._ev_last_change_time = coord._ev_last_change_per_charger.get(self.cid)
@@ -315,7 +349,9 @@ class PerChargerContext:
         assert coord is not None, "PerChargerContext._coord must be set"
         try:
             # Save back this charger's per-charger state.
-            coord._ev_stalled_since_per_charger[self.cid] = coord._ev_stalled_since
+            # ``_ev_stalled_since`` is migrated (#589 Surface-A): it lives on
+            # ``self.state`` (the durable _pcc_store object), already persisted
+            # by reference — no write-back needed.
             coord._ev_enable_surplus_per_charger[self.cid] = coord._ev_enable_surplus_since
             coord._ev_charge_started_per_charger[self.cid] = coord._ev_charge_started_at
             coord._ev_last_change_per_charger[self.cid] = coord._ev_last_change_time
@@ -343,9 +379,9 @@ class PerChargerContext:
             if getattr(coord, "_current_pcc", None) is self:
                 coord._current_pcc = None
 
-            # Restore primary view.
+            # Restore primary view. (``_ev_stalled_since`` is migrated — it
+            # lives on ``self.state``, nothing to restore.)
             coord._ev_device = self._saved["dev"]
-            coord._ev_stalled_since = self._saved["stalled"]
             coord._ev_enable_surplus_since = self._saved["enable"]
             coord._ev_charge_started_at = self._saved["started"]
             coord._ev_last_change_time = self._saved["change"]

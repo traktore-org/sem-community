@@ -191,3 +191,48 @@ class TestSurfaceBTaperNoSwap:
         assert "self._ev_taper_detector = self._ev_taper_detectors[primary_id]" not in src, (
             "the Surface-B per-cycle taper swap was reintroduced"
         )
+
+
+class TestSurfaceAStalledSinceIsolation:
+    """#589 Surface-A — the migrated _ev_stalled_since must NOT leak between
+    chargers. This is the oracle the class historically lacked ('a missed
+    swap-back passes every unit test'): two chargers with divergent values,
+    assert no cross-contamination + per-charger persistence across cycles."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import (
+            PerChargerContext,
+        )
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_stalled_since_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        # charger A: fresh, then sets its stall time
+        with self._ctx(coord, "a"):
+            assert coord._ev_stalled_since is None
+            coord._ev_stalled_since = 100.0
+            assert coord._ev_stalled_since == 100.0
+        # charger B: MUST NOT see A's value (the leak guard)
+        with self._ctx(coord, "b"):
+            assert coord._ev_stalled_since is None, "A's stall time leaked into B"
+            coord._ev_stalled_since = 200.0
+        # re-enter A next cycle: its OWN value persisted (durable _pcc_store)
+        with self._ctx(coord, "a"):
+            assert coord._ev_stalled_since == 100.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_stalled_since == 200.0
+
+    def test_out_of_loop_uses_default_backing(self):
+        coord = self._coord()
+        # no active pcc → default backing field
+        assert coord._ev_stalled_since is None
+        coord._ev_stalled_since = 42.0
+        assert coord._ev_stalled_since == 42.0
+        assert coord._ev_stalled_since_default == 42.0

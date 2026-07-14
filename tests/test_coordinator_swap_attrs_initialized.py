@@ -37,7 +37,8 @@ COORDINATOR_PY = (
 # list is the human review point.
 REQUIRED_SWAP_ATTRS = {
     "_ev_device",
-    "_ev_stalled_since",
+    # _ev_stalled_since migrated off the swap to the durable _pcc_store
+    # (#589 Surface-A) — it's a coordinator property now, no longer snapshotted.
     "_ev_enable_surplus_since",
     "_ev_charge_started_at",
     "_ev_last_change_time",

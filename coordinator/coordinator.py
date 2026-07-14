@@ -51,7 +51,7 @@ from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
 from .flow_calculator import FlowCalculator
 from .charging_control import ChargingStateMachine, ChargingContext
-from .per_charger_context import PerChargerContext
+from .per_charger_context import PerChargerContext, PerChargerState
 from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import SurplusController
@@ -252,8 +252,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Solar stability primary view (swapped per-charger by PerChargerContext).
         self._ev_last_set_amps_ts: Optional[float] = None
         self._ev_budget_history: list = []
+        # #589 Surface-A — durable per-charger state objects (replacing the
+        # parallel _ev_*_per_charger dicts field-by-field). Held by the loop's
+        # PerChargerContext by reference; the migrated _ev_* properties read/
+        # write it, so a field can't leak between chargers.
+        self._pcc_store: Dict[str, PerChargerState] = {}
         # Per-charger state dicts for multi-charger (#112)
-        self._ev_stalled_since_per_charger: Dict[str, Optional[float]] = {}
+        # (_ev_stalled_since_per_charger removed — migrated to _pcc_store #589)
         self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
         self._ev_charge_started_per_charger: Dict[str, Optional[float]] = {}
         self._ev_last_change_per_charger: Dict[str, Any] = {}
@@ -471,8 +476,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # never entered this code path and so didn't surface the bug).
         self._current_charger_budget: Optional[float] = None
 
-        # EV stall detection for self-healing
-        self._ev_stalled_since: Optional[float] = None
+        # EV stall detection for self-healing.
+        # #589 Surface-A: _ev_stalled_since is a PROPERTY backed by the current
+        # PerChargerContext's durable state (self._current_pcc.state) so it can't
+        # leak between chargers; this default backs it out-of-loop (no active pcc).
+        self._ev_stalled_since_default: Optional[float] = None
         # False-stall guard: consecutive failed re-enables + "car full" latch (#243)
         self._ev_reenable_attempts: int = 0
         self._ev_charge_refused: bool = False
@@ -1240,6 +1248,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # harness that disables taper via ``= None``). When per-charger
         # detectors exist the getter still resolves the primary from them.
         self._ev_taper_detector_default = value
+
+    @property
+    def _ev_stalled_since(self) -> Optional[float]:
+        """#589 Surface-A — this charger's stall timestamp, backed by the
+        current PerChargerContext's durable state (``_current_pcc.state``).
+        Out-of-loop (no active pcc) falls back to a default. Because the loop's
+        context holds the ``_pcc_store[cid]`` object by reference, reads/writes
+        mutate the stored per-charger object directly — no snapshot/write-back,
+        so this field can't leak between chargers (the #315 class)."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            return pcc.state.stalled_since
+        return self._ev_stalled_since_default
+
+    @_ev_stalled_since.setter
+    def _ev_stalled_since(self, value: Optional[float]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None and pcc.state is not None:
+            pcc.state.stalled_since = value
+        else:
+            self._ev_stalled_since_default = value
 
     def _collect_trace(self, sem_data, power, charging_context) -> None:
         # ``charging_context`` reserved for a future management-layer capture.

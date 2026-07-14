@@ -108,32 +108,29 @@ class TestSwapInvariant:
         ev_dev_left = MagicMock(name="left_dev")
         ev_dev_right = MagicMock(name="right_dev")
 
-        # First pass through charger "left": stash a stalled timestamp.
-        stall_ts = datetime(2026, 5, 31, 16, 0, 0)
+        # #589 Surface-A: _ev_stalled_since was migrated off the swap onto the
+        # durable _pcc_store (it's a coordinator PROPERTY now, exercised with a
+        # REAL coordinator in test_589_followup.py::TestSurfaceAStalledSinceIsolation).
+        # This mock-coordinator test covers the still-swap-based fields.
         with PerChargerContext.for_charger(coord, "left", ev_dev_left, {}):
-            coord._ev_stalled_since = stall_ts
             coord._ev_reenable_attempts = 3
             coord._ev_charge_refused = True
 
         # Persisted to the per-charger dicts.
-        assert coord._ev_stalled_since_per_charger["left"] == stall_ts
         assert coord._ev_reenable_attempts_per_charger["left"] == 3
         assert coord._ev_charge_refused_per_charger["left"] is True
 
-        # Primary view back to its pre-entry default (None / 0 / False).
-        assert coord._ev_stalled_since is None
+        # Primary view back to its pre-entry default.
         assert coord._ev_reenable_attempts == 0
         assert coord._ev_charge_refused is False
 
         # Second iteration over a DIFFERENT charger: does not see left's state.
         with PerChargerContext.for_charger(coord, "right", ev_dev_right, {}):
-            assert coord._ev_stalled_since is None
             assert coord._ev_reenable_attempts == 0
             assert coord._ev_charge_refused is False
 
         # Third iteration over left again: sees its own state.
         with PerChargerContext.for_charger(coord, "left", ev_dev_left, {}):
-            assert coord._ev_stalled_since == stall_ts
             assert coord._ev_reenable_attempts == 3
             assert coord._ev_charge_refused is True
 
