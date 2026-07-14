@@ -2902,6 +2902,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _batt_inv = getattr(self._sensor_reader, "_battery_sign_inverted", {})
             _batt_det = getattr(self._sensor_reader, "_battery_sign_detected", {})
             result["diag_battery_sign"] = _format_battery_sign_diag(_batt_inv, _batt_det)
+            # #589 — observe-only post-lock contradiction flags.
+            result["diag_grid_sign_contradiction"] = "yes" if bool(
+                getattr(self._sensor_reader, "_grid_sign_lock_contradiction", False)
+            ) else "no"
+            result["diag_battery_sign_contradiction"] = "yes" if bool(
+                getattr(self._sensor_reader, "_battery_sign_contradiction", False)
+            ) else "no"
             result["diag_charger_count"] = len(self._ev_devices)
             result["diag_charger_control"] = "number" if any(
                 getattr(d, 'current_entity_id', None) for d in self._ev_devices.values()
