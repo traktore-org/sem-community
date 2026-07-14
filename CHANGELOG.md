@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.6] — 14.07.2026
+
+### 🐛 Fixes
+
+- 🔋 **Home battery no longer duplicated in the house-load tiles** (#587, by @RienduPre) — since 1.7.5
+  the battery is a first-class device in the priority list (#576), which also made it show up as a
+  house-load device tile on the flow diagram even though it already has its own battery node right
+  beside it. It's now excluded from those tiles (same as the EV charger already is) while staying in
+  the Control-tab priority list.
+
 # [1.7.5-beta.5] — 13.07.2026
 
 ### 📊 Enhancements
