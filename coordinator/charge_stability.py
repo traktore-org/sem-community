@@ -182,6 +182,97 @@ class ChargeStability:
         # adapter, leaving last_intent=CHARGE forever).
         self._sem_session: set[str] = set()
 
+    # ------------------------------------------------------------------ #
+    # Restart-safe timer persistence (#589)                               #
+    # ------------------------------------------------------------------ #
+
+    def snapshot_timers(self, now_mono: float) -> dict:
+        """Return elapsed-seconds for each per-charger timer dict.
+
+        Encodes the ELAPSED time (``now_mono - stamp``) rather than the
+        raw monotonic stamp so the snapshot is clock-independent — it
+        survives an HA restart whose ``time.monotonic()`` begins near 0.
+
+        Only finite, non-negative elapsed values are emitted; negative
+        values (clock skew / future stamp) are silently dropped so a
+        corrupt snapshot cannot mis-arm a stop on restore.
+
+        The six timer dicts covered: ``deficit``, ``deep_deficit``,
+        ``surplus``, ``start``, ``latched``, ``stopped_at``.
+        """
+        def _elapsed(d: Dict[str, float]) -> Dict[str, float]:
+            out = {}
+            for cid, stamp in d.items():
+                elapsed = now_mono - stamp
+                if 0.0 <= elapsed < float("inf"):
+                    out[cid] = elapsed
+            return out
+
+        return {
+            "deficit": _elapsed(self._deficit_since),
+            "deep_deficit": _elapsed(self._deep_deficit_since),
+            "surplus": _elapsed(self._surplus_since),
+            "start": _elapsed(self._start_since),
+            "latched": _elapsed(self._latched),
+            "stopped_at": _elapsed(self._stopped_at),
+        }
+
+    def restore_timers(self, saved: dict, now_mono: float) -> None:
+        """Rebase persisted elapsed-seconds back onto the current monotonic clock.
+
+        The rebase formula is: ``stamp = now_mono - elapsed``, so that
+        ``now_mono - stamp == elapsed`` — the countdown resumes from
+        exactly where it was at snapshot time.  We deliberately do NOT
+        add downtime (the HA restart gap) — a deep-deficit countdown
+        that was 40 s old before restart is still 40 s old after, which
+        means a charger that was about to be stopped will be stopped
+        promptly rather than being granted a full fresh grace window that
+        would drain the battery.
+
+        Guards:
+        * ``elapsed < 0`` — impossible (clock moved backward), skip.
+        * ``elapsed > 86400`` (24 h) — stale blob or clock jump; skip to
+          avoid mis-arming a stop that should have resolved long ago.
+        * Malformed input (non-dict, missing keys, non-numeric values) —
+          logged at DEBUG and silently ignored; never raises.
+        """
+        _MAX_ELAPSED_S = 86_400.0
+
+        if not isinstance(saved, dict):
+            _LOGGER.debug("restore_timers: saved is not a dict (%r), skipping", type(saved))
+            return
+
+        _map: dict[str, Dict[str, float]] = {
+            "deficit": self._deficit_since,
+            "deep_deficit": self._deep_deficit_since,
+            "surplus": self._surplus_since,
+            "start": self._start_since,
+            "latched": self._latched,
+            "stopped_at": self._stopped_at,
+        }
+
+        for key, target in _map.items():
+            blob = saved.get(key)
+            if not isinstance(blob, dict):
+                continue
+            for cid, elapsed in blob.items():
+                try:
+                    elapsed_f = float(elapsed)
+                except (TypeError, ValueError):
+                    _LOGGER.debug(
+                        "restore_timers[%s][%s]: non-numeric elapsed %r, skipping",
+                        key, cid, elapsed,
+                    )
+                    continue
+                if elapsed_f < 0.0 or elapsed_f >= _MAX_ELAPSED_S:
+                    _LOGGER.debug(
+                        "restore_timers[%s][%s]: elapsed %.1f s outside valid range "
+                        "[0, %.0f], skipping",
+                        key, cid, elapsed_f, _MAX_ELAPSED_S,
+                    )
+                    continue
+                target[cid] = now_mono - elapsed_f
+
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
         self._deficit_since.pop(cid, None)

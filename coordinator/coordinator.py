@@ -1616,6 +1616,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # enrichment tail then degrades to core data instead of taking the
         # WHOLE coordinator UpdateFailed (every entity on all tabs stale).
         core_result = None
+        # #589 — single injected clock for the charge-stability layer so all
+        # timer comparisons within one coordinator cycle use the same ``now``.
+        # Computed once here and threaded into both filter() call sites via
+        # _charge_stability_kwargs(); this also feeds snapshot_timers() in
+        # _save_ev_session_state so the persisted elapsed values are coherent
+        # with the filter timestamps of the same cycle.
+        _now_mono_cycle = time.monotonic()
         try:
             # Per-cycle caches — avoid redundant lookups within one 10s cycle (#52)
             self._cycle_forecast = self._forecast_reader.read_forecast()
@@ -2291,6 +2298,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         decision = self._charge_stability.filter(
                             decision, view, adapter,
                             **self._charge_stability_kwargs(),
+                            now_ts=_now_mono_cycle,
                         )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
@@ -2477,6 +2485,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 decision = self._charge_stability.filter(
                     decision, view, adapter,
                     **self._charge_stability_kwargs(),
+                    now_ts=_now_mono_cycle,
                 )
                 try:
                     await actuate(decision, adapter, view.power, reconciler=reconciler)
@@ -5481,12 +5490,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 "Restored EV session: active=%s, setpoint=%.0fA, %.2fkWh",
                 ev._session_active, ev._current_setpoint, self._session_data.energy_kwh,
             )
+        # #589 — restore stability timers so a deep-deficit countdown that was
+        # in progress before the restart resumes from the correct elapsed time
+        # rather than being reset to 0 (which would re-arm a full grace window
+        # and allow the battery to drain for the full 45 s again).
+        # The stability timers are at the top level of the blob (fleet-wide).
+        # Be fully defensive: any error → skip, never raise.
+        try:
+            stability_blob = state.get("stability_timers")
+            if stability_blob is not None:
+                self._charge_stability.restore_timers(stability_blob, time.monotonic())
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("restore_timers failed, skipping timer rebase", exc_info=True)
         self._ev_last_change_time = None
 
     def _save_ev_session_state(self) -> None:
         """Persist EV session state to storage."""
         if not self._storage:
             return
+
+        # #589 — snapshot the charge-stability timers so that on restart
+        # a deep-deficit countdown resumes from where it was rather than
+        # re-arming a full fresh grace window (the battery-drain bug).
+        # Stability timers are fleet-wide (one ChargeStability instance),
+        # so they are stored at the top level of the blob, not per-charger.
+        stability_snapshot = self._charge_stability.snapshot_timers(time.monotonic())
 
         # Multi-charger (#112): save all chargers
         if self._ev_devices:
@@ -5507,14 +5535,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     primary_dev._session_active, primary_dev._current_setpoint, primary_sd,
                 ),
                 "chargers": per_charger,
+                "stability_timers": stability_snapshot,
             })
         elif self._ev_device:
             ev = self._ev_device
-            self._storage.set_ev_session_state(
-                self._serialize_session_state(
+            self._storage.set_ev_session_state({
+                **self._serialize_session_state(
                     ev._session_active, ev._current_setpoint, self._session_data,
                 ),
-            )
+                "stability_timers": stability_snapshot,
+            })
 
     def _serialize_session_state(
         self, session_active: bool, current_setpoint: float, sd,
