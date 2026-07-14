@@ -1455,7 +1455,10 @@ class SEMSystemDiagramCard extends SEMLitBase {
         if (!devicesEntity?.attributes?.devices) return nothing;
 
         const devices = Object.entries(devicesEntity.attributes.devices)
-            .filter(([, info]) => info.device_type !== 'ev_charger')
+            // #587 — EV and the synthetic home battery each have their own node,
+            // so keep them out of the house-load device tiles (don't show twice).
+            .filter(([, info]) => info.device_type !== 'ev_charger'
+                && info.device_type !== 'battery')
             .map(([id, info]) => {
                 const powerEntity = info.power_entity ? this._hass.states[info.power_entity] : null;
                 const power = powerEntity ? parseFloat(powerEntity.state) || 0 : (info.current_power || 0);
