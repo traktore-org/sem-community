@@ -58,14 +58,21 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        from ..battery_charge_adapter import ChargeCommand
+        from ..battery_charge_adapter import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
             max_power_w=charge_power_w,
             duration_minutes=duration_min,
         )
-        await self._charge_adapter.start_forced_charge(cmd)
-        self._last_intent = BatteryIntent.FORCE_CHARGE
+        # #589 3b (honest result): record FORCE_CHARGE only when the delegate
+        # didn't FAIL — a failed charge must retry next cycle, not masquerade
+        # as charging. Mirrors the huawei/generic adapters.
+        status = await self._charge_adapter.start_forced_charge(cmd)
+        if getattr(status, "status", None) is ChargeCommandStatus.FAILED:
+            self._last_error = "start_forced_charge failed"
+        else:
+            self._last_error = None
+            self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion

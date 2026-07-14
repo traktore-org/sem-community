@@ -5631,6 +5631,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         now = dt_util.now()
         interval_hours = self.update_interval.total_seconds() / 3600
 
+        # #589 (EV W2/W3): the PRIMARY charger's own per-charger taper result,
+        # captured in the loop below so the fleet-sum re-update is not needed.
+        primary_id = next(iter(self._ev_devices)) if self._ev_devices else None
+        primary_taper_data = None
         # Multi-charger (#112): run per-charger taper detection
         if self._ev_devices and len(self._ev_devices) >= 1:
             for cid, ev_dev in self._ev_devices.items():
@@ -5705,9 +5709,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     )
 
                 if charger_power > 0 or charger_connected:
-                    self._ev_taper_detectors[cid].update(
+                    _td = self._ev_taper_detectors[cid].update(
                         charger_power, charger_setpoint, charger_connected, now,
                     )
+                    # #589 (EV W2/W3): keep the primary's OWN taper result so we
+                    # don't re-feed the fleet sum into the primary detector below
+                    # (that false-anchored the primary's SOC on another charger's
+                    # power). Its own per-charger power is the correct input.
+                    if cid == primary_id:
+                        primary_taper_data = _td
 
                 # Per-charger energy update (#318). Without this every
                 # per-charger detector keeps ``_energy_since_full=0`` so
@@ -5732,15 +5742,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._ev_device:
             ev_setpoint = getattr(self._ev_device, "_current_setpoint", 0.0)
 
-        # Run taper detection (primary / single charger). Multi-charger
-        # taper is handled per-charger by
-        # ``_update_per_charger_detector_energy`` (v1.6.6 #318); this
-        # call only runs when no per-charger detectors are configured.
-        # FLEET-READ: legacy single-detector path.
-        if power.ev_power > 0 or power.ev_connected:
+        # Run taper detection. #589 (EV W2/W3): for multi-charger the primary
+        # charger's OWN detector was already updated per-charger above (#318),
+        # and its result is in ``primary_taper_data``. The previous code then
+        # re-updated that same primary detector with the FLEET sum
+        # (``power.ev_power``) every cycle — so another charger's draw
+        # false-anchored the primary's SOC/peak (the exact fleet-read class the
+        # AST lint can't catch because the read was annotated). Now the fleet
+        # update ONLY runs on the legacy single-detector path (no per-charger
+        # devices configured at all).
+        if self._ev_devices:
+            taper_data = (
+                primary_taper_data if primary_taper_data is not None
+                else EVTaperData()
+            )
+        # FLEET-READ: legacy single-detector path — reached ONLY when no
+        # per-charger devices exist, so the fleet total IS this one charger.
+        elif power.ev_power > 0 or power.ev_connected:  # FLEET-READ: legacy single-detector gate
             taper_data = self._ev_taper_detector.update(
-                # FLEET-READ: single-detector input — see comment above.
-                power.ev_power, ev_setpoint, power.ev_connected, now,
+                power.ev_power, ev_setpoint, power.ev_connected, now,  # FLEET-READ: legacy single-detector input
             )
         else:
             taper_data = EVTaperData()

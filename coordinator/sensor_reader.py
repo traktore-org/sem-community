@@ -569,14 +569,29 @@ class SensorReader:
                 readings.battery_power = -readings.battery_power
                 readings.calculate_derived()
         else:
+            from dataclasses import replace
+            # #589 — keep the per-battery dict in lockstep with the fleet scalar
+            # on EVERY negate below. The actuator sources BatteryRuntime.last_known_w
+            # from readings.batteries[bid].power_w, not the fleet scalar. This
+            # branch is reached when per_battery_mode is off (single/combined
+            # battery, ed is None) — usually readings.batteries is empty so this
+            # is a no-op, but a single per-battery meter (_n_units == 1) DOES
+            # populate it, and flipping only the scalar would desync the
+            # arbitrage/force-discharge direction. Mirrors #588 H-1.
+            def _negate_per_battery():
+                for bid, bp in list(readings.batteries.items()):
+                    readings.batteries[bid] = replace(bp, power_w=-bp.power_w)
+
             battery_needs_negate = self._detect_battery_sign(readings)
             if battery_needs_negate:
                 readings.battery_power = -readings.battery_power
+                _negate_per_battery()
                 readings.calculate_derived()
             # #588 B1 — one-tap user battery sign flip, same as per_battery_mode
             # branch. Sits on top of the auto-detect / manual-invert path.
             if bool(self._raw_config.get("battery_sign_user_flip", False)):
                 readings.battery_power = -readings.battery_power
+                _negate_per_battery()
                 readings.calculate_derived()
 
         # #589 — observe-only post-lock battery sign contradiction audit.
