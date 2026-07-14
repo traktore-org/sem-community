@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .types import FleetEvPower, PowerReadings
+from .sign_audit import CounterCorrelationAudit
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -289,25 +290,17 @@ class SensorReader:
         # the manual-computed sign against the Energy Dashboard counters
         # in observe-only mode and warns loudly on sustained contradiction.
         self._manual_grid_config_warned: set[str] = set()
-        self._manual_grid_import_baseline: Optional[float] = None
-        self._manual_grid_export_baseline: Optional[float] = None
-        self._manual_grid_mismatch_votes: int = 0
-        self._manual_grid_mismatch: bool = False
-        self._manual_grid_mismatch_warned: bool = False
+        # Three CounterCorrelationAudit instances replace the 15 scattered
+        # fields (_*_baseline, _*_votes, _*_contradiction, _*_warned).
+        # Logging is handled by the adapter methods that call .update() and
+        # inspect the returned sentinel ("warn" / "clear" / None).
+        self._manual_grid_audit = CounterCorrelationAudit()
         # #589 — post-lock contradiction audit for the auto-detected grid sign.
         # Uses separate baselines so the voter's own baselines are never disturbed.
-        self._grid_audit_import_baseline: Optional[float] = None
-        self._grid_audit_export_baseline: Optional[float] = None
-        self._grid_sign_lock_contradiction_votes: int = 0
-        self._grid_sign_lock_contradiction: bool = False
-        self._grid_sign_lock_contradiction_warned: bool = False
+        self._grid_sign_audit = CounterCorrelationAudit()
         # #589 — observe-only battery sign contradiction audit (post-lock).
         # Separate baselines keep the voter's _battery_charge/discharge_baseline clean.
-        self._battery_audit_charge_baseline: Optional[float] = None
-        self._battery_audit_discharge_baseline: Optional[float] = None
-        self._battery_sign_contradiction_votes: int = 0
-        self._battery_sign_contradiction: bool = False
-        self._battery_sign_contradiction_warned: bool = False
+        self._battery_sign_audit = CounterCorrelationAudit()
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -748,6 +741,103 @@ class SensorReader:
                 if ed else []
             ),
         }
+
+    # ------------------------------------------------------------------
+    # Backward-compat properties for the CounterCorrelationAudit fields
+    # ------------------------------------------------------------------
+    # coordinator.py and tests access these as plain attributes on the
+    # reader instance.  Surfacing them via @property keeps the external
+    # interface identical while the state now lives on the audit objects.
+
+    # ---- manual grid mismatch ----------------------------------------
+
+    @property
+    def _manual_grid_import_baseline(self) -> Optional[float]:
+        return self._manual_grid_audit.baseline_a
+
+    @_manual_grid_import_baseline.setter
+    def _manual_grid_import_baseline(self, v: Optional[float]) -> None:
+        self._manual_grid_audit.baseline_a = v
+
+    @property
+    def _manual_grid_export_baseline(self) -> Optional[float]:
+        return self._manual_grid_audit.baseline_b
+
+    @_manual_grid_export_baseline.setter
+    def _manual_grid_export_baseline(self, v: Optional[float]) -> None:
+        self._manual_grid_audit.baseline_b = v
+
+    @property
+    def _manual_grid_mismatch_votes(self) -> int:
+        return self._manual_grid_audit.votes
+
+    @property
+    def _manual_grid_mismatch(self) -> bool:
+        return self._manual_grid_audit.flagged
+
+    @property
+    def _manual_grid_mismatch_warned(self) -> bool:
+        return self._manual_grid_audit.warned
+
+    # ---- grid sign lock contradiction --------------------------------
+
+    @property
+    def _grid_audit_import_baseline(self) -> Optional[float]:
+        return self._grid_sign_audit.baseline_a
+
+    @_grid_audit_import_baseline.setter
+    def _grid_audit_import_baseline(self, v: Optional[float]) -> None:
+        self._grid_sign_audit.baseline_a = v
+
+    @property
+    def _grid_audit_export_baseline(self) -> Optional[float]:
+        return self._grid_sign_audit.baseline_b
+
+    @_grid_audit_export_baseline.setter
+    def _grid_audit_export_baseline(self, v: Optional[float]) -> None:
+        self._grid_sign_audit.baseline_b = v
+
+    @property
+    def _grid_sign_lock_contradiction_votes(self) -> int:
+        return self._grid_sign_audit.votes
+
+    @property
+    def _grid_sign_lock_contradiction(self) -> bool:
+        return self._grid_sign_audit.flagged
+
+    @property
+    def _grid_sign_lock_contradiction_warned(self) -> bool:
+        return self._grid_sign_audit.warned
+
+    # ---- battery sign contradiction ----------------------------------
+
+    @property
+    def _battery_audit_charge_baseline(self) -> Optional[float]:
+        return self._battery_sign_audit.baseline_a
+
+    @_battery_audit_charge_baseline.setter
+    def _battery_audit_charge_baseline(self, v: Optional[float]) -> None:
+        self._battery_sign_audit.baseline_a = v
+
+    @property
+    def _battery_audit_discharge_baseline(self) -> Optional[float]:
+        return self._battery_sign_audit.baseline_b
+
+    @_battery_audit_discharge_baseline.setter
+    def _battery_audit_discharge_baseline(self, v: Optional[float]) -> None:
+        self._battery_sign_audit.baseline_b = v
+
+    @property
+    def _battery_sign_contradiction_votes(self) -> int:
+        return self._battery_sign_audit.votes
+
+    @property
+    def _battery_sign_contradiction(self) -> bool:
+        return self._battery_sign_audit.flagged
+
+    @property
+    def _battery_sign_contradiction_warned(self) -> bool:
+        return self._battery_sign_audit.warned
 
     def export_sign_state(self) -> dict:
         """Snapshot the LOCKED sign-detection state for persistence."""
@@ -2006,6 +2096,10 @@ class SensorReader:
         Observe-only by design: manual config is explicit user intent, so
         SEM never silently re-flips it — it makes the misconfiguration loud
         instead.
+
+        Delegates to ``_manual_grid_audit`` (CounterCorrelationAudit).
+        Counter-A = import (rising ↔ grid_power < 0 under SEM convention,
+        i.e. ``positive_power_means_a=False`` since positive = export).
         """
         # Sum across the counter LISTS when present — Dutch dual-tariff
         # DSMR meters split each direction into tarief 1 + tarief 2
@@ -2028,60 +2122,43 @@ class SensorReader:
         if import_val is None or export_val is None:
             return
 
-        if self._manual_grid_import_baseline is None:
-            self._manual_grid_import_baseline = import_val
-            self._manual_grid_export_baseline = export_val
-            return
-        deltas = self._counter_deltas(
-            self._manual_grid_import_baseline, self._manual_grid_export_baseline,
+        # counter-A = import, counter-B = export.
+        # positive_power_means_a=False: grid_power > 0 means export (B rising).
+        signal = self._manual_grid_audit.update(
             import_val, export_val,
+            positive_power_means_a=False,
+            power_positive=grid_power > 0,
+            counter_deltas_fn=self._counter_deltas,
         )
-        self._manual_grid_import_baseline = import_val
-        self._manual_grid_export_baseline = export_val
-
-        # Counter reset (#476) or ambiguous deltas → no judgement this cycle.
-        if deltas is None:
-            return
-        import_delta, export_delta = deltas
-        if import_delta > 0.001 and export_delta < 0.001:
-            counters_say_export = False
-        elif export_delta > 0.001 and import_delta < 0.001:
-            counters_say_export = True
-        else:
-            return
-
-        manual_says_export = grid_power > 0
-        if manual_says_export != counters_say_export:
-            self._manual_grid_mismatch_votes += 1
-        else:
-            self._manual_grid_mismatch_votes = 0
-            if self._manual_grid_mismatch:
-                self._manual_grid_mismatch = False
-                _LOGGER.info(
-                    "Manual grid entities agree with the Energy Dashboard "
-                    "counters again — clearing the mismatch flag."
-                )
-            return
-
-        if self._manual_grid_mismatch_votes >= 5 and not self._manual_grid_mismatch:
-            self._manual_grid_mismatch = True
-            if not self._manual_grid_mismatch_warned:
-                self._manual_grid_mismatch_warned = True
-                _LOGGER.warning(
-                    "Manual grid power entities CONTRADICT the Energy "
-                    "Dashboard counters for 5+ cycles: SEM computes %s "
-                    "(grid_power=%.0f W) while the %s counter is the one "
-                    "increasing. grid_import_power_entity=%s / "
-                    "grid_export_power_entity=%s are most likely SWAPPED "
-                    "(or point at the wrong meters). SEM does not override "
-                    "manual config — fix the two fields in the SEM config. "
-                    "(#461)",
-                    "EXPORT" if manual_says_export else "IMPORT",
-                    grid_power,
-                    "import" if not counters_say_export else "export",
-                    self._raw_config.get("grid_import_power_entity"),
-                    self._raw_config.get("grid_export_power_entity"),
-                )
+        if signal == "clear":
+            _LOGGER.info(
+                "Manual grid entities agree with the Energy Dashboard "
+                "counters again — clearing the mismatch flag."
+            )
+        elif signal == "warn":
+            # Reconstruct the human-readable context for the warning.
+            manual_says_export = grid_power > 0
+            # Which counter was rising at the moment the threshold was crossed?
+            # We can infer from the current baselines vs prior: the audit has
+            # already updated the baselines, so we re-derive the direction from
+            # the last delta pair.  Instead, derive from the power sign to avoid
+            # re-computing: if manual_says_export but audit fired, the import
+            # counter must have been rising.
+            _LOGGER.warning(
+                "Manual grid power entities CONTRADICT the Energy "
+                "Dashboard counters for 5+ cycles: SEM computes %s "
+                "(grid_power=%.0f W) while the %s counter is the one "
+                "increasing. grid_import_power_entity=%s / "
+                "grid_export_power_entity=%s are most likely SWAPPED "
+                "(or point at the wrong meters). SEM does not override "
+                "manual config — fix the two fields in the SEM config. "
+                "(#461)",
+                "EXPORT" if manual_says_export else "IMPORT",
+                grid_power,
+                "import" if manual_says_export else "export",
+                self._raw_config.get("grid_import_power_entity"),
+                self._raw_config.get("grid_export_power_entity"),
+            )
 
     def _audit_autodetect_grid_sign(self, grid_power: float, ed) -> None:
         """Observe-only post-lock contradiction check for the auto-detected grid sign (#589).
@@ -2093,6 +2170,9 @@ class SensorReader:
 
         Observe-only by design: never re-flips the sign — makes a wrong
         lock loud instead.
+
+        Delegates to ``_grid_sign_audit`` (CounterCorrelationAudit).
+        Counter-A = import; positive_power_means_a=False (positive = export).
         """
         import_entities = (
             list(getattr(ed, "grid_import_energy_list", None) or [])
@@ -2111,55 +2191,29 @@ class SensorReader:
         if import_val is None or export_val is None:
             return
 
-        if self._grid_audit_import_baseline is None:
-            self._grid_audit_import_baseline = import_val
-            self._grid_audit_export_baseline = export_val
-            return
-        deltas = self._counter_deltas(
-            self._grid_audit_import_baseline, self._grid_audit_export_baseline,
+        signal = self._grid_sign_audit.update(
             import_val, export_val,
+            positive_power_means_a=False,
+            power_positive=grid_power > 0,
+            counter_deltas_fn=self._counter_deltas,
         )
-        self._grid_audit_import_baseline = import_val
-        self._grid_audit_export_baseline = export_val
-
-        if deltas is None:
-            return
-        import_delta, export_delta = deltas
-        if import_delta > 0.001 and export_delta < 0.001:
-            counters_say_export = False
-        elif export_delta > 0.001 and import_delta < 0.001:
-            counters_say_export = True
-        else:
-            return
-
-        lock_says_export = grid_power > 0
-        if lock_says_export != counters_say_export:
-            self._grid_sign_lock_contradiction_votes += 1
-        else:
-            self._grid_sign_lock_contradiction_votes = 0
-            if self._grid_sign_lock_contradiction:
-                self._grid_sign_lock_contradiction = False
-                _LOGGER.info(
-                    "Auto-detected grid sign now agrees with the Energy Dashboard "
-                    "counters again — clearing the grid sign contradiction flag. (#589)"
-                )
-            return
-
-        if (self._grid_sign_lock_contradiction_votes >= 5
-                and not self._grid_sign_lock_contradiction):
-            self._grid_sign_lock_contradiction = True
-            if not self._grid_sign_lock_contradiction_warned:
-                self._grid_sign_lock_contradiction_warned = True
-                _LOGGER.warning(
-                    "Auto-detected grid sign CONTRADICTS the Energy Dashboard "
-                    "counters for 5+ cycles: SEM computes %s (grid_power=%.0f W) "
-                    "while the %s counter is the one increasing. The locked "
-                    "grid sign convention may be wrong. Use the 'Fix grid sign' "
-                    "button in the SEM Config tab to correct it. (#589)",
-                    "EXPORT" if lock_says_export else "IMPORT",
-                    grid_power,
-                    "import" if not counters_say_export else "export",
-                )
+        if signal == "clear":
+            _LOGGER.info(
+                "Auto-detected grid sign now agrees with the Energy Dashboard "
+                "counters again — clearing the grid sign contradiction flag. (#589)"
+            )
+        elif signal == "warn":
+            lock_says_export = grid_power > 0
+            _LOGGER.warning(
+                "Auto-detected grid sign CONTRADICTS the Energy Dashboard "
+                "counters for 5+ cycles: SEM computes %s (grid_power=%.0f W) "
+                "while the %s counter is the one increasing. The locked "
+                "grid sign convention may be wrong. Use the 'Fix grid sign' "
+                "button in the SEM Config tab to correct it. (#589)",
+                "EXPORT" if lock_says_export else "IMPORT",
+                grid_power,
+                "import" if lock_says_export else "export",
+            )
 
     def _audit_battery_sign_lock(self, battery_power: float, ed) -> None:
         """Observe-only post-lock contradiction check for the fleet battery sign (#589).
@@ -2179,6 +2233,9 @@ class SensorReader:
         Observe-only by design: never re-flips the sign.
         Uses ``_battery_audit_charge_baseline`` / ``_battery_audit_discharge_baseline``
         so the voter's ``_battery_charge_baseline`` is never disturbed.
+
+        Delegates to ``_battery_sign_audit`` (CounterCorrelationAudit).
+        Counter-A = charge; positive_power_means_a=True (positive = charging).
         """
         if not self._battery_sign_detected.get(self._FLEET_BID):
             return
@@ -2201,60 +2258,36 @@ class SensorReader:
         if charge_val is None or discharge_val is None:
             return
 
-        if self._battery_audit_charge_baseline is None:
-            self._battery_audit_charge_baseline = charge_val
-            self._battery_audit_discharge_baseline = discharge_val
-            return
-        deltas = self._counter_deltas(
-            self._battery_audit_charge_baseline, self._battery_audit_discharge_baseline,
+        # counter-A = charge, counter-B = discharge.
+        # positive_power_means_a=True: battery_power > 0 means charging (A rising).
+        signal = self._battery_sign_audit.update(
             charge_val, discharge_val,
+            positive_power_means_a=True,
+            power_positive=battery_power > 0,
+            counter_deltas_fn=self._counter_deltas,
         )
-        self._battery_audit_charge_baseline = charge_val
-        self._battery_audit_discharge_baseline = discharge_val
-
-        if deltas is None:
-            return
-        charge_delta, discharge_delta = deltas
-        if charge_delta > 0.001 and discharge_delta < 0.001:
-            counters_say_charging = True
-        elif discharge_delta > 0.001 and charge_delta < 0.001:
-            counters_say_charging = False
-        else:
-            return
-
-        power_says_charging = battery_power > 0
-        if power_says_charging != counters_say_charging:
-            self._battery_sign_contradiction_votes += 1
-        else:
-            self._battery_sign_contradiction_votes = 0
-            if self._battery_sign_contradiction:
-                self._battery_sign_contradiction = False
-                _LOGGER.info(
-                    "Battery sign now agrees with the Energy Dashboard "
-                    "counters again — clearing the battery sign contradiction flag. (#589)"
-                )
-            return
-
-        if (self._battery_sign_contradiction_votes >= 5
-                and not self._battery_sign_contradiction):
-            self._battery_sign_contradiction = True
-            if not self._battery_sign_contradiction_warned:
-                self._battery_sign_contradiction_warned = True
-                charge_ent = charge_entities[0] if charge_entities else "unknown"
-                discharge_ent = discharge_entities[0] if discharge_entities else "unknown"
-                _LOGGER.warning(
-                    "Battery sign CONTRADICTS the Energy Dashboard counters "
-                    "for 5+ cycles: SEM computes battery_power=%.0f W (%s) "
-                    "while the %s counter (%s / %s) is the one increasing. "
-                    "The locked battery sign convention may be wrong. Use "
-                    "'Reset sign detection' in the SEM Config tab to clear "
-                    "the lock and re-learn it. (#589)",
-                    battery_power,
-                    "CHARGING" if power_says_charging else "DISCHARGING",
-                    "discharge" if power_says_charging else "charge",
-                    charge_ent,
-                    discharge_ent,
-                )
+        if signal == "clear":
+            _LOGGER.info(
+                "Battery sign now agrees with the Energy Dashboard "
+                "counters again — clearing the battery sign contradiction flag. (#589)"
+            )
+        elif signal == "warn":
+            power_says_charging = battery_power > 0
+            charge_ent = charge_entities[0] if charge_entities else "unknown"
+            discharge_ent = discharge_entities[0] if discharge_entities else "unknown"
+            _LOGGER.warning(
+                "Battery sign CONTRADICTS the Energy Dashboard counters "
+                "for 5+ cycles: SEM computes battery_power=%.0f W (%s) "
+                "while the %s counter (%s / %s) is the one increasing. "
+                "The locked battery sign convention may be wrong. Use "
+                "'Reset sign detection' in the SEM Config tab to clear "
+                "the lock and re-learn it. (#589)",
+                battery_power,
+                "CHARGING" if power_says_charging else "DISCHARGING",
+                "discharge" if power_says_charging else "charge",
+                charge_ent,
+                discharge_ent,
+            )
 
     # With healthy two-sided any-device picks held, re-scan only every
     # N cycles for the same-device upgrade case (#485 H3). At the
