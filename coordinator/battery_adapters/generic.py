@@ -236,24 +236,37 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if self._setpoint_bidirectional and self._force_discharge_entity:
             await self._enter_active_strategy()
             watts = max(0.0, min(float(charge_power_w), self.max_charge_power_w))
-            await self._write_force_discharge(-watts)
-            self._last_intent = BatteryIntent.FORCE_CHARGE
+            ok = await self._write_force_discharge(-watts)
+            if ok:
+                self._last_error = None
+                self._last_intent = BatteryIntent.FORCE_CHARGE
+            else:
+                self._last_error = "bidirectional charge write failed"
+                # _last_intent intentionally NOT updated — retry next cycle (#589)
             return
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        ok_zero = await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        if not ok_zero:
+            self._last_error = "mutual-exclusion zero-write failed"
+            return
         if self._charge_adapter is None:
             _LOGGER.warning(
                 "GenericBatteryAdapter: no forced-charge backend — "
                 "command_force_charge ignored",
             )
             return
-        from ..battery_charge_adapter import ChargeCommand
+        from ..battery_charge_adapter import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
             max_power_w=charge_power_w,
             duration_minutes=duration_min,
         )
-        await self._charge_adapter.start_forced_charge(cmd)
-        self._last_intent = BatteryIntent.FORCE_CHARGE
+        status = await self._charge_adapter.start_forced_charge(cmd)
+        if status.status is ChargeCommandStatus.FAILED:
+            self._last_error = f"start_forced_charge failed: {status.message}"
+            # _last_intent intentionally NOT updated — retry next cycle (#589)
+        else:
+            self._last_error = None
+            self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion

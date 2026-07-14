@@ -65,6 +65,10 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # every transition issues exactly ONE command and defers the rest to
         # the next cycle. This flag is the state that makes that possible.
         self._forcible_discharging = False
+        # Whether a forcible CHARGE is currently active (started by SEM this
+        # lifetime). Guards the startup orphan-clear from wrongly stopping a
+        # charge that SEM itself issued this run (#589 Part C).
+        self._forcible_charging = False
         # Stop-retry budget. Huawei Modbus writes are queued and can be
         # dropped / reordered under a flaky connection — a single
         # stop_forcible_charge sometimes doesn't land, leaving the battery
@@ -146,17 +150,28 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
                 "Huawei battery: forcible discharge %.0f W to SOC %d%% "
                 "(manual sell / arbitrage)", watts, int(floor_soc),
             )
+            self._last_error = None
+            self._last_intent = BatteryIntent.FORCE_DISCHARGE
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning(
                 "Huawei battery: forcible_discharge_soc failed: %s", e,
             )
-        self._last_intent = BatteryIntent.FORCE_DISCHARGE
+            self._last_error = f"forcible_discharge_soc failed: {e}"
+            # _last_intent intentionally NOT updated — retry next cycle (#589)
 
     async def command_stop_force_discharge(self) -> None:
         # #532: also catch an orphan op from a prior instance (the flag-gated
         # _stop_forcible alone misses it on a fresh adapter).
-        if not await self._maybe_clear_startup_orphan():
-            await self._stop_forcible()
+        # #589: record STOP_FORCE_DISCHARGE only when the stop landed.
+        cleared = await self._maybe_clear_startup_orphan()
+        if not cleared:
+            stopped = await self._stop_forcible()
+            if not stopped and self._forcible_discharging:
+                # Stop didn't land — leave _last_intent unchanged so the
+                # next cycle re-issues. _stop_forcible already logged.
+                self._last_error = "stop_forcible failed"
+                return
+        self._last_error = None
         self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
 
     async def _stop_forcible(self) -> bool:
@@ -241,14 +256,20 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         return self._forcible_status_reading() == "active"
 
     async def _maybe_clear_startup_orphan(self) -> bool:
-        """Cancel a forcible op left running by a prior SEM instance (#532).
+        """Cancel a forcible op (charge OR discharge) left running by a prior
+        SEM instance (#532, #589 Part C).
 
         One-shot, consumed only once ``huawei_solar`` is loaded so the status
         sensor is readable (the same startup race the adapter self-heal guards
         against). Issues exactly ONE ``stop_forcible_charge`` if an op is
         active that THIS adapter didn't start. Returns True when it issued the
         stop so the caller defers other Modbus writes this cycle (back-to-back
-        writes after a stop block the LUNA2000)."""
+        writes after a stop block the LUNA2000).
+
+        Conservative: if the status sensor is unreadable or absent, we do
+        NOTHING (fail-safe). Only issues a stop command — never a new
+        charge/discharge. Does NOT touch generic/Sessy setpoint boot-clear.
+        # TODO(#589 3b): extend to generic adapter setpoint-based orphan-clear."""
         if self._startup_orphan_checked:
             return False
         from . import _integration_loaded
@@ -261,8 +282,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             # Sensor exists but hasn't polled a real value yet — wait one more
             # cycle so we don't miss an in-flight op to sensor lag.
             return False
-        if self._forcible_discharging:
-            # We started it this lifetime — the normal _stop_forcible path
+        if self._forcible_discharging or self._forcible_charging:
+            # We started this op in the current lifetime — the normal path
             # owns it; nothing orphaned.
             self._startup_orphan_checked = True
             return False
@@ -358,14 +379,20 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         if await self._stop_forcible():
             self._last_intent = BatteryIntent.FORCE_CHARGE
             return
-        from ..battery_charge_adapter import ChargeCommand
+        from ..battery_charge_adapter import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
             max_power_w=charge_power_w,
             duration_minutes=duration_min,
         )
-        await self._charge_adapter.start_forced_charge(cmd)
-        self._last_intent = BatteryIntent.FORCE_CHARGE
+        status = await self._charge_adapter.start_forced_charge(cmd)
+        if status.status is ChargeCommandStatus.FAILED:
+            self._last_error = f"start_forced_charge failed: {status.message}"
+            # _last_intent intentionally NOT updated — retry next cycle (#589)
+        else:
+            self._forcible_charging = True  # guard orphan-clear from stopping us
+            self._last_error = None
+            self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
         # STOP any forced op — also clears an arbitrage discharge (#523),
@@ -374,12 +401,15 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # charge share the same huawei stop service, so one clean stop covers
         # both; only fall through to the charge adapter when not forcing.
         if await self._maybe_clear_startup_orphan():
+            self._forcible_charging = False
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
         if await self._stop_forcible():
+            self._forcible_charging = False
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
         await self._charge_adapter.stop_forced_charge()
+        self._forcible_charging = False
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
 
     # ─── Helpers ───────────────────────────────────────────────
