@@ -1154,6 +1154,10 @@
       "title": "Sensor niet beschikbaar",
       "description": "De sensor `{entity_id}` ({friendly_name}) is al {minutes}+ minuten niet beschikbaar. SEM kan deze niet meenemen in berekeningen totdat de sensor weer actief is. Controleer de bovenliggende integratie (Huawei modbus / Solcast / Forecast.Solar / uw omvormernetwerk). Deze melding verdwijnt automatisch zodra de sensor weer een geldige waarde rapporteert."
     },
+    "sensor_stale": {
+      "title": "Sensor bevroren",
+      "description": "De sensor `{entity_id}` ({friendly_name}) meldt zich als beschikbaar maar is al {minutes}+ minuten niet bijgewerkt — hij lijkt bevroren. SEM gebruikt de verouderde waarde in de energiebalans en tekenherkenning, wat je cijfers kan vervormen. Controleer de integratie (Huawei modbus / Growatt cloud / je omvormernetwerk). Deze melding verdwijnt automatisch zodra de sensor weer bijwerkt."
+    },
     "charger_actuation_failed": {
       "title": "EV-lader accepteert geen commando's: {name}",
       "description": "De laatste 3+ stroomcommando's van SEM naar **{name}** zijn geweigerd: `{error}`. De lader staat op dit moment NIET onder controle van SEM — hij blijft doen wat hem het laatst is opgedragen (inclusief op vol vermogen laden in de uit-stand). Meest voorkomende oorzaken: de besturingsentiteit van de lader is hernoemd door een update van de bovenliggende integratie, of `ev_charger_service` verwijst naar een service met een ander parameterschema. Controleer de besturingsentiteit/service van de lader in de SEM-configuratie. Deze melding verdwijnt automatisch na het eerstvolgende geslaagde commando."

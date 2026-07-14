@@ -76,3 +76,30 @@ class TestSensorFreshnessW3:
             r.hass.states.get = lambda eid, _s=_state(1000, age_s=700): _s
             r._read_sensor(f"sensor.{eid}", name)
             assert f"sensor.{eid}" in r._frozen_sensors, f"{name} not checked"
+
+
+class TestFrozenSensorRepair:
+    """The freeze also surfaces as an HA Repair (not just a log), cleared on recovery."""
+
+    def test_freeze_raises_repair(self):
+        from unittest.mock import patch
+        r = _reader()
+        r.hass.states.get = lambda eid: _state(4000, age_s=700)
+        with patch(
+            "custom_components.solar_energy_management.coordinator.repair_issues.raise_sensor_stale"
+        ) as raise_stale:
+            r._read_sensor("sensor.solar", "solar")
+        raise_stale.assert_called_once()
+        assert raise_stale.call_args.args[1] == "sensor.solar"
+
+    def test_recovery_clears_repair(self):
+        from unittest.mock import patch
+        r = _reader()
+        r.hass.states.get = lambda eid: _state(4000, age_s=700)
+        r._read_sensor("sensor.grid", "grid")   # freeze
+        r.hass.states.get = lambda eid: _state(4000, age_s=2)  # recovered
+        with patch(
+            "custom_components.solar_energy_management.coordinator.repair_issues.clear_sensor_stale"
+        ) as clear_stale:
+            r._read_sensor("sensor.grid", "grid")
+        clear_stale.assert_called_once()

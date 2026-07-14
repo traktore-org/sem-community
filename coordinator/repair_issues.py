@@ -100,6 +100,47 @@ def clear_sensor_unavailable(hass: HomeAssistant, entity_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
+def _stale_issue_id(entity_id: str) -> str:
+    """Stable per-entity issue id for a FROZEN (available-but-stale) sensor."""
+    return f"sensor_stale_{entity_id}"
+
+
+def raise_sensor_stale(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    friendly_name: str | None = None,
+    minutes_stale: int = 10,
+) -> None:
+    """File a repair when a fast power ``entity_id`` is 'available' but has not
+    updated past the freeze threshold (#589 W3). Idempotent."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_stale_issue_id(entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="sensor_stale",
+            translation_placeholders={
+                "entity_id": entity_id,
+                "friendly_name": friendly_name or entity_id,
+                "minutes": str(minutes_stale),
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create (stale) failed for %s: %s", entity_id, e)
+
+
+def clear_sensor_stale(hass: HomeAssistant, entity_id: str) -> None:
+    """Clear the frozen-sensor repair when ``entity_id`` updates again."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _stale_issue_id(entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete (stale) failed for %s: %s", entity_id, e)
+
+
 def _actuation_issue_id(device_id: str) -> str:
     return f"charger_actuation_failed_{device_id}"
 

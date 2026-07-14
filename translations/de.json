@@ -1154,6 +1154,10 @@
       "title": "Sensor nicht verfügbar",
       "description": "Der Sensor `{entity_id}` ({friendly_name}) ist seit {minutes}+ Minuten nicht verfügbar. SEM kann ihn nicht in Berechnungen einbeziehen, bis er wieder verfügbar ist. Prüfen Sie die zugrundeliegende Integration (Huawei modbus / Solcast / Forecast.Solar / Ihr Wechselrichter-Netzwerk). Wird automatisch gelöscht, sobald der Sensor wieder einen gültigen Wert meldet."
     },
+    "sensor_stale": {
+      "title": "Sensor eingefroren",
+      "description": "Der Sensor `{entity_id}` ({friendly_name}) meldet sich als verfügbar, hat aber seit {minutes}+ Minuten nicht aktualisiert — er scheint eingefroren. SEM verwendet seinen veralteten Wert in der Energiebilanz und Vorzeichenerkennung, was die Werte verfälschen kann. Prüfen Sie die Integration (Huawei Modbus / Growatt Cloud / Ihr Wechselrichter-Netzwerk). Dieser Hinweis verschwindet automatisch, sobald der Sensor wieder aktualisiert."
+    },
     "charger_actuation_failed": {
       "title": "E-Auto-Ladegerät nimmt keine Befehle an: {name}",
       "description": "Die letzten 3+ Strombefehle von SEM an **{name}** wurden abgelehnt: `{error}`. Das Ladegerät steht derzeit NICHT unter SEM-Kontrolle — es macht weiter, was zuletzt befohlen wurde (einschließlich Laden mit voller Leistung im Aus-Modus). Häufigste Ursachen: Die Steuer-Entität wurde durch ein Update der Upstream-Integration umbenannt, oder `ev_charger_service` zeigt auf einen Dienst mit anderem Parameterschema. Prüfe die Steuer-Entität/den Dienst des Ladegeräts in der SEM-Konfiguration. Dieser Hinweis verschwindet automatisch nach dem nächsten erfolgreichen Befehl."

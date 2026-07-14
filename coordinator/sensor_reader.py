@@ -2783,16 +2783,26 @@ class SensorReader:
         if age_s >= self._STALE_THRESHOLD_S:
             if entity_id not in self._frozen_sensors:
                 self._frozen_sensors.add(entity_id)
+                mins = int(age_s // 60)
                 _LOGGER.warning(
                     "Sensor %s (%s) is FROZEN — last update %d min ago but still "
                     "'available'; its stale value is feeding the energy balance "
                     "and sign detection. Check the upstream integration "
                     "(modbus/cloud stall). (W3)",
-                    entity_id, name, int(age_s // 60),
+                    entity_id, name, mins,
+                )
+                # (HA Repairs) surface it in the UI, not just the log.
+                from . import repair_issues as _ri
+                _ri.raise_sensor_stale(
+                    self.hass, entity_id,
+                    friendly_name=state.attributes.get("friendly_name"),
+                    minutes_stale=mins,
                 )
         elif entity_id in self._frozen_sensors:
-            # Fresh again — re-arm the warn-once + note recovery.
+            # Fresh again — re-arm the warn-once, clear the Repair, note recovery.
             self._frozen_sensors.discard(entity_id)
+            from . import repair_issues as _ri
+            _ri.clear_sensor_stale(self.hass, entity_id)
             _LOGGER.info(
                 "Sensor %s (%s) is updating again (was frozen).", entity_id, name,
             )
