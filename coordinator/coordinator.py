@@ -1611,6 +1611,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # entity_id ever changes; this per-cycle pull is the backstop.
         self._sync_observer_mode_from_switch()
 
+        # #589 3a (publish isolation) — once the core snapshot is built we
+        # alias it here; a failure in the ~550-line analytics/diagnostic
+        # enrichment tail then degrades to core data instead of taking the
+        # WHOLE coordinator UpdateFailed (every entity on all tabs stale).
+        core_result = None
         try:
             # Per-cycle caches — avoid redundant lookups within one 10s cycle (#52)
             self._cycle_forecast = self._forecast_reader.read_forecast()
@@ -2704,6 +2709,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             self._initial_update_done = True
             result = sem_data.to_dict()
+            # 3a — core snapshot complete (power/flows/energy/battery/EV/
+            # charging). Everything below is enrichment; a throw past this
+            # point degrades to core data (see the except handler), it does
+            # not discard the cycle. ``result`` is only mutated below (keys
+            # added), never reassigned, so this alias stays valid.
+            core_result = result
 
             # Add per-charger data (#131): power + session
             per_charger_soc: Dict[str, float] = {}
@@ -3256,9 +3267,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if surplus_window:
                 result["predicted_surplus_window"] = surplus_window
 
+            # 3a — full cycle incl. enrichment succeeded; clear the degrade flag
+            # so the next enrichment failure warns again (warn-once per episode).
+            self._enrich_degraded = False
             return result
 
         except Exception as e:
+            if core_result is not None:
+                # #589 3a — the failure is in the enrichment tail (the core
+                # snapshot was already built). Publish the core data so
+                # power/battery/EV/flows stay live instead of the whole
+                # coordinator going UpdateFailed; only the analytics/diagnostic
+                # keys added after the snapshot are missing this cycle.
+                if not getattr(self, "_enrich_degraded", False):
+                    self._enrich_degraded = True
+                    _LOGGER.warning(
+                        "SEM result enrichment failed after the core snapshot "
+                        "(%s); publishing core data — some analytics/diagnostic "
+                        "entities may be stale this cycle. Control (power, "
+                        "battery, EV) is unaffected.", e, exc_info=True,
+                    )
+                return core_result
             _LOGGER.error("Error updating SEM data: %s", e, exc_info=True)
             raise UpdateFailed(f"Update failed: {e}") from e
 
