@@ -149,3 +149,45 @@ class TestW7ElseBranchPerBatterySync:
 
         assert result.battery_power == -300.0
         assert result.batteries["b1"].power_w == -300.0
+
+
+class TestSurfaceBTaperNoSwap:
+    """#589 C step 1 — the primary taper detector is COMPUTED (property), not
+    swapped per-cycle. The former `_ev_taper_detector = _ev_taper_detectors[
+    primary_id]` reassignment (one of two parallel per-charger swap surfaces)
+    is gone, so the primary can never drift out of sync."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        hass = MagicMock()
+        return SEMCoordinator(hass, {})
+
+    def test_returns_default_when_no_per_charger_detectors(self):
+        c = self._coord()
+        c._ev_devices = {}
+        assert c._ev_taper_detector is c._ev_taper_detector_default
+
+    def test_resolves_primary_from_per_charger_dict(self):
+        from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
+            EVTaperDetector,
+        )
+        c = self._coord()
+        prim = EVTaperDetector({})
+        second = EVTaperDetector({})
+        c._ev_devices = {"keba": object(), "wallbox": object()}
+        c._ev_taper_detectors = {"keba": prim, "wallbox": second}
+        # primary = first _ev_devices key = "keba"
+        assert c._ev_taper_detector is prim
+        assert c._ev_taper_detector is not second
+
+    def test_no_swap_reassignment_in_update_ev_intelligence(self):
+        # Guard: the per-cycle swap must not come back.
+        import pathlib
+        coord = pathlib.Path(__file__).resolve().parents[1] / "coordinator" / "coordinator.py"
+        src = coord.read_text()
+        assert "self._ev_taper_detector = self._ev_taper_detectors[primary_id]" not in src, (
+            "the Surface-B per-cycle taper swap was reintroduced"
+        )

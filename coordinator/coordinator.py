@@ -402,7 +402,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         )
 
         # EV Intelligence: taper detection, virtual SOC, charge skip (#106)
-        self._ev_taper_detector = EVTaperDetector(config)  # Primary charger
+        # #589 Surface-B retirement: the primary detector is now COMPUTED by the
+        # _ev_taper_detector property (below) instead of swapped in each cycle.
+        # This default backs the property before the per-charger detectors exist
+        # (first-update restore) and for a bare single-charger install.
+        self._ev_taper_detector_default = EVTaperDetector(config)  # Primary fallback
         self._ev_taper_detectors: Dict[str, EVTaperDetector] = {}  # Per-charger (#112)
 
         # Calculation integrity checker (runs every cycle)
@@ -1206,6 +1210,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     # It reads values the control layers already computed and NEVER feeds
     # anything back — so it cannot change a decision. The whole thing is
     # wrapped in try/except: observability must never break control.
+
+    @property
+    def _ev_taper_detector(self) -> "EVTaperDetector":
+        """Primary charger's taper detector — COMPUTED, not swapped (#589
+        Surface-B retirement).
+
+        Returns the primary per-charger detector when the per-charger detectors
+        exist; otherwise the default (the first-update restore window, before
+        the per-charger loop has built them, and a bare single-charger install).
+        Read-only: the ~30 call sites read or MUTATE the returned detector
+        object (e.g. ``._full_detected = True``) — that still works, it mutates
+        the resolved primary. The former per-cycle
+        ``_ev_taper_detector = _ev_taper_detectors[primary_id]``
+        reassignment (one of the two parallel per-charger swap surfaces) is
+        gone: the primary is derived, so it can never drift out of sync.
+        """
+        devices = getattr(self, "_ev_devices", None)
+        if devices:
+            primary_id = next(iter(devices))
+            det = self._ev_taper_detectors.get(primary_id)
+            if det is not None:
+                return det
+        return self._ev_taper_detector_default
+
+    @_ev_taper_detector.setter
+    def _ev_taper_detector(self, value) -> None:
+        # Writes go to the default backing detector (construction + a test
+        # harness that disables taper via ``= None``). When per-charger
+        # detectors exist the getter still resolves the primary from them.
+        self._ev_taper_detector_default = value
 
     def _collect_trace(self, sem_data, power, charging_context) -> None:
         # ``charging_context`` reserved for a future management-layer capture.
@@ -5761,10 +5795,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     cid, charger_power, interval_hours,
                 )
 
-            # Primary charger's detector drives SOC/skip (sync with main detector)
-            primary_id = next(iter(self._ev_devices))
-            if primary_id in self._ev_taper_detectors:
-                self._ev_taper_detector = self._ev_taper_detectors[primary_id]
+        # #589 Surface-B retirement: the primary charger's detector is now
+        # resolved by the _ev_taper_detector property (computed from
+        # _ev_taper_detectors[primary_id]) — no per-cycle swap. The former
+        # `_ev_taper_detector = _ev_taper_detectors[primary_id]`
+        # reassignment was one of the two parallel per-charger swap surfaces
+        # (#589); deleting it removes a state-leak surface.
 
         # Get current EV setpoint (0 if no EV device)
         ev_setpoint = 0.0
