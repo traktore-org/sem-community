@@ -294,6 +294,20 @@ class SensorReader:
         self._manual_grid_mismatch_votes: int = 0
         self._manual_grid_mismatch: bool = False
         self._manual_grid_mismatch_warned: bool = False
+        # #589 — post-lock contradiction audit for the auto-detected grid sign.
+        # Uses separate baselines so the voter's own baselines are never disturbed.
+        self._grid_audit_import_baseline: Optional[float] = None
+        self._grid_audit_export_baseline: Optional[float] = None
+        self._grid_sign_lock_contradiction_votes: int = 0
+        self._grid_sign_lock_contradiction: bool = False
+        self._grid_sign_lock_contradiction_warned: bool = False
+        # #589 — observe-only battery sign contradiction audit (post-lock).
+        # Separate baselines keep the voter's _battery_charge/discharge_baseline clean.
+        self._battery_audit_charge_baseline: Optional[float] = None
+        self._battery_audit_discharge_baseline: Optional[float] = None
+        self._battery_sign_contradiction_votes: int = 0
+        self._battery_sign_contradiction: bool = False
+        self._battery_sign_contradiction_warned: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -457,6 +471,20 @@ class SensorReader:
                 readings.grid_power = -readings.grid_power
                 readings.calculate_derived()
 
+            # #589 — observe-only post-lock contradiction check for the
+            # auto/counter/solar/restored lock.  Runs only when the lock is
+            # set AND we are on the combined/split auto path (manual entity
+            # overrides use _audit_manual_grid_sign in _read_from_energy_dashboard).
+            _manual_ent = (
+                self._raw_config.get("grid_import_power_entity")
+                or self._raw_config.get("grid_export_power_entity")
+            )
+            _ed_for_audit = self._energy_dashboard_config
+            if (self._grid_sign_detected
+                    and not _manual_ent
+                    and _ed_for_audit is not None):
+                self._audit_autodetect_grid_sign(readings.grid_power, _ed_for_audit)
+
         # #461: one-tap user sign flip from the Control-tab button. Sits on
         # TOP of whatever the manual-override / auto-detect path decided, so
         # a wrongly-locked sign (import/export inverted) can be corrected in
@@ -550,6 +578,14 @@ class SensorReader:
             if bool(self._raw_config.get("battery_sign_user_flip", False)):
                 readings.battery_power = -readings.battery_power
                 readings.calculate_derived()
+
+        # #589 — observe-only post-lock battery sign contradiction audit.
+        # Runs here so battery_power is final (all corrections applied).
+        # The method guards on the fleet lock being set, so it is a no-op
+        # until the sign is detected, and a no-op in per_battery_mode
+        # (where __fleet__ lock is never set).
+        if ed is not None:
+            self._audit_battery_sign_lock(readings.battery_power, ed)
 
         return readings
 
@@ -2030,6 +2066,179 @@ class SensorReader:
                     "import" if not counters_say_export else "export",
                     self._raw_config.get("grid_import_power_entity"),
                     self._raw_config.get("grid_export_power_entity"),
+                )
+
+    def _audit_autodetect_grid_sign(self, grid_power: float, ed) -> None:
+        """Observe-only post-lock contradiction check for the auto-detected grid sign (#589).
+
+        Mirrors ``_audit_manual_grid_sign`` exactly but targets the auto/
+        counter/solar/restored lock path (i.e. NOT the manual entity override).
+        Five consecutive contradictions set ``_grid_sign_lock_contradiction``
+        (surfaced as ``diag_grid_sign_contradiction``) and log one WARNING.
+
+        Observe-only by design: never re-flips the sign — makes a wrong
+        lock loud instead.
+        """
+        import_entities = (
+            list(getattr(ed, "grid_import_energy_list", None) or [])
+            or ([ed.grid_import_energy] if getattr(ed, "grid_import_energy", None) else [])
+        )
+        export_entities = (
+            list(getattr(ed, "grid_export_energy_list", None) or [])
+            or ([ed.grid_export_energy] if getattr(ed, "grid_export_energy", None) else [])
+        )
+        if not import_entities or not export_entities:
+            return
+        if abs(grid_power) < 100:
+            return
+        import_val = self._sum_counter_states(import_entities)
+        export_val = self._sum_counter_states(export_entities)
+        if import_val is None or export_val is None:
+            return
+
+        if self._grid_audit_import_baseline is None:
+            self._grid_audit_import_baseline = import_val
+            self._grid_audit_export_baseline = export_val
+            return
+        deltas = self._counter_deltas(
+            self._grid_audit_import_baseline, self._grid_audit_export_baseline,
+            import_val, export_val,
+        )
+        self._grid_audit_import_baseline = import_val
+        self._grid_audit_export_baseline = export_val
+
+        if deltas is None:
+            return
+        import_delta, export_delta = deltas
+        if import_delta > 0.001 and export_delta < 0.001:
+            counters_say_export = False
+        elif export_delta > 0.001 and import_delta < 0.001:
+            counters_say_export = True
+        else:
+            return
+
+        lock_says_export = grid_power > 0
+        if lock_says_export != counters_say_export:
+            self._grid_sign_lock_contradiction_votes += 1
+        else:
+            self._grid_sign_lock_contradiction_votes = 0
+            if self._grid_sign_lock_contradiction:
+                self._grid_sign_lock_contradiction = False
+                _LOGGER.info(
+                    "Auto-detected grid sign now agrees with the Energy Dashboard "
+                    "counters again — clearing the grid sign contradiction flag. (#589)"
+                )
+            return
+
+        if (self._grid_sign_lock_contradiction_votes >= 5
+                and not self._grid_sign_lock_contradiction):
+            self._grid_sign_lock_contradiction = True
+            if not self._grid_sign_lock_contradiction_warned:
+                self._grid_sign_lock_contradiction_warned = True
+                _LOGGER.warning(
+                    "Auto-detected grid sign CONTRADICTS the Energy Dashboard "
+                    "counters for 5+ cycles: SEM computes %s (grid_power=%.0f W) "
+                    "while the %s counter is the one increasing. The locked "
+                    "grid sign convention may be wrong. Use the 'Fix grid sign' "
+                    "button in the SEM Config tab to correct it. (#589)",
+                    "EXPORT" if lock_says_export else "IMPORT",
+                    grid_power,
+                    "import" if not counters_say_export else "export",
+                )
+
+    def _audit_battery_sign_lock(self, battery_power: float, ed) -> None:
+        """Observe-only post-lock contradiction check for the fleet battery sign (#589).
+
+        Runs only when the fleet battery sign is locked
+        (``_battery_sign_detected[__fleet__]`` is True). Compares the
+        sign-corrected ``battery_power`` against which Energy Dashboard energy
+        counter (charge vs discharge) is rising.
+
+        SEM convention (from types.py):
+          battery_power > 0  → charging    → charge counter should be rising
+          battery_power < 0  → discharging → discharge counter should be rising
+
+        Five consecutive contradictions set ``_battery_sign_contradiction``
+        (surfaced as ``diag_battery_sign_contradiction``) and log one WARNING.
+
+        Observe-only by design: never re-flips the sign.
+        Uses ``_battery_audit_charge_baseline`` / ``_battery_audit_discharge_baseline``
+        so the voter's ``_battery_charge_baseline`` is never disturbed.
+        """
+        if not self._battery_sign_detected.get(self._FLEET_BID):
+            return
+        if abs(battery_power) < 100:
+            return
+
+        charge_entities = (
+            list(getattr(ed, "battery_charge_energy_list", None) or [])
+            or ([ed.battery_charge_energy] if getattr(ed, "battery_charge_energy", None) else [])
+        )
+        discharge_entities = (
+            list(getattr(ed, "battery_discharge_energy_list", None) or [])
+            or ([ed.battery_discharge_energy] if getattr(ed, "battery_discharge_energy", None) else [])
+        )
+        if not charge_entities or not discharge_entities:
+            return
+
+        charge_val = self._sum_counter_states(charge_entities)
+        discharge_val = self._sum_counter_states(discharge_entities)
+        if charge_val is None or discharge_val is None:
+            return
+
+        if self._battery_audit_charge_baseline is None:
+            self._battery_audit_charge_baseline = charge_val
+            self._battery_audit_discharge_baseline = discharge_val
+            return
+        deltas = self._counter_deltas(
+            self._battery_audit_charge_baseline, self._battery_audit_discharge_baseline,
+            charge_val, discharge_val,
+        )
+        self._battery_audit_charge_baseline = charge_val
+        self._battery_audit_discharge_baseline = discharge_val
+
+        if deltas is None:
+            return
+        charge_delta, discharge_delta = deltas
+        if charge_delta > 0.001 and discharge_delta < 0.001:
+            counters_say_charging = True
+        elif discharge_delta > 0.001 and charge_delta < 0.001:
+            counters_say_charging = False
+        else:
+            return
+
+        power_says_charging = battery_power > 0
+        if power_says_charging != counters_say_charging:
+            self._battery_sign_contradiction_votes += 1
+        else:
+            self._battery_sign_contradiction_votes = 0
+            if self._battery_sign_contradiction:
+                self._battery_sign_contradiction = False
+                _LOGGER.info(
+                    "Battery sign now agrees with the Energy Dashboard "
+                    "counters again — clearing the battery sign contradiction flag. (#589)"
+                )
+            return
+
+        if (self._battery_sign_contradiction_votes >= 5
+                and not self._battery_sign_contradiction):
+            self._battery_sign_contradiction = True
+            if not self._battery_sign_contradiction_warned:
+                self._battery_sign_contradiction_warned = True
+                charge_ent = charge_entities[0] if charge_entities else "unknown"
+                discharge_ent = discharge_entities[0] if discharge_entities else "unknown"
+                _LOGGER.warning(
+                    "Battery sign CONTRADICTS the Energy Dashboard counters "
+                    "for 5+ cycles: SEM computes battery_power=%.0f W (%s) "
+                    "while the %s counter (%s / %s) is the one increasing. "
+                    "The locked battery sign convention may be wrong. Use "
+                    "'Reset sign detection' in the SEM Config tab to clear "
+                    "the lock and re-learn it. (#589)",
+                    battery_power,
+                    "CHARGING" if power_says_charging else "DISCHARGING",
+                    "discharge" if power_says_charging else "charge",
+                    charge_ent,
+                    discharge_ent,
                 )
 
     # With healthy two-sided any-device picks held, re-scan only every

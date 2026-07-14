@@ -148,6 +148,25 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 # #531: don't sell blind — a setpoint battery has no hardware
                 # reserve-stop, so an unavailable SOC must hold, not discharge.
                 if soc is not None and soc > floor:
+                    # ⚠️ MULTI-BATTERY RE-ACTIVATION GUARD (arbitrage is dormant
+                    # in stable — #533 migration v14 forces it off; _any_allow_arb
+                    # is False and the UI is hidden). ``discharge_power_w`` here is
+                    # the scheduler's single ``max_discharge_power_w`` (the global
+                    # ``battery_max_discharge_power`` config, battery_charge_scheduler
+                    # .py:723). It is handed UNSPLIT to EVERY arbitrage battery, so
+                    # an N-battery fleet exports N× this value.
+                    #
+                    # The sibling LIMIT_DISCHARGE path below (~line 242) already hit
+                    # this exact class (#531) and splits ``home/n``. BEFORE re-enabling
+                    # arbitrage, resolve the intended semantics of the config value
+                    # and apply the matching treatment:
+                    #   • if it means "total battery→grid export" → split ``/n``
+                    #     (``n = max(1, int(getattr(f, "battery_count", 1) or 1))``),
+                    #     mirroring LIMIT_DISCHARGE;
+                    #   • if it means "per-battery export cap" → leave unsplit but
+                    #     clamp each battery to its own capability, not a shared max.
+                    # Left UNSPLIT deliberately for now so the fix lands with the
+                    # design decision, not a guess on dormant code (#523/#533).
                     return BatteryDecision(
                         battery_id=rt.battery_id,
                         intent=BatteryIntent.FORCE_DISCHARGE,

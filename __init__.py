@@ -2075,6 +2075,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
         # would otherwise grow the list. Guarded — coordinator may be
         # missing if setup never completed.
         if coordinator is not None:
+            # Part B (#589): clear any active force-op before dropping adapters.
+            # Prevents a reload mid-force-op stranding the inverter in a
+            # forced charge/discharge mode that SEM will no longer manage.
+            # Only issues a STOP (command_normal) — never a new command.
+            # Failures are swallowed so a flaky Modbus never blocks unload.
+            _battery_adapters = getattr(coordinator, "_battery_adapters", {}) or {}
+            for _bid, _adapter in _battery_adapters.items():
+                try:
+                    await _adapter.command_normal()
+                    _LOGGER.debug(
+                        "Battery adapter %s: command_normal on unload", _bid,
+                    )
+                except Exception as _e:  # noqa: BLE001
+                    _LOGGER.debug(
+                        "Battery adapter %s: command_normal on unload failed "
+                        "(non-blocking): %s", _bid, _e,
+                    )
+
             sc = getattr(coordinator, "_surplus_controller", None)
             if sc is not None and hasattr(sc, "clear_devices"):
                 sc.clear_devices()

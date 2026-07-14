@@ -891,6 +891,12 @@
       "diag_battery_sign": {
         "name": "Batterievorzeichen"
       },
+      "diag_grid_sign_contradiction": {
+        "name": "Netzvorzeichen-Widerspruch"
+      },
+      "diag_battery_sign_contradiction": {
+        "name": "Batterievorzeichen-Widerspruch"
+      },
       "diag_charger_control": {
         "name": "Lader-Steuerungsmethode"
       },

@@ -891,6 +891,12 @@
       "diag_battery_sign": {
         "name": "Batterij Laden of Ontladen"
       },
+      "diag_grid_sign_contradiction": {
+        "name": "Net Tekencontraditie"
+      },
+      "diag_battery_sign_contradiction": {
+        "name": "Batterij Tekencontraditie"
+      },
       "diag_charger_control": {
         "name": "Lader Besturings Methode"
       },

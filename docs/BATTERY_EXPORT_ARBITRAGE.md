@@ -173,5 +173,16 @@ coordinator, migration v14 forcing `battery_grid_arbitrage_enabled=False`, and
      Document this clearly in the config-flow help, or give arbitrage its own
      default, so an installer's DNO solar cap doesn't silently throttle battery
      selling in a surprising way.
+   - **⚠️ Multi-battery N× over-export (BLOCKER for multi-battery fleets).**
+     `decide_battery` hands the scheduler's single `discharge_power_w`
+     (`= max_discharge_power_w`, the global `battery_max_discharge_power`) to
+     **every** arbitrage-enabled battery **unsplit** — an N-battery fleet exports
+     N× that value to the grid. The sibling `LIMIT_DISCHARGE` path already fixed
+     this exact class (#531) by splitting `home/n`. Before re-enabling, decide the
+     config's semantics: *total export* → split `/n` (mirror LIMIT_DISCHARGE using
+     `f.battery_count`); *per-battery cap* → leave unsplit but clamp each unit to
+     its own capability. A ⚠️ guard comment sits at the arbitrage return in
+     `coordinator/decide_battery.py`. Single-battery installs are unaffected.
 5. Soak on the HA-TEST sim rig (`sem_sim_dynamic_export.yaml`) — **never on the
-   shared PROD battery** (#532 was a real LUNA2000 drain).
+   shared PROD battery** (#532 was a real LUNA2000 drain). Cover a **two-battery**
+   arbitrage case in the soak so the N× split above is exercised.
