@@ -251,6 +251,19 @@ class SensorReader:
         # Per-entity flag — was the Repair already raised this outage?
         # Avoids re-raising every cycle past the threshold.
         self._sensor_repair_raised: set[str] = set()
+        # W3 — frozen (available-but-not-updating) fast-power-sensor detector.
+        # A Huawei modbus stall / Growatt cloud freeze keeps the entity
+        # "available" with a stale value that silently poisons the energy
+        # balance + sign detection (the #461/#462 triage had no log visibility
+        # into this). Observe-only: warn ONCE per freeze; the reading is
+        # unchanged. Only the fast power sensors (which update every few
+        # seconds) are checked, with a generous threshold, so a legitimately
+        # slow sensor never false-positives.
+        self._frozen_sensors: set[str] = set()
+        self._FAST_POWER_NAMES = frozenset(
+            {"solar", "grid", "grid_import", "grid_export", "battery"}
+        )
+        self._STALE_THRESHOLD_S = 600  # 10 min: a fast power sensor stale this long is frozen
         # Cache last valid SOC to avoid 0% during sensor gaps
         self._last_valid_soc: float = 0.0
         # EV flap fix (2026-07-10): the KEBA charging-power sensor polls over
@@ -2729,10 +2742,60 @@ class SensorReader:
                     from . import repair_issues as _ri
                     _ri.clear_sensor_unavailable(self.hass, entity_id)
 
+            # W3 — observe-only frozen-sensor detection (does NOT alter value).
+            # Wrapped so the audit can NEVER corrupt the read: an exception here
+            # would otherwise hit the outer except → a wrong 0.0.
+            try:
+                self._audit_sensor_freshness(entity_id, name, state)
+            except Exception:  # noqa: BLE001 — freshness must never break a read
+                pass
             return value
         except (ValueError, TypeError) as e:
             _LOGGER.debug(f"Could not parse {entity_id} ({name}): {e}")
             return None if allow_none else 0.0
+
+    def _audit_sensor_freshness(self, entity_id: str, name: str, state) -> None:
+        """W3 — warn ONCE when a FAST power sensor is available but frozen.
+
+        Only ``solar``/``grid``/``battery`` power sensors are checked (they
+        update every few seconds, so a >10 min gap means the upstream
+        integration stalled — Huawei modbus, Growatt cloud). Observe-only: the
+        value is returned unchanged; this makes the freeze VISIBLE in the log
+        (the #461/#462 triage blind spot) so a silently-stale reading poisoning
+        the balance + sign detection is diagnosable. The generous threshold +
+        fast-power-only scoping means a legitimately slow sensor never trips.
+        """
+        if name not in self._FAST_POWER_NAMES:
+            return
+        last_updated = getattr(state, "last_updated", None)
+        if last_updated is None:
+            return
+        try:
+            import homeassistant.util.dt as _dt
+            age_s = (_dt.utcnow() - last_updated).total_seconds()
+        except Exception:  # noqa: BLE001 — never break a read over freshness
+            return
+        # Guard a non-datetime last_updated (test MagicMock / naive dt): a
+        # non-numeric age must never reach ``int(age_s//60)`` below, whose
+        # TypeError would be swallowed by _read_sensor's except → wrong 0.0.
+        if not isinstance(age_s, (int, float)) or isinstance(age_s, bool):
+            return
+        if age_s >= self._STALE_THRESHOLD_S:
+            if entity_id not in self._frozen_sensors:
+                self._frozen_sensors.add(entity_id)
+                _LOGGER.warning(
+                    "Sensor %s (%s) is FROZEN — last update %d min ago but still "
+                    "'available'; its stale value is feeding the energy balance "
+                    "and sign detection. Check the upstream integration "
+                    "(modbus/cloud stall). (W3)",
+                    entity_id, name, int(age_s // 60),
+                )
+        elif entity_id in self._frozen_sensors:
+            # Fresh again — re-arm the warn-once + note recovery.
+            self._frozen_sensors.discard(entity_id)
+            _LOGGER.info(
+                "Sensor %s (%s) is updating again (was frozen).", entity_id, name,
+            )
 
     def _read_binary_sensor(self, entity_id: Optional[str], name: str) -> bool:
         """Read a binary sensor or status sensor value.
