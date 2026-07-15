@@ -81,3 +81,51 @@ class TestPerceptionFoldsIntoHealth:
         self._cycle(tc, agree=True)
         dump = tc.recent()
         assert dump[-1]["cross_checks"]["battery_sign"]["data"]["agree"] is True
+
+
+class TestLayerMismatchBinarySensor:
+    """#590 — the layered-trace health signal is now a queryable binary sensor
+    (the single surface that replaced the retired sign-contradiction sensors)."""
+
+    def test_key_registered(self):
+        from custom_components.solar_energy_management.binary_sensor import (
+            BINARY_SENSOR_TYPES,
+        )
+        assert "layer_mismatch" in {d.key for d in BINARY_SENSOR_TYPES}
+
+    def test_is_on_and_attrs_read_coordinator_data(self):
+        from unittest.mock import MagicMock
+        from homeassistant.components.binary_sensor import (
+            BinarySensorEntityDescription,
+        )
+        from custom_components.solar_energy_management.binary_sensor import (
+            SEMSolarBinarySensor,
+        )
+        coord = MagicMock()
+        coord.data = {
+            "layer_mismatch": True,
+            "layer_mismatch_subsystem": "perception:battery_sign",
+            "layer_mismatch_cycles": 4,
+        }
+        coord.last_update_success = True
+        bs = SEMSolarBinarySensor(
+            coord, BinarySensorEntityDescription(key="layer_mismatch"), MagicMock(),
+        )
+        assert bs.is_on is True
+        attrs = bs.extra_state_attributes
+        assert attrs["subsystem"] == "perception:battery_sign"
+        assert attrs["persisted_cycles"] == 4
+
+    def test_attrs_none_for_other_keys(self):
+        from unittest.mock import MagicMock
+        from homeassistant.components.binary_sensor import (
+            BinarySensorEntityDescription,
+        )
+        from custom_components.solar_energy_management.binary_sensor import (
+            SEMSolarBinarySensor,
+        )
+        coord = MagicMock(); coord.data = {"ev_connected": True}
+        bs = SEMSolarBinarySensor(
+            coord, BinarySensorEntityDescription(key="ev_connected"), MagicMock(),
+        )
+        assert bs.extra_state_attributes is None

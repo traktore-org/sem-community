@@ -973,6 +973,9 @@
       },
       "utility_signal_active": {
         "name": "Utility Signal Active"
+      },
+      "layer_mismatch": {
+        "name": "Layer Mismatch"
       }
     },
     "switch": {

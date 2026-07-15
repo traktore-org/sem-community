@@ -971,6 +971,9 @@
       },
       "utility_signal_active": {
         "name": "Signal Réseau Actif"
+      },
+      "layer_mismatch": {
+        "name": "Layer Mismatch"
       }
     },
     "switch": {

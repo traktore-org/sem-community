@@ -973,6 +973,9 @@
       },
       "utility_signal_active": {
         "name": "Netbeheerder Signaal Actief"
+      },
+      "layer_mismatch": {
+        "name": "Laag-mismatch"
       }
     },
     "switch": {

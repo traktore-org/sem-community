@@ -3114,10 +3114,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _batt_inv = getattr(self._sensor_reader, "_battery_sign_inverted", {})
             _batt_det = getattr(self._sensor_reader, "_battery_sign_detected", {})
             result["diag_battery_sign"] = _format_battery_sign_diag(_batt_inv, _batt_det)
-            # #590 — the grid/battery sign-contradiction diag sensors were retired
-            # into the perception health surface (binary_sensor.sem_layer_mismatch,
-            # tagged perception:<signal>) + the diagnose cross_checks dump. The
-            # audit flags still feed _trace_perception (see _trace_perception).
+            # #590 — the layered-trace health signal, surfaced as ONE queryable
+            # binary sensor (binary_sensor.sem_layer_mismatch). ON when a
+            # control OR perception layer-boundary fault has PERSISTED; the
+            # ``perception:<signal>`` subsystem tag names a sign contradiction.
+            # This replaces the retired per-signal diag_*_sign_contradiction
+            # sensors — the audit flags still feed _trace_perception (Phase 1),
+            # and the diagnose cross_checks dump carries the per-cycle detail.
+            _health = self.trace_health()
+            result["layer_mismatch"] = not bool(_health.get("ok", True))
+            result["layer_mismatch_subsystem"] = _health.get("subsystem")
+            result["layer_mismatch_cycles"] = int(_health.get("cycles", 0) or 0)
             result["diag_charger_count"] = len(self._ev_devices)
             result["diag_charger_control"] = "number" if any(
                 getattr(d, 'current_entity_id', None) for d in self._ev_devices.values()

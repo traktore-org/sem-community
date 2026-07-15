@@ -983,6 +983,9 @@
       },
       "surplus_available": {
         "name": "Surplus Available"
+      },
+      "layer_mismatch": {
+        "name": "Layer Mismatch"
       }
     },
     "switch": {

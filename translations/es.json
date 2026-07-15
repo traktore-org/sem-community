@@ -971,6 +971,9 @@
       },
       "utility_signal_active": {
         "name": "Señal Red Activa"
+      },
+      "layer_mismatch": {
+        "name": "Layer Mismatch"
       }
     },
     "switch": {

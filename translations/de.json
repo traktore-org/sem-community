@@ -973,6 +973,9 @@
       },
       "utility_signal_active": {
         "name": "EVU-Signal Aktiv"
+      },
+      "layer_mismatch": {
+        "name": "Schicht-Abweichung"
       }
     },
     "switch": {
