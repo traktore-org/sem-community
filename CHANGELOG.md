@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.7] — 15.07.2026
+
+### 🐛 Fixes
+
+- 📱 **EV flow-dot animation now runs on iOS** (#591, by @hrdilshan) — the System Diagram
+  card's animated power-flow dots were dead in the iOS companion app and every iOS browser
+  (all WebKit). Replaced the SMIL `<mpath href>` reference with an inline `animateMotion path=`,
+  which WebKit renders.
+- 🌙 **Night/solar charging status no longer stuck on "Active" after the target is reached**
+  (#596) — on a single-charger install the fleet charging state kept reporting the pre-target
+  state ("Night charging active") while the charger had actually reached target and gone idle,
+  so `night_charging_status` read `active`. It now reflects the charger's real state
+  (`target_reached`). Multi-charger installs keep the master state, with per-charger states
+  exposed separately.
+- 🔔 **Honest "night charging complete" notification** (#596) — the completion push compared
+  what was charged against the *daily* kWh target (e.g. "1.9/8.0 kWh"), which read like a
+  shortfall when the car had simply reached its SOC target. It now shows only what was charged.
+
 # [1.7.5-beta.6] — 14.07.2026
 
 ### 🐛 Fixes
