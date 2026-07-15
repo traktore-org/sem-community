@@ -297,8 +297,10 @@ class SEMScheduleCard extends SEMLitBase {
         const priceLevel = this._stateObj('tariff_price_level')?.state;
         const priceKey = ['cheap', 'normal', 'expensive', 'very_cheap', 'very_expensive']
             .includes(priceLevel) ? priceLevel : null;
-        // Night: in window?
-        const inNight = this._stateObj('night_charging_status')?.state === 'active';
+        // Night: in window? (#596 — 'target_reached' is still inside the open
+        // night window, just already topped off, so keep the highlight.)
+        const inNight = ['active', 'target_reached']
+            .includes(this._stateObj('night_charging_status')?.state);
         // Surplus: current solar power
         const solarW = parseFloat(this._stateObj('solar_power')?.state);
         const solarLabel = !isNaN(solarW) && solarW > 50
