@@ -84,6 +84,24 @@ deep-deficit battery-drain bridge). **Where it lives:** `charge_stability.py`. *
 balance can't. **Open:** any other self-referential check; audit for them in `/coherence-audit`.
 Refs #589.
 
+### 9. Engine-specific SVG/SMIL form (renders on Blink/Gecko, silent on WebKit) — GUARDED
+**Symptom:** a dashboard-card visual works on desktop Chrome/Firefox and Android but is dead on
+*every* iOS browser (Safari, Chrome, HA Companion app — all WebKit) with no error. **Root shape:**
+the card emits an SVG/SMIL construct that WebKit resolves more strictly than Blink/Gecko — the flow
+dots used `<animateMotion><mpath href="#id"/></animateMotion>`, but WebKit only matches the
+XLink-namespaced `xlink:href` on `<mpath>`, so the plain `href` never bound and the dot had no path
+(#591). Lenient engines accept the plain `href`, so it passes every desktop/Android check — the gap
+is invisible until an iOS user reports it. **Where it lives:** all animated SVG in the dashboard
+cards — `dashboard/card/sem-system-diagram-card.js` (vanilla), `dashboard/card/src/cards/*.js`
+(sem-flow-card, sem-system-diagram-card), built into `dist/sem-cards.js`. **Closure:** drop the
+`<mpath>` indirection — inline the motion path as `<animateMotion path="M…">` (the SVG 1.1 form
+supported on every engine incl. old WebKit); path data is already at each site. **Guard:** the
+mpath ban + inline-path presence test (`test/mpath-webkit-guard.test.js`, in CI's `card-test` job)
+makes the WebKit-broken reference form unrepresentable in card source. Refs #591.
+**Watch:** the guard covers `<mpath>` specifically; other WebKit-strict forms (bare `href` on
+`<use>`/`<textPath>`/gradients, `xlink:` assumptions) can still bite — sweep them if a new
+"works everywhere but iOS" card bug appears, and widen the guard.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
