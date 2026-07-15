@@ -1280,8 +1280,15 @@ class SEMData:
         return data
 
     def _get_solar_charging_status(self) -> str:
-        """Get solar charging status from charging state."""
-        solar_states = ["solar_charging_active", "solar_super_charging", "solar_target_reached", "solar_min_pv"]
+        """Get solar charging status from charging state.
+
+        #596: ``solar_target_reached`` is a TERMINAL state (charger idle at
+        target) — it must NOT collapse into ``"active"`` alongside the truly
+        active states, or the status reports "actively charging" while the
+        charger sits at 0 A. Left out of ``solar_states`` so it falls through
+        to the ``elif`` → ``"target_reached"``.
+        """
+        solar_states = ["solar_charging_active", "solar_super_charging", "solar_min_pv"]
         if self.charging_state in solar_states:
             return "active"
         elif "solar" in self.charging_state.lower():
@@ -1289,8 +1296,15 @@ class SEMData:
         return "idle"
 
     def _get_night_charging_status(self) -> str:
-        """Get night charging status from charging state."""
-        night_states = ["night_charging_active", "night_target_reached"]
+        """Get night charging status from charging state.
+
+        #596: same class as :meth:`_get_solar_charging_status` —
+        ``night_target_reached`` is terminal and must report ``"target_reached"``,
+        not ``"active"``. Caught on PROD: night status stayed "active" after the
+        target was met while the charger was idle at 0 A (also tripped the #590
+        ev layer-mismatch trace, which is a SEPARATE, correct signal).
+        """
+        night_states = ["night_charging_active"]
         if self.charging_state in night_states:
             return "active"
         elif "night" in self.charging_state.lower():
