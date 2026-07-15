@@ -1166,6 +1166,12 @@ class SEMData:
             "energy_tip_category": self.energy_assistant.energy_tip_category,
             "energy_ev_solar_percentage": self.energy_assistant.energy_ev_solar_percentage,
 
+            # #590 — layered-trace health (binary_sensor.sem_layer_mismatch).
+            # Placeholder default here (guards the key name); the coordinator's
+            # enrichment overwrites it each cycle from trace_health() once the
+            # trace has committed (it can't be computed at SEMData build time).
+            "layer_mismatch": False,
+
             # Utility signals (Phase 7)
             "utility_signal_active": self.utility_signal.utility_signal_active,
             "utility_signal_source": self.utility_signal.utility_signal_source,
