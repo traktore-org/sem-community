@@ -80,6 +80,10 @@ class SEMSystemDiagramCard extends SEMLitBase {
         this._lastDiagKey = '';
         this._sunSparkProps = null;
         this._sunSparkSig = '';
+        // #591 — the sun-spark 'd' string, stashed by _sparkWavePath and read
+        // by _renderSunSpark (both gated on the same condition). Initialized
+        // here so the invariant is explicit even if template order ever drifts.
+        this._sparkWaveD = '';
     }
 
     setConfig(config) {
@@ -717,12 +721,6 @@ class SEMSystemDiagramCard extends SEMLitBase {
                             <stop offset="100%" stop-color="#F7941E"/>
                         </radialGradient>
 
-                        <path id="path-solar"   d="${L.paths.solar}"/>
-                        <path id="path-home"    d="${L.paths.home}"/>
-                        <path id="path-battery" d="${L.paths.battery}"/>
-                        <path id="path-grid"    d="${L.paths.grid}"/>
-                        <path id="path-ev"      d="${L.paths.ev}"/>
-
                         ${this._sunPtX != null && solar > 50 ? this._sparkWavePath(L) : nothing}
                     </defs>
 
@@ -792,19 +790,19 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
                     <!-- Flow animation groups -->
                     <g class="flow-group" style="opacity:${flowSolarActive ? 1 : 0}">
-                        ${this._renderFlow(false, '#ff9800', semCalcDuration(solar), 'path-solar', L.paths.solar, 2)}
+                        ${this._renderFlow(false, '#ff9800', semCalcDuration(solar), L.paths.solar, 2)}
                     </g>
                     <g class="flow-group" style="opacity:${flowBattActive ? 1 : 0}">
-                        ${this._renderFlow(flowBattReverse, flowBattColor, semCalcDuration(battery), 'path-battery', L.paths.battery, 3)}
+                        ${this._renderFlow(flowBattReverse, flowBattColor, semCalcDuration(battery), L.paths.battery, 3)}
                     </g>
                     <g class="flow-group" style="opacity:${flowGridActive ? 1 : 0}">
-                        ${this._renderFlow(flowGridReverse, flowGridColor, semCalcDuration(gridImport || gridExport), 'path-grid', L.paths.grid, 3)}
+                        ${this._renderFlow(flowGridReverse, flowGridColor, semCalcDuration(gridImport || gridExport), L.paths.grid, 3)}
                     </g>
                     <g class="flow-group" style="opacity:${flowHomeActive ? 1 : 0}">
-                        ${this._renderFlow(false, '#5BC8D8', semCalcDuration(home), 'path-home', L.paths.home, 2)}
+                        ${this._renderFlow(false, '#5BC8D8', semCalcDuration(home), L.paths.home, 2)}
                     </g>
                     <g class="flow-group" style="opacity:${flowEvActive ? 1 : 0}">
-                        ${this._renderFlow(false, '#8DC892', semCalcDuration(ev), 'path-ev', L.paths.ev, 3)}
+                        ${this._renderFlow(false, '#8DC892', semCalcDuration(ev), L.paths.ev, 3)}
                     </g>
 
                     <!-- Solar panel -->
@@ -1322,7 +1320,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
      * Particle delays are deterministic (i/count*duration) so re-renders
      * don't restart SMIL animations.
      */
-    _renderFlow(reverse, color, durationSec, pathId, pathD, count) {
+    _renderFlow(reverse, color, durationSec, pathD, count) {
         const dur = durationSec.toFixed(1);
         const cycle = 28;
         const toOffset = reverse ? String(cycle) : String(-cycle);
@@ -1332,30 +1330,29 @@ class SEMSystemDiagramCard extends SEMLitBase {
         for (let i = 0; i < count; i++) {
             const delay = (i / count) * durationSec;
             const begin = `-${delay.toFixed(2)}s`;
+            // #591 — inline path= (not an mpath href reference): WebKit's SMIL resolver
+            // only matches xlink:href on mpath, so plain href never resolved
+            // and the dots stood still on every iOS browser. Inline path data is
+            // the SVG 1.1 form supported everywhere; the dots follow pathD, the
+            // same curve as the visible stroke below.
             particles.push(svg`
                 <circle r="5" fill="${color}" opacity="0.12">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"
                                    keyPoints=${reverseAttrs ? reverseAttrs.kp : nothing}
                                    keyTimes=${reverseAttrs ? reverseAttrs.kt : nothing}
-                                   begin="${begin}">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                                   begin="${begin}"/>
                 </circle>
                 <circle r="2.5" fill="${color}" opacity="0.95">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"
                                    keyPoints=${reverseAttrs ? reverseAttrs.kp : nothing}
                                    keyTimes=${reverseAttrs ? reverseAttrs.kt : nothing}
-                                   begin="${begin}">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                                   begin="${begin}"/>
                 </circle>
                 <circle r="1" fill="rgba(255,255,255,0.9)" opacity="0.85">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"
                                    keyPoints=${reverseAttrs ? reverseAttrs.kp : nothing}
                                    keyTimes=${reverseAttrs ? reverseAttrs.kt : nothing}
-                                   begin="${begin}">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                                   begin="${begin}"/>
                 </circle>
             `);
         }
@@ -1381,7 +1378,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
     }
 
     /**
-     * Spark wave <path> in <defs> — referenced by the spark particles' mpath.
+     * Builds the sun→panel wave path. Returns a decorative stroke element and
+     * stashes its 'd' in this._sparkWaveD for _renderSunSpark to inline as the
+     * spark particles' animateMotion path= (#591 — no mpath reference).
      */
     _sparkWavePath(L) {
         const sx = this._sunPtX, sy = this._sunPtY;
@@ -1402,6 +1401,11 @@ class SEMSystemDiagramCard extends SEMLitBase {
             const wave = Math.sin(frac * waves * Math.PI * 2) * amp;
             d += ` L${(cx2 + perpX * wave).toFixed(1)},${(cy2 + perpY * wave).toFixed(1)}`;
         }
+        // #591 — stash the wave path so _renderSunSpark can inline it as
+        // animateMotion path= (WebKit ignores an mpath href reference). Both are gated on
+        // the same (_sunPtX != null && solar > 50) and evaluated in DOM order,
+        // so this is always set before the sparks render.
+        this._sparkWaveD = d;
         return svg`<path id="spark-wave" d="${d}" fill="none"
                          stroke="rgba(255,200,60,0.12)" stroke-width="2.5" stroke-linecap="round"
                          filter="url(#glowSun)"/>`;
@@ -1428,19 +1432,16 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 });
             }
         }
+        const waveD = this._sparkWaveD;  // #591 — inline path= instead of an mpath href reference (iOS/WebKit)
         return this._sunSparkProps.map(p => p.kind === 'gold' ? svg`
             <circle r="${p.r.toFixed(1)}" fill="rgba(255,220,60,${p.opacity.toFixed(2)})" filter="url(#glowSun)">
-                <animateMotion dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
-                               begin="-${p.delay.toFixed(1)}s">
-                    <mpath href="#spark-wave"/>
-                </animateMotion>
+                <animateMotion path="${waveD}" dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
+                               begin="-${p.delay.toFixed(1)}s"/>
             </circle>
         ` : svg`
             <circle r="${(p.r * 0.6).toFixed(1)}" fill="rgba(255,255,230,${p.opacity.toFixed(2)})">
-                <animateMotion dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
-                               begin="-${p.delay.toFixed(1)}s">
-                    <mpath href="#spark-wave"/>
-                </animateMotion>
+                <animateMotion path="${waveD}" dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
+                               begin="-${p.delay.toFixed(1)}s"/>
             </circle>
         `);
     }
@@ -1483,11 +1484,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
             const cx = baseX;
             const pathD = `M${H.cx + H.r},${H.cy + 10 + idx * 8} C${H.cx + H.r + 40},${H.cy + 30 + idx * 15} ${cx - 30},${cy - 10} ${cx - 16},${cy}`;
             const flowDot = dev.power > 5 ? svg`
-                <path id="dev-path-${idx}" d="${pathD}" fill="none" stroke="none"/>
                 <circle r="1.5" fill="${color}" opacity="0.8">
-                    <animateMotion dur="${semCalcDuration(dev.power).toFixed(1)}s" repeatCount="indefinite" calcMode="paced">
-                        <mpath href="#dev-path-${idx}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${semCalcDuration(dev.power).toFixed(1)}s" repeatCount="indefinite" calcMode="paced"/>
                 </circle>
             ` : nothing;
             const r = 14;
