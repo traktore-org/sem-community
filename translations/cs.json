@@ -889,12 +889,6 @@
       "diag_battery_sign": {
         "name": "Znaménková konvence baterie"
       },
-      "diag_grid_sign_contradiction": {
-        "name": "Grid Sign Contradiction"
-      },
-      "diag_battery_sign_contradiction": {
-        "name": "Battery Sign Contradiction"
-      },
       "diag_charger_control": {
         "name": "Metoda ovládání nabíječky"
       },

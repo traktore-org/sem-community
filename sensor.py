@@ -1320,14 +1320,9 @@ SENSOR_TYPES = [
         key="diag_battery_sign",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    SensorEntityDescription(
-        key="diag_grid_sign_contradiction",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
-        key="diag_battery_sign_contradiction",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
+    # #590 — diag_grid_sign_contradiction / diag_battery_sign_contradiction
+    # retired into the one perception health surface (binary_sensor.sem_layer_
+    # _mismatch, tagged perception:<signal>) + the diagnose cross_checks dump.
     SensorEntityDescription(
         key="diag_charger_control",
         entity_category=EntityCategory.DIAGNOSTIC,
