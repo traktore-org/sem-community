@@ -211,6 +211,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return "ev_charger"
         return chargers[0].get("id") or "ev_charger_0"
 
+    @staticmethod
+    def _resolve_fleet_charging_state(global_state, effective_states):
+        """The published fleet ``charging_state`` (#596).
+
+        The global state machine computes ``global_state`` BEFORE the
+        per-charger loop refines each charger's terminal state
+        (NIGHT_TARGET_REACHED / SOLAR_IDLE / …). For a **single-charger**
+        install that refinement IS the truth, so the fleet state must adopt it
+        — otherwise the fleet state (and the ``night_charging_status`` /
+        ``solar_charging_status`` sensors derived from it) stays "…_active"
+        after the charger has reached target (the PROD symptom in #596).
+
+        **Multi- (or zero-) charger** keeps ``global_state``: chargers can
+        disagree and per-charger states are exposed separately (#351 M4), so
+        they cannot collapse to one fleet value. Notifications are unaffected —
+        they dispatch from ``_effective_states_per_charger`` when populated.
+        """
+        if len(effective_states) == 1:
+            (only_eff, _name), = effective_states.values()
+            if only_eff is not None:
+                return only_eff
+        return global_state
+
     def __init__(self, hass: HomeAssistant, config: Dict[str, Any]) -> None:
         """Initialize the coordinator."""
         self.hass = hass
@@ -2796,6 +2819,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     power, energy, energy_flows, performance,
                     charging_context.available_power,
                 )
+
+            # #596: reconcile the published fleet ``charging_state`` with the
+            # per-charger effective state for single-charger installs (see
+            # _resolve_fleet_charging_state).
+            charging_state = self._resolve_fleet_charging_state(
+                charging_state,
+                getattr(self, "_effective_states_per_charger", None) or {},
+            )
 
             # Step 11: Build complete data structure
             sem_data = SEMData(

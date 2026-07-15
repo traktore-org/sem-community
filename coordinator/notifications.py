@@ -405,10 +405,15 @@ class NotificationManager:
                 remaining=remaining_needed)
 
         elif state == ChargingState.NIGHT_TARGET_REACHED:
+            # #596: NIGHT_TARGET_REACHED completes on the night SOC/deadline
+            # target, NOT the daily kWh target — so showing "charged/daily"
+            # (e.g. "1.9/8.0kWh") falsely reads as a shortfall when the car is
+            # simply full. Show only what was charged. (notif_target_reached
+            # below keeps /target: that state IS the daily-kWh target.)
             messages["charger"] = _t("notif_charger_night_done", "Night: Done")
             messages["mobile"] = _t("notif_night_complete",
-                "Night charging complete: {charged:.1f}/{target}kWh",
-                charged=daily_ev_energy, target=daily_ev_target)
+                "Night charging complete: {charged:.1f}kWh charged",
+                charged=daily_ev_energy)
 
         elif state == ChargingState.NIGHT_DISABLED:
             messages["charger"] = _t("notif_charger_night_off", "Night: Off")

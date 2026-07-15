@@ -64,3 +64,54 @@ def test_night_disabled_still_resolves_non_active():
     # night_disabled must not read as "active": it matches the `night` elif
     # and strips the prefix → "disabled".
     assert _status("night_disabled", "night") == "disabled"
+
+
+# ── #596 root cause: the fleet charging_state must adopt the single charger's
+# effective state (the global state machine runs before the per-charger loop
+# refines terminal states). This is the piece that actually made PROD show
+# "active" while the charger was night_target_reached. ──
+from custom_components.solar_energy_management.const import ChargingState
+from custom_components.solar_energy_management.coordinator.coordinator import (
+    SEMCoordinator,
+)
+
+_resolve = SEMCoordinator._resolve_fleet_charging_state
+GLOBAL = ChargingState.NIGHT_CHARGING_ACTIVE
+
+
+def test_single_charger_adopts_effective_target_reached():
+    # THE bug: one charger at night_target_reached → fleet must reflect it.
+    eff = {"ev_charger": (ChargingState.NIGHT_TARGET_REACHED, "EV")}
+    assert _resolve(GLOBAL, eff) == ChargingState.NIGHT_TARGET_REACHED
+
+
+def test_single_charger_adopts_effective_solar_idle():
+    eff = {"ev_charger": (ChargingState.SOLAR_IDLE, "EV")}
+    assert _resolve(GLOBAL, eff) == ChargingState.SOLAR_IDLE
+
+
+def test_multi_charger_keeps_global_master_state():
+    # Chargers can disagree — must NOT collapse to one (#351 M4).
+    eff = {
+        "a": (ChargingState.NIGHT_TARGET_REACHED, "A"),
+        "b": (ChargingState.NIGHT_CHARGING_ACTIVE, "B"),
+    }
+    assert _resolve(GLOBAL, eff) == GLOBAL
+
+
+def test_zero_chargers_keeps_global_state():
+    assert _resolve(GLOBAL, {}) == GLOBAL
+
+
+def test_single_charger_none_effective_falls_back_to_global():
+    assert _resolve(GLOBAL, {"ev_charger": (None, "EV")}) == GLOBAL
+
+
+def test_end_to_end_single_charger_target_reached_status():
+    # The two fixes together: rollup adopts night_target_reached, and the
+    # status getter maps that to "target_reached" (not "active").
+    eff = {"ev_charger": (ChargingState.NIGHT_TARGET_REACHED, "EV")}
+    fleet = _resolve(GLOBAL, eff)
+    d = SEMData()
+    d.charging_state = str(getattr(fleet, "value", fleet))
+    assert d._get_night_charging_status() == "target_reached"
