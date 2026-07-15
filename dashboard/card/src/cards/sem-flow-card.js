@@ -226,11 +226,6 @@ class SEMFlowCard extends SEMLitBase {
                         ${this._svgRaw(this._glowFilter('glowHome',       homeColor,       10))}
                         ${this._svgRaw(this._glowFilter('glowEV',         evColor,         8))}
                         ${this._svgRaw(this._glowFilter('glowInverter',   invColor,        6))}
-                        <path id="path-solar"   d="${L.paths.solar}"/>
-                        <path id="path-home"    d="${L.paths.home}"/>
-                        <path id="path-battery" d="${L.paths.battery}"/>
-                        <path id="path-grid"    d="${L.paths.grid}"/>
-                        <path id="path-ev"      d="${L.paths.ev}"/>
                     </defs>
 
                     <rect width="100%" height="100%" fill="url(#bgGrad)"/>
@@ -242,11 +237,11 @@ class SEMFlowCard extends SEMLitBase {
                     ${this._svgRaw(hasGrid ? `<path id="track-grid" d="${L.paths.grid}" fill="none" stroke="${gridImportColor}" stroke-width="1.5" stroke-dasharray="4,6" opacity="0.18"/>` : '')}
                     ${this._svgRaw(hasEv ? this._track(L.paths.ev, evColor) : '')}
 
-                    ${this._svgRaw(hasSolar ? `<g id="flow-solar" class="flow-group" style="opacity:0" data-path-id="path-solar" data-path-d="${L.paths.solar}" data-color="${solarColor}" data-count="2"></g>` : '')}
-                    ${this._svgRaw(hasBattery ? `<g id="flow-battery" class="flow-group" style="opacity:0" data-path-id="path-battery" data-path-d="${L.paths.battery}" data-color="${batteryColor}" data-count="3"></g>` : '')}
-                    ${this._svgRaw(hasGrid ? `<g id="flow-grid" class="flow-group" style="opacity:0" data-path-id="path-grid" data-path-d="${L.paths.grid}" data-color="${gridImportColor}" data-count="3"></g>` : '')}
-                    ${this._svgRaw(hasSolar || hasInverter ? `<g id="flow-home" class="flow-group" style="opacity:0" data-path-id="path-home" data-path-d="${L.paths.home}" data-color="${homeColor}" data-count="2"></g>` : '')}
-                    ${this._svgRaw(hasEv ? `<g id="flow-ev" class="flow-group" style="opacity:0" data-path-id="path-ev" data-path-d="${L.paths.ev}" data-color="${evColor}" data-count="3"></g>` : '')}
+                    ${this._svgRaw(hasSolar ? `<g id="flow-solar" class="flow-group" style="opacity:0" data-path-d="${L.paths.solar}" data-color="${solarColor}" data-count="2"></g>` : '')}
+                    ${this._svgRaw(hasBattery ? `<g id="flow-battery" class="flow-group" style="opacity:0" data-path-d="${L.paths.battery}" data-color="${batteryColor}" data-count="3"></g>` : '')}
+                    ${this._svgRaw(hasGrid ? `<g id="flow-grid" class="flow-group" style="opacity:0" data-path-d="${L.paths.grid}" data-color="${gridImportColor}" data-count="3"></g>` : '')}
+                    ${this._svgRaw(hasSolar || hasInverter ? `<g id="flow-home" class="flow-group" style="opacity:0" data-path-d="${L.paths.home}" data-color="${homeColor}" data-count="2"></g>` : '')}
+                    ${this._svgRaw(hasEv ? `<g id="flow-ev" class="flow-group" style="opacity:0" data-path-d="${L.paths.ev}" data-color="${evColor}" data-count="3"></g>` : '')}
 
                     ${this._svgRaw(hasSolar ? `
                     <g id="node-solar" filter="url(#glowSolar)">
@@ -548,16 +543,15 @@ class SEMFlowCard extends SEMLitBase {
         const color = dynamicColor || group.dataset.color;
         if (dynamicColor) group.dataset.color = dynamicColor;
 
-        const pathId = group.dataset.pathId;
         const pathD  = group.dataset.pathD;
         const count  = parseInt(group.dataset.count, 10) || 2;
         const newSig = `${reverse ? 'r' : 'f'}:${duration.toFixed(1)}:${color}`;
         if (group.dataset.sig === newSig) return;
         group.dataset.sig = newSig;
-        group.innerHTML = this._flowEffects(pathD, pathId, color, count, duration, reverse);
+        group.innerHTML = this._flowEffects(pathD, color, count, duration, reverse);
     }
 
-    _flowEffects(pathD, pathId, color, count, duration, reverse) {
+    _flowEffects(pathD, color, count, duration, reverse) {
         const dur = duration.toFixed(1);
         const dashOffset = reverse ? '32' : '-32';
         const reverseAttrs = reverse ? ' keyPoints="1;0" keyTimes="0;1"' : '';
@@ -566,18 +560,17 @@ class SEMFlowCard extends SEMLitBase {
                      <animate attributeName="stroke-dashoffset" from="0" to="${dashOffset}"
                               dur="${dur}s" repeatCount="indefinite"/>
                    </path>`;
+        // #591 — inline path= instead of an mpath href="#id" reference: WebKit (every iOS
+        // browser) only resolves xlink:href on mpath, so the plain-href
+        // reference never bound and the flow dots stood still on iOS.
         for (let i = 0; i < count; i++) {
             const delay = (i / count) * duration;
             svg += `
                 <circle r="5" fill="${color}" opacity="0.12">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>
                 <circle r="2.5" fill="${color}" opacity="0.9">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>`;
         }
         return svg;
@@ -675,7 +668,9 @@ class SEMFlowCard extends SEMLitBase {
 
             svgHtml += `<path id="dev-conn-${idx}" d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}" fill="none" stroke="${color}" stroke-width="1.2" stroke-dasharray="3,5" opacity="0.1"/>`;
             svgHtml += `<g id="dev-flow-${idx}"></g>`;
-            svgHtml += `<path id="dev-path-${idx}" d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}" fill="none" stroke="none"/>`;
+            // #591 — the flow dot now inlines its path (path=) instead of
+            // referencing this via an mpath href reference, so the invisible target path
+            // is no longer needed.
             const entityAttr = info.power_entity ? ` data-entity="${info.power_entity}"` : '';
             svgHtml += `<g id="dev-group-${idx}" class="device-clickable"${entityAttr} data-idx="${idx}">`;
             svgHtml += `<circle id="dev-circle-${idx}" cx="${cx}" cy="${cy}" r="${nodeR}" fill="rgba(128,128,128,0.03)" stroke="${color}" stroke-width="1.2" opacity="0.4"/>`;
@@ -740,9 +735,7 @@ class SEMFlowCard extends SEMLitBase {
                                 <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="${dur}s" repeatCount="indefinite"/>
                             </path>
                             <circle r="2" fill="${color}" opacity="0.8">
-                                <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s">
-                                    <mpath href="#dev-path-${idx}"/>
-                                </animateMotion>
+                                <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s"/>
                             </circle>`;
                     }
                 } else if (flowGroup.dataset.sig !== '') {

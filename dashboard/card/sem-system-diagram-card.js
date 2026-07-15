@@ -426,17 +426,16 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             return;
         }
 
-        const pathId = group.dataset.pathId;
         const pathD = group.dataset.pathD;
         const color = group.dataset.color;
         const count = parseInt(group.dataset.count, 10) || 2;
         const newSig = `${reverse ? 'r' : 'f'}:${duration.toFixed(1)}`;
         if (group.dataset.sig === newSig) return;
         group.dataset.sig = newSig;
-        group.innerHTML = this._flowEffects(pathD, pathId, color, count, duration, reverse);
+        group.innerHTML = this._flowEffects(pathD, color, count, duration, reverse);
     }
 
-    _flowEffects(pathD, pathId, color, count, duration, reverse) {
+    _flowEffects(pathD, color, count, duration, reverse) {
         const dur = duration.toFixed(1);
         const dashOffset = reverse ? '32' : '-32';
         const reverseAttrs = reverse ? ' keyPoints="1;0" keyTimes="0;1"' : '';
@@ -447,20 +446,20 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                               dur="${dur}s" repeatCount="indefinite"/>
                    </path>`;
 
+        // #591 — inline path= instead of an mpath href="#id" reference: WebKit (every iOS
+        // browser) only resolves xlink:href on mpath, so plain href never bound
+        // and the flow dots stood still on iOS. Inline path data is the SVG 1.1
+        // form supported everywhere.
         for (let i = 0; i < count; i++) {
             const delay = (i / count) * duration;
             svg += `
                 <circle r="5" fill="${color}" opacity="0.12">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite"
-                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite"
+                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>
                 <circle r="2.5" fill="${color}" opacity="0.9">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite"
-                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite"
+                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>`;
         }
         return svg;
@@ -524,16 +523,15 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             // Animated flow when device is consuming
             if (power > 5) {
                 const dur = this._calcDuration(power).toFixed(1);
-                html += `<path d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}"
+                const devPathD = `M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}`;
+                html += `<path d="${devPathD}"
                                fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="8,16" opacity="0.4" stroke-linecap="round">
                              <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="${dur}s" repeatCount="indefinite"/>
                            </path>`;
+                // #591 — inline path= instead of an mpath href reference (iOS/WebKit).
                 html += `<circle r="2" fill="${color}" opacity="0.8">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s">
-                        <mpath href="#dev-path-${idx}"/>
-                    </animateMotion>
+                    <animateMotion path="${devPathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s"/>
                 </circle>`;
-                html += `<path id="dev-path-${idx}" d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}" fill="none" stroke="none"/>`;
             }
 
             // Device circle node
@@ -697,12 +695,6 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                         ${this._glowFilter('glowHome',    '#5BC8D8', 10)}
                         ${this._glowFilter('glowEV',      '#8DC892', 8)}
                         ${this._glowFilter('glowInverter','#96CAEE', 6)}
-
-                        <path id="path-solar"   d="${L.paths.solar}"/>
-                        <path id="path-home"    d="${L.paths.home}"/>
-                        <path id="path-battery" d="${L.paths.battery}"/>
-                        <path id="path-grid"    d="${L.paths.grid}"/>
-                        <path id="path-ev"      d="${L.paths.ev}"/>
                     </defs>
 
                     <rect width="100%" height="100%" fill="url(#bgGrad)"/>
@@ -717,15 +709,15 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
                     <!-- Animated flow groups -->
                     <g id="flow-solar" class="flow-group" style="opacity:0"
-                       data-path-id="path-solar" data-path-d="${L.paths.solar}" data-color="#ff9800" data-count="2"></g>
+                       data-path-d="${L.paths.solar}" data-color="#ff9800" data-count="2"></g>
                     <g id="flow-battery" class="flow-group" style="opacity:0"
-                       data-path-id="path-battery" data-path-d="${L.paths.battery}" data-color="#4db6ac" data-count="3"></g>
+                       data-path-d="${L.paths.battery}" data-color="#4db6ac" data-count="3"></g>
                     <g id="flow-grid" class="flow-group" style="opacity:0"
-                       data-path-id="path-grid" data-path-d="${L.paths.grid}" data-color="#488fc2" data-count="3"></g>
+                       data-path-d="${L.paths.grid}" data-color="#488fc2" data-count="3"></g>
                     <g id="flow-home" class="flow-group" style="opacity:0"
-                       data-path-id="path-home" data-path-d="${L.paths.home}" data-color="#5BC8D8" data-count="2"></g>
+                       data-path-d="${L.paths.home}" data-color="#5BC8D8" data-count="2"></g>
                     <g id="flow-ev" class="flow-group" style="opacity:0"
-                       data-path-id="path-ev" data-path-d="${L.paths.ev}" data-color="#8DC892" data-count="3"></g>
+                       data-path-d="${L.paths.ev}" data-color="#8DC892" data-count="3"></g>
 
                     <!-- SOLAR -->
                     <g id="node-solar" filter="url(#glowSolar)">
