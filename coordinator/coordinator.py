@@ -3609,7 +3609,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Forecast tracker update failed: %s", e)
 
-        # Apply real-time dampening to forecast remaining and surplus
+        # Apply real-time dampening to the *planning* view of remaining solar
+        # (surplus + best-window). (#598) The dampened value is kept LOCAL and
+        # deliberately NOT written back to
+        # ``forecast_data.forecast_remaining_today_kwh`` — that field feeds the
+        # user-facing "Remaining" tile, which must stay on the SAME (raw) basis
+        # as the "Forecast today" tile beside it. Dampening the display field
+        # while today stays raw produced a self-contradictory pair at dawn
+        # (e.g. today 70.8 kWh / remaining 35 kWh with almost nothing produced,
+        # because the morning dampening factor sits near its 0.5 clamp floor).
+        # The EV/battery control path re-derives its own dampened remaining from
+        # the raw ``_cycle_forecast`` (see _build_fleet_cycle_state), so it is
+        # unaffected by keeping the display field raw.
         try:
             if forecast_data.forecast_available:
                 dampening = self._forecast_tracker.dampening_factor
@@ -3617,7 +3628,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 dampened_remaining = round(
                     forecast_data.forecast_remaining_today_kwh * dampening, 2
                 )
-                forecast_data.forecast_remaining_today_kwh = dampened_remaining
                 battery_target_soc = self.config.get("battery_priority_soc", 90)
                 battery_need_kwh = max(0, (battery_target_soc - power.battery_soc) / 100 * self.battery_capacity_kwh)
                 predicted_home = self._predictor.predict_consumption_today_kwh(dt_util.now())

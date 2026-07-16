@@ -121,6 +121,27 @@ still English-shaped — Huawei's `inverter_input_power` / German PV slugs are *
 if a Huawei/localized user reports solar or grid reading 0 (grid already matches via `power_meter`).
 Refs #250 #274 #597.
 
+### 11. Corrected value overwrites a raw display field (paired-figure basis mismatch) — GUARDED
+**Symptom:** two figures shown side by side on a card disagree in a way that reads as a
+contradiction — the "Remaining" tile far below the "Forecast today" tile at *dawn*, when almost
+nothing has been produced (today 70.8 kWh / remaining 35 kWh, #598). **Root shape:** a *corrected*
+quantity (a dampened/adjusted planning value) is written **back onto the field that also feeds a
+raw display sensor**, so one tile is raw and its sibling is corrected — different bases, same card.
+The corrected value is legitimate for planning; the defect is that it *leaked* into the display
+field instead of staying local. Here `forecast_remaining_today_kwh` was overwritten with
+`raw_remaining × dampening_factor` (which sits near its 0.5 clamp floor in the morning) while
+`forecast_today_kwh` stayed raw. **Where it lives:** `coordinator/coordinator.py::_update_analytics_phases`
+(forecast display fields); any place a `* factor` / `apply_dampening()` / correction result is
+assigned back to a `*_data` field that `to_data()` publishes. **Closure:** keep the corrected value
+in a LOCAL variable for planning (surplus/window/control already re-derive dampening from the raw
+`_cycle_forecast`); write the display field exactly once — the raw reader value — and never
+re-derive it. **Guard:** `tests/test_598_display_remaining_astguard.py` — an AST lint that fails CI
+if `_update_analytics_phases` assigns `forecast_data.forecast_remaining_today_kwh` more than once, or
+assigns it anything other than the raw reader attribute. Refs #598.
+**Watch:** the guard covers the remaining-solar field specifically; sweep the other paired display
+fields if a new "these two numbers contradict each other" report appears — e.g. a corrected
+`forecast_today_kwh`, or any tariff/PV figure shown raw beside a corrected sibling.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
