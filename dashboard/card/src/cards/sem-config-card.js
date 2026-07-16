@@ -784,6 +784,12 @@ class SEMConfigCard extends SEMLitBase {
                   → Apply-batched reload. */ ''}
             ${this._renderPicker('battery_soc_sensor', 'config_battery_soc_sensor',
                 'sensor', null, opts, 'config_help_battery_soc_sensor')}
+            ${/* #592/#597 — battery power override; #593 — hardware cycle count.
+                  Both fallbacks: SEM autodetects first, these are the escape hatch. */ ''}
+            ${this._renderPicker('battery_power_sensor', 'config_battery_power_sensor',
+                'sensor', 'power', opts, 'config_help_battery_power_sensor')}
+            ${this._renderPicker('battery_cycles_sensor', 'config_battery_cycles_sensor',
+                'sensor', null, opts, 'config_help_battery_cycles_sensor')}
             ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
             ${this._renderZoneKnob('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
             ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
@@ -852,6 +858,11 @@ class SEMConfigCard extends SEMLitBase {
                 'sensor', 'power', opts, 'config_help_grid_import_entity')}
             ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
                 'sensor', 'power', opts, 'config_help_grid_export_entity')}
+            ${/* #592 — solar power override for energy-only installs (SolarEdge/
+                  Sonnen etc.): supply a real solar power sensor so Home isn't
+                  clamped to 0. Autodetect-first; this is the escape hatch. */ ''}
+            ${this._renderPicker('solar_production_sensor', 'config_solar_production_sensor',
+                'sensor', 'power', opts, 'config_help_solar_production_sensor')}
             ${this._hasBattery() ? html`
                 <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
                     <span class="ctrl-label" style="font-weight:600">${this._t('config_battery_control')}</span>
@@ -925,6 +936,9 @@ class SEMConfigCard extends SEMLitBase {
                     null, opts, 'config_help_hp_climate')}
                 ${this._renderPicker('heat_pump_power_sensor', 'config_hp_power_sensor', 'sensor',
                     'power', opts, 'config_help_hp_power_sensor')}
+                ${/* #600 — kWh energy counter fallback when there's no power sensor. */ ''}
+                ${this._renderPicker('heat_pump_energy_sensor', 'config_hp_energy_sensor', 'sensor',
+                    'energy', opts, 'config_help_hp_energy_sensor')}
                 ${/* #550: HP temperature sensor override — structural key that had
                       no picker anywhere (unreachable). */ ''}
                 ${this._renderPicker('heat_pump_temperature_sensor', 'config_hp_temperature_sensor',
@@ -1011,6 +1025,9 @@ class SEMConfigCard extends SEMLitBase {
                     'sensor', 'temperature', opts, 'config_help_hw_temp_sensor')}
                 ${this._renderPicker('hot_water_power_sensor', 'config_hw_power_sensor',
                     'sensor', 'power', opts, 'config_help_hw_power_sensor')}
+                ${/* #600 — kWh energy counter fallback when there's no power sensor. */ ''}
+                ${this._renderPicker('hot_water_energy_sensor', 'config_hw_energy_sensor',
+                    'sensor', 'energy', opts, 'config_help_hw_energy_sensor')}
                 ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
                     T, 'config_help_hw_solar_target')}
                 ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
