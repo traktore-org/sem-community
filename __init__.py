@@ -204,6 +204,9 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     "heat_pump_relay1_entity", "heat_pump_relay2_entity",
     "heat_pump_climate_entity", "heat_pump_power_sensor",
     "heat_pump_temperature_sensor",
+    # #600 — load-device kWh energy counters (derive power when no power sensor);
+    # read at controller construction → reload on change.
+    "heat_pump_energy_sensor", "hot_water_energy_sensor",
     # #523: read at HeatPumpController construction, so a change must reload
     # to rebuild the controller with the new relay polarity.
     "heat_pump_invert_sg_ready",
@@ -1743,6 +1746,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 relay2_entity_id=hp_relay2,
                 climate_entity_id=hp_climate,
                 power_entity_id=full_config.get("heat_pump_power_sensor"),
+                energy_entity_id=full_config.get("heat_pump_energy_sensor"),  # #600
                 temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
                 boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
                 max_setpoint=float(full_config.get("heat_pump_max_setpoint", 55.0)),
@@ -1793,6 +1797,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 priority=int(full_config.get("hot_water_priority", 6)),
                 entity_id=hw_entity,
                 power_entity_id=full_config.get("hot_water_power_sensor"),
+                energy_entity_id=full_config.get("hot_water_energy_sensor"),  # #600
                 temperature_entity_id=full_config.get("hot_water_temperature_sensor"),
                 max_temperature=float(full_config.get("hot_water_max_temperature", 70.0)),
                 min_temperature=float(full_config.get("hot_water_minimum_temperature", 40.0)),
@@ -3189,6 +3194,9 @@ async def _async_register_phase_services(
             "priority": call.data.get("priority", 5),
             "rated_power": call.data.get("rated_power", 1000),
             "power_entity_id": call.data.get("power_entity_id"),
+            # #600 — optional kWh energy counter; SEM autodetects a companion
+            # power sensor on the device first, else derives power from this.
+            "energy_entity_id": call.data.get("energy_entity_id"),
             "control_mode": call.data.get("control_mode", "surplus"),
             "depends_on": call.data.get("depends_on") or [],
             # (#569) climate device support
@@ -3242,6 +3250,7 @@ async def _async_register_phase_services(
             vol.Optional("priority", default=5): vol.All(int, vol.Range(min=1, max=10)),
             vol.Optional("rated_power", default=1000): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
+            vol.Optional("energy_entity_id"): cv.string,  # #600
             vol.Optional("control_mode", default="surplus"): vol.In(
                 ["off", "peak_only", "surplus"]
             ),

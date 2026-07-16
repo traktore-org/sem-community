@@ -319,6 +319,7 @@ class UnifiedDeviceRegistry:
             "priority": spec.get("priority", 5),
             "rated_power": spec.get("rated_power", 1000),
             "power_entity_id": spec.get("power_entity_id"),
+            "energy_entity_id": spec.get("energy_entity_id"),  # #600
             "control_mode": spec.get("control_mode", "surplus"),
             "depends_on": list(spec.get("depends_on") or []),
             # (#569) device kind + climate params — persisted so a climate
