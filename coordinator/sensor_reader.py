@@ -1677,7 +1677,25 @@ class SensorReader:
         # #553 — a battery "unit" is either a combined power entity OR a
         # two-sensor pair (#551). Multi-battery handling counts both.
         n_units = len(ed.battery_power_list) + len(ed.battery_power_pairs)
-        if n_units > 1:
+        if self.config.battery_power_sensor:
+            # #597 — the explicit SEM ``battery_power_sensor`` override wins,
+            # mirroring the ``battery_soc_sensor`` override precedence below.
+            # This was MISSING on the Energy-Dashboard path (present only on the
+            # legacy path), while SOC had it here — so an install whose Energy
+            # Dashboard exposes only charge/discharge ENERGY (``batt:pwr=none``,
+            # e.g. Huawei) but which set ``battery_power_sensor`` to a real
+            # combined power sensor read null. Read via ``_read_sensor(...,
+            # "battery")`` (same call the ED combined path uses); note the ED
+            # ``battery_power_inverted`` flag is intentionally NOT applied here
+            # — that flag describes HA's ED dialog sensor, whereas the SEM
+            # override is assumed already in SEM convention (and if it isn't,
+            # the battery-sign detector self-corrects, and the manual flip
+            # service is the escape hatch). Mirrors the SOC override, which
+            # likewise bypasses the ED ``stat_soc`` handling.
+            readings.battery_power = self._read_sensor(
+                self.config.battery_power_sensor, "battery"
+            )
+        elif n_units > 1:
             total = 0.0
             # Phase A of per-battery card mirror: assign short stable
             # slugs (``b1``, ``b2`` …) keyed by the Energy Dashboard
