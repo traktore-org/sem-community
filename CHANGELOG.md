@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.8] — 16.07.2026
+
+### 🐛 Fixes
+
+- ☀️ **Forecast "Remaining" tile no longer contradicts "Forecast today"** (#598, by @ebnerjoh) —
+  in the morning the Home-tab Forecast Details tile could show e.g. "Forecast today 70.8 kWh"
+  beside "Remaining 35 kWh" with almost nothing produced yet. The remaining figure was being
+  multiplied by the real-time dampening factor (which sits near its 0.5 clamp floor at dawn)
+  while today's figure stayed raw — two different bases side by side. "Remaining" now stays on
+  the same raw basis as "Forecast today" (remaining = forecast − production). Internal
+  surplus/charging planning still uses the dampened value, unchanged.
+
 # [1.7.5-beta.7] — 15.07.2026
 
 ### 🐛 Fixes
