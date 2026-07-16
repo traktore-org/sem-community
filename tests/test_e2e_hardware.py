@@ -1378,6 +1378,114 @@ class TestSolaXEnergyOnlyDerivation:
             )
         assert found == "sensor.inv_battery_power"
 
+    @pytest.mark.parametrize(
+        "power_eid",
+        [
+            # Huawei Solar (wlcrs/huawei_solar) combined battery power — the
+            # keyword list must cover both the English translation-key slug
+            # and the German-locale slug (#597: `batterien_lade_entladeleistung`
+            # was reported reading null because neither matched).
+            "sensor.batteries_charge_discharge_power",       # Huawei EN combined
+            "sensor.batterien_lade_entladeleistung",         # Huawei DE combined (#597 reporter)
+            "sensor.batteries_lade_entladeleistung",         # Huawei DE (fleet)
+            "sensor.battery_1_lade_entladeleistung",         # Huawei DE (per-battery)
+            "sensor.battery_1_charge_discharge_power",        # Huawei EN (per-battery)
+        ],
+    )
+    def test_battery_power_derives_for_huawei_naming(self, power_eid):
+        """Huawei combined battery power (EN + DE) must be derivable (#597).
+
+        The energy sensor and the combined power sensor share the Batteries
+        device; the derive keyword list has to recognise Huawei's
+        ``charge_discharge_power`` / ``lade_entladeleistung`` naming or the
+        battery power reads null forever (no manual override exists).
+        """
+        import custom_components.solar_energy_management.ha_energy_reader as har
+
+        device = "batteries"
+        energy_eid = "sensor.batteries_total_charge"
+        ents = []
+        for eid in (energy_eid, power_eid):
+            e = MagicMock()
+            e.entity_id = eid
+            e.domain = "sensor"
+            e.disabled_by = None
+            e.device_id = device
+            ents.append(e)
+
+        registry = MagicMock()
+        registry.async_get = lambda eid: next(
+            (e for e in ents if e.entity_id == eid), None
+        )
+
+        def _state_for(eid):
+            if eid.endswith("total_charge"):
+                return _state(100, unit="kWh", device_class="energy")
+            return _state(-450, unit="W", device_class="power")
+
+        hass = MagicMock()
+        hass.states.get = _state_for
+
+        with patch.object(har.er, "async_get", return_value=registry), \
+             patch.object(har.er, "async_entries_for_device", return_value=ents):
+            found = har._find_power_sensor_on_device(
+                hass, energy_eid, har._POWER_DERIVE_RULES["battery"],
+            )
+        assert found == power_eid
+
+    @pytest.mark.parametrize(
+        ("combined_eid", "per_battery_eid"),
+        [
+            ("sensor.batteries_charge_discharge_power",
+             "sensor.battery_1_charge_discharge_power"),   # Huawei EN
+            ("sensor.batterien_lade_entladeleistung",
+             "sensor.battery_1_lade_entladeleistung"),     # Huawei DE
+        ],
+    )
+    def test_battery_power_prefers_combined_over_per_battery_huawei(
+        self, combined_eid, per_battery_eid,
+    ):
+        """Fleet-combined Huawei battery power wins over the per-battery slug (#597).
+
+        Both slugs are the same length, so length alone is a coin-flip; the
+        ``batteries``/``batterien`` prefer tokens must pick the combined sensor
+        deterministically regardless of registry iteration order.
+        """
+        import custom_components.solar_energy_management.ha_energy_reader as har
+
+        device = "batteries"
+        energy_eid = "sensor.batteries_total_charge"
+        # Deliberately list the per-battery entity FIRST so a naive
+        # (order-dependent) tie-break would pick the wrong one.
+        ents = []
+        for eid in (energy_eid, per_battery_eid, combined_eid):
+            e = MagicMock()
+            e.entity_id = eid
+            e.domain = "sensor"
+            e.disabled_by = None
+            e.device_id = device
+            ents.append(e)
+
+        registry = MagicMock()
+        registry.async_get = lambda eid: next(
+            (e for e in ents if e.entity_id == eid), None
+        )
+
+        def _state_for(eid):
+            if eid.endswith("total_charge"):
+                return _state(100, unit="kWh", device_class="energy")
+            return _state(-450, unit="W", device_class="power")
+
+        hass = MagicMock()
+        hass.states.get = _state_for
+
+        with patch.object(har.er, "async_get", return_value=registry), \
+             patch.object(har.er, "async_entries_for_device", return_value=ents):
+            found = har._find_power_sensor_on_device(
+                hass, energy_eid, har._POWER_DERIVE_RULES["battery"],
+            )
+        assert found == combined_eid
+
     @pytest.mark.asyncio
     async def test_pipeline_nonzero_including_soc(self, tmp_path):
         """Full pipeline: derived sensors → non-zero power; SOC via signature."""

@@ -41,8 +41,27 @@ _POWER_DERIVE_RULES: Dict[str, Dict[str, tuple]] = {
         # combined `battery_power` AND a `battery_power_charge`, the shortest-name
         # tie-break favours the combined (bidirectional) sensor. SolaX only has
         # `battery_power_charge` (which is itself signed), so it is still picked.
-        "include": ("battery_power", "batt_power", "power_battery"),
-        "prefer": ("total",),
+        #
+        # #597 — the keyword list is brand/locale-specific (bug-class "power-derive
+        # keyword gap"): Huawei Solar names its combined battery power
+        # `..._charge_discharge_power` (EN) / `..._lade_entladeleistung` (DE), so
+        # neither of the SolaX-shaped keywords matched and the sensor stayed null
+        # with no manual override to fall back on. Multilingual coverage mirrors
+        # the `_DISCHARGE_CONTROL_PATTERNS` approach in hardware_detection.py.
+        "include": (
+            "battery_power", "batt_power", "power_battery",
+            "charge_discharge_power",   # Huawei Solar (EN combined)
+            "lade_entladeleistung",     # Huawei Solar (DE combined)
+        ),
+        # #597 — when a Huawei device exposes BOTH the fleet-combined
+        # (`batteries_…` / `batterien_…`, plural) and a per-battery
+        # (`battery_1_…`, singular) power sensor, the two slugs are the same
+        # length so the length tie-break is non-deterministic. The plural
+        # "batteries"/"batterien" tokens name the combined fleet sensor and
+        # never appear in the singular per-battery slug, so they pick the
+        # combined deterministically (SolaX's `battery_power` vs
+        # `battery_power_charge` still discriminates on length as before).
+        "prefer": ("total", "batteries", "batterien"),
     },
 }
 # Substrings that disqualify a candidate regardless of type (non-real power).
