@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.9] — 16.07.2026
+
+### 🐛 Fixes
+
+- 🔋 **`battery_power_sensor` override now works on Energy-Dashboard setups** (#597, by
+  @tsaligerseidl) — installs whose Home Assistant Energy Dashboard exposes only battery
+  charge/discharge *energy* (no combined power sensor) could configure `battery_power_sensor`
+  to point at a real power sensor, but SEM ignored it and reported battery power as null
+  (SOC worked, power didn't). The override is now honoured on the Energy-Dashboard path,
+  the same way the SOC override already was.
+
 # [1.7.5-beta.8] — 16.07.2026
 
 ### 🐛 Fixes
