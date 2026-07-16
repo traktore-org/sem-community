@@ -199,6 +199,8 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # set_option change must reload for it to take effect; without this the
     # override only applied on the next full restart.
     "solar_production_sensor", "battery_power_sensor", "grid_power_sensor",
+    # #593: hardware battery lifetime-cycle sensor (preferred over the estimate).
+    "battery_cycles_sensor",
     "heat_pump_relay1_entity", "heat_pump_relay2_entity",
     "heat_pump_climate_entity", "heat_pump_power_sensor",
     "heat_pump_temperature_sensor",
