@@ -1063,6 +1063,32 @@ class TestBatteryPowerConfigPipeline:
 
         assert power.battery_power == -1800  # override honoured, not null/0
 
+    def test_solar_power_sensor_override_on_ed_path(self):
+        """#592 — the SEM solar power override (config key
+        ``solar_production_sensor`` → ``solar_power_sensor``) must be honoured on
+        the Energy-Dashboard path (sibling of the #597 battery override). Repro:
+        a SolarEdge+Sonnen install exposes solar ENERGY only, so ``ed.solar_power``
+        is None → the Home balance read solar=0 → Home clamped to 0. The override
+        supplies a real solar power sensor."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power=None,               # ED exposes solar energy only
+            grid_import_power="sensor.grid",
+            battery_power=None,
+        )
+        states = {
+            "sensor.grid": _state(0),
+            "sensor.solar_override": _state(4200),
+        }
+        reader = _make_reader_with_states(
+            hass, states, ed,
+            extra_config={"solar_production_sensor": "sensor.solar_override"},
+        )
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.solar_power == 4200  # override honoured, not 0
+
     def test_no_battery_power_override_still_null_when_ed_has_none(self):
         """Guard the other side: with NO override and ``batt:pwr=none`` the
         reader still reports 0 (unchanged behaviour — the fix only adds the

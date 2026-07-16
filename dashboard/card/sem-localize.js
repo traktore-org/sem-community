@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-15T21:30:34.834881+00:00
+// Generated: 2026-07-16T18:54:30.874100+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1175,7 +1175,17 @@
       "rated_power_hint": "Rated power (off)",
       "plan_device_run": "{name} — expected to run",
       "plan_device_done": "{name} — done for today",
-      "home_battery": "Home battery"
+      "home_battery": "Home battery",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "de": {
       "charging": "Laden",
@@ -2347,7 +2357,17 @@
       "rated_power_hint": "Nennleistung (aus)",
       "plan_device_run": "{name} — läuft voraussichtlich",
       "plan_device_done": "{name} — heute erledigt",
-      "home_battery": "Heimspeicher"
+      "home_battery": "Heimspeicher",
+      "config_solar_production_sensor": "Solar-Leistungssensor",
+      "config_help_solar_production_sensor": "Aktuelle Solarleistung (W). Setze ihn, wenn dein Energie-Dashboard nur einen Solar-Energiesensor (kWh) hat, damit der Hausverbrauch nicht bei 0 hängt. SEM versucht zuerst die automatische Erkennung.",
+      "config_battery_power_sensor": "Batterie-Leistungssensor",
+      "config_help_battery_power_sensor": "Aktuelle Batterieleistung (W, negativ = Entladung). Setze ihn, wenn die Batterieleistung 0 zeigt, obwohl im Energie-Dashboard nur Batterie-Energie vorhanden ist. Wird zuerst automatisch erkannt.",
+      "config_battery_cycles_sensor": "Batterie-Zyklen-Sensor",
+      "config_help_battery_cycles_sensor": "Ein Hardware-Zähler für die Lade-Zyklen der Batterie (z. B. aus deiner Sonnen-/Huawei-Integration). Wenn gesetzt, zeigt SEM diesen statt der Schätzung. Wird zuerst am Batteriegerät automatisch erkannt.",
+      "config_hp_energy_sensor": "Wärmepumpen-Energiesensor (kWh)",
+      "config_help_hp_energy_sensor": "Ein kumulativer Energiezähler (kWh) für die Wärmepumpe, falls kein Leistungssensor vorhanden ist. SEM leitet daraus die aktuelle Leistung ab (oder erkennt zuerst einen Leistungssensor).",
+      "config_hw_energy_sensor": "Warmwasser-Energiesensor (kWh)",
+      "config_help_hw_energy_sensor": "Ein kumulativer Energiezähler (kWh) für das Warmwassergerät, falls kein Leistungssensor vorhanden ist. SEM leitet daraus die aktuelle Leistung ab (oder erkennt zuerst einen Leistungssensor)."
     },
     "fr": {
       "charging": "En charge",
@@ -3519,7 +3539,17 @@
       "rated_power_hint": "Puissance nominale (éteint)",
       "plan_device_run": "{name} — devrait fonctionner",
       "plan_device_done": "{name} — terminé pour aujourd'hui",
-      "home_battery": "Batterie domestique"
+      "home_battery": "Batterie domestique",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "es": {
       "charging": "Cargando",
@@ -4691,7 +4721,17 @@
       "rated_power_hint": "Potencia nominal (apagado)",
       "plan_device_run": "{name} — se espera que funcione",
       "plan_device_done": "{name} — hecho por hoy",
-      "home_battery": "Batería doméstica"
+      "home_battery": "Batería doméstica",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "it": {
       "charging": "In carica",
@@ -5863,7 +5903,17 @@
       "rated_power_hint": "Potenza nominale (spento)",
       "plan_device_run": "{name} — dovrebbe funzionare",
       "plan_device_done": "{name} — completato per oggi",
-      "home_battery": "Batteria di casa"
+      "home_battery": "Batteria di casa",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "nl": {
       "charging": "Laden",
@@ -7035,7 +7085,17 @@
       "rated_power_hint": "Nominaal vermogen (uit)",
       "plan_device_run": "{name} — draait naar verwachting",
       "plan_device_done": "{name} — klaar voor vandaag",
-      "home_battery": "Thuisbatterij"
+      "home_battery": "Thuisbatterij",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8207,7 +8267,17 @@
       "rated_power_hint": "Jmenovitý výkon (vyp.)",
       "plan_device_run": "{name} — očekává se spuštění",
       "plan_device_done": "{name} — pro dnešek hotovo",
-      "home_battery": "Domácí baterie"
+      "home_battery": "Domácí baterie",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "da": {
       "charging": "Oplader",
@@ -9379,7 +9449,17 @@
       "rated_power_hint": "Nominel effekt (fra)",
       "plan_device_run": "{name} — forventes at køre",
       "plan_device_done": "{name} — færdig for i dag",
-      "home_battery": "Hjemmebatteri"
+      "home_battery": "Hjemmebatteri",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "fi": {
       "charging": "Lataus",
@@ -10551,7 +10631,17 @@
       "rated_power_hint": "Nimellisteho (pois)",
       "plan_device_run": "{name} — käynnistyy odotetusti",
       "plan_device_done": "{name} — valmis tälle päivälle",
-      "home_battery": "Kotiakku"
+      "home_battery": "Kotiakku",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "hu": {
       "charging": "Töltés",
@@ -11723,7 +11813,17 @@
       "rated_power_hint": "Névleges teljesítmény (ki)",
       "plan_device_run": "{name} — várhatóan működik",
       "plan_device_done": "{name} — mára kész",
-      "home_battery": "Otthoni akkumulátor"
+      "home_battery": "Otthoni akkumulátor",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "no": {
       "charging": "Lader",
@@ -12895,7 +12995,17 @@
       "rated_power_hint": "Nominell effekt (av)",
       "plan_device_run": "{name} — forventes å kjøre",
       "plan_device_done": "{name} — ferdig for i dag",
-      "home_battery": "Hjemmebatteri"
+      "home_battery": "Hjemmebatteri",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14067,7 +14177,17 @@
       "rated_power_hint": "Moc znamionowa (wył.)",
       "plan_device_run": "{name} — powinno działać",
       "plan_device_done": "{name} — gotowe na dziś",
-      "home_battery": "Bateria domowa"
+      "home_battery": "Bateria domowa",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "pt": {
       "charging": "A carregar",
@@ -15239,7 +15359,17 @@
       "rated_power_hint": "Potência nominal (desligado)",
       "plan_device_run": "{name} — deve funcionar",
       "plan_device_done": "{name} — concluído por hoje",
-      "home_battery": "Bateria doméstica"
+      "home_battery": "Bateria doméstica",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "ro": {
       "charging": "Încărcare",
@@ -16411,7 +16541,17 @@
       "rated_power_hint": "Putere nominală (oprit)",
       "plan_device_run": "{name} — se așteaptă să funcționeze",
       "plan_device_done": "{name} — gata pentru azi",
-      "home_battery": "Baterie de casă"
+      "home_battery": "Baterie de casă",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     },
     "sv": {
       "charging": "Laddar",
@@ -17583,7 +17723,17 @@
       "rated_power_hint": "Märkeffekt (av)",
       "plan_device_run": "{name} — förväntas köra",
       "plan_device_done": "{name} — klart för idag",
-      "home_battery": "Hembatteri"
+      "home_battery": "Hembatteri",
+      "config_solar_production_sensor": "Solar power sensor",
+      "config_help_solar_production_sensor": "Live solar power (W). Set this if your Energy Dashboard has only a solar energy (kWh) sensor, so Home consumption isn't stuck at 0. SEM tries to autodetect it first.",
+      "config_battery_power_sensor": "Battery power sensor",
+      "config_help_battery_power_sensor": "Live battery power (W, negative = discharge). Set this if battery power reads 0 while your Energy Dashboard has only battery energy. Autodetected first.",
+      "config_battery_cycles_sensor": "Battery cycles sensor",
+      "config_help_battery_cycles_sensor": "A hardware lifetime battery-cycle counter (e.g. from your Sonnen/Huawei integration). When set, SEM shows this instead of its throughput estimate. Autodetected on the battery device first.",
+      "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
+      "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
     }
   };
 

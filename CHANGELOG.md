@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.10] — 16.07.2026
+
+### ✨ Sensor-input flexibility (autodetect-first, manual override as fallback)
+
+- ☀️ **Solar power on energy-only installs** (#592) — a SolarEdge/Sonnen (etc.) setup whose
+  Energy Dashboard exposes only solar *energy* read solar power as 0, which clamped Home
+  consumption to 0. SEM now honours a `solar_production_sensor` override on the Energy-Dashboard
+  path (the same way the battery/grid overrides already work), and those power overrides now
+  reload live when changed.
+- 🔋 **Real battery cycle count** (#593) — SEM's throughput estimate only counts what it has seen
+  since install and can't match the manufacturer's counter (e.g. Sonnenbatterie 249 vs SEM 165).
+  SEM now **autodetects** a lifetime-cycle sensor on the battery device (EN + DE names), with an
+  optional `battery_cycles_sensor` override; the estimate remains the last-resort fallback.
+- 🔥 **Load-device power from a kWh counter** (#600, from @tlinnet's Viessmann ViCare) — a heat
+  pump / hot-water / generic load whose only meter is a cumulative kWh counter can now feed it:
+  SEM first **autodetects a companion power sensor** on the device, and otherwise derives a smooth
+  power signal from the counter (dividing each step by the real elapsed time, so a slow yearly
+  counter never produces the ~12 kW spike a fixed-window derivative would).
+
 # [1.7.5-beta.9] — 16.07.2026
 
 ### 🐛 Fixes

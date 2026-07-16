@@ -63,6 +63,16 @@ _POWER_DERIVE_RULES: Dict[str, Dict[str, tuple]] = {
         # `battery_power_charge` still discriminates on length as before).
         "prefer": ("total", "batteries", "batterien"),
     },
+    # #600 — generic LOAD device (heat pump / hot water / switch): find the
+    # device's own power sensor to feed a kWh-only load. Broad power keywords
+    # (EN+DE); the same-device scope keeps it specific. Extend as reported.
+    "load": {
+        "include": (
+            "power", "leistung", "consumption", "verbrauch",
+            "active_power", "current_power",
+        ),
+        "prefer": ("total", "current"),
+    },
 }
 # Substrings that disqualify a candidate regardless of type (non-real power).
 _POWER_DERIVE_EXCLUDE: tuple = ("reactive", "apparent", "factor")

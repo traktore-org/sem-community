@@ -319,6 +319,7 @@ class UnifiedDeviceRegistry:
             "priority": spec.get("priority", 5),
             "rated_power": spec.get("rated_power", 1000),
             "power_entity_id": spec.get("power_entity_id"),
+            "energy_entity_id": spec.get("energy_entity_id"),  # #600
             "control_mode": spec.get("control_mode", "surplus"),
             "depends_on": list(spec.get("depends_on") or []),
             # (#569) device kind + climate params — persisted so a climate
@@ -559,6 +560,11 @@ class UnifiedDeviceRegistry:
                     priority=device.priority,
                     entity_id=entity,
                     power_entity_id=device.power_sensor,
+                    # #600 — discovered devices carry an energy_sensor too; pass
+                    # it so an energy-only individual device (power_sensor None)
+                    # derives live power. The power_sensor, when present, still
+                    # wins in observed_power_w (it IS the autodetected companion).
+                    energy_entity_id=device.energy_sensor,
                 )
                 # Apply persisted control mode (#49)
                 from ..devices.base import DeviceControlMode

@@ -14,6 +14,17 @@ from .sign_audit import CounterCorrelationAudit
 
 _LOGGER = logging.getLogger(__name__)
 
+# #593 — battery lifetime-cycle sensor autodetect keywords (EN + DE + common
+# integration names). Extend this list as new hardware is reported — that is how
+# the supported-hardware autodetect is maintained (see the manual override in
+# the coordinator as the last-resort fallback).
+_CYCLE_KEYWORDS = (
+    "cycles", "cycle_count", "charge_cycles", "battery_cycles",
+    "zyklen", "ladezyklen", "lade_zyklen",   # Sonnenbatterie / Huawei (DE)
+    "full_cycles", "equivalent_full_cycles",
+)
+_CYCLES_UNSET = object()  # cache sentinel distinct from a None result
+
 # Known patterns for split grid power sensors — single source of truth.
 # GRID_TRIGGER_HINTS is derived from these and used in __init__.py to
 # pre-filter new sensor events. Adding a new brand here automatically
@@ -1525,7 +1536,16 @@ class SensorReader:
         # by inverter (multi-inverter installs only — single-inverter
         # leaves the dict empty and falls back to readings.solar_power).
         from .charger_types import InverterPower
-        if len(ed.solar_power_list) > 1:
+        if self.config.solar_power_sensor:
+            # #592 — explicit SEM solar power override wins (sibling of the #597
+            # battery override). On energy-only installs the Energy Dashboard
+            # exposes solar ENERGY only, so ``ed.solar_power`` is None and the
+            # Home balance read solar=0 (→ Home clamped to 0); the override lets
+            # the user supply a real solar power sensor. Same fix as battery.
+            readings.solar_power = self._read_sensor(
+                self.config.solar_power_sensor, "solar"
+            )
+        elif len(ed.solar_power_list) > 1:
             total = 0.0
             for entity in ed.solar_power_list:
                 w = self._read_sensor(entity, "solar")
@@ -2903,6 +2923,45 @@ class SensorReader:
                     cid, pc_power, pc_charging,
                 )
                 readings.ev_connected_per_charger[cid] = True
+
+    def detect_battery_cycles_sensor(self, battery_anchor_entity: Optional[str]) -> Optional[str]:
+        """#593 — autodetect a battery lifetime-cycle sensor on the SAME device
+        as the battery power/SOC sensor (keyword scan), so Sonnen/Huawei/etc.
+        users get the manufacturer's real cycle count without configuring
+        anything. The manual ``battery_cycles_sensor`` override wins over this
+        (resolved in the coordinator); this is the primary autodetect path.
+        Cached per reader instance. Returns a numeric-validated sensor id or None.
+        """
+        if getattr(self, "_cycles_sensor_cache", _CYCLES_UNSET) is not _CYCLES_UNSET:
+            return self._cycles_sensor_cache
+        result = None
+        if battery_anchor_entity and "." in battery_anchor_entity:
+            try:
+                registry = er.async_get(self.hass)
+                anchor = registry.async_get(battery_anchor_entity)
+                if anchor and anchor.device_id:
+                    for entry in er.async_entries_for_device(registry, anchor.device_id):
+                        if entry.domain != "sensor":
+                            continue
+                        eid = entry.entity_id
+                        if not any(kw in eid.lower() for kw in _CYCLE_KEYWORDS):
+                            continue
+                        st = self.hass.states.get(eid)
+                        if st is not None and st.state not in ("unknown", "unavailable", None):
+                            try:
+                                if float(st.state) >= 0:
+                                    _LOGGER.info(
+                                        "Auto-detected battery cycles sensor: %s = %s (#593)",
+                                        eid, st.state,
+                                    )
+                                    result = eid
+                                    break
+                            except (ValueError, TypeError):
+                                continue
+            except Exception as e:  # noqa: BLE001 — best-effort autodetect
+                _LOGGER.debug("Battery cycles autodetect failed: %s", e)
+        self._cycles_sensor_cache = result
+        return result
 
     def _auto_detect_battery_soc(self, battery_power_entity: str) -> Optional[str]:
         """Auto-detect battery SOC sensor from the same device as the power sensor.

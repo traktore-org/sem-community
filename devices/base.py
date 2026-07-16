@@ -132,6 +132,7 @@ class ControllableDevice(ABC):
         min_power_threshold: float = 0.0,
         entity_id: Optional[str] = None,
         power_entity_id: Optional[str] = None,
+        energy_entity_id: Optional[str] = None,
     ):
         self.hass = hass
         self.device_id = device_id
@@ -140,6 +141,11 @@ class ControllableDevice(ABC):
         self.min_power_threshold = min_power_threshold
         self.entity_id = entity_id
         self.power_entity_id = power_entity_id
+        # #600 — a kWh-only load device (no power sensor) can supply a
+        # TOTAL_INCREASING energy counter; live power is derived from it. A
+        # power sensor always wins; the deriver is the fallback. Lazily created.
+        self.energy_entity_id = energy_entity_id
+        self._energy_deriver = None
         self._status = DeviceStatus()
         self._enabled = True
         self._managed_externally = False
@@ -319,6 +325,34 @@ class ControllableDevice(ABC):
 
         self._daily_runtime_last_check = now
 
+    def observed_power_w(self) -> Optional[float]:
+        """#600 — the device's live consumption in W: the power sensor if
+        present and readable, else derived from an energy (kWh) counter, else
+        None. A power sensor ALWAYS wins; the energy deriver is the fallback for
+        kWh-only devices (e.g. Viessmann ViCare yearly counter)."""
+        if self.hass and self.power_entity_id:
+            state = self.hass.states.get(self.power_entity_id)
+            if state and state.state not in ("unknown", "unavailable", None):
+                try:
+                    return float(state.state)
+                except (ValueError, TypeError):
+                    pass
+        if self.hass and self.energy_entity_id:
+            state = self.hass.states.get(self.energy_entity_id)
+            energy = None
+            if state and state.state not in ("unknown", "unavailable", None):
+                try:
+                    energy = float(state.state)
+                except (ValueError, TypeError):
+                    energy = None
+            if self._energy_deriver is None:
+                from ..coordinator.energy_rate_deriver import EnergyRateDeriver
+                self._energy_deriver = EnergyRateDeriver()
+            rated = getattr(self, "rated_power", None)
+            cap = rated * 2 if rated else None
+            return self._energy_deriver.update(energy, time.monotonic(), max_power_w=cap)
+        return None
+
     def calibrate_rated_power(self) -> None:
         """(#559/#576) Learn the device's real draw from its power sensor.
 
@@ -328,26 +362,21 @@ class ControllableDevice(ABC):
         ``SwitchDevice`` to the base (#576) so EVERY device type — switch,
         heat pump, climate — "sees where it goes", not just switches.
 
-        No-op for devices without a power sensor or a ``rated_power`` (e.g. the
-        modulating EV, which measures draw its own way): those keep their
-        default rating (1 kW for a sensor-less surplus device — a saner floor
-        than the old 0 W-at-discovery, which made a switch turn on at any
-        surplus and import the rest from grid)."""
+        #600 — reads via ``observed_power_w`` so a kWh-only device (energy
+        counter, no power sensor) still calibrates from its derived power.
+        No-op for devices without any consumption signal or a ``rated_power``
+        (e.g. the modulating EV, which measures draw its own way)."""
         rated = getattr(self, "rated_power", None)
-        if (rated is None or not self.power_entity_id
-                or not self.hass or not self.is_active):
+        if rated is None or not self.hass or not self.is_active:
             return
-        state = self.hass.states.get(self.power_entity_id)
-        if not state or state.state in ("unknown", "unavailable", None):
-            return
-        try:
-            observed = float(state.state)
-        except (ValueError, TypeError):
+        observed = self.observed_power_w()
+        if observed is None:
             return
         if observed > self.rated_power:
             _LOGGER.info(
                 "%s: calibrated rated_power %.0fW -> %.0fW from %s",
-                self.name, self.rated_power, observed, self.power_entity_id,
+                self.name, self.rated_power, observed,
+                self.power_entity_id or self.energy_entity_id,
             )
             self.rated_power = observed
             self.min_power_threshold = observed
@@ -638,6 +667,7 @@ class SwitchDevice(ControllableDevice):
         min_on_time: int = 300,
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
+        energy_entity_id: Optional[str] = None,
     ):
         # (#576) 1 kW default for a sensor-less / discovery-zero switch: a saner
         # floor than 0 W (which left the activation threshold tiny, so the
@@ -649,6 +679,7 @@ class SwitchDevice(ControllableDevice):
             hass, device_id, name, priority,
             min_power_threshold or rp,
             entity_id, power_entity_id,
+            energy_entity_id=energy_entity_id,
         )
         self.rated_power = rp
         self.min_on_time = min_on_time
@@ -779,11 +810,13 @@ class ClimateDevice(ControllableDevice):
         min_on_time: int = 300,
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass, device_id, name, priority,
             min_power_threshold or rated_power,
             entity_id, power_entity_id,
+            energy_entity_id=energy_entity_id,
         )
         self.rated_power = rated_power
         self.hvac_mode = hvac_mode or "cool"
@@ -1689,11 +1722,13 @@ class SetpointDevice(ControllableDevice):
         normal_setpoint: float = 21.0,
         boost_offset: float = 2.0,
         min_power_change_interval: float = 300.0,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass, device_id, name, priority,
             min_power_threshold or rated_power,
             entity_id, power_entity_id,
+            energy_entity_id=energy_entity_id,
         )
         self.rated_power = rated_power
         self.climate_entity_id = climate_entity_id
@@ -1928,6 +1963,23 @@ def surplus_device_from_spec(
     priority = spec.get("priority", 5)
     entity_id = spec.get("entity_id", "")
     power_entity_id = spec.get("power_entity_id")
+    energy_entity_id = spec.get("energy_entity_id")
+    # #600 — autodetect-FIRST: a kWh-only load device (energy sensor, no power
+    # sensor) first tries to find a companion power sensor on the same device;
+    # only when none exists does the device fall back to deriving power from the
+    # energy counter (EnergyRateDeriver). A power sensor always beats derivation.
+    if energy_entity_id and not power_entity_id:
+        try:
+            from ..ha_energy_reader import (
+                _find_power_sensor_on_device, _POWER_DERIVE_RULES,
+            )
+            found = _find_power_sensor_on_device(
+                hass, energy_entity_id, _POWER_DERIVE_RULES["load"],
+            )
+            if found:
+                power_entity_id = found
+        except Exception:  # noqa: BLE001 — best-effort autodetect
+            pass
     if dtype == "climate":
         target = spec.get("target_temperature")
         return ClimateDevice(
@@ -1938,6 +1990,7 @@ def surplus_device_from_spec(
             priority=priority,
             entity_id=entity_id,
             power_entity_id=power_entity_id,
+            energy_entity_id=energy_entity_id,
             hvac_mode=spec.get("hvac_mode", "cool"),
             target_temperature=float(target) if target is not None else None,
         )
@@ -1949,4 +2002,5 @@ def surplus_device_from_spec(
         priority=priority,
         entity_id=entity_id,
         power_entity_id=power_entity_id,
+        energy_entity_id=energy_entity_id,
     )

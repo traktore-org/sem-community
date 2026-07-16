@@ -97,6 +97,7 @@ class HeatPumpController(SetpointDevice):
         min_power_change_interval: float = 300.0,
         daily_min_runtime_sec: int = 0,
         invert_sg_ready: bool = False,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass=hass,
@@ -111,6 +112,7 @@ class HeatPumpController(SetpointDevice):
             boost_offset=boost_offset,
             max_setpoint=max_setpoint,
             min_power_change_interval=min_power_change_interval,
+            energy_entity_id=energy_entity_id,  # #600 — heat-pump kWh counter → derived power
         )
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.relay1_entity_id = relay1_entity_id

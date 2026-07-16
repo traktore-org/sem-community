@@ -212,6 +212,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return chargers[0].get("id") or "ev_charger_0"
 
     @staticmethod
+    def _resolve_battery_cycles(hw_state, throughput_cycles):
+        """#593 — prefer a hardware lifetime-cycle reading over the throughput
+        estimate. ``hw_state`` is the raw sensor state (str) or None;
+        ``throughput_cycles`` is the estimate (or None if no capacity). Returns
+        ``(cycles, health_score)`` or ``(None, None)`` if neither is available.
+        A present-but-unparseable hw reading falls back to the estimate (never
+        drops the value)."""
+        hw = None
+        if hw_state is not None and hw_state not in ("unknown", "unavailable"):
+            try:
+                hw = round(float(hw_state), 1)
+            except (ValueError, TypeError):
+                hw = None
+        cycles = hw if hw is not None else throughput_cycles
+        if cycles is None:
+            return None, None
+        # 0.02% degradation per cycle (typical Li-ion), capped at 30%.
+        health = round(100 - min(30, cycles * 0.02), 1)
+        return cycles, health
+
+    @staticmethod
     def _resolve_fleet_charging_state(global_state, effective_states):
         """The published fleet ``charging_state`` (#596).
 
@@ -2800,16 +2821,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 except Exception as e:
                     _LOGGER.warning("Yearly seeding from statistics failed (will retry): %s", e)
 
-            # Step 9c: Calculate battery health metrics
+            # Step 9c: Calculate battery health metrics. #593 — a configured
+            # HARDWARE lifetime-cycle sensor is preferred over the throughput
+            # estimate (which only counts what SEM has seen since install and
+            # can't match the manufacturer's counter, e.g. Sonnenbatterie 249 vs
+            # SEM 165). Resolution + parse extracted to a pure helper for test.
             battery_capacity = self.battery_capacity_kwh
+            hw_state = None
+            # #593 — resolution order: manual override → autodetected cycle
+            # sensor on the battery device (Sonnen/Huawei get it free) →
+            # throughput estimate below. Manual wins; autodetect is primary.
+            cycles_sensor = self.config.get("battery_cycles_sensor")
+            if not cycles_sensor:
+                _ed = self._energy_dashboard_config
+                _anchor = (
+                    self.config.get("battery_power_sensor")
+                    or (getattr(_ed, "battery_power", None) if _ed else None)
+                    or (getattr(_ed, "battery_soc", None) if _ed else None)
+                )
+                cycles_sensor = self._sensor_reader.detect_battery_cycles_sensor(_anchor)
+            if cycles_sensor:
+                _st = self.hass.states.get(cycles_sensor)
+                hw_state = _st.state if _st is not None else None
+            throughput_cycles = None
             if battery_capacity > 0:
                 lifetime_charge = self._energy_calculator._get_lifetime("battery_charge")
                 lifetime_discharge = self._energy_calculator._get_lifetime("battery_discharge")
-                total_throughput = (lifetime_charge + lifetime_discharge) / 2
-                power.battery_cycles_estimated = round(total_throughput / battery_capacity, 1)
-                # Estimate health: assume 0.02% degradation per cycle (typical Li-ion)
-                degradation = min(30, power.battery_cycles_estimated * 0.02)
-                power.battery_health_score = round(100 - degradation, 1)
+                throughput_cycles = round(
+                    (lifetime_charge + lifetime_discharge) / 2 / battery_capacity, 1
+                )
+            cycles, health = self._resolve_battery_cycles(hw_state, throughput_cycles)
+            if cycles is not None:
+                power.battery_cycles_estimated = cycles
+                power.battery_health_score = health
 
             # Steps 10–10.5: Analytics phases (extracted for readability, #29)
             forecast_data, tracker_data, tariff_data, surplus_data, \
