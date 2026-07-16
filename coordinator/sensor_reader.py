@@ -1525,7 +1525,16 @@ class SensorReader:
         # by inverter (multi-inverter installs only — single-inverter
         # leaves the dict empty and falls back to readings.solar_power).
         from .charger_types import InverterPower
-        if len(ed.solar_power_list) > 1:
+        if self.config.solar_power_sensor:
+            # #592 — explicit SEM solar power override wins (sibling of the #597
+            # battery override). On energy-only installs the Energy Dashboard
+            # exposes solar ENERGY only, so ``ed.solar_power`` is None and the
+            # Home balance read solar=0 (→ Home clamped to 0); the override lets
+            # the user supply a real solar power sensor. Same fix as battery.
+            readings.solar_power = self._read_sensor(
+                self.config.solar_power_sensor, "solar"
+            )
+        elif len(ed.solar_power_list) > 1:
             total = 0.0
             for entity in ed.solar_power_list:
                 w = self._read_sensor(entity, "solar")
