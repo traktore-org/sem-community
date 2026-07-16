@@ -102,6 +102,25 @@ makes the WebKit-broken reference form unrepresentable in card source. Refs #591
 `<use>`/`<textPath>`/gradients, `xlink:` assumptions) can still bite — sweep them if a new
 "works everywhere but iOS" card bug appears, and widen the guard.
 
+### 10. Power-derive keyword gap (brand/locale naming not in the include list) — PARTIAL
+**Symptom:** a source's real-time power reads 0/null forever while its energy counters are fine
+(`batt:pwr=none` in `diag_ed_config`, yet the brand's power sensor exists and is valid) — SEM never
+resolves the power entity, so every derived flow for that source is silently 0. **Root shape:** when
+the Energy Dashboard has no `stat_rate` power link, SEM *derives* power from the energy sensor's
+device via a hardcoded English keyword substring list (`_POWER_DERIVE_RULES`); any brand/locale
+whose entity_id isn't in the list is invisible, and unlike SOC there's *no manual override* to fall
+back on. The device+`device_class=power` scoping keeps it from being a pure "match anything" rule, so
+the list must actually name each brand's slug (EN **and** localized). **Where it lives:**
+`ha_energy_reader.py::_POWER_DERIVE_RULES` — the `solar`, `grid` **and** `battery` include lists (same
+shape as the multilingual `_DISCHARGE_CONTROL_PATTERNS` in `hardware_detection.py`). **Closure:**
+multilingual keyword coverage per brand — #597 added Huawei's `charge_discharge_power` (EN) /
+`lade_entladeleistung` (DE) to the battery list. **Guard:** the brand-naming table test
+(`test_battery_power_derives_for_huawei_naming`) makes an un-covered brand slug fail CI.
+**Open siblings:** the `solar` list (`pv_power`/`solar_power`/`production_power`) and `grid` list are
+still English-shaped — Huawei's `inverter_input_power` / German PV slugs are *not* covered; sweep them
+if a Huawei/localized user reports solar or grid reading 0 (grid already matches via `power_meter`).
+Refs #250 #274 #597.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
