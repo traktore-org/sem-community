@@ -1036,6 +1036,50 @@ class TestBatteryPowerConfigPipeline:
 
         assert power.battery_power == -1200  # flipped → discharge
 
+    def test_battery_power_sensor_override_on_ed_path(self):
+        """#597 — the SEM ``battery_power_sensor`` override must be honoured on
+        the Energy-Dashboard path (it was only wired on the legacy path, while
+        ``battery_soc_sensor`` was wired on both). Repro: a Huawei install whose
+        Energy Dashboard exposes battery charge/discharge ENERGY only
+        (``batt:pwr=none``); the user set ``battery_power_sensor`` to a real
+        combined power sensor → SEM read null. Now it reads the override."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power=None,          # batt:pwr=none — ED exposes energy only
+        )
+        states = {
+            "sensor.pv": _state(4000),
+            "sensor.grid": _state(0),
+            "sensor.batt_override": _state(-1800),  # −1800 W = discharging (SEM)
+        }
+        reader = _make_reader_with_states(
+            hass, states, ed,
+            extra_config={"battery_power_sensor": "sensor.batt_override"},
+        )
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.battery_power == -1800  # override honoured, not null/0
+
+    def test_no_battery_power_override_still_null_when_ed_has_none(self):
+        """Guard the other side: with NO override and ``batt:pwr=none`` the
+        reader still reports 0 (unchanged behaviour — the fix only adds the
+        override branch, it doesn't fabricate a value)."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power=None,
+        )
+        states = {"sensor.pv": _state(4000), "sensor.grid": _state(0)}
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.battery_power == 0
+
     def test_two_sensor_grid_power_config_pipeline(self):
         """#553 review B1 — declared two-sensor GRID pair must be consumed
         as export − import (manual-override semantics), not read as a
