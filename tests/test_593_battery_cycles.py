@@ -52,9 +52,11 @@ def test_health_degradation_capped_at_30pct():
 
 
 # ── the autodetect: find a cycle sensor on the battery device ──
-def _reader_with_device(anchor, device_entities, states):
+def _reader_with_device(monkeypatch, anchor, device_entities, states):
     """A SensorReader whose entity-registry resolves `anchor` to a device that
-    owns `device_entities`, with `states` mocked."""
+    owns `device_entities`, with `states` mocked. Uses ``monkeypatch`` so the
+    module-level ``er`` patches are RESTORED after the test (a raw assignment
+    would pollute the shared entity_registry module for every later test)."""
     from custom_components.solar_energy_management.coordinator.sensor_reader import (
         SensorReader,
     )
@@ -68,16 +70,16 @@ def _reader_with_device(anchor, device_entities, states):
     entries = [MagicMock(entity_id=e, domain="sensor") for e in device_entities]
     reg = MagicMock()
     reg.async_get = lambda eid: anchor_entry if eid == anchor else None
-    # patch the module-level entity_registry helpers this call uses
-    sr_mod.er.async_get = lambda _h: reg
-    sr_mod.er.async_entries_for_device = lambda _r, _d: entries
+    monkeypatch.setattr(sr_mod.er, "async_get", lambda _h: reg)
+    monkeypatch.setattr(sr_mod.er, "async_entries_for_device", lambda _r, _d: entries)
     return reader
 
 
-def test_autodetect_finds_cycles_sensor_on_battery_device():
+def test_autodetect_finds_cycles_sensor_on_battery_device(monkeypatch):
     st = MagicMock()
     st.state = "249"
     reader = _reader_with_device(
+        monkeypatch,
         anchor="sensor.sonnen_battery_power",
         device_entities=["sensor.sonnen_battery_power", "sensor.sonnen_battery_cycles"],
         states={"sensor.sonnen_battery_cycles": st},
@@ -86,8 +88,9 @@ def test_autodetect_finds_cycles_sensor_on_battery_device():
         "sensor.sonnen_battery_cycles"
 
 
-def test_autodetect_returns_none_when_no_cycle_sensor():
+def test_autodetect_returns_none_when_no_cycle_sensor(monkeypatch):
     reader = _reader_with_device(
+        monkeypatch,
         anchor="sensor.batt_power",
         device_entities=["sensor.batt_power", "sensor.batt_soc"],
         states={},
