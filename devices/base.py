@@ -1722,11 +1722,13 @@ class SetpointDevice(ControllableDevice):
         normal_setpoint: float = 21.0,
         boost_offset: float = 2.0,
         min_power_change_interval: float = 300.0,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass, device_id, name, priority,
             min_power_threshold or rated_power,
             entity_id, power_entity_id,
+            energy_entity_id=energy_entity_id,
         )
         self.rated_power = rated_power
         self.climate_entity_id = climate_entity_id

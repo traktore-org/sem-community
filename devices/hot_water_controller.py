@@ -67,6 +67,7 @@ class HotWaterController(SwitchDevice):
         min_on_time: int = 300,
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass=hass,
@@ -79,6 +80,7 @@ class HotWaterController(SwitchDevice):
             min_on_time=min_on_time,
             min_off_time=min_off_time,
             daily_min_runtime_sec=daily_min_runtime_sec,
+            energy_entity_id=energy_entity_id,  # #600 — DHW kWh counter → derived power
         )
         self.temperature_entity_id = temperature_entity_id
         self.max_temperature = max_temperature
