@@ -116,3 +116,73 @@ async def test_no_guard_when_set_energy_unsupported(keba, mock_hass):
     await keba.stop_session()
     assert not _calls(mock_hass, "set_energy")
     assert _calls(mock_hass, "disable")
+
+
+# ─── #553 follow-up: verify-and-reassert (lost UDP release) ──────────
+# PROD 2026-07-17: start_session's one-shot ``set_energy 0`` release was
+# lost (KEBA is UDP) — the box kept its armed 1 kWh target and terminated
+# every session within seconds (session_energy 9.1 ≥ target 1.0) while SEM
+# wrote currents into sessions the box kept killing. The guard register
+# must be RECONCILED on every charge command, not trusted from one write.
+
+
+def _et_state(value):
+    st = MagicMock()
+    st.state = str(value)
+    return st
+
+
+@pytest.mark.asyncio
+async def test_guard_release_reasserted_when_flag_armed(keba, mock_hass):
+    keba._idle_guard_armed = True   # SEM believes armed (release lost)
+    await keba.ensure_energy_guard_released()
+    data = [
+        c.args[2] for c in mock_hass.services.async_call.call_args_list
+        if len(c.args) >= 3 and c.args[1] == "set_energy"
+    ]
+    assert data == [{"energy": 0}]
+    assert keba._idle_guard_armed is False
+
+
+@pytest.mark.asyncio
+async def test_guard_release_reasserted_when_box_sensor_says_armed(keba, mock_hass):
+    """SEM's flag is clear (start_session ran) but the BOX still reports an
+    armed target — the exact lost-datagram shape. The sensor is the truth."""
+    keba._idle_guard_armed = False
+    keba._energy_target_sensor_cache = "sensor.keba_p30_energy_target"
+    mock_hass.states.get = MagicMock(return_value=_et_state(1.0))
+    await keba.ensure_energy_guard_released()
+    data = [
+        c.args[2] for c in mock_hass.services.async_call.call_args_list
+        if len(c.args) >= 3 and c.args[1] == "set_energy"
+    ]
+    assert data == [{"energy": 0}]
+
+
+@pytest.mark.asyncio
+async def test_guard_release_noop_when_clear(keba, mock_hass):
+    """Common case: flag clear + box target 0 → no service call at all."""
+    keba._idle_guard_armed = False
+    keba._energy_target_sensor_cache = "sensor.keba_p30_energy_target"
+    mock_hass.states.get = MagicMock(return_value=_et_state(0.0))
+    await keba.ensure_energy_guard_released()
+    assert not _calls(mock_hass, "set_energy")
+
+
+@pytest.mark.asyncio
+async def test_adapter_charge_command_reconciles_guard(keba, mock_hass):
+    """KebaAdapter.command_current must run the guard reconcile even on a
+    session it believes is already open (_session_active True) — that was
+    the burst-loop window: WRITEs only, no start, guard never re-released."""
+    from custom_components.solar_energy_management.coordinator.charger_adapters import (
+        adapter_for,
+    )
+    keba._session_active = True     # reconciler in WRITE-only mode
+    keba._idle_guard_armed = True   # box still armed
+    adapter = adapter_for(keba)
+    await adapter.command_current(10)
+    data = [
+        c.args[2] for c in mock_hass.services.async_call.call_args_list
+        if len(c.args) >= 3 and c.args[1] == "set_energy"
+    ]
+    assert {"energy": 0} in data, "charge command must release a stale guard"

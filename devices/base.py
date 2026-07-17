@@ -1473,6 +1473,83 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Failed to set charger failsafe: %s", e)
 
+    def _energy_target_sensor_id(self) -> Optional[str]:
+        """Entity id of the box's OWN energy-target register sensor, if the
+        charger integration exposes one (KEBA: ``sensor.*_energy_target``).
+
+        Discovered once via the entity registry as a sibling of the configured
+        power sensor's device — same strategy as the SOC / temperature sibling
+        discovery. None when undiscoverable (non-KEBA, no registry entry)."""
+        cached = getattr(self, "_energy_target_sensor_cache", "?")
+        if cached != "?":
+            return cached
+        found = None
+        try:
+            from homeassistant.helpers import entity_registry as er
+            anchor = self.power_entity_id or self.current_sensor_entity_id
+            if anchor and self.hass is not None:
+                reg = er.async_get(self.hass)
+                ent = reg.async_get(anchor)
+                if ent is not None and ent.device_id:
+                    for other in er.async_entries_for_device(reg, ent.device_id):
+                        if other.entity_id.endswith("energy_target"):
+                            found = other.entity_id
+                            break
+        except Exception:  # noqa: BLE001 — discovery must never break a command
+            found = None
+        self._energy_target_sensor_cache = found
+        return found
+
+    async def ensure_energy_guard_released(self) -> None:
+        """(#553 follow-up) Verify the box actually RELEASED the runaway-cap
+        energy target — and re-send the release if not.
+
+        ``start_session`` sends ``set_energy 0`` exactly once, fire-and-forget.
+        KEBA speaks lossy UDP: PROD 2026-07-17 showed the release datagram
+        dropped — the box kept its armed 1 kWh target, terminated every new
+        session within seconds (session_energy 9.1 ≥ target 1.0), and the car
+        burst-cycled for 25 minutes while SEM faithfully wrote currents into a
+        session the box kept killing. SEM reconciles the *current* every
+        cycle; the guard register must be reconciled the same way, not
+        trusted from one write.
+
+        Checks SEM's own armed flag AND (when discoverable) the box's
+        ``energy_target`` sensor; either says armed → re-send ``set_energy 0``.
+        Cheap no-op in the common case (flag False + sensor 0/absent).
+        """
+        armed = bool(getattr(self, "_idle_guard_armed", False))
+        if not armed:
+            sensor = self._energy_target_sensor_id()
+            if sensor:
+                st = self.hass.states.get(sensor) if self.hass else None
+                if st is not None and st.state not in (
+                    "unknown", "unavailable", None, "",
+                ):
+                    try:
+                        armed = float(st.state) > 0
+                    except (ValueError, TypeError):
+                        armed = False
+        if not armed:
+            return
+        domain = (self.charger_service or "").split(".", 1)[0]
+        if not (domain and self.hass.services.has_service(domain, "set_energy")):
+            return
+        try:
+            await self.hass.services.async_call(
+                domain, "set_energy", {"energy": 0}, blocking=True,
+            )
+            self._idle_guard_armed = False
+            _LOGGER.info(
+                "%s: released a STALE energy-target guard the box still held "
+                "(lost/unapplied set_energy release, #553) — charging can "
+                "proceed unbounded again", self.name,
+            )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "%s: stale energy-target guard release failed (%s) — the box "
+                "may keep ending sessions at the runaway cap", self.name, e,
+            )
+
     async def start_session(self, energy_target_kwh: float = 0) -> None:
         """Start a charging session.
 
