@@ -1493,6 +1493,39 @@ class TestChargerControlPipeline:
         val = reader._read_sensor("sensor.wallbox_power", "ev")
         assert val == 4500  # Already in W
 
+    def test_single_charger_in_list_ev_power_aggregates(self):
+        """A SINGLE charger defined through the config-flow ``ev_chargers``
+        list (power sensor nested inside the entry, no top-level sensor) must
+        still populate fleet ``ev_power``.
+
+        Regression: the fleet-sum used ``len(ev_chargers) > 1``, so a single
+        charger-in-list fell through to the empty legacy top-level sensor and
+        read ev_power=0. The EV's real draw then masqueraded as a home
+        consumption spike and the surplus budget oscillated (charger flap).
+        """
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar",
+            grid_import_power="sensor.grid",
+        )
+        states = {
+            "sensor.solar": _state(9000),
+            "sensor.grid": _state(7000),
+            "sensor.keba_p30_charging_power": _state(5.28, unit="kW",
+                                                     device_class="power"),
+        }
+        reader = _make_reader_with_states(hass, states, ed, extra_config={
+            "ev_chargers": [{
+                "id": "ev_charger",
+                "name": "EV Charger",
+                "ev_charging_power_sensor": "sensor.keba_p30_charging_power",
+            }],
+        })
+        power = reader.read_power()
+        # 5.28 kW → 5280 W, summed for the single charger (not 0).
+        assert power.ev_power == pytest.approx(5280, abs=1)
+        assert power.ev_power_per_charger.get("ev_charger") == pytest.approx(5280, abs=1)
+
     @pytest.mark.asyncio
     async def test_number_entity_with_all_charger_brands(self):
         """All number-entity chargers use the same control path."""

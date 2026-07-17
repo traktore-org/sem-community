@@ -1825,7 +1825,17 @@ class SensorReader:
         # ``.get(cid)`` rather than ``[cid]`` — a charger that's
         # configured but has no power sensor will be silently absent.
         ev_chargers = self._raw_config.get("ev_chargers", [])
-        if len(ev_chargers) > 1:
+        # Sum the per-charger power sensors whenever ANY charger carries a
+        # nested ``ev_charging_power_sensor`` — including a SINGLE charger
+        # defined through the modern config-flow ``ev_chargers`` list (its
+        # sensor lives inside the list entry, not at top level). The old
+        # ``len > 1`` guard skipped the single-charger-in-list case, so its
+        # fleet ``ev_power`` fell through to the (empty) legacy top-level
+        # sensor and read 0 — the EV's own draw then masqueraded as a home
+        # consumption spike and the surplus budget oscillated (flap). Falls
+        # through to ED / top-level only when NO charger has a nested sensor,
+        # so legacy single-charger configs keep working.
+        if any(c.get("ev_charging_power_sensor") for c in ev_chargers):
             total_ev = 0.0
             for charger_cfg in ev_chargers:
                 cid = charger_cfg.get("id")
@@ -2617,9 +2627,12 @@ class SensorReader:
         # Inverter temperature (#564: configured sensor, else device sibling)
         self._read_inverter_temperature(readings)
 
-        # EV power — sum all chargers if multi-charger (#193)
+        # EV power — sum the per-charger sensors whenever ANY charger has a
+        # nested one (incl. a single config-flow charger); see the primary
+        # block above for why ``len > 1`` was wrong (single-charger-in-list
+        # read ev_power=0 → false home spike → surplus-budget flap).
         ev_chargers = self._raw_config.get("ev_chargers", [])
-        if len(ev_chargers) > 1:
+        if any(c.get("ev_charging_power_sensor") for c in ev_chargers):
             total_ev = 0.0
             for charger_cfg in ev_chargers:
                 cps = charger_cfg.get("ev_charging_power_sensor")
