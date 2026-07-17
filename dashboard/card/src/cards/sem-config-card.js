@@ -953,8 +953,9 @@ class SEMConfigCard extends SEMLitBase {
                         { min: 0, max: 10, step: 0.5, unit: '°C', default: 2.0 }, opts, 'config_help_hp_boost_offset')}
                 ${this._renderOptionSlider('heat_pump_max_setpoint', 'config_hp_max_setpoint',
                     { min: 30, max: 80, step: 1, unit: '°C', default: 55 }, opts, 'config_help_hp_max_setpoint')}
-                ${this._renderOptionSlider('heat_pump_priority', 'config_hp_priority',
-                    { min: 1, max: 10, step: 1, unit: '', default: 4 }, opts, 'config_help_hp_priority')}
+                ${/* #602/#576 — heat_pump_priority slider retired: the heat pump
+                      is a draggable row in the device-priority list now, so its
+                      position IS its priority (single axis, no parallel knob). */ ''}
             </div>
         `;
     }
@@ -1043,8 +1044,8 @@ class SEMConfigCard extends SEMLitBase {
                     { min: 55, max: 80, step: 1, unit: '°C', default: 65 }, opts, 'config_help_hw_legionella_target')}
                 ${this._renderOptionSlider('hot_water_minimum_temperature', 'config_hw_min_temperature',
                     { min: 30, max: 55, step: 1, unit: '°C', default: 40 }, opts, 'config_help_hw_min_temperature')}
-                ${this._renderOptionSlider('hot_water_priority', 'config_hw_priority',
-                    { min: 1, max: 10, step: 1, unit: '', default: 5 }, opts, 'config_help_hw_priority')}
+                ${/* #602/#576 — hot_water_priority slider retired: hot water is a
+                      draggable row in the device-priority list now (single axis). */ ''}
             </div>
         `;
     }

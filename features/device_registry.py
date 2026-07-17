@@ -157,6 +157,10 @@ class UnifiedDeviceRegistry:
         # the reclaim gate all share ONE identity. The ED ``is_ev`` naming
         # guess is suppressed when chargers are configured (no double-add).
         self._ev_charger_rows: List[Dict[str, Any]] = []
+        # (#602/#576) heat-pump / hot-water controllers as first-class draggable
+        # rows in the ONE priority list — so their surplus priority is the drag
+        # position, not a standalone heat_pump_priority/hot_water_priority knob.
+        self._load_controller_rows: List[Dict[str, Any]] = []
         # (#559 Phase 0) Devices registered via the register_surplus_device
         # service. Pre-fix these lived only in the surplus controller's
         # memory and silently vanished on every restart.
@@ -793,6 +797,22 @@ class UnifiedDeviceRegistry:
             if cid:
                 result[cid] = self._ev_charger_row(charger)
 
+        # (#602/#576) heat-pump / hot-water controllers — first-class draggable
+        # rows so their surplus priority is the drag position, not a standalone
+        # knob. Drop any discovered/individual-device duplicate of the same
+        # physical unit (matched by power/switch entity) so it appears once.
+        _lc_ents = self._load_controller_entities()
+        if _lc_ents:
+            result = {
+                k: v for k, v in result.items()
+                if not (v.get("power_entity") in _lc_ents
+                        or v.get("switch_entity") in _lc_ents)
+            }
+        for row in self._load_controller_rows:
+            lid = row.get("id")
+            if lid and lid not in result:
+                result[lid] = self._load_controller_row(row)
+
         # (#576) the home battery — a draggable sink in the same priority list.
         # Loads ABOVE it reclaim the power that would charge the battery; loads
         # BELOW it yield. It's a passive device (no on/off, no mode): its only
@@ -972,6 +992,50 @@ class UnifiedDeviceRegistry:
             "sem_owned": False,
             "connected": bool(charger.get("connected", False)),
             "is_ev": True,
+        }
+
+    def set_load_controllers(self, rows: List[Dict[str, Any]]) -> None:
+        """(#602/#576) The coordinator hands its registered heat-pump / hot-water
+        controllers here each cycle so they appear in the ONE priority list,
+        keyed by their control id (``heat_pump`` / ``hot_water``). Each dict:
+        ``{id, name, priority_seed, power_entity, energy_sensor, switch_entity,
+        current_power_w, is_on, rated_power_w}``. The drag position (or the
+        seed) is their surplus priority — no separate priority knob."""
+        self._load_controller_rows = list(rows or [])
+
+    def _load_controller_entities(self) -> set:
+        """Power/switch entities of the HP/HW controllers — used to suppress a
+        duplicate discovered/individual-device row for the same physical unit."""
+        ents = set()
+        for r in self._load_controller_rows:
+            for k in ("power_entity", "switch_entity"):
+                if r.get(k):
+                    ents.add(r[k])
+        return ents
+
+    def _load_controller_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Priority-list payload for one HP/HW controller, keyed by its control
+        id, with its drag-set (or seeded) priority."""
+        did = row["id"]
+        power_w = float(row.get("current_power_w", 0.0) or 0.0)
+        return {
+            "name": row.get("name", did),
+            "priority": self.priority_for(
+                did, seed=int(row.get("priority_seed", 5))),
+            "is_controllable": True,
+            "is_critical": False,
+            "power_rating": round(float(row.get("rated_power_w", 1000) or 1000)),
+            "power_entity": row.get("power_entity"),
+            "energy_sensor": row.get("energy_sensor"),
+            "switch_entity": row.get("switch_entity"),
+            "is_available": True,
+            "is_on": bool(row.get("is_on", False)),
+            "current_power": round(power_w),
+            "device_type": did,  # "heat_pump" / "hot_water"
+            "has_manual_mapping": False,
+            "control": {"type": "switch"},
+            "control_mode": "surplus",
+            "sem_owned": False,
         }
 
     def _goal_payload(self, device_id: str) -> Dict[str, Any]:
