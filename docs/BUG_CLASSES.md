@@ -150,6 +150,11 @@ fields if a new "these two numbers contradict each other" report appears — e.g
   sign-audit debounce vs the trace streak; the CounterCorrelationAudit dedup). Unify into one.
 - **Parallel systems that are one concept** — two things modeled separately that should be one
   (e.g. arbitrage folded INTO the scheduler; the canonical `EVBudget`; the ONE priority list).
+  *Sub-shape — a parallel priority/ordering knob that clobbers the unified list:* a standalone
+  `*_priority` config re-set onto a device's `.priority` every cycle, killing its drag position
+  (`heat_pump_priority`/`hot_water_priority` at coordinator 6439/6464 — #602/#576; the retired
+  `ev_shed_priority`/#514 EV steppers were the same). **Sweep:** grep every `.priority =` — it must
+  read `priority_for(id, seed=config)`, never assign the config directly. Adjacent leftovers: #604.
 - **Spec-vs-reality gap** — something *designed but never wired* (e.g. the layered-trace health
   signal was a spec + a method but never an entity until #590). Verify the assumed thing *exists*.
 - **Marginal refactor (do NOT force)** — a dedup that needs a shim or wide test churn for a
