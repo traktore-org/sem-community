@@ -221,6 +221,10 @@ class DashboardGenerator:
             # Substitute weather entity (template uses weather.home as placeholder)
             self._substitute_weather_entity(template)
 
+            # #595 — drop the EV tab entirely on installs with no EV charger, so
+            # battery/solar-only setups don't get a cluttered empty EV section.
+            self._prune_ev_view_if_no_charger(template)
+
             # Override template title/path with user preferences
             template["title"] = dashboard_title
             template["path"] = dashboard_path
@@ -234,6 +238,27 @@ class DashboardGenerator:
         else:
             _LOGGER.error("Dashboard template not found at %s", self._dashboard_template_path)
             raise FileNotFoundError(f"Dashboard template not found: {self._dashboard_template_path}")
+
+    def _prune_ev_view_if_no_charger(self, template: Dict[str, Any]) -> None:
+        """#595 — remove the whole EV tab when no EV charger is configured.
+
+        The EV cards live only on the ``ev`` view; a battery/solar-only install
+        has nothing to show there, so the tab was pure clutter. Mirrors the
+        ``has_ev`` test the K-Flow card already uses."""
+        from ..const import DOMAIN
+
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            return
+        full = {**entries[0].data, **entries[0].options}
+        has_ev = bool(full.get("ev_chargers") or full.get("ev_charging_power_sensor"))
+        if has_ev:
+            return
+        views = template.get("views", [])
+        kept = [v for v in views if v.get("path") != "ev"]
+        if len(kept) != len(views):
+            template["views"] = kept
+            _LOGGER.info("#595 — no EV charger configured; removed the EV tab")
 
     async def _update_peak_load_management_view(self, view: Dict[str, Any]) -> None:
         """Update peak load management view with dynamic device cards.
