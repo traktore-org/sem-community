@@ -11,7 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.5-beta.10] — 16.07.2026
+# [1.7.5-beta.11] — 17.07.2026
+
+> ⚠️ **beta.10 was recalled** — it shipped with the single-charger EV power regression fixed
+> below. If you installed beta.10, update to this release.
+
+### 🐛 Fixes (both root-caused live on real hardware)
+
+- ⚡ **EV power read 0 for a single charger — start/stop flap on the real wallbox** — the fleet
+  EV-power aggregation only summed per-charger power sensors for *multi*-charger setups
+  (`len > 1`); a single charger configured through the modern `ev_chargers` list fell through to
+  legacy fallbacks that resolve to nothing. SEM was blind to the car's draw: the EV's kW showed up
+  as a phantom *home consumption spike*, the surplus budget oscillated, and the "car not drawing"
+  start-escalation churned the contactor every ~10 s. Now the per-charger sum runs whenever any
+  charger carries a nested power sensor (1 or N chargers), feeding both the fleet total and the
+  per-charger view.
+- 🔌 **KEBA: a lost UDP release left the box killing every session** (#553 follow-up) — the ~1 kWh
+  runaway-cap energy target armed at session stop is released with a single fire-and-forget
+  `set_energy 0`; KEBA speaks lossy UDP, and a dropped release left the box terminating every new
+  charge within seconds (session energy already ≥ target) while SEM kept writing currents into
+  sessions the box kept killing. The guard register is now **reconciled on every charge command** —
+  SEM's own armed flag and the box's `energy_target` sensor are checked, and the release is
+  re-sent until it takes.
+
+### ✨ Dashboard & device priority
+
+- 🚗 **EV tab hides when no charger is configured** (#595) — installs without an EV charger no
+  longer get an empty EV dashboard tab.
+- 🔥 **Heat pump + hot water are draggable rows in the ONE priority list** (#602/#576) — their
+  surplus priority is now their position in the device-priority list (seeded from the old config
+  values on upgrade), and the standalone Heat-Pump/Hot-Water priority sliders are retired. Their
+  rated power is settable on the dashboard Config tab.
+
+# [1.7.5-beta.10] — 16.07.2026 *(recalled)*
 
 ### ✨ Sensor-input flexibility (autodetect-first, manual override as fallback)
 
