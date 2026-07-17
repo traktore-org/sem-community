@@ -35,7 +35,7 @@
           "ev_total_energy_sensor": "可选。输送给车辆的累计电量 kWh 计数器。用于准确追踪充电会话。"
         }
       },
-	  "hardware": {
+      "hardware": {
         "title": "硬件",
         "description": "最后一步！设置您的 **峰值功率限制** —— 即您的电网合同允许的最大 kW，超过该值后 SEM 将开始减载。SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置都将使用安全默认值，您稍后可以在 SEM 看板全新的 **配置** 标签页中进行调整 —— 包括电动汽车充电桩、热泵、电价以及电池分区。",
         "data": {
@@ -51,7 +51,7 @@
           "diagram_style": "选择在“主页”标签页上使用哪种系统拓扑图卡片。“SEM” 使用内置的动效拓扑图。“K-Flow” 使用 K-Flow HACS 卡片（必须单独安装）。"
         }
       },
-	  "reconfigure": {
+      "reconfigure": {
         "title": "重新配置太阳能消纳管理 (SEM)",
         "description": "更新您的电动汽车充电桩和通知设置",
         "data": {
@@ -68,7 +68,7 @@
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "ev_target_soc": "电动汽车目标电量 (%)"
         },
-		"data_description": {
+        "data_description": {
           "ev_connected_sensor": "报告车辆插头当前是否已连接的二进制传感器。",
           "ev_charging_sensor": "报告电动汽车当前是否正在充电的二进制传感器。",
           "ev_charging_power_sensor": "报告当前输送至车辆的实时功率数值传感器 (W)。",
@@ -84,7 +84,7 @@
         }
       }
     },
-	"error": {
+    "error": {
       "unknown": "发生了未知错误。请重试。",
       "entity_not_found": "未找到实体。请确认该实体 ID 确实存在。",
       "incorrect_device_class": "实体 {entity_id} 的设备类别 (device_class) 为错误的 {actual}，应为 {expected}。请选择具有正确设备类别的传感器。",
@@ -125,7 +125,7 @@
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)"
         },
-		"data_description": {
+        "data_description": {
           "ev_connected_sensor": "报告车辆插头当前是否已连接的二进制传感器。",
           "ev_charging_sensor": "报告电动汽车当前是否正在充电的二进制传感器。",
           "ev_charging_power_sensor": "报告当前输送至车辆的实时功率数值传感器 (W)。",
@@ -141,7 +141,7 @@
           "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。"
         }
       },
-	  "settings": {
+      "settings": {
         "title": "SEM 优化设置",
         "description": "更新您的 SEM 优化参数",
         "data": {
@@ -171,7 +171,7 @@
           "legionella_interval_hours": "消毒周期最大间隔时间 (小时)",
           "diagram_style": "系统图样式"
         },
-		"data_description": {
+        "data_description": {
           "update_interval": "协调器读取传感器和调整硬件的频率。10 秒可提供最准确的电量统计；超过 30 秒的值会导致电量少计。范围：10–60 秒。",
           "battery_priority_soc": "区域 1 → 区域 2 的边界。低于此电量 (SOC) 时，所有太阳能都将优先供给蓄电池，且电动汽车充电将被锁定。默认值为 30%。四区域策略（见架构文档）需要将此值设为低位 (5–60%) —— 请勿与旧版 3 区域含义混淆（旧版中此值是一个高目标值）。",
           "battery_buffer_soc": "区域 2 → 区域 3 的边界。高于此电量 (SOC) 时，蓄电池可以放电以弥补太阳能不足，从而为电动汽车充电。默认值为 70%。",
@@ -196,7 +196,7 @@
           "legionella_interval_hours": "在 SEM 强制启动加热之前，两次军团菌消毒周期之间的最大间隔时间（小时）。"
         }
       },
-	  "settings_ev": {
+      "settings_ev": {
         "title": "电动汽车充电与太阳能",
         "description": "配置电动汽车充电目标和太阳能阈值。",
         "data": {
@@ -228,7 +228,7 @@
           "grid_import_power_entity": "电网购电功率传感器（可选，自动检测）",
           "grid_export_power_entity": "电网供电功率传感器（可选，自动检测）"
         },
-		"data_description": {
+        "data_description": {
           "tariff_mode": "选择“静态”代表固定费率，“动态”代表实时计价，或选择“日历”代表分时电价计划。",
           "dynamic_tariff_entity": "提供当前购电电价的传感器。可自动检测来自 Tibber、Nordpool 等的数据。",
           "dynamic_forecast_entity": "可选。包含每小时电价预测的传感器，用于智能调度。",
@@ -254,7 +254,7 @@
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "ev_target_soc": "电动汽车目标电量 (%)"
         },
-		"data_description": {
+        "data_description": {
           "load_management_enabled": "启用/禁用 SEM 的自动减载功能，以保持在您的电网峰值限制以下。",
           "target_peak_limit": "在 SEM 开始切除可控负荷之前的最大电网功率 (kW)。",
           "warning_peak_level": "SEM 在采取行动前发出警告的功率水平 (kW)。",
@@ -291,7 +291,7 @@
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "ev_target_soc": "电动汽车目标电量 (%)"
         },
-		"data_description": {
+        "data_description": {
           "enable_charger_notifications": "启用/禁用充电桩状态卡片上显示的常驻通知条。",
           "enable_mobile_notifications": "启用/禁用发送到您移动设备的推送通知。",
           "mobile_notification_service": "用于移动端推送的 HA 通知服务 (例如 notify.mobile_app_your_phone)。",
@@ -324,7 +324,7 @@
           "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
         }
       },
-	  "ev_charger_edit": {
+      "ev_charger_edit": {
         "title": "编辑电动汽车充电桩",
         "description": "更新此充电桩的传感器映射和优先级。",
         "data": {
@@ -352,7 +352,7 @@
           "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。"
         }
       },
-	  "ev_charger_add": {
+      "ev_charger_add": {
         "title": "添加电动汽车充电桩",
         "description": "配置一个新的电动汽车充电桩。SEM 将根据优先级在多个充电桩之间分配富余的绿电功率。\n\n对于电流控制，请在数值实体 (Wallbox, go-eCharger) 或服务调用 (KEBA) 中【二选一】进行配置，将另一个留空即可。",
         "data": {
@@ -380,7 +380,6 @@
           "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。"
         }
       },
-
       "pv_naming": {
         "title": "命名您的光伏组串",
         "description": "为每个太阳能光伏组串命名（例如：东侧 / 南侧 / 西侧）。哪个插槽对应哪组面板 — 其编号遵循您“能源看板”中的太阳能列表顺序，而非罗盘方向：\n\n{mapping}\n\n留空则保持默认名称 (PV1/PV2/…)。",
@@ -933,9 +932,12 @@
       },
       "heat_pump_registration_status": {
         "name": "热泵注册状态"
+      },
+      "diag_battery_sign": {
+        "name": "蓄电池正负符号惯例"
       }
     },
-	"binary_sensor": {
+    "binary_sensor": {
       "ev_connected": {
         "name": "电动汽车已连接"
       },
@@ -971,6 +973,9 @@
       },
       "utility_signal_active": {
         "name": "电网调度信号激活"
+      },
+      "layer_mismatch": {
+        "name": "控制层级不一致"
       }
     },
     "switch": {
@@ -1177,6 +1182,10 @@
     "keba_failsafe_active": {
       "title": "KEBA Failsafe（故障安全保护机制）已启用 — 需将其禁用以获得稳定充电",
       "description": "您的 KEBA 充电桩 \"{name}\" 启用了其内部的 failsafe 看门狗保护。SEM（类似于 evcc）在运行时不再依赖此看门狗，但如果它保持开启状态，充电桩在收到控制指令的间隙会频繁将供给电流降至其 6 A 的默认回退值，这会导致充电过程不断震荡 (6A ↔ 9A)，并导致某些车型（例如雷诺 Zoe）无法稳定充电。\n\nHome Assistant 内置的 KEBA 服务无法关闭该看门狗（不接受将超时时间设置为 0），因此您需要直接在充电桩端禁用它：将 **failsafe timeout 设置为 0**（可以通过 KEBA UDP 发送指令 `failsafe 0 0 1`，或使用 KEBA 官方的 KeContact 工具）。请参阅相关配置指南获取分步说明。一旦关闭该机制，此修复建议将自动清除。"
+    },
+    "sensor_stale": {
+      "title": "传感器数据冻结",
+      "description": "传感器 `{entity_id}`（{friendly_name}）仍显示为可用，但已超过 {minutes} 分钟未更新数据，疑似冻结。SEM 仍在能量平衡和符号检测中使用其过期数值，相关计算结果可能失真。请检查该传感器所属的集成/设备（重新加载集成或检查设备连接）。"
     }
   }
 }
