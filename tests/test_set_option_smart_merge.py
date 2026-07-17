@@ -265,9 +265,16 @@ class TestStructuralKeysVisibility:
         """
         expected = {
             "battery_soc_sensor",
+            # #592/#597 power-sensor overrides (read at SensorReader construction)
+            "solar_production_sensor", "battery_power_sensor", "grid_power_sensor",
+            # #593 hardware battery cycles sensor
+            "battery_cycles_sensor",
             "heat_pump_relay1_entity", "heat_pump_relay2_entity",
             "heat_pump_climate_entity", "heat_pump_power_sensor",
             "heat_pump_temperature_sensor",
+            # #600 load-device energy sensors + #602 rated power
+            "heat_pump_energy_sensor", "hot_water_energy_sensor",
+            "heat_pump_rated_power", "hot_water_rated_power",
             "heat_pump_invert_sg_ready",
             "hot_water_entity", "hot_water_power_sensor",
             "hot_water_temperature_sensor",

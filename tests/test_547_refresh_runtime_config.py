@@ -77,7 +77,10 @@ class TestRefreshRuntimeConfig:
         assert hp.max_setpoint == 60.0
         assert hp.force_on_threshold == 4000.0
         assert hp.invert_sg_ready is True
-        assert hp.priority == 7
+        # #602/#576 — priority is the DRAG-LIST position now (resolved by
+        # refresh_direct_device_priorities), no longer clobbered from
+        # heat_pump_priority here; it stays at the registration value.
+        assert hp.priority == 1
 
     def test_hot_water_targets_pushed_timer_preserved(self):
         # The legionella timer state must NOT be reset by the refresh.
@@ -94,7 +97,9 @@ class TestRefreshRuntimeConfig:
         assert hw.max_temperature == 65.0
         assert hw.solar_target_temp == 52.0
         assert hw.legionella_interval_hours == 200.0
-        assert hw.priority == 5
+        # #602/#576 — priority is the drag-list position now, not clobbered from
+        # hot_water_priority here; stays at the registration value.
+        assert hw.priority == 1
         # Timer state untouched (refresh, not rebuild).
         assert hw.hours_since_legionella == 99.0
         assert hw._legionella_cycle_active is True
