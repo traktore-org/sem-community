@@ -35,6 +35,7 @@ const SECTIONS = [
     },
     {
         id: 'ev_chargers',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md',
         icon: 'mdi:ev-station',
         color: '#5BC8D8',
         titleKey: 'config_section_ev_chargers',
@@ -42,6 +43,7 @@ const SECTIONS = [
     },
     {
         id: 'battery_zones',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md',
         icon: 'mdi:battery-charging-medium',
         color: '#4db6ac',
         titleKey: 'config_section_battery_zones',
@@ -49,6 +51,7 @@ const SECTIONS = [
     },
     {
         id: 'tariff',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md',
         icon: 'mdi:cash-multiple',
         color: '#96CAEE',
         titleKey: 'config_section_tariff',
@@ -56,6 +59,7 @@ const SECTIONS = [
     },
     {
         id: 'heat_pump',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/MULTI_DEVICE_GUIDE.md',
         icon: 'mdi:heat-pump',
         color: '#4db6ac',
         titleKey: 'config_section_heat_pump',
@@ -63,6 +67,7 @@ const SECTIONS = [
     },
     {
         id: 'hot_water',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/MULTI_DEVICE_GUIDE.md',
         icon: 'mdi:water-boiler',
         color: '#5BC8D8',
         titleKey: 'config_section_hot_water',
@@ -70,6 +75,7 @@ const SECTIONS = [
     },
     {
         id: 'battery_scheduler',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/BATTERY_EXPORT_ARBITRAGE.md',
         icon: 'mdi:calendar-clock',
         color: '#f06292',
         titleKey: 'config_section_battery_scheduler',
@@ -77,6 +83,7 @@ const SECTIONS = [
     },
     {
         id: 'load_management',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/LOAD_PRIORITY.md',
         icon: 'mdi:flash-alert',
         color: '#ff9800',
         titleKey: 'config_section_load_management',
@@ -84,6 +91,7 @@ const SECTIONS = [
     },
     {
         id: 'forecast',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md',
         icon: 'mdi:weather-partly-cloudy',
         color: '#ff9800',
         titleKey: 'config_section_forecast',
@@ -93,6 +101,7 @@ const SECTIONS = [
         // (#566) rename PV strings inline — only rendered when ≥2 strings are
         // detected (see the visibility filter in render()).
         id: 'pv_strings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/PV_STRINGS.md',
         icon: 'mdi:solar-panel',
         color: '#ff9800',
         titleKey: 'config_section_pv_strings',
@@ -100,6 +109,7 @@ const SECTIONS = [
     },
     {
         id: 'notifications',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md',
         icon: 'mdi:bell-outline',
         color: '#96CAEE',
         titleKey: 'config_section_notifications',
@@ -107,6 +117,7 @@ const SECTIONS = [
     },
     {
         id: 'advanced',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md',
         icon: 'mdi:cog-outline',
         color: '#888',
         titleKey: 'config_section_advanced',
@@ -181,6 +192,14 @@ class SEMConfigCard extends SEMLitBase {
             // window.confirm) + add/remove busy flag.
             _pendingRemove: { state: true },
             _chargerBusy: { state: true },
+            // #605 — staged TUNABLE edits (numbers/toggles/selects, entity- or
+            // option-backed). Nothing writes until the section's Apply, so an
+            // accidental scroll-flick on mobile stages a revertable change
+            // instead of silently committing one.
+            _staged: { state: true },
+            _secApplying: { state: true },
+            // #606 — per-row help open state (the small info button).
+            _helpOpen: { state: true },
         };
     }
 
@@ -207,6 +226,16 @@ class SEMConfigCard extends SEMLitBase {
         this._applying = false;
         this._pendingRemove = '';  // charger id awaiting remove-confirm
         this._chargerBusy = false;
+        // #605 staging: id → { kind, value }. id is an entity_id for
+        // entity-backed controls, or 'opt:' + optionKey for option-backed.
+        this._staged = {};
+        this._secApplying = '';
+        this._helpOpen = {};   // helpKey → bool (#606 per-row info)
+        // Which section each control id belongs to — populated during render
+        // (the section wrapper sets _sec while its content renders). Plain
+        // object, not reactive: it's derived bookkeeping.
+        this._secOf = {};
+        this._sec = null;
     }
 
     disconnectedCallback() {
@@ -498,16 +527,20 @@ class SEMConfigCard extends SEMLitBase {
     _renderToggle(entityId, labelKey, T, helpKey) {
         const entity = this._hass?.states[entityId];
         if (!entity) return nothing;
-        const isOn = entity.state === 'on';
+        this._reg(entityId);
+        const dirty = this._isDirty(entityId);
+        const cur = String(this._stagedVal(entityId, entity.state));
+        const isOn = cur === 'on';
         return html`
-            <div class="stepper-cell">
+            <div class="stepper-cell ${dirty ? 'dirty' : ''}">
                 <div class="toggle-row">
-                    <span class="toggle-label">${this._t(labelKey)}</span>
-                    <div class="toggle-track ${isOn ? 'on' : ''}" @click=${() => this._toggleSwitch(entityId)}>
+                    <span class="toggle-label">${this._t(labelKey)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${this._helpBtn(helpKey)}</span>
+                    <div class="toggle-track ${isOn ? 'on' : ''}"
+                         @click=${() => this._stage(entityId, 'switch', isOn ? 'off' : 'on')}>
                         <div class="toggle-thumb"></div>
                     </div>
                 </div>
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+                ${this._helpBlock(helpKey)}
             </div>
         `;
     }
@@ -515,18 +548,20 @@ class SEMConfigCard extends SEMLitBase {
     _renderSelect(entityId, labelKey, T, helpKey) {
         const entity = this._hass?.states[entityId];
         if (!entity) return nothing;
-        const cur = entity.state;
+        this._reg(entityId);
+        const dirty = this._isDirty(entityId);
+        const cur = String(this._stagedVal(entityId, entity.state));
         const options = entity.attributes.options || [];
         return html`
-            <div class="stepper-cell">
+            <div class="stepper-cell ${dirty ? 'dirty' : ''}">
                 <div class="ctrl-row">
-                    <span class="ctrl-label">${this._t(labelKey)}</span>
+                    <span class="ctrl-label">${this._t(labelKey)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${this._helpBtn(helpKey)}</span>
                     <select class="sem-select" .value=${cur}
-                            @change=${(e) => this._selectOption(entityId, e.target.value)}>
+                            @change=${(e) => this._stage(entityId, 'select', e.target.value)}>
                         ${options.map(o => html`<option value="${o}" ?selected=${o === cur}>${this._t(o.toLowerCase()) || o}</option>`)}
                     </select>
                 </div>
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+                ${this._helpBlock(helpKey)}
             </div>
         `;
     }
@@ -713,7 +748,11 @@ class SEMConfigCard extends SEMLitBase {
     _renderZoneKnob(entityId, labelKey, T, helpKey) {
         const e = this._hass?.states[entityId];
         if (!e) return nothing;
-        const val = parseFloat(e.state) || 0;
+        this._reg(entityId);
+        const live = parseFloat(e.state) || 0;
+        // #605 — render the STAGED value; changes stage, Apply commits.
+        const dirty = this._isDirty(entityId);
+        const val = Number(this._stagedVal(entityId, live));
         const _mn = parseFloat(e.attributes.min);
         const _mx = parseFloat(e.attributes.max);
         const min = Number.isNaN(_mn) ? 0 : _mn;
@@ -722,21 +761,25 @@ class SEMConfigCard extends SEMLitBase {
         const unit = e.attributes.unit_of_measurement || '';
         const decimals = step < 1 ? 1 : 0;
         const pct = max > min ? Math.round(((val - min) / (max - min)) * 100) : 0;
+        const stepBy = (dir) => {
+            const next = Math.max(min, Math.min(max, val + dir * step));
+            this._stage(entityId, 'number', next);
+        };
         return html`
-            <div class="zone-knob">
+            <div class="zone-knob ${dirty ? 'dirty' : ''}">
                 <div class="zone-knob-top">
-                    <span class="zone-knob-label">${this._t(labelKey)}</span>
-                    <span class="zone-chip">${val.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                    <span class="zone-knob-label">${this._t(labelKey)}${this._helpBtn(helpKey)}</span>
+                    <span class="zone-chip">${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${val.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
                 </div>
                 <div class="zone-knob-slider">
-                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, -1)}>−</button>
+                    <button class="zone-mini" @click=${() => stepBy(-1)}>−</button>
                     <input type="range" class="zone-range"
                         min=${min} max=${max} step=${step} .value=${String(val)}
                         style=${`--fill:${pct}%`}
-                        @change=${(ev) => this._setNumber(entityId, parseFloat(ev.target.value))} />
-                    <button class="zone-mini" @click=${() => this._stepNumber(entityId, 1)}>+</button>
+                        @change=${(ev) => this._stage(entityId, 'number', parseFloat(ev.target.value))} />
+                    <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+                ${this._helpBlock(helpKey, e.attributes.sem_default, unit)}
             </div>
         `;
     }
@@ -1367,27 +1410,146 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    // ── #605 staged-tunable core ─────────────────────────────────────
+    // Every tunable control renders the STAGED value when one exists and
+    // routes its change into _stage() instead of writing live. The section
+    // footer commits (Apply) or drops (Revert) the section's staged set.
+
+    _reg(id) {
+        // Bind a control id to the section currently rendering (see
+        // _renderSection). Called from every tunable renderer.
+        if (this._sec) this._secOf[id] = this._sec;
+    }
+
+    _liveOf(id, kind) {
+        if (kind === 'option') {
+            const o = this._options || {};
+            return o[id.slice(4)];
+        }
+        const e = this._hass?.states[id];
+        if (!e) return undefined;
+        return kind === 'number' ? parseFloat(e.state) : e.state;
+    }
+
+    _stage(id, kind, value) {
+        const live = this._liveOf(id, kind);
+        const same = kind === 'number'
+            ? Number(live) === Number(value)
+            : String(live) === String(value);
+        const st = { ...this._staged };
+        if (same) delete st[id]; else st[id] = { kind, value };
+        this._staged = st;
+    }
+
+    _isDirty(id) {
+        return Object.prototype.hasOwnProperty.call(this._staged, id);
+    }
+
+    _stagedVal(id, live) {
+        const s = this._staged[id];
+        return s === undefined ? live : s.value;
+    }
+
+    _sectionStaged(secId) {
+        return Object.keys(this._staged).filter(k => this._secOf[k] === secId);
+    }
+
+    _revertSection(secId) {
+        const st = { ...this._staged };
+        this._sectionStaged(secId).forEach(k => delete st[k]);
+        this._staged = st;
+    }
+
+    async _applySection(secId) {
+        const keys = this._sectionStaged(secId);
+        if (!keys.length || this._secApplying) return;
+        this._secApplying = secId;
+        try {
+            const optPayload = {};
+            for (const k of keys) {
+                const s = this._staged[k];
+                if (s.kind === 'option') {
+                    optPayload[k.slice(4)] = s.value;
+                } else if (s.kind === 'number') {
+                    await this._hass.callService('number', 'set_value',
+                        { entity_id: k, value: Number(s.value) });
+                } else if (s.kind === 'select') {
+                    await this._hass.callService('select', 'select_option',
+                        { entity_id: k, option: String(s.value) });
+                } else if (s.kind === 'switch') {
+                    await this._hass.callService('switch',
+                        s.value === 'on' ? 'turn_on' : 'turn_off',
+                        { entity_id: k });
+                }
+            }
+            if (Object.keys(optPayload).length) {
+                const entryId = await this._ensureEntryId();
+                await this._hass.callService('solar_energy_management', 'set_option', {
+                    options: optPayload, ...(entryId ? { entry_id: entryId } : {}),
+                });
+                this._options = { ...this._options, ...optPayload };
+            }
+            const st = { ...this._staged };
+            keys.forEach(k => delete st[k]);
+            this._staged = st;
+        } catch (err) {
+            console.error('[sem-config-card] section apply failed', err);
+            this._saveStatus = {
+                ...this._saveStatus,
+                ['_sec_' + secId]: err?.message || 'apply failed',
+            };
+        } finally {
+            this._secApplying = '';
+            this.requestUpdate();
+        }
+    }
+
+    // ── #606 per-row help (info button + default value) ──────────────
+
+    _helpVisible(helpKey) {
+        return !!(helpKey && (this._showHelp || this._helpOpen[helpKey]));
+    }
+
+    _helpBtn(helpKey) {
+        if (!helpKey) return nothing;
+        return html`<ha-icon class="row-help-btn ${this._helpOpen[helpKey] ? 'on' : ''}"
+            icon="mdi:information-outline" style="--mdc-icon-size:14px"
+            @click=${(e) => {
+                e.stopPropagation();
+                this._helpOpen = { ...this._helpOpen, [helpKey]: !this._helpOpen[helpKey] };
+            }}></ha-icon>`;
+    }
+
+    _helpBlock(helpKey, def, unit) {
+        if (!this._helpVisible(helpKey)) return nothing;
+        const hasDef = def !== undefined && def !== null && def !== '';
+        return html`<div class="setting-help-text">${this._t(helpKey)}${hasDef
+            ? html` <span class="help-default">${this._t('config_default_label')}: ${def}${unit ? ' ' + unit : ''}</span>`
+            : nothing}</div>`;
+    }
+
     // Toggle bound to an entry.options key. Use when no runtime
     // ``switch.sem_*`` entity exists for the option.
     // Native <select> bound to an entry.options key.
     _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
-        const cur = opts[optionKey] != null ? opts[optionKey] : defaultVal;
-        const status = this._saveStatus[optionKey];
+        const sid = 'opt:' + optionKey;
+        this._reg(sid);
+        const live = opts[optionKey] != null ? opts[optionKey] : defaultVal;
+        const dirty = this._isDirty(sid);
+        const cur = this._stagedVal(sid, live);
         return html`
-            <div class="stepper-cell">
+            <div class="stepper-cell ${dirty ? 'dirty' : ''}">
                 <div class="ctrl-row">
-                    <span class="ctrl-label">${this._t(labelKey)}</span>
+                    <span class="ctrl-label">${this._t(labelKey)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${this._helpBtn(helpKey)}</span>
                     <select class="sem-select"
                             .value=${cur}
-                            @change=${(e) => this._saveOption(optionKey, e.target.value, optionKey)}>
+                            @change=${(e) => this._stage(sid, 'option', e.target.value)}>
                         ${options.map(o => html`
                             <option value="${o.value}" ?selected=${o.value === cur}>${o.label}</option>
                         `)}
                     </select>
                 </div>
-                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
-                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+                ${this._helpBlock(helpKey, defaultVal)}
             </div>
         `;
     }
@@ -1400,31 +1562,34 @@ class SEMConfigCard extends SEMLitBase {
     // doesn't fire its own reload and discard a sibling picker's staged edit.
     // Non-structural toggles keep saving live on click (unchanged).
     _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal) {
-        const status = this._saveStatus[optionKey];
         const structural = STRUCTURAL_KEYS.has(optionKey);
-        const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
-        const cur = staged
+        const sid = 'opt:' + optionKey;
+        if (!structural) this._reg(sid);
+        const stagedStructural = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
+        const liveOn = opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal;
+        const dirty = stagedStructural || (!structural && this._isDirty(sid));
+        const cur = stagedStructural
             ? !!this._pending[optionKey]
-            : (opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal);
+            : (!structural && this._isDirty(sid) ? !!this._staged[sid].value : liveOn);
         const onToggle = () => {
             if (structural) {
                 this._pending = { ...this._pending, [optionKey]: !cur };
                 this.requestUpdate();
             } else {
-                this._saveOption(optionKey, !cur, optionKey);
+                // #605 — tunable option toggles stage like everything else.
+                this._stage(sid, 'option', !cur);
             }
         };
         return html`
-            <div class="stepper-cell">
+            <div class="stepper-cell ${dirty ? 'dirty' : ''}">
                 <div class="toggle-row">
-                    <span class="toggle-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}</span>
+                    <span class="toggle-label">${this._t(labelKey)}${dirty ? html`<span class="dirty-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}${this._helpBtn(helpKey)}</span>
                     <div class="toggle-track ${cur ? 'on' : ''}"
                          @click=${onToggle}>
                         <div class="toggle-thumb"></div>
                     </div>
                 </div>
-                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+                ${this._helpBlock(helpKey)}
             </div>
         `;
     }
@@ -1434,18 +1599,21 @@ class SEMConfigCard extends SEMLitBase {
     // need hundreds of clicks; typing the number is faster. Commits on
     // blur and Enter to avoid one save per keystroke.
     _renderOptionNumberInput(optionKey, labelKey, cfg, opts, helpKey) {
-        const cur = opts[optionKey] != null ? opts[optionKey] : cfg.default;
-        const status = this._saveStatus[optionKey];
+        const sid = 'opt:' + optionKey;
+        this._reg(sid);
+        const live = opts[optionKey] != null ? opts[optionKey] : cfg.default;
+        const dirty = this._isDirty(sid);
+        const cur = this._stagedVal(sid, live);
         const commit = (val) => {
             const n = parseFloat(val);
             if (Number.isNaN(n)) return;
             const clamped = Math.max(cfg.min, Math.min(cfg.max, n));
-            this._saveOption(optionKey, clamped, optionKey);
+            this._stage(sid, 'option', clamped);
         };
         return html`
-            <div class="stepper-cell">
+            <div class="stepper-cell ${dirty ? 'dirty' : ''}">
                 <div class="ctrl-row">
-                    <span class="ctrl-label">${this._t(labelKey)}</span>
+                    <span class="ctrl-label">${this._t(labelKey)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${this._helpBtn(helpKey)}</span>
                     <div class="num-input-wrap">
                         <input class="sem-num-input" type="number"
                                .value=${String(cur)}
@@ -1456,9 +1624,7 @@ class SEMConfigCard extends SEMLitBase {
                         ${cfg.unit ? html`<span class="num-unit">${cfg.unit}</span>` : nothing}
                     </div>
                 </div>
-                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
-                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+                ${this._helpBlock(helpKey, cfg.default, cfg.unit)}
             </div>
         `;
     }
@@ -1468,32 +1634,33 @@ class SEMConfigCard extends SEMLitBase {
     // #528: option-key slider in the same colorful accent style as the
     // entity knob (saves an entry.option live via _saveOption).
     _renderOptionSlider(optionKey, labelKey, cfg, opts, helpKey) {
-        const cur = parseFloat(opts[optionKey] != null ? opts[optionKey] : cfg.default) || 0;
-        const status = this._saveStatus[optionKey];
+        const sid = 'opt:' + optionKey;
+        this._reg(sid);
+        const live = parseFloat(opts[optionKey] != null ? opts[optionKey] : cfg.default) || 0;
+        const dirty = this._isDirty(sid);
+        const cur = Number(this._stagedVal(sid, live));
         const decimals = cfg.step < 1 ? 1 : 0;
         const unit = cfg.unit || '';
         const pct = cfg.max > cfg.min ? Math.round(((cur - cfg.min) / (cfg.max - cfg.min)) * 100) : 0;
         const stepBy = (d) => {
             const next = Math.min(cfg.max, Math.max(cfg.min, cur + d * cfg.step));
-            this._saveOption(optionKey, next, optionKey);
+            this._stage(sid, 'option', next);
         };
         return html`
-            <div class="zone-knob">
+            <div class="zone-knob ${dirty ? 'dirty' : ''}">
                 <div class="zone-knob-top">
-                    <span class="zone-knob-label">${this._t(labelKey)}</span>
-                    <span class="zone-chip">${cur.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
+                    <span class="zone-knob-label">${this._t(labelKey)}${this._helpBtn(helpKey)}</span>
+                    <span class="zone-chip">${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${cur.toFixed(decimals)}${unit ? ' ' + unit : ''}</span>
                 </div>
                 <div class="zone-knob-slider">
                     <button class="zone-mini" @click=${() => stepBy(-1)}>−</button>
                     <input type="range" class="zone-range"
                         min=${cfg.min} max=${cfg.max} step=${cfg.step} .value=${String(cur)}
                         style=${`--fill:${pct}%`}
-                        @change=${(ev) => this._saveOption(optionKey, parseFloat(ev.target.value), optionKey)} />
+                        @change=${(ev) => this._stage(sid, 'option', parseFloat(ev.target.value))} />
                     <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
-                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
-                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
-                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+                ${this._helpBlock(helpKey, cfg.default, unit)}
             </div>
         `;
     }
@@ -1877,6 +2044,13 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="section-dot" style="background:${section.color}"></div>
                 <ha-icon icon="${section.icon}" style="--mdc-icon-size:20px;color:${section.color}"></ha-icon>
                 <span class="section-title-text">${this._t(section.titleKey)}</span>
+                ${this._sectionStaged(section.id).length ? html`
+                    <span class="header-dirty-badge" title="${this._t('config_pending_hint')}">● ${this._sectionStaged(section.id).length}</span>` : nothing}
+                ${section.docs ? html`
+                    <a class="section-docs-link" href="${section.docs}" target="_blank" rel="noopener"
+                       title="${this._t('config_docs')}" @click=${(e) => e.stopPropagation()}>
+                        <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:15px"></ha-icon>
+                    </a>` : nothing}
                 <span class="section-subtitle" style="color:${subtitle ? section.color : ''}">${subtitle}</span>
                 <sem-diagnose-button
                     .hass=${this._hass}
@@ -1892,13 +2066,34 @@ class SEMConfigCard extends SEMLitBase {
 
     _renderSection(section, contentFn, T) {
         const collapsed = this._collapsed[section.id];
+        // #605 — bind every tunable rendered inside this section to it (the
+        // renderers call _reg() while _sec is set), so the footer knows which
+        // staged edits belong here.
+        this._sec = section.id;
+        const body = contentFn(T);
+        this._sec = null;
+        const dirty = this._sectionStaged(section.id);
+        const busy = this._secApplying === section.id;
+        const err = this._saveStatus['_sec_' + section.id];
+        const footer = dirty.length ? html`
+            <div class="section-stage-bar">
+                <span class="stage-count">● ${dirty.length} ${this._t('config_unsaved')}</span>
+                ${err ? html`<span class="stage-err">⚠ ${err}</span>` : nothing}
+                <button class="stage-btn revert" ?disabled=${busy}
+                        @click=${() => this._revertSection(section.id)}>↩ ${this._t('config_revert')}</button>
+                <button class="stage-btn apply" ?disabled=${busy}
+                        @click=${() => this._applySection(section.id)}>${busy
+                            ? html`${this._t('config_saving')}…`
+                            : html`✓ ${this._t('config_apply_section')}`}</button>
+            </div>` : nothing;
         return html`
             <div class="section ${collapsed ? '' : 'expanded'}"
                  style="--section-accent: ${section.color}">
                 ${this._renderSectionHeader(section, T)}
                 <div class="section-content ${collapsed ? '' : 'expanded'}">
                     <div class="section-body">
-                        ${contentFn(T)}
+                        ${body}
+                        ${footer}
                     </div>
                 </div>
             </div>
@@ -2388,6 +2583,65 @@ class SEMConfigCard extends SEMLitBase {
                     transition: background 0.15s, border-color 0.15s;
                 }
                 .ha-settings-btn:hover { background: ${T.surfaceHover}; border-color: ${accent}; }
+
+                /* ── #605 staged-changes UI ── */
+                .zone-knob.dirty, .stepper-cell.dirty {
+                    border-left: 3px solid var(--section-accent, ${accent});
+                    padding-left: 8px; margin-left: -11px;
+                    border-radius: 4px;
+                }
+                .dirty-dot {
+                    color: var(--section-accent, ${accent});
+                    font-size: 10px; margin: 0 4px; vertical-align: middle;
+                }
+                .section-stage-bar {
+                    display: flex; align-items: center; gap: 10px;
+                    margin-top: 12px; padding: 8px 12px;
+                    background: ${T.surface}; border: 1px solid var(--section-accent, ${accent});
+                    border-radius: 10px;
+                    position: sticky; bottom: 8px; z-index: 3;
+                    backdrop-filter: blur(8px);
+                }
+                .stage-count { font-size: 12.5px; color: var(--section-accent, ${accent}); font-weight: 600; flex: 1; }
+                .stage-err { font-size: 12px; color: #ef5350; }
+                .stage-btn {
+                    padding: 6px 14px; border-radius: 8px; font-size: 13px;
+                    cursor: pointer; border: 1px solid ${T.surfaceBorder};
+                    background: ${T.surface}; color: var(--primary-text-color, ${T.text});
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .stage-btn.apply {
+                    background: var(--section-accent, ${accent}); color: #fff;
+                    border-color: transparent; font-weight: 600;
+                }
+                .stage-btn:disabled { opacity: 0.55; cursor: default; }
+                .stage-btn:not(:disabled):hover { filter: brightness(1.12); }
+                .header-dirty-badge {
+                    font-size: 11px; font-weight: 700;
+                    color: var(--section-accent, ${accent});
+                    margin-left: 6px; white-space: nowrap;
+                }
+
+                /* ── #606 per-row help + defaults + docs ── */
+                .row-help-btn {
+                    color: ${T.textDim || 'rgba(150,160,175,0.8)'};
+                    cursor: pointer; margin-left: 5px; vertical-align: middle;
+                    opacity: 0.7; transition: opacity 0.15s, color 0.15s;
+                }
+                .row-help-btn:hover { opacity: 1; }
+                .row-help-btn.on { color: var(--section-accent, ${accent}); opacity: 1; }
+                .help-default {
+                    display: inline-block; margin-left: 8px;
+                    font-size: 11px; font-weight: 600;
+                    color: var(--section-accent, ${accent});
+                    opacity: 0.9; white-space: nowrap;
+                }
+                .section-docs-link {
+                    display: inline-flex; align-items: center;
+                    color: ${T.textDim || 'rgba(150,160,175,0.8)'};
+                    margin-left: 6px; opacity: 0.7; transition: opacity 0.15s;
+                }
+                .section-docs-link:hover { opacity: 1; color: var(--section-accent, ${accent}); }
             </style>
             <ha-card>
                 <div class="wrap">

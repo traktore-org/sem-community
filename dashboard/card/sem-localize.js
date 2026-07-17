@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-17T06:05:06.369310+00:00
+// Generated: 2026-07-17T20:48:31.518964+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1189,7 +1189,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Apply changes",
+      "config_revert": "Revert",
+      "config_unsaved": "unsaved",
+      "config_default_label": "Default",
+      "config_docs": "Documentation"
     },
     "de": {
       "charging": "Laden",
@@ -2375,7 +2380,12 @@
       "config_hp_rated_power": "Wärmepumpen-Nennleistung (W)",
       "config_help_hp_rated_power": "Die elektrische Nennaufnahme der Wärmepumpe in Watt, für die Überschuss-Dimensionierung wenn kein Leistungssensor zum Kalibrieren vorhanden ist. Standard 2000 W.",
       "config_hw_rated_power": "Warmwasser-Nennleistung (W)",
-      "config_help_hw_rated_power": "Die elektrische Nennaufnahme des Warmwassergeräts in Watt, für die Überschuss-Dimensionierung wenn kein Leistungssensor vorhanden ist. Standard 2500 W."
+      "config_help_hw_rated_power": "Die elektrische Nennaufnahme des Warmwassergeräts in Watt, für die Überschuss-Dimensionierung wenn kein Leistungssensor vorhanden ist. Standard 2500 W.",
+      "config_apply_section": "Änderungen übernehmen",
+      "config_revert": "Verwerfen",
+      "config_unsaved": "ungespeichert",
+      "config_default_label": "Standard",
+      "config_docs": "Dokumentation"
     },
     "fr": {
       "charging": "En charge",
@@ -3561,7 +3571,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Appliquer les modifications",
+      "config_revert": "Annuler",
+      "config_unsaved": "non enregistré",
+      "config_default_label": "Défaut",
+      "config_docs": "Documentation"
     },
     "es": {
       "charging": "Cargando",
@@ -4747,7 +4762,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Aplicar cambios",
+      "config_revert": "Revertir",
+      "config_unsaved": "sin guardar",
+      "config_default_label": "Predeterminado",
+      "config_docs": "Documentación"
     },
     "it": {
       "charging": "In carica",
@@ -5933,7 +5953,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Applica modifiche",
+      "config_revert": "Ripristina",
+      "config_unsaved": "non salvato",
+      "config_default_label": "Predefinito",
+      "config_docs": "Documentazione"
     },
     "nl": {
       "charging": "Laden",
@@ -7119,7 +7144,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Wijzigingen toepassen",
+      "config_revert": "Terugdraaien",
+      "config_unsaved": "niet opgeslagen",
+      "config_default_label": "Standaard",
+      "config_docs": "Documentatie"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8305,7 +8335,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Použít změny",
+      "config_revert": "Vrátit",
+      "config_unsaved": "neuloženo",
+      "config_default_label": "Výchozí",
+      "config_docs": "Dokumentace"
     },
     "da": {
       "charging": "Oplader",
@@ -9491,7 +9526,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Anvend ændringer",
+      "config_revert": "Fortryd",
+      "config_unsaved": "ikke gemt",
+      "config_default_label": "Standard",
+      "config_docs": "Dokumentation"
     },
     "fi": {
       "charging": "Lataus",
@@ -10677,7 +10717,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Ota muutokset käyttöön",
+      "config_revert": "Palauta",
+      "config_unsaved": "tallentamatta",
+      "config_default_label": "Oletus",
+      "config_docs": "Dokumentaatio"
     },
     "hu": {
       "charging": "Töltés",
@@ -11863,7 +11908,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Módosítások alkalmazása",
+      "config_revert": "Visszavonás",
+      "config_unsaved": "mentetlen",
+      "config_default_label": "Alapértelmezett",
+      "config_docs": "Dokumentáció"
     },
     "no": {
       "charging": "Lader",
@@ -13049,7 +13099,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Bruk endringer",
+      "config_revert": "Tilbakestill",
+      "config_unsaved": "ulagret",
+      "config_default_label": "Standard",
+      "config_docs": "Dokumentasjon"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14235,7 +14290,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Zastosuj zmiany",
+      "config_revert": "Cofnij",
+      "config_unsaved": "niezapisane",
+      "config_default_label": "Domyślnie",
+      "config_docs": "Dokumentacja"
     },
     "pt": {
       "charging": "A carregar",
@@ -15421,7 +15481,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Aplicar alterações",
+      "config_revert": "Reverter",
+      "config_unsaved": "não guardado",
+      "config_default_label": "Predefinição",
+      "config_docs": "Documentação"
     },
     "ro": {
       "charging": "Încărcare",
@@ -16607,7 +16672,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Aplică modificările",
+      "config_revert": "Revenire",
+      "config_unsaved": "nesalvat",
+      "config_default_label": "Implicit",
+      "config_docs": "Documentație"
     },
     "sv": {
       "charging": "Laddar",
@@ -17793,7 +17863,12 @@
       "config_hp_rated_power": "Heat pump rated power (W)",
       "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
       "config_hw_rated_power": "Hot water rated power (W)",
-      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W.",
+      "config_apply_section": "Verkställ ändringar",
+      "config_revert": "Återställ",
+      "config_unsaved": "osparade",
+      "config_default_label": "Standard",
+      "config_docs": "Dokumentation"
     }
   };
 
