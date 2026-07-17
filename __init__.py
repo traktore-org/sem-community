@@ -207,6 +207,9 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #600 — load-device kWh energy counters (derive power when no power sensor);
     # read at controller construction → reload on change.
     "heat_pump_energy_sensor", "hot_water_energy_sensor",
+    # #602 — heat pump / hot water rated power (W), read at controller
+    # construction; was config-flow-only, now settable from the dashboard.
+    "heat_pump_rated_power", "hot_water_rated_power",
     # #523: read at HeatPumpController construction, so a change must reload
     # to rebuild the controller with the new relay polarity.
     "heat_pump_invert_sg_ready",

@@ -939,6 +939,10 @@ class SEMConfigCard extends SEMLitBase {
                 ${/* #600 — kWh energy counter fallback when there's no power sensor. */ ''}
                 ${this._renderPicker('heat_pump_energy_sensor', 'config_hp_energy_sensor', 'sensor',
                     'energy', opts, 'config_help_hp_energy_sensor')}
+                ${/* #602 — rated power (W); used when there's no power sensor to
+                      calibrate from. Was config-only, now settable here. */ ''}
+                ${this._renderOptionNumberInput('heat_pump_rated_power', 'config_hp_rated_power',
+                    { min: 100, max: 30000, step: 50, unit: 'W', default: 2000 }, opts, 'config_help_hp_rated_power')}
                 ${/* #550: HP temperature sensor override — structural key that had
                       no picker anywhere (unreachable). */ ''}
                 ${this._renderPicker('heat_pump_temperature_sensor', 'config_hp_temperature_sensor',
@@ -1028,6 +1032,9 @@ class SEMConfigCard extends SEMLitBase {
                 ${/* #600 — kWh energy counter fallback when there's no power sensor. */ ''}
                 ${this._renderPicker('hot_water_energy_sensor', 'config_hw_energy_sensor',
                     'sensor', 'energy', opts, 'config_help_hw_energy_sensor')}
+                ${/* #602 — rated power (W); config-only before, now settable here. */ ''}
+                ${this._renderOptionNumberInput('hot_water_rated_power', 'config_hw_rated_power',
+                    { min: 100, max: 30000, step: 50, unit: 'W', default: 2500 }, opts, 'config_help_hw_rated_power')}
                 ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
                     T, 'config_help_hw_solar_target')}
                 ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',

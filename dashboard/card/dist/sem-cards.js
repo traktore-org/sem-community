@@ -6347,6 +6347,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 ${""}
                 ${this._renderPicker("heat_pump_energy_sensor","config_hp_energy_sensor","sensor","energy",i,"config_help_hp_energy_sensor")}
                 ${""}
+                ${this._renderOptionNumberInput("heat_pump_rated_power","config_hp_rated_power",{min:100,max:3e4,step:50,unit:"W",default:2e3},i,"config_help_hp_rated_power")}
+                ${""}
                 ${this._renderPicker("heat_pump_temperature_sensor","config_hp_temperature_sensor","sensor","temperature",i,"config_help_hp_temperature_sensor")}
                 ${t?this._renderStepper("number.sem_heat_pump_boost_offset","heat_pump_boost_offset",e,"config_help_hp_boost_offset"):this._renderOptionSlider("heat_pump_boost_offset","heat_pump_boost_offset",{min:0,max:10,step:.5,unit:"°C",default:2},i,"config_help_hp_boost_offset")}
                 ${this._renderOptionSlider("heat_pump_max_setpoint","config_hp_max_setpoint",{min:30,max:80,step:1,unit:"°C",default:55},i,"config_help_hp_max_setpoint")}
@@ -6397,6 +6399,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 ${this._renderPicker("hot_water_power_sensor","config_hw_power_sensor","sensor","power",t,"config_help_hw_power_sensor")}
                 ${""}
                 ${this._renderPicker("hot_water_energy_sensor","config_hw_energy_sensor","sensor","energy",t,"config_help_hw_energy_sensor")}
+                ${""}
+                ${this._renderOptionNumberInput("hot_water_rated_power","config_hw_rated_power",{min:100,max:3e4,step:50,unit:"W",default:2500},t,"config_help_hw_rated_power")}
                 ${this._renderStepper("number.sem_hot_water_solar_target","hot_water_solar_target",e,"config_help_hw_solar_target")}
                 ${this._renderStepper("number.sem_hot_water_max_temperature","hot_water_max_temperature",e,"config_help_hw_max_temperature")}
                 ${this._renderOptionSlider("hot_water_legionella_target","config_hw_legionella_target",{min:55,max:80,step:1,unit:"°C",default:65},t,"config_help_hw_legionella_target")}

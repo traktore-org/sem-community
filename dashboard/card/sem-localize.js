@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-16T18:54:30.874100+00:00
+// Generated: 2026-07-17T06:05:06.369310+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1185,7 +1185,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "de": {
       "charging": "Laden",
@@ -2367,7 +2371,11 @@
       "config_hp_energy_sensor": "Wärmepumpen-Energiesensor (kWh)",
       "config_help_hp_energy_sensor": "Ein kumulativer Energiezähler (kWh) für die Wärmepumpe, falls kein Leistungssensor vorhanden ist. SEM leitet daraus die aktuelle Leistung ab (oder erkennt zuerst einen Leistungssensor).",
       "config_hw_energy_sensor": "Warmwasser-Energiesensor (kWh)",
-      "config_help_hw_energy_sensor": "Ein kumulativer Energiezähler (kWh) für das Warmwassergerät, falls kein Leistungssensor vorhanden ist. SEM leitet daraus die aktuelle Leistung ab (oder erkennt zuerst einen Leistungssensor)."
+      "config_help_hw_energy_sensor": "Ein kumulativer Energiezähler (kWh) für das Warmwassergerät, falls kein Leistungssensor vorhanden ist. SEM leitet daraus die aktuelle Leistung ab (oder erkennt zuerst einen Leistungssensor).",
+      "config_hp_rated_power": "Wärmepumpen-Nennleistung (W)",
+      "config_help_hp_rated_power": "Die elektrische Nennaufnahme der Wärmepumpe in Watt, für die Überschuss-Dimensionierung wenn kein Leistungssensor zum Kalibrieren vorhanden ist. Standard 2000 W.",
+      "config_hw_rated_power": "Warmwasser-Nennleistung (W)",
+      "config_help_hw_rated_power": "Die elektrische Nennaufnahme des Warmwassergeräts in Watt, für die Überschuss-Dimensionierung wenn kein Leistungssensor vorhanden ist. Standard 2500 W."
     },
     "fr": {
       "charging": "En charge",
@@ -3549,7 +3557,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "es": {
       "charging": "Cargando",
@@ -4731,7 +4743,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "it": {
       "charging": "In carica",
@@ -5913,7 +5929,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "nl": {
       "charging": "Laden",
@@ -7095,7 +7115,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8277,7 +8301,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "da": {
       "charging": "Oplader",
@@ -9459,7 +9487,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "fi": {
       "charging": "Lataus",
@@ -10641,7 +10673,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "hu": {
       "charging": "Töltés",
@@ -11823,7 +11859,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "no": {
       "charging": "Lader",
@@ -13005,7 +13045,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14187,7 +14231,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "pt": {
       "charging": "A carregar",
@@ -15369,7 +15417,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "ro": {
       "charging": "Încărcare",
@@ -16551,7 +16603,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     },
     "sv": {
       "charging": "Laddar",
@@ -17733,7 +17789,11 @@
       "config_hp_energy_sensor": "Heat pump energy sensor (kWh)",
       "config_help_hp_energy_sensor": "A cumulative energy counter (kWh) for the heat pump when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
       "config_hw_energy_sensor": "Hot water energy sensor (kWh)",
-      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first)."
+      "config_help_hw_energy_sensor": "A cumulative energy counter (kWh) for the hot water device when it has no power sensor. SEM derives live power from it (or autodetects a power sensor first).",
+      "config_hp_rated_power": "Heat pump rated power (W)",
+      "config_help_hp_rated_power": "The heat pump's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2000 W.",
+      "config_hw_rated_power": "Hot water rated power (W)",
+      "config_help_hw_rated_power": "The hot water device's rated electrical draw in watts, used for surplus sizing when there's no power sensor to calibrate from. Default 2500 W."
     }
   };
 
