@@ -1,0 +1,1182 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "太阳能消纳管理 (SEM) 设置",
+        "description": "SEM 已从您的 Home Assistant 能源看板中检测到以下传感器：\n\n{summary}\n\n点击 **提交** 继续。只需最后一步。充电桩、热泵、电价以及所有其他高级设置稍后都可以在 SEM 看板全新的 **配置** 标签页中进行设置——现在无需处理它们。",
+        "data": {
+          "observer_mode": "测试模式（只读——不控制任何硬件）"
+        },
+        "data_description": {
+          "observer_mode": "正常安装请保持【关闭】状态。仅在镜像了生产实例的测试/临时 Home Assistant 系统上才需要【开启】，开启后 SEM 将绝不会向 KEBA、逆变器或任何开关发送控制指令。"
+        }
+      },
+      "ev_charger": {
+        "title": "电动汽车充电桩",
+        "description": "SEM 已从 Home Assistant 实体注册表中自动检测到您的充电桩。请检查下方内容并点击 **提交** —— 通常无需修改。可选字段可以保持空白。\n\n请选择【其中一种】控制路径：使用 数字实体 (适用于 Wallbox、go-eCharger、Heidelberg、OpenWB、Ohme、V2C 等) 或者 服务调用 (适用于 KEBA、Easee、Zaptec、OCPP 等)。",
+        "data": {
+          "ev_connected_sensor": "🔌 充电桩连接状态 — 车辆插头连接传感器",
+          "ev_charging_sensor": "⚡ 充电桩充电状态 — 当前是否正在充电",
+          "ev_charging_power_sensor": "🚗 充电桩充电功率 — 输送给车辆的实时功率 (W)",
+          "ev_current_control_entity": "电流控制数字实体 (适用于 Wallbox 类充电桩)",
+          "ev_charger_service": "充电桩电流设置服务 (适用于 KEBA 类充电桩)",
+          "ev_charger_service_entity_id": "充电桩服务目标实体 (可选)",
+          "ev_current_sensor": "⚡ 充电桩实时电流 — 充电安培数 (A)",
+          "ev_total_energy_sensor": "🔋 充电桩累计电量 — 累计输送的电能 (kWh)"
+        },
+        "data_description": {
+          "ev_connected_sensor": "报告车辆插头当前是否已连接的二进制传感器。已从 KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg 中自动检测。",
+          "ev_charging_sensor": "报告 SEM 是否应将当前充电状态视为激活的二进制传感器。已从您的充电桩集成中自动检测。",
+          "ev_charging_power_sensor": "报告当前输送至车辆的实时功率数值传感器 (W)。已从您的充电桩集成中自动检测。",
+          "ev_current_control_entity": "SEM 用于写入并修改充电电流的数字实体 (例如 number.wallbox_charging_current)。适用于提供数字实体而非服务调用的充电桩。如果您在下方填写了【服务调用】路径，请保持此处空白。",
+          "ev_charger_service": "用于设置充电电流的 Home Assistant 服务 (例如 keba.set_current, easee.set_charger_max_limit)。已为 KEBA 自动填写。如果您在上方填写了【数字实体】路径，请保持此处空白。",
+          "ev_charger_service_entity_id": "作为服务调用目标传递的实体 ID。需要时会自动填写；如果该服务是全局服务，请保持空白。",
+          "ev_current_sensor": "可选。报告实际充电电流的数值传感器 (A)。用于诊断分析。",
+          "ev_total_energy_sensor": "可选。输送给车辆的累计电量 kWh 计数器。用于准确追踪充电会话。"
+        }
+      },
+	  "hardware": {
+        "title": "硬件",
+        "description": "最后一步！设置您的 **峰值功率限制** —— 即您的电网合同允许的最大 kW，超过该值后 SEM 将开始减载。SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置都将使用安全默认值，您稍后可以在 SEM 看板全新的 **配置** 标签页中进行调整 —— 包括电动汽车充电桩、热泵、电价以及电池分区。",
+        "data": {
+          "battery_capacity_kwh": "家用蓄电池容量 (kWh)",
+          "target_peak_limit": "峰值功率限制 (kW)",
+          "generate_dashboard_on_install": "立即生成 SEM 看板（会重启 HA）",
+          "diagram_style": "系统拓扑图样式"
+        },
+        "data_description": {
+          "battery_capacity_kwh": "您家用蓄电池（非电动汽车）的总可用容量 (kWh)。由预测驱动的充电策略用于估算电池可在多大程度上弥补太阳能缺口。请检查您的逆变器规格说明书。",
+          "target_peak_limit": "您的电网合同允许的最大 kW，超过该值后 SEM 将开始负载削减。对于基于需量的电价，通常为 3–5 kW；否则建议设置为您的熔断器额定值除以 4 以留出余量。",
+          "generate_dashboard_on_install": "启用时，SEM 将在完成此步骤后立即创建 Lovelace 看板，并在此后约 5 秒重启 Home Assistant，以便让新看板可见。您稍后随时可以通过 solar_energy_management.generate_dashboard 服务手动重新运行此操作。",
+          "diagram_style": "选择在“主页”标签页上使用哪种系统拓扑图卡片。“SEM” 使用内置的动效拓扑图。“K-Flow” 使用 K-Flow HACS 卡片（必须单独安装）。"
+        }
+      },
+	  "reconfigure": {
+        "title": "重新配置太阳能消纳管理 (SEM)",
+        "description": "更新您的电动汽车充电桩和通知设置",
+        "data": {
+          "ev_connected_sensor": "充电桩连接状态",
+          "ev_charging_sensor": "充电桩充电状态",
+          "ev_charging_power_sensor": "充电桩充电功率",
+          "ev_charger_service": "充电桩服务",
+          "ev_charger_service_entity_id": "充电桩服务目标实体",
+          "ev_total_energy_sensor": "充电桩累计电量计数器",
+          "enable_charger_notifications": "启用充电桩显示屏通知",
+          "enable_mobile_notifications": "启用手机通知",
+          "mobile_notification_service": "手机通知服务",
+          "vehicle_soc_entity": "车辆电池电量 (SOC)",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "ev_target_soc": "电动汽车目标电量 (%)"
+        },
+		"data_description": {
+          "ev_connected_sensor": "报告车辆插头当前是否已连接的二进制传感器。",
+          "ev_charging_sensor": "报告电动汽车当前是否正在充电的二进制传感器。",
+          "ev_charging_power_sensor": "报告当前输送至车辆的实时功率数值传感器 (W)。",
+          "ev_charger_service": "用于设置充电电流的 HA 服务 (例如 keba.set_current)。对于通过数字实体控制的充电桩，请保持此处空白。",
+          "ev_charger_service_entity_id": "作为服务调用目标传递的实体 ID。如果不需要，请保持空白。",
+          "ev_total_energy_sensor": "可选。输送给车辆的累计电量 kWh 计数器。",
+          "enable_charger_notifications": "启用/禁用充电桩状态卡片上显示的常驻通知条。",
+          "enable_mobile_notifications": "启用/禁用发送到您移动设备的推送通知。",
+          "mobile_notification_service": "用于移动端推送的 HA 通知服务 (例如 notify.mobile_app_your_phone)。",
+          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
+          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
+          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+        }
+      }
+    },
+	"error": {
+      "unknown": "发生了未知错误。请重试。",
+      "entity_not_found": "未找到实体。请确认该实体 ID 确实存在。",
+      "incorrect_device_class": "实体 {entity_id} 的设备类别 (device_class) 为错误的 {actual}，应为 {expected}。请选择具有正确设备类别的传感器。",
+      "incorrect_state_class": "实体 {entity_id} 的状态类别 (state_class) 为错误的 {actual}，应为 {expected}。能源传感器必须使用 state_class: total_increasing。",
+      "entity_unavailable": "实体 {entity_id} 当前不可用。请确保设备已上线并正在提供数据。",
+      "invalid_value": "实体 {entity_id} 具有无效的值 {value}。应为数值。",
+      "service_not_found": "未找到通知服务 {service}。请检查服务名称（例如 notify.mobile_app_your_phone）。",
+      "validation_failed": "一个或多个传感器验证失败。请检查下方的错误信息并修正问题。",
+      "solar_production_sensor": "太阳能发电量传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。",
+      "grid_power_sensor": "电网功率传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。负数 = 购电（输入），正数 = 供电（输出）。",
+      "battery_soc_sensor": "蓄电池电量 (SOC) 传感器是必填项，且必须提供百分比读数 (0-100%)。",
+      "battery_power_sensor": "蓄电池功率传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。正数 = 充电，负数 = 放电。",
+      "ev_connected_sensor": "充电桩连接状态传感器是必填项，且必须是二进制传感器 (binary_sensor，ON/OFF)。",
+      "ev_charging_sensor": "充电桩充电状态传感器是必填项，且必须是二进制传感器 (binary_sensor，ON/OFF)。",
+      "ev_charging_power_sensor": "充电桩充电功率传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。"
+    },
+    "abort": {
+      "already_configured": "太阳能消纳管理 (SEM) 已经配置过了。只允许存在一个实例。"
+    }
+  },
+  "options": {
+    "step": {
+      "ev_charger": {
+        "title": "电动汽车充电桩",
+        "description": "提示：大多数设置现在都移到了 SEM 看板 → 配置标签页（色彩丰富且实时）。此流程仅保留用于无头（Headless）设置和实体绑定。\n\n请检查并更新您的电动汽车充电桩实体映射。只有当您提供车辆蓄电池电量 (SOC) 传感器时，车辆 SOC 字段才会生效。",
+        "data": {
+          "ev_connected_sensor": "充电桩连接状态",
+          "ev_charging_sensor": "充电桩充电状态",
+          "ev_charging_power_sensor": "充电桩充电功率",
+          "ev_charger_service": "充电桩电流设置服务（可选）",
+          "ev_charger_service_entity_id": "充电桩服务目标实体（可选）",
+          "ev_total_energy_sensor": "充电桩累计电量计数器（可选）",
+          "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "ev_target_soc": "电动汽车目标电量 (%)",
+          "daily_ev_target_max": "太阳能充电限制量 (kWh)",
+          "ev_target_soc_max": "太阳能充电限制电量 (SOC %)",
+          "vehicle_range_entity": "车辆续航里程传感器",
+          "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)"
+        },
+		"data_description": {
+          "ev_connected_sensor": "报告车辆插头当前是否已连接的二进制传感器。",
+          "ev_charging_sensor": "报告电动汽车当前是否正在充电的二进制传感器。",
+          "ev_charging_power_sensor": "报告当前输送至车辆的实时功率数值传感器 (W)。",
+          "ev_charger_service": "用于设置充电电流的 HA 服务。对于通过数字实体控制的充电桩，请保持此处空白。",
+          "ev_charger_service_entity_id": "作为服务调用目标传递的实体 ID。如果不需要，请保持空白。",
+          "ev_total_energy_sensor": "可选。输送给车辆的累计电量 kWh 计数器。",
+          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
+          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
+          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。",
+          "daily_ev_target_max": "太阳能富余电量充电达到此值后将停止。保持最大值以允许自由使用太阳能充电。",
+          "ev_target_soc_max": "太阳能富余电量充电达到此剩余电量 (SOC %) 后将停止。保持 100% 以允许自由使用太阳能充电。",
+          "vehicle_range_entity": "可选。真实的续航里程传感器。若未提供，续航里程将根据 SOC × 容量 × 能效进行估算。",
+          "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。"
+        }
+      },
+	  "settings": {
+        "title": "SEM 优化设置",
+        "description": "更新您的 SEM 优化参数",
+        "data": {
+          "update_interval": "更新间隔 (秒)",
+          "battery_priority_soc": "蓄电池优先电量 (SOC %)",
+          "min_solar_power": "最低太阳能功率 — 原始光伏发电量 (W)",
+          "daily_ev_target": "每日电动汽车充电目标 (kWh)",
+          "battery_assist_max_power": "蓄电池辅助最大功率 (W)",
+          "battery_assist_min_surplus": "蓄电池辅助最低太阳能富余量 (W)",
+          "battery_capacity_kwh": "蓄电池容量 (kWh)",
+          "battery_discharge_protection_enabled": "启用蓄电池放电保护",
+          "battery_max_discharge_power": "最大放电功率 (W)",
+          "electricity_import_rate": "电网购电电价 (每 kWh)",
+          "electricity_off_peak_rate": "谷电电价 (每 kWh)",
+          "electricity_export_rate": "电网上网/馈电电价 (每 kWh)",
+          "demand_charge_rate": "基本电费/需量电价 (CHF/kW/月)",
+          "observer_mode": "观察者模式 (只读)",
+          "smart_night_charging": "智能夜间充电",
+          "vehicle_soc_entity": "车辆电池电量 (SOC)",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "ev_target_soc": "电动汽车目标电量 (%)",
+          "battery_buffer_soc": "区域 2/3 边界 — 蓄电池缓冲电量 (SOC %)",
+          "battery_auto_start_soc": "区域 3/4 边界 — 蓄电池自动启动电量 (SOC %)",
+          "battery_discharge_control_entity": "蓄电池放电控制实体（可选）",
+          "hot_water_solar_target": "热水太阳能加热目标温度 (°C)",
+          "legionella_target_temp": "军团菌消毒目标温度 (°C)",
+          "legionella_interval_hours": "消毒周期最大间隔时间 (小时)",
+          "diagram_style": "系统图样式"
+        },
+		"data_description": {
+          "update_interval": "协调器读取传感器和调整硬件的频率。10 秒可提供最准确的电量统计；超过 30 秒的值会导致电量少计。范围：10–60 秒。",
+          "battery_priority_soc": "区域 1 → 区域 2 的边界。低于此电量 (SOC) 时，所有太阳能都将优先供给蓄电池，且电动汽车充电将被锁定。默认值为 30%。四区域策略（见架构文档）需要将此值设为低位 (5–60%) —— 请勿与旧版 3 区域含义混淆（旧版中此值是一个高目标值）。",
+          "battery_buffer_soc": "区域 2 → 区域 3 的边界。高于此电量 (SOC) 时，蓄电池可以放电以弥补太阳能不足，从而为电动汽车充电。默认值为 70%。",
+          "battery_auto_start_soc": "区域 3 → 区域 4 的边界。高于此电量 (SOC) 时，即使没有太阳能富余，电动汽车也可以开始充电，电能直接从蓄电池中抽取。默认值为 90%。",
+          "min_solar_power": "原始光伏发电底线 —— 低于该面板输出功率时，“太阳能可用”状态将转为 false：仅太阳能充电模式不会启动，且深度亏电保护会将其视作黑夜（因此充电会迅速停止，而不会转由电网支撑）。注意这是原始发电量，而不是富余量 —— 区别于“蓄电池辅助最低太阳能富余量”（光伏减去家庭用电），后者决定了家用蓄电池何时可以介入协助。默认值为 1000 W；请保持在电动汽车充电桩的硬件最低功率以下（三相约为 4140 W，单相约为 1380 W）。",
+          "daily_ev_target": "夜间利用电网充电的每日目标 kWh。设置为 0 可完全禁用夜间充电。",
+          "battery_assist_max_power": "在区域 3/4 中，家用蓄电池可以放电协助电动汽车充电的最大功率。默认值为 4500 W。",
+          "battery_assist_min_surplus": "在任何充电模式下，家用蓄电池获准协助电动汽车充电前的最低实际太阳能富余量。低于此值时，蓄电池的电量将保留供家庭使用（汽车从电网 + 太阳能抽电）。默认值为 1200 W。设置为 0 可让蓄电池在任何情况下（包括通宵）都支持电动汽车。",
+          "battery_capacity_kwh": "家用蓄电池的总可用容量（注意：不是电动汽车电池 —— 汽车电池在电动汽车步骤中是一个单独的字段）。用于基于天气预测的充电策略。",
+          "battery_discharge_protection_enabled": "启用后，SEM 将限制逆变器在夜间电动汽车充电期间的放电限制，使家用蓄电池仅为房屋供电（而不供给电动汽车）。",
+          "battery_max_discharge_power": "由放电保护功能强制执行的蓄电池放电硬性上限。",
+          "electricity_import_rate": "白天/固定电价（CHF/kWh，含增值税）。用于成本追踪。",
+          "electricity_off_peak_rate": "谷电电价（每 kWh）。如果您没有分时电价，请将其设置为与购电电价相同。",
+          "electricity_export_rate": "电力公司支付的上网/馈电电价 (CHF/kWh)。",
+          "demand_charge_rate": "每月每 kW 峰值功率的需量电费 (CHF/kW/月)。如果您的合同中没有需量电费，请设置为 0。",
+          "observer_mode": "启用后，SEM 会监控并计算所有内容，但绝不会向硬件发送服务调用。适用于镜像正式环境的测试/预发 HA 实例。",
+          "smart_night_charging": "启用时，SEM 会根据估算的电动汽车 SOC、太阳能发电预测、经温度调整的耗电量预测以及学习到的驾驶习惯，智能地跳过或减少夜间充电。",
+          "battery_discharge_control_entity": "控制逆变器最大放电功率限制的数字实体（例如华为上的 number.batteries_maximale_entladeleistung）。安装时会自动检测；如果需要，可在此处覆盖。",
+          "diagram_style": "选择在主页标签页上使用哪种系统图卡片。“SEM”使用内置的动态图。“K-Flow”使用 K-Flow HACS 卡片（必须单独安装）。修改后需要重新运行 generate_dashboard。",
+          "hot_water_solar_target": "太阳能辅助热水加热的目标温度 (°C)。当有富余电量时，SEM 会提高锅炉的加热目标。",
+          "legionella_target_temp": "热水系统在军团菌消毒周期中必须达到的温度 (°C)。",
+          "legionella_interval_hours": "在 SEM 强制启动加热之前，两次军团菌消毒周期之间的最大间隔时间（小时）。"
+        }
+      },
+	  "settings_ev": {
+        "title": "电动汽车充电与太阳能",
+        "description": "配置电动汽车充电目标和太阳能阈值。",
+        "data": {
+          "daily_ev_target": "夜间充电目标量 (kWh)",
+          "min_solar_power": "启动电动汽车充电的最低太阳能功率 (W)",
+          "observer_mode": "观察者模式（只读，无硬件控制）",
+          "smart_night_charging": "根据明天的天气预测减少夜间目标量"
+        },
+        "data_description": {
+          "daily_ev_target": "每晚从电网充电的目标 kWh。设置为 0 可禁用夜间电网充电。",
+          "min_solar_power": "SEM 启动太阳能电动汽车充电所需的最低富余太阳能功率 (W)。",
+          "observer_mode": "启用时，SEM 将监控所有数据，但绝不向硬件发送指令。",
+          "smart_night_charging": "启用时，当明天的太阳能发电量预测充足时，SEM 将减少夜间充电目标量。"
+        }
+      },
+      "settings_tariff": {
+        "title": "电价与高级设置",
+        "description": "电费费率及高级调优参数。",
+        "data": {
+          "tariff_mode": "电价模式",
+          "dynamic_tariff_entity": "动态电价实体（留空则自动检测）",
+          "dynamic_forecast_entity": "预测实体（可选，留空则自动检测）",
+          "dynamic_feedin_entity": "上网/馈电电价实体（可选，用于动态出口电价）",
+          "electricity_import_rate": "购电电价",
+          "electricity_off_peak_rate": "谷电电价（若有不同）",
+          "electricity_export_rate": "上网/馈电电价",
+          "demand_charge_rate": "基本电费/需量电价",
+          "update_interval": "更新间隔 (秒)",
+          "grid_import_power_entity": "电网购电功率传感器（可选，自动检测）",
+          "grid_export_power_entity": "电网供电功率传感器（可选，自动检测）"
+        },
+		"data_description": {
+          "tariff_mode": "选择“静态”代表固定费率，“动态”代表实时计价，或选择“日历”代表分时电价计划。",
+          "dynamic_tariff_entity": "提供当前购电电价的传感器。可自动检测来自 Tibber、Nordpool 等的数据。",
+          "dynamic_forecast_entity": "可选。包含每小时电价预测的传感器，用于智能调度。",
+          "dynamic_feedin_entity": "可选。提供当前上网/馈电电价的传感器，用于动态出口电价。",
+          "electricity_import_rate": "白天/固定购电电价（货币单位/kWh，含增值税）。作为动态电价不可用时的备用电价。",
+          "electricity_off_peak_rate": "夜间/谷电购电电价（货币单位/kWh）。如果您使用的是固定单一电价，请设置为与购电电价相同。",
+          "electricity_export_rate": "电力公司支付的上网/馈电电价（货币单位/kWh）。",
+          "demand_charge_rate": "每月最高需求量电费（货币单位/kW/月）。如果您的合同中没有该项，请设置为 0。",
+          "update_interval": "SEM 读取传感器和调整硬件的频率（秒）。范围：10–60 秒。",
+          "grid_import_power_entity": "可选。用于测量电网购电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。",
+          "grid_export_power_entity": "可选。用于测量电网供电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。"
+        }
+      },
+      "load_management": {
+        "title": "负荷管理设置",
+        "description": "更新负荷管理配置",
+        "data": {
+          "load_management_enabled": "启用负荷管理",
+          "target_peak_limit": "目标峰值限制 (kW)",
+          "warning_peak_level": "预警峰值水平 (kW)",
+          "emergency_peak_level": "紧急峰值水平 (kW)",
+          "vehicle_soc_entity": "车辆电池电量 (SOC)",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "ev_target_soc": "电动汽车目标电量 (%)"
+        },
+		"data_description": {
+          "load_management_enabled": "启用/禁用 SEM 的自动减载功能，以保持在您的电网峰值限制以下。",
+          "target_peak_limit": "在 SEM 开始切除可控负荷之前的最大电网功率 (kW)。",
+          "warning_peak_level": "SEM 在采取行动前发出警告的功率水平 (kW)。",
+          "emergency_peak_level": "SEM 为避免产生需量电费而采取激进减载措施的功率水平 (kW)。",
+          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
+          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
+          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+        }
+      },
+      "battery_scheduler": {
+        "title": "蓄电池充电调度器",
+        "description": "配置在低电价时段结合天气预测的电网向蓄电池充电设置",
+        "data": {
+          "battery_charge_scheduler_enabled": "启用蓄电池充电调度器",
+          "battery_capacity_kwh": "蓄电池容量",
+          "battery_max_charge_power_w": "最大充电功率",
+          "battery_roundtrip_efficiency": "充放电循环效率",
+          "battery_cycle_cost": "蓄电池循环成本（损耗折旧）",
+          "battery_precharge_trigger_hour": "每日评估时间（点）",
+          "battery_max_target_soc": "最大目标电量 (SOC)",
+          "battery_min_deficit_kwh": "最小缺口阈值",
+          "battery_pessimism_weight": "预测悲观权重",
+          "battery_force_charge_negative_price": "负电价时强制充电"
+        }
+      },
+      "notifications": {
+        "title": "通知设置",
+        "description": "更新通知配置",
+        "data": {
+          "enable_charger_notifications": "启用充电桩显示屏通知",
+          "enable_mobile_notifications": "启用手机通知",
+          "mobile_notification_service": "手机通知服务",
+          "vehicle_soc_entity": "车辆电池电量 (SOC)",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "ev_target_soc": "电动汽车目标电量 (%)"
+        },
+		"data_description": {
+          "enable_charger_notifications": "启用/禁用充电桩状态卡片上显示的常驻通知条。",
+          "enable_mobile_notifications": "启用/禁用发送到您移动设备的推送通知。",
+          "mobile_notification_service": "用于移动端推送的 HA 通知服务 (例如 notify.mobile_app_your_phone)。",
+          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
+          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
+          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+        }
+      },
+      "dashboard_options": {
+        "title": "看板安装",
+        "description": "安装或重新安装 SEM 看板",
+        "data": {
+          "generate_dashboard": "生成看板",
+          "dashboard_title": "看板标题",
+          "dashboard_path": "看板路径 (URL)",
+          "include_financial": "包含财务追踪",
+          "include_flows": "包含功率流可视化",
+          "vehicle_soc_entity": "车辆电池电量 (SOC)",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "ev_target_soc": "电动汽车目标电量 (%)"
+        },
+        "data_description": {
+          "generate_dashboard": "为 SEM 创建一个新的 Lovelace 看板。如果已存在相同路径的看板，它将被替换。",
+          "dashboard_title": "侧边栏中显示的看板名称。例如：'太阳能消纳管理'",
+          "dashboard_path": "看板的 URL 路径（小写，使用连字符）。例如：'sem-dashboard'",
+          "include_financial": "添加财务追踪标签页，显示成本、收益和投资回报率 (ROI) 指标。",
+          "include_flows": "添加功率流可视化标签页，通过桑基图 (Sankey diagram) 展示能量流动。",
+          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
+          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
+          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+        }
+      },
+	  "ev_charger_edit": {
+        "title": "编辑电动汽车充电桩",
+        "description": "更新此充电桩的传感器映射和优先级。",
+        "data": {
+          "charger_name": "充电桩名称",
+          "ev_connected_sensor": "电动汽车连接状态",
+          "ev_charging_sensor": "电动汽车充电状态",
+          "ev_charging_power_sensor": "电动汽车充电功率",
+          "ev_charger_service": "充电桩电流设置服务（可选）",
+          "ev_charger_service_entity_id": "充电桩服务目标实体（可选）",
+          "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
+          "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
+          "daily_ev_target_max": "太阳能充电上限量 (kWh)",
+          "ev_target_soc_max": "太阳能充电上限电量 (SOC %)"
+        },
+        "data_description": {
+          "charger_name": "在看板中显示的充电桩友好名称。",
+          "ev_connected_sensor": "报告是否有车辆插入此充电桩的二进制传感器 (binary_sensor)。",
+          "ev_charging_sensor": "报告此充电桩当前是否正在输出功率的二进制传感器 (binary_sensor)。",
+          "ev_charging_power_sensor": "报告此充电桩输出功率的数值传感器 (W)。",
+          "ev_charger_service": "用于设置充电电流的 HA 服务。适用于 KEBA 或 Easee 等设备。",
+          "ev_charger_service_entity_id": "作为服务调用目标的实体 ID。如果不需要请留空。",
+          "ev_surplus_priority": "多个充电桩之间的富余绿电分配顺序。数字越小 = 优先级越高。",
+          "ev_current_control_entity": "用于设置充电电流 (A) 的数值实体 (number 实体)。适用于 Wallbox、go-eCharger 以及类似的充电桩。",
+          "daily_ev_target_max": "太阳能富余绿电充电达到此数值后将停止充电。保持默认满额则允许不受限地使用太阳能充电。",
+          "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。"
+        }
+      },
+	  "ev_charger_add": {
+        "title": "添加电动汽车充电桩",
+        "description": "配置一个新的电动汽车充电桩。SEM 将根据优先级在多个充电桩之间分配富余的绿电功率。\n\n对于电流控制，请在数值实体 (Wallbox, go-eCharger) 或服务调用 (KEBA) 中【二选一】进行配置，将另一个留空即可。",
+        "data": {
+          "charger_name": "充电桩名称",
+          "ev_connected_sensor": "电动汽车连接状态",
+          "ev_charging_sensor": "电动汽车充电状态",
+          "ev_charging_power_sensor": "电动汽车充电功率",
+          "ev_charger_service": "充电桩电流设置服务（可选）",
+          "ev_charger_service_entity_id": "充电桩服务目标实体（可选）",
+          "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
+          "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
+          "daily_ev_target_max": "太阳能充电上限量 (kWh)",
+          "ev_target_soc_max": "太阳能充电上限电量 (SOC %)"
+        },
+        "data_description": {
+          "charger_name": "在看板中显示的充电桩友好名称。",
+          "ev_connected_sensor": "报告是否有车辆插入此充电桩的二进制传感器 (binary_sensor)。",
+          "ev_charging_sensor": "报告此充电桩当前是否正在输出功率的二进制传感器 (binary_sensor)。",
+          "ev_charging_power_sensor": "报告此充电桩输出功率的数值传感器 (W)。",
+          "ev_charger_service": "用于设置充电电流的 HA 服务。适用于 KEBA 或 Easee 等设备。",
+          "ev_charger_service_entity_id": "作为服务调用目标的实体 ID。如果不需要请留空。",
+          "ev_surplus_priority": "多个充电桩之间的富余绿电分配顺序。数字越小 = 优先级越高。",
+          "ev_current_control_entity": "用于设置充电电流 (A) 的数值实体 (number 实体)。适用于 Wallbox、go-eCharger 以及类似的充电桩。",
+          "daily_ev_target_max": "太阳能富余绿电充电达到此数值后将停止充电。保持默认满额则允许不受限地使用太阳能充电。",
+          "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。"
+        }
+      },
+
+      "pv_naming": {
+        "title": "命名您的光伏组串",
+        "description": "为每个太阳能光伏组串命名（例如：东侧 / 南侧 / 西侧）。哪个插槽对应哪组面板 — 其编号遵循您“能源看板”中的太阳能列表顺序，而非罗盘方向：\n\n{mapping}\n\n留空则保持默认名称 (PV1/PV2/…)。",
+        "data": {
+          "pv_name_pv1": "PV1 名称",
+          "pv_name_pv2": "PV2 名称",
+          "pv_name_pv3": "PV3 名称",
+          "pv_name_pv4": "PV4 名称",
+          "pv_name_pv5": "PV5 名称",
+          "pv_name_pv6": "PV6 名称"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "solar_power": {
+        "name": "太阳能功率"
+      },
+      "home_consumption_power": {
+        "name": "家庭负荷功率"
+      },
+      "grid_power": {
+        "name": "电网功率"
+      },
+      "grid_active_power": {
+        "name": "电网有功功率"
+      },
+      "grid_import_power": {
+        "name": "电网购电功率"
+      },
+      "grid_export_power": {
+        "name": "电网供电/上网功率"
+      },
+      "battery_power": {
+        "name": "蓄电池功率"
+      },
+      "battery_charge_power": {
+        "name": "蓄电池充电功率"
+      },
+      "battery_discharge_power": {
+        "name": "蓄电池放电功率"
+      },
+      "ev_power": {
+        "name": "电动汽车充电功率"
+      },
+      "available_power": {
+        "name": "可用富余功率"
+      },
+      "battery_soc": {
+        "name": "蓄电池电量 (SOC)"
+      },
+      "battery_status": {
+        "name": "蓄电池状态"
+      },
+      "battery_temperature": {
+        "name": "蓄电池温度"
+      },
+      "inverter_temperature": {
+        "name": "逆变器温度"
+      },
+      "battery_cycles_estimated": {
+        "name": "蓄电池循环次数（预估）"
+      },
+      "battery_health_score": {
+        "name": "蓄电池健康度评分"
+      },
+      "calculated_current": {
+        "name": "计算所得电流"
+      },
+      "charging_state": {
+        "name": "充电状态"
+      },
+      "grid_status": {
+        "name": "电网状态"
+      },
+      "solar_charging_status": {
+        "name": "太阳能绿电充电"
+      },
+      "night_charging_status": {
+        "name": "夜间谷电充电"
+      },
+      "battery_priority_status": {
+        "name": "蓄电池优先级"
+      },
+      "charging_strategy": {
+        "name": "充电策略"
+      },
+      "daily_solar_energy": {
+        "name": "今日太阳能发电量"
+      },
+      "daily_home_energy": {
+        "name": "今日家庭用电量"
+      },
+      "daily_grid_import_energy": {
+        "name": "今日电网购电量"
+      },
+      "daily_grid_export_energy": {
+        "name": "今日电网供电/上网量"
+      },
+      "daily_battery_charge_energy": {
+        "name": "今日蓄电池充电量"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "今日蓄电池放电量"
+      },
+      "daily_ev_energy": {
+        "name": "今日电动汽车充电量"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "本月太阳能发电量"
+      },
+      "monthly_grid_import_energy": {
+        "name": "本月电网购电量"
+      },
+      "monthly_grid_export_energy": {
+        "name": "本月电网供电/上网量"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "本月蓄电池充电量"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "本月蓄电池放电量"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "本月家庭用电量"
+      },
+      "flow_solar_to_home_power": {
+        "name": "太阳能至家庭功率"
+      },
+      "flow_solar_to_battery_power": {
+        "name": "太阳能至蓄电池功率"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "太阳能至电网功率"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "太阳能至电动汽车功率"
+      },
+      "flow_battery_to_home_power": {
+        "name": "蓄电池至家庭功率"
+      },
+      "flow_battery_to_ev_power": {
+        "name": "蓄电池至电动汽车功率"
+      },
+      "flow_grid_to_home_power": {
+        "name": "电网至家庭功率"
+      },
+      "flow_grid_to_ev_power": {
+        "name": "电网至电动汽车功率"
+      },
+      "flow_grid_to_battery_power": {
+        "name": "电网至蓄电池功率"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "太阳能至家庭电量"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "太阳能至电动汽车电量"
+      },
+      "flow_solar_to_battery_energy": {
+        "name": "太阳能至蓄电池电量"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "太阳能至电网电量（上网）"
+      },
+      "flow_grid_to_home_energy": {
+        "name": "电网至家庭电量（购电）"
+      },
+      "flow_grid_to_ev_energy": {
+        "name": "电网至电动汽车电量"
+      },
+      "flow_grid_to_battery_energy": {
+        "name": "电网至蓄电池电量"
+      },
+      "flow_battery_to_home_energy": {
+        "name": "蓄电池至家庭电量"
+      },
+      "flow_battery_to_ev_energy": {
+        "name": "蓄电池至电动汽车电量"
+      },
+      "self_consumption_rate": {
+        "name": "自发自用率"
+      },
+      "autarky_rate": {
+        "name": "自给自足率"
+      },
+      "daily_savings": {
+        "name": "今日节省电费"
+      },
+      "daily_battery_savings": {
+        "name": "今日蓄电池节省电费"
+      },
+      "daily_costs": {
+        "name": "今日电费支出"
+      },
+      "daily_export_revenue": {
+        "name": "今日上网收益"
+      },
+      "daily_net_cost": {
+        "name": "今日净电费电开支"
+      },
+      "monthly_savings": {
+        "name": "本月节省电费"
+      },
+      "monthly_battery_savings": {
+        "name": "本月蓄电池节省电费"
+      },
+      "monthly_costs": {
+        "name": "本月电费支出"
+      },
+      "monthly_export_revenue": {
+        "name": "本月上网收益"
+      },
+      "monthly_net_cost": {
+        "name": "本月净电费开支"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "今年太阳能发电量"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "累计太阳能总发电量"
+      },
+      "yearly_grid_import_energy": {
+        "name": "今年电网购电量"
+      },
+      "yearly_grid_export_energy": {
+        "name": "今年电网供电/上网量"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "今年蓄电池充电量"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "今年蓄电池放电量"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "今年家庭用电量"
+      },
+      "yearly_ev_energy": {
+        "name": "今年电动汽车充电量"
+      },
+      "yearly_costs": {
+        "name": "今年电费支出"
+      },
+      "yearly_savings": {
+        "name": "今年节省电费"
+      },
+      "yearly_battery_savings": {
+        "name": "今年蓄电池节省电费"
+      },
+      "yearly_export_revenue": {
+        "name": "今年上网收益"
+      },
+      "yearly_net_cost": {
+        "name": "今年净电费开支"
+      },
+      "lifetime_total_savings": {
+        "name": "累计总节省电费"
+      },
+      "lifetime_grid_cost": {
+        "name": "累计电网电费支出"
+      },
+      "roi_percentage": {
+        "name": "投资回报率 (ROI) 百分比"
+      },
+      "roi_payback_years": {
+        "name": "投资回收年限"
+      },
+      "roi_annual_savings": {
+        "name": "年均节省金额 (ROI)"
+      },
+      "forecast_correction_factor": {
+        "name": "天气预测修正系数"
+      },
+      "forecast_corrected_today": {
+        "name": "今日修正后发电预测"
+      },
+      "forecast_history_days": {
+        "name": "预测历史天数"
+      },
+      "daily_co2_avoided": {
+        "name": "今日减排 CO2"
+      },
+      "yearly_co2_avoided": {
+        "name": "今年减排 CO2"
+      },
+      "yearly_trees_equivalent": {
+        "name": "今年等效植树"
+      },
+      "lifetime_co2_avoided": {
+        "name": "累计减排 CO2"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "累计等效植树"
+      },
+      "power_charge_cost": {
+        "name": "需量/高峰负荷电费"
+      },
+      "consecutive_peak_15min": {
+        "name": "15分钟连续峰值功率"
+      },
+      "monthly_consecutive_peak": {
+        "name": "本月峰值功率"
+      },
+      "current_vs_peak_percentage": {
+        "name": "当前占峰值比例"
+      },
+      "target_peak_limit": {
+        "name": "峰值功率限制"
+      },
+      "peak_margin": {
+        "name": "峰值功率余量"
+      },
+      "load_management_status": {
+        "name": "负荷管理状态"
+      },
+      "load_management_recommendation": {
+        "name": "负荷控制建议"
+      },
+      "loads_currently_shed": {
+        "name": "当前已减载负荷数"
+      },
+      "available_load_reduction": {
+        "name": "可减少负荷容量"
+      },
+      "controllable_devices_count": {
+        "name": "可控设备总数"
+      },
+      "surplus_total_w": {
+        "name": "富余绿电功率总量"
+      },
+      "surplus_distributable_w": {
+        "name": "可分配富余功率"
+      },
+      "surplus_allocated_w": {
+        "name": "已分配富余功率"
+      },
+      "surplus_unallocated_w": {
+        "name": "未分配富余功率"
+      },
+      "surplus_active_devices": {
+        "name": "绿电激活设备数"
+      },
+      "surplus_total_devices": {
+        "name": "绿电控制设备总数"
+      },
+      "forecast_today_kwh": {
+        "name": "今日发电量预测"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "明日发电量预测"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "今日剩余发电预测"
+      },
+      "forecast_power_now_w": {
+        "name": "当前预测发电功率"
+      },
+      "forecast_source": {
+        "name": "天气预测数据源"
+      },
+      "charging_recommendation": {
+        "name": "最佳充电建议"
+      },
+      "tariff_current_import_rate": {
+        "name": "当前实时电价"
+      },
+      "tariff_current_export_rate": {
+        "name": "当前上网电价"
+      },
+      "tariff_price_level": {
+        "name": "实时电价等级"
+      },
+      "tariff_provider": {
+        "name": "电价服务商"
+      },
+      "tariff_next_cheap_start": {
+        "name": "下个低电价时段起止"
+      },
+      "heat_pump_mode": {
+        "name": "热泵模式"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "热泵 SG-Ready 状态"
+      },
+      "pv_daily_specific_yield": {
+        "name": "光伏日等效利用小时数"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "实际发电对比预测偏差"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "光伏预估年化衰减"
+      },
+      "pv_degradation_trend": {
+        "name": "光伏衰减趋势"
+      },
+      "energy_optimization_score": {
+        "name": "能源优化评分"
+      },
+      "energy_tip": {
+        "name": "节能优化建议"
+      },
+      "energy_tip_category": {
+        "name": "节能优化建议类别"
+      },
+      "energy_ev_solar_percentage": {
+        "name": "车充太阳能占比 %"
+      },
+      "utility_signal_source": {
+        "name": "电网调度信号源"
+      },
+      "utility_signal_count_today": {
+        "name": "今日电网调度信号次数"
+      },
+      "predictor_training_status": {
+        "name": "模型训练状态"
+      },
+      "predictor_model_accuracy": {
+        "name": "模型预测准确度"
+      },
+      "predicted_surplus_window": {
+        "name": "预测绿电富余时段"
+      },
+      "session_energy": {
+        "name": "单次充电电量"
+      },
+      "session_solar_share": {
+        "name": "单次充电太阳能占比"
+      },
+      "session_cost": {
+        "name": "单次充电花费"
+      },
+      "session_duration": {
+        "name": "单次充电时长"
+      },
+      "lifetime_ev_energy": {
+        "name": "累计电动汽车总充电量"
+      },
+      "lifetime_ev_solar": {
+        "name": "累计车充太阳能总量"
+      },
+      "lifetime_ev_cost": {
+        "name": "累计车充总电费开支"
+      },
+      "lifetime_ev_sessions": {
+        "name": "累计车充总次数"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "累计车充太阳能平均占比"
+      },
+      "vehicle_soc": {
+        "name": "车辆电量 (SOC)"
+      },
+      "ev_remaining_range": {
+        "name": "续航里程"
+      },
+      "best_surplus_window": {
+        "name": "最佳绿电富余时段"
+      },
+      "night_start_time": {
+        "name": "夜间时段开始时间"
+      },
+      "night_end_time": {
+        "name": "夜间时段结束时间"
+      },
+      "night_window_hours": {
+        "name": "夜间低电价总时长"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "今日预测发电峰值功率"
+      },
+      "forecast_peak_time_today": {
+        "name": "今日预测发电峰值时间"
+      },
+      "forecast_surplus_kwh": {
+        "name": "富余电量预测"
+      },
+      "forecast_dampening_factor": {
+        "name": "预测阻尼/衰减系数"
+      },
+      "battery_scheduler_state": {
+        "name": "蓄电池调度状态"
+      },
+      "battery_scheduler_target_soc": {
+        "name": "蓄电池调度目标电量"
+      },
+      "battery_scheduler_deficit_kwh": {
+        "name": "蓄电池调度电量缺口"
+      },
+      "battery_scheduler_reason": {
+        "name": "蓄电池调度触发原因"
+      },
+      "ev_charger_count": {
+        "name": "已配置充电桩数量"
+      },
+      "ev_taper_trend": {
+        "name": "车充降流末端趋势"
+      },
+      "diag_version": {
+        "name": "SEM 版本"
+      },
+      "diag_grid_mode": {
+        "name": "电网传感器模式"
+      },
+      "diag_grid_sign": {
+        "name": "电网正负符号惯例"
+      },
+      "diag_charger_control": {
+        "name": "充电桩控制方式"
+      },
+      "diag_battery_capacity": {
+        "name": "蓄电池配置容量"
+      },
+      "diag_update_interval": {
+        "name": "系统更新间隔"
+      },
+      "diag_observer_mode": {
+        "name": "观察者模式"
+      },
+      "diag_sensors_unavailable": {
+        "name": "不可用传感器列表"
+      },
+      "battery_session_type": {
+        "name": "蓄电池循环类型"
+      },
+      "battery_session_energy": {
+        "name": "蓄电池循环能量"
+      },
+      "battery_session_solar_share": {
+        "name": "蓄电池单次充电太阳能占比"
+      },
+      "battery_session_cost": {
+        "name": "蓄电池单次循环成本"
+      },
+      "battery_session_savings": {
+        "name": "蓄电池单次循环收益"
+      },
+      "battery_session_duration": {
+        "name": "蓄电池单次循环时长"
+      },
+      "battery_session_avg_power": {
+        "name": "蓄电池单次循环平均功率"
+      },
+      "diag_charger_count": {
+        "name": "已配充电桩"
+      },
+      "diag_ed_config": {
+        "name": "能源看板配置状态"
+      },
+      "heat_pump_registration_status": {
+        "name": "热泵注册状态"
+      }
+    },
+	"binary_sensor": {
+      "ev_connected": {
+        "name": "电动汽车已连接"
+      },
+      "ev_charging": {
+        "name": "电动汽车充电中"
+      },
+      "battery_charging": {
+        "name": "蓄电池充电中"
+      },
+      "battery_discharging": {
+        "name": "蓄电池放电中"
+      },
+      "grid_export_active": {
+        "name": "电网供电/上网激活"
+      },
+      "solar_active": {
+        "name": "太阳能发电激活"
+      },
+      "surplus_available": {
+        "name": "有富余绿电量"
+      },
+      "forecast_available": {
+        "name": "发电预测可用"
+      },
+      "tariff_is_dynamic": {
+        "name": "动态电价"
+      },
+      "heat_pump_solar_boost": {
+        "name": "热泵太阳能增强激发"
+      },
+      "heat_pump_registered": {
+        "name": "热泵已注册"
+      },
+      "utility_signal_active": {
+        "name": "电网调度信号激活"
+      }
+    },
+    "switch": {
+      "observer_mode": {
+        "name": "观察者模式"
+      }
+    },
+    "number": {
+      "update_interval": {
+        "name": "更新间隔"
+      },
+      "battery_priority_soc": {
+        "name": "蓄电池高优先级电量 (SOC)"
+      },
+      "minimum_solar_power": {
+        "name": "启动充电最低太阳能功率"
+      },
+      "daily_ev_target": {
+        "name": "每日电动汽车充电目标量"
+      },
+      "battery_assist_max_power": {
+        "name": "蓄电池辅助最大功率"
+      },
+      "battery_assist_min_surplus": {
+        "name": "蓄电池辅助最低太阳能富余功率"
+      },
+      "regulation_offset": {
+        "name": "调节偏差补偿/偏置"
+      },
+      "demand_charge_rate": {
+        "name": "需量电价费率"
+      },
+      "cheap_price_threshold": {
+        "name": "低电价/谷电阈值"
+      },
+      "expensive_price_threshold": {
+        "name": "高电价/峰电阈值"
+      },
+      "heat_pump_boost_offset": {
+        "name": "热泵增强运行偏置"
+      },
+      "hot_water_max_temperature": {
+        "name": "热水最高目标温度"
+      },
+      "system_size_kwp": {
+        "name": "光伏系统装机容量 (kWp)"
+      },
+      "ev_min_current": {
+        "name": "电动汽车最低电流"
+      },
+      "ev_enable_delay_seconds": {
+        "name": "电动汽车启动延迟（绿电富余时）"
+      },
+      "ev_disable_delay_seconds": {
+        "name": "电动汽车停止延迟（功率不足时）"
+      },
+      "battery_buffer_soc": {
+        "name": "蓄电池缓冲电量 (SOC)"
+      },
+      "battery_auto_start_soc": {
+        "name": "蓄电池自动启动电量 (SOC)"
+      },
+      "battery_capacity_kwh": {
+        "name": "蓄电池容量"
+      },
+      "battery_max_discharge_power": {
+        "name": "蓄电池最大放电功率"
+      },
+      "system_investment_cost": {
+        "name": "系统初始投资成本"
+      },
+      "ev_minimum_current": {
+        "name": "电动汽车最低电流"
+      },
+      "ev_phases": {
+        "name": "电动汽车充电相数"
+      },
+      "electricity_import_rate": {
+        "name": "购电电价费率"
+      },
+      "electricity_export_rate": {
+        "name": "上网电价费率"
+      },
+      "night_earliest_start": {
+        "name": "夜间最早开始时间"
+      },
+      "night_latest_end": {
+        "name": "夜间最晚结束时间"
+      },
+      "battery_capacity": {
+        "name": "蓄电池容量"
+      },
+      "hot_water_solar_target": {
+        "name": "热水太阳能加热目标"
+      },
+      "legionella_target_temp": {
+        "name": "军团菌消杀目标温度"
+      },
+      "legionella_interval_hours": {
+        "name": "军团菌消杀间隔小时数"
+      },
+      "ev_target_soc": {
+        "name": "电动汽车目标电量 (SOC %)"
+      },
+      "daily_ev_target_max": {
+        "name": "电动汽车太阳能充电上限量 (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "电动汽车太阳能充电上限电量 (SOC %)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "百公里电耗 (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "车辆启动电流 (A)"
+      },
+      "surplus_event_threshold": {
+        "name": "富余功率事件触发阈值"
+      }
+    },
+    "select": {
+      "ev_target_type": {
+        "name": "电动汽车充电目标类型",
+        "state": {
+          "kwh": "按目标电量 (kWh)",
+          "soc": "按目标电量百分比 (SOC %)"
+        }
+      },
+      "charge_mode": {
+        "name": "充电模式",
+        "state": {
+          "solar_only": "纯太阳能绿电",
+          "solar_plus_cheap": "太阳能 + 低谷电价时段",
+          "min_plus_solar": "最低基础电流 + 太阳能",
+          "always_max": "始终保持最大功率",
+          "off": "关闭"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "生成 SEM 看板失败。请查看 Home Assistant 日志以获取详细信息。"
+    },
+    "load_management_not_initialized": {
+      "message": "负荷管理尚未就绪。请等待集成完成启动后重试。"
+    },
+    "device_registry_not_initialized": {
+      "message": "设备注册表尚未就绪。请等待集成完成启动后重试。"
+    },
+    "mapping_service_required": {
+      "message": "当控制类型为“service”服务调用时，必须提供一个服务。请配置需要调用的服务。"
+    },
+    "mapping_entity_required": {
+      "message": "此控制类型需要一个控制实体。请配置控制实体。"
+    },
+    "device_not_found": {
+      "message": "未找到设备“{device_id}”。"
+    },
+    "invalid_device_property": {
+      "message": "无效的设备属性：“{property}”。"
+    },
+    "invalid_deadline_format": {
+      "message": "无效的时间截止格式：“{deadline}”。请使用 ISO 8601 格式，例如 2026-05-27T07:00:00。"
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "电动汽车充电桩未配置",
+      "description": "未配置电动汽车充电桩传感器，因此电动汽车充电相关功能不可用。请在集成选项中添加电动汽车“连接”传感器或充电功率传感器以启用车充功能。"
+    },
+    "sensor_unavailable": {
+      "title": "传感器不可用",
+      "description": "传感器 `{entity_id}` ({friendly_name}) 已持续不可用超过 {minutes} 分钟。在恢复之前，SEM 无法将其纳入核心计算。请检查上游集成（如华为 Modbus / Solcast / Forecast.Solar / 您的逆变器网络通讯）。当该传感器下一次上报有效值时，此问题将自动清除。"
+    },
+    "charger_actuation_failed": {
+      "title": "电动汽车充电桩不接受控制指令: {name}",
+      "description": "SEM 最近向 **{name}** 发送的连续 3 次以上的电流指令均被拒绝，错误信息为：`{error}`。该充电桩目前【未受 SEM 控制】— 它将保持上一次的运行指令状态（包括在关闭模式下以全功率充电）。最常见的原因有：上游集成更新导致充电桩控制实体被重命名，或者 `ev_charger_service` 指向了参数架构发生变化的另一个服务。请在 SEM 配置中检查充电桩的控制实体或服务。一旦下一次成功下发指令，此问题将自动清除。"
+    },
+    "no_forecast_integration": {
+      "title": "未检测到太阳能发电预测集成",
+      "description": "SEM 在启动后的一小时内尝试寻找太阳能预测集成（如 Forecast.Solar、Solcast PV Solar 或自定义预测传感器）但未找到。在安装相应集成之前，结合预测的高级智能功能（如最佳富余时段建议、智能夜间谷电充电、预测阻尼系数调整）将保持非激活状态。当 SEM 检测到预测集成后，此问题将自动清除。"
+    },
+    "no_recorder": {
+      "title": "Recorder 历史记录集成不可用",
+      "description": "SEM 尝试从 HA Recorder（历史记录组件）引导加载电动汽车/充电历史数据，但读取失败。缺少此数据，电动汽车智能逻辑（估算 SOC、每日电池衰减）将无法实现热启动，转而在后续的实时充电循环中缓慢积累并生成。通常这只是偶发的瞬态异常，在下一次成功读取历史记录时会自动清除。"
+    },
+    "heat_pump_relay_unavailable": {
+      "title": "热泵 SG-Ready {slot} 不可用",
+      "description": "已配置的 SG-Ready 继电器实体 `{entity_id}` ({slot}) 已持续处于不可用或未知状态超过 {minutes} 分钟。虽然 SEM 可以正常注册热泵控制器，但在此实体上报真实状态之前，下发的每个 SG-Ready 指令都将静默失效且无任何实际响应。请检查上游设备 — 如 ESP 继电器板、Shelly、基于 Modbus 桥接的 template switch（模板开关），或任何管理此实体的集成。当该继电器重新上报开/关状态时，此问题将自动清除。"
+    },
+    "heat_pump_partial_sg_ready": {
+      "title": "热泵 SG-Ready 处于半配置状态",
+      "description": "SEM 中仅配置了两个 SG-Ready 继电器中的一个（`heat_pump_relay1_entity` 或 `heat_pump_relay2_entity`），且未设置 climate（空调/温控）实体作为备用通道。SG-Ready 协议需要跨两个继电器以 2 位二进制编码来实现四种状态（BLOCKED 锁定 / NORMAL 正常 / BOOST 增强 / FORCE_ON 强制启动），因此单一继电器无法驱动该协议。请配置第二个继电器，或者设置 `heat_pump_climate_entity` 以切换为仅通过温控温设调优的增强路径。一旦配置修改正确，此问题将自动清除。"
+    },
+    "hot_water_entity_unavailable": {
+      "title": "热水锅炉/热水器控制实体不可用",
+      "description": "已配置的热水控制实体 `{entity_id}` 已持续处于不可用或未知状态超过 {minutes} 分钟。虽然 SEM 可以正常注册控制器，但在该实体恢复正常并上报真实状态之前，所有的富余绿电调度指令都将静默失效且不执行。请检查上游设备 — 锅炉继电器、water_heater 集成、温控设备，或任何管理此实体的上游集成。当实体恢复后，此问题将自动清除。"
+    },
+    "hot_water_temperature_sensor_unavailable": {
+      "title": "热水温度传感器不可用",
+      "description": "已配置的热水温度传感器 `{entity_id}` 已持续处于不可用或未知状态超过 {minutes} 分钟。在此传感器故障期间，SEM 将采取故障安全保护机制：在返回真实的温度读数前，【不会】由于绿电富余而激活锅炉加热，以避免在失去温度反馈的情况下发生过度加热。请检查该传感器的上游集成。当传感器恢复后，此问题将自动清除。"
+    },
+    "keba_failsafe_active": {
+      "title": "KEBA Failsafe（故障安全保护机制）已启用 — 需将其禁用以获得稳定充电",
+      "description": "您的 KEBA 充电桩 \"{name}\" 启用了其内部的 failsafe 看门狗保护。SEM（类似于 evcc）在运行时不再依赖此看门狗，但如果它保持开启状态，充电桩在收到控制指令的间隙会频繁将供给电流降至其 6 A 的默认回退值，这会导致充电过程不断震荡 (6A ↔ 9A)，并导致某些车型（例如雷诺 Zoe）无法稳定充电。\n\nHome Assistant 内置的 KEBA 服务无法关闭该看门狗（不接受将超时时间设置为 0），因此您需要直接在充电桩端禁用它：将 **failsafe timeout 设置为 0**（可以通过 KEBA UDP 发送指令 `failsafe 0 0 1`，或使用 KEBA 官方的 KeContact 工具）。请参阅相关配置指南获取分步说明。一旦关闭该机制，此修复建议将自动清除。"
+    }
+  }
+}
