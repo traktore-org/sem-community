@@ -866,6 +866,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pcd[cid] = round(getattr(energy, "daily_ev", 0.0) or 0.0, 3)
         return pcd
 
+    def _charger_daily_kwh(self, cid: str, energy) -> float:
+        """THIS charger's delivered-today kWh, on the SAME basis the dashboard
+        shows — the ONE accessor for every decision/preview read.
+
+        PROD 2026-07-17 night-idle bug: the user raised the daily target to
+        14.5 kWh with "Today" showing 13.09, but night charging stayed idle —
+        ``_calculate_remaining_need`` read the RAW per-charger integrator
+        (15.42 kWh, drifted high during a flap incident) while the dashboard
+        showed the persisted global (13.09). Two accumulators for the same
+        quantity → the paired-figure basis-mismatch class (BUG_CLASSES #11):
+        the user tunes the target against the displayed figure, so decisions
+        MUST measure against that same figure. ``_per_charger_daily_report``
+        already applies the single-charger global substitution (#536); this
+        accessor routes every consumer through it. Multi-charger installs keep
+        their own per-charger accumulators (which sum to the global).
+        """
+        return float(self._per_charger_daily_report(energy).get(cid, 0.0) or 0.0)
+
     @property
     def battery_capacity_kwh(self) -> float:
         """Battery capacity in kWh — auto-detected or from config (#84)."""
@@ -2186,21 +2204,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                         "inheriting global %.1f kWh", cid, target,
                                     )
                                     self._night_global_fallback_logged.add(cid)
-                            daily = self._daily_ev_per_charger.get(cid, 0.0)
-                            # Single charger: the per-charger integrator is
-                            # REBUILT FROM POWER each restart and under-reports
-                            # after a restart, while the global ``daily_ev`` is
-                            # persisted — the same quantity, and exactly what the
-                            # dashboard "Today" shows (see _per_charger_daily_report).
-                            # Use the persisted global so the night target's
-                            # "delivered" matches the displayed Today figure;
-                            # otherwise repeated restarts make the planner think
-                            # the target isn't reached and it keeps charging past
-                            # it (#536). Multi-charger keeps its own persisted
-                            # per-charger accumulator.
-                            chargers = self.config.get("ev_chargers") or []
-                            if len(chargers) == 1:
-                                daily = float(getattr(energy, "daily_ev", 0.0) or 0.0)
+                            # Display-consistent basis via the ONE accessor
+                            # (#536 single-charger global substitution +
+                            # 2026-07-17 night-idle basis-mismatch fix).
+                            daily = self._charger_daily_kwh(cid, energy)
                             self._night_target_per_charger_map[cid] = max(0, target - daily)
 
                     # Backward compat: set the old scalar for single-value reads
@@ -2514,7 +2521,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             ev_priority=self._ev_priority_for(cid),
                             charger_cfg=charger_cfg,
                             mode=per_mode,
-                            daily_ev_kwh=self._daily_ev_per_charger.get(cid, 0.0),
+                            daily_ev_kwh=self._charger_daily_kwh(cid, energy),
                             target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
                             tariff_wait=bool(charging_context.night_tariff_wait),
@@ -3410,10 +3417,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 raise ValueError("charge mode disables night charging — no EV preview")
                             _target = (_pcfg.get("daily_ev_target")
                                        or self.config.get("daily_ev_target", 10))
-                            if _cid and _cid in self._daily_ev_per_charger:
-                                _daily = self._daily_ev_per_charger[_cid]
-                            else:
-                                _daily = getattr(energy, "daily_ev", 0.0) or 0.0
+                            _daily = (self._charger_daily_kwh(_cid, energy)
+                                      if _cid else (getattr(energy, "daily_ev", 0.0) or 0.0))
                             _remain = max(0.0, float(_target) - float(_daily))
                             if _remain > 0.1:
                                 _ev_remaining = _remain
@@ -3455,9 +3460,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 or self.config.get("daily_ev_target", 10)
                             )
                             _ev_daily = (
-                                self._daily_ev_per_charger.get(_cid)
-                                if _cid and _cid in self._daily_ev_per_charger
-                                else (getattr(energy, "daily_ev", 0.0) or 0.0)
+                                self._charger_daily_kwh(_cid, energy)
+                                if _cid else (getattr(energy, "daily_ev", 0.0) or 0.0)
                             )
                             _remaining_to_target = max(
                                 0.0, float(_ev_target) - float(_ev_daily),
@@ -5216,8 +5220,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # underreport B's remaining need (or fire target-reached
         # spuriously) the moment A drew any energy.
         cid = cfg.get("id") if cfg else None
-        pc_daily = getattr(self, "_daily_ev_per_charger", None) or {}
-        consumed = pc_daily.get(cid, energy.daily_ev) if cid else energy.daily_ev
+        # Display-consistent basis (#536 / night-idle 2026-07-17): the raw
+        # per-charger integrator can drift from the persisted global the
+        # dashboard shows; measure the target against the DISPLAYED figure.
+        consumed = (
+            self._charger_daily_kwh(cid, energy) if cid else energy.daily_ev
+        )
         return max(0, daily_target - consumed)
 
     def _build_fleet_cycle_state(
@@ -5448,8 +5456,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_priority=self._ev_priority_for(_primary_cfg.get("id") or "ev_charger"),
             charger_cfg=_primary_cfg,
             mode=self._effective_charge_mode_for(_primary_cfg),
-            daily_ev_kwh=self._daily_ev_per_charger.get(
-                _primary_cfg.get("id") or "ev_charger", 0.0,
+            daily_ev_kwh=self._charger_daily_kwh(
+                _primary_cfg.get("id") or "ev_charger", energy,
             ),
             target_kwh=remaining_floor,
             # Night plan flags (#246 deadline + #247 tariff_wait).
