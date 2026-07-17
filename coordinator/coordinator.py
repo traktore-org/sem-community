@@ -726,41 +726,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         reg = getattr(self, "_device_registry", None)
         return reg.priority_for(cid, seed=seed) if reg is not None else seed
 
-    def _load_controller_rows(self) -> "List[Dict[str, Any]]":
-        """(#602/#576) Priority-list rows for the registered heat-pump / hot-water
-        controllers, so they're first-class DRAGGABLE members of the one list —
-        their surplus priority is the drag position, seeded (on upgrade) from the
-        old ``heat_pump_priority`` / ``hot_water_priority`` config."""
-        sc = getattr(self, "_surplus_controller", None)
-        if sc is None:
-            return []
-        cfg = {**self.config_entry.data, **self.config_entry.options} \
-            if getattr(self, "config_entry", None) else dict(self.config)
-        rows: "List[Dict[str, Any]]" = []
-        for did, seed_key, seed_def in (
-            ("heat_pump", "heat_pump_priority", 4),
-            ("hot_water", "hot_water_priority", 6),
-        ):
-            dev = sc.get_device(did)
-            if dev is None:
-                continue
-            try:
-                cur = float(dev.observed_power_w() or 0.0)
-            except Exception:  # noqa: BLE001
-                cur = 0.0
-            rows.append({
-                "id": did,
-                "name": getattr(dev, "name", did),
-                "priority_seed": int(cfg.get(seed_key, seed_def)),
-                "power_entity": getattr(dev, "power_entity_id", None),
-                "energy_sensor": getattr(dev, "energy_entity_id", None),
-                "switch_entity": getattr(dev, "entity_id", None),
-                "current_power_w": cur,
-                "is_on": bool(getattr(dev, "is_active", False)),
-                "rated_power_w": float(getattr(dev, "rated_power", 1000) or 1000),
-            })
-        return rows
-
     def _charger_priority_rows(self) -> "List[Dict[str, Any]]":
         """(#576 P2.1) Priority-list rows for every configured EV charger,
         keyed by CONTROL id, for the device registry.
@@ -3795,10 +3760,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     # (mirrors _has_battery). The ED is_ev guess is suppressed
                     # for these — one identity across row/drag/distribution.
                     _reg.set_ev_chargers(self._charger_priority_rows())
-                    # (#602/#576) hand the HP/HW controllers to the registry so
-                    # they're first-class DRAGGABLE rows (their priority = drag
-                    # position, no separate knob).
-                    _reg.set_load_controllers(self._load_controller_rows())
+                    # (#602/#576) the HP/HW controllers are surfaced as draggable
+                    # rows by the registry's direct-registration path itself; the
+                    # refresh below makes the drag store authoritative for them.
                     # (#576) make the drag store authoritative for directly-
                     # registered surplus devices (heat pump / hot water /
                     # climate) too, so their list slot governs the walk below.
