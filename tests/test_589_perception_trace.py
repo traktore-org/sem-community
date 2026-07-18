@@ -129,3 +129,49 @@ class TestLayerMismatchBinarySensor:
             coord, BinarySensorEntityDescription(key="ev_connected"), MagicMock(),
         )
         assert bs.extra_state_attributes is None
+
+
+class TestPreDebouncedFold:
+    """#590 — ONE debounce per signal, never two stacked.
+
+    The counter audit already requires 5 consecutive votes before flagging;
+    a cross-check marked ``pre_debounced`` therefore alarms health() on its
+    FIRST faulted cycle instead of waiting out the trace's own >=3 streak
+    (pre-fold: a real contradiction surfaced only after ~8 cycles)."""
+
+    def _cycle(self, tc, *, agree: bool, pre: bool = True):
+        t = tc.begin()
+        t.cross_checks["battery_sign"] = CrossCheck(
+            "battery_sign", status=LayerStatus.OK,
+            data={"agree": agree}, pre_debounced=pre,
+        )
+        tc.commit()
+
+    def test_pre_debounced_alarms_on_first_cycle(self):
+        tc = TraceCollector()
+        self._cycle(tc, agree=False)
+        h = tc.health()
+        assert h["ok"] is False
+        assert h["subsystem"] == "perception:battery_sign"
+        assert h["cycles"] == 1
+
+    def test_pre_debounced_recovery_clears(self):
+        tc = TraceCollector()
+        self._cycle(tc, agree=False)
+        assert tc.health()["ok"] is False
+        self._cycle(tc, agree=True)
+        assert tc.health()["ok"] is True
+
+    def test_non_pre_debounced_keeps_streak_threshold(self):
+        # The control-layer streak contract is untouched: an un-flagged
+        # cross-check still needs the >=3-cycle streak.
+        tc = TraceCollector()
+        self._cycle(tc, agree=False, pre=False)
+        self._cycle(tc, agree=False, pre=False)
+        assert tc.health()["ok"] is True
+        self._cycle(tc, agree=False, pre=False)
+        assert tc.health()["ok"] is False
+
+    def test_to_dict_carries_the_flag(self):
+        cc = CrossCheck("grid_sign", data={"agree": False}, pre_debounced=True)
+        assert cc.to_dict()["pre_debounced"] is True

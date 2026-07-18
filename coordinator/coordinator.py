@@ -1474,17 +1474,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             or getattr(reader, "_manual_grid_mismatch", False)
         )
         batt_fault = bool(getattr(reader, "_battery_sign_contradiction", False))
+        # #590 — pre_debounced: the CounterCorrelationAudit behind these flags
+        # already requires 5 consecutive contradiction votes; the trace health
+        # engine must not stack its own >=3-cycle streak on top (one debounce).
         trace.cross_checks["grid_sign"] = CrossCheck(
             signal="grid_sign",
             status=LayerStatus.OK,
             detail="grid sign vs import/export counters",
             data={"agree": (not grid_fault)},
+            pre_debounced=True,
         )
         trace.cross_checks["battery_sign"] = CrossCheck(
             signal="battery_sign",
             status=LayerStatus.OK,
             detail="battery sign vs charge/discharge counters",
             data={"agree": (not batt_fault)},
+            pre_debounced=True,
         )
 
     def _trace_ev(self, trace, sem_data, power) -> None:

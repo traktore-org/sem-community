@@ -178,6 +178,12 @@ class CrossCheck:
     status: LayerStatus = LayerStatus.OK
     detail: str = ""
     data: Dict[str, Any] = field(default_factory=dict)  # {"agree": bool|None, …}
+    # #590 — the SOURCE already debounced this signal (the counter audit's
+    # 5-vote threshold). The trace health engine then alarms on the FIRST
+    # faulted cycle instead of stacking its ≥3-cycle streak on top: ONE
+    # debounce, not two (pre-fold, a real contradiction only surfaced after
+    # 5 votes + 3 streak cycles ≈ 8 cycles ≈ 80 s).
+    pre_debounced: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -185,6 +191,7 @@ class CrossCheck:
             "status": self.status.value,
             "detail": self.detail,
             "data": dict(self.data),
+            "pre_debounced": self.pre_debounced,
         }
 
     @property
@@ -240,6 +247,9 @@ class TraceCollector:
         # subsystem → consecutive cycles with a layer-boundary mismatch.
         # Debounces the health signal so a single-cycle blip doesn't alarm.
         self._streak: Dict[str, int] = {}
+        # #590 — mismatch keys whose SOURCE already debounced (pre_debounced
+        # cross-checks): health() alarms these at streak ≥1, not ≥threshold.
+        self._pre_debounced: set = set()
 
     def begin(self, wall_iso: str = "") -> CycleTrace:
         """Open a fresh trace for this cycle. Returns it for capture writes."""
@@ -269,6 +279,13 @@ class TraceCollector:
             for cc in self._current.cross_checks.values()
             if cc.is_fault
         }
+        # #590 — remember which faulted keys arrived pre-debounced so
+        # health() can alarm them without stacking a second streak delay.
+        self._pre_debounced = {
+            f"perception:{cc.signal}"
+            for cc in self._current.cross_checks.values()
+            if cc.is_fault and cc.pre_debounced
+        }
         # reset streaks that recovered this cycle; increment the ones still bad
         for k in list(self._streak):
             if k not in mismatched:
@@ -286,7 +303,13 @@ class TraceCollector:
         ``binary_sensor.sem_layer_mismatch`` / ``diagnose`` health surface
         read — it would have flagged the 2026-07-10 flap within ~3 cycles.
         """
-        persistent = {k: v for k, v in self._streak.items() if v >= threshold}
+        # #590 — pre-debounced keys (source already vote-debounced, e.g. the
+        # counter audit) alarm at the first cycle; everything else keeps the
+        # streak threshold. One debounce per signal, never two stacked.
+        persistent = {
+            k: v for k, v in self._streak.items()
+            if v >= (1 if k in self._pre_debounced else threshold)
+        }
         if not persistent:
             return {"ok": True, "subsystem": None, "cycles": 0, "mismatch": None}
         worst = max(persistent, key=persistent.get)
