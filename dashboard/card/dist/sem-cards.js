@@ -6351,6 +6351,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 ${this._renderOptionNumberInput("heat_pump_rated_power","config_hp_rated_power",{min:100,max:3e4,step:50,unit:"W",default:2e3},i,"config_help_hp_rated_power")}
                 ${""}
                 ${this._renderPicker("heat_pump_temperature_sensor","config_hp_temperature_sensor","sensor","temperature",i,"config_help_hp_temperature_sensor")}
+                ${""}
+                ${this._renderPicker("vacation_mode_entity","config_vacation_entity",["binary_sensor","input_boolean","switch","calendar"],null,i,"config_help_vacation_entity")}
                 ${t?this._renderStepper("number.sem_heat_pump_boost_offset","heat_pump_boost_offset",e,"config_help_hp_boost_offset"):this._renderOptionSlider("heat_pump_boost_offset","heat_pump_boost_offset",{min:0,max:10,step:.5,unit:"°C",default:2},i,"config_help_hp_boost_offset")}
                 ${this._renderOptionSlider("heat_pump_max_setpoint","config_hp_max_setpoint",{min:30,max:80,step:1,unit:"°C",default:55},i,"config_help_hp_max_setpoint")}
                 ${""}

@@ -990,6 +990,11 @@ class SEMConfigCard extends SEMLitBase {
                       no picker anywhere (unreachable). */ ''}
                 ${this._renderPicker('heat_pump_temperature_sensor', 'config_hp_temperature_sensor',
                     'sensor', 'temperature', opts, 'config_help_hp_temperature_sensor')}
+                ${/* #594 — external vacation signal (ViCare holiday etc.); OR'd
+                      with switch.sem_vacation_mode. Tunable — read per cycle. */ ''}
+                ${this._renderPicker('vacation_mode_entity', 'config_vacation_entity',
+                    ['binary_sensor', 'input_boolean', 'switch', 'calendar'],
+                    null, opts, 'config_help_vacation_entity')}
                 ${registered
                     ? this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T, 'config_help_hp_boost_offset')
                     : this._renderOptionSlider('heat_pump_boost_offset', 'heat_pump_boost_offset',

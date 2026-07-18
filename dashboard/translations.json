@@ -1192,7 +1192,9 @@
     "config_help_label": "Explain settings",
     "config_reset_default": "Reset to default",
     "vacation_mode": "Vacation Mode",
-    "vacation_mode_help": "While away, SEM pauses comfort heating (heat pump boost and hot water). Legionella protection catches up when you return."
+    "vacation_mode_help": "While away, SEM pauses comfort heating (heat pump boost and hot water). Legionella protection catches up when you return.",
+    "config_vacation_entity": "Vacation signal entity",
+    "config_help_vacation_entity": "Optional external vacation signal (e.g. your heat-pump app’s holiday mode, an input_boolean, or a calendar). While it is on, SEM suppresses comfort heating — same effect as the SEM Vacation mode switch; either source activates it."
   },
   "de": {
     "charging": "Laden",
@@ -2387,7 +2389,9 @@
     "config_help_label": "Einstellungen erklären",
     "config_reset_default": "Auf Standard zurücksetzen",
     "vacation_mode": "Urlaubsmodus",
-    "vacation_mode_help": "Während der Abwesenheit pausiert SEM die Komfortheizung (Wärmepumpen-Boost und Warmwasser). Der Legionellenschutz holt den Zyklus nach der Rückkehr nach."
+    "vacation_mode_help": "Während der Abwesenheit pausiert SEM die Komfortheizung (Wärmepumpen-Boost und Warmwasser). Der Legionellenschutz holt den Zyklus nach der Rückkehr nach.",
+    "config_vacation_entity": "Urlaubs-Signal-Entität",
+    "config_help_vacation_entity": "Optionales externes Urlaubssignal (z. B. der Ferienmodus der Wärmepumpen-App, ein input_boolean oder ein Kalender). Solange es aktiv ist, unterdrückt SEM Komfortheizen — gleiche Wirkung wie der SEM-Urlaubsmodus-Schalter; jede der beiden Quellen aktiviert ihn."
   },
   "fr": {
     "charging": "En charge",
@@ -3582,7 +3586,9 @@
     "config_help_label": "Expliquer les réglages",
     "config_reset_default": "Réinitialiser",
     "vacation_mode": "Mode vacances",
-    "vacation_mode_help": "Pendant votre absence, SEM suspend le chauffage de confort (boost pompe à chaleur et eau chaude). La protection anti-légionelle rattrape le cycle à votre retour."
+    "vacation_mode_help": "Pendant votre absence, SEM suspend le chauffage de confort (boost pompe à chaleur et eau chaude). La protection anti-légionelle rattrape le cycle à votre retour.",
+    "config_vacation_entity": "Entité signal vacances",
+    "config_help_vacation_entity": "Signal de vacances externe optionnel (mode vacances de la pompe à chaleur, input_boolean ou calendrier). Tant qu’il est actif, SEM suspend le chauffage de confort."
   },
   "es": {
     "charging": "Cargando",
@@ -4777,7 +4783,9 @@
     "config_help_label": "Explicar ajustes",
     "config_reset_default": "Restablecer",
     "vacation_mode": "Modo vacaciones",
-    "vacation_mode_help": "Durante la ausencia, SEM pausa la calefacción de confort (refuerzo de la bomba de calor y agua caliente). La protección contra legionela recupera el ciclo al volver."
+    "vacation_mode_help": "Durante la ausencia, SEM pausa la calefacción de confort (refuerzo de la bomba de calor y agua caliente). La protección contra legionela recupera el ciclo al volver.",
+    "config_vacation_entity": "Entidad señal vacaciones",
+    "config_help_vacation_entity": "Señal de vacaciones externa opcional (modo vacaciones de la bomba de calor, input_boolean o calendario). Mientras esté activa, SEM suprime la calefacción de confort."
   },
   "it": {
     "charging": "In carica",
@@ -5972,7 +5980,9 @@
     "config_help_label": "Spiega impostazioni",
     "config_reset_default": "Ripristina predefinito",
     "vacation_mode": "Modalità vacanza",
-    "vacation_mode_help": "Durante l’assenza, SEM sospende il riscaldamento comfort (boost della pompa di calore e acqua calda). La protezione antilegionella recupera il ciclo al rientro."
+    "vacation_mode_help": "Durante l’assenza, SEM sospende il riscaldamento comfort (boost della pompa di calore e acqua calda). La protezione antilegionella recupera il ciclo al rientro.",
+    "config_vacation_entity": "Entità segnale vacanza",
+    "config_help_vacation_entity": "Segnale vacanza esterno opzionale (modalità vacanza della pompa di calore, input_boolean o calendario). Finché è attivo, SEM sospende il riscaldamento comfort."
   },
   "nl": {
     "charging": "Laden",
@@ -7167,7 +7177,9 @@
     "config_help_label": "Instellingen uitleggen",
     "config_reset_default": "Standaard herstellen",
     "vacation_mode": "Vakantiemodus",
-    "vacation_mode_help": "Tijdens afwezigheid pauzeert SEM comfortverwarming (warmtepomp-boost en warm water). De legionellabescherming haalt de cyclus na terugkeer in."
+    "vacation_mode_help": "Tijdens afwezigheid pauzeert SEM comfortverwarming (warmtepomp-boost en warm water). De legionellabescherming haalt de cyclus na terugkeer in.",
+    "config_vacation_entity": "Vakantiesignaal-entiteit",
+    "config_help_vacation_entity": "Optioneel extern vakantiesignaal (vakantiemodus van de warmtepomp-app, input_boolean of agenda). Zolang het aan is, onderdrukt SEM comfortverwarming."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -8362,7 +8374,9 @@
     "config_help_label": "Vysvětlit nastavení",
     "config_reset_default": "Obnovit výchozí",
     "vacation_mode": "Režim dovolené",
-    "vacation_mode_help": "Během nepřítomnosti SEM pozastaví komfortní vytápění (boost tepelného čerpadla a teplou vodu). Ochrana proti legionelám dožene cyklus po návratu."
+    "vacation_mode_help": "Během nepřítomnosti SEM pozastaví komfortní vytápění (boost tepelného čerpadla a teplou vodu). Ochrana proti legionelám dožene cyklus po návratu.",
+    "config_vacation_entity": "Entita signálu dovolené",
+    "config_help_vacation_entity": "Volitelný externí signál dovolené (režim dovolené tepelného čerpadla, input_boolean nebo kalendář). Dokud je aktivní, SEM potlačuje komfortní ohřev."
   },
   "da": {
     "charging": "Oplader",
@@ -9557,7 +9571,9 @@
     "config_help_label": "Forklar indstillinger",
     "config_reset_default": "Nulstil til standard",
     "vacation_mode": "Ferietilstand",
-    "vacation_mode_help": "Under fravær sætter SEM komfortopvarmning på pause (varmepumpe-boost og varmt vand). Legionellabeskyttelsen indhenter cyklussen ved hjemkomst."
+    "vacation_mode_help": "Under fravær sætter SEM komfortopvarmning på pause (varmepumpe-boost og varmt vand). Legionellabeskyttelsen indhenter cyklussen ved hjemkomst.",
+    "config_vacation_entity": "Ferie-signal-entitet",
+    "config_help_vacation_entity": "Valgfrit eksternt feriesignal (varmepumpens ferietilstand, input_boolean eller kalender). Så længe det er aktivt, undertrykker SEM komfortopvarmning."
   },
   "fi": {
     "charging": "Lataus",
@@ -10752,7 +10768,9 @@
     "config_help_label": "Selitä asetukset",
     "config_reset_default": "Palauta oletus",
     "vacation_mode": "Lomatila",
-    "vacation_mode_help": "Poissa ollessasi SEM keskeyttää mukavuuslämmityksen (lämpöpumpun tehostuksen ja lämpimän veden). Legionellasuojaus ottaa jakson kiinni palattuasi."
+    "vacation_mode_help": "Poissa ollessasi SEM keskeyttää mukavuuslämmityksen (lämpöpumpun tehostuksen ja lämpimän veden). Legionellasuojaus ottaa jakson kiinni palattuasi.",
+    "config_vacation_entity": "Loma-signaalientiteetti",
+    "config_help_vacation_entity": "Valinnainen ulkoinen lomasignaali (lämpöpumpun lomatila, input_boolean tai kalenteri). Kun se on päällä, SEM estää mukavuuslämmityksen."
   },
   "hu": {
     "charging": "Töltés",
@@ -11947,7 +11965,9 @@
     "config_help_label": "Beállítások magyarázata",
     "config_reset_default": "Alapértelmezett visszaállítása",
     "vacation_mode": "Vakáció üzemmód",
-    "vacation_mode_help": "Távollét alatt a SEM szünetelteti a komfortfűtést (hőszivattyú-rásegítés és melegvíz). A legionella-védelem hazatéréskor pótolja a ciklust."
+    "vacation_mode_help": "Távollét alatt a SEM szünetelteti a komfortfűtést (hőszivattyú-rásegítés és melegvíz). A legionella-védelem hazatéréskor pótolja a ciklust.",
+    "config_vacation_entity": "Vakáció-jelzés entitás",
+    "config_help_vacation_entity": "Opcionális külső vakációjelzés (hőszivattyú-app nyaralás módja, input_boolean vagy naptár). Amíg aktív, a SEM felfüggeszti a komfortfűtést."
   },
   "no": {
     "charging": "Lader",
@@ -13142,7 +13162,9 @@
     "config_help_label": "Forklar innstillinger",
     "config_reset_default": "Tilbakestill til standard",
     "vacation_mode": "Feriemodus",
-    "vacation_mode_help": "Når du er borte, pauser SEM komfortoppvarming (varmepumpe-boost og varmtvann). Legionellabeskyttelsen tar igjen syklusen når du kommer hjem."
+    "vacation_mode_help": "Når du er borte, pauser SEM komfortoppvarming (varmepumpe-boost og varmtvann). Legionellabeskyttelsen tar igjen syklusen når du kommer hjem.",
+    "config_vacation_entity": "Ferie-signalentitet",
+    "config_help_vacation_entity": "Valgfritt eksternt feriesignal (varmepumpens feriemodus, input_boolean eller kalender). Så lenge det er aktivt, undertrykker SEM komfortoppvarming."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -14337,7 +14359,9 @@
     "config_help_label": "Wyjaśnij ustawienia",
     "config_reset_default": "Przywróć domyślne",
     "vacation_mode": "Tryb wakacyjny",
-    "vacation_mode_help": "Podczas nieobecności SEM wstrzymuje ogrzewanie komfortowe (boost pompy ciepła i ciepłą wodę). Ochrona przed legionellą nadrabia cykl po powrocie."
+    "vacation_mode_help": "Podczas nieobecności SEM wstrzymuje ogrzewanie komfortowe (boost pompy ciepła i ciepłą wodę). Ochrona przed legionellą nadrabia cykl po powrocie.",
+    "config_vacation_entity": "Encja sygnału urlopu",
+    "config_help_vacation_entity": "Opcjonalny zewnętrzny sygnał urlopu (tryb urlopowy pompy ciepła, input_boolean lub kalendarz). Gdy aktywny, SEM wstrzymuje ogrzewanie komfortowe."
   },
   "pt": {
     "charging": "A carregar",
@@ -15532,7 +15556,9 @@
     "config_help_label": "Explicar definições",
     "config_reset_default": "Repor predefinição",
     "vacation_mode": "Modo férias",
-    "vacation_mode_help": "Durante a ausência, o SEM pausa o aquecimento de conforto (reforço da bomba de calor e água quente). A proteção contra legionela recupera o ciclo no regresso."
+    "vacation_mode_help": "Durante a ausência, o SEM pausa o aquecimento de conforto (reforço da bomba de calor e água quente). A proteção contra legionela recupera o ciclo no regresso.",
+    "config_vacation_entity": "Entidade sinal de férias",
+    "config_help_vacation_entity": "Sinal de férias externo opcional (modo férias da bomba de calor, input_boolean ou calendário). Enquanto ativo, o SEM suspende o aquecimento de conforto."
   },
   "ro": {
     "charging": "Încărcare",
@@ -16727,7 +16753,9 @@
     "config_help_label": "Explică setările",
     "config_reset_default": "Resetare implicită",
     "vacation_mode": "Mod vacanță",
-    "vacation_mode_help": "În absență, SEM suspendă încălzirea de confort (boost pompă de căldură și apă caldă). Protecția anti-legionella recuperează ciclul la întoarcere."
+    "vacation_mode_help": "În absență, SEM suspendă încălzirea de confort (boost pompă de căldură și apă caldă). Protecția anti-legionella recuperează ciclul la întoarcere.",
+    "config_vacation_entity": "Entitate semnal vacanță",
+    "config_help_vacation_entity": "Semnal de vacanță extern opțional (modul vacanță al pompei de căldură, input_boolean sau calendar). Cât timp este activ, SEM suprimă încălzirea de confort."
   },
   "sv": {
     "charging": "Laddar",
@@ -17922,7 +17950,9 @@
     "config_help_label": "Förklara inställningar",
     "config_reset_default": "Återställ standard",
     "vacation_mode": "Semesterläge",
-    "vacation_mode_help": "Vid frånvaro pausar SEM komfortvärme (värmepumpsboost och varmvatten). Legionellaskyddet tar igen cykeln när du kommer hem."
+    "vacation_mode_help": "Vid frånvaro pausar SEM komfortvärme (värmepumpsboost och varmvatten). Legionellaskyddet tar igen cykeln när du kommer hem.",
+    "config_vacation_entity": "Semestersignal-entitet",
+    "config_help_vacation_entity": "Valfri extern semestersignal (värmepumpens semesterläge, input_boolean eller kalender). Så länge den är på undertrycker SEM komfortvärme."
   },
   "zh": {
     "charging": "充电中",
@@ -19117,6 +19147,8 @@
     "config_help_label": "设置说明",
     "config_reset_default": "恢复默认值",
     "vacation_mode": "度假模式",
-    "vacation_mode_help": "外出期间，SEM 会暂停舒适供暖（热泵增强和热水）。返回后军团菌防护会补上错过的周期。"
+    "vacation_mode_help": "外出期间，SEM 会暂停舒适供暖（热泵增强和热水）。返回后军团菌防护会补上错过的周期。",
+    "config_vacation_entity": "度假信号实体",
+    "config_help_vacation_entity": "可选的外部度假信号（例如热泵应用的假期模式、input_boolean 或日历）。激活期间，SEM 将暂停舒适加热——与 SEM 度假模式开关效果相同；任一来源均可激活。"
   }
 }
