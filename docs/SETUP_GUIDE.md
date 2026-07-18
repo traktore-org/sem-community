@@ -276,12 +276,28 @@ load — check **Settings > System > Logs** (filter for
 
 ## 5. Options Flow
 
-Once SEM is running, open **Settings > Devices & Services**, find the SEM
-card, and click **Configure** to adjust any setting without reinstalling.
-Changes take effect within one coordinator cycle (default 10 seconds).
+**The dashboard Configuration tab is the primary place to change settings** —
+open your SEM dashboard and switch to the ⚙ Configuration tab. Everything below
+is editable there, organized in the same sections as this guide, with:
 
+- **Staged changes with Apply/Revert per section** — nothing saves while you
+  scroll or on an accidental tap; changed rows are highlighted and commit only
+  when you press *Apply changes* (or *Revert* to undo).
+- **ⓘ help on every setting** — tap the info icon for the explanation, the
+  factory **default**, and a one-tap **↺ Reset to default**. The *Explain
+  settings* toggle at the top opens all help texts at once.
+- **📖 docs links** — each section header links straight to its chapter in
+  this guide.
+- **🩺 Diagnose per section** — copies a focused JSON snapshot (config + live
+  state + recent related log lines, including your recent config changes) for
+  sharing in an issue.
 
-The options flow is organized into these pages:
+Changes take effect within one coordinator cycle (default 10 seconds);
+settings that re-wire entities trigger a one-time reload on Apply.
+
+*Fallback:* the classic HA options flow still exists under **Settings >
+Devices & Services → SEM → Configure** — useful when the dashboard isn't
+generated yet. It is organized into these pages:
 1. **EV Charger** — charger sensors and control method
 2. **Battery & SOC Zones** — battery capacity, SOC thresholds, discharge protection
 3. **EV Charging & Solar** — daily targets, surplus settings, night charging
@@ -787,7 +803,22 @@ limit (if configured).
 
 ## 10. Heat Pump and Hot Water
 
-SEM can control a heat pump or hot water system using the SG-Ready standard.
+SEM can control a heat pump or hot water system using the SG-Ready standard,
+or — for pumps without relays (Nibe, Mitsubishi, Daikin, Viessmann…) — via
+their `climate` entity (setpoint boost on surplus).
+
+**Their place in the surplus order:** since v1.7.5 the heat pump and hot
+water device appear as **draggable rows in the ONE device-priority list** on
+the Control tab — their surplus priority is simply their list position
+(there is no separate priority slider anymore). See
+[LOAD_PRIORITY.md](LOAD_PRIORITY.md).
+
+**No power sensor?** Point the *Heat pump / Hot water energy sensor (kWh)*
+field at a cumulative energy counter (e.g. a Viessmann ViCare kWh total) —
+SEM derives a smooth live power signal from it, or autodetects a companion
+power sensor on the same device. Set *Rated power (W)* so surplus sizing
+works before the first live reading. Both fields live in the dashboard
+Configuration tab's Heat Pump / Hot Water sections.
 
 ### What is SG-Ready?
 

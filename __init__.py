@@ -3623,12 +3623,16 @@ async def _async_register_phase_services(
                 )
                 await hass.config_entries.async_reload(target_entry.entry_id)
 
-        _LOGGER.debug(
-            "set_option wrote %d key(s) to entry %s "
-            "(structural=%s tunable=%s unrouted=%s reload=%s)",
+        # #605 — INFO, not debug: these lines ARE the config change history.
+        # The Config tab's Diagnose panel surfaces recent SEM log lines, so a
+        # user who fat-fingered a value can see exactly which keys changed and
+        # when (values included; the bulky ev_chargers list is elided).
+        _LOGGER.info(
+            "set_option wrote %d key(s) to entry %s: %s "
+            "(structural=%s reload=%s)",
             len(options), target_entry.entry_id,
-            structural_keys, tunable_keys, unrouted,
-            bool(direct_keys),
+            {k: options[k] for k in list(options)[:8] if k != "ev_chargers"},
+            structural_keys, bool(direct_keys),
         )
 
     hass.services.async_register(

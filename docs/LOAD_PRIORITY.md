@@ -86,6 +86,13 @@ and the battery:
 - **Every device type participates by position** — surplus switches, modulating
   loads, climate/AC, the heat pump (SG-Ready) and hot water are all walked by their
   list slot and share the reclaimed battery-charge power the same way.
+- **Heat pump & hot water are draggable rows too (v1.7.5-beta.11, #602)** — they
+  appear with their own glyphs (heat-pump / water-boiler) and their surplus
+  priority is their list position, seeded once from the old
+  `heat_pump_priority` / `hot_water_priority` values on upgrade. The separate
+  priority sliders were retired; the legacy EV flags
+  (`ev_load_priority`, `ev_shed_priority`, `ev_priority_over_battery`) are
+  cleaned from stored configs by the v16 schema migration (#604).
 - **Default order is EV → battery → loads.** Loads yield to battery charging until
   you drag one above the battery; the `Battery priority SOC` reserve floor stays an
   absolute override (below it, the battery charges first regardless of position).

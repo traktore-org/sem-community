@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.12] — 18.07.2026
+
+### ✨ Configuration tab redesign (#605 + #606, by @tlinnet's reports)
+
+- 📝 **Staged changes with Apply/Revert per section** — steppers, sliders, selects and
+  toggles no longer save on touch: a changed row is highlighted (● badge on the section
+  header too) and commits only on **✓ Apply changes**, or **↩ Revert** undoes it. Kills
+  the mobile scroll-flick that silently changed values; option keys commit as ONE batched
+  write per section.
+- ⓘ **Help on every setting** — a per-row info button opens that setting's explanation
+  with its factory **Default** and a one-tap **↺ Reset to default** (stages through Apply,
+  so a reset is previewable and revertable). The global toggle is now a labeled
+  **Explain settings** pill instead of a bare (?) icon.
+- 📖 **Docs links per section** — every section header links straight to its exact chapter
+  in the guides (anchored), and the guides got a freshness pass to match the new surface.
+- 🧾 **Config change history** — every settings write is now an INFO log line with the
+  changed keys and values, visible in the section's 🩺 Diagnose panel ("what did I
+  change?").
+- 🖼️ README Configuration description + screenshot refreshed from the live card.
+
 # [1.7.5-beta.11] — 17.07.2026
 
 > ⚠️ **beta.10 was recalled** — it shipped with the single-charger EV power regression fixed

@@ -622,6 +622,12 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         if value is None:
             value = self._get_default_value(description.key)
         self._attr_native_value = value
+        # (#606) surface the FACTORY default so the dashboard Config card can
+        # show "Default: X" in each setting's help — single source of truth
+        # (the same lookup the entity itself falls back to), no card-side map.
+        self._attr_extra_state_attributes = {
+            "sem_default": self._get_default_value(description.key),
+        }
 
     def _get_default_value(self, key: str) -> float:
         """Get default value for a setting."""
