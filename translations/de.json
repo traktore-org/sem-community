@@ -935,6 +935,9 @@
       },
       "heat_pump_registration_status": {
         "name": "Wärmepumpe Registrierungs-Status"
+      },
+      "vpp_event": {
+        "name": "VPP-Ereignis"
       }
     },
     "binary_sensor": {

@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-18T09:02:00.463954+00:00
+// Generated: 2026-07-18T09:39:53.539949+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1200,7 +1200,18 @@
       "vacation_mode": "Vacation Mode",
       "vacation_mode_help": "While away, SEM pauses comfort heating (heat pump boost and hot water). Legionella protection catches up when you return.",
       "config_vacation_entity": "Vacation signal entity",
-      "config_help_vacation_entity": "Optional external vacation signal (e.g. your heat-pump app’s holiday mode, an input_boolean, or a calendar). While it is on, SEM suppresses comfort heating — same effect as the SEM Vacation mode switch; either source activates it."
+      "config_help_vacation_entity": "Optional external vacation signal (e.g. your heat-pump app’s holiday mode, an input_boolean, or a calendar). While it is on, SEM suppresses comfort heating — same effect as the SEM Vacation mode switch; either source activates it.",
+      "config_vpp_section": "Grid VPP",
+      "config_vpp_enabled": "VPP dispatch",
+      "config_help_vpp_enabled": "Responds to grid operator (VPP) events, e.g. Axle Energy: exports battery power or pauses/boosts EV charging for the event window. Starts in observer mode — see docs/GRID_VPP.md for wiring and safety rails.",
+      "config_vpp_observer": "Observer mode (log only)",
+      "config_help_vpp_observer": "Dry run: SEM logs and notifies what it WOULD do during a VPP event but controls nothing. Turn off only after the log looks right.",
+      "config_vpp_event_entity": "Event signal",
+      "config_vpp_direction_entity": "Event direction",
+      "config_vpp_event_end_entity": "Event end time",
+      "config_vpp_pre_event_entity": "Pre-event signal",
+      "config_vpp_reserve_soc": "VPP battery reserve",
+      "config_help_vpp_reserve_soc": "Export events never discharge the home battery below this level."
     },
     "de": {
       "charging": "Laden",
@@ -2397,7 +2408,18 @@
       "vacation_mode": "Urlaubsmodus",
       "vacation_mode_help": "Während der Abwesenheit pausiert SEM die Komfortheizung (Wärmepumpen-Boost und Warmwasser). Der Legionellenschutz holt den Zyklus nach der Rückkehr nach.",
       "config_vacation_entity": "Urlaubs-Signal-Entität",
-      "config_help_vacation_entity": "Optionales externes Urlaubssignal (z. B. der Ferienmodus der Wärmepumpen-App, ein input_boolean oder ein Kalender). Solange es aktiv ist, unterdrückt SEM Komfortheizen — gleiche Wirkung wie der SEM-Urlaubsmodus-Schalter; jede der beiden Quellen aktiviert ihn."
+      "config_help_vacation_entity": "Optionales externes Urlaubssignal (z. B. der Ferienmodus der Wärmepumpen-App, ein input_boolean oder ein Kalender). Solange es aktiv ist, unterdrückt SEM Komfortheizen — gleiche Wirkung wie der SEM-Urlaubsmodus-Schalter; jede der beiden Quellen aktiviert ihn.",
+      "config_vpp_section": "Netz-VPP",
+      "config_vpp_enabled": "VPP-Dispatch",
+      "config_help_vpp_enabled": "Reagiert auf Netzbetreiber-Ereignisse (VPP), z. B. Axle Energy: exportiert Batterieleistung oder pausiert/verstärkt das EV-Laden für das Ereignisfenster. Startet im Beobachtermodus — siehe docs/GRID_VPP.md für Verkabelung und Sicherheitsmechanismen.",
+      "config_vpp_observer": "Beobachtermodus (nur protokollieren)",
+      "config_help_vpp_observer": "Testlauf: SEM protokolliert und meldet, was es bei einem VPP-Ereignis tun WÜRDE, steuert aber nichts. Erst deaktivieren, wenn das Protokoll passt.",
+      "config_vpp_event_entity": "Ereignis-Signal",
+      "config_vpp_direction_entity": "Ereignis-Richtung",
+      "config_vpp_event_end_entity": "Ereignis-Endzeit",
+      "config_vpp_pre_event_entity": "Vorlauf-Signal",
+      "config_vpp_reserve_soc": "VPP-Batteriereserve",
+      "config_help_vpp_reserve_soc": "Export-Ereignisse entladen die Hausbatterie nie unter dieses Niveau."
     },
     "fr": {
       "charging": "En charge",
@@ -3594,7 +3616,18 @@
       "vacation_mode": "Mode vacances",
       "vacation_mode_help": "Pendant votre absence, SEM suspend le chauffage de confort (boost pompe à chaleur et eau chaude). La protection anti-légionelle rattrape le cycle à votre retour.",
       "config_vacation_entity": "Entité signal vacances",
-      "config_help_vacation_entity": "Signal de vacances externe optionnel (mode vacances de la pompe à chaleur, input_boolean ou calendrier). Tant qu’il est actif, SEM suspend le chauffage de confort."
+      "config_help_vacation_entity": "Signal de vacances externe optionnel (mode vacances de la pompe à chaleur, input_boolean ou calendrier). Tant qu’il est actif, SEM suspend le chauffage de confort.",
+      "config_vpp_section": "VPP réseau",
+      "config_vpp_enabled": "Dispatch VPP",
+      "config_help_vpp_enabled": "Répond aux événements de l'opérateur réseau (VPP), p. ex. Axle Energy : exporte la puissance de la batterie ou met en pause/booste la charge du VE pendant la fenêtre de l'événement. Démarre en mode observateur — voir docs/GRID_VPP.md pour le câblage et les garde-fous.",
+      "config_vpp_observer": "Mode observateur (journal uniquement)",
+      "config_help_vpp_observer": "Essai à blanc : SEM journalise et notifie ce qu'il FERAIT pendant un événement VPP mais ne commande rien. Ne le désactivez que lorsque le journal est correct.",
+      "config_vpp_event_entity": "Signal d'événement",
+      "config_vpp_direction_entity": "Direction de l'événement",
+      "config_vpp_event_end_entity": "Heure de fin d'événement",
+      "config_vpp_pre_event_entity": "Signal pré-événement",
+      "config_vpp_reserve_soc": "Réserve batterie VPP",
+      "config_help_vpp_reserve_soc": "Les événements d'export ne déchargent jamais la batterie domestique sous ce niveau."
     },
     "es": {
       "charging": "Cargando",
@@ -4791,7 +4824,18 @@
       "vacation_mode": "Modo vacaciones",
       "vacation_mode_help": "Durante la ausencia, SEM pausa la calefacción de confort (refuerzo de la bomba de calor y agua caliente). La protección contra legionela recupera el ciclo al volver.",
       "config_vacation_entity": "Entidad señal vacaciones",
-      "config_help_vacation_entity": "Señal de vacaciones externa opcional (modo vacaciones de la bomba de calor, input_boolean o calendario). Mientras esté activa, SEM suprime la calefacción de confort."
+      "config_help_vacation_entity": "Señal de vacaciones externa opcional (modo vacaciones de la bomba de calor, input_boolean o calendario). Mientras esté activa, SEM suprime la calefacción de confort.",
+      "config_vpp_section": "VPP de red",
+      "config_vpp_enabled": "Despacho VPP",
+      "config_help_vpp_enabled": "Responde a eventos del operador de red (VPP), p. ej. Axle Energy: exporta potencia de la batería o pausa/impulsa la carga del VE durante la ventana del evento. Comienza en modo observador — consulta docs/GRID_VPP.md para el cableado y las salvaguardas.",
+      "config_vpp_observer": "Modo observador (solo registro)",
+      "config_help_vpp_observer": "Simulacro: SEM registra y notifica lo que HARÍA durante un evento VPP pero no controla nada. Desactívalo solo cuando el registro sea correcto.",
+      "config_vpp_event_entity": "Señal de evento",
+      "config_vpp_direction_entity": "Dirección del evento",
+      "config_vpp_event_end_entity": "Hora de fin del evento",
+      "config_vpp_pre_event_entity": "Señal pre-evento",
+      "config_vpp_reserve_soc": "Reserva de batería VPP",
+      "config_help_vpp_reserve_soc": "Los eventos de exportación nunca descargan la batería doméstica por debajo de este nivel."
     },
     "it": {
       "charging": "In carica",
@@ -5988,7 +6032,18 @@
       "vacation_mode": "Modalità vacanza",
       "vacation_mode_help": "Durante l’assenza, SEM sospende il riscaldamento comfort (boost della pompa di calore e acqua calda). La protezione antilegionella recupera il ciclo al rientro.",
       "config_vacation_entity": "Entità segnale vacanza",
-      "config_help_vacation_entity": "Segnale vacanza esterno opzionale (modalità vacanza della pompa di calore, input_boolean o calendario). Finché è attivo, SEM sospende il riscaldamento comfort."
+      "config_help_vacation_entity": "Segnale vacanza esterno opzionale (modalità vacanza della pompa di calore, input_boolean o calendario). Finché è attivo, SEM sospende il riscaldamento comfort.",
+      "config_vpp_section": "VPP di rete",
+      "config_vpp_enabled": "Dispacciamento VPP",
+      "config_help_vpp_enabled": "Risponde agli eventi dell'operatore di rete (VPP), ad es. Axle Energy: esporta potenza dalla batteria o mette in pausa/potenzia la ricarica EV per la finestra dell'evento. Parte in modalità osservatore — vedi docs/GRID_VPP.md per collegamenti e protezioni.",
+      "config_vpp_observer": "Modalità osservatore (solo log)",
+      "config_help_vpp_observer": "Prova a vuoto: SEM registra e notifica cosa FAREBBE durante un evento VPP ma non controlla nulla. Disattivala solo quando il log è corretto.",
+      "config_vpp_event_entity": "Segnale evento",
+      "config_vpp_direction_entity": "Direzione evento",
+      "config_vpp_event_end_entity": "Ora di fine evento",
+      "config_vpp_pre_event_entity": "Segnale pre-evento",
+      "config_vpp_reserve_soc": "Riserva batteria VPP",
+      "config_help_vpp_reserve_soc": "Gli eventi di esportazione non scaricano mai la batteria domestica sotto questo livello."
     },
     "nl": {
       "charging": "Laden",
@@ -7185,7 +7240,18 @@
       "vacation_mode": "Vakantiemodus",
       "vacation_mode_help": "Tijdens afwezigheid pauzeert SEM comfortverwarming (warmtepomp-boost en warm water). De legionellabescherming haalt de cyclus na terugkeer in.",
       "config_vacation_entity": "Vakantiesignaal-entiteit",
-      "config_help_vacation_entity": "Optioneel extern vakantiesignaal (vakantiemodus van de warmtepomp-app, input_boolean of agenda). Zolang het aan is, onderdrukt SEM comfortverwarming."
+      "config_help_vacation_entity": "Optioneel extern vakantiesignaal (vakantiemodus van de warmtepomp-app, input_boolean of agenda). Zolang het aan is, onderdrukt SEM comfortverwarming.",
+      "config_vpp_section": "Net-VPP",
+      "config_vpp_enabled": "VPP-dispatch",
+      "config_help_vpp_enabled": "Reageert op netbeheerder-events (VPP), bijv. Axle Energy: exporteert batterijvermogen of pauzeert/versnelt EV-laden tijdens het eventvenster. Start in observatiemodus — zie docs/GRID_VPP.md voor bedrading en veiligheidsmaatregelen.",
+      "config_vpp_observer": "Observatiemodus (alleen loggen)",
+      "config_help_vpp_observer": "Proefdraaien: SEM logt en meldt wat het ZOU doen tijdens een VPP-event, maar stuurt niets aan. Pas uitschakelen als het log er goed uitziet.",
+      "config_vpp_event_entity": "Event-signaal",
+      "config_vpp_direction_entity": "Event-richting",
+      "config_vpp_event_end_entity": "Eindtijd event",
+      "config_vpp_pre_event_entity": "Pre-event-signaal",
+      "config_vpp_reserve_soc": "VPP-batterijreserve",
+      "config_help_vpp_reserve_soc": "Export-events ontladen de thuisbatterij nooit onder dit niveau."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8382,7 +8448,18 @@
       "vacation_mode": "Režim dovolené",
       "vacation_mode_help": "Během nepřítomnosti SEM pozastaví komfortní vytápění (boost tepelného čerpadla a teplou vodu). Ochrana proti legionelám dožene cyklus po návratu.",
       "config_vacation_entity": "Entita signálu dovolené",
-      "config_help_vacation_entity": "Volitelný externí signál dovolené (režim dovolené tepelného čerpadla, input_boolean nebo kalendář). Dokud je aktivní, SEM potlačuje komfortní ohřev."
+      "config_help_vacation_entity": "Volitelný externí signál dovolené (režim dovolené tepelného čerpadla, input_boolean nebo kalendář). Dokud je aktivní, SEM potlačuje komfortní ohřev.",
+      "config_vpp_section": "Síťové VPP",
+      "config_vpp_enabled": "VPP dispečink",
+      "config_help_vpp_enabled": "Reaguje na události provozovatele sítě (VPP), např. Axle Energy: exportuje výkon baterie nebo pozastaví/zesílí nabíjení EV po dobu události. Začíná v režimu pozorovatele — viz docs/GRID_VPP.md (zapojení a pojistky).",
+      "config_vpp_observer": "Režim pozorovatele (jen log)",
+      "config_help_vpp_observer": "Zkouška nanečisto: SEM zaznamená a oznámí, co BY během VPP události udělal, ale nic neřídí. Vypněte až po ověření logu.",
+      "config_vpp_event_entity": "Signál události",
+      "config_vpp_direction_entity": "Směr události",
+      "config_vpp_event_end_entity": "Čas konce události",
+      "config_vpp_pre_event_entity": "Signál před událostí",
+      "config_vpp_reserve_soc": "Rezerva baterie VPP",
+      "config_help_vpp_reserve_soc": "Exportní události nikdy nevybijí domácí baterii pod tuto úroveň."
     },
     "da": {
       "charging": "Oplader",
@@ -9579,7 +9656,18 @@
       "vacation_mode": "Ferietilstand",
       "vacation_mode_help": "Under fravær sætter SEM komfortopvarmning på pause (varmepumpe-boost og varmt vand). Legionellabeskyttelsen indhenter cyklussen ved hjemkomst.",
       "config_vacation_entity": "Ferie-signal-entitet",
-      "config_help_vacation_entity": "Valgfrit eksternt feriesignal (varmepumpens ferietilstand, input_boolean eller kalender). Så længe det er aktivt, undertrykker SEM komfortopvarmning."
+      "config_help_vacation_entity": "Valgfrit eksternt feriesignal (varmepumpens ferietilstand, input_boolean eller kalender). Så længe det er aktivt, undertrykker SEM komfortopvarmning.",
+      "config_vpp_section": "Net-VPP",
+      "config_vpp_enabled": "VPP-dispatch",
+      "config_help_vpp_enabled": "Reagerer på netoperatørens hændelser (VPP), f.eks. Axle Energy: eksporterer batterieffekt eller pauser/booster EV-opladning i hændelsesvinduet. Starter i observatørtilstand — se docs/GRID_VPP.md for tilslutning og sikkerhedsværn.",
+      "config_vpp_observer": "Observatørtilstand (kun log)",
+      "config_help_vpp_observer": "Tørkørsel: SEM logger og notificerer, hvad det VILLE gøre under en VPP-hændelse, men styrer intet. Slå først fra, når loggen ser rigtig ud.",
+      "config_vpp_event_entity": "Hændelsessignal",
+      "config_vpp_direction_entity": "Hændelsesretning",
+      "config_vpp_event_end_entity": "Hændelsens sluttid",
+      "config_vpp_pre_event_entity": "Før-hændelsessignal",
+      "config_vpp_reserve_soc": "VPP-batterireserve",
+      "config_help_vpp_reserve_soc": "Eksporthændelser aflader aldrig hjemmebatteriet under dette niveau."
     },
     "fi": {
       "charging": "Lataus",
@@ -10776,7 +10864,18 @@
       "vacation_mode": "Lomatila",
       "vacation_mode_help": "Poissa ollessasi SEM keskeyttää mukavuuslämmityksen (lämpöpumpun tehostuksen ja lämpimän veden). Legionellasuojaus ottaa jakson kiinni palattuasi.",
       "config_vacation_entity": "Loma-signaalientiteetti",
-      "config_help_vacation_entity": "Valinnainen ulkoinen lomasignaali (lämpöpumpun lomatila, input_boolean tai kalenteri). Kun se on päällä, SEM estää mukavuuslämmityksen."
+      "config_help_vacation_entity": "Valinnainen ulkoinen lomasignaali (lämpöpumpun lomatila, input_boolean tai kalenteri). Kun se on päällä, SEM estää mukavuuslämmityksen.",
+      "config_vpp_section": "Verkko-VPP",
+      "config_vpp_enabled": "VPP-ohjaus",
+      "config_help_vpp_enabled": "Reagoi verkko-operaattorin tapahtumiin (VPP), esim. Axle Energy: syöttää akkutehoa verkkoon tai keskeyttää/tehostaa EV-latausta tapahtumaikkunan ajan. Käynnistyy tarkkailutilassa — katso docs/GRID_VPP.md (kytkennät ja turvarajat).",
+      "config_vpp_observer": "Tarkkailutila (vain loki)",
+      "config_help_vpp_observer": "Kuivaharjoitus: SEM kirjaa ja ilmoittaa, mitä se TEKISI VPP-tapahtuman aikana, mutta ei ohjaa mitään. Poista käytöstä vasta, kun loki näyttää oikealta.",
+      "config_vpp_event_entity": "Tapahtumasignaali",
+      "config_vpp_direction_entity": "Tapahtuman suunta",
+      "config_vpp_event_end_entity": "Tapahtuman päättymisaika",
+      "config_vpp_pre_event_entity": "Ennakkosignaali",
+      "config_vpp_reserve_soc": "VPP-akkuvaranto",
+      "config_help_vpp_reserve_soc": "Vientitapahtumat eivät koskaan pura kotiakkua tämän tason alle."
     },
     "hu": {
       "charging": "Töltés",
@@ -11973,7 +12072,18 @@
       "vacation_mode": "Vakáció üzemmód",
       "vacation_mode_help": "Távollét alatt a SEM szünetelteti a komfortfűtést (hőszivattyú-rásegítés és melegvíz). A legionella-védelem hazatéréskor pótolja a ciklust.",
       "config_vacation_entity": "Vakáció-jelzés entitás",
-      "config_help_vacation_entity": "Opcionális külső vakációjelzés (hőszivattyú-app nyaralás módja, input_boolean vagy naptár). Amíg aktív, a SEM felfüggeszti a komfortfűtést."
+      "config_help_vacation_entity": "Opcionális külső vakációjelzés (hőszivattyú-app nyaralás módja, input_boolean vagy naptár). Amíg aktív, a SEM felfüggeszti a komfortfűtést.",
+      "config_vpp_section": "Hálózati VPP",
+      "config_vpp_enabled": "VPP-vezérlés",
+      "config_help_vpp_enabled": "Reagál a hálózatüzemeltető (VPP) eseményeire, pl. Axle Energy: akkumulátor-teljesítményt exportál, vagy szünetelteti/felgyorsítja az EV-töltést az eseményablakban. Megfigyelő módban indul — lásd docs/GRID_VPP.md (bekötés és biztonsági korlátok).",
+      "config_vpp_observer": "Megfigyelő mód (csak napló)",
+      "config_help_vpp_observer": "Próbaüzem: a SEM naplózza és jelzi, mit TENNE egy VPP-esemény alatt, de semmit sem vezérel. Csak akkor kapcsolja ki, ha a napló rendben van.",
+      "config_vpp_event_entity": "Eseményjel",
+      "config_vpp_direction_entity": "Esemény iránya",
+      "config_vpp_event_end_entity": "Esemény vége",
+      "config_vpp_pre_event_entity": "Esemény előtti jel",
+      "config_vpp_reserve_soc": "VPP akkumulátor-tartalék",
+      "config_help_vpp_reserve_soc": "Az exportesemények soha nem merítik a házi akkumulátort e szint alá."
     },
     "no": {
       "charging": "Lader",
@@ -13170,7 +13280,18 @@
       "vacation_mode": "Feriemodus",
       "vacation_mode_help": "Når du er borte, pauser SEM komfortoppvarming (varmepumpe-boost og varmtvann). Legionellabeskyttelsen tar igjen syklusen når du kommer hjem.",
       "config_vacation_entity": "Ferie-signalentitet",
-      "config_help_vacation_entity": "Valgfritt eksternt feriesignal (varmepumpens feriemodus, input_boolean eller kalender). Så lenge det er aktivt, undertrykker SEM komfortoppvarming."
+      "config_help_vacation_entity": "Valgfritt eksternt feriesignal (varmepumpens feriemodus, input_boolean eller kalender). Så lenge det er aktivt, undertrykker SEM komfortoppvarming.",
+      "config_vpp_section": "Nett-VPP",
+      "config_vpp_enabled": "VPP-styring",
+      "config_help_vpp_enabled": "Reagerer på nettoperatørens hendelser (VPP), f.eks. Axle Energy: eksporterer batterieffekt eller pauser/booster EV-lading i hendelsesvinduet. Starter i observatørmodus — se docs/GRID_VPP.md for tilkobling og sikkerhetsmekanismer.",
+      "config_vpp_observer": "Observatørmodus (kun logg)",
+      "config_help_vpp_observer": "Tørrkjøring: SEM logger og varsler hva det VILLE gjort under en VPP-hendelse, men styrer ingenting. Slå av først når loggen ser riktig ut.",
+      "config_vpp_event_entity": "Hendelsessignal",
+      "config_vpp_direction_entity": "Hendelsesretning",
+      "config_vpp_event_end_entity": "Hendelsens sluttid",
+      "config_vpp_pre_event_entity": "Førhendelsessignal",
+      "config_vpp_reserve_soc": "VPP-batterireserve",
+      "config_help_vpp_reserve_soc": "Eksporthendelser lader aldri ut hjemmebatteriet under dette nivået."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14367,7 +14488,18 @@
       "vacation_mode": "Tryb wakacyjny",
       "vacation_mode_help": "Podczas nieobecności SEM wstrzymuje ogrzewanie komfortowe (boost pompy ciepła i ciepłą wodę). Ochrona przed legionellą nadrabia cykl po powrocie.",
       "config_vacation_entity": "Encja sygnału urlopu",
-      "config_help_vacation_entity": "Opcjonalny zewnętrzny sygnał urlopu (tryb urlopowy pompy ciepła, input_boolean lub kalendarz). Gdy aktywny, SEM wstrzymuje ogrzewanie komfortowe."
+      "config_help_vacation_entity": "Opcjonalny zewnętrzny sygnał urlopu (tryb urlopowy pompy ciepła, input_boolean lub kalendarz). Gdy aktywny, SEM wstrzymuje ogrzewanie komfortowe.",
+      "config_vpp_section": "VPP sieciowe",
+      "config_vpp_enabled": "Dysponowanie VPP",
+      "config_help_vpp_enabled": "Reaguje na zdarzenia operatora sieci (VPP), np. Axle Energy: eksportuje moc baterii lub wstrzymuje/przyspiesza ładowanie EV w oknie zdarzenia. Startuje w trybie obserwatora — zobacz docs/GRID_VPP.md (okablowanie i zabezpieczenia).",
+      "config_vpp_observer": "Tryb obserwatora (tylko log)",
+      "config_help_vpp_observer": "Próba: SEM loguje i powiadamia, co ZROBIŁBY podczas zdarzenia VPP, ale niczym nie steruje. Wyłącz dopiero, gdy log wygląda poprawnie.",
+      "config_vpp_event_entity": "Sygnał zdarzenia",
+      "config_vpp_direction_entity": "Kierunek zdarzenia",
+      "config_vpp_event_end_entity": "Czas końca zdarzenia",
+      "config_vpp_pre_event_entity": "Sygnał przed zdarzeniem",
+      "config_vpp_reserve_soc": "Rezerwa baterii VPP",
+      "config_help_vpp_reserve_soc": "Zdarzenia eksportu nigdy nie rozładowują baterii domowej poniżej tego poziomu."
     },
     "pt": {
       "charging": "A carregar",
@@ -15564,7 +15696,18 @@
       "vacation_mode": "Modo férias",
       "vacation_mode_help": "Durante a ausência, o SEM pausa o aquecimento de conforto (reforço da bomba de calor e água quente). A proteção contra legionela recupera o ciclo no regresso.",
       "config_vacation_entity": "Entidade sinal de férias",
-      "config_help_vacation_entity": "Sinal de férias externo opcional (modo férias da bomba de calor, input_boolean ou calendário). Enquanto ativo, o SEM suspende o aquecimento de conforto."
+      "config_help_vacation_entity": "Sinal de férias externo opcional (modo férias da bomba de calor, input_boolean ou calendário). Enquanto ativo, o SEM suspende o aquecimento de conforto.",
+      "config_vpp_section": "VPP de rede",
+      "config_vpp_enabled": "Despacho VPP",
+      "config_help_vpp_enabled": "Responde a eventos do operador de rede (VPP), p. ex. Axle Energy: exporta potência da bateria ou pausa/impulsiona o carregamento do VE durante a janela do evento. Começa em modo observador — veja docs/GRID_VPP.md para ligações e salvaguardas.",
+      "config_vpp_observer": "Modo observador (apenas registo)",
+      "config_help_vpp_observer": "Ensaio: o SEM regista e notifica o que FARIA durante um evento VPP mas não controla nada. Desative apenas quando o registo estiver correto.",
+      "config_vpp_event_entity": "Sinal de evento",
+      "config_vpp_direction_entity": "Direção do evento",
+      "config_vpp_event_end_entity": "Hora de fim do evento",
+      "config_vpp_pre_event_entity": "Sinal pré-evento",
+      "config_vpp_reserve_soc": "Reserva de bateria VPP",
+      "config_help_vpp_reserve_soc": "Eventos de exportação nunca descarregam a bateria doméstica abaixo deste nível."
     },
     "ro": {
       "charging": "Încărcare",
@@ -16761,7 +16904,18 @@
       "vacation_mode": "Mod vacanță",
       "vacation_mode_help": "În absență, SEM suspendă încălzirea de confort (boost pompă de căldură și apă caldă). Protecția anti-legionella recuperează ciclul la întoarcere.",
       "config_vacation_entity": "Entitate semnal vacanță",
-      "config_help_vacation_entity": "Semnal de vacanță extern opțional (modul vacanță al pompei de căldură, input_boolean sau calendar). Cât timp este activ, SEM suprimă încălzirea de confort."
+      "config_help_vacation_entity": "Semnal de vacanță extern opțional (modul vacanță al pompei de căldură, input_boolean sau calendar). Cât timp este activ, SEM suprimă încălzirea de confort.",
+      "config_vpp_section": "VPP de rețea",
+      "config_vpp_enabled": "Dispecerizare VPP",
+      "config_help_vpp_enabled": "Răspunde la evenimentele operatorului de rețea (VPP), de ex. Axle Energy: exportă puterea bateriei sau întrerupe/accelerează încărcarea VE pe durata evenimentului. Pornește în mod observator — vezi docs/GRID_VPP.md (cablare și măsuri de siguranță).",
+      "config_vpp_observer": "Mod observator (doar jurnal)",
+      "config_help_vpp_observer": "Repetiție: SEM înregistrează și notifică ce AR face în timpul unui eveniment VPP, dar nu controlează nimic. Dezactivați doar când jurnalul arată corect.",
+      "config_vpp_event_entity": "Semnal de eveniment",
+      "config_vpp_direction_entity": "Direcția evenimentului",
+      "config_vpp_event_end_entity": "Ora de sfârșit a evenimentului",
+      "config_vpp_pre_event_entity": "Semnal pre-eveniment",
+      "config_vpp_reserve_soc": "Rezervă baterie VPP",
+      "config_help_vpp_reserve_soc": "Evenimentele de export nu descarcă niciodată bateria casei sub acest nivel."
     },
     "sv": {
       "charging": "Laddar",
@@ -17958,7 +18112,18 @@
       "vacation_mode": "Semesterläge",
       "vacation_mode_help": "Vid frånvaro pausar SEM komfortvärme (värmepumpsboost och varmvatten). Legionellaskyddet tar igen cykeln när du kommer hem.",
       "config_vacation_entity": "Semestersignal-entitet",
-      "config_help_vacation_entity": "Valfri extern semestersignal (värmepumpens semesterläge, input_boolean eller kalender). Så länge den är på undertrycker SEM komfortvärme."
+      "config_help_vacation_entity": "Valfri extern semestersignal (värmepumpens semesterläge, input_boolean eller kalender). Så länge den är på undertrycker SEM komfortvärme.",
+      "config_vpp_section": "Nät-VPP",
+      "config_vpp_enabled": "VPP-styrning",
+      "config_help_vpp_enabled": "Svarar på nätoperatörens händelser (VPP), t.ex. Axle Energy: exporterar batterieffekt eller pausar/ökar EV-laddning under händelsefönstret. Startar i observatörsläge — se docs/GRID_VPP.md för koppling och skyddsräcken.",
+      "config_vpp_observer": "Observatörsläge (endast logg)",
+      "config_help_vpp_observer": "Torrkörning: SEM loggar och meddelar vad det SKULLE göra under en VPP-händelse men styr ingenting. Stäng av först när loggen ser rätt ut.",
+      "config_vpp_event_entity": "Händelsesignal",
+      "config_vpp_direction_entity": "Händelseriktning",
+      "config_vpp_event_end_entity": "Händelsens sluttid",
+      "config_vpp_pre_event_entity": "Förhandssignal",
+      "config_vpp_reserve_soc": "VPP-batterireserv",
+      "config_help_vpp_reserve_soc": "Exporthändelser laddar aldrig ur hemmabatteriet under denna nivå."
     },
     "zh": {
       "charging": "充电中",
@@ -19155,7 +19320,18 @@
       "vacation_mode": "度假模式",
       "vacation_mode_help": "外出期间，SEM 会暂停舒适供暖（热泵增强和热水）。返回后军团菌防护会补上错过的周期。",
       "config_vacation_entity": "度假信号实体",
-      "config_help_vacation_entity": "可选的外部度假信号（例如热泵应用的假期模式、input_boolean 或日历）。激活期间，SEM 将暂停舒适加热——与 SEM 度假模式开关效果相同；任一来源均可激活。"
+      "config_help_vacation_entity": "可选的外部度假信号（例如热泵应用的假期模式、input_boolean 或日历）。激活期间，SEM 将暂停舒适加热——与 SEM 度假模式开关效果相同；任一来源均可激活。",
+      "config_vpp_section": "电网 VPP",
+      "config_vpp_enabled": "VPP 调度",
+      "config_help_vpp_enabled": "响应电网运营商（VPP）事件，例如 Axle Energy：在事件窗口内输出电池电力或暂停/加速电动车充电。默认以观察模式启动——接线与安全机制请参阅 docs/GRID_VPP.md。",
+      "config_vpp_observer": "观察模式（仅记录）",
+      "config_help_vpp_observer": "演练：SEM 会记录并通知在 VPP 事件期间它「将会」执行的操作，但不进行任何控制。确认日志无误后再关闭。",
+      "config_vpp_event_entity": "事件信号",
+      "config_vpp_direction_entity": "事件方向",
+      "config_vpp_event_end_entity": "事件结束时间",
+      "config_vpp_pre_event_entity": "事件前信号",
+      "config_vpp_reserve_soc": "VPP 电池储备",
+      "config_help_vpp_reserve_soc": "输出事件绝不会将家用电池放电至此水平以下。"
     }
   };
 

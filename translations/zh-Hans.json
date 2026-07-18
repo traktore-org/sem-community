@@ -935,6 +935,9 @@
       },
       "diag_battery_sign": {
         "name": "蓄电池正负符号惯例"
+      },
+      "vpp_event": {
+        "name": "VPP 事件"
       }
     },
     "binary_sensor": {

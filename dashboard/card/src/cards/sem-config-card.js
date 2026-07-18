@@ -1837,7 +1837,30 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderAdvanced(T) {
+        const opts = this._options || {};
         return html`
+            ${/* #580 — Grid VPP dispatch (Axle Energy first). Observer mode is
+                  the default: log/notify only, actuate nothing. First help text
+                  links docs/GRID_VPP.md. */ ''}
+            <div class="readonly-row" style="border-bottom:1px solid ${T.surfaceBorder};padding-bottom:4px;margin-bottom:4px">
+                <span class="ctrl-label" style="font-weight:600">${this._t('config_vpp_section')}</span>
+            </div>
+            ${this._renderOptionToggle('vpp_enabled', 'config_vpp_enabled',
+                opts, 'config_help_vpp_enabled', false)}
+            ${this._renderOptionToggle('vpp_observer_mode', 'config_vpp_observer',
+                opts, 'config_help_vpp_observer', true)}
+            ${this._renderPicker('vpp_event_active_entity', 'config_vpp_event_entity',
+                ['binary_sensor', 'sensor'], null, opts, null)}
+            ${this._renderPicker('vpp_direction_entity', 'config_vpp_direction_entity',
+                ['sensor', 'select', 'input_select'], null, opts, null)}
+            ${this._renderPicker('vpp_event_end_entity', 'config_vpp_event_end_entity',
+                'sensor', 'timestamp', opts, null)}
+            ${this._renderPicker('vpp_pre_event_entity', 'config_vpp_pre_event_entity',
+                ['binary_sensor', 'sensor'], null, opts, null)}
+            ${this._renderOptionSlider('vpp_reserve_soc', 'config_vpp_reserve_soc',
+                { min: 5, max: 80, step: 5, unit: '%', default: 20 }, opts,
+                'config_help_vpp_reserve_soc')}
+            <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
             ${this._renderToggle('switch.sem_observer_mode', 'observer_mode', T, 'config_help_observer_mode')}
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_update_interval', 'update_interval', T, 'config_help_update_interval')}

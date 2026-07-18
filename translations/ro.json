@@ -933,6 +933,9 @@
       },
       "heat_pump_registration_status": {
         "name": "Heat Pump Registration Status"
+      },
+      "vpp_event": {
+        "name": "Eveniment VPP"
       }
     },
     "binary_sensor": {

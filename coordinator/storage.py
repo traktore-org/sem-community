@@ -397,6 +397,17 @@ class SEMStorage:
         """Persist sign-detection lock state."""
         self._energy_data["sign_state"] = state
 
+    # VPP event history persistence (#580) — per-event energy accounting
+    # for payment reconciliation (bounded to ~20 records by VppDispatcher).
+    def get_vpp_events(self) -> list:
+        """Get persisted VPP event records."""
+        events = self._energy_data.get("vpp_events", [])
+        return events if isinstance(events, list) else []
+
+    def set_vpp_events(self, events: list) -> None:
+        """Persist VPP event records."""
+        self._energy_data["vpp_events"] = list(events or [])
+
     # Legionella timestamp persistence (#508 I2) — without this, driving
     # the legionella cycle (#508 C1) would force a disinfection run on
     # every restart, since a None timestamp reads as "overdue".

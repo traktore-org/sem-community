@@ -670,6 +670,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         ``__new__`` without ``hass`` — the free function ignores
         ``hass`` post-Phase-C anyway.
         """
+        # #580 — VPP per-cycle EV veto/boost. During an active (non-observer)
+        # VPP event the grid signal outranks the user's charge mode FOR THAT
+        # CYCLE ONLY: an export event pauses every charger (mode ``off`` →
+        # the actuator's TERMINAL branch stops the session); an import event
+        # boosts to ``always_max``. Nothing is persisted — the override drops
+        # the moment the event ends and the user's mode resumes. Routed here
+        # (the single mode read-point, #277) so no second veto path exists.
+        _vpp_ev = getattr(self, "_vpp_ev_override", None)
+        if _vpp_ev == "pause":
+            return "off"
+        if _vpp_ev == "boost":
+            return "always_max"
         from ..consts.ev_charge_modes import effective_charge_mode_for
         return effective_charge_mode_for(
             getattr(self, "hass", None),
@@ -2247,6 +2259,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # ``calculate_available_power`` + ``calculate_charging_current``
             # bare-variable pair was dead-code after Phase B (their result
             # was passed in and ignored) and has been removed.
+            # Step 5.9: VPP grid-event dispatch (#580) — pure decision core +
+            # per-cycle overrides. Runs BEFORE the charging context / EV /
+            # battery / surplus steps so an active event can veto the EV
+            # (charge-mode override), force the battery (per-battery mode
+            # override) and shed loads (peak-shed posture) THIS cycle.
+            # Wrapped: a VPP fault must never break the coordinator cycle.
+            try:
+                await self._run_vpp_dispatch(power, energy)
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.warning("VPP dispatch error: %s", e, exc_info=True)
+                self._vpp_ev_override = None
+                self._vpp_battery_override = None
+                self._vpp_shed_loads = False
+
             charging_context = self._build_charging_context(power, energy)
             charging_state = self._state_machine.update_state(charging_context)
 
@@ -3286,6 +3312,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 if _night_plan.next_cheap_start is not None:
                     result["ev_next_cheap_window"] = _night_plan.next_cheap_start.isoformat()
 
+            # VPP grid-event dispatch state (#580) — feeds sensor.sem_vpp_event
+            # (state + per-event accounting attributes). Always present so the
+            # sensor reads "idle" rather than unavailable when VPP is off.
+            result.update(getattr(self, "_vpp_publish", None)
+                          or {"vpp_event": "idle", "vpp_event_observer": True})
+
             # Diagnostics summary for dashboard System tab
             result["diag_version"] = self._get_version()
             _disc = getattr(self._sensor_reader, "_split_grid_discovery", None) or {}
@@ -3900,6 +3932,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             peak_state = (
                 self._load_manager.get_state() if self._load_manager else None
             )
+            # #580 — a VPP export event sheds discretionary surplus loads via
+            # the EXISTING peak gate: EMERGENCY posture ⇒ peak_shed_all in the
+            # SurplusController (#508 W2). Per-cycle; drops with the event.
+            if getattr(self, "_vpp_shed_loads", False):
+                from ..const import LoadManagementState as _LMS
+                peak_state = _LMS.EMERGENCY
             # (#576) stash the priority-walk inputs for the 3-layer trace so
             # "why did the pool pump stop early?" is answerable: the battery's
             # slot, how much charge power it yielded, and whether it's commanded.
@@ -4534,6 +4572,171 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             storable=storable,
         )
 
+    # ── VPP grid-event dispatch (#580) ───────────────────────────────
+
+    def _snapshot_vpp_states(self) -> dict:
+        """Raw states of the wired VPP entities (None when unset/missing)."""
+        out = {}
+        for cfg_key, name in (
+            ("vpp_event_active_entity", "event_active"),
+            ("vpp_direction_entity", "direction"),
+            ("vpp_event_end_entity", "event_end"),
+            ("vpp_pre_event_entity", "pre_event"),
+        ):
+            eid = self.config.get(cfg_key) or ""
+            st = self.hass.states.get(eid) if eid else None
+            out[name] = st.state if st is not None else None
+        return out
+
+    def _vpp_apply_battery_override(self, pbc: dict) -> dict:
+        """Merge the per-cycle VPP battery override into one battery's view
+        config (#580).
+
+        The override rides the EXISTING manual-mode road in decide_battery:
+        ``battery_mode=force_discharge`` (respects the reserve floor, falls
+        to NORMAL at/below it) or ``force_charge`` (max accepted power). A
+        battery the user set to ``off`` stays hands-off — the user's opt-out
+        outranks the grid event. Reserve = max(user's per-battery reserve,
+        ``vpp_reserve_soc``) so VPP can only tighten, never loosen, the
+        floor. Returns a NEW dict; the input is never mutated."""
+        override = getattr(self, "_vpp_battery_override", None)
+        if not override:
+            return pbc
+        if str(pbc.get("battery_mode", "auto") or "auto").lower() == "off":
+            return pbc
+        merged = {**pbc, **override}
+        if "battery_reserve_soc" in override:
+            try:
+                user_reserve = float(pbc.get("battery_reserve_soc") or 0.0)
+            except (TypeError, ValueError):
+                user_reserve = 0.0
+            merged["battery_reserve_soc"] = max(
+                float(override["battery_reserve_soc"]), user_reserve,
+            )
+        return merged
+
+    async def _vpp_notify(self, message: str) -> None:
+        """Event start/end notification via the existing helper (best-effort,
+        honours the global mobile-notifications opt-in)."""
+        if not self.config.get("enable_mobile_notifications", False):
+            return
+        try:
+            await self._notification_manager._send_mobile_notification(
+                message, group="sem_alerts",
+            )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("VPP notification failed: %s", e)
+
+    async def _run_vpp_dispatch(self, power, energy) -> None:
+        """Per-cycle VPP evaluation + override plumbing (#580).
+
+        Calls the pure core with (config, entity-state snapshot, battery
+        SOC, now), advances the dispatcher (phase edges + per-event energy
+        accounting), then sets the three per-cycle override flags the
+        existing control paths consume:
+
+        * ``_vpp_ev_override``      → ``_effective_charge_mode_for``
+        * ``_vpp_battery_override`` → ``_vpp_apply_battery_override``
+        * ``_vpp_shed_loads``       → surplus-controller peak posture
+
+        Observer mode (default) leaves all three cleared — the decision is
+        computed, logged, notified and published, but actuates NOTHING."""
+        from .vpp_dispatch import VppDispatcher, evaluate_vpp
+
+        # Reset per-cycle flags first — they must never survive a cycle in
+        # which the evaluation didn't (re-)assert them.
+        self._vpp_ev_override = None
+        self._vpp_battery_override = None
+        self._vpp_shed_loads = False
+
+        if not bool(self.config.get("vpp_enabled", False)):
+            self._vpp_publish = {"vpp_event": "idle",
+                                 "vpp_event_observer": True}
+            return
+
+        if getattr(self, "_vpp_dispatcher", None) is None:
+            stored = self._storage.get_vpp_events() if self._storage else []
+            self._vpp_dispatcher = VppDispatcher(events=stored)
+
+        now = dt_util.now()
+        soc = getattr(power, "battery_soc", None)
+        if getattr(power, "battery_soc_unavailable", False):
+            soc = None
+        decision = evaluate_vpp(
+            self.config, self._snapshot_vpp_states(), soc, now,
+        )
+
+        out = self._vpp_dispatcher.update(
+            decision,
+            grid_import_kwh=float(
+                getattr(energy, "daily_grid_import", 0.0) or 0.0),
+            grid_export_kwh=float(
+                getattr(energy, "daily_grid_export", 0.0) or 0.0),
+            now=now,
+        )
+
+        # ── per-cycle overrides (actuation) — observer mode sets none ──
+        kinds = {a.kind for a in decision.actions}
+        if not decision.observer:
+            if "pause_ev" in kinds:
+                self._vpp_ev_override = "pause"
+            elif "boost_ev" in kinds:
+                self._vpp_ev_override = "boost"
+            if "force_discharge" in kinds:
+                self._vpp_battery_override = {
+                    "battery_mode": "force_discharge",
+                    "battery_reserve_soc": float(
+                        self.config.get("vpp_reserve_soc", 20) or 20),
+                }
+            elif "force_charge" in kinds:
+                self._vpp_battery_override = {"battery_mode": "force_charge"}
+            self._vpp_shed_loads = "shed_loads" in kinds
+
+        # ── transition logging + notifications ─────────────────────────
+        verb = "WOULD dispatch" if decision.observer else "dispatching"
+        if out["transition"] == "start":
+            plan = ", ".join(sorted(kinds)) or "nothing"
+            msg = (f"VPP event started ({decision.direction}) — "
+                   f"{verb}: {plan}")
+            _LOGGER.info("%s :: %s", msg, decision.reason)
+            await self._vpp_notify(msg)
+        elif out["transition"] == "end":
+            ev = out.get("event") or {}
+            msg = (f"VPP event ended ({ev.get('direction')}) — delivered "
+                   f"{float(ev.get('kwh', 0.0) or 0.0):.2f} kWh"
+                   + (" (observer — not dispatched)" if ev.get("observer")
+                      else ""))
+            _LOGGER.info(msg)
+            await self._vpp_notify(msg)
+        elif out["transition"] == "boot_reconcile":
+            _LOGGER.warning(
+                "VPP: stale open event record closed on boot — a restart "
+                "interrupted an event window (accounting reconciled; force "
+                "ops are cleared by the battery adapters' normal teardown)"
+            )
+        # log each non-event phase transition once (pre_event / back to idle)
+        prev_phase = getattr(self, "_vpp_prev_phase", "idle")
+        if decision.phase != prev_phase and out["transition"] is None:
+            _LOGGER.info(
+                "VPP phase %s → %s — %s (%s)", prev_phase, decision.phase,
+                verb, decision.reason,
+            )
+        self._vpp_prev_phase = decision.phase
+
+        # gate-stuck sanity cap — warn once per stuck episode
+        if decision.gate_stuck:
+            if not getattr(self, "_vpp_stuck_warned", False):
+                _LOGGER.warning("VPP: %s", decision.reason)
+                self._vpp_stuck_warned = True
+        else:
+            self._vpp_stuck_warned = False
+
+        # persist event history (energy store already delay-saves each cycle)
+        if out["events_changed"] and self._storage:
+            self._storage.set_vpp_events(self._vpp_dispatcher.events)
+
+        self._vpp_publish = self._vpp_dispatcher.publish_state(decision)
+
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
         """Per-cycle battery control via decide_battery + actuate_battery.
 
@@ -4791,7 +4994,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             view = BatteryView(
                 runtime=runtime,
-                config=self._per_battery_config(batt_idx, _bat_count),
+                config=self._vpp_apply_battery_override(
+                    self._per_battery_config(batt_idx, _bat_count)
+                ),
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),

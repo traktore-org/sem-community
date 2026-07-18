@@ -976,6 +976,14 @@ SENSOR_TYPES = [
     ),
 
     # ============================================================================
+    # VPP GRID-EVENT DISPATCH (#580)
+    # ============================================================================
+    SensorEntityDescription(
+        key="vpp_event",
+        icon="mdi:transmission-tower",
+    ),
+
+    # ============================================================================
     # NIGHT WINDOW
     # ============================================================================
     SensorEntityDescription(
@@ -1824,6 +1832,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "schedule",
         "top_5_peaks",
         "top_5_peaks_formatted",
+        # #580 — VPP event history (UI/accounting helper, no charting value)
+        "events",
+        "last_event",
     })
 
     # Sensors disabled by default (not used by dashboard template)
@@ -2199,6 +2210,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "today_plan": self.coordinator.data.get("today_plan") or [],
                 # Per-charger plan rows (#464) — {cid: [rows…]}.
                 "per_charger_plans": _per_charger_plans,
+            })
+        elif self.entity_description.key == "vpp_event":
+            # #580 — per-event accounting for payment reconciliation.
+            d = self.coordinator.data
+            attrs.update({
+                "direction": d.get("vpp_event_direction"),
+                "started": d.get("vpp_event_started"),
+                "delivered_kwh_so_far": d.get("vpp_event_delivered_kwh"),
+                "observer": d.get("vpp_event_observer"),
+                "reason": d.get("vpp_event_reason"),
+                "last_event": d.get("vpp_last_event"),
+                "events": d.get("vpp_events") or [],
             })
         elif self.entity_description.key == "charging_strategy":
             attrs.update({

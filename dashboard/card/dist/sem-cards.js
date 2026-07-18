@@ -6617,7 +6617,19 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${this._renderOptionToggle("enable_charger_notifications","config_notif_charger",t,"config_help_notif_charger",!0)}
             ${this._renderOptionToggle("enable_mobile_notifications","config_notif_mobile",t,"config_help_notif_mobile",!1)}
             ${this._renderOptionSelect("mobile_notification_service","config_notif_service",i,t,"config_help_notif_service","")}
-        `}_renderAdvanced(e){return W`
+        `}_renderAdvanced(e){const t=this._options||{};return W`
+            ${""}
+            <div class="readonly-row" style="border-bottom:1px solid ${e.surfaceBorder};padding-bottom:4px;margin-bottom:4px">
+                <span class="ctrl-label" style="font-weight:600">${this._t("config_vpp_section")}</span>
+            </div>
+            ${this._renderOptionToggle("vpp_enabled","config_vpp_enabled",t,"config_help_vpp_enabled",!1)}
+            ${this._renderOptionToggle("vpp_observer_mode","config_vpp_observer",t,"config_help_vpp_observer",!0)}
+            ${this._renderPicker("vpp_event_active_entity","config_vpp_event_entity",["binary_sensor","sensor"],null,t,null)}
+            ${this._renderPicker("vpp_direction_entity","config_vpp_direction_entity",["sensor","select","input_select"],null,t,null)}
+            ${this._renderPicker("vpp_event_end_entity","config_vpp_event_end_entity","sensor","timestamp",t,null)}
+            ${this._renderPicker("vpp_pre_event_entity","config_vpp_pre_event_entity",["binary_sensor","sensor"],null,t,null)}
+            ${this._renderOptionSlider("vpp_reserve_soc","config_vpp_reserve_soc",{min:5,max:80,step:5,unit:"%",default:20},t,"config_help_vpp_reserve_soc")}
+            <div style="margin-top:6px;border-top:1px solid ${e.surfaceBorder};padding-top:4px"></div>
             ${this._renderToggle("switch.sem_observer_mode","observer_mode",e,"config_help_observer_mode")}
             <div class="stepper-pair">
                 ${this._renderStepper("number.sem_update_interval","update_interval",e,"config_help_update_interval")}
