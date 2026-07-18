@@ -2818,12 +2818,26 @@ class SensorReader:
         """
         if name not in self._FAST_POWER_NAMES:
             return
-        last_updated = getattr(state, "last_updated", None)
-        if last_updated is None:
+        # Freshness = time since the entity last *reported* its state, NOT since
+        # its value last *changed*. HA only advances ``last_updated`` when the
+        # state/attributes actually change; ``last_reported`` advances on every
+        # write to the state machine, even when the value is identical. A fast
+        # power sensor legitimately holds a constant value for long stretches —
+        # a split discharge-power sensor sits at 0 W while the battery charges
+        # (Fronius exposes separate charge + discharge sensors), grid_export is
+        # 0 while importing, solar is 0 overnight — and would look "frozen" for
+        # >10 min on ``last_updated`` though it is reporting fine every poll
+        # (#611). Only a genuine upstream stall (modbus/cloud) freezes
+        # ``last_reported`` too. Fall back to ``last_updated`` when
+        # ``last_reported`` is absent (pre-2024.4 HA / a test mock).
+        last_seen = getattr(state, "last_reported", None)
+        if last_seen is None:
+            last_seen = getattr(state, "last_updated", None)
+        if last_seen is None:
             return
         try:
             import homeassistant.util.dt as _dt
-            age_s = (_dt.utcnow() - last_updated).total_seconds()
+            age_s = (_dt.utcnow() - last_seen).total_seconds()
         except Exception:  # noqa: BLE001 — never break a read over freshness
             return
         # Guard a non-datetime last_updated (test MagicMock / naive dt): a
@@ -2836,7 +2850,7 @@ class SensorReader:
                 self._frozen_sensors.add(entity_id)
                 mins = int(age_s // 60)
                 _LOGGER.warning(
-                    "Sensor %s (%s) is FROZEN — last update %d min ago but still "
+                    "Sensor %s (%s) is FROZEN — last reported %d min ago but still "
                     "'available'; its stale value is feeding the energy balance "
                     "and sign detection. Check the upstream integration "
                     "(modbus/cloud stall). (W3)",

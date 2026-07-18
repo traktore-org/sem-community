@@ -62,8 +62,14 @@ boot reconcile + unload cleanup across *all* intents/brands (not just Huawei dis
 **Symptom:** an `unavailable` or *available-but-frozen* sensor feeds `0.0`/a stale value into the
 balance + sign detection, silently distorting figures. **Where it lives:** `_read_sensor`.
 **Closure:** unavailable → Repair after threshold; *frozen* fast-power sensor → warn-once + Repair
-(observe-only, W3). **Open siblings:** the frozen value still *feeds* the balance (observe-only, not
-yet held); multi-unit partial-availability sums silently under-report (audit W6). Refs #274 #461 #589.
+(observe-only, W3). Freshness keys off ``last_reported`` (advances on every state-machine write),
+NOT ``last_updated`` (advances only when the *value* changes) — else a fast-power sensor that
+legitimately holds a constant value for >10 min (a split discharge sensor at 0 W while the battery
+charges — Fronius; ``grid_export`` while importing; solar overnight) false-positives as frozen
+(#611). **Guard:** `test_589_sensor_freshness.py::test_constant_value_but_still_reporting_not_frozen`
++ the missing-`last_reported` fallback test. **Open siblings:** the frozen value still *feeds* the
+balance (observe-only, not yet held); multi-unit partial-availability sums silently under-report
+(audit W6). Refs #274 #461 #589 #611.
 
 ### 6. Multi-unit over-command (N× / partial split) — PARTIAL
 **Symptom:** a fleet-level power target handed to *each* of N units → N× the intended
