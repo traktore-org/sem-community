@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.13] — 18.07.2026
+
+### ✨ Features
+
+- 🏖️ **Vacation mode** (#594, by @tlinnet) — `switch.sem_vacation_mode` plus an optional external
+  vacation-signal entity (point it at a ViCare-style holiday sensor, an input_boolean, or a
+  calendar). While active SEM stops all comfort heating encouragement (no SG-Ready boost, no
+  setpoint boost, no DHW solar heating — the pump's own program and frost protection run
+  untouched); legionella pauses and runs promptly on return. Optional: let the DHW tank absorb
+  free surplus at the minimum target only. EV/battery/loads unaffected.
+- ⚡ **Grid-VPP event dispatch** (#580, by @blackpatina) — generic virtual-power-plant support,
+  Axle Energy first: wire the event gate/direction/window entities and SEM dispatches export
+  events (battery force-discharge above a reserve floor, EV pause, load shed) and import events
+  (force-charge, EV boost) through its existing controls, reverting automatically at event end
+  or restart. **Observer mode ships ON**: SEM logs and notifies what it *would* do — watch a few
+  events, compare the per-event kWh accounting against your VPP's payout, then arm it.
+  Docs: `docs/GRID_VPP.md`.
+- 🇨🇳 **Simplified Chinese dashboard** (#608, glossary by @waphbs from #607) — all ~1200 dashboard
+  strings in zh, with proper `zh-Hans`/`zh-CN` language-code resolution; 16 dashboard languages.
+
+### 🐛 Fixes (all root-caused and provoked live on real hardware)
+
+- 🛡️ **Observer mode survives config reloads** — the toggle previously lived only in the switch
+  entity: every reload booted an unprotected coordinator until the switch re-synced (minutes).
+  The observer and vacation toggles now persist into the config entry, and a hands-off install
+  boots protected from its first cycle. Global observer also outranks the VPP's own observer flag.
+- 🔌 **KEBA runaway-cap guard is self-healing** — the ~1 kWh box-level energy target could stay
+  armed after a lost UDP release, killing every session ("box starts, dies in seconds, retries").
+  The release is now reconciled on every charge command, with sensor discovery that works for
+  KEBA's device-less integration (name-derived) and never caches a boot-time failure. Live test:
+  guard armed mid-charge → self-released in 8 seconds, charge uninterrupted.
+- 🚨 **Sign-contradiction alarm fires in one cycle** (#590) — `sem_layer_mismatch` now alarms on
+  the counter audit's own 5-vote debounce instead of stacking a second streak on top (proven
+  live: battery sign flipped → alarm on the first post-vote cycle, zero misbehavior meanwhile).
+- 🧹 **Legacy EV priority flags retired** (#604) — `ev_load_priority` / `ev_shed_priority` /
+  `ev_priority_over_battery` are migrated (v16 schema) into the ONE device-priority list;
+  the old fallback-chain semantics are preserved exactly.
+- 🔋 **Estimated SOC is marked honestly** — without a vehicle SOC sensor the EV card shows
+  `~N%` with an "SOC (est.)" label and an explanatory hint, so the dead-reckoned estimate is
+  never mistaken for the car's own reading.
+
 # [1.7.5-beta.12] — 18.07.2026
 
 ### ✨ Configuration tab redesign (#605 + #606, by @tlinnet's reports)
