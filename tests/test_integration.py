@@ -38,18 +38,18 @@ class TestPlatformEntityCounts:
 
     @pytest.mark.asyncio
     async def test_switch_count(self, mock_hass, config_entry, mock_coordinator):
-        """Post-#277 Phase C: only ``observer_mode`` remains as a
-        global switch (the legacy ``night_charging`` +
-        ``smart_night_charging`` were removed when the named
-        ``charge_mode`` selector took over)."""
+        """Post-#277 Phase C: ``observer_mode`` is the sole legacy global
+        switch (``night_charging`` + ``smart_night_charging`` were removed
+        when the named ``charge_mode`` selector took over). #594 added
+        ``vacation_mode``."""
         config_entry.runtime_data = mock_coordinator
         mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await switch_setup(mock_hass, config_entry, add_entities)
         switches = add_entities.call_args[0][0]
-        assert len(switches) == 1
+        assert len(switches) == 2
         keys = {s.entity_description.key for s in switches}
-        assert keys == {"observer_mode"}
+        assert keys == {"observer_mode", "vacation_mode"}
 
     @pytest.mark.asyncio
     async def test_number_count(self, mock_hass, config_entry, mock_coordinator):
