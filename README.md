@@ -239,7 +239,7 @@ SEM includes a built-in dashboard with 8 views and a unified glassmorphism dark 
 | **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
 | **EV** | Charging status, session stats, solar share gauge, lifetime totals, EV Intelligence (taper trend, virtual SOC, charge skip reasoning, battery health) |
 | **Control** | Live surplus allocation, load-priority drag-and-drop, per-device control modes, today's schedule |
-| **Configuration** | All post-setup configuration in one place — colorful SOC-zone controls, entity pickers, EV charger add/remove, tariff, heat pump, hot water, battery scheduler. Rarely need HA's native config flow |
+| **Configuration** | All post-setup configuration in one place — staged **Apply/Revert per section** (nothing saves on an accidental tap), a ⓘ on every setting with its explanation, **factory default and one-tap ↺ reset**, an **Explain settings** toggle that opens all help at once, and a 📖 link on each section header straight to the matching [docs](docs/SETUP_GUIDE.md) chapter. Rarely need HA's native config flow |
 | **Costs** | Today/month/year KPIs, period selector, cost & savings charts, demand charge, tariff rates |
 | **System** | Health diagnostics, sensor status, charging state, peak management |
 
