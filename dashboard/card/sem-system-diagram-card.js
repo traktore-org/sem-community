@@ -105,8 +105,31 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             this._visible = entries[0].isIntersecting;
             const svg = this.shadowRoot.querySelector('svg');
             if (svg) svg.style.animationPlayState = this._visible ? 'running' : 'paused';
+            // Coming back on-screen: refresh immediately — a hass update that
+            // arrived while hidden was dropped by the _visible gate.
+            if (this._visible && this._hass && this._rendered) this._updateFlows();
         }, { threshold: 0.01 });
         this._intersectionObserver.observe(this);
+
+        // ── Display-truth reconcile (PROD 2026-07-18, iOS stale nodes) ──
+        // The value texts are written by rAF animations; iOS suspends rAF in a
+        // backgrounded WebView and can DROP the pending frames on resume — the
+        // internal value cache advances while the DISPLAYED text stays frozen
+        // at the pre-suspend value (observed: battery/grid showing last
+        // night's 2.5 kW / 1.9 kW for 6+ hours while every kWh label was
+        // live). Same failure class as any fire-and-forget write: the display
+        // must be RECONCILED against truth, not trusted from one write.
+        //   1. visibilitychange → re-run the full update on every app resume
+        //      (also re-arms a stuck _visible from a missed intersection).
+        //   2. A slow watchdog hard-sets any value text that drifted from the
+        //      cache — catches every other dead-rAF/stuck-observer shape.
+        this._onVisibility = () => {
+            if (document.visibilityState === 'visible' && this._hass && this._rendered) {
+                this._visible = true;
+                this._updateFlows();
+            }
+        };
+        document.addEventListener('visibilitychange', this._onVisibility);
     }
 
     disconnectedCallback() {
@@ -115,6 +138,10 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
         clearTimeout(this._updateTimer);
         clearTimeout(this._resizeTimeout);
+        if (this._onVisibility) {
+            document.removeEventListener('visibilitychange', this._onVisibility);
+            this._onVisibility = null;
+        }
         for (const id of Object.keys(this._animFrames)) {
             cancelAnimationFrame(this._animFrames[id]);
         }
@@ -206,6 +233,18 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             }
         };
         this._animFrames[id] = requestAnimationFrame(animate);
+        // Settle fallback: rAF frames die silently in a backgrounded/resumed
+        // iOS WebView — make sure the FINAL value always lands (the animation
+        // is decoration; the number is the product). No-op when a newer
+        // target superseded this one.
+        setTimeout(() => {
+            if (this._currentValues[id] !== newWatts) return;
+            if (this._animFrames[id]) {
+                cancelAnimationFrame(this._animFrames[id]);
+                delete this._animFrames[id];
+            }
+            el.textContent = prefix + this._formatPower(newWatts);
+        }, duration + 250);
     }
 
     _setGlowIntensity(nodeId, watts, maxWatts) {
