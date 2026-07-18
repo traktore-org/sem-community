@@ -877,12 +877,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         showed the persisted global (13.09). Two accumulators for the same
         quantity → the paired-figure basis-mismatch class (BUG_CLASSES #11):
         the user tunes the target against the displayed figure, so decisions
-        MUST measure against that same figure. ``_per_charger_daily_report``
-        already applies the single-charger global substitution (#536); this
-        accessor routes every consumer through it. Multi-charger installs keep
-        their own per-charger accumulators (which sum to the global).
+        MUST measure against that same figure (same substitution
+        ``_per_charger_daily_report`` applies for the sensors, #536).
+
+        Contracts honoured (CI caught both on the first cut):
+        - single charger → the persisted GLOBAL ``daily_ev`` (displayed basis);
+        - multi-charger with own accounting → THIS charger's accumulator;
+        - multi-charger, cid absent from the map → the FLEET total (#351 H1:
+          conservative — over-counts consumed so a top-up never overshoots);
+        - defensive on stubs (no ``_daily_ev_per_charger`` attr → empty map).
         """
-        return float(self._per_charger_daily_report(energy).get(cid, 0.0) or 0.0)
+        pcd = getattr(self, "_daily_ev_per_charger", None) or {}
+        chargers = self.config.get("ev_chargers") or []
+        global_daily = float(getattr(energy, "daily_ev", 0.0) or 0.0)
+        if len(chargers) == 1:
+            return global_daily
+        if cid in pcd:
+            return float(pcd[cid] or 0.0)
+        return global_daily
 
     @property
     def battery_capacity_kwh(self) -> float:

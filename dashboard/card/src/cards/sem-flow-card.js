@@ -120,8 +120,24 @@ class SEMFlowCard extends SEMLitBase {
             this._visible = entries[0].isIntersecting;
             const svg = this.renderRoot.querySelector('svg');
             if (svg) svg.style.animationPlayState = this._visible ? 'running' : 'paused';
+            // Back on-screen → refresh now: hass updates that arrived while
+            // hidden were dropped by the _visible gate in set hass.
+            if (this._visible && this._hass) this._updateFlowsImperative();
         }, { threshold: 0.01 });
         this._intersectionObserver.observe(this);
+
+        // Display-truth reconcile (same class as sem-system-diagram-card,
+        // PROD 2026-07-18 stale iOS nodes): iOS suspends/drops rAF in a
+        // backgrounded WebView, freezing value texts while the internal cache
+        // advances; a missed intersection transition can also leave _visible
+        // stuck false. Re-sync on every app resume.
+        this._onVisibility = () => {
+            if (document.visibilityState === 'visible' && this._hass) {
+                this._visible = true;
+                this._updateFlowsImperative();
+            }
+        };
+        document.addEventListener('visibilitychange', this._onVisibility);
     }
 
     disconnectedCallback() {
@@ -130,6 +146,10 @@ class SEMFlowCard extends SEMLitBase {
         if (this._intersectionObserver) { this._intersectionObserver.disconnect(); this._intersectionObserver = null; }
         clearTimeout(this._updateTimer);
         clearTimeout(this._resizeTimeout);
+        if (this._onVisibility) {
+            document.removeEventListener('visibilitychange', this._onVisibility);
+            this._onVisibility = null;
+        }
         for (const id of Object.keys(this._animFrames)) cancelAnimationFrame(this._animFrames[id]);
         this._animFrames = {};
     }
@@ -912,6 +932,17 @@ class SEMFlowCard extends SEMLitBase {
             else { delete this._animFrames[id]; }
         };
         this._animFrames[id] = requestAnimationFrame(animate);
+        // Settle fallback: rAF frames die silently on a backgrounded/resumed
+        // iOS WebView — guarantee the FINAL value lands. No-op when a newer
+        // target superseded this one.
+        setTimeout(() => {
+            if (this._currentValues[id] !== newVal) return;
+            if (this._animFrames[id]) {
+                cancelAnimationFrame(this._animFrames[id]);
+                delete this._animFrames[id];
+            }
+            el.textContent = fmt(newVal);
+        }, duration + 250);
     }
 
     _setText(id, text) {
