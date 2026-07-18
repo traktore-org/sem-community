@@ -163,7 +163,7 @@ Everything else is automatic.
 
 ## Language Support
 
-SEM supports 15 languages. The integration follows your Home Assistant language setting automatically. Each user sees the dashboard in their own profile language.
+SEM supports 16 languages. The integration follows your Home Assistant language setting automatically. Each user sees the dashboard in their own profile language.
 
 For details, see the [Dashboard Guide](DASHBOARD_GUIDE.md).
 

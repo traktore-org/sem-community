@@ -350,7 +350,7 @@ ha-card {
 
 ## Multi-Language Support
 
-SEM supports 15 languages: Czech, Danish, German, English, Spanish, Finnish, French, Hungarian, Italian, Dutch, Norwegian, Polish, Portuguese, Romanian, and Swedish.
+SEM supports 16 languages: Czech, Danish, German, English, Spanish, Finnish, French, Hungarian, Italian, Dutch, Norwegian, Polish, Portuguese, Romanian, Swedish, and Simplified Chinese (`zh` — also used when Home Assistant reports `zh-Hans`).
 
 ### How Translation Works — Two Language Settings
 

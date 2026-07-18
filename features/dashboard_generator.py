@@ -63,6 +63,11 @@ class DashboardGenerator:
         all_translations = self._cached_translations
         lang_translations = all_translations.get(lang)
         if not lang_translations:
+            # Regional variants fall back to the base language
+            # (zh-Hans → zh, de-CH → de) — matches semLocalize() in the cards.
+            base_lang = lang.lower().split("-")[0]
+            lang_translations = all_translations.get(base_lang)
+        if not lang_translations:
             return config
 
         # Build reverse lookup: English text → translated text

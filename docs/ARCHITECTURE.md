@@ -898,7 +898,7 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All YAML-based card content — mushroom titles, labels, tab names, template strings
 
 **How it works:**
-1. Loads `dashboard/translations.json` (single source of truth, 1116 keys × 15 languages)
+1. Loads `dashboard/translations.json` (single source of truth, 1166 keys × 16 languages)
 2. Builds a reverse lookup: English text → translated text
 3. Walks the entire dashboard YAML tree
 4. Replaces exact-match English strings in translatable fields: `title`, `subtitle`, `primary`, `secondary`, `name`, `label`, `content`
@@ -919,7 +919,7 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All SEM custom card content (labels, status text, error messages)
 
 **How it works:**
-1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1116 keys × 15 languages as a JS object
+1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1166 keys × 16 languages as a JS object
 2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`
 3. Fires `sem-localize-ready` CustomEvent when loaded
 4. SEM cards extend `SEMBaseCard` (in `sem-shared.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
@@ -957,7 +957,7 @@ A household may have the system set to German, but one user's profile set to Eng
 Both layers read from the same file: **`dashboard/translations.json`**
 
 ```
-dashboard/translations.json          ← single source (1116 keys × 15 languages)
+dashboard/translations.json          ← single source (1166 keys × 16 languages)
     │
     ├──→ dashboard_generator.py      reads at generation time (server-side)
     │
@@ -979,6 +979,6 @@ Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), 
 
 ### Adding a New Translation Key
 
-1. Add the key to **all 15 languages** in `translations.json`
+1. Add the key to **all 16 languages** in `translations.json`
 2. Regenerate `sem-localize.js`
 3. Use `_t('key_name')` in custom card JS, or use the English text directly in dashboard template YAML (server-side translation handles the lookup)

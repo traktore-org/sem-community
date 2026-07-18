@@ -894,9 +894,9 @@ battery first, then heats water, then charges the car.
 
 ## 11. Language Support
 
-SEM supports 15 languages: English, German, Dutch, French, Spanish, Italian,
-Portuguese, Polish, Swedish, Czech, Danish, Finnish, Hungarian, Romanian, and
-Norwegian.
+SEM supports 16 languages: English, German, Dutch, French, Spanish, Italian,
+Portuguese, Polish, Swedish, Czech, Danish, Finnish, Hungarian, Romanian,
+Norwegian, and Simplified Chinese.
 
 Translation works in two layers:
 
@@ -925,7 +925,7 @@ To change the server language (affects static labels for all users):
    with the new language
 
 The source of truth for all translations is `dashboard/translations.json`
-(1116 keys across 15 languages). If you want to contribute a translation
+(1166 keys across 16 languages). If you want to contribute a translation
 correction or add a new language, see
 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 
