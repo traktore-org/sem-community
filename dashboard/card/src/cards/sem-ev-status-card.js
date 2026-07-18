@@ -196,7 +196,10 @@ class SEMEVStatusCard extends SEMLitBase {
         return name;
     }
 
-    _renderSocGauge(soc) {
+    _renderSocGauge(soc, isEstimate = false) {
+        // An ESTIMATED SOC (no vehicle SOC sensor - dead-reckoned from
+        // delivered kWh, taper-anchored) is marked with ~ so nobody mistakes
+        // it for the car's own reading (repeated confusion source).
         const socVal = soc != null ? Math.max(0, Math.min(100, soc)) : 0;
         const socColor = socVal > 60 ? '#8DC892' : socVal > 30 ? '#ff9800' : '#f06292';
         const socFill = Math.max(2, (socVal / 100) * 52);
@@ -212,7 +215,7 @@ class SEMEVStatusCard extends SEMLitBase {
                     fill="white" font-size="14" font-weight="700"
                     font-family="'Segoe UI','Roboto',sans-serif"
                     opacity="0.95">
-                    ${soc != null ? Math.round(soc) + '%' : '\u2014'}
+                    ${soc != null ? (isEstimate ? '~' : '') + Math.round(soc) + '%' : '\u2014'}
                 </text>
             </svg>
         `;
@@ -530,6 +533,8 @@ class SEMEVStatusCard extends SEMLitBase {
             ?? this._val('vehicle_soc', null);
         const estimatedSoc = this._val(`charger_${id}_estimated_soc`, null);
         const soc = vehicleSoc != null ? vehicleSoc : estimatedSoc;
+        // Real vehicle SOC shows plain; the fallback estimate is marked ~/est.
+        const socIsEstimate = vehicleSoc == null && estimatedSoc != null;
         // (#440) nights / chargeNeeded / needsCharge / chargeIcon / chargeColor /
         // chargeText removed — the underlying skip decision is gone.
         const name = this._chargerName(id);
@@ -649,9 +654,9 @@ class SEMEVStatusCard extends SEMLitBase {
                 </div>
 
                 <div class="charger-body">
-                    <div class="charger-soc">
-                        ${this._renderSocGauge(soc)}
-                        <span class="soc-label">SOC</span>
+                    <div class="charger-soc" title="${socIsEstimate ? this._t('soc_estimated_hint') : ''}">
+                        ${this._renderSocGauge(soc, socIsEstimate)}
+                        <span class="soc-label">${socIsEstimate ? this._t('soc_estimated_label') : 'SOC'}</span>
                     </div>
 
                     <div class="charger-metrics">

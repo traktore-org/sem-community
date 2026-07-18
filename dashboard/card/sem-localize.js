@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-18T09:39:53.539949+00:00
+// Generated: 2026-07-18T13:29:43.393922+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1211,7 +1211,9 @@
       "config_vpp_event_end_entity": "Event end time",
       "config_vpp_pre_event_entity": "Pre-event signal",
       "config_vpp_reserve_soc": "VPP battery reserve",
-      "config_help_vpp_reserve_soc": "Export events never discharge the home battery below this level."
+      "config_help_vpp_reserve_soc": "Export events never discharge the home battery below this level.",
+      "soc_estimated_label": "SOC (est.)",
+      "soc_estimated_hint": "Estimated from delivered energy — no vehicle SOC sensor configured. The car’s own reading may differ."
     },
     "de": {
       "charging": "Laden",
@@ -2419,7 +2421,9 @@
       "config_vpp_event_end_entity": "Ereignis-Endzeit",
       "config_vpp_pre_event_entity": "Vorlauf-Signal",
       "config_vpp_reserve_soc": "VPP-Batteriereserve",
-      "config_help_vpp_reserve_soc": "Export-Ereignisse entladen die Hausbatterie nie unter dieses Niveau."
+      "config_help_vpp_reserve_soc": "Export-Ereignisse entladen die Hausbatterie nie unter dieses Niveau.",
+      "soc_estimated_label": "SOC (gesch.)",
+      "soc_estimated_hint": "Aus der geladenen Energie geschätzt — kein Fahrzeug-SOC-Sensor konfiguriert. Der Wert im Auto kann abweichen."
     },
     "fr": {
       "charging": "En charge",
@@ -3627,7 +3631,9 @@
       "config_vpp_event_end_entity": "Heure de fin d'événement",
       "config_vpp_pre_event_entity": "Signal pré-événement",
       "config_vpp_reserve_soc": "Réserve batterie VPP",
-      "config_help_vpp_reserve_soc": "Les événements d'export ne déchargent jamais la batterie domestique sous ce niveau."
+      "config_help_vpp_reserve_soc": "Les événements d'export ne déchargent jamais la batterie domestique sous ce niveau.",
+      "soc_estimated_label": "SOC (est.)",
+      "soc_estimated_hint": "Estimé à partir de l’énergie délivrée — aucun capteur SOC du véhicule configuré."
     },
     "es": {
       "charging": "Cargando",
@@ -4835,7 +4841,9 @@
       "config_vpp_event_end_entity": "Hora de fin del evento",
       "config_vpp_pre_event_entity": "Señal pre-evento",
       "config_vpp_reserve_soc": "Reserva de batería VPP",
-      "config_help_vpp_reserve_soc": "Los eventos de exportación nunca descargan la batería doméstica por debajo de este nivel."
+      "config_help_vpp_reserve_soc": "Los eventos de exportación nunca descargan la batería doméstica por debajo de este nivel.",
+      "soc_estimated_label": "SOC (est.)",
+      "soc_estimated_hint": "Estimado a partir de la energía entregada — sin sensor SOC del vehículo."
     },
     "it": {
       "charging": "In carica",
@@ -6043,7 +6051,9 @@
       "config_vpp_event_end_entity": "Ora di fine evento",
       "config_vpp_pre_event_entity": "Segnale pre-evento",
       "config_vpp_reserve_soc": "Riserva batteria VPP",
-      "config_help_vpp_reserve_soc": "Gli eventi di esportazione non scaricano mai la batteria domestica sotto questo livello."
+      "config_help_vpp_reserve_soc": "Gli eventi di esportazione non scaricano mai la batteria domestica sotto questo livello.",
+      "soc_estimated_label": "SOC (stim.)",
+      "soc_estimated_hint": "Stimato dall’energia erogata — nessun sensore SOC del veicolo configurato."
     },
     "nl": {
       "charging": "Laden",
@@ -7251,7 +7261,9 @@
       "config_vpp_event_end_entity": "Eindtijd event",
       "config_vpp_pre_event_entity": "Pre-event-signaal",
       "config_vpp_reserve_soc": "VPP-batterijreserve",
-      "config_help_vpp_reserve_soc": "Export-events ontladen de thuisbatterij nooit onder dit niveau."
+      "config_help_vpp_reserve_soc": "Export-events ontladen de thuisbatterij nooit onder dit niveau.",
+      "soc_estimated_label": "SOC (gesch.)",
+      "soc_estimated_hint": "Geschat op basis van geleverde energie — geen voertuig-SOC-sensor geconfigureerd."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8459,7 +8471,9 @@
       "config_vpp_event_end_entity": "Čas konce události",
       "config_vpp_pre_event_entity": "Signál před událostí",
       "config_vpp_reserve_soc": "Rezerva baterie VPP",
-      "config_help_vpp_reserve_soc": "Exportní události nikdy nevybijí domácí baterii pod tuto úroveň."
+      "config_help_vpp_reserve_soc": "Exportní události nikdy nevybijí domácí baterii pod tuto úroveň.",
+      "soc_estimated_label": "SOC (odhad)",
+      "soc_estimated_hint": "Odhad z dodané energie — není nakonfigurován senzor SOC vozidla."
     },
     "da": {
       "charging": "Oplader",
@@ -9667,7 +9681,9 @@
       "config_vpp_event_end_entity": "Hændelsens sluttid",
       "config_vpp_pre_event_entity": "Før-hændelsessignal",
       "config_vpp_reserve_soc": "VPP-batterireserve",
-      "config_help_vpp_reserve_soc": "Eksporthændelser aflader aldrig hjemmebatteriet under dette niveau."
+      "config_help_vpp_reserve_soc": "Eksporthændelser aflader aldrig hjemmebatteriet under dette niveau.",
+      "soc_estimated_label": "SOC (est.)",
+      "soc_estimated_hint": "Estimeret ud fra leveret energi — ingen køretøjs-SOC-sensor konfigureret."
     },
     "fi": {
       "charging": "Lataus",
@@ -10875,7 +10891,9 @@
       "config_vpp_event_end_entity": "Tapahtuman päättymisaika",
       "config_vpp_pre_event_entity": "Ennakkosignaali",
       "config_vpp_reserve_soc": "VPP-akkuvaranto",
-      "config_help_vpp_reserve_soc": "Vientitapahtumat eivät koskaan pura kotiakkua tämän tason alle."
+      "config_help_vpp_reserve_soc": "Vientitapahtumat eivät koskaan pura kotiakkua tämän tason alle.",
+      "soc_estimated_label": "SOC (arvio)",
+      "soc_estimated_hint": "Arvioitu ladatusta energiasta — ajoneuvon SOC-anturia ei ole määritetty."
     },
     "hu": {
       "charging": "Töltés",
@@ -12083,7 +12101,9 @@
       "config_vpp_event_end_entity": "Esemény vége",
       "config_vpp_pre_event_entity": "Esemény előtti jel",
       "config_vpp_reserve_soc": "VPP akkumulátor-tartalék",
-      "config_help_vpp_reserve_soc": "Az exportesemények soha nem merítik a házi akkumulátort e szint alá."
+      "config_help_vpp_reserve_soc": "Az exportesemények soha nem merítik a házi akkumulátort e szint alá.",
+      "soc_estimated_label": "SOC (becsült)",
+      "soc_estimated_hint": "A leadott energiából becsülve — nincs jármű-SOC-szenzor beállítva."
     },
     "no": {
       "charging": "Lader",
@@ -13291,7 +13311,9 @@
       "config_vpp_event_end_entity": "Hendelsens sluttid",
       "config_vpp_pre_event_entity": "Førhendelsessignal",
       "config_vpp_reserve_soc": "VPP-batterireserve",
-      "config_help_vpp_reserve_soc": "Eksporthendelser lader aldri ut hjemmebatteriet under dette nivået."
+      "config_help_vpp_reserve_soc": "Eksporthendelser lader aldri ut hjemmebatteriet under dette nivået.",
+      "soc_estimated_label": "SOC (est.)",
+      "soc_estimated_hint": "Estimert fra levert energi — ingen kjøretøy-SOC-sensor konfigurert."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14499,7 +14521,9 @@
       "config_vpp_event_end_entity": "Czas końca zdarzenia",
       "config_vpp_pre_event_entity": "Sygnał przed zdarzeniem",
       "config_vpp_reserve_soc": "Rezerwa baterii VPP",
-      "config_help_vpp_reserve_soc": "Zdarzenia eksportu nigdy nie rozładowują baterii domowej poniżej tego poziomu."
+      "config_help_vpp_reserve_soc": "Zdarzenia eksportu nigdy nie rozładowują baterii domowej poniżej tego poziomu.",
+      "soc_estimated_label": "SOC (szac.)",
+      "soc_estimated_hint": "Oszacowane z dostarczonej energii — brak czujnika SOC pojazdu."
     },
     "pt": {
       "charging": "A carregar",
@@ -15707,7 +15731,9 @@
       "config_vpp_event_end_entity": "Hora de fim do evento",
       "config_vpp_pre_event_entity": "Sinal pré-evento",
       "config_vpp_reserve_soc": "Reserva de bateria VPP",
-      "config_help_vpp_reserve_soc": "Eventos de exportação nunca descarregam a bateria doméstica abaixo deste nível."
+      "config_help_vpp_reserve_soc": "Eventos de exportação nunca descarregam a bateria doméstica abaixo deste nível.",
+      "soc_estimated_label": "SOC (est.)",
+      "soc_estimated_hint": "Estimado a partir da energia fornecida — sem sensor SOC do veículo."
     },
     "ro": {
       "charging": "Încărcare",
@@ -16915,7 +16941,9 @@
       "config_vpp_event_end_entity": "Ora de sfârșit a evenimentului",
       "config_vpp_pre_event_entity": "Semnal pre-eveniment",
       "config_vpp_reserve_soc": "Rezervă baterie VPP",
-      "config_help_vpp_reserve_soc": "Evenimentele de export nu descarcă niciodată bateria casei sub acest nivel."
+      "config_help_vpp_reserve_soc": "Evenimentele de export nu descarcă niciodată bateria casei sub acest nivel.",
+      "soc_estimated_label": "SOC (est.)",
+      "soc_estimated_hint": "Estimat din energia livrată — fără senzor SOC al vehiculului."
     },
     "sv": {
       "charging": "Laddar",
@@ -18123,7 +18151,9 @@
       "config_vpp_event_end_entity": "Händelsens sluttid",
       "config_vpp_pre_event_entity": "Förhandssignal",
       "config_vpp_reserve_soc": "VPP-batterireserv",
-      "config_help_vpp_reserve_soc": "Exporthändelser laddar aldrig ur hemmabatteriet under denna nivå."
+      "config_help_vpp_reserve_soc": "Exporthändelser laddar aldrig ur hemmabatteriet under denna nivå.",
+      "soc_estimated_label": "SOC (uppsk.)",
+      "soc_estimated_hint": "Uppskattat från levererad energi — ingen fordons-SOC-sensor konfigurerad."
     },
     "zh": {
       "charging": "充电中",
@@ -19331,7 +19361,9 @@
       "config_vpp_event_end_entity": "事件结束时间",
       "config_vpp_pre_event_entity": "事件前信号",
       "config_vpp_reserve_soc": "VPP 电池储备",
-      "config_help_vpp_reserve_soc": "输出事件绝不会将家用电池放电至此水平以下。"
+      "config_help_vpp_reserve_soc": "输出事件绝不会将家用电池放电至此水平以下。",
+      "soc_estimated_label": "SOC（估算）",
+      "soc_estimated_hint": "根据已充电量估算——未配置车辆 SOC 传感器，车内实际读数可能不同。"
     }
   };
 
