@@ -213,3 +213,27 @@ async def test_guard_sensor_discovery_retries_after_early_failure(keba, mock_has
     data = [c.args[2] for c in mock_hass.services.async_call.call_args_list
             if len(c.args) >= 3 and c.args[1] == "set_energy"]
     assert data == [{"energy": 0}]
+
+
+@pytest.mark.asyncio
+async def test_guard_sensor_discovery_by_name_when_no_device(keba, mock_hass, monkeypatch):
+    """KEBA's hub-style YAML integration attaches NO device_id to its
+    entities (PROD 2026-07-18), so device-registry sibling discovery is
+    structurally blind. The name-derivation fallback must find
+    <box>_energy_target from the configured <box>_charging_power anchor."""
+    import custom_components.solar_energy_management.devices.base as base_mod
+    keba.power_entity_id = "sensor.keba_p30_charging_power"
+    # entity registry returns an entry with device_id None
+    class _Ent: device_id = None
+    class _Reg:
+        def async_get(self, eid): return _Ent()
+    monkeypatch.setattr("homeassistant.helpers.entity_registry.async_get",
+                        lambda hass: _Reg())
+    states = {"sensor.keba_p30_energy_target": _et_state(1.0)}
+    mock_hass.states.get = lambda eid: states.get(eid)
+    mock_hass.states.async_entity_ids = lambda d=None: list(states)
+    keba._idle_guard_armed = False
+    await keba.ensure_energy_guard_released()
+    data = [c.args[2] for c in mock_hass.services.async_call.call_args_list
+            if len(c.args) >= 3 and c.args[1] == "set_energy"]
+    assert data == [{"energy": 0}], "name-derived discovery must trigger the release"

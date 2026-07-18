@@ -1491,9 +1491,11 @@ class CurrentControlDevice(ControllableDevice):
         # Retry every call until found; cache only a positive hit.
         found = None
         try:
-            from homeassistant.helpers import entity_registry as er
             anchor = self.power_entity_id or self.current_sensor_entity_id
             if anchor and self.hass is not None:
+                # Strategy 1 — device-registry sibling (integrations that
+                # attach entities to a device).
+                from homeassistant.helpers import entity_registry as er
                 reg = er.async_get(self.hass)
                 ent = reg.async_get(anchor)
                 if ent is not None and ent.device_id:
@@ -1501,6 +1503,30 @@ class CurrentControlDevice(ControllableDevice):
                         if other.entity_id.endswith("energy_target"):
                             found = other.entity_id
                             break
+                # Strategy 2 — name derivation. The KEBA integration is a
+                # hub-style YAML platform whose entities carry NO device_id
+                # (PROD 2026-07-18: device-registry discovery structurally
+                # blind → the guard backstop never fired). Derive the
+                # register sensor from the anchor's naming:
+                # sensor.<box>_charging_power → sensor.<box>_energy_target.
+                if not found:
+                    obj = anchor.split(".", 1)[-1]
+                    for suf in ("_charging_power", "_power", "_max_current"):
+                        if obj.endswith(suf):
+                            cand = "sensor." + obj[: -len(suf)] + "_energy_target"
+                            if self.hass.states.get(cand) is not None:
+                                found = cand
+                            break
+                # Strategy 3 — unique prefix match across all states.
+                if not found:
+                    prefix = anchor.split(".", 1)[-1].split("_", 1)[0]
+                    cands = [
+                        eid for eid in self.hass.states.async_entity_ids("sensor")
+                        if eid.endswith("_energy_target")
+                        and eid.split(".", 1)[-1].startswith(prefix)
+                    ]
+                    if len(cands) == 1:
+                        found = cands[0]
         except Exception:  # noqa: BLE001 — discovery must never break a command
             found = None
         if found:
