@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-18T04:40:28.405403+00:00
+// Generated: 2026-07-18T05:25:35.921368+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1195,7 +1195,8 @@
       "config_unsaved": "unsaved",
       "config_default_label": "Default",
       "config_docs": "Documentation",
-      "config_help_label": "Explain settings"
+      "config_help_label": "Explain settings",
+      "config_reset_default": "Reset to default"
     },
     "de": {
       "charging": "Laden",
@@ -2387,7 +2388,8 @@
       "config_unsaved": "ungespeichert",
       "config_default_label": "Standard",
       "config_docs": "Dokumentation",
-      "config_help_label": "Einstellungen erklären"
+      "config_help_label": "Einstellungen erklären",
+      "config_reset_default": "Auf Standard zurücksetzen"
     },
     "fr": {
       "charging": "En charge",
@@ -3579,7 +3581,8 @@
       "config_unsaved": "non enregistré",
       "config_default_label": "Défaut",
       "config_docs": "Documentation",
-      "config_help_label": "Expliquer les réglages"
+      "config_help_label": "Expliquer les réglages",
+      "config_reset_default": "Réinitialiser"
     },
     "es": {
       "charging": "Cargando",
@@ -4771,7 +4774,8 @@
       "config_unsaved": "sin guardar",
       "config_default_label": "Predeterminado",
       "config_docs": "Documentación",
-      "config_help_label": "Explicar ajustes"
+      "config_help_label": "Explicar ajustes",
+      "config_reset_default": "Restablecer"
     },
     "it": {
       "charging": "In carica",
@@ -5963,7 +5967,8 @@
       "config_unsaved": "non salvato",
       "config_default_label": "Predefinito",
       "config_docs": "Documentazione",
-      "config_help_label": "Spiega impostazioni"
+      "config_help_label": "Spiega impostazioni",
+      "config_reset_default": "Ripristina predefinito"
     },
     "nl": {
       "charging": "Laden",
@@ -7155,7 +7160,8 @@
       "config_unsaved": "niet opgeslagen",
       "config_default_label": "Standaard",
       "config_docs": "Documentatie",
-      "config_help_label": "Instellingen uitleggen"
+      "config_help_label": "Instellingen uitleggen",
+      "config_reset_default": "Standaard herstellen"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8347,7 +8353,8 @@
       "config_unsaved": "neuloženo",
       "config_default_label": "Výchozí",
       "config_docs": "Dokumentace",
-      "config_help_label": "Vysvětlit nastavení"
+      "config_help_label": "Vysvětlit nastavení",
+      "config_reset_default": "Obnovit výchozí"
     },
     "da": {
       "charging": "Oplader",
@@ -9539,7 +9546,8 @@
       "config_unsaved": "ikke gemt",
       "config_default_label": "Standard",
       "config_docs": "Dokumentation",
-      "config_help_label": "Forklar indstillinger"
+      "config_help_label": "Forklar indstillinger",
+      "config_reset_default": "Nulstil til standard"
     },
     "fi": {
       "charging": "Lataus",
@@ -10731,7 +10739,8 @@
       "config_unsaved": "tallentamatta",
       "config_default_label": "Oletus",
       "config_docs": "Dokumentaatio",
-      "config_help_label": "Selitä asetukset"
+      "config_help_label": "Selitä asetukset",
+      "config_reset_default": "Palauta oletus"
     },
     "hu": {
       "charging": "Töltés",
@@ -11923,7 +11932,8 @@
       "config_unsaved": "mentetlen",
       "config_default_label": "Alapértelmezett",
       "config_docs": "Dokumentáció",
-      "config_help_label": "Beállítások magyarázata"
+      "config_help_label": "Beállítások magyarázata",
+      "config_reset_default": "Alapértelmezett visszaállítása"
     },
     "no": {
       "charging": "Lader",
@@ -13115,7 +13125,8 @@
       "config_unsaved": "ulagret",
       "config_default_label": "Standard",
       "config_docs": "Dokumentasjon",
-      "config_help_label": "Forklar innstillinger"
+      "config_help_label": "Forklar innstillinger",
+      "config_reset_default": "Tilbakestill til standard"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14307,7 +14318,8 @@
       "config_unsaved": "niezapisane",
       "config_default_label": "Domyślnie",
       "config_docs": "Dokumentacja",
-      "config_help_label": "Wyjaśnij ustawienia"
+      "config_help_label": "Wyjaśnij ustawienia",
+      "config_reset_default": "Przywróć domyślne"
     },
     "pt": {
       "charging": "A carregar",
@@ -15499,7 +15511,8 @@
       "config_unsaved": "não guardado",
       "config_default_label": "Predefinição",
       "config_docs": "Documentação",
-      "config_help_label": "Explicar definições"
+      "config_help_label": "Explicar definições",
+      "config_reset_default": "Repor predefinição"
     },
     "ro": {
       "charging": "Încărcare",
@@ -16691,7 +16704,8 @@
       "config_unsaved": "nesalvat",
       "config_default_label": "Implicit",
       "config_docs": "Documentație",
-      "config_help_label": "Explică setările"
+      "config_help_label": "Explică setările",
+      "config_reset_default": "Resetare implicită"
     },
     "sv": {
       "charging": "Laddar",
@@ -17883,7 +17897,8 @@
       "config_unsaved": "osparade",
       "config_default_label": "Standard",
       "config_docs": "Dokumentation",
-      "config_help_label": "Förklara inställningar"
+      "config_help_label": "Förklara inställningar",
+      "config_reset_default": "Återställ standard"
     }
   };
 

@@ -6245,7 +6245,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         @change=${t=>this._stage(e,"number",parseFloat(t.target.value))} />
                     <button class="zone-mini" @click=${()=>f(1)}>+</button>
                 </div>
-                ${this._helpBlock(s,r.attributes.sem_default,_)}
+                ${this._helpBlock(s,r.attributes.sem_default,_,e,"number")}
             </div>
         `}_renderSocZoneStrip(e){const t=this._num("number.sem_battery_priority_soc"),i=this._num("number.sem_battery_buffer_soc"),s=this._num("number.sem_battery_auto_start_soc");if(null==t||null==i||null==s)return q;const r=this._num("sensor.sem_battery_soc"),a=e=>Math.max(0,Math.min(100,e));return W`
             <div class="soc-strip">
@@ -6503,7 +6503,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             </div>
         `}_reg(e){this._sec&&(this._secOf[e]=this._sec)}_liveOf(e,t){if("option"===t){return(this._options||{})[e.slice(4)]}const i=this._hass?.states[e];if(i)return"number"===t?parseFloat(i.state):i.state}_stage(e,t,i){const s=this._liveOf(e,t),r="number"===t?Number(s)===Number(i):String(s)===String(i),a={...this._staged};r?delete a[e]:a[e]={kind:t,value:i},this._staged=a}_isDirty(e){return Object.prototype.hasOwnProperty.call(this._staged,e)}_stagedVal(e,t){const i=this._staged[e];return void 0===i?t:i.value}_sectionStaged(e){return Object.keys(this._staged).filter(t=>this._secOf[t]===e)}_revertSection(e){const t={...this._staged};this._sectionStaged(e).forEach(e=>delete t[e]),this._staged=t}async _applySection(e){const t=this._sectionStaged(e);if(t.length&&!this._secApplying){this._secApplying=e;try{const e={};for(const i of t){const t=this._staged[i];"option"===t.kind?e[i.slice(4)]=t.value:"number"===t.kind?await this._hass.callService("number","set_value",{entity_id:i,value:Number(t.value)}):"select"===t.kind?await this._hass.callService("select","select_option",{entity_id:i,option:String(t.value)}):"switch"===t.kind&&await this._hass.callService("switch","on"===t.value?"turn_on":"turn_off",{entity_id:i})}if(Object.keys(e).length){const t=await this._ensureEntryId();await this._hass.callService("solar_energy_management","set_option",{options:e,...t?{entry_id:t}:{}}),this._options={...this._options,...e}}const i={...this._staged};t.forEach(e=>delete i[e]),this._staged=i}catch(t){console.error("[sem-config-card] section apply failed",t),this._saveStatus={...this._saveStatus,["_sec_"+e]:t?.message||"apply failed"}}finally{this._secApplying="",this.requestUpdate()}}}_helpVisible(e){return!(!e||!this._showHelp&&!this._helpOpen[e])}_helpBtn(e){return e?W`<ha-icon class="row-help-btn ${this._helpOpen[e]?"on":""}"
             icon="mdi:information-outline" style="--mdc-icon-size:14px"
-            @click=${t=>{t.stopPropagation(),this._helpOpen={...this._helpOpen,[e]:!this._helpOpen[e]}}}></ha-icon>`:q}_helpBlock(e,t,i){if(!this._helpVisible(e))return q;const s=null!=t&&""!==t;return W`<div class="setting-help-text">${this._t(e)}${s?W` <span class="help-default">${this._t("config_default_label")}: ${t}${i?" "+i:""}</span>`:q}</div>`}_renderOptionSelect(e,t,i,s,r,a){const o="opt:"+e;this._reg(o);const n=null!=s[e]?s[e]:a,l=this._isDirty(o),c=this._stagedVal(o,n);return W`
+            @click=${t=>{t.stopPropagation(),this._helpOpen={...this._helpOpen,[e]:!this._helpOpen[e]}}}></ha-icon>`:q}_helpBlock(e,t,i,s,r){if(!this._helpVisible(e))return q;const a=null!=t&&""!==t,o=a&&s&&r;return W`<div class="setting-help-text">${this._t(e)}${a?W` <span class="help-default">${this._t("config_default_label")}: ${t}${i?" "+i:""}</span>`:q}${o?W` <button class="help-reset-btn" title="${this._t("config_reset_default")}"
+                  @click=${e=>{e.stopPropagation(),this._stage(s,r,t)}}>↺ ${this._t("config_reset_default")}</button>`:q}</div>`}_renderOptionSelect(e,t,i,s,r,a){const o="opt:"+e;this._reg(o);const n=null!=s[e]?s[e]:a,l=this._isDirty(o),c=this._stagedVal(o,n);return W`
             <div class="stepper-cell ${l?"dirty":""}">
                 <div class="ctrl-row">
                     <span class="ctrl-label">${this._t(t)}${l?W`<span class="dirty-dot">●</span>`:q}${this._helpBtn(r)}</span>
@@ -6515,7 +6516,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         `)}
                     </select>
                 </div>
-                ${this._helpBlock(r,a)}
+                ${this._helpBlock(r,a,void 0,o,"option")}
             </div>
         `}_renderOptionToggle(e,t,i,s,r){const a=Kt.has(e),o="opt:"+e;a||this._reg(o);const n=a&&Object.prototype.hasOwnProperty.call(this._pending,e),l=null!=i[e]?!!i[e]:!!r,c=n||!a&&this._isDirty(o),d=n?!!this._pending[e]:!a&&this._isDirty(o)?!!this._staged[o].value:l;return W`
             <div class="stepper-cell ${c?"dirty":""}">
@@ -6542,7 +6543,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         ${i.unit?W`<span class="num-unit">${i.unit}</span>`:q}
                     </div>
                 </div>
-                ${this._helpBlock(r,i.default,i.unit)}
+                ${this._helpBlock(r,i.default,i.unit,a,"option")}
             </div>
         `}_renderOptionSlider(e,t,i,s,r){const a="opt:"+e;this._reg(a);const o=parseFloat(null!=s[e]?s[e]:i.default)||0,n=this._isDirty(a),l=Number(this._stagedVal(a,o)),c=i.step<1?1:0,d=i.unit||"",p=i.max>i.min?Math.round((l-i.min)/(i.max-i.min)*100):0,h=e=>{const t=Math.min(i.max,Math.max(i.min,l+e*i.step));this._stage(a,"option",t)};return W`
             <div class="zone-knob ${n?"dirty":""}">
@@ -6558,7 +6559,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         @change=${e=>this._stage(a,"option",parseFloat(e.target.value))} />
                     <button class="zone-mini" @click=${()=>h(1)}>+</button>
                 </div>
-                ${this._helpBlock(r,i.default,d)}
+                ${this._helpBlock(r,i.default,d,a,"option")}
             </div>
         `}_renderBatteryScheduler(e){const t=this._options||{};return W`
             <div class="setup-intro">${this._t("config_battery_scheduler_intro")}</div>
@@ -7233,6 +7234,15 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     margin-left: 6px; opacity: 0.7; transition: opacity 0.15s;
                 }
                 .section-docs-link:hover { opacity: 1; color: var(--section-accent, ${i}); }
+                .help-reset-btn {
+                    display: inline-block; margin-left: 8px;
+                    padding: 1px 8px; border-radius: 9px;
+                    font-size: 11px; cursor: pointer;
+                    border: 1px solid ${e.surfaceBorder};
+                    background: transparent;
+                    color: var(--section-accent, ${i});
+                }
+                .help-reset-btn:hover { border-color: var(--section-accent, ${i}); }
             </style>
             <ha-card>
                 <div class="wrap">

@@ -779,7 +779,7 @@ class SEMConfigCard extends SEMLitBase {
                         @change=${(ev) => this._stage(entityId, 'number', parseFloat(ev.target.value))} />
                     <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
-                ${this._helpBlock(helpKey, e.attributes.sem_default, unit)}
+                ${this._helpBlock(helpKey, e.attributes.sem_default, unit, entityId, 'number')}
             </div>
         `;
     }
@@ -1520,11 +1520,18 @@ class SEMConfigCard extends SEMLitBase {
             }}></ha-icon>`;
     }
 
-    _helpBlock(helpKey, def, unit) {
+    _helpBlock(helpKey, def, unit, sid, kind) {
         if (!this._helpVisible(helpKey)) return nothing;
         const hasDef = def !== undefined && def !== null && def !== '';
+        // #605 follow-up (Guido): reset-to-default STAGES the factory value
+        // through the same Apply pipeline — previewable, revertable, and
+        // committed only on the section Apply like any other edit.
+        const canReset = hasDef && sid && kind;
         return html`<div class="setting-help-text">${this._t(helpKey)}${hasDef
             ? html` <span class="help-default">${this._t('config_default_label')}: ${def}${unit ? ' ' + unit : ''}</span>`
+            : nothing}${canReset
+            ? html` <button class="help-reset-btn" title="${this._t('config_reset_default')}"
+                  @click=${(e) => { e.stopPropagation(); this._stage(sid, kind, def); }}>↺ ${this._t('config_reset_default')}</button>`
             : nothing}</div>`;
     }
 
@@ -1549,7 +1556,7 @@ class SEMConfigCard extends SEMLitBase {
                         `)}
                     </select>
                 </div>
-                ${this._helpBlock(helpKey, defaultVal)}
+                ${this._helpBlock(helpKey, defaultVal, undefined, sid, 'option')}
             </div>
         `;
     }
@@ -1624,7 +1631,7 @@ class SEMConfigCard extends SEMLitBase {
                         ${cfg.unit ? html`<span class="num-unit">${cfg.unit}</span>` : nothing}
                     </div>
                 </div>
-                ${this._helpBlock(helpKey, cfg.default, cfg.unit)}
+                ${this._helpBlock(helpKey, cfg.default, cfg.unit, sid, 'option')}
             </div>
         `;
     }
@@ -1660,7 +1667,7 @@ class SEMConfigCard extends SEMLitBase {
                         @change=${(ev) => this._stage(sid, 'option', parseFloat(ev.target.value))} />
                     <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
-                ${this._helpBlock(helpKey, cfg.default, unit)}
+                ${this._helpBlock(helpKey, cfg.default, unit, sid, 'option')}
             </div>
         `;
     }
@@ -2652,6 +2659,15 @@ class SEMConfigCard extends SEMLitBase {
                     margin-left: 6px; opacity: 0.7; transition: opacity 0.15s;
                 }
                 .section-docs-link:hover { opacity: 1; color: var(--section-accent, ${accent}); }
+                .help-reset-btn {
+                    display: inline-block; margin-left: 8px;
+                    padding: 1px 8px; border-radius: 9px;
+                    font-size: 11px; cursor: pointer;
+                    border: 1px solid ${T.surfaceBorder};
+                    background: transparent;
+                    color: var(--section-accent, ${accent});
+                }
+                .help-reset-btn:hover { border-color: var(--section-accent, ${accent}); }
             </style>
             <ha-card>
                 <div class="wrap">
