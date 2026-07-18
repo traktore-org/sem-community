@@ -28,6 +28,14 @@ SWITCH_TYPES = [
         key="observer_mode",
         entity_category=EntityCategory.CONFIG,
     ),
+    # #594 — vacation mode: while ON, SEM suppresses comfort heating
+    # (heat-pump SG-Ready boost + hot-water solar target). OR'd with the
+    # optional external ``vacation_mode_entity`` config key each cycle.
+    SwitchEntityDescription(
+        key="vacation_mode",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:beach",
+    ),
 ]
 
 # (ev_limit_surplus (#235) was folded into the optional Max ceiling (#245); its
@@ -135,6 +143,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
 
         if description.key == "observer_mode":
             self._is_on = coordinator.config_entry.options.get("observer_mode", False)
+        elif description.key == "vacation_mode":
+            # #594 — same persistence pattern as observer_mode: seed from the
+            # config option, then RestoreEntity takes over across reboots.
+            self._is_on = coordinator.config_entry.options.get("vacation_mode", False)
         else:
             self._is_on = False
 
@@ -157,6 +169,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # False) won the race and SEM controlled hardware despite the switch.
         if self.entity_description.key == "observer_mode":
             self.coordinator._observer_mode = self._is_on
+        # Same immediacy for vacation mode (#594): push the restored state so
+        # the first control cycle after a reboot already gates comfort heating.
+        if self.entity_description.key == "vacation_mode":
+            self.coordinator._vacation_switch_on = self._is_on
 
     @property
     def is_on(self) -> bool:
@@ -171,6 +187,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # independent of the per-cycle entity lookup.
         if self.entity_description.key == "observer_mode":
             self.coordinator._observer_mode = True
+        if self.entity_description.key == "vacation_mode":
+            self.coordinator._vacation_switch_on = True  # #594 — immediate
         # Push the new state immediately (#259): otherwise the UI only reflects the
         # toggle on the next coordinator push, and a swallowed refresh error below
         # would silently leave HA showing the old state.
@@ -187,6 +205,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._is_on = False
         if self.entity_description.key == "observer_mode":
             self.coordinator._observer_mode = False
+        if self.entity_description.key == "vacation_mode":
+            self.coordinator._vacation_switch_on = False  # #594 — immediate
         self.async_write_ha_state()  # reflect immediately (#259)
 
         try:

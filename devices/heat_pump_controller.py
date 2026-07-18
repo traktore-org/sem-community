@@ -126,6 +126,14 @@ class HeatPumpController(SetpointDevice):
         self.force_on_threshold = force_on_threshold
         self._hp_status = HeatPumpStatus()
 
+        # #594 — vacation mode. Set each cycle by the coordinator. While
+        # True, SEM stops ENCOURAGING the pump (no SG-Ready boost/force-on,
+        # no climate setpoint boost, no cheap-tariff force). SEM never sends
+        # a BLOCKING signal for vacation — deactivation returns the pump to
+        # SG-Ready NORMAL (state 2), so the pump's own frost/safety logic is
+        # untouched.
+        self.vacation: bool = False
+
         # #421 — telemetry surface mirroring #359/#416/#420
         # classifier_path / dampening_path / legionella_path patterns.
         # Each decision branch sets the corresponding ``*_path`` string
@@ -166,6 +174,10 @@ class HeatPumpController(SetpointDevice):
         Records the decision branch on ``self._last_offpeak_path`` (#421):
         ``parent_declines`` / ``already_warm_skip`` / ``activate``.
         """
+        if self.vacation:
+            # #594 — no cheap-tariff comfort forcing while away.
+            self._last_offpeak_path = "vacation_blocked"
+            return False
         if not super().needs_offpeak_activation:
             self._last_offpeak_path = "parent_declines"
             return False
@@ -183,7 +195,15 @@ class HeatPumpController(SetpointDevice):
         ``boost`` (surplus < force_on_threshold) or
         ``force_on`` (surplus >= threshold). Climate boost is composed via
         a ``+climate`` suffix when ``climate_entity_id`` is configured.
+
+        #594: while vacation mode is active the pump receives NO
+        comfort-driven activation — return 0 W without touching the relays
+        (``vacation_blocked`` path). The coordinator already deactivated a
+        running boost on the vacation transition.
         """
+        if self.vacation:
+            self._last_activation_path = "vacation_blocked"
+            return 0.0
         if available_watts >= self.force_on_threshold:
             target_state = SGReadyState.FORCE_ON
             self._last_activation_path = "force_on"
@@ -379,6 +399,7 @@ class HeatPumpController(SetpointDevice):
             "is_solar_boosted": self._hp_status.is_solar_boosted,
             "current_temperature": self.get_current_temperature(),
             "force_on_threshold": self.force_on_threshold,
+            "vacation": self.vacation,  # #594
             # #421 — telemetry surface (mirrors #359/#416/#420 pattern).
             "activation_path": self._last_activation_path,
             "deactivation_path": self._last_deactivation_path,

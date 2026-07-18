@@ -274,6 +274,9 @@ DEFAULT_INVERTER_MAX_POWER_W: Final = 10000
 # via ``hass.states.get(...)`` — do NOT prepend a platform prefix at the call
 # site (that produced a dead three-segment id and silently broke the lookup).
 ENTITY_OBSERVER_MODE_SWITCH: Final = "switch.sem_observer_mode"
+# #594 — SEM's own vacation-mode switch (one of the two activation sources;
+# the other is the optional external ``vacation_mode_entity`` config key).
+ENTITY_VACATION_MODE_SWITCH: Final = "switch.sem_vacation_mode"
 ENTITY_SOLAR_POWER: Final = "sensor.sem_solar_power"
 
 # HA state constants (avoid magic strings)

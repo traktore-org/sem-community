@@ -979,6 +979,9 @@
     "switch": {
       "observer_mode": {
         "name": "Režim pozorovatele"
+      },
+      "vacation_mode": {
+        "name": "Režim dovolené"
       }
     },
     "number": {

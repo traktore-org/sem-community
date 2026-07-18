@@ -29,9 +29,10 @@ class TestSEMSwitches:
         """Verify switch types. Post-#277 Phase C the legacy global
         ``night_charging`` and ``smart_night_charging`` switches are
         gone (the named ``charge_mode`` selector carries the same
-        intent); ``observer_mode`` is the only remaining one."""
+        intent); ``observer_mode`` remains, joined by ``vacation_mode``
+        (#594 — suppress comfort heating while away)."""
         keys = [s.key for s in SWITCH_TYPES]
-        assert keys == ["observer_mode"]
+        assert keys == ["observer_mode", "vacation_mode"]
 
     # ``test_night_charging_default_off`` and
     # ``test_night_charging_existing_state_preserved`` removed in

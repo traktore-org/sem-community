@@ -981,6 +981,9 @@
     "switch": {
       "observer_mode": {
         "name": "Observatiemodus"
+      },
+      "vacation_mode": {
+        "name": "Vakantiemodus"
       }
     },
     "number": {

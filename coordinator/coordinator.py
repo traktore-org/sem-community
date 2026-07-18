@@ -32,6 +32,7 @@ from ..const import (
     ED_RESOLVE_MAX_ATTEMPTS,
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
+    ENTITY_VACATION_MODE_SWITCH,
     ENTITY_SOLAR_POWER,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
@@ -576,6 +577,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Observer mode: read-only monitoring, no hardware control
         self._observer_mode = config.get("observer_mode", False)
+
+        # Vacation mode (#594): suppress comfort heating (heat pump boost +
+        # hot water solar target) while away. Two activation sources OR'd
+        # per cycle: SEM's own ``switch.sem_vacation_mode`` (pushed onto
+        # ``_vacation_switch_on`` by the switch entity, backstopped from the
+        # entity state each cycle) and the optional external
+        # ``vacation_mode_entity`` config key (binary_sensor / input_boolean
+        # / switch / calendar — active while its state is ``on``).
+        self._vacation_switch_on = config.get("vacation_mode", False)
+        self._vacation_active = False
 
         # Tracking flags
         self._initial_update_done = False
@@ -1722,6 +1733,88 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         observer_state = self.hass.states.get(ENTITY_OBSERVER_MODE_SWITCH)
         if observer_state is not None and observer_state.state in ("on", "off"):
             self._observer_mode = observer_state.state == "on"
+
+    def _sync_vacation_mode_from_switch(self) -> None:
+        """Backstop the vacation switch flag from the entity each cycle (#594).
+
+        Same contract as ``_sync_observer_mode_from_switch``: only a DEFINITE
+        ``on``/``off`` updates the flag — transient unavailable/unknown holds
+        the last known value (the switch also pushes directly, see switch.py).
+        """
+        vac_state = self.hass.states.get(ENTITY_VACATION_MODE_SWITCH)
+        if vac_state is not None and vac_state.state in ("on", "off"):
+            self._vacation_switch_on = vac_state.state == "on"
+
+    def _compute_vacation_active(self) -> bool:
+        """Vacation is active when EITHER source says so (#594).
+
+        1. The optional external ``vacation_mode_entity`` (tunable config
+           key, read per cycle): ``binary_sensor.*`` / ``input_boolean.*`` /
+           ``switch.*`` are active while ``on``; ``calendar.*`` is ``on``
+           exactly while an event is ongoing — same check covers all four.
+        2. SEM's own ``switch.sem_vacation_mode``.
+        """
+        self._sync_vacation_mode_from_switch()
+        if self._vacation_switch_on:
+            return True
+        ext_entity = self.config.get("vacation_mode_entity") or ""
+        if ext_entity:
+            ext_state = self.hass.states.get(ext_entity)
+            if ext_state is not None and ext_state.state == "on":
+                return True
+        return False
+
+    async def _apply_vacation_mode(self) -> bool:
+        """Set the per-cycle vacation flag on the comfort-heating controllers
+        and deactivate them cleanly on the vacation transition (#594).
+
+        Runs BEFORE ``SurplusController.update`` so this cycle's activation
+        pass already sees the gate. SEM only stops ENCOURAGING: deactivation
+        returns the heat pump to SG-Ready NORMAL (never BLOCKED) and the
+        boiler to its own thermostat — frost/safety logic is untouched. EV /
+        battery / load-priority devices are deliberately not touched.
+        """
+        was_active = self._vacation_active
+        vacation = self._compute_vacation_active()
+        self._vacation_active = vacation
+        devices = getattr(self._surplus_controller, "_devices", {})
+        for dev_id in ("heat_pump", "hot_water"):
+            dev = devices.get(dev_id)
+            if dev is None:
+                continue
+            dev.vacation = vacation
+            if dev_id == "hot_water":
+                dev.vacation_dhw_surplus = bool(
+                    self.config.get("vacation_dhw_surplus", False)
+                )
+            if not vacation or self._observer_mode or not dev.is_active:
+                continue
+            # The hot-water surplus dump may stay active (it re-targets
+            # ``min_temperature`` via ``_active_target_temp``) — but on the
+            # rising edge deactivate once so the entity's written setpoint
+            # drops from the solar/comfort target to the minimum on the next
+            # (gated) activation. Legionella-in-flight is aborted by
+            # ``check_legionella_cycle`` itself.
+            dump_allowed = (
+                dev_id == "hot_water"
+                and dev.vacation_dhw_surplus
+                and not getattr(dev, "_legionella_cycle_active", False)
+            )
+            if dump_allowed and was_active:
+                continue
+            try:
+                await dev.deactivate()
+                if not dev.is_active:
+                    dev.record_deactivated()
+                    _LOGGER.info(
+                        "Vacation mode: deactivated %s (comfort heating "
+                        "suspended while away)", dev.name,
+                    )
+            except Exception as e:  # noqa: BLE001 — never break the cycle
+                _LOGGER.warning(
+                    "Vacation deactivation of %s failed: %s", dev_id, e,
+                )
+        return vacation
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data from sensors and calculate derived values."""
@@ -3729,8 +3822,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Tariff read failed: %s", e)
 
+        # Vacation mode (#594) — resolve + apply BEFORE the surplus
+        # allocation below so this cycle's activation pass already sees the
+        # gate on the heat-pump / hot-water controllers. Own try: a failure
+        # here must not take out the surplus phase.
+        try:
+            await self._apply_vacation_mode()
+        except Exception as e:  # noqa: BLE001 — never break the cycle
+            _LOGGER.debug("Vacation mode apply failed: %s", e)
+
         # Surplus controller (Phase 0.2)
         surplus_data = SurplusControlData()
+        surplus_data.vacation_active = self._vacation_active
         try:
             # #508 W7 — feed the TRUE house surplus, not the EV budget.
             # ``grid_export_power`` is what the house is exporting after the

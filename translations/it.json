@@ -979,6 +979,9 @@
     "switch": {
       "observer_mode": {
         "name": "Modalità Osservatore"
+      },
+      "vacation_mode": {
+        "name": "Modalità vacanza"
       }
     },
     "number": {

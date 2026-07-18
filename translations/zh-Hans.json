@@ -981,6 +981,9 @@
     "switch": {
       "observer_mode": {
         "name": "观察者模式"
+      },
+      "vacation_mode": {
+        "name": "度假模式"
       }
     },
     "number": {

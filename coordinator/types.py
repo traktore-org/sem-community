@@ -582,6 +582,9 @@ class SurplusControlData:
     surplus_total_devices: int = 0
     # (#559 Phase 0) debounced availability signal for user automations
     surplus_available: bool = False
+    # (#594) vacation mode — comfort heating (heat pump / hot water)
+    # suppressed while True. Published for the dashboard chip.
+    vacation_active: bool = False
 
 
 @dataclass
@@ -1082,6 +1085,7 @@ class SEMData:
             "surplus_active_devices": self.surplus_control.surplus_active_devices,
             "surplus_available": self.surplus_control.surplus_available,
             "surplus_total_devices": self.surplus_control.surplus_total_devices,
+            "vacation_active": self.surplus_control.vacation_active,  # #594
 
             # Forecast (Phase 0)
             "forecast_today_kwh": self.forecast.forecast_today_kwh,
