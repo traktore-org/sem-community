@@ -2147,6 +2147,16 @@ class SEMConfigCard extends SEMLitBase {
                     border-radius: 50%;
                 }
                 .help-toggle:hover { opacity: 1; }
+                .help-toggle-labeled {
+                    display: inline-flex; align-items: center; gap: 5px;
+                    padding: 4px 10px; border-radius: 14px;
+                    border: 1px solid ${T.surfaceBorder};
+                    font-size: 12px; cursor: pointer;
+                    color: ${T.textDim || 'rgba(150,160,175,0.9)'};
+                    transition: color 0.15s, border-color 0.15s;
+                }
+                .help-toggle-labeled:hover { color: ${accent}; border-color: ${accent}; }
+                .help-toggle-labeled.on { color: ${accent}; border-color: ${accent}; }
                 .help-toggle.on { color: ${accent}; opacity: 1; }
 
                 /* ── Sections: same surface shape as the battery card's
@@ -2645,14 +2655,18 @@ class SEMConfigCard extends SEMLitBase {
             </style>
             <ha-card>
                 <div class="wrap">
+                    ${/* #606 — the bare (?) icon was not self-explanatory
+                        (Guido): the global help toggle carries a visible
+                        label now. */ ''}
                     <div class="card-help-bar">
-                        <ha-icon
-                            class="help-toggle ${this._showHelp ? 'on' : ''}"
-                            icon="${this._showHelp ? 'mdi:help-circle' : 'mdi:help-circle-outline'}"
-                            title="${this._t('zone_help_toggle')}"
-                            @click=${() => this._toggleHelp()}
-                            style="--mdc-icon-size:18px"
-                        ></ha-icon>
+                        <span class="help-toggle-labeled ${this._showHelp ? 'on' : ''}"
+                              @click=${() => this._toggleHelp()}>
+                            <ha-icon
+                                icon="${this._showHelp ? 'mdi:help-circle' : 'mdi:help-circle-outline'}"
+                                style="--mdc-icon-size:16px"
+                            ></ha-icon>
+                            <span>${this._t('config_help_label')}</span>
+                        </span>
                     </div>
                     ${this._renderApplyBar()}
                     ${SECTIONS
