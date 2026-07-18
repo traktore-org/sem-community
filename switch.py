@@ -174,6 +174,31 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = self._is_on
 
+
+    def _persist_flag(self, value: bool) -> None:
+        """Persist the toggle into entry.options WITHOUT a reload.
+
+        PROD/TEST 2026-07-18: observer mode lived only in the switch entity +
+        the running coordinator flag. Every config-entry RELOAD built a fresh
+        coordinator from ``config.get("observer_mode", False)`` — and until
+        the switch platform re-attached (minutes on a busy start), a
+        supposedly hands-off install ran FULLY ARMED; a VPP test in that
+        window force-discharged the real battery. Same no-reload write path
+        as set_option's tunable branch: arm the skip mirror, update the
+        running config in place, then write the entry options.
+        """
+        if self.hass is None:
+            return  # pre-add lifecycle / bare test stubs — nothing to persist to
+        key = self.entity_description.key
+        entry = self.coordinator.config_entry
+        new_options = {**(entry.options or {}), key: value}
+        self.coordinator._skip_options_reload = dict(new_options)
+        try:
+            self.coordinator.config[key] = value
+        except Exception:  # noqa: BLE001
+            pass
+        self.hass.config_entries.async_update_entry(entry, options=new_options)
+
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
@@ -189,6 +214,9 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._observer_mode = True
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = True  # #594 — immediate
+        # Reload-durable: the flag must survive a config-entry reload (see
+        # _persist_flag — the unprotected-window class).
+        self._persist_flag(True)
         # Push the new state immediately (#259): otherwise the UI only reflects the
         # toggle on the next coordinator push, and a swallowed refresh error below
         # would silently leave HA showing the old state.
@@ -207,6 +235,7 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._observer_mode = False
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = False  # #594 — immediate
+        self._persist_flag(False)  # reload-durable (see _persist_flag)
         self.async_write_ha_state()  # reflect immediately (#259)
 
         try:

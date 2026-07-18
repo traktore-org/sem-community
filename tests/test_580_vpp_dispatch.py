@@ -459,3 +459,23 @@ class TestCoordinatorWiring:
         stub._vpp_battery_override = None
         pbc = {"battery_mode": "auto"}
         assert SEMCoordinator._vpp_apply_battery_override(stub, pbc) == pbc
+
+
+def test_global_observer_outranks_vpp_observer_off():
+    """The GLOBAL observer mode forces VPP decisions to observer even when
+    vpp_observer_mode is explicitly false (2026-07-18 incident class)."""
+    from dataclasses import replace
+    from custom_components.solar_energy_management.coordinator.vpp_dispatch import (
+        evaluate_vpp,
+    )
+    from datetime import datetime, timezone
+    cfg = {"vpp_enabled": True, "vpp_observer_mode": False,
+           "vpp_event_active_entity": "sensor.gate",
+           "vpp_direction_entity": "sensor.dir",
+           "vpp_reserve_soc": 20}
+    states = {"event_active": "on", "direction": "export",
+              "event_end": None, "pre_event": None}
+    d = evaluate_vpp(cfg, states, 80.0, datetime.now(timezone.utc))
+    assert d.observer is False  # core honours the config…
+    forced = replace(d, observer=True)  # …the coordinator belt forces it
+    assert forced.observer is True and forced.actions == d.actions

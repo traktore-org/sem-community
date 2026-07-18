@@ -235,3 +235,33 @@ class TestSEMSwitches:
         assert "identifiers" in device_info
         assert device_info["name"] == "Solar Energy Management Test"
         assert device_info["manufacturer"] == "Custom"
+
+
+@pytest.mark.asyncio
+async def test_observer_toggle_persists_to_entry_options(monkeypatch):
+    """2026-07-18 unprotected-window class: the observer toggle lived only in
+    the switch entity + the running coordinator flag — every config reload
+    rebuilt the coordinator from config (False) and ran FULLY ARMED until the
+    switch platform re-attached. The toggle must write through to
+    entry.options (no-reload) so a rebuilt coordinator boots protected."""
+    from unittest.mock import MagicMock
+    from custom_components.solar_energy_management.switch import SEMSolarSwitch, SWITCH_TYPES
+    desc = next(s for s in SWITCH_TYPES if s.key == "observer_mode")
+    coordinator = MagicMock()
+    coordinator.config = {}
+    entry = MagicMock()
+    entry.options = {}
+    coordinator.config_entry = entry
+    sw = SEMSolarSwitch(coordinator, desc, entry)
+    sw.hass = MagicMock()
+    sw.async_write_ha_state = MagicMock()
+    await sw.async_turn_on()
+    # options written with the flag, skip-reload armed, running config mirrored
+    kwargs = sw.hass.config_entries.async_update_entry.call_args
+    assert kwargs.args[0] is entry
+    assert kwargs.kwargs["options"]["observer_mode"] is True
+    assert coordinator._skip_options_reload == {"observer_mode": True}
+    assert coordinator.config["observer_mode"] is True
+    await sw.async_turn_off()
+    kwargs = sw.hass.config_entries.async_update_entry.call_args
+    assert kwargs.kwargs["options"]["observer_mode"] is False

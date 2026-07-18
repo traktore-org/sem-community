@@ -4665,6 +4665,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         decision = evaluate_vpp(
             self.config, self._snapshot_vpp_states(), soc, now,
         )
+        # Belt: the GLOBAL observer mode outranks vpp_observer_mode — a
+        # hands-off install must never actuate through the VPP road either
+        # (2026-07-18 incident class: an unprotected reload window let a
+        # non-observer VPP test reach the real inverter).
+        if getattr(self, "_observer_mode", False) and not decision.observer:
+            from dataclasses import replace as _dc_replace
+            decision = _dc_replace(decision, observer=True)
 
         out = self._vpp_dispatcher.update(
             decision,
