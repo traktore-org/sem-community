@@ -945,6 +945,9 @@
       },
       "diag_ed_config": {
         "name": "Energy Dashboard Config"
+      },
+      "vpp_event": {
+        "name": "VPP Event"
       }
     },
     "binary_sensor": {
