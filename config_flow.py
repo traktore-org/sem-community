@@ -146,7 +146,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     ``initial_current`` (decouples from the misleading "night"
     #     prefix — the value is the session-start ramp current, applied
     #     whenever a session begins). Display: "Vehicle Start Amps".
-    VERSION = 15
+    VERSION = 16
 
     @staticmethod
     @callback
@@ -1045,6 +1045,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
+                # #604: ONE priority axis — the unified device-priority list
+                # (#576). Shed order under peak is the reverse list walk
+                # (#470: higher list number sheds first), so there is no
+                # separate shed slider.
                 vol.Optional(
                     "ev_surplus_priority",
                     default=5,
@@ -1208,6 +1212,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
+                # #604: ONE priority axis — the unified device-priority list
+                # (#576). Lower number = charges first on surplus; shed
+                # order under peak is the reverse list walk (#470: higher
+                # list number sheds first). The legacy per-charger
+                # ``ev_shed_priority`` slider is retired.
                 vol.Optional(
                     "ev_surplus_priority",
                     default=charger.get("ev_surplus_priority", 5),

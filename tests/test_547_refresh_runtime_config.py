@@ -113,7 +113,7 @@ class TestRefreshRuntimeConfig:
             # ev_shed_priority is RETIRED (#576) — set here to prove it's now
             # ignored: shed order follows the ONE list position instead.
             "ev_chargers": [{"id": "wb", "ev_min_current": 10,
-                             "max_charging_current": 16, "ev_shed_priority": 8}],
+                             "max_charging_current": 16}],
         }
         lm = SimpleNamespace(_devices={"load_device_wb": {"priority": 1}})
         coord = _coord(cfg, ev_devices={"wb": dev}, load_manager=lm)
@@ -121,10 +121,24 @@ class TestRefreshRuntimeConfig:
         assert dev.priority == 4          # global surplus priority
         assert dev.min_current == 10.0    # per-charger override
         assert dev.max_current == 16.0
-        # #576 — shed priority = the list position (dev.priority), NOT the
+        # #576/#604 — shed priority = the list position (dev.priority), NOT the
         # retired ev_shed_priority=8. Latest-to-charge (highest list number)
         # sheds first under the load manager's "higher number sheds first".
         assert lm._devices["load_device_wb"]["priority"] == 4
+
+    def test_legacy_ev_shed_priority_key_is_ignored(self):
+        # #604: a lingering ev_shed_priority key (pre-v16 config) must NOT
+        # diverge the shed order from the unified list position.
+        dev = _Dev(priority=1, min_current=6.0, max_current=32.0,
+                   phases=3, voltage=230, min_power_threshold=0.0)
+        cfg = {
+            "ev_surplus_priority": 4,
+            "ev_chargers": [{"id": "wb", "ev_shed_priority": 8}],
+        }
+        lm = SimpleNamespace(_devices={"load_device_wb": {"priority": 1}})
+        coord = _coord(cfg, ev_devices={"wb": dev}, load_manager=lm)
+        SEMCoordinator.refresh_runtime_config(coord)
+        assert lm._devices["load_device_wb"]["priority"] == dev.priority == 4
 
     def test_min_power_threshold_re_derived(self):
         # HIGH (review): the surplus-activation gate must follow min_current,
@@ -138,15 +152,17 @@ class TestRefreshRuntimeConfig:
         assert dev.min_current == 10.0
         assert dev.min_power_threshold == 10 * 3 * 230  # 6900, re-derived
 
-    def test_ev_load_priority_alias(self):
-        # LOW (review): legacy ev_load_priority alias is the fallback, as at
-        # construction (__init__._cfg).
+    def test_ev_load_priority_alias_retired(self):
+        # #604: the runtime alias fallback is GONE — the v14→v15 migration
+        # maps ev_load_priority → ev_surplus_priority once (see
+        # test_config_flow_migration.py::test_v14_to_v15_*). A lingering
+        # alias key is ignored; the device keeps its current priority.
         dev = _Dev(priority=3, min_current=6.0, max_current=32.0,
                    phases=3, voltage=230, min_power_threshold=0.0)
         cfg = {"ev_chargers": [{"id": "wb", "ev_load_priority": 7}]}
         coord = _coord(cfg, ev_devices={"wb": dev})
         SEMCoordinator.refresh_runtime_config(coord)
-        assert dev.priority == 7
+        assert dev.priority == 3
 
     def test_static_tariff_rates_pushed(self):
         tp = StaticTariffProvider(peak_rate=0.1, off_peak_rate=0.1, export_rate=0.01)

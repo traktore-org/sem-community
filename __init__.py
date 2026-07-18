@@ -1165,6 +1165,86 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 16:
+        # v15 → v16 (#604): retire the remaining legacy EV priority flags.
+        # ``ev_load_priority`` was a pre-#470 alias for the surplus priority —
+        # map it into ``ev_surplus_priority`` where that is absent, then drop
+        # it. ``ev_shed_priority`` (already stripped from chargers in v15) and
+        # ``ev_priority_over_battery`` (fed a planner knob that was never
+        # reachable from any UI, so it always held its default) are deleted
+        # wherever they linger — top level AND per-charger entries. The ONE
+        # drag list (#576) is the single priority axis; shed order stays the
+        # reverse walk (#470 rule preserved by list position).
+        _LEGACY_PRIO_KEYS = (
+            "ev_load_priority", "ev_shed_priority", "ev_priority_over_battery",
+        )
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            mapped = removed = 0
+            # Captured BEFORE any alias mapping: only an ORIGINAL global
+            # canonical outranked the per-charger alias in the old fallback
+            # chain (charger-surplus → global-surplus → charger-alias →
+            # global-alias). A mapped global ALIAS ranked BELOW the
+            # charger alias, so it must not block the per-charger mapping.
+            _orig_global_surplus = (
+                new_data.get("ev_surplus_priority")
+                if new_data.get("ev_surplus_priority") is not None
+                else new_options.get("ev_surplus_priority")
+            )
+            for bag in (new_data, new_options):
+                # top-level: map alias → canonical, then delete legacy keys
+                if new_data.get("ev_surplus_priority") is None \
+                        and new_options.get("ev_surplus_priority") is None \
+                        and bag.get("ev_load_priority") is not None:
+                    try:
+                        bag["ev_surplus_priority"] = int(bag["ev_load_priority"])
+                        mapped += 1
+                    except (TypeError, ValueError):
+                        pass
+                for k in _LEGACY_PRIO_KEYS:
+                    if k in bag:
+                        del bag[k]
+                        removed += 1
+                chargers = bag.get("ev_chargers")
+                if not isinstance(chargers, list):
+                    continue
+                rebuilt = []
+                for c in chargers:
+                    if isinstance(c, dict):
+                        c = dict(c)
+                        if _orig_global_surplus is None \
+                                and c.get("ev_surplus_priority") is None \
+                                and c.get("ev_load_priority") is not None:
+                            try:
+                                c["ev_surplus_priority"] = int(c["ev_load_priority"])
+                                mapped += 1
+                            except (TypeError, ValueError):
+                                pass
+                        for k in _LEGACY_PRIO_KEYS:
+                            if k in c:
+                                del c[k]
+                                removed += 1
+                    rebuilt.append(c)
+                bag["ev_chargers"] = rebuilt
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=16, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if mapped or removed:
+                _LOGGER.info(
+                    "#604: retired legacy EV priority flags — mapped %d "
+                    "ev_load_priority value(s) to ev_surplus_priority, "
+                    "removed %d legacy key(s)", mapped, removed,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v16 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -1567,7 +1647,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             ev_charger_service = _cfg("ev_charger_service")
             ev_service_entity = _cfg("ev_charger_service_entity_id")
             ev_current_entity = _cfg("ev_current_control_entity")
-            ev_priority = int(_cfg("ev_surplus_priority", _cfg("ev_load_priority", 3 + idx)))
+            # #604: ``ev_surplus_priority`` is the ONE priority axis (#576).
+            # The legacy ``ev_load_priority`` alias is mapped into it by the
+            # v15→v16 migration, so the construction-time alias fallback is
+            # gone; ``ev_shed_priority`` stays retired (shed = reverse walk,
+            # #470 rule preserved by list position).
+            ev_priority = int(_cfg("ev_surplus_priority", 3 + idx))
 
             # Also auto-fill sensor reader config from first charger
             if idx == 0:

@@ -450,7 +450,8 @@ async def async_setup_entry(
                 # retired — the drag-orderable device-priority list is now the
                 # single editor (surplus order = list position, shed order = the
                 # reverse walk). The ``ev_surplus_priority`` CONFIG value is kept
-                # as the seed read at boot; ``ev_shed_priority`` is gone entirely.
+                # as the seed read at boot; ``ev_shed_priority`` is gone entirely
+                # (#604: config keys purged by the v15→v16 migration).
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(

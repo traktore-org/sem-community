@@ -252,6 +252,12 @@ class SchedulerConfig:
     # Peak management
     peak_limit_w: float = 0.0  # 0 = no limit
     max_grid_import_w: float = 0.0  # 0 = no limit; cap total grid draw during charge
+    # #604: internal planner knob — the legacy ``ev_priority_over_battery``
+    # config key no longer feeds it (it was never reachable from any UI, so
+    # this always held its default True; the v14→v15 migration deletes the
+    # key). The list-based replacement is the unified device-priority list
+    # (#576): the battery's list position vs the charger's, once the
+    # battery's position is plumbed into this planner.
     ev_priority: bool = True  # EV gets priority over battery in peak conflicts
 
     # Negative tariff handling
@@ -302,7 +308,6 @@ class SchedulerConfig:
             replan_on_ev_change=config.get("battery_replan_on_ev_change", True),
             peak_limit_w=config.get("peak_limit_w", 0.0),
             max_grid_import_w=config.get("battery_max_grid_import_w", 0.0),
-            ev_priority=config.get("ev_priority_over_battery", True),
             force_charge_on_negative_price=config.get("battery_force_charge_negative_price", True),
             arbitrage_enabled=config.get("battery_grid_arbitrage_enabled", False),
             arbitrage_min_export_price=config.get("battery_arbitrage_min_export_price", 0.20),

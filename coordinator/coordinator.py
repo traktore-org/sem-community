@@ -6522,11 +6522,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, dev in ev_devices.items():
                 ccfg = chargers_by_id.get(cid, {})
                 try:
-                    # Match the construction resolution (__init__._cfg): the
-                    # legacy ``ev_load_priority`` alias is the fallback.
+                    # Match the construction resolution (__init__._cfg).
+                    # #604: the legacy ``ev_load_priority`` alias is gone —
+                    # the v14→v15 migration mapped it into
+                    # ``ev_surplus_priority``.
                     surplus_prio = int(_cfg_charger(
-                        ccfg, "ev_surplus_priority",
-                        _cfg_charger(ccfg, "ev_load_priority", dev.priority),
+                        ccfg, "ev_surplus_priority", dev.priority,
                     ))
                     # (#576 P2.1) the drag list is the single authoritative
                     # priority axis: a drag override wins over the config seed,
