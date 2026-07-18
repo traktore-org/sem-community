@@ -1480,9 +1480,15 @@ class CurrentControlDevice(ControllableDevice):
         Discovered once via the entity registry as a sibling of the configured
         power sensor's device — same strategy as the SOC / temperature sibling
         discovery. None when undiscoverable (non-KEBA, no registry entry)."""
-        cached = getattr(self, "_energy_target_sensor_cache", "?")
-        if cached != "?":
+        cached = getattr(self, "_energy_target_sensor_cache", None)
+        if cached:
             return cached
+        # NO negative caching (PROD 2026-07-18): the first lookup can run
+        # before the entity registry is ready at boot — caching that None
+        # permanently killed the guard backstop for the process lifetime
+        # (the armed flag is instance state and resets on reload, so the
+        # sensor check was the ONLY durable detector — and it was dark).
+        # Retry every call until found; cache only a positive hit.
         found = None
         try:
             from homeassistant.helpers import entity_registry as er
@@ -1497,7 +1503,14 @@ class CurrentControlDevice(ControllableDevice):
                             break
         except Exception:  # noqa: BLE001 — discovery must never break a command
             found = None
-        self._energy_target_sensor_cache = found
+        if found:
+            self._energy_target_sensor_cache = found
+        elif not getattr(self, "_energy_target_warned", False):
+            self._energy_target_warned = True
+            _LOGGER.debug(
+                "%s: energy-target register sensor not discoverable (yet) — "
+                "the guard backstop retries each charge command", self.name,
+            )
         return found
 
     async def ensure_energy_guard_released(self) -> None:

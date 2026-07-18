@@ -186,3 +186,30 @@ async def test_adapter_charge_command_reconciles_guard(keba, mock_hass):
         if len(c.args) >= 3 and c.args[1] == "set_energy"
     ]
     assert {"energy": 0} in data, "charge command must release a stale guard"
+
+
+@pytest.mark.asyncio
+async def test_guard_sensor_discovery_retries_after_early_failure(keba, mock_hass, monkeypatch):
+    """PROD 2026-07-18: the first discovery ran before the entity registry
+    was ready, and the None result was cached FOREVER — the sensor backstop
+    (the only reload-durable guard detector) went permanently dark and the
+    box sat armed at 1 kWh through a whole flap. Negative results must NOT
+    cache; a later successful discovery must work."""
+    calls = {"n": 0}
+    def _fail_then_find(self):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return None  # registry not ready at boot
+        self._energy_target_sensor_cache = "sensor.keba_p30_energy_target"
+        return "sensor.keba_p30_energy_target"
+    monkeypatch.setattr(type(keba), "_energy_target_sensor_id", _fail_then_find)
+    keba._idle_guard_armed = False
+    mock_hass.states.get = MagicMock(return_value=_et_state(1.0))
+    # first call: discovery fails → no release possible
+    await keba.ensure_energy_guard_released()
+    assert not _calls(mock_hass, "set_energy")
+    # second call: discovery succeeds → armed target detected → release sent
+    await keba.ensure_energy_guard_released()
+    data = [c.args[2] for c in mock_hass.services.async_call.call_args_list
+            if len(c.args) >= 3 and c.args[1] == "set_energy"]
+    assert data == [{"energy": 0}]
