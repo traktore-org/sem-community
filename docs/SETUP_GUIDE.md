@@ -384,6 +384,103 @@ v1.7.0-beta.16).
 Switch modes from **Settings → Devices & Services → Solar Energy Management
 → Configure → Tariff settings → "Price classification mode"**.
 
+#### Bring your own price sensor — the universal tariff contract (#612)
+
+Dynamic mode does **not** require a supported provider integration. The
+Dynamic price sensor can be **any entity whose state is the current import
+price per kWh** — a community tariff integration, the Spanish PVPC core
+integration, or a **template sensor you write yourself** encoding your
+contract. SEM treats a user-configured entity as authoritative (provider
+"custom") and reads it every cycle.
+
+The contract, in full:
+
+- **State** = the current price per kWh (plain number). This alone gives
+  correct cost tracking and (via the observed price) level classification
+  fallbacks.
+- **Optional but recommended: a day-curve attribute** — expose today's
+  hourly prices as `raw_today` (and ideally `raw_tomorrow`), each an array
+  of `{start, end, value}` entries (Nordpool shape; several other shapes
+  are auto-detected too). With a curve, the **entire** dynamic machinery
+  lights up: percentile price levels, cheap-window detection, the
+  overnight cheapest-hours planner and the battery charge scheduler.
+  The `tariff_classifier_path` attribute on the price-level sensor shows
+  which path/attribute SEM matched — check it if classification looks off.
+- **Minimal variant without a curve**: set *Price classification mode* to
+  `static` and enter your own cheap/expensive thresholds between your
+  known plateau prices — deterministic levels with zero extra YAML (no
+  window planning; use the normal night-window setting instead).
+
+#### Spain — the 2.0TD three-period tariff, ready to paste
+
+Spain's regulated 2.0TD structure (P1 *punta* / P2 *llano* / P3 *valle*,
+weekends **and national holidays** all-valle) is a fixed national schedule,
+so the whole tariff fits in one template sensor. Set your three prices at
+the top; SEM's Dynamic mode does the rest (verified live: percentile
+classification + the midnight valle window planned correctly).
+
+- **On PVPC (regulated hourly prices)?** Skip the template — install the
+  core [PVPC Hourly Pricing](https://www.home-assistant.io/integrations/pvpc_hourly_pricing/)
+  integration and point the Dynamic price sensor at it.
+- **Holidays**: for the ~10 weekday national holidays a year, add the core
+  [Workday](https://www.home-assistant.io/integrations/workday/) integration
+  and extend both `valle_day` lines to
+  `{% set valle_day = ... >= 5 or is_state('binary_sensor.workday_sensor', 'off') %}`.
+  Without it, holidays classify as normal weekdays (no safety impact).
+
+```yaml
+# /config/packages/es_tariff_20td.yaml  (or under `template:` in configuration.yaml)
+template:
+  - sensor:
+      - name: "Electricity Price ES 2.0TD"
+        unique_id: es_20td_price
+        unit_of_measurement: "EUR/kWh"
+        state: >-
+          {% set p = {'p1': 0.182, 'p2': 0.131, 'p3': 0.092} %}
+          {% set valle_day = now().weekday() >= 5 %}
+          {% set h = now().hour %}
+          {% if valle_day or h < 8 %}{{ p.p3 }}
+          {% elif 10 <= h < 14 or 18 <= h < 22 %}{{ p.p1 }}
+          {% else %}{{ p.p2 }}{% endif %}
+        attributes:
+          raw_today: >-
+            {% set p = {'p1': 0.182, 'p2': 0.131, 'p3': 0.092} %}
+            {% set valle_day = now().weekday() >= 5 %}
+            {% set midnight = today_at() %}
+            {% set ns = namespace(out=[]) %}
+            {% for h in range(24) %}
+              {% if valle_day or h < 8 %}{% set v = p.p3 %}
+              {% elif 10 <= h < 14 or 18 <= h < 22 %}{% set v = p.p1 %}
+              {% else %}{% set v = p.p2 %}{% endif %}
+              {% set ns.out = ns.out + [{'start': (midnight + timedelta(hours=h)).isoformat(),
+                                         'end': (midnight + timedelta(hours=h + 1)).isoformat(),
+                                         'value': v}] %}
+            {% endfor %}
+            {{ ns.out }}
+          raw_tomorrow: >-
+            {% set p = {'p1': 0.182, 'p2': 0.131, 'p3': 0.092} %}
+            {% set tmr = today_at() + timedelta(days=1) %}
+            {% set valle_day = tmr.weekday() >= 5 %}
+            {% set ns = namespace(out=[]) %}
+            {% for h in range(24) %}
+              {% if valle_day or h < 8 %}{% set v = p.p3 %}
+              {% elif 10 <= h < 14 or 18 <= h < 22 %}{% set v = p.p1 %}
+              {% else %}{% set v = p.p2 %}{% endif %}
+              {% set ns.out = ns.out + [{'start': (tmr + timedelta(hours=h)).isoformat(),
+                                         'end': (tmr + timedelta(hours=h + 1)).isoformat(),
+                                         'value': v}] %}
+            {% endfor %}
+            {{ ns.out }}
+```
+
+Then: **Settings → Configure → Tariff** → mode **Dynamic** → Dynamic price
+sensor = `sensor.electricity_price_es_2_0td`. On plateaued tariffs the
+percentile buckets land on the extremes — expect *valle → very_cheap/cheap*
+and *punta → expensive/very_expensive*; that's correct (punta IS the day's
+most expensive period). What SEM deliberately does **not** model: the
+contracted-power term, meter rental and taxes — SEM's costs are decision
+estimates, not invoice replication (see #612).
+
 ### Notification settings
 
 | Setting | Default | What it does and when to change it |

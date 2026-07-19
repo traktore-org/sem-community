@@ -1533,7 +1533,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[
                             {"value": "static", "label": "Static (fixed HT/NT rates)"},
-                            {"value": "dynamic", "label": "Dynamic (Tibber / Nordpool / aWATTar / Amber / Octopus)"},
+                            {"value": "dynamic", "label": "Dynamic / price sensor (Tibber / Nordpool / aWATTar / Amber / Octopus — or any entity with the current price as state, e.g. a template sensor)"},
                             {"value": "calendar", "label": "Calendar (time-based HT/NT schedule)"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
