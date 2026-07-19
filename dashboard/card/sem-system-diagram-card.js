@@ -26,6 +26,12 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
     setConfig(config) {
         this.config = config;
+        // #595 follow-up — hide the EV charger node entirely on installs
+        // without a charger. The generator injects show_ev:false when
+        // neither ev_chargers nor ev_charging_power_sensor is configured
+        // (same test that prunes the EV view). Default true for
+        // backward compat with hand-written configs.
+        this._showEv = config.show_ev !== false;
         // #455 — parity with sem-flow-card: explicit ``entities:`` config
         // points the card at arbitrary HA entities; ``entity_prefix``
         // stays the default/fallback. Same precedence as sem-flow-card:
@@ -319,7 +325,9 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         // intentionally unmapped node (e.g. no EV) must not show as a
         // permanent "sensor unavailable" warning.
         const unavailable = [];
-        for (const suffix of ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'ev_power', 'battery_soc']) {
+        const trackedKeys = ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'battery_soc'];
+        if (this._showEv) trackedKeys.splice(4, 0, 'ev_power');
+        for (const suffix of trackedKeys) {
             const eid = this._entityId(suffix);
             if (!eid) {
                 if (this._mode === 'prefix') unavailable.push(suffix);
@@ -744,7 +752,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     ${this._track(L.paths.home,    '#5BC8D8')}
                     ${this._track(L.paths.battery, '#4db6ac')}
                     ${this._track(L.paths.grid,    '#488fc2')}
-                    ${this._track(L.paths.ev,      '#8DC892')}
+                    ${this._showEv ? this._track(L.paths.ev, '#8DC892') : ''}
 
                     <!-- Animated flow groups -->
                     <g id="flow-solar" class="flow-group" style="opacity:0"
@@ -755,8 +763,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                        data-path-d="${L.paths.grid}" data-color="#488fc2" data-count="3"></g>
                     <g id="flow-home" class="flow-group" style="opacity:0"
                        data-path-d="${L.paths.home}" data-color="#5BC8D8" data-count="2"></g>
-                    <g id="flow-ev" class="flow-group" style="opacity:0"
-                       data-path-d="${L.paths.ev}" data-color="#8DC892" data-count="3"></g>
+                    ${this._showEv ? this._evFlowGroupMarkup(L) : ''}
 
                     <!-- SOLAR -->
                     <g id="node-solar" filter="url(#glowSolar)">
@@ -844,21 +851,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <text id="val-autarky" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#5BC8D8" opacity="0.5"></text>
                     <text id="val-today-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs * 2 + 6}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#5BC8D8" opacity="0.4"></text>
 
-                    <!-- EV -->
-                    <g id="node-ev" filter="url(#glowEV)">
-                        ${this._glowRing(E, '#8DC892')}
-                        <circle cx="${E.cx}" cy="${E.cy}" r="${E.r}" fill="rgba(141,200,146,0.07)" stroke="#8DC892" stroke-width="1.8"/>
-                        <g transform="translate(${E.cx},${E.cy})" stroke="#8DC892" fill="none" opacity="${this._compact ? 0.85 : 0.7}" stroke-width="${this._compact ? 2.2 : 1.8}" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="-8" y="-13" width="16" height="22" rx="3"/>
-                            <rect x="-5" y="-9" width="10" height="8" rx="1.5"/>
-                            <path d="M-1,-1 L0,3 L1,-1"/>
-                            <line x1="0" y1="9" x2="0" y2="13"/>
-                            <circle cx="0" cy="15" r="1.5" fill="#8DC892" opacity="0.4" stroke="none"/>
-                        </g>
-                    </g>
-                    <text id="label-ev" x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#8DC892">${this._t('ev_charging')}</text>
-                    <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#8DC892">0 W</text>
-                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#8DC892" opacity="0.5"></text>
+                    <!-- EV (omitted entirely when show_ev: false, #595) -->
+                    ${this._showEv ? this._evNodeMarkup(E, F, fl, fv, fs) : ''}
 
                     <!-- Device labels -->
                     <g id="device-labels"></g>
@@ -873,6 +867,28 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                 </svg>
             </ha-card>
         `;
+    }
+
+    _evFlowGroupMarkup(L) {
+        return `<g id="flow-ev" class="flow-group" style="opacity:0"
+                       data-path-d="${L.paths.ev}" data-color="#8DC892" data-count="3"></g>`;
+    }
+
+    _evNodeMarkup(E, F, fl, fv, fs) {
+        return `<g id="node-ev" filter="url(#glowEV)">
+                        ${this._glowRing(E, '#8DC892')}
+                        <circle cx="${E.cx}" cy="${E.cy}" r="${E.r}" fill="rgba(141,200,146,0.07)" stroke="#8DC892" stroke-width="1.8"/>
+                        <g transform="translate(${E.cx},${E.cy})" stroke="#8DC892" fill="none" opacity="${this._compact ? 0.85 : 0.7}" stroke-width="${this._compact ? 2.2 : 1.8}" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="-8" y="-13" width="16" height="22" rx="3"/>
+                            <rect x="-5" y="-9" width="10" height="8" rx="1.5"/>
+                            <path d="M-1,-1 L0,3 L1,-1"/>
+                            <line x1="0" y1="9" x2="0" y2="13"/>
+                            <circle cx="0" cy="15" r="1.5" fill="#8DC892" opacity="0.4" stroke="none"/>
+                        </g>
+                    </g>
+                    <text id="label-ev" x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#8DC892">${this._t('ev_charging')}</text>
+                    <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#8DC892">0 W</text>
+                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#8DC892" opacity="0.5"></text>`;
     }
 
     _glowFilter(id, color, blur) {
