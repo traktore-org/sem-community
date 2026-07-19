@@ -65,7 +65,10 @@ class TestSwapInvariant:
         are PROPERTIES on the real coordinator backed by _pcc_store; they
         are NOT in the _saved snapshot and are tested via the real-coordinator
         isolation tests in test_589_followup.py. This test covers the still-
-        swap-based fields: _ev_device, _current_charger_budget, _cycle_vehicle_soc.
+        swap-based fields: _ev_device, _current_charger_budget.
+        (_cycle_vehicle_soc is a pcc-backed property since the #589 swap
+        retirement — on this MagicMock stub it's a plain attr the context
+        seeds from but never mutates, so the invariant holds trivially.)
         """
         coord = _make_coord()
         coord._ev_device = "FLEET_DEV"
@@ -139,6 +142,32 @@ class TestSwapInvariant:
         with PerChargerContext(cid="left", ev_dev=ev_dev_left, charger_cfg={}, _coord=coord):
             assert coord._ev_reenable_attempts == 3
             assert coord._ev_charge_refused is True
+
+    def test_vehicle_soc_override_cannot_leak(self):
+        """#589 swap retirement — a per-charger vehicle-SOC override dies
+        with its context: the next charger seeds fresh from the global
+        value, and the global value survives the loop untouched. This is
+        the exact leak the old ``_saved_vehicle_soc`` restore prevented by
+        convention; the pcc-backed property prevents it by construction
+        (there is no restore to forget)."""
+        from unittest.mock import MagicMock as MM
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        coord = SEMCoordinator(MM(), {})
+        coord._cycle_vehicle_soc = 55.0  # global (primary-entity) cycle SOC
+
+        with PerChargerContext(cid="left", ev_dev=MM(), charger_cfg={}, _coord=coord):
+            assert coord._cycle_vehicle_soc == 55.0  # seeded from global
+            coord._cycle_vehicle_soc = 81.0  # per-charger entity override
+            assert coord._cycle_vehicle_soc == 81.0
+
+        # Post-loop: the global value is untouched by the override.
+        assert coord._cycle_vehicle_soc == 55.0
+
+        # Next charger seeds from the GLOBAL value, not left's override.
+        with PerChargerContext(cid="right", ev_dev=MM(), charger_cfg={}, _coord=coord):
+            assert coord._cycle_vehicle_soc == 55.0
 
 
 class TestSkipFlag:

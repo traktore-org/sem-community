@@ -157,6 +157,17 @@ class PerChargerContext:
     ``effective_state``. Falls back to ``cid`` if the config omits
     a ``name`` key."""
 
+    vehicle_soc: Optional[float] = None
+    """#589 swap retirement — THIS charger's vehicle SOC for the current
+    cycle. Seeded in ``__enter__`` from the coordinator's global
+    (primary-entity) cycle SOC, then overridden by the loop body when the
+    charger has its own ``vehicle_soc_entity``. The coordinator's
+    ``_cycle_vehicle_soc`` property resolves to this field while the
+    context is active, so the per-charger override can no longer leak
+    into the next charger via a forgotten restore (the old
+    ``_saved_vehicle_soc`` snapshot path). Cycle-scoped: lives on the
+    context, not on the durable ``PerChargerState``."""
+
     # ------------------------------------------------------------------
     # Internal: references + the swap snapshot.
     # ------------------------------------------------------------------
@@ -171,10 +182,6 @@ class PerChargerContext:
     _saved: dict = field(default_factory=dict, repr=False)
     """Coordinator attributes captured at ``__enter__``, restored at
     ``__exit__``. Mirrors the pre-v1.6.7 ``saved = {...}`` dict."""
-
-    _saved_vehicle_soc: Any = field(default=None, repr=False)
-    """``_cycle_vehicle_soc`` captured separately because it has its own
-    legacy save path (``saved_vehicle_soc_ctrl`` in the old code)."""
 
     _entered: bool = field(default=False, repr=False)
     """Guard against nested entry. The coordinator loop is single-threaded
@@ -283,7 +290,14 @@ class PerChargerContext:
             "dev": coord._ev_device,
             "current_charger_budget": coord._current_charger_budget,
         }
-        self._saved_vehicle_soc = coord._cycle_vehicle_soc
+        # #589 swap retirement — seed this charger's cycle SOC from the
+        # global (primary-entity) value. Must read BEFORE ``_current_pcc``
+        # is bound below: the coordinator property resolves to the pcc
+        # field once the pointer is set. Chargers without their own
+        # ``vehicle_soc_entity`` keep seeing the global SOC (legacy
+        # semantics); the loop body's per-charger override lands on this
+        # context only and dies with it — nothing to restore.
+        self.vehicle_soc = coord._cycle_vehicle_soc
 
         # Push this charger's state onto the coordinator.
         # ``_ev_stalled_since``, ``_ev_enable_surplus_since``,
@@ -367,7 +381,6 @@ class PerChargerContext:
             # preserve that semantic (the post-loop reader treats
             # non-None as "I'm currently inside a per-charger iteration").
             coord._current_charger_budget = None
-            coord._cycle_vehicle_soc = self._saved_vehicle_soc
         finally:
             self._entered = False
         return False  # never swallow exceptions

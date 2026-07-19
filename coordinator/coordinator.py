@@ -1464,6 +1464,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         else:
             self._ev_last_set_amps_ts_default = value
 
+    @property
+    def _cycle_vehicle_soc(self) -> Optional[float]:
+        """#589 swap retirement — vehicle SOC for the ACTIVE charger.
+
+        Inside the per-charger loop this resolves to ``_current_pcc.vehicle_soc``
+        (seeded from the global value at ``__enter__``, overridden by the loop
+        body when the charger has its own ``vehicle_soc_entity``); out-of-loop
+        it falls back to the global per-cycle value read from the primary
+        ``vehicle_soc_entity``. Replaces the ``_saved_vehicle_soc``
+        snapshot/restore in ``PerChargerContext`` — the per-charger override
+        dies with the context, so it cannot leak into the next charger."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            return pcc.vehicle_soc
+        return self._cycle_vehicle_soc_default
+
+    @_cycle_vehicle_soc.setter
+    def _cycle_vehicle_soc(self, value: Optional[float]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            pcc.vehicle_soc = value
+        else:
+            self._cycle_vehicle_soc_default = value
+
     def _collect_trace(self, sem_data, power, charging_context) -> None:
         # ``charging_context`` reserved for a future management-layer capture.
         try:
