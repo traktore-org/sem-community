@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.18] — 19.07.2026
+
+### 🐛 Fixes
+
+- 🔌🚗 **Single generic/manual EV charger now actually starts charging** (#616) — a charger
+  configured through the config-flow stores its plug, charging and current-control entities inside
+  its own charger entry, not the old flat top-level keys. SEM's EV connection read only consulted
+  those per-charger entities when *two or more* chargers were configured; with a single charger it
+  fell back to the (empty) legacy top-level plug sensor. The result: SEM's own per-charger
+  `charger_..._connected` correctly read *connected*, but the global `ev_connected` stayed *false*,
+  so the charging policy reported *"min_plus_solar but EV disconnected"* and commanded **0 A**
+  forever — the car never charged even with the cable plugged in. SEM now reads each charger's own
+  plug/charging sensor whenever any charger defines one (matching how EV power was already handled),
+  so a lone config-flow charger drives the fleet state correctly. Thanks @onkelfu for the precise
+  diagnostics that pinned the exact mismatch.
+
+**Full Changelog**: [v1.7.5-beta.17...v1.7.5-beta.18](https://github.com/traktore-org/sem-community/compare/v1.7.5-beta.17...v1.7.5-beta.18)
+
 # [1.7.5-beta.17] — 19.07.2026
 
 ### 🐛 Fixes
