@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.15] — 19.07.2026
+
+### ✨ Features
+
+- 🚗💤 **Full-car offer backoff** (#610) — a plugged-in car whose battery is genuinely full used to
+  receive a fresh start-offer ladder every time solar surplus persisted, producing continuous
+  charger commands all afternoon against a BMS that kept declining. After 3 consecutive declined
+  ladders SEM now goes quiet for 20 minutes — ended instantly by a real draw (e.g. after cabin
+  preconditioning frees headroom), an unplug, or a mode change, and the backoff survives HA
+  restarts. The estimated SOC still never gates charging (#440 truth model) — this tunes the retry
+  cadence only. The strategy sensor explains it plainly: *"full-car backoff — next offer in N min"*.
+
+### 🐛 Fixes
+
+- 👻 **The system diagram no longer draws a ghost EV node on installs without a charger**
+  (#595, by @hrdilshan) — beta.11 hid the EV *tab*, but the reporter's actual circled complaint
+  was the EV charger node on the system overview diagram. All three diagram variants now hide
+  their EV branch (node, flow path, labels, availability tracking) when no charger is configured:
+  the illustrated Lit diagram card, the schematic flow card (whose prefix mode previously ignored
+  EV gating entirely), and the legacy vanilla card. The dashboard generator injects the flag using
+  the same no-charger test that prunes the EV tab; K-Flow was already gated. Re-run
+  *generate dashboard* after updating to pick it up.
+
+### 🏗️ Architecture
+
+- 🧱 **The multi-charger state-leak bug class is now structurally impossible** (#589) — the
+  per-charger context's snapshot/restore swap (the mechanism behind four historical
+  "charger B behaves like charger A" hotfixes, #284/#289/#315/#318) has been deleted entirely.
+  All per-charger state lives on a durable per-charger store or the context object, and the
+  legacy coordinator attributes are properties that dispatch on the active context — there is no
+  write-back left to forget. Two long-dead swap fields were removed outright, and a CI guard now
+  fails on any reintroduced swap. Verified by 4685 tests including a production-loop-shaped
+  two-charger isolation oracle, plus live single-charger operation on real hardware.
+
+**Full Changelog**: [v1.7.5-beta.14...v1.7.5-beta.15](https://github.com/traktore-org/sem-community/compare/v1.7.5-beta.14...v1.7.5-beta.15)
+
 # [1.7.5-beta.14] — 18.07.2026
 
 ### 🐛 Fixes (all root-caused and provoked live on real hardware)
