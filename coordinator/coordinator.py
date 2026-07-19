@@ -507,19 +507,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``None`` outside any per-charger iteration.
         self._current_pcc = None
 
-        # Per-charger surplus budget for the active iteration.
-        # ``None`` outside any per-charger iteration; set by
-        # ``PerChargerContext.__enter__`` from the per-charger
-        # distribution map and cleared on ``__exit__``.
-        #
-        # Loadbearing: ``PerChargerContext.__enter__`` snapshots this
-        # field into ``_saved`` before pushing this charger's value —
-        # if it's missing on the coordinator the very first cycle
-        # raises ``AttributeError`` and the integration stops updating
-        # (HA-TEST 2026-05-31 PROD repro: shipped v1.6.7 → v1.6.14
-        # always crashed multi-charger first cycle; single-charger
-        # never entered this code path and so didn't surface the bug).
-        self._current_charger_budget: Optional[float] = None
+        # _current_charger_budget was DELETED (#589 swap retirement): the
+        # per-charger budget flows through ``pcc.budget_w`` →
+        # ``build_charger_view`` since the per-device-primary rebuild; the
+        # coordinator scalar had no remaining reader — only the swap that
+        # set and cleared it (and the v1.6.7-crash init this comment block
+        # used to defend, which the deletion makes moot).
 
         # EV stall detection for self-healing.
         # #589 Surface-A: ALL of these are PROPERTIES backed by the current

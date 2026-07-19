@@ -40,7 +40,6 @@ def _make_coord(ev_chargers=None):
     coord.config = {"ev_chargers": ev_chargers or [{"id": "left"}, {"id": "right"}]}
     # Primary view (the "fleet" attributes that get swapped per iteration).
     coord._ev_device = None
-    coord._current_charger_budget = None
     coord._cycle_vehicle_soc = None
     # #589 Surface-A: _pcc_store is the durable per-charger state store.
     coord._pcc_store = {}
@@ -75,10 +74,12 @@ class TestSwapInvariant:
         coord._cycle_vehicle_soc = 42.0
 
         ev_dev = MagicMock(name="left_dev")
-        with PerChargerContext.for_charger(coord, "left", ev_dev, {"left": 4000.0}):
-            # Inside: coordinator sees the per-charger view.
+        with PerChargerContext.for_charger(coord, "left", ev_dev, {"left": 4000.0}) as pcc:
+            # Inside: coordinator sees the per-charger view; the budget
+            # lives on the context itself (#589 — the coordinator scalar
+            # _current_charger_budget is deleted).
             assert coord._ev_device is ev_dev
-            assert coord._current_charger_budget == 4000.0
+            assert pcc.budget_w == 4000.0
 
         # Outside: primary view restored.
         assert coord._ev_device == "FLEET_DEV"
@@ -101,7 +102,6 @@ class TestSwapInvariant:
                 raise RuntimeError("boom")
 
         assert coord._ev_device == "FLEET_DEV"
-        assert coord._current_charger_budget is None  # legacy semantic
 
     def test_per_charger_state_persists_across_iterations(self):
         """Mutations to Surface-A fields inside the context are durable across
@@ -240,24 +240,23 @@ class TestCfgLookup:
 
 
 class TestBudget:
-    """The budget passed to ``for_charger`` is forwarded into
-    ``self._current_charger_budget`` and reset to ``None`` on exit
-    (matching the legacy semantic where ``None`` means "not currently
-    inside a per-charger iteration")."""
+    """The budget passed to ``for_charger`` lives on ``pcc.budget_w`` —
+    the single source that flows into ``build_charger_view``. (#589 swap
+    retirement: the coordinator scalar ``_current_charger_budget`` it
+    used to mirror was dead and is deleted; the context no longer pushes
+    anything onto the coordinator for the budget.)"""
 
-    def test_budget_pushed_then_cleared(self):
+    def test_budget_on_context(self):
         coord = _make_coord()
-        with PerChargerContext.for_charger(coord, "left", MagicMock(), {"left": 6800.0}):
-            assert coord._current_charger_budget == 6800.0
-        assert coord._current_charger_budget is None
+        with PerChargerContext.for_charger(coord, "left", MagicMock(), {"left": 6800.0}) as pcc:
+            assert pcc.budget_w == 6800.0
 
     def test_budget_none_when_charger_not_in_dict(self):
         """The night-state path doesn't populate ``ev_budget_per_charger`` —
         in that case the per-charger budget is ``None`` rather than 0."""
         coord = _make_coord()
-        with PerChargerContext.for_charger(coord, "left", MagicMock(), {}):
-            assert coord._current_charger_budget is None
-        assert coord._current_charger_budget is None
+        with PerChargerContext.for_charger(coord, "left", MagicMock(), {}) as pcc:
+            assert pcc.budget_w is None
 
 
 class TestEffectiveStateField:

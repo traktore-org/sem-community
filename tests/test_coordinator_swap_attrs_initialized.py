@@ -42,7 +42,8 @@ REQUIRED_SWAP_ATTRS = {
     #   _ev_stalled_since, _ev_enable_surplus_since, _ev_charge_started_at,
     #   _ev_last_change_time, _ev_reenable_attempts, _ev_charge_refused,
     #   _ev_last_set_amps_ts.
-    "_current_charger_budget",
+    # _current_charger_budget was deleted outright (#589 swap retirement —
+    # dead scalar; budget flows through pcc.budget_w → build_charger_view).
     "_cycle_vehicle_soc",
     # v1.6.14 cache pointer for ``_this_charger_power`` shim.
     "_current_pcc",
@@ -90,9 +91,10 @@ class TestPerChargerSwapAttrsInitialized:
     """Every attribute ``PerChargerContext.__enter__`` snapshots
     must be initialized in ``SEMCoordinator.__init__``. The actual
     PROD bug pattern: the v1.6.7 PerChargerContext refactor added
-    ``_current_charger_budget`` to the swap snapshot but never
-    initialized it on the coordinator — every multi-charger setup
-    crashed its first cycle until v1.6.14 (HA-TEST 2026-05-31)."""
+    ``_current_charger_budget`` (since deleted, #589) to the swap
+    snapshot but never initialized it on the coordinator — every
+    multi-charger setup crashed its first cycle until v1.6.14
+    (HA-TEST 2026-05-31)."""
 
     def test_required_attrs_assigned_in_init(self):
         source = COORDINATOR_PY.read_text()

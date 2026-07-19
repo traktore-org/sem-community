@@ -112,7 +112,10 @@ class PerChargerContext:
     # ------------------------------------------------------------------
     budget_w: Optional[float] = None
     """Per-charger surplus budget in watts, or ``None`` outside a solar
-    state (matches ``self._current_charger_budget`` semantics)."""
+    state. The single source for this charger's budget — flows into
+    ``build_charger_view`` → ``decide``. (The coordinator scalar
+    ``_current_charger_budget`` it used to mirror was dead and is
+    deleted, #589 swap retirement.)"""
 
     skipped_for_night: bool = False
     """``True`` when the charger's mode opts it out of the current night
@@ -288,7 +291,6 @@ class PerChargerContext:
         # ``self.state``.)
         self._saved = {
             "dev": coord._ev_device,
-            "current_charger_budget": coord._current_charger_budget,
         }
         # #589 swap retirement — seed this charger's cycle SOC from the
         # global (primary-entity) value. Must read BEFORE ``_current_pcc``
@@ -306,7 +308,6 @@ class PerChargerContext:
         # ``_ev_last_set_amps_ts`` are all migrated (#589 Surface-A) — they
         # are now properties reading ``self.state.<field>``; nothing to push.
         coord._ev_device = self.ev_dev
-        coord._current_charger_budget = self.budget_w
 
         # v1.6.14: precompute this charger's draw via the coordinator's
         # kW-aware helper. Reads ``self._ev_device`` indirectly via
@@ -376,11 +377,6 @@ class PerChargerContext:
             # ``self.state`` (the durable _pcc_store object) and are accessed
             # via coordinator properties — nothing to restore for them.
             coord._ev_device = self._saved["dev"]
-            # ``_current_charger_budget`` is cleared to ``None`` in the
-            # legacy code rather than restored to its pre-loop value —
-            # preserve that semantic (the post-loop reader treats
-            # non-None as "I'm currently inside a per-charger iteration").
-            coord._current_charger_budget = None
         finally:
             self._entered = False
         return False  # never swallow exceptions
