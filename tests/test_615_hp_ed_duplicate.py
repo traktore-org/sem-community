@@ -112,6 +112,22 @@ class TestHeatPumpEnergyDashboardDuplicate:
         assert "hot_water" in devs
         assert ed.device_id not in devs
 
+    def test_ed_row_sharing_switch_entity_is_suppressed(self):
+        # A boiler registered by its control switch, with an ED row whose
+        # discovered/mapped control points at the SAME switch → one row.
+        hw = _FakeCtrl("hot_water", "Hot Water", 6, 2500,
+                       switch_entity="switch.boiler")
+        ed = UnifiedDevice(
+            energy_sensor="sensor.boiler_energy",
+            power_sensor=None,
+            name="Boiler",
+            priority=5,
+            control={"entity": "switch.boiler"},
+        )
+        devs = _reg({"hot_water": hw}, [ed]).get_devices_for_sensor()
+        assert "hot_water" in devs
+        assert ed.device_id not in devs
+
     def test_unrelated_ed_device_is_not_suppressed(self):
         # An ED device that does NOT share any entity with the heat pump must
         # survive — the dedup keys on the shared entity, not "is there a HP".

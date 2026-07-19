@@ -713,7 +713,7 @@ class UnifiedDeviceRegistry:
             # control id ``heat_pump``/``hot_water``). Drop the ED row; the
             # authoritative control-id row is emitted below.
             if direct_entities and (
-                device.energy_sensor in direct_entities
+                (device.energy_sensor and device.energy_sensor in direct_entities)
                 or (device.power_sensor and device.power_sensor in direct_entities)
                 or (device.control_entity and device.control_entity in direct_entities)
             ):
