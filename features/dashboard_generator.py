@@ -264,6 +264,37 @@ class DashboardGenerator:
         if len(kept) != len(views):
             template["views"] = kept
             _LOGGER.info("#595 — no EV charger configured; removed the EV tab")
+        # #595 follow-up — the system overview cards drew a ghost EV node
+        # too (the reporter's circled complaint). Inject show_ev:false so
+        # both diagram cards hide their EV branch. K-Flow gets the
+        # equivalent _show_ev flag in _inject_kflow_card already.
+        hidden = self._set_show_ev_false(kept)
+        if hidden:
+            _LOGGER.info(
+                "#595 — no EV charger configured; hid the EV node on %d diagram card(s)",
+                hidden,
+            )
+
+    _EV_AWARE_DIAGRAM_CARDS = (
+        "custom:sem-system-diagram-card",
+        "custom:sem-flow-card",
+    )
+
+    def _set_show_ev_false(self, node: Any) -> int:
+        """Recursively walk views/cards and set ``show_ev: false`` on every
+        SEM diagram card (they nest inside vertical-stacks). Returns the
+        number of cards flagged."""
+        count = 0
+        if isinstance(node, dict):
+            if node.get("type") in self._EV_AWARE_DIAGRAM_CARDS:
+                node["show_ev"] = False
+                count += 1
+            for value in node.values():
+                count += self._set_show_ev_false(value)
+        elif isinstance(node, list):
+            for item in node:
+                count += self._set_show_ev_false(item)
+        return count
 
     async def _update_peak_load_management_view(self, view: Dict[str, Any]) -> None:
         """Update peak load management view with dynamic device cards.

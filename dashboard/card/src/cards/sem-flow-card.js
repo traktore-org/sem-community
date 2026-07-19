@@ -64,6 +64,9 @@ class SEMFlowCard extends SEMLitBase {
         this._showValues  = config.show_values  !== false;
         this._showGlow    = config.show_glow    !== false;
         this._showInverter = config.show_inverter !== false;
+        // #595 follow-up — generator injects show_ev:false on installs
+        // without a charger (same has_ev test that prunes the EV view).
+        this._showEv = config.show_ev !== false;
         this.requestUpdate();
     }
 
@@ -1002,6 +1005,10 @@ class SEMFlowCard extends SEMLitBase {
     }
 
     _hasNode(node) {
+        // #595 follow-up — honor show_ev:false in BOTH modes (prefix mode
+        // used to return true unconditionally, so charger-less installs
+        // still drew a ghost EV branch).
+        if (node === 'ev' && !this._showEv) return false;
         if (this._mode === 'prefix') return true;
         const e = this._entities;
         if (!e) return false;

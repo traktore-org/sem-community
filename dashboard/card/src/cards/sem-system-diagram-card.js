@@ -100,6 +100,11 @@ class SEMSystemDiagramCard extends SEMLitBase {
             this._entities = null;
         }
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
+        // #595 follow-up — the generator injects show_ev:false on installs
+        // without a charger (same has_ev test that prunes the EV view), so
+        // the diagram doesn't draw a ghost EV node. Default true for
+        // backward compat with hand-written configs.
+        this._showEv = config.show_ev !== false;
     }
 
     /** Resolve a logical suffix to an entity id (#455).
@@ -592,7 +597,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // keys count — an intentionally omitted node (no EV configured)
         // must not show as a permanent "sensor unavailable" warning.
         const unavailable = [];
-        for (const suffix of ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'ev_power', 'battery_soc']) {
+        const trackedSuffixes = ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'battery_soc'];
+        if (this._showEv) trackedSuffixes.splice(4, 0, 'ev_power');
+        for (const suffix of trackedSuffixes) {
             const eid = this._eid(suffix);
             if (!eid) {
                 if (this._mode === 'prefix') unavailable.push(suffix);
@@ -785,8 +792,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           stroke-dasharray="5,7" opacity="0.22"/>
                     <path d="${L.paths.grid}"    fill="none" stroke="#488fc2" stroke-width="2"
                           stroke-dasharray="5,7" opacity="0.22"/>
-                    <path d="${L.paths.ev}"      fill="none" stroke="#8DC892" stroke-width="2"
-                          stroke-dasharray="5,7" opacity="0.22"/>
+                    ${this._showEv ? svg`<path d="${L.paths.ev}" fill="none" stroke="#8DC892" stroke-width="2"
+                          stroke-dasharray="5,7" opacity="0.22"/>` : nothing}
 
                     <!-- Flow animation groups -->
                     <g class="flow-group" style="opacity:${flowSolarActive ? 1 : 0}">
@@ -801,9 +808,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <g class="flow-group" style="opacity:${flowHomeActive ? 1 : 0}">
                         ${this._renderFlow(false, '#5BC8D8', semCalcDuration(home), L.paths.home, 2)}
                     </g>
-                    <g class="flow-group" style="opacity:${flowEvActive ? 1 : 0}">
+                    ${this._showEv ? svg`<g class="flow-group" style="opacity:${flowEvActive ? 1 : 0}">
                         ${this._renderFlow(false, '#8DC892', semCalcDuration(ev), L.paths.ev, 3)}
-                    </g>
+                    </g>` : nothing}
 
                     <!-- Solar panel -->
                     <g filter="url(#glowSolar)" class="clickable" @click=${() => this._showMoreInfo('solar_power')}>
@@ -901,8 +908,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           text-anchor="middle" font-family="${F}" font-size="${fs + 1}"
                           fill="#5BC8D8" opacity="0.6" font-weight="600">${homeKwh}</text>
 
-                    <!-- EV -->
-                    <g filter="url(#glowEV)" class="clickable" @click=${() => this._showMoreInfo('ev_power')}>
+                    <!-- EV (omitted entirely when show_ev: false, #595) -->
+                    ${this._showEv ? svg`<g filter="url(#glowEV)" class="clickable" @click=${() => this._showMoreInfo('ev_power')}>
                         ${this._illustrationEV(L.E.cx, L.E.cy, L.E.r)}
                     </g>
                     <text x="${L.E.cx}" y="${L.E.labelY}" text-anchor="middle"
@@ -918,7 +925,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <text x="${L.E.cx}" y="${L.E.labelY + fv * 1.0 + fl + fs + 2}" class="clickable"
                           @click=${() => this._showMoreInfo('daily_ev_energy')}
                           text-anchor="middle" font-family="${F}" font-size="${fs + 1}"
-                          fill="#8DC892" opacity="0.6" font-weight="600">${evKwh}</text>
+                          fill="#8DC892" opacity="0.6" font-weight="600">${evKwh}</text>` : nothing}
 
                     <!-- Device strip (desktop only) -->
                     ${!c ? this._renderDeviceStrip(L.H) : nothing}

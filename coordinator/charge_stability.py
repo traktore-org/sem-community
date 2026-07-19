@@ -133,6 +133,19 @@ START_KICK_MAX_A = 10
 # refusal instead of holding a high current forever.
 START_KICK_GIVEUP_S = 90.0
 
+# #610 — full-car offer backoff. A single give-up re-armed as soon as the
+# surplus persisted again, which against a genuinely-full car produced
+# continuous kick-ladder chatter all afternoon (PROD 2026-07-18: car at
+# 100 %, kWh-target mode, no vehicle SOC sensor — UDP set_current noise
+# against a BMS that kept declining). After this many CONSECUTIVE
+# no-latch give-ups the offers stop for FULL_CAR_BACKOFF_S, ended early
+# by a real draw (car accepts again, e.g. after preconditioning) or by
+# an unplug / mode change / DISABLE. Per the #440 truth model the
+# estimated SOC still never gates charging — this tunes the RETRY
+# CADENCE only.
+FULL_CAR_GIVEUP_STREAK = 3
+FULL_CAR_BACKOFF_S = 1200.0
+
 # Once a car has drawn, treat a low/zero power reading as a transient and
 # HOLD the steady current for this long before concluding it really stopped.
 # Bridges the brief 0 W blips that would otherwise trigger a re-start at a
@@ -163,6 +176,13 @@ class ChargeStability:
         self._start_offer: Dict[str, int] = {}
         # Last time the car was observed drawing — latch hysteresis.
         self._latched: Dict[str, float] = {}
+        # #610 — consecutive no-latch give-ups and the full-car backoff
+        # deadline (monotonic). Deliberately NOT cleared by _reset(): the
+        # give-up path itself calls _reset, and the whole point is that
+        # the streak/backoff survive it. Cleared by a real draw, by the
+        # out-of-scope branch (unplug / mode change / DISABLE), or expiry.
+        self._giveup_streak: Dict[str, int] = {}
+        self._giveup_backoff_until: Dict[str, float] = {}
         # Set when the disable-bridge STOPS. While present, an IDLE decision is
         # honoured as-is and the bridge does NOT re-engage even if the car is
         # still drawing (actuator lag) — closes the bounded re-engagement the
@@ -215,6 +235,15 @@ class ChargeStability:
             "start": _elapsed(self._start_since),
             "latched": _elapsed(self._latched),
             "stopped_at": _elapsed(self._stopped_at),
+            # #610 — full-car backoff survives a restart: the streak as-is,
+            # the deadline as REMAINING seconds (it's a future deadline, not
+            # an elapsed timer, so the _elapsed shape doesn't fit).
+            "giveup_streak": dict(self._giveup_streak),
+            "giveup_backoff_remaining": {
+                cid: bu - now_mono
+                for cid, bu in self._giveup_backoff_until.items()
+                if bu - now_mono > 0.0
+            },
         }
 
     def restore_timers(self, saved: dict, now_mono: float) -> None:
@@ -272,6 +301,30 @@ class ChargeStability:
                     )
                     continue
                 target[cid] = now_mono - elapsed_f
+
+        # #610 — full-car backoff round-trip. Streak: plain ints. Deadline:
+        # persisted as REMAINING seconds, rebased to now + remaining (same
+        # no-downtime-credit philosophy as the elapsed timers — a backoff
+        # with 10 min left before restart has 10 min left after). Bounds
+        # guard against stale/corrupt blobs.
+        streaks = saved.get("giveup_streak")
+        if isinstance(streaks, dict):
+            for cid, n in streaks.items():
+                try:
+                    n_i = int(n)
+                except (TypeError, ValueError):
+                    continue
+                if 0 < n_i <= 1000:
+                    self._giveup_streak[str(cid)] = n_i
+        remaining = saved.get("giveup_backoff_remaining")
+        if isinstance(remaining, dict):
+            for cid, rem in remaining.items():
+                try:
+                    rem_f = float(rem)
+                except (TypeError, ValueError):
+                    continue
+                if 0.0 < rem_f <= FULL_CAR_BACKOFF_S:
+                    self._giveup_backoff_until[str(cid)] = now_mono + rem_f
 
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
@@ -354,6 +407,11 @@ class ChargeStability:
             or decision.intent is ChargerIntent.DISABLE
         ):
             self._reset(cid)
+            # #610 — an unplug / mode change / DISABLE ends the full-car
+            # backoff: a plug or user status change is exactly the signal
+            # that should re-open start offers.
+            self._giveup_streak.pop(cid, None)
+            self._giveup_backoff_until.pop(cid, None)
             return decision
 
         cfg = view.config if isinstance(view.config, dict) else {}
@@ -398,6 +456,10 @@ class ChargeStability:
             drawing = adapter.actual_charging(view.power)
             if drawing:
                 self._latched[cid] = now
+                # #610 — the car accepted current again (e.g. after
+                # preconditioning freed BMS headroom): end the backoff.
+                self._giveup_streak.pop(cid, None)
+                self._giveup_backoff_until.pop(cid, None)
             # Latch hysteresis: once a car has drawn, a single low/zero power
             # reading is almost always a transient (the car blips, a sensor
             # hiccup) — NOT a reason to re-start at a different current. Any
@@ -428,6 +490,28 @@ class ChargeStability:
                     ramp_amps=ramp_amps,
                 )
             if not charging:
+                # #610 — full-car backoff: after FULL_CAR_GIVEUP_STREAK
+                # consecutive no-latch give-ups, stay quiet for a long
+                # cooldown instead of re-running the kick ladder against a
+                # BMS that keeps declining. A genuinely-full car gets a
+                # quiet afternoon; one that starts accepting is picked up
+                # within one cooldown (or instantly on any draw/unplug).
+                backoff_until = self._giveup_backoff_until.get(cid)
+                if backoff_until is not None:
+                    if now < backoff_until:
+                        return replace(
+                            decision,
+                            intent=ChargerIntent.IDLE,
+                            commanded_amps=0,
+                            reason=(
+                                f"stability: full-car backoff — car declined "
+                                f"{self._giveup_streak.get(cid, 0)} start "
+                                f"ladders; next offer in "
+                                f"{max(0.0, backoff_until - now) / 60.0:.0f} min "
+                                f"— {decision.reason}"
+                            ),
+                        )
+                    self._giveup_backoff_until.pop(cid, None)
                 # Fresh start (no prior charge command). Day waits for the
                 # surplus to persist enable_delay_s (anti-flap); night starts
                 # at once (the planner already decided). Begin gently at min;
@@ -481,13 +565,27 @@ class ChargeStability:
                 # Stop offering (don't sit at a high current); the stall
                 # detector / planner own the refusal.
                 self._reset(cid)
+                # #610 — count consecutive give-ups; enough in a row means
+                # the car is genuinely full/refusing → long backoff before
+                # the next ladder (streak survives expiry, so a still-full
+                # car re-arms after ONE further ladder, not three).
+                streak = self._giveup_streak.get(cid, 0) + 1
+                self._giveup_streak[cid] = streak
+                backoff_note = ""
+                if streak >= FULL_CAR_GIVEUP_STREAK:
+                    self._giveup_backoff_until[cid] = now + FULL_CAR_BACKOFF_S
+                    backoff_note = (
+                        f" — backing off {FULL_CAR_BACKOFF_S / 60.0:.0f} min "
+                        f"after {streak} declined ladders"
+                    )
                 return replace(
                     decision,
                     intent=ChargerIntent.IDLE,
                     commanded_amps=0,
                     reason=(
                         f"stability: no draw at {offer}A after escalation "
-                        f"— car not latching (full/refusing) — "
+                        f"— car not latching (full/refusing)"
+                        f"{backoff_note} — "
                         f"{decision.reason}"
                     ),
                 )
