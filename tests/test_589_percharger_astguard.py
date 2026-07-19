@@ -8,10 +8,10 @@ forget the write-back for a field and it leaks. Surface-A migrated all 7
 leak-prone scalars onto the durable ``PerChargerState``/``_pcc_store`` (held by
 reference — no write-back to forget). These AST guards lock that in:
 
-1. ``__enter__``/``__exit__`` may only assign the two REMAINING allowed
-   ``coord._ev_*`` swaps (``_ev_device``, ``_ev_budget_history``). A new
-   ``coord._ev_<x> = …`` swap fails CI — directing the author to add a
-   ``PerChargerState`` field instead (which cannot leak).
+1. ``__enter__``/``__exit__`` may only assign the ONE remaining allowed
+   ``coord._ev_*`` swap (``_ev_device``). A new ``coord._ev_<x> = …`` swap
+   fails CI — directing the author to add a ``PerChargerState`` field
+   instead (which cannot leak).
 2. The retired parallel ``_ev_*_per_charger`` dicts must not reappear.
 3. The 7 migrated fields must live on ``PerChargerState`` (their safe home).
 """
@@ -24,11 +24,12 @@ _ROOT = Path(__file__).resolve().parents[1]
 _PCC = _ROOT / "coordinator" / "per_charger_context.py"
 _COORD = _ROOT / "coordinator" / "coordinator.py"
 
-# The ONLY per-charger ``coord._ev_*`` attributes the swap is still allowed to
-# assign. ``_ev_device`` is the device reference; ``_ev_budget_history`` is a
-# SHARED LIST (setdefault returns the same object each cycle — already
-# leak-safe). Everything else must live on PerChargerState.
-_ALLOWED_SWAP = {"_ev_device", "_ev_budget_history"}
+# The ONLY per-charger ``coord._ev_*`` attribute the swap is still allowed to
+# assign. ``_ev_device`` is the device reference (retired last, #589 swap
+# retirement). Everything else must live on PerChargerState.
+# (``_ev_budget_history`` was DEAD state — its median-budget consumer was
+# removed with the obsolete stability knobs in #536 — deleted, not migrated.)
+_ALLOWED_SWAP = {"_ev_device"}
 
 _MIGRATED_FIELDS = {
     "stalled_since", "enable_surplus_since", "charge_started_at",

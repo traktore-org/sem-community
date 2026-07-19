@@ -301,7 +301,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_enable_surplus_since_default: Optional[float] = None
         # Solar stability primary view — also migrated (#589 Surface-A).
         self._ev_last_set_amps_ts_default: Optional[float] = None
-        self._ev_budget_history: list = []
         # #589 Surface-A — durable per-charger state objects (replacing the
         # parallel _ev_*_per_charger dicts field-by-field). Held by the loop's
         # PerChargerContext by reference; the migrated _ev_* properties read/
@@ -314,12 +313,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         #   _ev_last_set_amps_ts.
         # Their _per_charger dicts are retired; they are now coordinator
         # PROPERTIES backed by the durable PerChargerState object.
-        # Solar stability layer (v1.7.1-beta.14): per-charger guard state.
-        # budget_history is the rolling-median window over recent budget_w
-        # samples so a single-cycle Huawei modbus flicker (e.g. 8000/0/8000 W)
-        # does not propagate into a current change. Mutated in place; the
-        # shared-list strategy means it is NOT migrated to PerChargerState.
-        self._ev_budget_history_per_charger: Dict[str, list] = {}
+        # _ev_budget_history + _ev_budget_history_per_charger were DELETED
+        # (#589 swap retirement): their only consumer (the ev_control
+        # median-budget helper) was removed with the obsolete stability knobs
+        # in #536; the swap machinery had been carrying dead state since.
+        # Surplus smoothing lives in surplus_controller (median-of-3
+        # pre-filter) and sensor_reader._smooth_ev_power.
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
         # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
         # ends at its own ``Charge by`` deadline (#246) — NOT at sunrise — so the

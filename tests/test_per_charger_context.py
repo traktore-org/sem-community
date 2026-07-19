@@ -44,9 +44,6 @@ def _make_coord(ev_chargers=None):
     coord._cycle_vehicle_soc = None
     # #589 Surface-A: _pcc_store is the durable per-charger state store.
     coord._pcc_store = {}
-    # Per-charger storage dicts still in use (budget_history).
-    coord._ev_budget_history_per_charger = {}
-    coord._ev_budget_history = []
     # v1.6.14: parallel dict written by ``__exit__`` from ``pcc.effective_state``.
     coord._effective_states_per_charger = {}
     # v1.6.14: cache pointer ``__enter__`` sets, ``__exit__`` clears.

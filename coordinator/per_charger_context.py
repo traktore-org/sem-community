@@ -282,8 +282,6 @@ class PerChargerContext:
         self._saved = {
             "dev": coord._ev_device,
             "current_charger_budget": coord._current_charger_budget,
-            # budget_history is the shared-list path; NOT migrated to PerChargerState.
-            "budget_history": coord._ev_budget_history,
         }
         self._saved_vehicle_soc = coord._cycle_vehicle_soc
 
@@ -295,13 +293,6 @@ class PerChargerContext:
         # are now properties reading ``self.state.<field>``; nothing to push.
         coord._ev_device = self.ev_dev
         coord._current_charger_budget = self.budget_w
-        # Budget history list is mutated in place by the actuator (appends
-        # the cycle's budget_w sample, pops the oldest). Setdefault keeps
-        # the same list reference across __enter__/__exit__ cycles so the
-        # rolling window survives.
-        coord._ev_budget_history = coord._ev_budget_history_per_charger.setdefault(
-            self.cid, [],
-        )
 
         # v1.6.14: precompute this charger's draw via the coordinator's
         # kW-aware helper. Reads ``self._ev_device`` indirectly via
@@ -349,11 +340,8 @@ class PerChargerContext:
             # ``_ev_charge_refused``, ``_ev_last_set_amps_ts``) are migrated
             # (#589 Surface-A): they live on ``self.state`` (the durable
             # _pcc_store object), already persisted by reference — no
-            # write-back needed.
-            # ``budget_history`` is the same list reference setdefault returned
-            # at __enter__; mutations done by the actuator persist naturally,
-            # so no explicit write-back is needed. The setdefault on the next
-            # __enter__ rebinds the primary view to the same list.
+            # write-back needed. (``budget_history`` was dead state and is
+            # deleted entirely, #589 swap retirement.)
 
             # v1.6.14: persist effective state for the post-loop
             # notification dispatcher. The dict on the coordinator
@@ -374,7 +362,6 @@ class PerChargerContext:
             # ``self.state`` (the durable _pcc_store object) and are accessed
             # via coordinator properties — nothing to restore for them.
             coord._ev_device = self._saved["dev"]
-            coord._ev_budget_history = self._saved["budget_history"]
             # ``_current_charger_budget`` is cleared to ``None`` in the
             # legacy code rather than restored to its pre-loop value —
             # preserve that semantic (the post-loop reader treats
