@@ -694,6 +694,10 @@ class UnifiedDeviceRegistry:
         # cause of the drag-writes-a-dead-key split (card row id != control id).
         chargers_configured = bool(self._ev_charger_rows)
         charger_entities = self._configured_charger_entities()
+        # (#615) Entities claimed by a directly-registered heat pump / hot
+        # water / climate device. An ED individual-device row for the SAME
+        # physical appliance is suppressed so it never appears twice.
+        direct_entities = self._direct_registration_entities()
         for device in self._devices:
             did = device.device_id
             if device.control_entity and device.control_entity in service_entities:
@@ -701,6 +705,17 @@ class UnifiedDeviceRegistry:
             if device.is_ev and (
                 chargers_configured
                 or (device.power_sensor and device.power_sensor in charger_entities)
+            ):
+                continue
+            # (#615) SAME physical appliance already owned by a direct heat
+            # pump / hot water registration (deduped on the shared entity, not
+            # the id — the ED id ``energy_dashboard_<slug>`` differs from the
+            # control id ``heat_pump``/``hot_water``). Drop the ED row; the
+            # authoritative control-id row is emitted below.
+            if direct_entities and (
+                device.energy_sensor in direct_entities
+                or (device.power_sensor and device.power_sensor in direct_entities)
+                or (device.control_entity and device.control_entity in direct_entities)
             ):
                 continue
             # Get live power reading
@@ -953,6 +968,41 @@ class UnifiedDeviceRegistry:
             c.get("power_entity") for c in self._ev_charger_rows
             if c.get("power_entity")
         }
+
+    def _direct_registration_entities(self) -> set:
+        """(#615) Entities OWNED by a directly-registered surplus device
+        (heat pump / hot water / climate — registered straight into the
+        controller, not via the ED list). These are authoritative rows,
+        emitted below by their control id. An ED ``individual device`` that
+        the user *also* added to HA's Energy Dashboard for the SAME physical
+        appliance (its power/energy counter) would otherwise appear a SECOND
+        time — because the ED row's id (``energy_dashboard_<slug>``) differs
+        from the control id (``heat_pump``/``hot_water``), so the id-keyed
+        dedup can't see it (issue #615: heat pump "twice in overview").
+
+        Same class as the #559 service-registration and #576 charger
+        suppressions: dedup on the SHARED ENTITY, not the id. Returns the set
+        of power/energy/switch entities the direct registrations claim; an ED
+        row referencing any of them is suppressed in favour of the
+        authoritative control-id row.
+        """
+        reserved: set = set()
+        for did, dev in getattr(
+            self._surplus_controller, "_devices", {}
+        ).items():
+            # ED-synced rows live here too (id ``energy_dashboard_*``) — they
+            # ARE the ED devices, so skip them. EV chargers have their own
+            # suppression path. Only the direct (heat_pump/hot_water/climate)
+            # registrations reserve entities here.
+            if did.startswith("energy_dashboard_") or getattr(dev, "is_ev", False):
+                continue
+            if did in self._service_registrations:
+                continue
+            for attr in ("power_entity_id", "energy_entity_id", "entity_id"):
+                ent = getattr(dev, attr, None)
+                if ent:
+                    reserved.add(ent)
+        return reserved
 
     def _ev_charger_row(self, charger: Dict[str, Any]) -> Dict[str, Any]:
         """Build the priority-list payload for one configured charger, keyed
