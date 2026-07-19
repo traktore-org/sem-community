@@ -172,6 +172,29 @@ none of these (e.g. a climate-only HP with a separately-named ED energy counter)
 through — but ED individual devices are *defined by* their energy sensor, so that overlap is the
 realistic one.
 
+### 13. Single-charger-in-list read as legacy (`len(ev_chargers) > 1` guard) — GUARDED
+**Symptom:** a lone EV charger configured through the config-flow (its sensors stored in
+`ev_chargers[0]`, NOT the flat top-level keys) has a fleet-level quantity silently read from the
+*empty* legacy top-level sensor — `ev_power=0` (false home spike → surplus-budget flap), per-charger
+flows blank, and (#616) `ev_connected=False` while `charger_<id>_connected=True`, so the EV policy
+reports "min_plus_solar but EV disconnected" and commands **0 A forever** even though the plug sensor
+reads ON. **Root shape:** a `len(ev_chargers) > 1` guard used as a proxy for "is this a multi-charger
+fleet" — but a *single* config-flow charger also lives in the list, so the `else` branch (legacy
+top-level flat keys) is wrong for it whenever those keys are unset. **Where it lives:**
+`coordinator/sensor_reader.py` — every place that chooses between per-charger `ev_chargers[i]` sensors
+and the flat top-level config: `ev_power` (fixed → `any(c.get("ev_charging_power_sensor"))`),
+`ev_connected`/`ev_charging` (#616 → `_read_ev_connection_status`, now shared by BOTH read paths),
+per-charger flow attribution (v1.6.15 fleet-sum, `test_split_grid_integration.py`). **Closure:** gate
+on `any(c.get("<the_sensor>") for c in ev_chargers)`, not the list length; read the per-charger sensor
+and fall back to the top-level key *per signal*. #616 also unified the two duplicated
+connection-status blocks (`_read_from_energy_dashboard` + `_read_from_legacy_config`) into one helper
+so the guard can no longer drift between the read paths — which is exactly how the `ev_power` fix
+missed the `ev_connected` sibling. **Guard:**
+`test_per_charger_entities.py::test_single_charger_connected_sensor_in_list_sets_fleet_connected` +
+`test_ev_power_single_charger_unchanged`. **Watch:** entity-creation dedup guards (`sensor.py`
+per-charger flow *entities*, ~line 1618) legitimately keep `len > 1` — they suppress duplicate
+registry entities, they don't read config; do NOT "fix" those. Refs #536 #616.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
