@@ -431,3 +431,88 @@ class TestSurfaceALastSetAmpsTsIsolation:
         coord._ev_last_set_amps_ts = 123.4
         assert coord._ev_last_set_amps_ts == 123.4
         assert coord._ev_last_set_amps_ts_default == 123.4
+
+
+class TestSwapRetirementInterleaved:
+    """#589 swap retirement — the rig-shaped oracle, in-process.
+
+    The design spec mandated the two-charger HA-TEST rig because 'a
+    missed swap-back passes every unit test and only shows on two live
+    chargers'. Post-retirement there IS no swap-back — but this test
+    still walks the exact production loop shape (sequential contexts
+    over two chargers across multiple simulated cycles, interleaving
+    EVERY migrated/retired field) against a real SEMCoordinator, so any
+    future regression in the property dispatch reproduces the live-rig
+    failure signature (charger B inheriting charger A's state) right
+    here in CI. Live-rig actuation coverage is impossible on the shared-
+    hardware TEST rig in observer mode (the per-charger loop is
+    observer-gated); this is the sanctioned equivalent.
+    """
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid, ev_dev=None):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import (
+            PerChargerContext,
+        )
+        return PerChargerContext(
+            cid=cid, ev_dev=ev_dev if ev_dev is not None else object(),
+            charger_cfg={}, _coord=coord,
+        )
+
+    def test_two_chargers_three_cycles_full_field_matrix(self):
+        from unittest.mock import MagicMock
+        coord = self._coord()
+        primary = MagicMock(name="primary")
+        coord._ev_device = primary          # registration (out-of-loop)
+        coord._cycle_vehicle_soc = 50.0     # global per-cycle SOC read
+        dev_a, dev_b = MagicMock(name="dev_a"), MagicMock(name="dev_b")
+
+        # ── cycle 1: A stalls + overrides SOC; B stays clean ──────────
+        with self._ctx(coord, "a", dev_a):
+            assert coord._ev_device is dev_a
+            assert coord._cycle_vehicle_soc == 50.0   # seeded from global
+            coord._ev_stalled_since = 111.0
+            coord._ev_reenable_attempts = 2
+            coord._cycle_vehicle_soc = 81.0           # per-charger entity
+        with self._ctx(coord, "b", dev_b):
+            assert coord._ev_device is dev_b
+            assert coord._cycle_vehicle_soc == 50.0, "A's SOC override leaked into B"
+            assert coord._ev_stalled_since is None, "A's stall leaked into B"
+            assert coord._ev_reenable_attempts == 0
+            coord._ev_charge_refused = True
+
+        # between cycles: primary view intact, no residue
+        assert coord._ev_device is primary
+        assert coord._cycle_vehicle_soc == 50.0
+        assert coord._ev_stalled_since is None
+        assert coord._current_pcc is None
+
+        # ── cycle 2: durable state came back per-charger ──────────────
+        with self._ctx(coord, "a", dev_a):
+            assert coord._ev_stalled_since == 111.0
+            assert coord._ev_reenable_attempts == 2
+            assert coord._ev_charge_refused is False, "B's refusal leaked into A"
+            coord._ev_stalled_since = None            # A's stall resolves
+        with self._ctx(coord, "b", dev_b):
+            assert coord._ev_charge_refused is True
+            assert coord._ev_stalled_since is None
+
+        # ── cycle 3: exception mid-A must not poison B ────────────────
+        try:
+            with self._ctx(coord, "a", dev_a):
+                coord._ev_reenable_attempts = 9
+                raise RuntimeError("decide blew up")
+        except RuntimeError:
+            pass
+        assert coord._current_pcc is None             # pointer unbound
+        with self._ctx(coord, "b", dev_b):
+            assert coord._ev_reenable_attempts == 0, "A's crash residue reached B"
+            assert coord._ev_device is dev_b
+        with self._ctx(coord, "a", dev_a):
+            assert coord._ev_reenable_attempts == 9   # A's write persisted

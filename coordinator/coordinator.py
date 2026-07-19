@@ -289,7 +289,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._energy_calculator = EnergyCalculator(config, self.time_manager)
         self._flow_calculator = FlowCalculator()
         self._state_machine = ChargingStateMachine(hass, config, self.time_manager)
-        self._ev_device = None  # Primary charger — set by __init__.py (backward compat)
+        # Primary charger — set by __init__.py (backward compat). A PROPERTY
+        # since the #589 swap retirement: in-loop reads resolve to the active
+        # PerChargerContext's device; this assignment routes to the _default
+        # backing via the setter.
+        self._ev_device = None
         self._ev_devices: Dict[str, Any] = {}  # All chargers keyed by charger_id (#112)
         # #589 Surface-A: these three are PROPERTIES backed by the current
         # PerChargerContext's durable state; the _default variants back them
@@ -301,7 +305,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_enable_surplus_since_default: Optional[float] = None
         # Solar stability primary view — also migrated (#589 Surface-A).
         self._ev_last_set_amps_ts_default: Optional[float] = None
-        self._ev_budget_history: list = []
         # #589 Surface-A — durable per-charger state objects (replacing the
         # parallel _ev_*_per_charger dicts field-by-field). Held by the loop's
         # PerChargerContext by reference; the migrated _ev_* properties read/
@@ -314,12 +317,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         #   _ev_last_set_amps_ts.
         # Their _per_charger dicts are retired; they are now coordinator
         # PROPERTIES backed by the durable PerChargerState object.
-        # Solar stability layer (v1.7.1-beta.14): per-charger guard state.
-        # budget_history is the rolling-median window over recent budget_w
-        # samples so a single-cycle Huawei modbus flicker (e.g. 8000/0/8000 W)
-        # does not propagate into a current change. Mutated in place; the
-        # shared-list strategy means it is NOT migrated to PerChargerState.
-        self._ev_budget_history_per_charger: Dict[str, list] = {}
+        # _ev_budget_history + _ev_budget_history_per_charger were DELETED
+        # (#589 swap retirement): their only consumer (the ev_control
+        # median-budget helper) was removed with the obsolete stability knobs
+        # in #536; the swap machinery had been carrying dead state since.
+        # Surplus smoothing lives in surplus_controller (median-of-3
+        # pre-filter) and sensor_reader._smooth_ev_power.
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
         # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
         # ends at its own ``Charge by`` deadline (#246) — NOT at sunrise — so the
@@ -508,19 +511,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``None`` outside any per-charger iteration.
         self._current_pcc = None
 
-        # Per-charger surplus budget for the active iteration.
-        # ``None`` outside any per-charger iteration; set by
-        # ``PerChargerContext.__enter__`` from the per-charger
-        # distribution map and cleared on ``__exit__``.
-        #
-        # Loadbearing: ``PerChargerContext.__enter__`` snapshots this
-        # field into ``_saved`` before pushing this charger's value —
-        # if it's missing on the coordinator the very first cycle
-        # raises ``AttributeError`` and the integration stops updating
-        # (HA-TEST 2026-05-31 PROD repro: shipped v1.6.7 → v1.6.14
-        # always crashed multi-charger first cycle; single-charger
-        # never entered this code path and so didn't surface the bug).
-        self._current_charger_budget: Optional[float] = None
+        # _current_charger_budget was DELETED (#589 swap retirement): the
+        # per-charger budget flows through ``pcc.budget_w`` →
+        # ``build_charger_view`` since the per-device-primary rebuild; the
+        # coordinator scalar had no remaining reader — only the swap that
+        # set and cleared it (and the v1.6.7-crash init this comment block
+        # used to defend, which the deletion makes moot).
 
         # EV stall detection for self-healing.
         # #589 Surface-A: ALL of these are PROPERTIES backed by the current
@@ -1464,6 +1460,59 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pcc.state.last_set_amps_ts = value
         else:
             self._ev_last_set_amps_ts_default = value
+
+    @property
+    def _ev_device(self) -> Optional[Any]:
+        """#589 swap retirement — the ACTIVE charger's device.
+
+        Inside the per-charger loop this resolves to ``_current_pcc.ev_dev``
+        (so every downstream ``self._ev_device`` read — config lookup,
+        adapter resolution, session tracking helpers — sees THIS charger);
+        out-of-loop it falls back to the primary device set by
+        ``__init__.py`` registration. Replaces the last ``_saved`` swap in
+        ``PerChargerContext`` — with no restore left to forget, the
+        #284/#315/#318 leak class is structurally closed.
+
+        Writers (registration, discovery, the legacy session-tracking
+        loop's manual swap) all run out-of-loop and land on the default
+        backing; an in-context write targets the context object and dies
+        with it."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            return pcc.ev_dev
+        return self._ev_device_default
+
+    @_ev_device.setter
+    def _ev_device(self, value: Optional[Any]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            pcc.ev_dev = value
+        else:
+            self._ev_device_default = value
+
+    @property
+    def _cycle_vehicle_soc(self) -> Optional[float]:
+        """#589 swap retirement — vehicle SOC for the ACTIVE charger.
+
+        Inside the per-charger loop this resolves to ``_current_pcc.vehicle_soc``
+        (seeded from the global value at ``__enter__``, overridden by the loop
+        body when the charger has its own ``vehicle_soc_entity``); out-of-loop
+        it falls back to the global per-cycle value read from the primary
+        ``vehicle_soc_entity``. Replaces the ``_saved_vehicle_soc``
+        snapshot/restore in ``PerChargerContext`` — the per-charger override
+        dies with the context, so it cannot leak into the next charger."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            return pcc.vehicle_soc
+        return self._cycle_vehicle_soc_default
+
+    @_cycle_vehicle_soc.setter
+    def _cycle_vehicle_soc(self, value: Optional[float]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            pcc.vehicle_soc = value
+        else:
+            self._cycle_vehicle_soc_default = value
 
     def _collect_trace(self, sem_data, power, charging_context) -> None:
         # ``charging_context`` reserved for a future management-layer capture.
@@ -2468,8 +2517,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             self._night_target_per_charger = per_charger_target
 
                         # Per-charger SOC target and surplus limit (#215).
-                        # ``_cycle_vehicle_soc`` is one of the swap fields
-                        # PerChargerContext restores in ``__exit__``.
+                        # ``_cycle_vehicle_soc`` is a pcc-dispatching
+                        # property (#589): this write lands on the active
+                        # context and dies with it — the global value is
+                        # untouched, nothing to restore.
                         charger_cfg = pcc.charger_cfg
                         per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
                         if per_soc_entity:
