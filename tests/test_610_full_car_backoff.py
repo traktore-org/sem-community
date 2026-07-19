@@ -42,16 +42,18 @@ class FakeAdapter:
         return power.power_w > 500.0
 
 
-def _view(*, power_w=0.0, connected=True, cid="wb"):
+def _view(*, power_w=0.0, connected=True, cid="wb", mode="min_plus_solar",
+          is_night=False):
     return ChargerView(
         power=ChargerPower(charger_id=cid, power_w=power_w,
                            connected=connected, charging=power_w > 500),
         energy=ChargerEnergy(charger_id=cid),
-        mode="min_plus_solar",
+        mode=mode,
         config={"ev_min_current": 6, "ev_phases": 3, "ev_voltage": 230,
                 "ev_max_current": 16},
-        fleet=FleetContext(is_night=False, solar_w=3000.0, min_solar_w=200.0,
-                           tariff_level=None),
+        fleet=FleetContext(is_night=is_night,
+                           solar_w=0.0 if is_night else 3000.0,
+                           min_solar_w=200.0, tariff_level=None),
     )
 
 
@@ -199,6 +201,41 @@ class TestFullCarBackoff:
         # And it is ENFORCED on the new instance.
         adapter2 = FakeAdapter()
         d = _filter(st2, _view(power_w=120.0), adapter2, now=10.0)
+        assert d.intent is ChargerIntent.IDLE
+        assert "full-car backoff" in d.reason
+
+    def test_mode_switch_clears_streak_and_backoff(self):
+        """Switching to a non-surplus mode (always_max/off) is user intent —
+        the out-of-scope branch clears the backoff so a later switch back
+        starts with a clean slate (review LOW, pinned)."""
+        st = ChargeStability()
+        adapter = FakeAdapter()
+        t = 0.0
+        for _ in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t)
+            t += 10.0
+        assert "wb" in st._giveup_backoff_until
+        _filter(st, _view(power_w=120.0, mode="always_max"), adapter, now=t + 5.0)
+        assert "wb" not in st._giveup_backoff_until
+        assert "wb" not in st._giveup_streak
+
+    def test_backoff_holds_at_night_documented_behavior(self):
+        """A daytime-armed backoff stays in force into the night window —
+        DELIBERATE (review LOW, pinned as intended): a still-plugged car
+        with a give-up streak is still full (it can't have discharged
+        while parked), so bypassing the backoff at night would just move
+        the all-afternoon chatter into the night window. A car that
+        genuinely needs a night charge arrives via a RE-PLUG, and the
+        unplug event clears the backoff (see
+        test_unplug_clears_streak_and_backoff)."""
+        st = ChargeStability()
+        adapter = FakeAdapter()
+        t = 0.0
+        for _ in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t)
+            t += 10.0
+        adapter.last_intent = None
+        d = _filter(st, _view(power_w=120.0, is_night=True), adapter, now=t + 60.0)
         assert d.intent is ChargerIntent.IDLE
         assert "full-car backoff" in d.reason
 
