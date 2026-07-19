@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.17] — 19.07.2026
+
+### 🐛 Fixes
+
+- 🔥♨️ **Heat pump / hot water no longer shows up twice in the overview** (#615) — a heat pump
+  configured in SEM *and* also added to Home Assistant's own Energy Dashboard as an individual
+  device appeared as two rows in the flow overview / priority list: once under your Dashboard name
+  (e.g. *"warmtepomp"*) and once under SEM's control row. The device list deduped by internal id,
+  but the auto-discovered Energy-Dashboard row and SEM's control row carry different ids, so both
+  slipped through. SEM now dedups on the *shared underlying entity* (power / energy / switch), the
+  same way it already does for service devices and EV chargers — the managed control row wins and
+  the duplicate is dropped. Distinct devices are untouched.
+
+**Full Changelog**: [v1.7.5-beta.16...v1.7.5-beta.17](https://github.com/traktore-org/sem-community/compare/v1.7.5-beta.16...v1.7.5-beta.17)
+
 # [1.7.5-beta.16] — 19.07.2026
 
 ### 🐛 Fixes
