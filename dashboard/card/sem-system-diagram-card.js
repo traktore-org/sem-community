@@ -32,6 +32,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         // (same test that prunes the EV view). Default true for
         // backward compat with hand-written configs.
         this._showEv = config.show_ev !== false;
+        // #614 — battery sibling of the same ghost-node class.
+        this._showBattery = config.show_battery !== false;
         // #455 — parity with sem-flow-card: explicit ``entities:`` config
         // points the card at arbitrary HA entities; ``entity_prefix``
         // stays the default/fallback. Same precedence as sem-flow-card:
@@ -327,6 +329,12 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const unavailable = [];
         const trackedKeys = ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'battery_soc'];
         if (this._showEv) trackedKeys.splice(4, 0, 'ev_power');
+        if (!this._showBattery) {
+            for (const k of ['battery_power', 'battery_soc']) {
+                const ix = trackedKeys.indexOf(k);
+                if (ix >= 0) trackedKeys.splice(ix, 1);
+            }
+        }
         for (const suffix of trackedKeys) {
             const eid = this._entityId(suffix);
             if (!eid) {
@@ -750,15 +758,14 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <!-- Static flow tracks -->
                     ${this._track(L.paths.solar,   '#ff9800')}
                     ${this._track(L.paths.home,    '#5BC8D8')}
-                    ${this._track(L.paths.battery, '#4db6ac')}
+                    ${this._showBattery ? this._track(L.paths.battery, '#4db6ac') : ''}
                     ${this._track(L.paths.grid,    '#488fc2')}
                     ${this._showEv ? this._track(L.paths.ev, '#8DC892') : ''}
 
                     <!-- Animated flow groups -->
                     <g id="flow-solar" class="flow-group" style="opacity:0"
                        data-path-d="${L.paths.solar}" data-color="#ff9800" data-count="2"></g>
-                    <g id="flow-battery" class="flow-group" style="opacity:0"
-                       data-path-d="${L.paths.battery}" data-color="#4db6ac" data-count="3"></g>
+                    ${this._showBattery ? this._batteryFlowGroupMarkup(L) : ''}
                     <g id="flow-grid" class="flow-group" style="opacity:0"
                        data-path-d="${L.paths.grid}" data-color="#488fc2" data-count="3"></g>
                     <g id="flow-home" class="flow-group" style="opacity:0"
@@ -791,23 +798,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <text id="val-inverter-status" x="${I.cx}" y="${I.cy + I.r + 14}" text-anchor="middle" font-family="${F}" font-size="${this._compact ? 11 : 10}" fill="#5a7a9a" opacity="0.7"></text>
 
                     <!-- BATTERY -->
-                    <g id="node-battery" filter="url(#glowBattery)">
-                        ${this._glowRing(B, '#4db6ac')}
-                        <circle cx="${B.cx}" cy="${B.cy}" r="${B.r}" fill="rgba(77,182,172,0.07)" stroke="#4db6ac" stroke-width="1.8"/>
-                        <circle cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="rgba(77,182,172,0.1)" stroke-width="5"/>
-                        <circle id="soc-arc" cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="#4db6ac" stroke-width="5"
-                                stroke-dasharray="${socCirc}" stroke-dashoffset="${socCirc}"
-                                transform="rotate(-90 ${B.cx} ${B.cy})" stroke-linecap="round" opacity="0.75"/>
-                        <g transform="translate(${B.cx},${B.cy})" stroke="#4db6ac" fill="none" opacity="${this._compact ? 0.85 : 0.7}">
-                            <rect x="-8" y="-13" width="16" height="26" rx="3" stroke-width="${this._compact ? 2.2 : 1.8}"/>
-                            <rect x="-3" y="-16" width="6" height="4" rx="1.5" fill="#4db6ac" opacity="0.5" stroke="none"/>
-                        </g>
-                    </g>
-                    <text id="label-battery" x="${B.cx}" y="${B.cy + B.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#4db6ac">${this._t('battery')}</text>
-                    <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#4db6ac">0%</text>
-                    <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="#4db6ac" opacity="0.7">0 W</text>
-                    <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.5"></text>
-                    <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.4"></text>
+                    ${this._showBattery ? this._batteryNodeMarkup(B, L, F, fl, fv, fs, socCirc) : ''}
 
                     <!-- GRID -->
                     <g id="node-grid" filter="url(#glowGrid)">
@@ -889,6 +880,31 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <text id="label-ev" x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#8DC892">${this._t('ev_charging')}</text>
                     <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#8DC892">0 W</text>
                     <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#8DC892" opacity="0.5"></text>`;
+    }
+
+    _batteryFlowGroupMarkup(L) {
+        return `<g id="flow-battery" class="flow-group" style="opacity:0"
+                       data-path-d="${L.paths.battery}" data-color="#4db6ac" data-count="3"></g>`;
+    }
+
+    _batteryNodeMarkup(B, L, F, fl, fv, fs, socCirc) {
+        return `<g id="node-battery" filter="url(#glowBattery)">
+                        ${this._glowRing(B, '#4db6ac')}
+                        <circle cx="${B.cx}" cy="${B.cy}" r="${B.r}" fill="rgba(77,182,172,0.07)" stroke="#4db6ac" stroke-width="1.8"/>
+                        <circle cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="rgba(77,182,172,0.1)" stroke-width="5"/>
+                        <circle id="soc-arc" cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="#4db6ac" stroke-width="5"
+                                stroke-dasharray="${socCirc}" stroke-dashoffset="${socCirc}"
+                                transform="rotate(-90 ${B.cx} ${B.cy})" stroke-linecap="round" opacity="0.75"/>
+                        <g transform="translate(${B.cx},${B.cy})" stroke="#4db6ac" fill="none" opacity="${this._compact ? 0.85 : 0.7}">
+                            <rect x="-8" y="-13" width="16" height="26" rx="3" stroke-width="${this._compact ? 2.2 : 1.8}"/>
+                            <rect x="-3" y="-16" width="6" height="4" rx="1.5" fill="#4db6ac" opacity="0.5" stroke="none"/>
+                        </g>
+                    </g>
+                    <text id="label-battery" x="${B.cx}" y="${B.cy + B.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#4db6ac">${this._t('battery')}</text>
+                    <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#4db6ac">0%</text>
+                    <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="#4db6ac" opacity="0.7">0 W</text>
+                    <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.5"></text>
+                    <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.4"></text>`;
     }
 
     _glowFilter(id, color, blur) {

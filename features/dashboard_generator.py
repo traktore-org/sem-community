@@ -245,11 +245,17 @@ class DashboardGenerator:
             raise FileNotFoundError(f"Dashboard template not found: {self._dashboard_template_path}")
 
     def _prune_ev_view_if_no_charger(self, template: Dict[str, Any]) -> None:
-        """#595 — remove the whole EV tab when no EV charger is configured.
+        """#595/#614 — hide absent-hardware surfaces from the dashboard.
 
-        The EV cards live only on the ``ev`` view; a battery/solar-only install
-        has nothing to show there, so the tab was pure clutter. Mirrors the
-        ``has_ev`` test the K-Flow card already uses."""
+        * No EV charger → the ``ev`` view is removed entirely (its cards
+          have nothing to show) and the diagram cards get ``show_ev: false``
+          so the system overview doesn't draw a ghost EV node.
+        * No battery → the diagram cards get ``show_battery: false`` (#614,
+          the battery sibling of the same ghost-node class — it used to
+          render a permanent "— W / sensor unavailable" battery).
+
+        Mirrors the ``has_ev`` / ``has_battery`` tests the K-Flow card
+        already uses (``_show_ev`` / ``_show_battery``)."""
         from ..const import DOMAIN
 
         entries = self.hass.config_entries.async_entries(DOMAIN)
@@ -257,43 +263,60 @@ class DashboardGenerator:
             return
         full = {**entries[0].data, **entries[0].options}
         has_ev = bool(full.get("ev_chargers") or full.get("ev_charging_power_sensor"))
-        if has_ev:
-            return
+        # Same battery test the K-Flow injection uses: explicit sensor OR a
+        # battery detected from the Energy Dashboard config — a battery-less
+        # verdict must never come from an incomplete config alone.
+        coordinator = None
+        if DOMAIN in self.hass.data:
+            for _eid, coord in self.hass.data[DOMAIN].items():
+                if hasattr(coord, "_energy_dashboard_config"):
+                    coordinator = coord
+                    break
+        ed_config = getattr(coordinator, "_energy_dashboard_config", None)
+        has_battery = bool(
+            full.get("battery_soc_sensor")
+            or full.get("battery_power_sensor")
+            or (ed_config and getattr(ed_config, "has_battery", False))
+        )
         views = template.get("views", [])
-        kept = [v for v in views if v.get("path") != "ev"]
-        if len(kept) != len(views):
-            template["views"] = kept
-            _LOGGER.info("#595 — no EV charger configured; removed the EV tab")
-        # #595 follow-up — the system overview cards drew a ghost EV node
-        # too (the reporter's circled complaint). Inject show_ev:false so
-        # both diagram cards hide their EV branch. K-Flow gets the
-        # equivalent _show_ev flag in _inject_kflow_card already.
-        hidden = self._set_show_ev_false(kept)
-        if hidden:
-            _LOGGER.info(
-                "#595 — no EV charger configured; hid the EV node on %d diagram card(s)",
-                hidden,
-            )
+        if not has_ev:
+            kept = [v for v in views if v.get("path") != "ev"]
+            if len(kept) != len(views):
+                template["views"] = kept
+                views = kept
+                _LOGGER.info("#595 — no EV charger configured; removed the EV tab")
+        flags = {}
+        if not has_ev:
+            flags["show_ev"] = False
+        if not has_battery:
+            flags["show_battery"] = False
+        if flags:
+            hidden = self._set_node_flags(views, flags)
+            if hidden:
+                _LOGGER.info(
+                    "#595/#614 — hid absent-hardware node(s) %s on %d diagram card(s)",
+                    sorted(flags), hidden,
+                )
 
-    _EV_AWARE_DIAGRAM_CARDS = (
+    _NODE_AWARE_DIAGRAM_CARDS = (
         "custom:sem-system-diagram-card",
         "custom:sem-flow-card",
     )
 
-    def _set_show_ev_false(self, node: Any) -> int:
-        """Recursively walk views/cards and set ``show_ev: false`` on every
-        SEM diagram card (they nest inside vertical-stacks). Returns the
-        number of cards flagged."""
+    def _set_node_flags(self, node: Any, flags: Dict[str, bool]) -> int:
+        """Recursively walk views/cards and apply node-visibility flags to
+        every SEM diagram card (they nest inside vertical-stacks). Returns
+        the number of cards flagged."""
         count = 0
         if isinstance(node, dict):
-            if node.get("type") in self._EV_AWARE_DIAGRAM_CARDS:
-                node["show_ev"] = False
+            if node.get("type") in self._NODE_AWARE_DIAGRAM_CARDS:
+                node.update(flags)
                 count += 1
             for value in node.values():
-                count += self._set_show_ev_false(value)
+                count += self._set_node_flags(value, flags)
         elif isinstance(node, list):
             for item in node:
-                count += self._set_show_ev_false(item)
+                count += self._set_node_flags(item, flags)
         return count
 
     async def _update_peak_load_management_view(self, view: Dict[str, Any]) -> None:
