@@ -960,6 +960,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           font-family="${F}" font-size="9" font-weight="300"
                           letter-spacing="2.5" fill="rgba(255,255,255,0.06)">SEM</text>
                 </svg>
+                ${c ? this._renderDeviceChips() : nothing}
             </ha-card>
         `;
     }
@@ -1475,12 +1476,14 @@ class SEMSystemDiagramCard extends SEMLitBase {
      * Top-3 controllable devices strip (desktop only).
      * Returns an svg fragment positioned bottom-right of the diagram.
      */
-    _renderDeviceStrip(H) {
+    _collectDevices() {
+        // Shared by the desktop satellite strip and the #614 mobile chip
+        // row: up to 3 house-load devices, heaviest draw first.
         const devicesEid = this._eid('controllable_devices_count');
         const devicesEntity = devicesEid ? this._hass?.states[devicesEid] : undefined;
-        if (!devicesEntity?.attributes?.devices) return nothing;
+        if (!devicesEntity?.attributes?.devices) return [];
 
-        const devices = Object.entries(devicesEntity.attributes.devices)
+        return Object.entries(devicesEntity.attributes.devices)
             // #587 — EV and the synthetic home battery each have their own node,
             // so keep them out of the house-load device tiles (don't show twice).
             .filter(([, info]) => info.device_type !== 'ev_charger'
@@ -1492,7 +1495,58 @@ class SEMSystemDiagramCard extends SEMLitBase {
             })
             .sort((a, b) => b.power - a.power)
             .slice(0, 3);
+    }
 
+    _renderDeviceChips() {
+        // #614 — mobile presentation of the controllable devices. The
+        // desktop satellite strip needs horizontal space the compact
+        // layout doesn't have, so phones got NOTHING; this renders the
+        // same up-to-3 devices as a chip row below the diagram (Option A,
+        // approved mockup 2026-07-19). Active devices show their color
+        // and live power; idle ones dim to "off". Tapping a chip opens
+        // more-info on the device's power entity when it has one.
+        const devices = this._collectDevices();
+        if (!devices.length) return nothing;
+        const colors = SEM_DEVICE_COLORS;
+        return html`
+            <div style="display:flex;gap:8px;padding:0 14px 14px;">
+                ${devices.map((dev, idx) => {
+                    const color = colors[idx % colors.length];
+                    const isOn = dev.is_on || dev.power > 5;
+                    let name = dev.name || dev.id;
+                    if (name.length > 14) name = name.substring(0, 13) + '…';
+                    return html`
+                        <div class="${dev.power_entity ? 'clickable' : ''}"
+                             @click=${() => dev.power_entity && this._fireMoreInfo(dev.power_entity)}
+                             style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;
+                                    padding:7px 4px;border-radius:12px;
+                                    border:1px solid ${color}${isOn ? '' : '44'};
+                                    background:rgba(128,128,128,${isOn ? 0.07 : 0.02});
+                                    opacity:${isOn ? 1 : 0.45}">
+                            <svg viewBox="-16 -16 32 32" width="22" height="22">
+                                <g stroke="${color}" fill="none" stroke-width="1.6"
+                                   stroke-linecap="round" stroke-linejoin="round">
+                                    ${this._deviceIcon(dev.device_type, dev.name || dev.id)}
+                                </g>
+                            </svg>
+                            <div style="font-size:10px;color:${color};font-weight:600;
+                                        white-space:nowrap;overflow:hidden;max-width:100%">${name}</div>
+                            <div style="font-size:11px;color:${color};font-weight:800">
+                                ${isOn ? semFormatPower(dev.power) : this._t('off')}</div>
+                        </div>`;
+                })}
+            </div>`;
+    }
+
+    _fireMoreInfo(entityId) {
+        this.dispatchEvent(new CustomEvent('hass-more-info', {
+            bubbles: true, composed: true,
+            detail: { entityId },
+        }));
+    }
+
+    _renderDeviceStrip(H) {
+        const devices = this._collectDevices();
         if (!devices.length) return nothing;
 
         const F = "'Segoe UI','Roboto',sans-serif";
