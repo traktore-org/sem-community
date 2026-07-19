@@ -24,7 +24,7 @@
 
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import {
-    semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_COLORS,
+    semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_ACCENT,
     semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey,
 } from '../base/sem-shared.js';
 
@@ -1507,11 +1507,11 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // more-info on the device's power entity when it has one.
         const devices = this._collectDevices();
         if (!devices.length) return nothing;
-        const colors = SEM_DEVICE_COLORS;
+        // #614 — one unified accent for all house-load devices (see sem-shared).
         return html`
             <div style="display:flex;gap:8px;padding:0 14px 14px;">
                 ${devices.map((dev, idx) => {
-                    const color = colors[idx % colors.length];
+                    const color = SEM_DEVICE_ACCENT;
                     const isOn = dev.is_on || dev.power > 5;
                     let name = dev.name || dev.id;
                     if (name.length > 14) name = name.substring(0, 13) + '…';
@@ -1520,18 +1520,17 @@ class SEMSystemDiagramCard extends SEMLitBase {
                              @click=${() => dev.power_entity && this._fireMoreInfo(dev.power_entity)}
                              style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;
                                     padding:7px 4px;border-radius:12px;
-                                    border:1px solid ${color}${isOn ? '' : '44'};
-                                    background:rgba(128,128,128,${isOn ? 0.07 : 0.02});
-                                    opacity:${isOn ? 1 : 0.45}">
-                            <svg viewBox="-16 -16 32 32" width="22" height="22">
+                                    border:1px solid ${color}${isOn ? '' : '55'};
+                                    background:rgba(128,128,128,${isOn ? 0.07 : 0.03});">
+                            <svg viewBox="-16 -16 32 32" width="22" height="22" style="opacity:${isOn ? 1 : 0.55}">
                                 <g stroke="${color}" fill="none" stroke-width="1.6"
                                    stroke-linecap="round" stroke-linejoin="round">
                                     ${this._deviceIcon(dev.device_type, dev.name || dev.id)}
                                 </g>
                             </svg>
-                            <div style="font-size:10px;color:${color};font-weight:600;
+                            <div style="font-size:10px;color:${color};font-weight:600;opacity:${isOn ? 1 : 0.85};
                                         white-space:nowrap;overflow:hidden;max-width:100%">${name}</div>
-                            <div style="font-size:11px;color:${color};font-weight:800">
+                            <div style="font-size:11px;color:${color};font-weight:800;opacity:${isOn ? 1 : 0.85}">
                                 ${isOn ? semFormatPower(dev.power) : this._t('off')}</div>
                         </div>`;
                 })}
@@ -1550,14 +1549,14 @@ class SEMSystemDiagramCard extends SEMLitBase {
         if (!devices.length) return nothing;
 
         const F = "'Segoe UI','Roboto',sans-serif";
-        const colors = SEM_DEVICE_COLORS;
+        // #614 — one unified accent for all house-load devices (see sem-shared).
         const baseX = 540, baseY = 310;
         const spacing = 50;
 
         return devices.map((dev, idx) => {
             let name = (dev.name || dev.id).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             if (name.length > 22) name = name.substring(0, 21) + '…';
-            const color = colors[idx % colors.length];
+            const color = SEM_DEVICE_ACCENT;
             const isOn = dev.is_on || dev.power > 5;
             const cy = baseY + idx * spacing;
             const cx = baseX;
@@ -1579,9 +1578,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     ${this._deviceIcon(dev.device_type, dev.name || dev.id)}
                 </g>
                 <text x="${cx + r + 6}" y="${cy - 2}" font-family="${F}" font-size="10"
-                      font-weight="500" fill="${color}" opacity="0.7">${name}</text>
+                      font-weight="500" fill="${color}" opacity="0.85">${name}</text>
                 <text x="${cx + r + 6}" y="${cy + 11}" font-family="${F}" font-size="10"
-                      font-weight="700" fill="${color}" opacity="${isOn ? 0.9 : 0.4}">${semFormatPower(dev.power)}</text>
+                      font-weight="700" fill="${color}" opacity="${isOn ? 0.95 : 0.75}">${semFormatPower(dev.power)}</text>
             `;
         });
     }
