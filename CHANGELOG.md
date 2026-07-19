@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.14] — 18.07.2026
+
+### 🐛 Fixes (all root-caused and provoked live on real hardware)
+
+- 🧊 **No more false "Sensor frozen" warnings on split power sensors** (#611, by @ebnerjoh) — the
+  frozen-sensor audit measured staleness from `last_updated`, which Home Assistant only advances
+  when a sensor's *value* changes. A split discharge-power sensor (Fronius exposes separate charge
+  **and** discharge power sensors) sits at a constant 0 W for well over 10 minutes while the
+  battery charges — so it looked "frozen" though it was reporting fine every poll. Same false
+  alarm hit `grid_export` while importing and solar overnight. Freshness now keys off
+  `last_reported`, which advances on every state-machine write even when the value is unchanged; a
+  genuine upstream stall (modbus/cloud) still freezes it and is still caught.
+
 # [1.7.5-beta.13] — 18.07.2026
 
 ### ✨ Features
