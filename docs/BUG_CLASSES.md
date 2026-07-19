@@ -148,6 +148,30 @@ assigns it anything other than the raw reader attribute. Refs #598.
 fields if a new "these two numbers contradict each other" report appears — e.g. a corrected
 `forecast_today_kwh`, or any tariff/PV figure shown raw beside a corrected sibling.
 
+### 12. Duplicate device row (authoritative registration vs ED auto-discovery, deduped by id) — GUARDED
+**Symptom:** one physical appliance appears **twice** in the overview / priority list — once under
+the user's Energy-Dashboard friendly name, once under SEM's control label (#615: "warmtepomp" AND
+"heatpump" side by side). **Root shape:** the same device is registered from *two* sources — an
+authoritative direct/service/charger registration keyed by a **control id** (`heat_pump`,
+`hot_water`, the charger's control id, a `register_surplus_device` id) *and* an Energy-Dashboard
+individual-device auto-discovery keyed `energy_dashboard_<slug>` (derived from its energy sensor).
+`get_devices_for_sensor`'s dedup keys on the **id**, so the two ids never collide and both rows
+emit. **Where it lives:** `features/device_registry.py::get_devices_for_sensor` — every path that
+suppresses an ED row in favour of an authoritative one. **Closure:** dedup on the **shared entity**,
+not the id — suppress the ED row when its power/energy/control entity is claimed by an authoritative
+registration. Three sibling suppressions now exist: service (`service_entities`, #559), charger
+(`_configured_charger_entities`, #576 P2.1), and direct heat-pump/hot-water/climate
+(`_direct_registration_entities`, #615 — covers *all* non-ED, non-EV, non-service direct
+registrations structurally, not per-device). **Guard:** `tests/test_615_hp_ed_duplicate.py` (an ED
+row sharing the HP/HW power/energy/switch entity yields ONE row; a distinct ED device is untouched).
+Refs #559 #576 #615.
+**Watch:** all three suppressions live inline in one method — if a *fourth* authoritative source is
+added (e.g. a new appliance controller family), reserve its entities the same way or it re-opens the
+class. The dedup matches on `energy_sensor`/`power_sensor`/`control_entity`; a device that shares
+none of these (e.g. a climate-only HP with a separately-named ED energy counter) can still slip
+through — but ED individual devices are *defined by* their energy sensor, so that overlap is the
+realistic one.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
