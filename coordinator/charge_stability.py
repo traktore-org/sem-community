@@ -460,6 +460,31 @@ class ChargeStability:
                 # preconditioning freed BMS headroom): end the backoff.
                 self._giveup_streak.pop(cid, None)
                 self._giveup_backoff_until.pop(cid, None)
+            # #610 — full-car backoff gate. MUST sit HERE, covering BOTH the
+            # fresh-start path and the "commanded but not drawing" ladder
+            # block below: in the live loop ``adapter.last_intent`` stays
+            # CHARGE_AT_AMPS across a give-up (the IDLE actuation is
+            # debounced), so the next cycle re-enters the ladder block with
+            # freshly-reset state and climbs again — the exact re-offer
+            # chatter the backoff exists to stop. Proven live on PROD
+            # 2026-07-19: backoff armed 11:10:12, ladder restarted 11:10:42;
+            # the original fresh-start-only gate never fired.
+            backoff_until = self._giveup_backoff_until.get(cid)
+            if backoff_until is not None and not drawing:
+                if now < backoff_until:
+                    return replace(
+                        decision,
+                        intent=ChargerIntent.IDLE,
+                        commanded_amps=0,
+                        reason=(
+                            f"stability: full-car backoff — car declined "
+                            f"{self._giveup_streak.get(cid, 0)} start "
+                            f"ladders; next offer in "
+                            f"{max(0.0, backoff_until - now) / 60.0:.0f} min "
+                            f"— {decision.reason}"
+                        ),
+                    )
+                self._giveup_backoff_until.pop(cid, None)
             # Latch hysteresis: once a car has drawn, a single low/zero power
             # reading is almost always a transient (the car blips, a sensor
             # hiccup) — NOT a reason to re-start at a different current. Any
@@ -490,28 +515,9 @@ class ChargeStability:
                     ramp_amps=ramp_amps,
                 )
             if not charging:
-                # #610 — full-car backoff: after FULL_CAR_GIVEUP_STREAK
-                # consecutive no-latch give-ups, stay quiet for a long
-                # cooldown instead of re-running the kick ladder against a
-                # BMS that keeps declining. A genuinely-full car gets a
-                # quiet afternoon; one that starts accepting is picked up
-                # within one cooldown (or instantly on any draw/unplug).
-                backoff_until = self._giveup_backoff_until.get(cid)
-                if backoff_until is not None:
-                    if now < backoff_until:
-                        return replace(
-                            decision,
-                            intent=ChargerIntent.IDLE,
-                            commanded_amps=0,
-                            reason=(
-                                f"stability: full-car backoff — car declined "
-                                f"{self._giveup_streak.get(cid, 0)} start "
-                                f"ladders; next offer in "
-                                f"{max(0.0, backoff_until - now) / 60.0:.0f} min "
-                                f"— {decision.reason}"
-                            ),
-                        )
-                    self._giveup_backoff_until.pop(cid, None)
+                # (#610 backoff is gated ABOVE, before the charging split —
+                # the fresh-start-only placement never fired in the live
+                # loop because last_intent keeps ``charging`` True.)
                 # Fresh start (no prior charge command). Day waits for the
                 # surplus to persist enable_delay_s (anti-flap); night starts
                 # at once (the planner already decided). Begin gently at min;

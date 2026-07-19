@@ -70,28 +70,34 @@ def _filter(st, view, adapter, now):
                      enable_delay_s=60, disable_delay_s=300, now_ts=now)
 
 
-def _run_ladder_to_giveup(st, adapter, t0, *, view=None):
-    """Walk one full enable→start→escalate→give-up sequence.
+def _run_ladder_to_giveup(st, adapter, t0, *, view=None, first=False):
+    """Walk one full start→escalate→give-up sequence, faithful to the
+    LIVE actuation loop.
 
-    Emulates the real actuation loop: last_intent=None before the fresh
-    start (the reconciler idled the charger after the previous give-up),
-    CHARGE_AT_AMPS once the start has been commanded. Returns
-    ``(final_decision, t_end)``.
+    THE 2026-07-19 PROD lesson: ``adapter.last_intent`` STAYS
+    ``CHARGE_AT_AMPS`` across a give-up (the IDLE actuation is
+    debounced), so every round after the first re-enters the
+    "commanded but not drawing" ladder block directly — no enable
+    delay, no fresh start. The first cut of this harness reset
+    ``last_intent = None`` between rounds, which routed every round
+    through the fresh-start branch and VACUOUSLY passed a backoff gate
+    that never fired in production. Returns ``(final_decision, t_end)``.
     """
     view = view or _view(power_w=120.0)  # plugged, never draws
-    adapter.last_intent = None
-    d = _filter(st, view, adapter, now=t0)                # arm enable delay
-    if "full-car backoff" in d.reason:
-        return d, t0
-    d = _filter(st, view, adapter, now=t0 + 60.0)         # gentle start
-    if "full-car backoff" in d.reason:
-        return d, t0 + 60.0
-    assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-    adapter.last_intent = ChargerIntent.CHARGE_AT_AMPS
-    t = t0 + 60.0
+    if first:
+        adapter.last_intent = None
+        _filter(st, view, adapter, now=t0)                # arm enable delay
+        d = _filter(st, view, adapter, now=t0 + 60.0)     # gentle start
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        adapter.last_intent = ChargerIntent.CHARGE_AT_AMPS
+        t = t0 + 60.0
+    else:
+        t = t0
     for i in range(1, 5):                                 # climb to ceiling
-        t = t0 + 60.0 + i * (START_KICK_GRACE_S + 1)
-        _filter(st, view, adapter, now=t)
+        t = t + (START_KICK_GRACE_S + 1)
+        d = _filter(st, view, adapter, now=t)
+        if "full-car backoff" in d.reason:
+            return d, t
     t = t + START_KICK_GIVEUP_S + 5
     d = _filter(st, view, adapter, now=t)                 # give-up
     return d, t
@@ -105,7 +111,7 @@ class TestFullCarBackoff:
     def test_single_giveup_does_not_backoff(self):
         st = ChargeStability()
         adapter = FakeAdapter()
-        d, _ = _run_ladder_to_giveup(st, adapter, 0.0)
+        d, _ = _run_ladder_to_giveup(st, adapter, 0.0, first=True)
         assert d.intent is ChargerIntent.IDLE
         assert "not latching" in d.reason
         assert "backing off" not in d.reason
@@ -116,8 +122,8 @@ class TestFullCarBackoff:
         adapter = FakeAdapter()
         t = 0.0
         d = None
-        for _ in range(FULL_CAR_GIVEUP_STREAK):
-            d, t = _run_ladder_to_giveup(st, adapter, t)
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            d, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         assert "backing off" in d.reason
         assert "wb" in st._giveup_backoff_until
@@ -129,12 +135,33 @@ class TestFullCarBackoff:
             assert d2.intent is ChargerIntent.IDLE
             assert "full-car backoff" in d2.reason
 
+    def test_backoff_gates_ladder_block_with_stale_charge_intent(self):
+        """THE PROD 2026-07-19 11:10 signature: backoff arms, and the very
+        next cycle still has ``last_intent=CHARGE_AT_AMPS`` (the IDLE
+        actuation is debounced), so the filter enters the CHARGING path.
+        The gate must fire there — the original fresh-start-only gate let
+        the ladder restart 30 s after arming ("trying 8A to start")."""
+        st = ChargeStability()
+        adapter = FakeAdapter()
+        t = 0.0
+        d = None
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            d, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
+            t += 10.0
+        assert "backing off" in d.reason
+        # Stale charge intent, exactly like the live loop after a give-up.
+        assert adapter.last_intent is ChargerIntent.CHARGE_AT_AMPS
+        d2 = _filter(st, _view(power_w=120.0), adapter, now=t + 30.0)
+        assert d2.intent is ChargerIntent.IDLE
+        assert "full-car backoff" in d2.reason
+        assert "trying" not in d2.reason  # NO ladder restart
+
     def test_backoff_expires_then_one_giveup_rearms(self):
         st = ChargeStability()
         adapter = FakeAdapter()
         t = 0.0
-        for _ in range(FULL_CAR_GIVEUP_STREAK):
-            _, t = _run_ladder_to_giveup(st, adapter, t)
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         # Past expiry the ladder runs again (the re-offer the issue asks
         # to preserve — a car accepting after preconditioning is picked
@@ -150,8 +177,8 @@ class TestFullCarBackoff:
         st = ChargeStability()
         adapter = FakeAdapter()
         t = 0.0
-        for _ in range(FULL_CAR_GIVEUP_STREAK):
-            _, t = _run_ladder_to_giveup(st, adapter, t)
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         assert "wb" in st._giveup_backoff_until
         # The car starts drawing (e.g. a KEBA auto-start / preconditioning
@@ -166,8 +193,8 @@ class TestFullCarBackoff:
         st = ChargeStability()
         adapter = FakeAdapter()
         t = 0.0
-        for _ in range(FULL_CAR_GIVEUP_STREAK):
-            _, t = _run_ladder_to_giveup(st, adapter, t)
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         assert "wb" in st._giveup_backoff_until
         # Unplug → out-of-scope branch clears the backoff: the plug event
@@ -185,8 +212,8 @@ class TestFullCarBackoff:
         st = ChargeStability()
         adapter = FakeAdapter()
         t = 0.0
-        for _ in range(FULL_CAR_GIVEUP_STREAK):
-            _, t = _run_ladder_to_giveup(st, adapter, t)
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         armed_until = st._giveup_backoff_until["wb"]
         # Snapshot 100 s into the backoff, restore on a fresh instance
@@ -211,8 +238,8 @@ class TestFullCarBackoff:
         st = ChargeStability()
         adapter = FakeAdapter()
         t = 0.0
-        for _ in range(FULL_CAR_GIVEUP_STREAK):
-            _, t = _run_ladder_to_giveup(st, adapter, t)
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         assert "wb" in st._giveup_backoff_until
         _filter(st, _view(power_w=120.0, mode="always_max"), adapter, now=t + 5.0)
@@ -231,8 +258,8 @@ class TestFullCarBackoff:
         st = ChargeStability()
         adapter = FakeAdapter()
         t = 0.0
-        for _ in range(FULL_CAR_GIVEUP_STREAK):
-            _, t = _run_ladder_to_giveup(st, adapter, t)
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         adapter.last_intent = None
         d = _filter(st, _view(power_w=120.0, is_night=True), adapter, now=t + 60.0)
