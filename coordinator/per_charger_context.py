@@ -342,12 +342,14 @@ class PerChargerContext:
                     self.effective_state,
                     self.charger_name or self.cid,
                 )
-
-            # Unbind: out-of-loop reads (single-charger fallback path,
-            # post-loop helpers) fall back to the primary/default view in
-            # every property and to direct-compute in _this_charger_power.
+        finally:
+            # Unbind UNCONDITIONALLY (review: the pointer is now the SOLE
+            # per-charger dispatch mechanism — a stale binding would make
+            # every property read the wrong charger, so it must clear even
+            # if the persist above raises). Out-of-loop reads then fall
+            # back to the primary/default view in every property and to
+            # direct-compute in _this_charger_power.
             if getattr(coord, "_current_pcc", None) is self:
                 coord._current_pcc = None
-        finally:
             self._entered = False
         return False  # never swallow exceptions

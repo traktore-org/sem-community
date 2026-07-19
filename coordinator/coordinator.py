@@ -2517,8 +2517,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             self._night_target_per_charger = per_charger_target
 
                         # Per-charger SOC target and surplus limit (#215).
-                        # ``_cycle_vehicle_soc`` is one of the swap fields
-                        # PerChargerContext restores in ``__exit__``.
+                        # ``_cycle_vehicle_soc`` is a pcc-dispatching
+                        # property (#589): this write lands on the active
+                        # context and dies with it — the global value is
+                        # untouched, nothing to restore.
                         charger_cfg = pcc.charger_cfg
                         per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
                         if per_soc_entity:
