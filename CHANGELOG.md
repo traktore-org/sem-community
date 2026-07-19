@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.16] — 19.07.2026
+
+### 🐛 Fixes
+
+- 🚗💤 **The full-car backoff now actually quiets the charger** (#610) — beta.15's backoff armed
+  correctly after 3 declined ladders but never gated: the charger's last commanded intent stays
+  *charge* across a give-up (the idle actuation is debounced), so the very next cycle re-entered
+  the start ladder and kept climbing — caught within 30 seconds by live provocation on real
+  hardware. The gate now sits above the charging split and holds whenever a backoff is armed and
+  the car isn't actually drawing. Live-proven end-to-end on PROD: three declined ladders →
+  *"next offer in 20 min"* counting down with the charger silent. If you installed beta.15,
+  update — the backoff there is log-cosmetic only.
+
+**Full Changelog**: [v1.7.5-beta.15...v1.7.5-beta.16](https://github.com/traktore-org/sem-community/compare/v1.7.5-beta.15...v1.7.5-beta.16)
+
 # [1.7.5-beta.15] — 19.07.2026
 
 ### ✨ Features
