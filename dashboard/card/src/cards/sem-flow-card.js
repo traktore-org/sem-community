@@ -67,6 +67,8 @@ class SEMFlowCard extends SEMLitBase {
         // #595 follow-up — generator injects show_ev:false on installs
         // without a charger (same has_ev test that prunes the EV view).
         this._showEv = config.show_ev !== false;
+        // #614 — battery sibling of the same ghost-node class.
+        this._showBattery = config.show_battery !== false;
         this.requestUpdate();
     }
 
@@ -1005,10 +1007,11 @@ class SEMFlowCard extends SEMLitBase {
     }
 
     _hasNode(node) {
-        // #595 follow-up — honor show_ev:false in BOTH modes (prefix mode
-        // used to return true unconditionally, so charger-less installs
-        // still drew a ghost EV branch).
+        // #595/#614 — honor show_ev/show_battery:false in BOTH modes
+        // (prefix mode used to return true unconditionally, so installs
+        // without the hardware still drew ghost branches).
         if (node === 'ev' && !this._showEv) return false;
+        if (node === 'battery' && !this._showBattery) return false;
         if (this._mode === 'prefix') return true;
         const e = this._entities;
         if (!e) return false;
