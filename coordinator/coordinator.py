@@ -289,7 +289,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._energy_calculator = EnergyCalculator(config, self.time_manager)
         self._flow_calculator = FlowCalculator()
         self._state_machine = ChargingStateMachine(hass, config, self.time_manager)
-        self._ev_device = None  # Primary charger — set by __init__.py (backward compat)
+        # Primary charger — set by __init__.py (backward compat). A PROPERTY
+        # since the #589 swap retirement: in-loop reads resolve to the active
+        # PerChargerContext's device; this assignment routes to the _default
+        # backing via the setter.
+        self._ev_device = None
         self._ev_devices: Dict[str, Any] = {}  # All chargers keyed by charger_id (#112)
         # #589 Surface-A: these three are PROPERTIES backed by the current
         # PerChargerContext's durable state; the _default variants back them
@@ -1456,6 +1460,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pcc.state.last_set_amps_ts = value
         else:
             self._ev_last_set_amps_ts_default = value
+
+    @property
+    def _ev_device(self) -> Optional[Any]:
+        """#589 swap retirement — the ACTIVE charger's device.
+
+        Inside the per-charger loop this resolves to ``_current_pcc.ev_dev``
+        (so every downstream ``self._ev_device`` read — config lookup,
+        adapter resolution, session tracking helpers — sees THIS charger);
+        out-of-loop it falls back to the primary device set by
+        ``__init__.py`` registration. Replaces the last ``_saved`` swap in
+        ``PerChargerContext`` — with no restore left to forget, the
+        #284/#315/#318 leak class is structurally closed.
+
+        Writers (registration, discovery, the legacy session-tracking
+        loop's manual swap) all run out-of-loop and land on the default
+        backing; an in-context write targets the context object and dies
+        with it."""
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            return pcc.ev_dev
+        return self._ev_device_default
+
+    @_ev_device.setter
+    def _ev_device(self, value: Optional[Any]) -> None:
+        pcc = getattr(self, "_current_pcc", None)
+        if pcc is not None:
+            pcc.ev_dev = value
+        else:
+            self._ev_device_default = value
 
     @property
     def _cycle_vehicle_soc(self) -> Optional[float]:

@@ -55,53 +55,70 @@ def _make_coord(ev_chargers=None):
 
 
 class TestSwapInvariant:
-    """The primary view must be restored exactly after the ``with`` block."""
+    """#589 swap retirement — the context no longer touches the
+    coordinator's primary attributes at all. The primary view is
+    trivially preserved because nothing writes it; the per-charger view
+    lives on the context (``pcc.ev_dev``, ``pcc.budget_w``, …) and the
+    real coordinator's PROPERTIES dispatch on ``_current_pcc``
+    (tested against a real SEMCoordinator below and in
+    test_589_followup.py)."""
 
-    def test_restores_primary_after_clean_exit(self):
-        """No mutation, clean exit: primary view unchanged.
-
-        #589 Surface-A: _ev_stalled_since and the other 6 migrated scalars
-        are PROPERTIES on the real coordinator backed by _pcc_store; they
-        are NOT in the _saved snapshot and are tested via the real-coordinator
-        isolation tests in test_589_followup.py. This test covers the still-
-        swap-based fields: _ev_device, _current_charger_budget.
-        (_cycle_vehicle_soc is a pcc-backed property since the #589 swap
-        retirement — on this MagicMock stub it's a plain attr the context
-        seeds from but never mutates, so the invariant holds trivially.)
-        """
+    def test_primary_untouched_after_clean_exit(self):
+        """No mutation, clean exit: the coordinator's primary attributes
+        are never written (there is no swap), and the per-charger view
+        lives on the context object."""
         coord = _make_coord()
         coord._ev_device = "FLEET_DEV"
         coord._cycle_vehicle_soc = 42.0
 
         ev_dev = MagicMock(name="left_dev")
         with PerChargerContext.for_charger(coord, "left", ev_dev, {"left": 4000.0}) as pcc:
-            # Inside: coordinator sees the per-charger view; the budget
-            # lives on the context itself (#589 — the coordinator scalar
-            # _current_charger_budget is deleted).
-            assert coord._ev_device is ev_dev
+            # The per-charger view is ON THE CONTEXT; the coordinator's
+            # plain attrs (this MagicMock stub has no properties) are
+            # simply left alone.
+            assert pcc.ev_dev is ev_dev
             assert pcc.budget_w == 4000.0
+            assert coord._current_pcc is pcc
+            assert coord._ev_device == "FLEET_DEV"  # untouched — no swap
 
-        # Outside: primary view restored.
+        # Outside: pointer cleared, primary attrs never changed.
+        assert coord._current_pcc is None
         assert coord._ev_device == "FLEET_DEV"
         assert coord._cycle_vehicle_soc == 42.0
 
-    def test_restores_primary_after_exception(self):
-        """If the body raises, primary view is still restored.
-
-        The legacy code used a ``try/finally`` block; the context manager
-        must offer the same guarantee so a charger-control failure can't
-        leak its swap into the next iteration.
-        """
+    def test_pointer_cleared_after_exception(self):
+        """If the body raises, ``_current_pcc`` is still unbound so the
+        coordinator properties fall back to the primary view — the
+        ``finally``-like guarantee the old restore provided."""
         coord = _make_coord()
         coord._ev_device = "FLEET_DEV"
 
         ev_dev = MagicMock(name="left_dev")
         with pytest.raises(RuntimeError, match="boom"):
-            with PerChargerContext.for_charger(coord, "left", ev_dev, {"left": 4000.0}):
-                assert coord._ev_device is ev_dev
+            with PerChargerContext.for_charger(coord, "left", ev_dev, {"left": 4000.0}) as pcc:
+                assert coord._current_pcc is pcc
                 raise RuntimeError("boom")
 
+        assert coord._current_pcc is None
         assert coord._ev_device == "FLEET_DEV"
+
+    def test_ev_device_property_dispatches_on_real_coordinator(self):
+        """On a REAL coordinator, ``_ev_device`` resolves to the active
+        context's device inside the block and to the primary outside —
+        the property replacement for the retired swap."""
+        from unittest.mock import MagicMock as MM
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        coord = SEMCoordinator(MM(), {})
+        primary = MM(name="primary_dev")
+        coord._ev_device = primary  # out-of-loop write → default backing
+        left = MM(name="left_dev")
+
+        with PerChargerContext(cid="left", ev_dev=left, charger_cfg={}, _coord=coord):
+            assert coord._ev_device is left
+
+        assert coord._ev_device is primary
 
     def test_per_charger_state_persists_across_iterations(self):
         """Mutations to Surface-A fields inside the context are durable across

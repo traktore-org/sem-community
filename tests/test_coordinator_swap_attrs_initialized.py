@@ -36,7 +36,6 @@ COORDINATOR_PY = (
 # ``SEMCoordinator.__init__``. The lint above is mechanical; this
 # list is the human review point.
 REQUIRED_SWAP_ATTRS = {
-    "_ev_device",
     # All 7 Surface-A scalars migrated off the swap to the durable _pcc_store
     # (#589 Surface-A) — they are coordinator PROPERTIES now, not snapshotted:
     #   _ev_stalled_since, _ev_enable_surplus_since, _ev_charge_started_at,
@@ -44,6 +43,11 @@ REQUIRED_SWAP_ATTRS = {
     #   _ev_last_set_amps_ts.
     # _current_charger_budget was deleted outright (#589 swap retirement —
     # dead scalar; budget flows through pcc.budget_w → build_charger_view).
+    # _ev_device is a pcc-dispatching property now (#589) — the context no
+    # longer snapshots it.
+    # #589 — __enter__ binds the durable state store; a missing init would
+    # crash the first multi-charger cycle exactly like the v1.6.7 bug.
+    "_pcc_store",
     "_cycle_vehicle_soc",
     # v1.6.14 cache pointer for ``_this_charger_power`` shim.
     "_current_pcc",
