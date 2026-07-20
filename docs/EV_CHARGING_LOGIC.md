@@ -2,24 +2,11 @@
 
 ![New EV card (v1.6.3) — single Charge mode selector replaces the legacy night/smart-night/tariff switches](images/sem_ev_tab.png)
 
-> **⚠️ Updated for v1.6.3 — the toggle-soup is gone.**
->
-> v1.6.3 (#277) replaces the four-switch architecture this guide
-> describes (``ev_charging_mode`` × ``night_charging`` ×
-> ``smart_night_charging`` × ``tariff_optimized``) with one named
-> per-charger ``Charge mode`` selector. The five modes are:
->
-> | Mode | What it does | When to pick |
-> |---|---|---|
-> | **Solar only** | Pure surplus, never grid | Solar maximalist |
-> | **Solar + cheapest hours** | Surplus by day, grid only in the cheapest tariff windows (hidden if no dynamic tariff configured) | Dynamic-tariff users |
-> | **Min + Solar** (default) | Guarantee Min from grid/night top-up, solar adds up to Max. Zone-adaptive during the day — Min comes from night charging, not forced grid pull at noon. Self-consumption-maximizing: solar surplus first, then (#545) the battery assists by discharging **into the car down to the Buffer SoC** when there's real surplus past the Solar Gate — emptying a near-full battery into the car rather than leaving it idle — and grid only when the remaining Min could no longer be delivered by tonight's window. | Daily commuter needing a baseline |
-> | **Always (max)** | Charge at maximum regardless of source | "Just charge the car" / strict legacy-``minpv`` behaviour |
-> | **Off** | No charging | Disabled |
->
-> Plus the existing **Charge Target range** (Min / Max), **Charge by HH:MM** deadline, and **Set as default** button as the per-mode detail. The old standalone switches (``night_charging``, ``smart_night_charging``, ``tariff_optimized``, ``ev_charging_mode``) are **removed** — automations that read them must read the new ``select.sem_charger_<id>_charge_mode`` instead.
->
-> The behavioural-priority cascade below (Min ▷ Charge by ▷ Cheapest hours ▷ Smart night ▷ Mode ▷ Surplus) still applies — the **intent** moved into the mode selector. A full rewrite of this guide tracking the new model is tracked separately; the historical detail below remains accurate for the pre-v1.6.3 toggle layout but the entity names have changed.
+> This is the **current** reference (rewritten 2026-07 for the v1.6.3+
+> single-selector model, #618). If you're migrating automations off the
+> pre-v1.6.3 toggles, see the
+> [archived legacy reference](archive/EV_CHARGING_LOGIC_LEGACY.md) —
+> it includes the old→new mode mapping.
 
 > **Updated for v1.7.3** — two reliability changes on top of the model above:
 > - **Charger state reconciler** (#392): SEM no longer re-issues a hardware command
@@ -35,79 +22,47 @@
 
 ---
 
-## Legacy reference (pre-v1.6.3)
+## The five charge modes
 
-The sections below describe the toggle architecture that v1.6.3 consolidated. Kept for now so existing dashboards and automations migrating off the old switches have a reference; will be rewritten in a follow-up release to describe only the new mode selector.
+One per-charger selector — `select.sem_charger_<id>_charge_mode` — carries the
+whole intent (the pre-v1.6.3 toggle collection is retired; see the
+[archived legacy reference](archive/EV_CHARGING_LOGIC_LEGACY.md) if you're
+migrating old automations):
 
-SEM's EV controller takes input from up to **6 user controls** plus solar, battery, grid, and (optionally) tariff prices. This guide is the canonical reference for how those inputs interact.
+| Mode | Grid use | What it does |
+|---|---|---|
+| **Solar only** | Never | Pure surplus charging; the home battery may assist above the Buffer SoC (Solar Gate permitting). Idles at night. |
+| **Solar + cheapest hours** | Only in cheap tariff windows | Surplus by day; grid only when the dynamic price is cheap. Hidden without a price source. |
+| **Min + Solar** *(default)* | Up to the Min guarantee | Guarantees *At least X kWh* by the *Charge by* deadline (night top-up when needed); solar adds up to Max on top. |
+| **Always (max)** | Whatever it takes | Charge at maximum immediately. Explicit override — ignores solar, tariff and night logic. |
+| **Off** | Never | No charging; SEM keeps the charger idle. |
 
-> **TL;DR — the priority cascade:**
-> **Min ▷ Charge by ▷ Cheapest hours ▷ Smart night ▷ Charging Mode ▷ Surplus opportunism**
->
-> *Min always wins. Tariff and smart-skip only fire when they don't risk Min. "Up to Full" is opportunistic — never forces grid.*
+The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
+**Charge by** deadline, **Min / Max current**, and **Set as default**.
 
----
+## The control surface (per charger)
 
-## 1. The control surface
-
-SEM splits EV charging into **two time domains** and **three layers**:
-
-```
-                  Daytime (solar hours)        Night window (e.g. 20:30 – 07:00)
-                  ──────────────────────       ─────────────────────────────────
-Layer A — Mode    Charging Mode (select)        (night logic always applies)
-Layer B — Toggles Cheapest hours                Overnight grid charging
-                                                Smart night charging
-                                                Cheapest hours
-Layer C — Floors  At least X kWh                At least X kWh
-                  Up to Full                    Charge by HH:MM
-                  Min / Max current             Min / Max current
-```
-
-Layer A and Layer B are **independent**: turn them on or off in any combination. Layer C is always in force.
-
----
-
-## 2. Daytime — `Charging Mode` (mutually exclusive)
-
-| Mode | Grid use | Solar use | When to pick |
-|---|---|---|---|
-| **Auto** (default) | Forecast-aware. Sunny tomorrow → no grid today; cloudy → falls back to Min+PV | Surplus first | Set & forget |
-| **PV** | None (battery may assist if above floor SoC) | Surplus + battery-assist | Solar maximalist |
-| **Self-consumption** | None ever | Pure surplus, battery untouched | Battery-cycle-averse |
-| **Min+PV** | Up to Min current always, plus surplus on top | Min floor + solar bonus | Daily commuter needing a baseline |
-| **Now** | Max immediately | Whatever's there | "Just charge the car" |
-| **Off** | None | None | Disabled |
-
-> **Now** and **Off** ignore all night and tariff logic — explicit user override wins.
-
----
-
-## 3. Night-window controls (per charger)
-
-| Card label | Internal entity | Default | Effect |
-|---|---|---|---|
-| **Overnight grid charging** | `switch.sem_charger_<id>_night_charging` | ON | Master switch for the night window. OFF = no grid charging overnight regardless of other settings. |
-| **Smart night charging** | `switch.sem_charger_<id>_smart_night_charging` | OFF | Skips tonight if Solcast forecast covers Min tomorrow. SoC-aware so a low car never gets skipped. |
-| **Cheapest hours (tariff)** | `switch.sem_charger_<id>_tariff_optimized` | OFF | Defer night charging to the cheapest *contiguous* price window. Min still guaranteed. |
-| **Charge by HH:MM** | `time.sem_charger_<id>_target_time` | window end | Deadline for hitting Min. Earlier than window end = forcing floor that **overrides peak limit**. |
-| **Set as default** | `button.sem_charger_<id>_set_default_target` | — | Copy this charger's Min/Max/deadline to global defaults for new chargers. |
-
----
-
-## 4. Floors & ceilings (always in effect)
-
-| Card label | Role |
+| Entity | Role |
 |---|---|
-| **At least X kWh** | **Hard floor** — guaranteed by *Charge by* time. Cannot be overridden by tariff or smart-skip. |
-| **Up to Full** | **Opportunistic ceiling** — surplus and cheap-hour bonus only; never forces grid. |
-| **Min current** (e.g. 6 A) | Lowest current the charger runs at (most cars won't accept charge below this). |
-| **Max current / Initial night A** | Upper bound. Also the rate a forcing deadline can ramp to. |
-| **Phases** (1 or 3) | Determines watts-per-amp (~230 W/A 1-φ, ~690 W/A 3-φ). |
+| `select.sem_charger_<id>_charge_mode` | The mode — the single intent input |
+| `number.sem_charger_<id>_daily_ev_target` / `_max` | *At least X kWh* floor / *Up to* ceiling |
+| `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing) |
+| `number.sem_charger_<id>_minimum_current` / max | Current bounds (most cars need ≥ 6 A) |
+| `sensor.sem_charging_strategy` | The live reason string — every decision explains itself here |
+
+## How a decision becomes amps
+
+Each 10 s cycle, per charger: a **pure decision** (`decide()`) computes the
+intent from this charger's own view → the **stability filter** applies
+median smoothing, enable/disable delays, the start-kick ladder (auto-raises
+a gentle 6 A offer until a fussy car latches) and the full-car backoff
+(#610: after 3 declined ladders, 20 min quiet) → the **reconciler** issues
+the minimum hardware commands to converge and then leaves the charger alone.
+The strategy sensor narrates every step.
 
 ---
 
-## 5. Cross-cutting: battery-assist & tariff
+## Battery assist & cheapest hours
 
 ### Battery-assist
 
@@ -132,53 +87,24 @@ idle while the EV grid-charged.
 > The separate *Battery assist floor SoC* knob was removed (folded into the
 > Buffer SoC) — see CHANGELOG v1.7.3-beta.59.
 
-Active in **Auto / Min+Solar** and **PV** modes. Not in **Self-consumption** (by design) or **Now** (which takes everything). Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
+Active in **Solar only** and **Min + Solar** (gated by the Solar Gate + Buffer SoC in both). Not in **Always (max)** — that mode takes everything from anywhere by definition. Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
 
-### Cheapest hours (tariff)
+### Cheapest hours (tariff-aware charging)
 
-The opt-in `tariff_optimized` switch changes behaviour in **three** places — not just at night:
+The cheapest-hours behaviour (built into the **Solar + cheapest hours** mode, and available to *Min + Solar* via the per-charger *Cheapest hours* option) changes behaviour in **three** places — not just at night:
 
 | Time | Charging Mode | What tariff_optimized does |
 |---|---|---|
-| Night | any | Waits for cheapest contiguous window before charging (subject to Min reachability) |
-| Daytime | Min+PV | **Drops the Min+PV grid guarantee on EXPENSIVE / VERY_EXPENSIVE hours.** Falls back to surplus-only; resumes on price drop or sufficient solar |
-| Daytime | PV / Self-consumption / Auto | No effect (these modes don't use grid anyway) |
-| Anytime | Now / Off | No effect (explicit override) |
+| Night | tariff-aware modes | Waits for cheapest contiguous window before charging (subject to Min reachability) |
+| Daytime | Min + Solar | **Drops the Min grid guarantee on EXPENSIVE / VERY_EXPENSIVE hours.** Falls back to surplus-only; resumes on price drop or sufficient solar |
+| Daytime | Solar only | No effect (never uses grid anyway) |
+| Anytime | Always (max) / Off | No effect (explicit override) |
 
 `Cheap price threshold` (e.g. 0.15) and `Expensive price threshold` (e.g. 0.35) define the boundaries when no dynamic provider gives level labels.
 
 ---
 
-## 6. The scenario matrix
-
-The complete decision space, in one table. Use this as the lookup when reasoning about a specific situation.
-
-| # | Time | Charging Mode | Overnight | Cheapest | Other | What SEM does | Status sensor |
-|---|---|---|---|---|---|---|---|
-| 1 | Day | Auto | — | — | Surplus available | Charge from surplus; current ramps with PV | `solar_only` |
-| 2 | Day | Auto | — | — | Sunny tomorrow forecast | Skip today — wait for tomorrow | `idle` |
-| 3 | Day | Auto | — | — | Cloudy forecast, surplus low | Fall through to Min+PV (grid Min + PV bonus) | `min_pv` |
-| 4 | Day | PV | — | — | Battery SoC ≥ buffer, solar < EV need | Battery assists at **full potential** — discharges into the car down to the buffer (#545) | `battery_assist` |
-| 5 | Day | PV | — | — | Battery SoC < buffer | Idle (no grid, battery off-limits) | `idle` |
-| 6 | Day | Self-consumption | — | — | Surplus available | Surplus only; battery untouched | `solar_only` |
-| 7 | Day | Min+PV | — | OFF | any price | Min current + PV bonus, always | `min_pv` |
-| 8 | Day | Min+PV | — | ON | Price = normal/cheap | Min current + PV bonus | `min_pv` |
-| 9 | Day | Min+PV | — | **ON** | **Price = expensive** | **Pause grid; surplus-only until price drops** | `solar_only` |
-| 10 | Day | Now | — | — | any | Max current immediately (overrides everything) | `now` |
-| 11 | Day | Off | — | — | any | Idle | `idle` |
-| 12 | Night | any | **OFF** | any | any | Idle — overnight grid charging disabled | `night_disabled` |
-| 13 | Night | any | ON | OFF | Smart night ON, sunny forecast, SoC OK | Skip tonight + notification "forecast covers Min" | `night_skipped` |
-| 14 | Night | any | ON | OFF | Deadline = window end | Gentle ramp, peak-managed (legacy 1.5.x behaviour) | `night_charging` |
-| 15 | Night | any | ON | OFF | **Deadline earlier than window end** | **Forcing**: scales current up to hit Min; can overshoot peak | `night_charging` (deadline_active) |
-| 16 | Night | any | ON | **ON** | Cheap window covers Min at peak-rate | `Waiting for cheap hours` until window opens | `tariff_waiting_for_cheap` |
-| 17 | Night | any | ON | **ON** | **Cheap window too short at peak-rate** | **Override tariff; charge now** ("not enough cheap hours") | `night_charging` |
-| 18 | Night | any | ON | ON | No price data (provider down) | Override tariff; charge now | `night_charging` |
-| 19 | Night | any | ON | any | Deadline physically impossible | Charge at max + push notification "can't reach Min in time" | `night_charging` (reachable=false) |
-| 20 | Night | any | ON | any | Min already met | Idle — only top up to *Up to Full* from surplus if it arrives | `night_target` |
-
----
-
-## 7. The night-charge planner step-by-step
+## The night-charge planner, step by step
 
 Every 10 s during the night window, for each charger:
 
@@ -194,7 +120,7 @@ Every 10 s during the night window, for each charger:
 
 4. Reachable? = (remaining_kWh / effective_rate) ≤ hours_left.
 
-5. If Cheapest hours ON:
+5. If cheapest-hours behaviour is on:
      a. Now is cheap?            → charge.
      b. Not reachable anyway?    → charge (don't add tariff penalty on top of an already-failing deadline).
      c. Sum cheap hours BEFORE deadline × effective_rate ≥ remaining_kWh?
@@ -207,11 +133,11 @@ Every 10 s during the night window, for each charger:
 
 ---
 
-## 8. Worked examples
+## Worked examples
 
 ### Example A — Single charger, default everything
 
-- 8.5 kWh Min, deadline 07:00 (= window end), tariff OFF, smart-night OFF
+- Mode *Min + Solar*, 8.5 kWh Min, deadline 07:00 (= window end), cheapest-hours off, smart-night off
 - Plug in at 22:00, SoC at 30 %, remaining_to_min = 8.5 kWh
 - Solar tomorrow's forecast irrelevant (smart-night off)
 - Hours to deadline = 9
@@ -220,7 +146,7 @@ Every 10 s during the night window, for each charger:
 
 ### Example B — Tariff-optimized, cheap window comfortably covers Min
 
-- Same setup but **Cheapest hours ON**
+- Same setup but with **cheapest-hours behaviour on** (Solar + cheapest hours mode, or the Cheapest hours option)
 - Cheap window 01:00–05:00 (4 h)
 - effective_rate = peak_managed_amps × 690 W/A ≈ 4.1 kW (assuming 6 A peak headroom)
 - Deliverable in cheap window = 4 × 4.1 = 16.4 kWh > 8.5 kWh ✓
@@ -229,7 +155,7 @@ Every 10 s during the night window, for each charger:
 
 ### Example C — Tariff override (the case that worried you)
 
-- 30 kWh Min (almost full charge), deadline 07:00, Cheapest hours ON
+- 30 kWh Min (almost full charge), deadline 07:00, cheapest-hours on
 - Cheap window 01:00–04:00 (only 3 h)
 - effective_rate = 4.1 kW
 - Deliverable = 3 × 4.1 = 12.3 kWh < 30 kWh ✗
@@ -238,7 +164,7 @@ Every 10 s during the night window, for each charger:
 
 ### Example D — Forcing deadline
 
-- 8.5 kWh Min, deadline = **03:00** (earlier than window end), tariff OFF
+- 8.5 kWh Min, deadline = **03:00** (earlier than window end), cheapest-hours off
 - Hours to deadline = 5
 - Required rate = 8.5 / 5 = 1.7 kW ≈ 2.5 A → clamped to 6 A floor anyway
 - BUT: deadline is "forcing" so SEM **bypasses the peak-managed rate**. If peak limit would normally throttle to 4.1 kW, the deadline-floor pushes through.
@@ -246,14 +172,14 @@ Every 10 s during the night window, for each charger:
 
 ### Example E — Daytime tariff pause
 
-- Min+PV mode, Cheapest hours ON, midday cloudy day
-- Min current would normally pull from grid to maintain 6 A floor
+- *Min + Solar* mode with cheapest-hours on, midday cloudy day
+- The Min guarantee would normally pull from grid to maintain the 6 A floor
 - Price hits `EXPENSIVE` level at 12:00
 - SEM drops to surplus-only: if solar < 6 A worth, the charger pauses. Resumes when price drops back to normal or solar covers it.
 
 ---
 
-## 9. When does the daily target counter reset?
+## When does the daily target counter reset?
 
 Each charger has its own daily energy bucket (`daily_ev` for that charger). The bucket rolls over at the charger's own **`Charge by`** time (defaults to the night window end, e.g. 07:00).
 
@@ -265,21 +191,7 @@ Each charger has its own daily energy bucket (`daily_ev` for that charger). The 
 
 ---
 
-## 10. What changes between releases?
-
-- **1.5.x and earlier**: only `night_charging` + `smart_night_charging` existed. No deadline, no tariff-aware night. Daily bucket reset at sunrise (had the double-charge race condition above).
-- **1.5.16 (unreleased)**:
-  - **`Charge by`** time picker (#246) — per-charger deadline with forcing behaviour.
-  - **`Cheapest hours (tariff)`** opt-in switch (#247) — night defer + daytime Min+PV pause.
-  - Reachability uses **peak_managed_amps**, not nameplate max (#274/C1) — prevents tariff-wait → miss-Min.
-  - Multi-charger night runs on a **shared peak budget** (#274/H1).
-  - DST-correct hour subtraction (#274/M2).
-  - **"Set as default"** button (#246) — propagate per-charger settings to global defaults.
-  - **Daily bucket reset moved from sunrise to per-charger deadline** (#280) — kills the summer double-charge race.
-
----
-
-## 11. Troubleshooting
+## Troubleshooting
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
@@ -296,7 +208,7 @@ Each charger has its own daily energy bucket (`daily_ev` for that charger). The 
 
 ---
 
-## 12. Heat pump — two valid wiring paths for SG-Ready
+## Heat pump — two valid wiring paths for SG-Ready
 
 SEM doesn't bundle device drivers — it operates on HA entities that other integrations expose (see [ARCHITECTURE.md → "SEM is not an integration"](ARCHITECTURE.md#architectural-principle--sem-is-not-an-integration)). For heat pumps with SG-Ready inputs there are two equally valid wiring paths, and SEM treats both the same way: as two `switch` entities that flip between `on` and `off`.
 
@@ -332,10 +244,10 @@ Some HEMS tools bundle vendor-specific Modbus templates that write directly to i
 
 ---
 
-## 13. Related docs
+## Related docs
 
 - [README — Recent Improvements](../README.md#recent-improvements-v15x) — release notes for each version
-- [USER_GUIDE — Configuration Options](../USER_GUIDE.md#configuration-options) — full settings reference
+- [USER_GUIDE — Configuration Options](USER_GUIDE.md#configuration-options) — full settings reference
 - [MULTI_DEVICE_GUIDE](MULTI_DEVICE_GUIDE.md) — multi-charger setup
 - [DASHBOARD_GUIDE](DASHBOARD_GUIDE.md) — card-by-card UI reference
-- [TROUBLESHOOTING](../TROUBLESHOOTING.md) — general issues
+- [TROUBLESHOOTING](TROUBLESHOOTING.md) — general issues

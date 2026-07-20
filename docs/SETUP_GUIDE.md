@@ -503,6 +503,22 @@ Notifications have a 10-minute cooldown per type to prevent alert fatigue.
 Flap suppression prevents notifications for transient state changes (state
 must be stable for 60 seconds before a notification fires).
 
+### Forecast settings
+
+SEM auto-detects a solar forecast integration (Solcast, Forecast.Solar or a
+compatible sensor) and uses it for smart night charging, the battery
+scheduler and the recommendation tips.
+
+| Setting | Default | What it does and when to change it |
+|---------|---------|-------------------------------------|
+| Forecast entity | Auto | The forecast sensor SEM reads. Auto-detection prefers Solcast; set it manually if you run several forecast integrations or a custom one. |
+| Weather entity | Auto | Feeds the weather card and forecast dampening. Auto-generated `weather.forecast_*` subentities are skipped (they lack the needed attributes) — any real `weather.*` entity is preferred. |
+
+**Forecast dampening** (#168): SEM continuously compares the forecast against
+actual production and applies a live correction factor, so an optimistic
+forecast on a hazy day doesn't skip a night charge your morning commute
+needed. The current factor is exposed on the forecast sensor's attributes.
+
 ### Advanced settings
 
 | Setting | Default | What it does and when to change it |
@@ -1195,7 +1211,7 @@ logger:
 
 View logs at **Settings > System > Logs** (filter for `solar_energy_management`).
 
-- Common issues: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- Common issues: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - Dashboard problems: [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md)
 - Multi-inverter and multi-charger: [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md)
 - Architecture and developer details: [ARCHITECTURE.md](ARCHITECTURE.md)

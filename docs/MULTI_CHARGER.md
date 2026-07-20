@@ -263,8 +263,7 @@ requiring explicit unwrap via `.as_fleet_total(reason: str)`. The
 lint then enforces the unwrap call instead of a comment annotation —
 structurally stronger.
 
-See [`/home/sem/.claude/plans/greedy-whistling-nebula.md`](../../.claude/plans/greedy-whistling-nebula.md)
-for the original plan.
+(The original planning notes were internal and are superseded by this document.)
 
 ---
 

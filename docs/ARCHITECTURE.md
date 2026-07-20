@@ -8,7 +8,7 @@ This document covers the internal architecture of Solar Energy Management (SEM) 
 >   OFF/IDLE/CHARGE → ActionKind) drives an observe/apply layer that issues the
 >   minimum commands to converge, then leaves the charger alone (idempotent idle,
 >   heartbeat re-writes, failsafe armed once, enable-switch reconciliation + backoff
->   #392/#536). It replaces the legacy per-cycle imperative `actuate()`.
+>   #392/#536). It replaces the legacy per-cycle imperative `actuate()` *body* (the wrapper function remains as a thin delegation).
 > - **Pure battery decision** — `coordinator/decide_battery.py`
 >   (`decide_battery(view) → BatteryDecision`, precedence FORCE_CHARGE →
 >   STOP_FORCE_CHARGE → LIMIT_DISCHARGE → NORMAL). The LIMIT_DISCHARGE clamp now
@@ -196,6 +196,21 @@ coordinator/
 ├── actuate.py              — Thin delegation of ChargerDecision to ChargerReconciler
 ├── actuate_battery.py      — Intent dispatch onto BatteryControlAdapter
 ├── build_view.py           — Builds ChargerView from PowerReadings + config
+├── charge_stability.py     — Stability filter between decide() and actuate():
+│                             median smoothing, enable/disable delays, start-kick
+│                             ladder, full-car backoff (#610), restart-safe timers
+├── charger_reconciler.py   — Desired-vs-observed charger convergence (#392);
+│                             minimum commands, enable-switch backoff
+├── device_reconciler.py    — Observe-only reconcile for generic surplus devices
+├── per_charger_context.py  — PerChargerContext/PerChargerState — per-charger state
+│                             via property dispatch; swap surface fully retired (#589)
+├── ev_control.py           — EVControlMixin: per-charger helpers (this-charger power,
+│                             config resolution) under the FLEET-READ lint
+├── battery_charge_scheduler.py — Cheap-window battery charging + (deactivated)
+│                             export arbitrage (#523/#533)
+├── cycle_trace.py          — Perception/trace layer: cross-checks, sign-contradiction
+│                             audits, health alarms (#589/#590, docs/SEM_TRACE.md)
+├── vpp_dispatch.py         — Grid/VPP event dispatch, observer-first (#580)
 ├── charging_control.py     — ChargingStateMachine (legacy; produces sensor display
 │                             state, no longer authoritative for control)
 ├── ev_taper_detector.py    — EVTaperDetector (taper detection, virtual SOC, skip logic)
