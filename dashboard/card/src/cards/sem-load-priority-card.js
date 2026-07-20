@@ -294,8 +294,20 @@ class SEMLoadPriorityCard extends SEMLitBase {
             }
             .ge-hint {
                 display:flex; align-items:center; gap:6px;
-                font-size:12px; color:#ff9800; padding:4px 0 6px;
+                font-size:12px; color:var(--secondary-text-color,#999); padding:4px 0 6px;
             }
+            /* (#620) battery-overnight toggle switch */
+            .batt-toggle {
+                width:34px; height:19px; border-radius:11px; border:none; padding:0;
+                position:relative; cursor:pointer; background:rgba(255,255,255,0.15);
+                transition:background .2s;
+            }
+            .batt-toggle.on { background:#4db6ac; }
+            .batt-toggle .knob {
+                position:absolute; top:2px; left:2px; width:15px; height:15px;
+                border-radius:50%; background:#fff; transition:left .2s;
+            }
+            .batt-toggle.on .knob { left:17px; }
             .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `;
     }
@@ -495,7 +507,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
                             <option value="off" ?selected="${this._mergedMode(device) === 'off'}">${this._t('off')}</option>
                             <option value="peak_only" ?selected="${this._mergedMode(device) === 'peak_only'}">${this._t('peak_only')}</option>
-                            <option value="surplus" ?selected="${this._mergedMode(device) === 'surplus'}">${this._t('mode_surplus')}</option>
+                            <option value="solar_only" ?selected="${this._mergedMode(device) === 'solar_only'}">${this._t('mode_solar_only')}</option>
+                            <option value="solar_battery" ?selected="${this._mergedMode(device) === 'solar_battery'}">${this._t('mode_solar_battery')}</option>
                         </select>
                     </label>`}
                     ${isBattery ? nothing : html`
@@ -513,7 +526,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">&#9660;</button>
                     </div>
                     ${(device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery
-                       || this._mergedMode(device) !== 'surplus') ? nothing : html`
+                       || (this._mergedMode(device) !== 'solar_only'
+                           && this._mergedMode(device) !== 'solar_battery')) ? nothing : html`
                     <button class="goal-btn ${this._goalOpen[device.id] ? 'active' : ''}"
                             data-action="toggle-goal" data-device="${device.id}"
                             title="${this._t('daily_target')}">
@@ -529,35 +543,39 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── (#559) goal engine UI — EV-charger look (one merged mode picker) ──
 
     _mergedMode(device) {
-        // (#559 beta.19 freeze) three modes only — off / peak_only / surplus.
-        // Surplus = solar_only (never imports). cheap_hours stays a backend
-        // option for HW/HP but isn't surfaced here; the deadline/always mode
-        // was deleted.
+        // (#620) four modes — off / peak_only / solar_only / solar_battery.
+        // control_mode=surplus splits on battery_assist_enabled: with it on the
+        // battery assists above the buffer (solar_battery); off = solar_only
+        // (battery reserved for the house). off/peak_only unchanged.
         const cm = device.controlMode || 'peak_only';
-        return cm === 'surplus' ? 'surplus' : cm;
+        if (cm !== 'surplus') return cm;
+        return (device.goals || {}).battery_assist_enabled ? 'solar_battery' : 'solar_only';
     }
 
     _mergedModeLabel(device) {
         const m = this._mergedMode(device);
         const key = { off: 'off', peak_only: 'peak_only',
-                      surplus: 'mode_surplus' }[m] || m;
+                      solar_only: 'mode_solar_only',
+                      solar_battery: 'mode_solar_battery' }[m] || m;
         return this._t(key);
     }
 
     _applyMergedMode(device, merged) {
-        const map = {
-            off:       { control_mode: 'off' },
-            peak_only: { control_mode: 'peak_only' },
-            surplus:   { control_mode: 'surplus' },
-        }[merged];
-        if (!map) return;
-        device.controlMode = map.control_mode;
-        this._sendDeviceUpdate(device.id, 'control_mode', map.control_mode);
-        // migrate a legacy 'always' policy off the removed value
-        if (map.control_mode === 'surplus'
-            && device.goals?.top_up_policy === 'always') {
-            device.goals.top_up_policy = 'solar_only';
-            this._sendDeviceUpdate(device.id, 'top_up_policy', 'solar_only');
+        // Both solar modes are control_mode=surplus; battery_assist_enabled is
+        // the discriminator (Tier-1 daytime assist, #620).
+        const controlMode = (merged === 'off' || merged === 'peak_only') ? merged : 'surplus';
+        device.controlMode = controlMode;
+        this._sendDeviceUpdate(device.id, 'control_mode', controlMode);
+        if (controlMode === 'surplus') {
+            const assist = merged === 'solar_battery';
+            device.goals = device.goals || {};
+            device.goals.battery_assist_enabled = assist;
+            this._sendDeviceUpdate(device.id, 'battery_assist_enabled', String(assist));
+            // migrate a legacy 'always' policy off the removed value
+            if (device.goals.top_up_policy === 'always') {
+                device.goals.top_up_policy = 'solar_only';
+                this._sendDeviceUpdate(device.id, 'top_up_policy', 'solar_only');
+            }
         }
         this.requestUpdate();
     }
@@ -574,45 +592,62 @@ class SEMLoadPriorityCard extends SEMLitBase {
         return Math.min(100, (p.runtime_today_min / target) * 100);
     }
 
-    // Single "at least" runtime slider, in hours (0 = no target, max 12h).
+    // Dual-handle Min/Max runtime slider in hours (#620) — mirrors the EV
+    // charge-target range. Green handle = Minimum (floor, daily_min_runtime_min),
+    // orange handle = Maximum (cap, daily_max_runtime_min; full scale = uncapped).
     _renderGoalSlider(device) {
         const SCALE_H = 12;
         const g = device.goals || {};
         const drag = this._goalDrag;
-        let hours = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
-        if (drag && drag.id === device.id) hours = drag.value;
-        const pct = Math.min(100, (hours / SCALE_H) * 100);
+        let minH = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
+        let maxRaw = parseFloat(g.daily_max_runtime_min) || 0;
+        let maxH = maxRaw > 0 ? maxRaw / 60 : SCALE_H;  // 0 = uncapped = full scale
+        if (drag && drag.id === device.id) {
+            if (drag.handle === 'min') minH = drag.value;
+            else maxH = drag.value;
+        }
+        if (maxH < minH) maxH = minH;
+        const minPct = Math.min(100, (minH / SCALE_H) * 100);
+        const maxPct = Math.min(100, (maxH / SCALE_H) * 100);
+        const atFull = maxH >= SCALE_H - 1e-6;
         const fmt = (h) => (h % 1 === 0 ? String(h) : h.toFixed(1));
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
-                    <span>${this._t('run_up_to')}
-                        <b style="color:#8DC892">${hours <= 0 ? this._t('no_target') : fmt(hours) + ' h'}</b>
-                    </span>
-                    <span style="color:var(--secondary-text-color,#999)">${this._t('goal_zero_hint')}</span>
+                    <span>${this._t('at_least')} <b style="color:#8DC892">${minH <= 0 ? this._t('no_target') : fmt(minH) + ' h'}</b></span>
+                    <span>${this._t('up_to')} <b style="color:#ff9800">${atFull ? this._t('uncapped') : fmt(maxH) + ' h'}</b></span>
                 </div>
-                <div class="range-track"
-                     @pointerdown=${(e) => this._goalSliderStart(e, device)}>
-                    <div class="range-fill" style="left:0;width:${pct}%;background:#8DC892"></div>
-                    <div class="range-handle range-handle-min" style="left:${pct}%"></div>
+                <div class="range-track">
+                    <div class="range-fill" style="left:${minPct}%;width:${Math.max(0, maxPct - minPct)}%;background:linear-gradient(90deg,#8DC892,#ff9800)"></div>
+                    <div class="range-handle range-handle-min" style="left:${minPct}%"
+                         @pointerdown=${(e) => this._goalSliderStart(e, device, 'min')}></div>
+                    <div class="range-handle range-handle-max" style="left:${maxPct}%"
+                         @pointerdown=${(e) => this._goalSliderStart(e, device, 'max')}></div>
                 </div>
             </div>`;
     }
 
-    _goalSliderStart(e, device) {
+    _goalSliderStart(e, device, handle) {
         e.stopPropagation();
         e.preventDefault();
         const SCALE_H = 12, STEP_H = 0.5;
-        const track = e.currentTarget;
+        const track = e.currentTarget.parentElement;  // handle → .range-track
         const g = device.goals = device.goals || {};
         const rect = track.getBoundingClientRect();
+        const curMinH = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
+        const rawMax = parseFloat(g.daily_max_runtime_min) || 0;
+        const curMaxH = rawMax > 0 ? rawMax / 60 : SCALE_H;
         const toVal = (clientX) => {
             let frac = (clientX - rect.left) / (rect.width || 1);
             frac = Math.max(0, Math.min(1, frac));
-            return Math.round((frac * SCALE_H) / STEP_H) * STEP_H;
+            let v = Math.round((frac * SCALE_H) / STEP_H) * STEP_H;
+            // Clamp so the handles can't cross.
+            if (handle === 'min') v = Math.min(v, curMaxH);
+            else v = Math.max(v, curMinH);
+            return v;
         };
         const apply = (clientX) => {
-            this._goalDrag = { id: device.id, value: toVal(clientX) };
+            this._goalDrag = { id: device.id, handle, value: toVal(clientX) };
             this.requestUpdate();
         };
         apply(e.clientX);
@@ -621,15 +656,31 @@ class SEMLoadPriorityCard extends SEMLitBase {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
             window.removeEventListener('pointercancel', onUp);
-            const minutes = Math.round(toVal(ev.clientX) * 60);
+            const hours = toVal(ev.clientX);
             this._goalDrag = null;
-            g.daily_min_runtime_min = minutes;
-            this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
+            if (handle === 'min') {
+                const minutes = Math.round(hours * 60);
+                g.daily_min_runtime_min = minutes;
+                this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
+            } else {
+                // Full scale = uncapped (store 0); otherwise the cap in minutes.
+                const minutes = hours >= SCALE_H - 1e-6 ? 0 : Math.round(hours * 60);
+                g.daily_max_runtime_min = minutes;
+                this._sendDeviceUpdate(device.id, 'daily_max_runtime_min', String(minutes));
+            }
             this.requestUpdate();
         };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
         window.addEventListener('pointercancel', onUp);
+    }
+
+    _toggleBatteryOvernight(device) {
+        const g = device.goals = device.goals || {};
+        const next = !g.battery_eligible_overnight;
+        g.battery_eligible_overnight = next;
+        this._sendDeviceUpdate(device.id, 'battery_eligible_overnight', String(next));
+        this.requestUpdate();
     }
 
     _renderGoalProgress(device) {
@@ -652,9 +703,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderGoalEditor(device) {
-        // Only meaningful in surplus mode — mode-gated disclosure.
-        if (this._mergedMode(device) !== 'surplus') return nothing;
+        // Mode-gated disclosure — shown in the two solar modes (#620).
+        const mode = this._mergedMode(device);
+        if (mode !== 'solar_only' && mode !== 'solar_battery') return nothing;
         const g = device.goals || {};
+        const overnight = !!g.battery_eligible_overnight;
         return html`
             <div class="goal-editor">
                 <div class="ge-title">
@@ -662,6 +715,19 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._t('daily_target')}
                 </div>
                 ${this._renderGoalSlider(device)}
+                ${mode === 'solar_battery' ? html`
+                <div class="ge-row">
+                    <span class="ge-label">${this._t('battery_overnight_label')}</span>
+                    <span class="ge-ctl">
+                        <button class="batt-toggle ${overnight ? 'on' : ''}"
+                                data-action="toggle-battery-overnight" data-device="${device.id}"
+                                title="${this._t('battery_overnight_help')}">
+                            <span class="knob"></span>
+                        </button>
+                    </span>
+                </div>
+                <div class="ge-hint">${this._t('battery_overnight_hint')}</div>
+                ` : html`<div class="ge-hint">${this._t('solar_only_hint')}</div>`}
                 <div class="ge-row">
                     <span class="ge-label">${this._t('stop_condition')}</span>
                     <span class="ge-ctl">
@@ -793,6 +859,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
             } else if (action === 'toggle-goal') {
                 this._goalOpen[deviceId] = !this._goalOpen[deviceId];
                 this.requestUpdate();
+            } else if (action === 'toggle-battery-overnight') {
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) this._toggleBatteryOvernight(device);
             }
         };
 

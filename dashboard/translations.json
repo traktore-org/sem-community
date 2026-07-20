@@ -1209,7 +1209,14 @@
     "soc_estimated_label": "SOC (est.)",
     "soc_estimated_hint": "Estimated from delivered energy — no vehicle SOC sensor configured. The car’s own reading may differ.",
     "device_heat_pump": "Heat pump",
-    "device_hot_water": "Hot water"
+    "device_hot_water": "Hot water",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "de": {
     "charging": "Laden",
@@ -2421,7 +2428,14 @@
     "soc_estimated_label": "SOC (gesch.)",
     "soc_estimated_hint": "Aus der geladenen Energie geschätzt — kein Fahrzeug-SOC-Sensor konfiguriert. Der Wert im Auto kann abweichen.",
     "device_heat_pump": "Wärmepumpe",
-    "device_hot_water": "Warmwasser"
+    "device_hot_water": "Warmwasser",
+    "mode_solar_only": "Nur Solar",
+    "mode_solar_battery": "Solar + Batterie",
+    "uncapped": "Unbegrenzt",
+    "battery_overnight_label": "Batterie nachts nutzen",
+    "battery_overnight_help": "Hausbatterie unter den Puffer (bis zur Reserve) entladen, um das Minimum ohne Sonne zu erreichen. Standard: aus.",
+    "battery_overnight_hint": "Solar-Unterstützung tagsüber über dem Puffer gilt immer.",
+    "solar_only_hint": "Nur Solar — die Batterie bleibt fürs Haus reserviert."
   },
   "fr": {
     "charging": "En charge",
@@ -3633,7 +3647,14 @@
     "soc_estimated_label": "SOC (est.)",
     "soc_estimated_hint": "Estimé à partir de l’énergie délivrée — aucun capteur SOC du véhicule configuré.",
     "device_heat_pump": "Pompe à chaleur",
-    "device_hot_water": "Eau chaude"
+    "device_hot_water": "Eau chaude",
+    "mode_solar_only": "Solaire seul",
+    "mode_solar_battery": "Solaire + batterie",
+    "uncapped": "Illimité",
+    "battery_overnight_label": "Utiliser la batterie la nuit",
+    "battery_overnight_help": "Puiser dans la batterie sous le tampon (jusqu’à la réserve) pour atteindre le minimum sans soleil. Désactivé par défaut.",
+    "battery_overnight_hint": "L’assistance solaire de jour au-dessus du tampon s’applique toujours.",
+    "solar_only_hint": "Solaire seul — la batterie reste réservée à la maison."
   },
   "es": {
     "charging": "Cargando",
@@ -4845,7 +4866,14 @@
     "soc_estimated_label": "SOC (est.)",
     "soc_estimated_hint": "Estimado a partir de la energía entregada — sin sensor SOC del vehículo.",
     "device_heat_pump": "Bomba de calor",
-    "device_hot_water": "Agua caliente"
+    "device_hot_water": "Agua caliente",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "it": {
     "charging": "In carica",
@@ -6057,7 +6085,14 @@
     "soc_estimated_label": "SOC (stim.)",
     "soc_estimated_hint": "Stimato dall’energia erogata — nessun sensore SOC del veicolo configurato.",
     "device_heat_pump": "Pompa di calore",
-    "device_hot_water": "Acqua calda"
+    "device_hot_water": "Acqua calda",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "nl": {
     "charging": "Laden",
@@ -7269,7 +7304,14 @@
     "soc_estimated_label": "SOC (gesch.)",
     "soc_estimated_hint": "Geschat op basis van geleverde energie — geen voertuig-SOC-sensor geconfigureerd.",
     "device_heat_pump": "Warmtepomp",
-    "device_hot_water": "Warm water"
+    "device_hot_water": "Warm water",
+    "mode_solar_only": "Alleen zon",
+    "mode_solar_battery": "Zon + batterij",
+    "uncapped": "Onbeperkt",
+    "battery_overnight_label": "Batterij ’s nachts gebruiken",
+    "battery_overnight_help": "Trek de thuisbatterij onder de buffer (tot de reserve) om het minimum te halen als er geen zon is. Standaard uit.",
+    "battery_overnight_hint": "Zonne-ondersteuning overdag boven de buffer geldt altijd.",
+    "solar_only_hint": "Alleen zon — de batterij blijft gereserveerd voor het huis."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -8481,7 +8523,14 @@
     "soc_estimated_label": "SOC (odhad)",
     "soc_estimated_hint": "Odhad z dodané energie — není nakonfigurován senzor SOC vozidla.",
     "device_heat_pump": "Tepelné čerpadlo",
-    "device_hot_water": "Teplá voda"
+    "device_hot_water": "Teplá voda",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "da": {
     "charging": "Oplader",
@@ -9693,7 +9742,14 @@
     "soc_estimated_label": "SOC (est.)",
     "soc_estimated_hint": "Estimeret ud fra leveret energi — ingen køretøjs-SOC-sensor konfigureret.",
     "device_heat_pump": "Varmepumpe",
-    "device_hot_water": "Varmt vand"
+    "device_hot_water": "Varmt vand",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "fi": {
     "charging": "Lataus",
@@ -10905,7 +10961,14 @@
     "soc_estimated_label": "SOC (arvio)",
     "soc_estimated_hint": "Arvioitu ladatusta energiasta — ajoneuvon SOC-anturia ei ole määritetty.",
     "device_heat_pump": "Lämpöpumppu",
-    "device_hot_water": "Lämmin vesi"
+    "device_hot_water": "Lämmin vesi",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "hu": {
     "charging": "Töltés",
@@ -12117,7 +12180,14 @@
     "soc_estimated_label": "SOC (becsült)",
     "soc_estimated_hint": "A leadott energiából becsülve — nincs jármű-SOC-szenzor beállítva.",
     "device_heat_pump": "Hőszivattyú",
-    "device_hot_water": "Melegvíz"
+    "device_hot_water": "Melegvíz",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "no": {
     "charging": "Lader",
@@ -13329,7 +13399,14 @@
     "soc_estimated_label": "SOC (est.)",
     "soc_estimated_hint": "Estimert fra levert energi — ingen kjøretøy-SOC-sensor konfigurert.",
     "device_heat_pump": "Varmepumpe",
-    "device_hot_water": "Varmtvann"
+    "device_hot_water": "Varmtvann",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -14541,7 +14618,14 @@
     "soc_estimated_label": "SOC (szac.)",
     "soc_estimated_hint": "Oszacowane z dostarczonej energii — brak czujnika SOC pojazdu.",
     "device_heat_pump": "Pompa ciepła",
-    "device_hot_water": "Ciepła woda"
+    "device_hot_water": "Ciepła woda",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "pt": {
     "charging": "A carregar",
@@ -15753,7 +15837,14 @@
     "soc_estimated_label": "SOC (est.)",
     "soc_estimated_hint": "Estimado a partir da energia fornecida — sem sensor SOC do veículo.",
     "device_heat_pump": "Bomba de calor",
-    "device_hot_water": "Água quente"
+    "device_hot_water": "Água quente",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "ro": {
     "charging": "Încărcare",
@@ -16965,7 +17056,14 @@
     "soc_estimated_label": "SOC (est.)",
     "soc_estimated_hint": "Estimat din energia livrată — fără senzor SOC al vehiculului.",
     "device_heat_pump": "Pompă de căldură",
-    "device_hot_water": "Apă caldă"
+    "device_hot_water": "Apă caldă",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "sv": {
     "charging": "Laddar",
@@ -18177,7 +18275,14 @@
     "soc_estimated_label": "SOC (uppsk.)",
     "soc_estimated_hint": "Uppskattat från levererad energi — ingen fordons-SOC-sensor konfigurerad.",
     "device_heat_pump": "Värmepump",
-    "device_hot_water": "Varmvatten"
+    "device_hot_water": "Varmvatten",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   },
   "zh": {
     "charging": "充电中",
@@ -19389,6 +19494,13 @@
     "soc_estimated_label": "SOC（估算）",
     "soc_estimated_hint": "根据已充电量估算——未配置车辆 SOC 传感器，车内实际读数可能不同。",
     "device_heat_pump": "热泵",
-    "device_hot_water": "热水"
+    "device_hot_water": "热水",
+    "mode_solar_only": "Solar only",
+    "mode_solar_battery": "Solar + battery",
+    "uncapped": "Uncapped",
+    "battery_overnight_label": "Use battery overnight",
+    "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
+    "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
+    "solar_only_hint": "Solar only — the battery stays reserved for the house."
   }
 }
