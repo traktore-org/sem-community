@@ -220,6 +220,27 @@ in-memory restore on every rebuild). **Watch:** any NEW per-device state persist
 and restored one-shot in the first-refresh/setup block is a fresh sibling — restore it on the rebuild
 path (registry store or the runtime hook), not once at a fixed setup point. Refs #508 #586 #622.
 
+### 15. Card action re-resolves a row by a non-unique key (energySensor collision) — GUARDED
+**Symptom:** a per-device dashboard action opens against the WRONG device — the config card for one
+load shows a *sibling's* control entity (#621: the "car socket" configure dialog showed the "pool
+pump" switch), while the underlying data/behaviour is correct (a pure UI mismatch). **Root shape:** a
+card row already carries a guaranteed-unique `id` (the `get_devices_for_sensor` dict key), but a
+button's handler throws it away and re-resolves the row by a *secondary* attribute that is **not
+unique** — `energySensor`, which is `null`→`''` for every device without an Energy-Dashboard energy
+counter (service-registered loads, direct heat-pump/hot-water, the battery row). `devices.find(d =>
+d.energySensor === '')` then returns the FIRST empty-key row, so all such rows collapse onto one.
+**Where it lives:** `dashboard/card/src/cards/sem-load-priority-card.js` — `_showConfigureModal` was
+the one offender; every sibling action (`controllable`, `move`, `combined_mode`, `depends_on`,
+`_moveDevice`) already resolves by `d.id === deviceId`. **Closure:** the configure button emits
+`data-device="${device.id}"` like every other action and the modal resolves via
+`findDeviceForConfig(devices, id)` (find by unique id); the mapping service's `energy_sensor` key is
+then read off the *resolved* row, not passed as the lookup key. **Guard:**
+`dashboard/card/test/load-config-modal.test.js::findDeviceForConfig resolves by id even when
+energySensors collide` (two empty-energySensor rows → each id resolves to its own control).
+**Watch:** any NEW per-row card action must resolve by `d.id` — never by `energySensor`,
+`switch_entity`, `power_entity` or `name`, all of which are null/blank/duplicable for some device
+family. Refs #621.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
