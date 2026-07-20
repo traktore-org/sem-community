@@ -745,6 +745,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                                data-goal="stop_at" data-device="${device.id}">
                     </span>
                 </div>
+                <div class="ge-hint">${this._t('stop_condition_hint')}</div>
             </div>`;
     }
 

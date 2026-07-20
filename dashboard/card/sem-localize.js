@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-20T19:47:51.908782+00:00
+// Generated: 2026-07-20T22:39:54.644311+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1157,7 +1157,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -1222,7 +1222,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Optional — end the run early when any sensor crosses a value (e.g. tank full, temperature reached)."
     },
     "de": {
       "charging": "Laden",
@@ -2376,7 +2377,7 @@
       "battery_role_help": "Die Batterie lädt aus dem Überschuss, den die Geräte über ihr nicht nutzen. Ziehe sie, um die Reihenfolge zu ändern — Geräte oben laden zuerst, Geräte unten weichen. Unter dem Reserve-SOC lädt die Batterie immer zuerst.",
       "goal_zero_hint": "0 = kein Ziel",
       "hours_on_solar_today": "h mit Solar heute",
-      "stop_entity_placeholder": "Sensor (z. B. SOC)",
+      "stop_entity_placeholder": "Sensor (z. B. temp)",
       "help_mode_off": "SEM überwacht nur — schaltet nie.",
       "help_mode_peak_only": "Deine Automatisierung steuert es; SEM schaltet es nur bei Lastspitzen ab und danach wieder ein.",
       "help_mode_surplus": "SEM schaltet es bei Solarüberschuss ein — nie Netzbezug.",
@@ -2441,7 +2442,8 @@
       "battery_overnight_label": "Batterie nachts nutzen",
       "battery_overnight_help": "Hausbatterie unter den Puffer (bis zur Reserve) entladen, um das Minimum ohne Sonne zu erreichen. Standard: aus.",
       "battery_overnight_hint": "Solar-Unterstützung tagsüber über dem Puffer gilt immer.",
-      "solar_only_hint": "Nur Solar — die Batterie bleibt fürs Haus reserviert."
+      "solar_only_hint": "Nur Solar — die Batterie bleibt fürs Haus reserviert.",
+      "stop_condition_hint": "Optional — den Lauf früher beenden, wenn ein Sensor einen Wert überschreitet (z. B. Tank voll, Temperatur erreicht)."
     },
     "fr": {
       "charging": "En charge",
@@ -3595,7 +3597,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -3660,7 +3662,8 @@
       "battery_overnight_label": "Utiliser la batterie la nuit",
       "battery_overnight_help": "Puiser dans la batterie sous le tampon (jusqu’à la réserve) pour atteindre le minimum sans soleil. Désactivé par défaut.",
       "battery_overnight_hint": "L’assistance solaire de jour au-dessus du tampon s’applique toujours.",
-      "solar_only_hint": "Solaire seul — la batterie reste réservée à la maison."
+      "solar_only_hint": "Solaire seul — la batterie reste réservée à la maison.",
+      "stop_condition_hint": "Optionnel — arrêter plus tôt quand un capteur dépasse une valeur (p. ex. réservoir plein, température atteinte)."
     },
     "es": {
       "charging": "Cargando",
@@ -4814,7 +4817,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -6033,7 +6036,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -7252,7 +7255,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = geen doel",
       "hours_on_solar_today": "u op zon vandaag",
-      "stop_entity_placeholder": "sensor (bijv. SOC)",
+      "stop_entity_placeholder": "sensor (bijv. temp)",
       "help_mode_off": "SEM observeert alleen — schakelt nooit.",
       "help_mode_peak_only": "Je eigen automatisering stuurt het; SEM schakelt het alleen uit bij een piek en daarna weer in.",
       "help_mode_surplus": "SEM schakelt in bij zonne-overschot — nooit import.",
@@ -7317,7 +7320,8 @@
       "battery_overnight_label": "Batterij ’s nachts gebruiken",
       "battery_overnight_help": "Trek de thuisbatterij onder de buffer (tot de reserve) om het minimum te halen als er geen zon is. Standaard uit.",
       "battery_overnight_hint": "Zonne-ondersteuning overdag boven de buffer geldt altijd.",
-      "solar_only_hint": "Alleen zon — de batterij blijft gereserveerd voor het huis."
+      "solar_only_hint": "Alleen zon — de batterij blijft gereserveerd voor het huis.",
+      "stop_condition_hint": "Optioneel — stop eerder wanneer een sensor een waarde overschrijdt (bijv. tank vol, temperatuur bereikt)."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8471,7 +8475,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -9690,7 +9694,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -10909,7 +10913,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -12128,7 +12132,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -13347,7 +13351,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -14566,7 +14570,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -15785,7 +15789,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -17004,7 +17008,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -18223,7 +18227,7 @@
       "battery_role_help": "The battery charges from surplus the loads above it don't use. Drag it to change the order — loads above charge first, loads below yield. Below the reserve SOC the battery always charges first.",
       "goal_zero_hint": "0 = no target",
       "hours_on_solar_today": "h on solar today",
-      "stop_entity_placeholder": "sensor (e.g. SOC)",
+      "stop_entity_placeholder": "sensor (e.g. temp)",
       "help_mode_off": "SEM only monitors — never switches it.",
       "help_mode_peak_only": "Your own automation runs it; SEM only sheds it on a grid peak, then restores it.",
       "help_mode_surplus": "SEM runs it on solar surplus — never imports from grid.",
@@ -19437,7 +19441,7 @@
       "mode_surplus": "富余电量",
       "goal_zero_hint": "0 = 无目标",
       "hours_on_solar_today": "h · 今日太阳能运行",
-      "stop_entity_placeholder": "传感器（例如 SOC）",
+      "stop_entity_placeholder": "传感器（例如 temp）",
       "help_mode_off": "SEM 仅监控 — 绝不切换它。",
       "help_mode_peak_only": "由您自己的自动化运行；SEM 仅在电网峰值时削减它，随后恢复。",
       "help_mode_surplus": "SEM 在有太阳能富余时运行它 — 绝不从电网购电。",
