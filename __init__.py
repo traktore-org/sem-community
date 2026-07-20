@@ -3390,6 +3390,14 @@ async def _async_register_phase_services(
             ),
             vol.Optional("stop_entity"): cv.string,
             vol.Optional("stop_at"): vol.Coerce(float),
+            # (#620) max cap + battery tiers — must be in the schema too, else
+            # voluptuous rejects them as extra keys (400) even though the
+            # handler reads them into goal_fields.
+            vol.Optional("daily_max_runtime_min"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=1440)
+            ),
+            vol.Optional("battery_assist_enabled"): cv.boolean,
+            vol.Optional("battery_eligible_overnight"): cv.boolean,
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )
