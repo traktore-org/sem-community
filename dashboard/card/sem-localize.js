@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-20T22:39:54.644311+00:00
+// Generated: 2026-07-20T23:06:14.707852+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -4882,7 +4882,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Opcional — termina antes cuando un sensor supera un valor (p. ej. depósito lleno, temperatura alcanzada)."
     },
     "it": {
       "charging": "In carica",
@@ -6101,7 +6102,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Opzionale — termina prima quando un sensore supera un valore (es. serbatoio pieno, temperatura raggiunta)."
     },
     "nl": {
       "charging": "Laden",
@@ -8540,7 +8542,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Volitelné — ukončit dříve, když čidlo překročí hodnotu (např. plná nádrž, dosažená teplota)."
     },
     "da": {
       "charging": "Oplader",
@@ -9759,7 +9762,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Valgfrit — afslut tidligere, når en sensor overskrider en værdi (f.eks. tank fuld, temperatur nået)."
     },
     "fi": {
       "charging": "Lataus",
@@ -10978,7 +10982,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Valinnainen — lopeta aikaisemmin, kun anturi ylittää arvon (esim. säiliö täynnä, lämpötila saavutettu)."
     },
     "hu": {
       "charging": "Töltés",
@@ -12197,7 +12202,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Opcionális — korábban leáll, ha egy érzékelő átlép egy értéket (pl. tartály tele, hőmérséklet elérve)."
     },
     "no": {
       "charging": "Lader",
@@ -13416,7 +13422,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Valgfritt — avslutt tidligere når en sensor passerer en verdi (f.eks. tank full, temperatur nådd)."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14635,7 +14642,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Opcjonalnie — zakończ wcześniej, gdy czujnik przekroczy wartość (np. zbiornik pełny, osiągnięta temperatura)."
     },
     "pt": {
       "charging": "A carregar",
@@ -15854,7 +15862,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Opcional — termina mais cedo quando um sensor ultrapassa um valor (por ex. tanque cheio, temperatura atingida)."
     },
     "ro": {
       "charging": "Încărcare",
@@ -17073,7 +17082,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Opțional — oprește mai devreme când un senzor depășește o valoare (de ex. rezervor plin, temperatură atinsă)."
     },
     "sv": {
       "charging": "Laddar",
@@ -18292,7 +18302,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "Valfritt — avsluta tidigare när en sensor passerar ett värde (t.ex. tank full, temperatur uppnådd)."
     },
     "zh": {
       "charging": "充电中",
@@ -19511,7 +19522,8 @@
       "battery_overnight_label": "Use battery overnight",
       "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
       "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
-      "solar_only_hint": "Solar only — the battery stays reserved for the house."
+      "solar_only_hint": "Solar only — the battery stays reserved for the house.",
+      "stop_condition_hint": "可选 — 当任一传感器超过某个值时提前结束（例如水箱已满、达到温度）。"
     }
   };
 
