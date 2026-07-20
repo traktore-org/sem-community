@@ -9,3 +9,6 @@ contact_links:
   - name: Ask a question
     url: https://github.com/traktore-org/sem-community/discussions
     about: Questions and discussions happen in the development repository
+  - name: 💛 Sponsor SEM (monthly)
+    url: https://github.com/sponsors/traktore-org
+    about: SEM is maintained by one person — a monthly sponsorship keeps development sustainable and helps prioritise feature requests
