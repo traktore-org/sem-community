@@ -1491,10 +1491,26 @@ class SEMSystemDiagramCard extends SEMLitBase {
             .map(([id, info]) => {
                 const powerEntity = info.power_entity ? this._hass.states[info.power_entity] : null;
                 const power = powerEntity ? parseFloat(powerEntity.state) || 0 : (info.current_power || 0);
-                return { id, ...info, power };
+                return { id, ...info, power, name: this._localizedDeviceName(id, info) };
             })
             .sort((a, b) => b.power - a.power)
             .slice(0, 3);
+    }
+
+    _localizedDeviceName(id, info) {
+        // #615 — SEM's own heat pump / hot water register with an English
+        // DEFAULT name ("Heat Pump" / "Hot Water"); localize it per-user so a
+        // Dutch dashboard shows "Warmtepomp", not "Heat Pump" (RienduPre).
+        // A user-renamed device (name ≠ the default) or any non-SEM device
+        // keeps its given name untouched.
+        const DEFAULTS = { heat_pump: 'Heat Pump', hot_water: 'Hot Water' };
+        const KEYS = { heat_pump: 'device_heat_pump', hot_water: 'device_hot_water' };
+        const def = DEFAULTS[id];
+        if (def && (info.name || '').trim() === def) {
+            const localized = this._t(KEYS[id]);
+            if (localized) return localized;
+        }
+        return info.name || id;
     }
 
     _renderDeviceChips() {
