@@ -7,7 +7,7 @@
  * Event detail: { start: Date, end: Date, granularity: 'hour'|'day'|'month', key: string }
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, nothing, semGlassCss } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard } from '../base/sem-shared.js';
 
 const PERIODS = [
@@ -19,6 +19,9 @@ const PERIODS = [
 ];
 
 class SEMPeriodSelectorCard extends SEMLitBase {
+    // #617 — glass chrome baked in (was card-mod *glass_card)
+    static get styles() { return [semGlassCss]; }
+
     static get watchedEntities() { return []; }
 
     constructor() {

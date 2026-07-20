@@ -202,14 +202,11 @@ class DashboardGenerator:
             template = self._translate_dashboard(template)
             _LOGGER.info("Using comprehensive dashboard template with %d views", len(template["views"]))
 
-            # Find and update views with dynamic content
-            for view in template["views"]:
-                if view.get("path") == "peak-load-management":
-                    _LOGGER.info("Updating Peak Load Management view with dynamic device cards")
-                    await self._update_peak_load_management_view(view)
-
-            # Update power-flow-card-plus with individual devices from load management
-            await self._update_power_flow_individual_devices(template)
+            # #617 — the legacy peak-load-management mushroom injection and
+            # the power-flow-card-plus device updater were removed: neither
+            # the view path nor the card type exists in the template since
+            # the bundled-card era (sem-load-priority-card owns device
+            # priority; sem-flow-card owns individual devices below).
 
             # Inject individual devices into sem-flow-card
             await self._update_flow_card_devices(template)
@@ -229,6 +226,11 @@ class DashboardGenerator:
             # #595 — drop the EV tab entirely on installs with no EV charger, so
             # battery/solar-only setups don't get a cluttered empty EV section.
             self._prune_ev_view_if_no_charger(template)
+
+            # #617 — sankey-chart is OPTIONAL (the last HACS card that was
+            # genuinely load-bearing): fall back to HA's native energy-sankey
+            # card when the HACS one isn't installed.
+            await self._substitute_sankey_if_missing(template)
 
             # Override template title/path with user preferences
             template["title"] = dashboard_title
@@ -298,6 +300,49 @@ class DashboardGenerator:
                     sorted(flags), hidden,
                 )
 
+    async def _substitute_sankey_if_missing(self, template: Dict[str, Any]) -> None:
+        """#617 — make the HACS sankey-chart card optional.
+
+        The Energy tab's flow diagram was the last genuinely required HACS
+        card. When it isn't installed (either known HACS directory name),
+        every ``custom:sankey-chart`` card is replaced with HA's native
+        ``energy-sankey`` card (core since ~2025.1; fed by the Energy
+        Dashboard config SEM already maintains) — richer SEM-entity
+        sections when the HACS card is present, zero extra downloads when
+        it isn't.
+        """
+        def _check_installed():
+            for d in ("sankey-chart", "ha-sankey-chart", "lovelace-sankey-chart"):
+                if os.path.isdir(os.path.join(self._config_dir, "www", "community", d)):
+                    return True
+            return False
+
+        if await self.hass.async_add_executor_job(_check_installed):
+            return
+
+        replaced = self._replace_sankey_cards(template)
+        if replaced:
+            _LOGGER.info(
+                "#617 — HACS sankey-chart not installed; substituted %d card(s) "
+                "with HA's native energy-sankey", replaced,
+            )
+
+    def _replace_sankey_cards(self, node: Any) -> int:
+        """Recursively swap ``custom:sankey-chart`` cards for native
+        ``energy-sankey``. Returns the number of cards replaced."""
+        count = 0
+        if isinstance(node, dict):
+            if node.get("type") == "custom:sankey-chart":
+                node.clear()
+                node["type"] = "energy-sankey"
+                return 1
+            for value in node.values():
+                count += self._replace_sankey_cards(value)
+        elif isinstance(node, list):
+            for item in node:
+                count += self._replace_sankey_cards(item)
+        return count
+
     _NODE_AWARE_DIAGRAM_CARDS = (
         "custom:sem-system-diagram-card",
         "custom:sem-flow-card",
@@ -318,179 +363,6 @@ class DashboardGenerator:
             for item in node:
                 count += self._set_node_flags(item, flags)
         return count
-
-    async def _update_peak_load_management_view(self, view: Dict[str, Any]) -> None:
-        """Update peak load management view with dynamic device cards.
-
-        Args:
-            view: The peak load management view dict to update (modified in-place)
-        """
-        from ..const import DOMAIN
-
-        # Get coordinator to access load manager
-        coordinator = None
-        if DOMAIN in self.hass.data:
-            # Get first coordinator instance
-            for entry_id, coord in self.hass.data[DOMAIN].items():
-                if hasattr(coord, "_load_manager"):
-                    coordinator = coord
-                    break
-
-        if not coordinator or not coordinator._load_manager:
-            _LOGGER.warning("Load manager not available for device card generation")
-            return
-
-        # Find the device management section
-        sections = view.get("sections", [])
-        if not sections:
-            _LOGGER.warning("No sections found in peak load management view")
-            return
-
-        # Find the section with "Device Priority Management" title or vertical-stack with device cards
-        device_section_index = None
-        for idx, section in enumerate(sections):
-            cards = section.get("cards", [])
-            for card in cards:
-                if not isinstance(card, dict):
-                    continue
-                # Check for mushroom title card with "Device Priority" in title
-                if card.get("type") == "custom:mushroom-title-card":
-                    title = card.get("title", "")
-                    if "Device Priority" in title or "Controllable Devices" in title:
-                        device_section_index = idx
-                        break
-                # Also check for vertical-stack containing device management
-                if card.get("type") == "vertical-stack":
-                    for inner_card in card.get("cards", []):
-                        if isinstance(inner_card, dict) and inner_card.get("type") == "custom:mushroom-title-card":
-                            title = inner_card.get("title", "")
-                            if "Device Priority" in title or "Controllable Devices" in title:
-                                device_section_index = idx
-                                break
-            if device_section_index is not None:
-                break
-
-        if device_section_index is None:
-            _LOGGER.warning("Could not find device management section (looking for 'Device Priority' title)")
-            return
-
-        # Generate new device cards
-        devices = coordinator._load_manager._devices
-        if not devices:
-            _LOGGER.warning("No devices found in load manager")
-            return
-
-        sorted_devices = sorted(devices.items(), key=lambda x: x[1].get("priority", 5))
-        _LOGGER.info("Generating cards for %d devices: %s", len(devices), list(devices.keys()))
-
-        new_device_cards = []
-
-        # Title card
-        new_device_cards.append({
-            "type": "custom:mushroom-title-card",
-            "title": "Device Priority Management",
-            "subtitle": f"{len(devices)} devices | Drag to reorder, then Sync"
-        })
-
-        # Add dynamic device cards for each device
-        for device_id, device_info in sorted_devices:
-            friendly_name = device_info.get("friendly_name", device_id)
-            device_type = device_info.get("device_type", "unknown")
-            icon = self._get_device_icon(device_type)
-
-            new_device_cards.append({
-                "type": "custom:mushroom-template-card",
-                "primary": friendly_name,
-                "secondary": (
-                    "{% set devices = state_attr('sensor.sem_load_management', 'device_list') | default([]) %}\n"
-                    f"{{% set device = devices | selectattr('id', 'eq', '{device_id}') | list | first | default(none) %}}\n"
-                    "{% if device %}\n"
-                    "  Priority: {{ device.priority }} | Power: {{ device.power }}W | "
-                    "{% if device.critical %}🔒{% else %}⚡{% endif %} | "
-                    "{% if device.controllable %}✅{% else %}🚫{% endif %}\n"
-                    "{% else %}\n"
-                    f"  '{device_id}'\n"
-                    "{% endif %}"
-                ),
-                "icon": icon,
-                "icon_color": (
-                    "{% set devices = state_attr('sensor.sem_load_management', 'device_list') | default([]) %}\n"
-                    f"{{% set device = devices | selectattr('id', 'eq', '{device_id}') | list | first | default(none) %}}\n"
-                    "{% if device and device.available %}green{% else %}grey{% endif %}"
-                ),
-                "badge_icon": (
-                    "{% set devices = state_attr('sensor.sem_load_management', 'device_list') | default([]) %}\n"
-                    f"{{% set device = devices | selectattr('id', 'eq', '{device_id}') | list | first | default(none) %}}\n"
-                    "{% if device and device.critical %}mdi:lock{% endif %}"
-                ),
-                "badge_color": "red",
-            })
-
-        # Add control buttons
-        dashboard_storage_key = f"lovelace.{getattr(self, '_dashboard_path', 'sem-dashboard')}"
-        new_device_cards.append({
-            "type": "horizontal-stack",
-            "cards": [
-                {
-                    "type": "button",
-                    "name": "Refresh Cards",
-                    "icon": "mdi:refresh",
-                    "tap_action": {
-                        "action": "call-service",
-                        "service": "solar_energy_management.generate_dashboard",
-                        "data": {
-                            "dashboard_path": getattr(self, '_dashboard_path', 'sem-dashboard'),
-                        },
-                    },
-                },
-                {
-                    "type": "button",
-                    "name": "Sync Priorities",
-                    "icon": "mdi:sort-numeric-ascending",
-                    "tap_action": {
-                        "action": "call-service",
-                        "service": "solar_energy_management.sync_priorities_from_dashboard",
-                        "data": {
-                            "dashboard_storage_key": dashboard_storage_key,
-                            "view_path": "peak-load-management",
-                        },
-                    },
-                },
-            ]
-        })
-
-        # Find and replace the vertical-stack containing device cards, or create new section
-        section = sections[device_section_index]
-        section_cards = section.get("cards", [])
-
-        # Look for vertical-stack to replace
-        replaced = False
-        for i, card in enumerate(section_cards):
-            if isinstance(card, dict) and card.get("type") == "vertical-stack":
-                # Check if this vertical-stack has the device management title
-                inner_cards = card.get("cards", [])
-                for inner in inner_cards:
-                    if isinstance(inner, dict) and inner.get("type") == "custom:mushroom-title-card":
-                        title = inner.get("title", "")
-                        if "Device Priority" in title or "Controllable Devices" in title:
-                            # Replace this vertical-stack's cards
-                            section_cards[i] = {
-                                "type": "vertical-stack",
-                                "cards": new_device_cards
-                            }
-                            replaced = True
-                            break
-                if replaced:
-                    break
-
-        if not replaced:
-            # No vertical-stack found, replace entire section cards
-            section["cards"] = [{
-                "type": "vertical-stack",
-                "cards": new_device_cards
-            }]
-
-        _LOGGER.info("Updated peak load management view with %d device cards", len(sorted_devices))
 
     def _substitute_weather_entity(self, template: Dict[str, Any]) -> None:
         """Replace placeholder weather.home with a real weather entity, or
@@ -542,75 +414,6 @@ class DashboardGenerator:
             _LOGGER.info("Weather card: using %s", weather_id)
         else:
             _LOGGER.info("Weather card: no weather entity, card removed")
-
-    async def _update_power_flow_individual_devices(self, template: Dict[str, Any]) -> None:
-        """Update power-flow-card-plus individual devices from load management.
-
-        Finds the power-flow-card-plus card in the template and populates
-        the individual section with up to 4 devices from load management,
-        sorted by priority.
-        """
-        from ..const import DOMAIN
-
-        # Get coordinator to access load manager
-        coordinator = None
-        if DOMAIN in self.hass.data:
-            for entry_id, coord in self.hass.data[DOMAIN].items():
-                if hasattr(coord, "_load_manager"):
-                    coordinator = coord
-                    break
-
-        if not coordinator or not coordinator._load_manager:
-            _LOGGER.debug("Load manager not available for power flow card device injection")
-            return
-
-        devices = coordinator._load_manager._devices
-        if not devices:
-            _LOGGER.debug("No load management devices found for power flow card")
-            return
-
-        # Sort by priority, take first 3 non-EV devices (EV is already in the card)
-        sorted_devices = sorted(devices.items(), key=lambda x: x[1].get("priority", 5))
-        # Exclude EV charger — both by is_ev flag and by matching EV power entity
-        ev_power_entity = coordinator.config.get("ev_charging_power_sensor", "")
-        non_ev_devices = [
-            (did, info) for did, info in sorted_devices
-            if not info.get("is_ev", False)
-            and info.get("power_entity")
-            and info.get("power_entity") != ev_power_entity
-        ][:3]  # Max 3 non-EV (EV charger is already individual #1, total max = 4)
-
-        if not non_ev_devices:
-            _LOGGER.debug("No non-EV devices with power sensors found for power flow card")
-            return
-
-        # Color palette for individual devices (after EV's #4DD0E1)
-        colors = ["#FF8A65", "#AED581", "#CE93D8"]
-
-        # Build individual device entries
-        new_individuals = []
-        for idx, (device_id, device_info) in enumerate(non_ev_devices):
-            power_entity = device_info["power_entity"]
-            friendly_name = device_info.get("friendly_name", device_id)
-            device_type = device_info.get("device_type", "unknown")
-            icon = self._get_device_icon(device_type)
-            color = colors[idx] if idx < len(colors) else "#90A4AE"
-
-            entry = {
-                "entity": power_entity,
-                "name": friendly_name,
-                "icon": icon,
-                "color": color,
-                "color_icon": True,
-                "color_value": True,
-                "display_zero": False,
-                "display_zero_tolerance": 50,
-                "decimals": 0,
-            }
-            new_individuals.append(entry)
-
-        # Find the power-flow-card-plus card in the template and update its individual list
-        self._inject_individual_devices(template.get("views", []), new_individuals)
 
     async def _update_flow_card_devices(self, template: Dict[str, Any]) -> None:
         """Inject individual devices into sem-flow-card from load management.

@@ -9,7 +9,7 @@
  *   entity_prefix: sensor.sem_   # default
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, nothing, semGlassCss } from '../base/sem-lit-base.js';
 import {
     semTheme, semFormatPower, semCardSurfaceCSS, SEM_COLORS, semDefineCard,
     semDiscoverPVStrings, semPVStringsCSS,
@@ -56,6 +56,9 @@ function buildEntityIds(prefix) {
 }
 
 class SEMSolarCard extends SEMLitBase {
+    // #617 — glass chrome baked in (was card-mod *glass_card)
+    static get styles() { return [semGlassCss]; }
+
     static get watchedEntities() {
         return buildEntityIds(DEFAULT_PREFIX);
     }

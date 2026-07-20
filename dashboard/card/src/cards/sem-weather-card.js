@@ -7,7 +7,7 @@
  *   forecast_rows: 5       # number of forecast rows (default 5)
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, nothing, semGlassCss } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard } from '../base/sem-shared.js';
 
 const WEATHER_ICONS = {
@@ -29,6 +29,9 @@ const WEATHER_ICONS = {
 };
 
 class SEMWeatherCard extends SEMLitBase {
+    // #617 — glass chrome baked in (was card-mod *glass_card)
+    static get styles() { return [semGlassCss]; }
+
     constructor() {
         super();
         this._clockTime = '--:--';
