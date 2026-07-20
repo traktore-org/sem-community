@@ -91,12 +91,15 @@ class TestGoalProperties:
         assert dev.stop_condition_met is False
 
     def test_speculative_surface_removed(self):
-        """Freeze guard: the deleted fields/props must not come back."""
+        """Freeze guard: the ENERGY / deadline surface stays deleted. The
+        runtime max cap (``daily_max_runtime_sec``) was legitimately restored
+        in #620 — correctly this time (persisted) — so it's excluded here and
+        covered by test_620_device_goal_model.py instead."""
         dev = _switch()
         for attr in (
-            "daily_max_runtime_sec", "daily_target_energy_kwh",
+            "daily_target_energy_kwh",
             "daily_max_energy_kwh", "_daily_energy_accumulated_kwh",
-            "daily_max_runtime_reached", "daily_max_energy_reached",
+            "daily_max_energy_reached",
             "deadline_pressure", "target_deadline", "_deadline_forced",
             "daily_energy_budget_kwh", "_seconds_until_deadline",
         ):
@@ -331,7 +334,9 @@ async def test_loads_goal_with_removed_keys(registry):
     registry._apply_goals(dev)  # must not raise on the extra keys
     assert dev.daily_min_runtime_sec == 240 * 60
     assert dev.top_up_policy == "solar_only"
-    assert not hasattr(dev, "daily_max_runtime_sec")
+    # (#620) daily_max_runtime_min is now a LIVE key again — applied to the
+    # restored device (the energy/deadline keys are still ignored).
+    assert dev.daily_max_runtime_sec == 120 * 60
 
 
 # ---------------------------------------------------------------------------
