@@ -62,7 +62,7 @@ Reason surface (like the EV strategy sensor): each device publishes *why* it is 
 
 The device target panel mirrors the load-priority card's existing look, NOT the full EV card (a switch does not need 5 modes / dual-amp / taper):
 
-- **Min / Max** as a compact dual field (hours), with today's progress bar (`X.X / Y h`).
+- **Min / Max** as an **EV-style dual-handle range slider** (green *at least* handle + orange *up to* handle, green→orange gradient fill — identical to the charger's Charge-target slider), with today's progress line (`X.X / Y h`).
 - **Allow overnight battery** toggle with a one-line hint.
 - Anti-cycle min-on/off under an "advanced" disclosure (sane defaults; most users never touch).
 - The device's priority is its drag position in the one list (unchanged).
