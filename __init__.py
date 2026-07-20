@@ -3226,18 +3226,23 @@ async def _async_install_card_assets(
                     if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
                         shutil.copy2(src, dst)
                         cards.append(fname)
-        # Copy Lit bundle from dist/ subdirectory
-        dist_src_dir = os.path.join(card_src_dir, "dist")
-        dist_www_dir = os.path.join(card_www_dir, "dist")
-        if os.path.isdir(dist_src_dir):
-            os.makedirs(dist_www_dir, exist_ok=True)
-            for fname in os.listdir(dist_src_dir):
-                if fname.endswith(".js"):
-                    src = os.path.join(dist_src_dir, fname)
-                    dst = os.path.join(dist_www_dir, fname)
-                    if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
-                        shutil.copy2(src, dst)
-                        cards.append(f"dist/{fname}")
+        # Copy Lit bundle from dist/ + vendored chart libs from vendor/
+        # (#617 — sem-chart-card loads Chart.js from the local vendor path
+        # first; without this sync the file 404s under HA's /local→www
+        # route and the CDN fallback silently reintroduces the internet
+        # dependency).
+        for sub in ("dist", "vendor"):
+            sub_src_dir = os.path.join(card_src_dir, sub)
+            sub_www_dir = os.path.join(card_www_dir, sub)
+            if os.path.isdir(sub_src_dir):
+                os.makedirs(sub_www_dir, exist_ok=True)
+                for fname in os.listdir(sub_src_dir):
+                    if fname.endswith(".js"):
+                        src = os.path.join(sub_src_dir, fname)
+                        dst = os.path.join(sub_www_dir, fname)
+                        if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
+                            shutil.copy2(src, dst)
+                            cards.append(f"{sub}/{fname}")
         # Also copy translations.json for sem-localize.js (#60)
         dashboard_dir = os.path.dirname(card_src_dir)
         translations_src = os.path.join(dashboard_dir, "translations.json")

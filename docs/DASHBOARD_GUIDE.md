@@ -222,16 +222,22 @@ Diagnostics and health monitoring.
 
 ## Required HACS Cards
 
-Install these via HACS > Frontend before the dashboard will render:
+**None** (#617 — zero-prerequisite dashboard). Everything on the dashboard is
+a bundled `sem-*` card or a native HA type; the glass styling is baked into the
+SEM cards themselves and the charts use a locally vendored Chart.js.
 
-| Card | HACS Repository | Purpose |
-|------|-----------------|---------|
-| `card-mod` | `thomasloven/lovelace-card-mod` | Glass card styling via `*glass_card` anchor. **Missing = blank tabs.** |
-| `mushroom` | `piitaya/lovelace-mushroom` | Chips, entity, template, number, and title sub-cards used inside SEM cards |
-| `apexcharts-card` | `RomRider/apexcharts-card` | All trend, power, and cost charts |
-| `sankey-chart` | `MindFreeze/sankey-chart` | Energy flow diagram on the Energy tab |
+Optional, auto-detected by the dashboard generator:
 
-**4 required HACS cards** (card-mod, mushroom, apexcharts-card, sankey-chart). Everything else on the dashboard is a bundled `sem-*` card or a native HA type. Optional: `k-flow-card` for the animated flow diagram on the Home tab (SEM falls back to its built-in system diagram if absent).
+| Card | HACS Repository | What it adds when installed |
+|------|-----------------|------------------------------|
+| `sankey-chart` | `MindFreeze/ha-sankey-chart` | Richer SEM-entity energy-flow sankey on the Energy tab; HA's native `energy-sankey` card is used otherwise |
+| `k-flow-card` | — | Animated flow visualization replacing the built-in system diagram (opt-in via *Diagram style*) |
+
+History: until v1.7.5 the docs listed 4 required cards (card-mod, mushroom,
+apexcharts-card, sankey-chart). A 2026-07 audit found mushroom and apexcharts
+had **zero remaining uses**, card-mod styled only five SEM-owned cards (now
+self-styled), and sankey gained the native fallback — so the requirement list
+went to zero. Installs that already have those cards are unaffected.
 
 ---
 

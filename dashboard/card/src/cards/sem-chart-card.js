@@ -13,28 +13,45 @@
  * - Chart instance destroyed in disconnectedCallback()
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, nothing, semGlassCss } from '../base/sem-lit-base.js';
 import { semTheme, semGetCurrency, semDefineCard, SEM_COLORS } from '../base/sem-shared.js';
 import { startOfDayInHaTz } from '../util/time-zone.js';
 import { formatLegendLabels } from '../util/legend-format.js';
 
-/* ── Chart.js CDN singleton loader ── */
+/* ── Chart.js singleton loader — LOCAL first, CDN fallback (#617) ──
+   The library ships vendored under dashboard/card/vendor/ and is served
+   from SEM's static path, so charts work offline / on isolated installs.
+   The CDN remains only as a fallback for installs whose static path
+   registration failed. */
+const _CHARTJS_SOURCES = [
+    '/local/custom_components/solar_energy_management/dashboard/card/vendor/chart.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js',
+];
+const _ADAPTER_SOURCES = [
+    '/local/custom_components/solar_energy_management/dashboard/card/vendor/chartjs-adapter-date-fns.bundle.min.js',
+    'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js',
+];
+
+function _loadScriptChain(sources, resolve, reject) {
+    if (!sources.length) { reject(new Error('all sources failed')); return; }
+    const script = document.createElement('script');
+    script.src = sources[0];
+    script.onload = () => resolve();
+    script.onerror = () => _loadScriptChain(sources.slice(1), resolve, reject);
+    document.head.appendChild(script);
+}
+
 let _chartJsReady = null;
 function _loadChartJs() {
     if (_chartJsReady) return _chartJsReady;
     _chartJsReady = new Promise((resolve, reject) => {
         if (window.Chart) { resolve(window.Chart); return; }
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js';
-        script.onload = () => {
-            const adapter = document.createElement('script');
-            adapter.src = 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js';
-            adapter.onload  = () => resolve(window.Chart);
-            adapter.onerror = () => resolve(window.Chart); // adapter optional
-            document.head.appendChild(adapter);
-        };
-        script.onerror = () => reject(new Error('Failed to load Chart.js'));
-        document.head.appendChild(script);
+        _loadScriptChain(_CHARTJS_SOURCES, () => {
+            // adapter is optional — resolve with Chart either way
+            _loadScriptChain(_ADAPTER_SOURCES,
+                () => resolve(window.Chart),
+                () => resolve(window.Chart));
+        }, () => reject(new Error('Failed to load Chart.js')));
     });
     return _chartJsReady;
 }
@@ -217,7 +234,8 @@ class SEMChartCard extends SEMLitBase {
 
     // ── Static CSS ──
     static get styles() {
-        return css`
+        // #617 — glass chrome baked in (was card-mod *glass_card)
+        return [semGlassCss, css`
             :host { display: block; }
             .sem-chart-wrap {
                 padding: 16px;
@@ -256,7 +274,7 @@ class SEMChartCard extends SEMLitBase {
                 font-family: 'Segoe UI','Roboto',sans-serif;
             }
             .empty-msg.visible { display: flex; }
-        `;
+        `];
     }
 
     // ── Render: static skeleton; chart canvas is populated imperatively ──

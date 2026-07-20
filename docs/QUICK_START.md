@@ -89,18 +89,17 @@ Click **Submit**.
 
 ## Step 3: Install Required Dashboard Cards
 
-The SEM dashboard requires these HACS frontend cards. Without them, tabs will appear blank or broken.
+**No extra HACS frontend cards are required** — every card the SEM dashboard
+uses is bundled with the integration or native Home Assistant.
 
-Go to **HACS > Frontend** and install each one:
+Optional (auto-detected if installed via **HACS > Frontend**):
 
-| Card | Why it is required |
-|------|--------------------|
-| **mushroom** | Used for chips, entity cards, and template cards throughout the dashboard |
-| **card-mod** | Applies the glass card styling -- without this, all tabs are blank |
-| **apexcharts-card** | Renders all power and energy charts |
-| **sankey-chart** | Energy flow diagram on the Energy tab |
+| Card | What it adds |
+|------|--------------|
+| **sankey-chart** | A richer SEM-entity energy-flow sankey on the Energy tab (native `energy-sankey` is used otherwise) |
+| **k-flow-card** | An animated flow visualization as an alternative Home-tab diagram (opt-in) |
 
-After installing all cards, hard-refresh your browser: **Ctrl+Shift+R** (Windows/Linux) or **Cmd+Shift+R** (Mac).
+After updating SEM or installing an optional card, hard-refresh your browser: **Ctrl+Shift+R** (Windows/Linux) or **Cmd+Shift+R** (Mac).
 
 **What you should see:** The SEM dashboard entry in the sidebar.
 
@@ -173,11 +172,11 @@ For details, see the [Dashboard Guide](DASHBOARD_GUIDE.md).
 
 **The dashboard is blank or shows white tabs**
 
-The `card-mod` HACS card is not installed or not loaded. Install it from HACS > Frontend and hard-refresh your browser (Ctrl+Shift+R).
+Usually a stale browser/service-worker cache after an update — hard-refresh (Ctrl+Shift+R), or clear the Companion app's frontend cache. No HACS card is required since v1.7.5.
 
 **Some tabs show an error card**
 
-A required HACS frontend card from Step 3 is missing. Check each card in the list and install any that are absent.
+If the error names a `sem-*` element, SEM's card bundle didn't register — restart Home Assistant and hard-refresh. If it names another custom card, you removed an optional card the dashboard was generated with — re-run the *generate dashboard* action to regenerate with fallbacks.
 
 **Sensors show `unavailable`**
 

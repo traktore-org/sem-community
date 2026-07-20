@@ -118,17 +118,19 @@ flow in the next step to start it.
 
 ### Dashboard frontend cards
 
-The SEM dashboard uses several HACS frontend cards. Install these via
-**HACS > Frontend** if they are not already present:
+**No HACS frontend cards are required.** Every card on the SEM dashboard is
+either bundled with the integration or a native Home Assistant card, and the
+charts render with a locally vendored Chart.js (no internet needed).
 
-| Card | Why it is required |
-|------|--------------------|
-| `mushroom` | Chips, entity cards, template cards throughout the dashboard |
-| `card-mod` | Glass card styling -- without this, all dashboard tabs are blank |
-| `apexcharts-card` | All power and energy charts |
-| `sankey-chart` | Energy flow diagram on the Energy tab |
+Two cards are **optional** and auto-detected — install them via
+**HACS > Frontend** only if you want the richer variant:
 
-See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full list and
+| Card | What it adds when installed |
+|------|-----------------------------|
+| `sankey-chart` | A richer SEM-entity energy-flow sankey on the Energy tab (otherwise HA's native `energy-sankey` card is used) |
+| `k-flow-card` | An animated flow visualization replacing the built-in system diagram (opt-in via the *Diagram style* setting) |
+
+See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full card list and
 troubleshooting steps when a card shows "Custom element doesn't exist".
 
 ---
@@ -1031,7 +1033,7 @@ Translation works in two layers:
 **Layer 1 — Dashboard labels (server-side):** Static card labels, axis titles,
 and section headers are translated at dashboard generation time using the
 server language set in **Settings > General**. All users see the same labels
-for mushroom and standard HA cards.
+for standard HA cards.
 
 **Layer 2 — Custom card text (per-user, runtime):** SEM's custom cards (system
 diagram, title cards, charger status card, period selector) call
@@ -1157,12 +1159,13 @@ the `solar_energy_management.diagnose` action (section `tariff`):
 
 **My dashboard shows white tabs or "Custom element doesn't exist".**
 
-The `card-mod` HACS card is missing or not loaded, which causes white tabs
-on the whole dashboard. A "Custom element doesn't exist" error on a specific
-tab means that tab's required card is missing. See
-[DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full card list and
-troubleshooting steps. After installing missing cards, hard-refresh your
-browser (Ctrl+Shift+R on Windows/Linux, Cmd+Shift+R on Mac).
+Since v1.7.5 no HACS card is required, so this usually means SEM's own card
+bundle didn't load — most often a stale browser/service-worker cache after an
+update. Hard-refresh (Ctrl+Shift+R on Windows/Linux, Cmd+Shift+R on Mac); on
+the Companion app clear the frontend cache. A "Custom element doesn't exist"
+error naming `sem-*` means the bundle resource is missing — restart Home
+Assistant so SEM re-registers it. See
+[DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full card list.
 
 **How do I add a second EV charger?**
 
