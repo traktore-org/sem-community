@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- ♻️ **A load's daily solar-runtime target no longer restarts on every reboot** (#622, reported by
+  @alexmc1510) — an auto-discovered load's "X/Y h on solar today" progress (the accrued runtime
+  toward its daily-minimum goal, e.g. the pool pump) reset to 0 on every Home Assistant restart, so
+  the load re-ran its whole target. The runtime restore ran once at setup, but a load whose switch
+  entity isn't ready yet is only created by the 35 s delayed re-discovery — after that one-shot
+  restore already found no device — and the rebuild refilled runtime only from an in-memory snapshot
+  that was empty for a never-loaded device. The restore is now idempotent and re-applied from storage
+  on every device rebuild, so a late-arriving load keeps its progress (extends the #586 fix).
 - 🔌🚗 **Single generic/manual EV charger now actually starts charging** (#616) — a charger
   configured through the config-flow stores its plug, charging and current-control entities inside
   its own charger entry, not the old flat top-level keys. SEM's EV connection read only consulted
