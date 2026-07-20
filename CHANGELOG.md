@@ -27,6 +27,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a lone config-flow charger drives the fleet state correctly. Thanks @onkelfu for the precise
   diagnostics that pinned the exact mismatch.
 
+### ✨ Features
+
+- 📱 **Controllable devices are finally visible on mobile** (#614) — the compact layout gets a
+  chip row below the system diagram: up to 3 house-load devices with glyph, name and live power;
+  active in the device accent color, idle dimmed, tap for more-info. Desktop keeps the satellite
+  strip; both views now share one muted accent (`#86A9B4`) instead of the old positional palette
+  that read as fake semantics next to the flow colors.
+- 💶 **Bring your own price sensor — documented tariff contract + Spanish 2.0TD recipe** (#612,
+  proposed by @alexmc1510) — the setup guide now documents that ANY entity whose state is the
+  current €/kWh works as the Dynamic price sensor, with a `raw_today`/`raw_tomorrow` curve
+  attribute unlocking price levels, cheap windows and the planners. Includes a ready-to-paste
+  Spanish 2.0TD three-period template (live-verified end-to-end) and a PVPC pointer. Zero new
+  runtime code; 8 CI tests pin the sensor contract.
+
+### 🐛 Fixes (cont.)
+
+- 👻🔋 **Battery ghost node swept** (#614) — battery-less installs no longer show a permanent
+  *"— W / sensor unavailable"* battery on the system diagram (all three variants; Energy-Dashboard-
+  detected batteries protected from false hiding). Hidden nodes also drop out of the render
+  dirty-check. Re-run *generate dashboard* after updating.
+
 **Full Changelog**: [v1.7.5-beta.17...v1.7.5-beta.18](https://github.com/traktore-org/sem-community/compare/v1.7.5-beta.17...v1.7.5-beta.18)
 
 # [1.7.5-beta.17] — 19.07.2026
