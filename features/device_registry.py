@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -167,6 +167,15 @@ class UnifiedDeviceRegistry:
         # top-up policy, stop condition) — device_id → dict. Applies to
         # BOTH auto-discovered and service-registered devices.
         self._device_goals: Dict[str, Dict[str, Any]] = {}
+        # (#622) Callback that re-applies persisted per-device accrued daily
+        # runtime from the coordinator's storage onto any device that came back
+        # EMPTY after a rebuild. Set by the coordinator after construction.
+        # Runtime uniquely lives in the coordinator's daily store (not this
+        # registry's override store), so unlike rated_power / dependencies /
+        # goals it isn't re-applied from _store during _sync_to_surplus_controller;
+        # this hook closes that gap for a device that appears only via the 35 s
+        # delayed re-discovery, after the one-shot setup restore already ran.
+        self._runtime_restore_hook: Optional[Callable[[], None]] = None
 
     @property
     def devices(self) -> List[UnifiedDevice]:
@@ -487,6 +496,20 @@ class UnifiedDeviceRegistry:
 
         # (#586) Re-apply the runtime snapshot onto the rebuilt devices.
         self._restore_accrued_runtimes(runtime_snapshot)
+
+        # (#622) The in-memory snapshot above only carries runtime that was
+        # already live in this process. A device that appears for the FIRST
+        # time after a restart — e.g. an auto-discovered load whose switch
+        # entity wasn't ready at setup, so it's created only by the 35 s
+        # delayed re-discovery — has no snapshot entry and comes back at 0.0.
+        # Re-apply the persisted runtime from the coordinator's storage so its
+        # daily-target progress survives instead of resetting to 0 and re-running
+        # the whole target every restart (alexmc1510's pool pump).
+        if self._runtime_restore_hook is not None:
+            try:
+                self._runtime_restore_hook()
+            except Exception as e:  # never let restore break discovery
+                _LOGGER.debug("Runtime restore hook failed: %s", e)
 
         # (#576) Re-apply the learned rating to the rebuilt devices, and seed a
         # rating from the power sensor's history for any load we haven't learned

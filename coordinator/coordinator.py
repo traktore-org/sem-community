@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any, Dict, Optional
 
 from homeassistant.config_entries import ConfigEntry
@@ -6634,24 +6634,51 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
     # Solar charging state sets
     def _restore_device_runtimes(self) -> None:
-        """Restore device runtimes from storage on startup."""
+        """Restore device runtimes from storage onto empty devices.
+
+        Safe to call repeatedly: only fills a device whose live accrued
+        runtime is still 0 (a freshly-(re)built object), NEVER clobbering a
+        value that already accrued this session. That idempotence is what lets
+        the registry re-invoke this after EVERY ``async_refresh_devices``
+        rebuild (#622), not just once at setup.
+
+        Why re-invoking matters: an auto-discovered load (e.g. alexmc1510's
+        pool pump) whose backing switch entity isn't ready during initial
+        setup is only created by the 35 s delayed re-discovery — AFTER the
+        one-shot setup restore already ran and found no device. That rebuild
+        restores accrued runtime only from an in-memory snapshot
+        (``_restore_accrued_runtimes``), which is empty for a device that was
+        never populated from storage — so the "X/Y h on solar today" progress
+        reset to 0 and the load re-ran its whole daily target on every restart.
+        Re-running this from storage on each rebuild fills that late device.
+
+        A restore that lands a stale ``meter_day`` (a restart spanning
+        midnight fills yesterday's accrued onto a fresh device) self-corrects:
+        the next ``update_daily_runtime(today)`` detects the rollover and
+        resets accrued to 0 within one cycle — the same rebase #586 relies on.
+        """
         if not self._storage:
             return
         runtimes = self._storage.get_device_runtimes()
         for device_id, data in runtimes.items():
             device = self._surplus_controller.get_device(device_id)
-            if device:
-                from datetime import date
-                try:
-                    meter_day = date.fromisoformat(data["meter_day"])
-                    device._daily_runtime_accumulated_sec = data["accumulated_sec"]
-                    device._daily_runtime_meter_day = meter_day
-                    _LOGGER.debug(
-                        "Restored runtime for %s: %.0fs (meter_day=%s)",
-                        device_id, data["accumulated_sec"], meter_day,
-                    )
-                except (KeyError, ValueError) as e:
-                    _LOGGER.debug("Failed to restore runtime for %s: %s", device_id, e)
+            if not device:
+                continue
+            # Never overwrite a live value — only fill a device that came back
+            # empty (fresh object, nothing accrued yet). Mirrors the in-memory
+            # _restore_accrued_runtimes contract so the two restore paths agree.
+            if float(getattr(device, "_daily_runtime_accumulated_sec", 0.0) or 0.0) > 0.0:
+                continue
+            try:
+                meter_day = date.fromisoformat(data["meter_day"])
+                device._daily_runtime_accumulated_sec = data["accumulated_sec"]
+                device._daily_runtime_meter_day = meter_day
+                _LOGGER.debug(
+                    "Restored runtime for %s: %.0fs (meter_day=%s)",
+                    device_id, data["accumulated_sec"], meter_day,
+                )
+            except (KeyError, ValueError) as e:
+                _LOGGER.debug("Failed to restore runtime for %s: %s", device_id, e)
 
     def _persist_device_runtimes(self) -> None:
         """Save device runtimes to storage."""
