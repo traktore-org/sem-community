@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.20] — 20.07.2026
+
+### 🐛 Fixes
+
+- 🎛️ **Load config card showed the wrong device's control** (#621, by @alexmc1510) — opening the
+  *Configure* dialog for one load (e.g. a "car socket") could display a sibling load's switch (the
+  "pool pump"). The dialog re-resolved the row by its energy sensor, which is empty for devices with
+  no Energy-Dashboard energy counter (service-registered loads, heat pump / hot water, the battery
+  row), so they all collided onto the first empty-key row. It now resolves by the row's unique id
+  like every other card action — data and shedding behaviour were already correct; this was UI-only.
+
 # [1.7.5-beta.19] — 20.07.2026
 
 ### ✨ Features
