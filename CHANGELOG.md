@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased — next beta]
+
+### ✨ Features
+
+- 🧳 **Zero required HACS cards** (#617) — the dashboard no longer needs any HACS frontend card.
+  The glass styling is baked into the SEM cards themselves (card-mod retired), mushroom and
+  apexcharts-card had no remaining uses, sankey-chart became optional (HA's native `energy-sankey`
+  is substituted when it isn't installed), and Chart.js is vendored and served locally — charts now
+  work on offline installs. Existing setups with the old cards are unaffected. Re-run
+  *generate dashboard* after updating.
+
 # [1.7.5-beta.18] — 19.07.2026
 
 ### 🐛 Fixes
