@@ -45,7 +45,18 @@ Per-device (on `SwitchDevice`, serialized + **restored** — the #559 HIGH-1 was
 
 Global (exists): the one priority list, the peak limit, the battery reserve/buffer SoC (reuse the Solar Gate buffer, #537).
 
-The control-mode dropdown stays **off / peak-only / surplus** (unchanged vocabulary); the min/max/battery knobs live in the device's target panel, shown in surplus mode.
+**Modes** (dropdown), aligned with the EV vocabulary:
+
+- **Off** — never runs.
+- **Peak-only** — participates only in peak-limit shedding; never actively runs on surplus.
+- **Solar only** — real surplus only; the **battery is untouched** (reserved for the house).
+- **Solar + battery** *(new)* — surplus **plus daytime battery-assist above the Buffer SoC** — the self-consumption-max behaviour (mirrors the EV's min+solar / #545). Automatic whenever battery > buffer and real surplus exists past the Solar Gate.
+
+**Battery, two tiers (gated by the two SoC thresholds you already have):**
+- **Tier 1 — daytime assist:** battery **above Buffer SoC** + real surplus → assists any *Solar + battery* device automatically (no toggle). Low-risk self-consumption; the battery is full anyway.
+- **Tier 2 — overnight drain (opt-in toggle "Use battery overnight (below buffer)"):** allows drawing **below the buffer, down to the Reserve SoC**, when there is no surplus. Off by default — this is the only tier that spends stored house energy at night.
+
+Below the Reserve SoC: nobody discharges. Hard floor.
 
 ## 4. Allocation (surplus_controller)
 
