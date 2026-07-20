@@ -27,3 +27,11 @@ body:
         - Hardware Support
         - Localization
         - Other
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        💛 **Love SEM and want to help an idea land sooner?**
+        SEM is built and maintained by one person. A [**monthly sponsorship**](https://github.com/sponsors/traktore-org)
+        keeps development sustainable and helps prioritise community feature requests like this one.
+        Every tier is appreciated — thank you for supporting the project!
