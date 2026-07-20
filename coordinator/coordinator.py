@@ -4005,12 +4005,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     true_surplus_w, reclaim_w=reclaim_w,
                 )
             else:
+                # (#620) battery context for the device battery tiers.
+                # Tier-1 assist budget = the battery-assist cap, offered ONLY
+                # when the battery is above the Buffer SoC AND there is real
+                # surplus past the Solar Gate (same gate the EV assist uses,
+                # #537) — so the battery tops loads up out of surplus it would
+                # otherwise export, never below the buffer. Reserve floor for
+                # Tier-2 is the load reclaim reserve (``battery_priority_soc``).
+                _b_soc = getattr(power, "battery_soc", None)
+                _b_buffer = float(self.config.get("battery_buffer_soc", 70) or 70)
+                _b_reserve = float(self.config.get("battery_priority_soc", 30) or 30)
+                _solar_gate = float(self.config.get("battery_assist_min_surplus", 1200) or 1200)
+                _assist_budget = (
+                    float(self.config.get("battery_assist_max_power", 3000) or 3000)
+                    if (_b_soc is not None and _b_soc > _b_buffer and true_surplus_w >= _solar_gate)
+                    else 0.0
+                )
                 allocation = await self._surplus_controller.update(
                     true_surplus_w,
                     price_level=tariff_data.tariff_price_level,
                     peak_state=peak_state,
                     reclaim_w=reclaim_w,
                     battery_priority=battery_priority,
+                    battery_soc=_b_soc,
+                    battery_buffer_soc=_b_buffer,
+                    battery_reserve_soc=_b_reserve,
+                    battery_assist_budget_w=_assist_budget,
                 )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
