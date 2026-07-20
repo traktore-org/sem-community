@@ -282,13 +282,36 @@ register_surplus_device:
             - "off"
     daily_min_runtime_min:
       name: Min Runtime per Day
-      description: Daily runtime target in minutes (e.g. 240 = pool pump runs at least 4h/day). SEM prefers solar surplus; the top-up policy decides what happens if the sun alone is not enough.
+      description: Daily runtime floor in minutes (e.g. 240 = pool pump runs at least 4h/day). SEM prefers solar surplus; a device is never fully starved behind higher-priority siblings. Not a hard guarantee.
       required: false
       selector:
         number:
           min: 0
           max: 1440
           unit_of_measurement: min
+    daily_max_runtime_min:
+      name: Max Runtime per Day
+      description: "(#620) Daily runtime CAP in minutes — the device never runs past this in a day (pump wear / waste). 0 = uncapped. Persisted across restarts."
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+    battery_assist_enabled:
+      name: Solar + battery (daytime assist)
+      description: "(#620) Tier 1 — let the home battery assist this device above the Buffer SoC when there is real solar surplus (self-consumption max, like the EV). Automatic; does not drain stored house energy. Off = Solar only (battery reserved for the house)."
+      required: false
+      default: false
+      selector:
+        boolean:
+    battery_eligible_overnight:
+      name: Use battery overnight (below buffer)
+      description: "(#620) Tier 2 — allow this device to draw the battery BELOW the buffer, down to the Reserve SoC, when there is no surplus (spends stored house energy at night). Off by default."
+      required: false
+      default: false
+      selector:
+        boolean:
     top_up_policy:
       name: Top-up Policy
       description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target on a dark day), cheap_hours (top up during cheap tariff windows)."

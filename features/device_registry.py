@@ -243,6 +243,9 @@ class UnifiedDeviceRegistry:
     GOAL_PROPERTIES = (
         "daily_min_runtime_min", "top_up_policy",
         "stop_entity", "stop_at",
+        # (#620) max cap + the two battery tiers.
+        "daily_max_runtime_min", "battery_assist_enabled",
+        "battery_eligible_overnight",
     )
 
     def _apply_goals(self, device) -> None:
@@ -266,6 +269,16 @@ class UnifiedDeviceRegistry:
         device.top_up_policy = policy
         device.stop_entity = str(goals.get("stop_entity", "") or "")
         device.stop_at = float(goals.get("stop_at", 0.0) or 0.0)
+        # (#620) daily max cap (persisted → restored, the #559 HIGH-1 fix) +
+        # the two battery tiers. All default off so an upgraded device with no
+        # stored values behaves exactly as before.
+        device.daily_max_runtime_sec = int(
+            float(goals.get("daily_max_runtime_min", 0) or 0) * 60
+        )
+        device.battery_assist_enabled = bool(goals.get("battery_assist_enabled", False))
+        device.battery_eligible_overnight = bool(
+            goals.get("battery_eligible_overnight", False)
+        )
 
     def seed_goals(self, device_id: str, goals: "Dict[str, Any]") -> None:
         """Stage goal fields before registration (register_surplus_device

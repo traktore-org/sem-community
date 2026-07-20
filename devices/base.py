@@ -167,10 +167,27 @@ class ControllableDevice(ABC):
 
         # Daily runtime tracking (Feature 2)
         self.daily_min_runtime_sec: int = 0  # 0 = disabled
+        # (#620) daily MAXIMUM runtime cap — the device never runs past this in
+        # a day (pump wear / waste protection). 0 = uncapped. Persisted +
+        # restored (the #559 HIGH-1 was an un-persisted cap lost on restart).
+        self.daily_max_runtime_sec: int = 0  # 0 = uncapped
         self._daily_runtime_accumulated_sec: float = 0.0
         self._daily_runtime_last_check: Optional[datetime] = None
         self._daily_runtime_meter_day: Optional[date] = None
         self._offpeak_forced: bool = False
+
+        # (#620) Battery use, two tiers gated by the existing Buffer + Reserve
+        # SoC. Tier 1 (``battery_assist_enabled``) = the "Solar + battery" mode:
+        # the battery assists this device above the Buffer SoC when real surplus
+        # exists (self-consumption max, mirrors the EV #545) — automatic, no
+        # per-cycle drain of stored house energy. Tier 2
+        # (``battery_eligible_overnight``) = the opt-in to draw BELOW the buffer,
+        # down to the Reserve SoC, when there is no surplus (spends stored house
+        # energy at night). Both default off — a bare switch load never touches
+        # the battery until the user chooses a battery mode. The allocation that
+        # CONSUMES these flags lands in surplus_controller (#620 Phase 2).
+        self.battery_assist_enabled: bool = False
+        self.battery_eligible_overnight: bool = False
 
         # (#559) Goal engine — grounded core. daily_min_runtime_sec (above,
         # pre-#559 "Feature 2") is the only target; solar_only default means
@@ -387,6 +404,15 @@ class ControllableDevice(ABC):
         return max(0, self.daily_min_runtime_sec - self._daily_runtime_accumulated_sec)
 
     @property
+    def daily_max_runtime_reached(self) -> bool:
+        """(#620) True when the device has hit its daily MAXIMUM runtime cap —
+        it must not run again today. 0 = uncapped (never reached). The
+        allocation passes exclude a capped device for the rest of the day."""
+        if self.daily_max_runtime_sec <= 0:
+            return False
+        return self._daily_runtime_accumulated_sec >= self.daily_max_runtime_sec
+
+    @property
     def needs_offpeak_activation(self) -> bool:
         """True if device has a runtime deficit, is enabled, and not already active."""
         if self.daily_min_runtime_sec <= 0:
@@ -394,6 +420,8 @@ class ControllableDevice(ABC):
         if not self._enabled:
             return False
         if self.is_active:
+            return False
+        if self.daily_max_runtime_reached:  # (#620) cap overrides the deficit
             return False
         return self.remaining_daily_runtime_sec > 0
 
@@ -458,6 +486,11 @@ class ControllableDevice(ABC):
 
     def can_activate(self) -> bool:
         """Check if device can be activated (respects dependencies, min_off, activation_delay)."""
+        # (#620) daily maximum cap — a capped-out device never re-activates
+        # today. Gated first: it overrides surplus, off-peak and deadline
+        # passes alike (the cap is a hard "done for today").
+        if self.daily_max_runtime_reached:
+            return False
         # Dependency check (#122): all depends_on devices must be in required state
         if not self._check_dependencies():
             return False
@@ -630,13 +663,20 @@ class ControllableDevice(ABC):
             "observed_on": obs,
             "sem_owned": self._sem_owned,
         }
-        if self.daily_min_runtime_sec > 0:
+        if self.daily_min_runtime_sec > 0 or self.daily_max_runtime_sec > 0:
             d.update({
                 "daily_min_runtime_sec": self.daily_min_runtime_sec,
                 "daily_runtime_accumulated_sec": round(self._daily_runtime_accumulated_sec, 1),
                 "top_up_policy": self.top_up_policy,
                 "remaining_daily_runtime_sec": round(self.remaining_daily_runtime_sec, 1),
                 "offpeak_forced": self._offpeak_forced,
+                # (#620) max cap + battery tiers — surfaced for the card + the
+                # allocation, and PERSISTED (the max cap is restored across a
+                # restart, closing the #559 HIGH-1 un-persisted-cap bug).
+                "daily_max_runtime_sec": self.daily_max_runtime_sec,
+                "daily_max_runtime_reached": self.daily_max_runtime_reached,
+                "battery_assist_enabled": self.battery_assist_enabled,
+                "battery_eligible_overnight": self.battery_eligible_overnight,
             })
         # Dependency info (#122)
         if self.depends_on:
@@ -667,6 +707,9 @@ class SwitchDevice(ControllableDevice):
         min_on_time: int = 300,
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
+        daily_max_runtime_sec: int = 0,        # (#620) 0 = uncapped
+        battery_assist_enabled: bool = False,  # (#620) Tier 1 — Solar + battery
+        battery_eligible_overnight: bool = False,  # (#620) Tier 2 — overnight
         energy_entity_id: Optional[str] = None,
     ):
         # (#576) 1 kW default for a sensor-less / discovery-zero switch: a saner
@@ -685,6 +728,9 @@ class SwitchDevice(ControllableDevice):
         self.min_on_time = min_on_time
         self.min_off_time = min_off_time
         self.daily_min_runtime_sec = daily_min_runtime_sec
+        self.daily_max_runtime_sec = daily_max_runtime_sec
+        self.battery_assist_enabled = battery_assist_enabled
+        self.battery_eligible_overnight = battery_eligible_overnight
 
     @property
     def device_type(self) -> DeviceType:
@@ -810,6 +856,9 @@ class ClimateDevice(ControllableDevice):
         min_on_time: int = 300,
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
+        daily_max_runtime_sec: int = 0,        # (#620) 0 = uncapped
+        battery_assist_enabled: bool = False,  # (#620) Tier 1 — Solar + battery
+        battery_eligible_overnight: bool = False,  # (#620) Tier 2 — overnight
         energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
@@ -824,6 +873,9 @@ class ClimateDevice(ControllableDevice):
         self.min_on_time = min_on_time
         self.min_off_time = min_off_time
         self.daily_min_runtime_sec = daily_min_runtime_sec
+        self.daily_max_runtime_sec = daily_max_runtime_sec
+        self.battery_assist_enabled = battery_assist_enabled
+        self.battery_eligible_overnight = battery_eligible_overnight
 
     @property
     def device_type(self) -> DeviceType:
