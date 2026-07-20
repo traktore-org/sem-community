@@ -195,6 +195,31 @@ missed the `ev_connected` sibling. **Guard:**
 per-charger flow *entities*, ~line 1618) legitimately keep `len > 1` — they suppress duplicate
 registry entities, they don't read config; do NOT "fix" those. Refs #536 #616.
 
+### 14. One-shot restore vs a late/rebuilt device (accrued per-device state resets) — PARTIAL
+**Symptom:** a load's accrued daily progress ("X/Y h on solar today", the runtime toward its
+minimum-runtime goal) resets to 0 on every HA restart and the load re-runs its whole daily target —
+even though a persist+restore for it exists. **Root shape:** per-device state that lives in the
+coordinator's daily store (NOT the registry's override store) is restored **once**, at a fixed point
+in setup. Anything the registry re-applies *during* `_sync_to_surplus_controller` on every rebuild
+(rated_power #576, control_mode, dependencies #122, goals #559 via `_apply_goals`) survives a late or
+rebuilt device for free; the one-shot-restored state does not. An auto-discovered load whose backing
+entity isn't ready at setup is created only by the 35 s delayed re-discovery — *after* the one-shot
+restore already ran and found no device — and the rebuild's runtime restore reads only an **in-memory**
+snapshot (`_restore_accrued_runtimes`), which is empty for a device never populated from storage
+(alexmc1510's pool pump, #622). #586 was the same shape one ordering earlier (restore ran before the
+registry existed at all). **Where it lives:** `coordinator/coordinator.py::_restore_device_runtimes`
+(daily runtime — closed #622) and the sibling one-shot restores in the first-refresh block that key off
+a device by id: `record_legionella_cycle` / `get_legionella_time` (#508, coordinator.py ~1927) — the
+`hot_water` device is registered *after* first-refresh (`__init__.py` ~1902), so that restore is a
+no-op and the legionella timestamp is lost on restart (**open sibling — temperature-safety, Guido**).
+**Closure (#622):** make `_restore_device_runtimes` idempotent (fill only a device whose live accrued
+is 0 — never clobber a live value) and have the registry re-invoke it via `_runtime_restore_hook` after
+**every** `async_refresh_devices` rebuild, so a late device is filled from storage. **Guard:**
+`test_622_late_device_runtime_restore.py` (idempotent fill + never-clobber + the hook fires after the
+in-memory restore on every rebuild). **Watch:** any NEW per-device state persisted to the daily store
+and restored one-shot in the first-refresh/setup block is a fresh sibling — restore it on the rebuild
+path (registry store or the runtime hook), not once at a fixed setup point. Refs #508 #586 #622.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

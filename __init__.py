@@ -1547,6 +1547,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             registry = UnifiedDeviceRegistry(
                 hass, coordinator._surplus_controller, coordinator._load_manager, discovery
             )
+            # (#622) Let every device rebuild (incl. the 35 s delayed
+            # re-discovery inside async_initialize) re-apply persisted accrued
+            # runtime from storage, so a late-arriving auto-discovered load
+            # doesn't reset its daily-target progress to 0 and re-run. Set
+            # BEFORE async_initialize so the first refresh already benefits.
+            registry._runtime_restore_hook = coordinator._restore_device_runtimes
             await registry.async_initialize()
             coordinator._device_registry = registry
             # (#586) Restore each device's accrued daily runtime NOW — the
@@ -1556,6 +1562,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             # device existed yet, so on a mid-day restart the accrued
             # "X/Y u op zon vandaag" progress reset to 0 while the target
             # (applied at registration via _apply_goals) survived.
+            # (#622) The registry now also re-runs this via _runtime_restore_hook
+            # after every async_refresh_devices (incl. the 35 s delayed
+            # re-discovery), so this explicit call is belt-and-suspenders: the
+            # idempotent restore is a no-op for any device the hook already
+            # filled, and it still guarantees a restore for devices present at
+            # setup even if the hook wiring changes.
             coordinator._restore_device_runtimes()
             # Tell load manager to skip its own discovery — registry owns the device list
             if coordinator._load_manager:
