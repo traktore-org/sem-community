@@ -23,6 +23,7 @@ import {
     formValuesToServiceData,
     buildLoadConfigModalHTML,
     readFormValues,
+    findDeviceForConfig,
 } from './load-config-modal.js';
 
 /* Drag-and-drop is Lit-native (pointer events) — see _dragStart/_dragMove/
@@ -463,7 +464,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
                         ${isBattery ? nothing : html`
-                        <span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}">
+                        <span class="configure-btn" data-action="configure" data-device="${device.id}" data-name="${device.name}">
                             <ha-icon icon="mdi:${device.hasManualMapping ? 'wrench' : 'cog'}" style="--mdc-icon-size:14px"></ha-icon> ${device.isControllable ? this._t('configure_device') : this._t('configure')}
                         </span>`}
                     </div>
@@ -785,7 +786,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
             } else if (action === 'move-up' || action === 'move-down') {
                 this._moveDevice(deviceId, action === 'move-up' ? -1 : 1);
             } else if (action === 'configure') {
-                this._showConfigureModal(target.dataset.energy, target.dataset.name);
+                this._showConfigureModal(deviceId, target.dataset.name);
             } else if (action === 'toggle-help') {
                 this._showHelp = !this._showHelp;
                 this.requestUpdate();
@@ -916,10 +917,19 @@ class SEMLoadPriorityCard extends SEMLitBase {
         }
     }
 
-    async _showConfigureModal(energySensor, deviceName) {
+    async _showConfigureModal(deviceId, deviceName) {
         const existing = this.renderRoot.getElementById('sem-config-modal');
         if (existing) existing.remove();
-        const dev = this.devices.find(d => d.energySensor === energySensor);
+        // Resolve by the row's UNIQUE id — NOT by energySensor, which is
+        // null/'' for every device without an Energy-Dashboard energy counter
+        // (service-registered loads, direct heat-pump/hot-water, the battery
+        // row). Keying on energySensor collided all such rows onto the FIRST
+        // empty-key device, so opening the config card for one showed a
+        // sibling's control entity (#621 — car socket showed the pool pump's
+        // switch). The mapping service is still keyed by energy_sensor, taken
+        // from the resolved device below.
+        const dev = findDeviceForConfig(this.devices, deviceId);
+        const energySensor = dev?.energySensor || '';
         const values = controlToFormValues(dev?.control);
         const hasManual = dev?.control?.discovered_via === 'manual_mapping';
         await this._ensureEntityPicker();
