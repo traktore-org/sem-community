@@ -5503,13 +5503,16 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             .range-fill {
                 position:absolute; top:0; height:100%; border-radius:3px;
                 background:linear-gradient(90deg, #8DC892, #ff9800);
+                pointer-events:none;  /* never swallow the handle grab */
             }
             .range-handle {
                 position:absolute; top:50%; width:18px; height:18px;
                 border-radius:50%; transform:translate(-50%, -50%);
                 background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.5);
-                cursor:grab; touch-action:none; pointer-events:none;
+                cursor:grab; touch-action:none; pointer-events:auto;
+                z-index:2;  /* sit above the fill so pointerdown lands */
             }
+            .range-handle:active { cursor:grabbing; }
             .range-handle-min { border:3px solid #8DC892; }
             .range-handle-max { border:3px solid #ff9800; }
             /* EV charge-target look (#559 UI merge) */
