@@ -11,9 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased — next beta]
+# [1.7.5-beta.19] — 20.07.2026
 
 ### ✨ Features
+
+- 🌍 **Localized device names on the overview** (#615, by @RienduPre) — SEM's own heat pump and
+  hot water now show their translated name on the system diagram (a Dutch dashboard shows
+  *Warmtepomp* / *Warm water* instead of the English defaults), per user profile language.
+  Custom-named or non-SEM devices keep their name. New device-name translations across all 16
+  languages.
 
 - 📚 **Docs truth & structure overhaul + GUI help anchors** (#618) — the EV charging guide is
   rewritten around the current 5-mode selector (the pre-v1.6.3 toggle reference moved to an
@@ -31,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   work on offline installs. Existing setups with the old cards are unaffected. Re-run
   *generate dashboard* after updating.
 
-# [1.7.5-beta.18] — 19.07.2026
 
 ### 🐛 Fixes
 
@@ -43,6 +48,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restore already found no device — and the rebuild refilled runtime only from an in-memory snapshot
   that was empty for a never-loaded device. The restore is now idempotent and re-applied from storage
   on every device rebuild, so a late-arriving load keeps its progress (extends the #586 fix).
+
+### 🧹 Housekeeping
+
+- 📝 **README household-load claims aligned with what ships** (#620) — the advertised EV-style
+  dual slider / kWh goals / cheap-hours / guaranteed-by-deadline for switch loads were removed in
+  #559; the README now describes the shipped minimum-runtime surface and tracks the rest in #620.
+  Enhancement requests now surface a monthly-sponsorship link (feature-request template footer,
+  issue chooser, and an auto-note when an issue is labelled *enhancement*).
+
+**Full Changelog**: [v1.7.5-beta.18...v1.7.5-beta.19](https://github.com/traktore-org/sem-community/compare/v1.7.5-beta.18...v1.7.5-beta.19)
+
+# [1.7.5-beta.18] — 19.07.2026
+
+### 🐛 Fixes
 - 🔌🚗 **Single generic/manual EV charger now actually starts charging** (#616) — a charger
   configured through the config-flow stores its plug, charging and current-control entities inside
   its own charger entry, not the old flat top-level keys. SEM's EV connection read only consulted
