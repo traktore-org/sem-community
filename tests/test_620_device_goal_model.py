@@ -297,6 +297,38 @@ class TestTier2Overnight:
                         battery_reserve_soc=20)
         d.activate.assert_not_called()
 
+    async def test_peak_ceiling_sheds_tier2_and_clears_marker(self, mock_hass):
+        """The peak limit is a HARD ceiling that overrides Tier-2 (reviewer
+        HIGH): an active overnight-battery device IS shed on EMERGENCY, and its
+        force marker is cleared so it carries no stale state."""
+        from custom_components.solar_energy_management.const import (
+            LoadManagementState,
+        )
+        sc = SurplusController(mock_hass)
+        d = _mock(is_active=True, battery_eligible_overnight=True,
+                  _batt_overnight_forced=True, consumption=800)
+        d.get_current_consumption = MagicMock(return_value=800.0)
+        sc.register_device(d)
+        await sc.update(0.0, peak_state=LoadManagementState.EMERGENCY,
+                        battery_soc=90, battery_reserve_soc=20)
+        d.deactivate.assert_awaited()
+        assert d._batt_overnight_forced is False
+        assert d._batt_overnight_forced_date is None
+
+    async def test_done_for_day_clears_overnight_marker(self, mock_hass):
+        """Goal-gate "daily target met" must also end a Tier-2 force so the
+        marker doesn't leak until day rollover (reviewer MEDIUM)."""
+        sc = SurplusController(mock_hass)
+        d = _mock(is_active=True, battery_eligible_overnight=True,
+                  _batt_overnight_forced=True, consumption=800)
+        d.daily_targets_met = True
+        sc.register_device(d)
+        await sc.update(0.0, price_level="normal", battery_soc=90,
+                        battery_reserve_soc=20)
+        d.deactivate.assert_awaited()
+        assert d._batt_overnight_forced is False
+        assert d._batt_overnight_forced_date is None
+
 
 @pytest.mark.asyncio
 class TestInertByDefault:

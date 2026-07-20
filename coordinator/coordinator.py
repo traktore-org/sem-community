@@ -6722,7 +6722,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if not self._storage:
             return
         for device in self._surplus_controller._devices.values():
-            if device.daily_min_runtime_sec > 0 and device._daily_runtime_meter_day:
+            # (#620) persist for a cap-ONLY device too — otherwise a restart
+            # loses its accrued runtime and the daily_max cap resets to 0, so
+            # it could run past the cap it had already hit.
+            _has_target = (
+                device.daily_min_runtime_sec > 0
+                or getattr(device, "daily_max_runtime_sec", 0) > 0
+            )
+            if _has_target and device._daily_runtime_meter_day:
                 self._storage.set_device_runtime(
                     device.device_id,
                     device._daily_runtime_accumulated_sec,

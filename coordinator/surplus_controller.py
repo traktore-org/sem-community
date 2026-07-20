@@ -564,6 +564,12 @@ class SurplusController:
                             device.record_deactivated()
                             device._offpeak_forced = False
                             device._offpeak_forced_date = None
+                            # (#620) done-for-the-day also ends any Tier-2
+                            # overnight force — otherwise the marker leaks until
+                            # day rollover and the LIFO exemption keeps shielding
+                            # an already-finished device.
+                            device._batt_overnight_forced = False
+                            device._batt_overnight_forced_date = None
                             _LOGGER.info(
                                 "%s: %s — deactivated for the rest of the day",
                                 device.name, done_reason,
@@ -690,6 +696,10 @@ class SurplusController:
         # back-off don't overshoot together. Externally-managed devices
         # (the EV) are already excluded by ``get_devices_sorted``; the load
         # manager owns the EV's peak shedding via ``shed_priority`` (#470).
+        # (#620) A Tier-2 overnight-battery device is NOT exempt here: the peak
+        # limit is a HARD grid ceiling that overrides the battery tiers. Shedding
+        # it relieves grid import; once peak clears the Tier-2 pass re-activates
+        # it. We clear its force marker so the shed device carries no stale state.
         if peak_shed:
             for device in reversed(devices):
                 if device.control_mode != DeviceControlMode.SURPLUS:
@@ -700,6 +710,8 @@ class SurplusController:
                 await device.deactivate()
                 if not device.is_active:
                     device.record_deactivated()
+                    device._batt_overnight_forced = False
+                    device._batt_overnight_forced_date = None
                     active_count = max(0, active_count - 1)
                     remaining_surplus += consumption
                     _LOGGER.info(
