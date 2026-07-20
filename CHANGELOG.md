@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
+- 📚 **Docs truth & structure overhaul + GUI help anchors** (#618) — the EV charging guide is
+  rewritten around the current 5-mode selector (the pre-v1.6.3 toggle reference moved to an
+  archive with an old→new migration map); a docs index landed and the stray root-level guides
+  moved into `docs/`; **every** Config-card section's docs link now lands on a dedicated,
+  CI-guarded anchor (a renamed heading fails the build instead of silently stranding the GUI's
+  help links); three parallel audits purged stale claims everywhere (wrong tab counts,
+  card-mod/mushroom ghosts, advice referencing removed options); tab screenshots recaptured
+  from the live dashboard.
+
 - 🧳 **Zero required HACS cards** (#617) — the dashboard no longer needs any HACS frontend card.
   The glass styling is baked into the SEM cards themselves (card-mod retired), mushroom and
   apexcharts-card had no remaining uses, sankey-chart became optional (HA's native `energy-sankey`

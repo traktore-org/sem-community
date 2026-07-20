@@ -29,13 +29,14 @@ const SECTIONS = [
         id: 'overview',
         icon: 'mdi:check-decagram',
         color: '#8DC892',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/README.md',
         titleKey: 'config_section_overview',
         subtitleFn: (c) => c._overviewSubtitle(),
         expanded: true,  // open by default — gives the user a quick status read
     },
     {
         id: 'ev_chargers',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md#1-the-control-surface',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md#the-five-charge-modes',
         icon: 'mdi:ev-station',
         color: '#5BC8D8',
         titleKey: 'config_section_ev_chargers',
@@ -51,7 +52,7 @@ const SECTIONS = [
     },
     {
         id: 'tariff',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#5-options-flow',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#tariff-and-pricing-settings',
         icon: 'mdi:cash-multiple',
         color: '#96CAEE',
         titleKey: 'config_section_tariff',
@@ -67,7 +68,7 @@ const SECTIONS = [
     },
     {
         id: 'hot_water',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#10-heat-pump-and-hot-water',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#hot-water-boiler-separate-from-heat-pump',
         icon: 'mdi:water-boiler',
         color: '#5BC8D8',
         titleKey: 'config_section_hot_water',
@@ -91,7 +92,7 @@ const SECTIONS = [
     },
     {
         id: 'forecast',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#12-faq',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#forecast-settings',
         icon: 'mdi:weather-partly-cloudy',
         color: '#ff9800',
         titleKey: 'config_section_forecast',
@@ -109,7 +110,7 @@ const SECTIONS = [
     },
     {
         id: 'notifications',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#5-options-flow',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#notification-settings',
         icon: 'mdi:bell-outline',
         color: '#96CAEE',
         titleKey: 'config_section_notifications',
@@ -117,7 +118,7 @@ const SECTIONS = [
     },
     {
         id: 'advanced',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#5-options-flow',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#advanced-settings',
         icon: 'mdi:cog-outline',
         color: '#888',
         titleKey: 'config_section_advanced',

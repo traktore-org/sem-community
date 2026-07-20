@@ -87,7 +87,7 @@ Click **Submit**.
 
 ---
 
-## Step 3: Install Required Dashboard Cards
+## Step 3: Dashboard cards (all bundled — optional extras only)
 
 **No extra HACS frontend cards are required** — every card the SEM dashboard
 uses is bundled with the integration or native Home Assistant.
@@ -111,7 +111,7 @@ Click **Solar Energy Management** in the Home Assistant sidebar.
 
 ![SEM Home tab](images/sem_home_tab.png)
 
-The dashboard has 7 tabs:
+The dashboard has 8 tabs:
 
 | Tab | What it shows |
 |-----|---------------|
@@ -120,6 +120,7 @@ The dashboard has 7 tabs:
 | **Battery** | Battery state, charge/discharge charts, SOC trends |
 | **EV** | EV charging session, daily progress, charging history |
 | **Control** | All switches, sliders, and device priority settings |
+| **Configuration** | Guided access to every SEM setting, with per-row help and docs links |
 | **Costs** | Financial breakdown — savings, feed-in revenue, costs |
 | **System** | Integration health, sensor status, coordinator info |
 
@@ -195,4 +196,4 @@ Go to **Settings > Dashboards > Energy** and add your solar and grid sensors. Th
 ## Next Steps
 
 - [Setup Guide](SETUP_GUIDE.md) — detailed configuration for EV charging strategy, tariffs, notifications, and multi-charger setups
-- [Dashboard Guide](DASHBOARD_GUIDE.md) — all 7 tabs explained, language support, customization options
+- [Dashboard Guide](DASHBOARD_GUIDE.md) — all 8 tabs explained, language support, customization options

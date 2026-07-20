@@ -443,7 +443,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - **Robust grid-sign autodetection + one-tap fix** (#461) — solar-anchored detector with `Fix grid sign` / `Reset` buttons and a `flip_grid_sign` service; locks survive restarts (#476).
 - **Battery-sign autodetection + one-tap fix** (#588) — brand-seeded (deterministic for known inverters) + counter-correlation detector with a `Fix battery sign` button and a `flip_battery_sign` service, at parity with the grid-sign handling; per-battery on multi-battery installs, locks survive restarts.
 - **Idempotent Huawei Modbus write** (#538), **dashboard time labels in the home timezone** (#539), and **full 15-locale dashboard translations** (parity-tested).
-- Battery → grid export arbitrage shipped in beta but is **off in this stable**, pending more soak (#533, re-enable targeted for v1.7.4).
+- Battery → grid export arbitrage shipped in beta but remains **deactivated** pending more review and soak (#533; re-evaluation planned for a later v1.7.x release).
 
 ### v1.7.2 — Hot Water boiler control (08.06.2026)
 - **HotWaterController fully wired** (#454) — setting `hot_water_entity` now actually controls the boiler at runtime (the class existed from day one but was never instantiated). Live status block, Repair issues for unavailable temp sensor / boiler entity, fail-safe semantics (boiler is NOT activated on surplus when the temp sensor is broken), and orphan-repair sweep when the user reconfigures the boiler entity.

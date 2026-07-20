@@ -4,7 +4,7 @@
 
 # Solar Energy Management - Dashboard Guide
 
-Complete guide for the SEM dashboard — a 7-tab glassmorphism interface with animated system diagram, real-time energy flows, cost tracking, and environmental impact.
+Complete guide for the SEM dashboard — an 8-tab glassmorphism interface with animated system diagram, real-time energy flows, cost tracking, and environmental impact.
 
 ![Dashboard Home](images/sem_home_tab.png)
 
@@ -249,7 +249,7 @@ These ship with the integration — no HACS installation needed:
 |------|---------|
 | `sem-flow-card` | Animated SVG power flow with daily energy, autarky gauge, visual config editor, tap actions, up to 6 individual devices |
 | `sem-system-diagram-card` | Illustrated SVG energy system diagram with detailed component drawings, animated spark flows, time-based sun arc, clickable nodes, responsive layouts |
-| `sem-solar-summary-card` | Solar production metrics with animated glow ring and forecast |
+| `sem-solar-card` | Solar production metrics with animated glow ring and forecast |
 | `sem-weather-card` | Live clock, weather conditions, colored temperature forecast bars |
 | `sem-chart-card` | Chart.js-powered charts with 6 presets (costs, savings, energy, power, battery, EV) |
 | `sem-period-selector-card` | Date range picker controlling all chart cards |
@@ -364,14 +364,14 @@ Home Assistant has two independent language settings. SEM uses both:
 
 | Setting | Where to change | What it affects in the dashboard |
 |---------|----------------|----------------------------------|
-| **System language** | Settings → General → Language | Mushroom card titles and labels, section headers, chart titles from ApexCharts/Sankey, all static YAML-based text |
+| **System language** | Settings → General → Language | Section headers, native/optional card titles and all static YAML-based text baked in at dashboard generation |
 | **User profile language** | Your profile → Language | SEM custom cards: flow card, chart card, battery card, EV status, period selector, solar summary, weather card |
 
 #### What this means in practice
 
-- **Same language for everyone:** If the system language is German, all mushroom cards, chart labels, and static text appear in German for every user.
+- **Same language for everyone:** If the system language is German, all generation-time text (section headers, static labels) appears in German for every user.
 - **Per-user SEM cards:** If one user sets their profile to English and another to French, the SEM flow card, chart card, and other SEM cards will show each user's chosen language.
-- **Mixed-language scenario:** System = German, user profile = English → mushroom cards show German, SEM cards show English. This is by design, not a bug.
+- **Mixed-language scenario:** System = German, user profile = English → generation-time text shows German, SEM cards show English. This is by design, not a bug.
 
 #### How to ensure consistent language
 
@@ -388,7 +388,7 @@ For all text to appear in the same language:
 
 | Action | What changes |
 |--------|-------------|
-| Change **system language** + regenerate dashboard | Mushroom cards, chart labels, section headers, tab names (reloads live, no HA restart) |
+| Change **system language** + regenerate dashboard | Section headers, static labels, tab names (reloads live, no HA restart) |
 | Change **user profile language** | SEM custom cards update immediately (no regeneration needed) |
 | Add new translations to `translations.json` | Must regenerate `sem-localize.js` + redeploy + regenerate dashboard (hard-refresh after — browser-cached `sem-localize.js`) |
 
@@ -401,10 +401,10 @@ For all text to appear in the same language:
 2. Hard-refresh your browser (Ctrl+Shift+R)
 
 ### Cards showing "Custom element doesn't exist"
-A required HACS card is missing. Check the browser console for the card name, install it via HACS, and hard-refresh.
+If the element name starts with `sem-`, SEM's card bundle didn't register — restart Home Assistant and hard-refresh. Any other name means the dashboard was generated while an *optional* card (sankey-chart, k-flow) was installed and it has since been removed — re-run *generate dashboard* to regenerate with the built-in fallbacks. No card install is required since v1.7.5 (#617).
 
 ### Blank Home tab
-Missing `card-mod` — the `*glass_card` styling anchor requires it. Install via HACS.
+Should not occur since v1.7.5 (styling is built into the SEM cards; card-mod is no longer used). A blank tab is almost always a stale browser/service-worker cache after an update — hard-refresh (Ctrl+Shift+R) or clear the Companion app's frontend cache.
 
 ### Entity not found errors
 The dashboard references SEM sensors that may not exist yet. Wait for the first coordinator cycle (10 seconds after restart) and refresh.
