@@ -201,6 +201,13 @@ class ControllableDevice(ABC):
         # rollover (the deficit was YESTERDAY's) so it can't re-fill the new
         # day's target from grid overnight.
         self._offpeak_forced_date: Optional[date] = None
+        # (#620) Tier-2 overnight battery force marker — SEPARATE from the
+        # cheap-hours ``_offpeak_forced`` so the cheap-hours force-expiry (which
+        # deactivates at non-cheap tariff) can't kill a battery-overnight run
+        # every cycle. Tier 2 expires on its own terms: the Reserve floor, the
+        # daily target met, or the day rollover.
+        self._batt_overnight_forced: bool = False
+        self._batt_overnight_forced_date: Optional[date] = None
 
         # Appliance dependencies (#122): device only activates when dependencies are met
         self.depends_on: List[str] = []  # device_ids that must be active
@@ -663,7 +670,8 @@ class ControllableDevice(ABC):
             "observed_on": obs,
             "sem_owned": self._sem_owned,
         }
-        if self.daily_min_runtime_sec > 0 or self.daily_max_runtime_sec > 0:
+        if (self.daily_min_runtime_sec > 0 or self.daily_max_runtime_sec > 0
+                or self.battery_assist_enabled or self.battery_eligible_overnight):
             d.update({
                 "daily_min_runtime_sec": self.daily_min_runtime_sec,
                 "daily_runtime_accumulated_sec": round(self._daily_runtime_accumulated_sec, 1),

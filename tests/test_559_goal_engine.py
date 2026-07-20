@@ -166,6 +166,10 @@ def _mock_device(**kw):
     device.status = MagicMock()
     device.control_mode = kw.get("control_mode", DeviceControlMode.SURPLUS)
     device._offpeak_forced = False
+    device._batt_overnight_forced = False
+    device._batt_overnight_forced_date = None
+    device.battery_assist_enabled = False
+    device.battery_eligible_overnight = False
     device.needs_offpeak_activation = kw.get("needs_offpeak", False)
     device.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     device.daily_min_runtime_sec = 0
@@ -315,7 +319,11 @@ def test_goal_payload_shape(registry):
     assert payload["progress"]["runtime_today_min"] == 0
     # deleted keys are gone from the payload
     assert "target_deadline" not in payload["goals"]
-    assert "daily_max_runtime_min" not in payload["goals"]
+    assert "daily_target_energy_kwh" not in payload["goals"]
+    # (#620) daily_max_runtime_min + battery flags are live keys again
+    assert payload["goals"]["daily_max_runtime_min"] == 0
+    assert payload["goals"]["battery_assist_enabled"] is False
+    assert payload["goals"]["battery_eligible_overnight"] is False
 
 
 @pytest.mark.asyncio

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.solar_energy_management.devices.base import (
-    SwitchDevice, DeviceControlMode,
+    SwitchDevice, DeviceControlMode, DeviceState,
 )
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
@@ -72,6 +72,52 @@ class TestMaxCapGate:
         assert blob["battery_assist_enabled"] is True
         assert blob["battery_eligible_overnight"] is True
 
+    def test_battery_only_device_serializes(self):
+        """A device with ONLY a battery flag (no runtime target) still emits
+        the battery fields (reviewer MEDIUM-3)."""
+        d = _switch()
+        d.battery_assist_enabled = True
+        blob = d.to_dict()
+        assert blob["battery_assist_enabled"] is True
+
+
+class TestGoalBoolPersistence:
+    """Reviewer BLOCKER-2: the service stores flags as STRINGS; bool('False')
+    is True in Python, so a disabled flag must NOT round-trip back to True."""
+
+    def test_goal_bool_parses_strings(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            _goal_bool,
+        )
+        assert _goal_bool("True") is True
+        assert _goal_bool("False") is False   # the bug: bool("False") == True
+        assert _goal_bool("false") is False
+        assert _goal_bool("true") is True
+        assert _goal_bool(True) is True
+        assert _goal_bool(False) is False
+        assert _goal_bool(None) is False
+        assert _goal_bool("1") is True
+        assert _goal_bool("0") is False
+
+    def test_apply_goals_restores_false_flag(self):
+        """The full path: a stored '"False"' string must land as False on the
+        device, not silently flip to True after a restart."""
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry,
+        )
+        reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._device_goals = {"pump": {
+            "daily_min_runtime_min": 60,
+            "battery_assist_enabled": "False",       # stored as a string
+            "battery_eligible_overnight": "True",
+        }}
+        dev = _switch(device_id="pump")
+        dev.battery_assist_enabled = True  # pretend it was on before restart
+        reg._apply_goals(dev)
+        assert dev.battery_assist_enabled is False   # was "False" → stays off
+        assert dev.battery_eligible_overnight is True
+
 
 # ── Phase 2: allocation — Tier 1 daytime assist ───────────────────────────
 
@@ -97,6 +143,8 @@ def _mock(**kw):
     d.control_mode = kw.get("control_mode", DeviceControlMode.SURPLUS)
     d._offpeak_forced = False
     d._offpeak_forced_date = None
+    d._batt_overnight_forced = kw.get("_batt_overnight_forced", False)
+    d._batt_overnight_forced_date = None
     d.needs_offpeak_activation = kw.get("needs_offpeak", False)
     d.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     d.daily_min_runtime_sec = 0
@@ -172,7 +220,8 @@ class TestTier2Overnight:
         await sc.update(0.0, price_level="normal", battery_soc=50,
                         battery_reserve_soc=20)
         d.activate.assert_called_once()
-        assert d._offpeak_forced is True
+        assert d._batt_overnight_forced is True
+        assert d._offpeak_forced is False  # Tier-2 uses its OWN marker
 
     async def test_overnight_blocked_below_reserve(self, mock_hass):
         """SoC ≤ reserve → the hard floor holds, no activation."""
@@ -194,6 +243,48 @@ class TestTier2Overnight:
         await sc.update(0.0, price_level="normal", battery_soc=90,
                         battery_reserve_soc=20)
         d.activate.assert_not_called()
+
+    async def test_overnight_does_not_self_flap(self, mock_hass):
+        """Reviewer BLOCKER-1: a Tier-2 device that activated must STAY on the
+        next cycle at normal tariff — the cheap-hours force-expiry (which
+        deactivates _offpeak_forced devices when tariff isn't cheap) must not
+        touch the separate _batt_overnight_forced marker."""
+        sc = SurplusController(mock_hass)
+        d = _switch(device_id="pump", rated_power=800)
+        d.control_mode = DeviceControlMode.SURPLUS
+        d.daily_min_runtime_sec = 3600
+        d.battery_eligible_overnight = True
+        # simulate: already forced on by Tier-2 last cycle
+        d._status.state = DeviceState.ACTIVE
+        d._batt_overnight_forced = True
+        from datetime import date as _date
+        from homeassistant.util import dt as dt_util
+        # freeze "today" so the day-rollover branch doesn't fire
+        d._batt_overnight_forced_date = dt_util.now().date()
+        d.deactivate = AsyncMock()
+        sc.register_device(d)
+        await sc.update(0.0, price_level="normal", battery_soc=50,
+                        battery_reserve_soc=20)
+        # SoC 50 > reserve 20, same day, normal tariff → NOT expired.
+        d.deactivate.assert_not_awaited()
+
+    async def test_overnight_expires_at_reserve(self, mock_hass):
+        """The Reserve floor DOES end a Tier-2 run — battery protected."""
+        sc = SurplusController(mock_hass)
+        d = _switch(device_id="pump", rated_power=800)
+        d.control_mode = DeviceControlMode.SURPLUS
+        d.battery_eligible_overnight = True
+        d._status.state = DeviceState.ACTIVE
+        d._batt_overnight_forced = True
+        from homeassistant.util import dt as dt_util
+        d._batt_overnight_forced_date = dt_util.now().date()
+        async def _deact():
+            d._status.state = DeviceState.IDLE
+        d.deactivate = AsyncMock(side_effect=_deact)
+        sc.register_device(d)
+        await sc.update(0.0, price_level="normal", battery_soc=20,
+                        battery_reserve_soc=20)  # SoC == reserve → expire
+        d.deactivate.assert_awaited()
 
     async def test_overnight_respects_max_cap(self, mock_hass):
         """A capped-out device (can_activate False) is skipped even with the

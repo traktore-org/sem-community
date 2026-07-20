@@ -107,6 +107,7 @@ class SurplusController:
         self._batt_buffer_soc: float = 100.0
         self._batt_reserve_soc: float = 100.0
         self._batt_assist_budget_w: float = 0.0
+        self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
         # EV Intelligence: anticipated surplus from taper detection (#106)
@@ -472,6 +473,10 @@ class SurplusController:
         remaining_surplus = distributable + max(0.0, reclaim_w)
         _reclaim_handed_back = False
         active_count = 0
+        # (#620) Tier-1 running budget — the battery can only supply its assist
+        # budget ONCE, not once per device. Decremented as each battery-assist
+        # load draws from it, so N loads can't each claim the full budget.
+        self._tier1_budget_left = self._batt_assist_budget_w
 
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —
         # the tariff left the cheap window, OR the day rolled over (the deficit
@@ -493,11 +498,24 @@ class SurplusController:
                     reason = "cheap-hours force expired (day rollover)"
                 elif price_level not in ("cheap", "very_cheap", "negative"):
                     reason = f"tariff now {price_level}"
+            # (#620) Tier-2 overnight battery force expiry — its OWN terms: the
+            # Reserve floor was crossed (battery must be protected) or the day
+            # rolled over. NOT expired by tariff (it isn't tariff-driven). The
+            # daily-target-met stop is handled by the goal gate below.
+            if reason is None and getattr(device, "_batt_overnight_forced", False):
+                soc = self._batt_soc
+                _bo_date = getattr(device, "_batt_overnight_forced_date", None)
+                if (_bo_date is not None and _bo_date != today_local):
+                    reason = "overnight battery force expired (day rollover)"
+                elif soc is not None and soc <= self._batt_reserve_soc:
+                    reason = "overnight battery force ended (reserve SoC reached)"
             if reason:
                 await device.deactivate()
                 if not device.is_active:
                     device._offpeak_forced = False
                     device._offpeak_forced_date = None
+                    device._batt_overnight_forced = False
+                    device._batt_overnight_forced_date = None
                     _LOGGER.info(
                         "Force ended for %s (%s)", device.name, reason,
                     )
@@ -584,6 +602,12 @@ class SurplusController:
                     if consumed > 0:
                         device.record_activated()
                         device.reset_surplus_timer()
+                        # (#620) if the battery covered a shortfall for this
+                        # assist device, subtract that from the running budget.
+                        if getattr(device, "battery_assist_enabled", False):
+                            batt_covered = max(0.0, consumed - max(0.0, remaining_surplus))
+                            self._tier1_budget_left = max(
+                                0.0, self._tier1_budget_left - batt_covered)
                     remaining_surplus -= consumed
                     if consumed > 0:
                         active_count += 1
@@ -617,7 +641,11 @@ class SurplusController:
                 # (#559) off-peak-forced devices run WITHOUT surplus by
                 # design — the force-expiry section and the peak shed pass
                 # own their lifecycle; the deficit LIFO must not flap them off.
-                if device._offpeak_forced:
+                # (#620) same for a Tier-2 overnight-battery forced device: it
+                # runs off the battery by design and is only ended by its OWN
+                # terms (reserve SoC / day rollover), never by the deficit LIFO.
+                if device._offpeak_forced or getattr(
+                        device, "_batt_overnight_forced", False):
                     continue
                 if device.is_active and device.can_deactivate():
                     consumption = device.get_current_consumption()
@@ -783,8 +811,8 @@ class SurplusController:
                     continue
                 consumed = await device.activate(device.min_power_threshold)
                 if consumed > 0:
-                    device._offpeak_forced = True
-                    device._offpeak_forced_date = today_local
+                    device._batt_overnight_forced = True  # (#620) own marker
+                    device._batt_overnight_forced_date = today_local
                     active_count += 1
                     for a in allocations:
                         if a.device_id == device.device_id:
@@ -843,7 +871,9 @@ class SurplusController:
         soc = self._batt_soc
         if soc is None or soc <= self._batt_buffer_soc:
             return 0.0
-        return self._batt_assist_budget_w
+        # Running budget: shrinks as earlier (higher-priority) battery-assist
+        # loads claim it this cycle, so the battery isn't multi-spent.
+        return max(0.0, min(self._batt_assist_budget_w, self._tier1_budget_left))
 
     def _tier2_overnight_eligible(self, device) -> bool:
         """(#620) Tier 2 — may this device draw the battery BELOW the buffer,

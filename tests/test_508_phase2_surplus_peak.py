@@ -63,6 +63,8 @@ def _make_device(
     device.stop_condition_met = False
     device.top_up_policy = "solar_only"
     device._offpeak_forced_date = None
+    device._batt_overnight_forced = False
+    device._batt_overnight_forced_date = None
     device.__class__ = MagicMock
     if antiflicker_blocks:
         device.deactivate = AsyncMock()  # is_active stays True

@@ -412,7 +412,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="help-panel">
                         <div class="help-item"><b>${this._t('off')}</b> — ${this._t('help_mode_off')}</div>
                         <div class="help-item"><b>${this._t('peak_only')}</b> — ${this._t('help_mode_peak_only')}</div>
-                        <div class="help-item"><b>${this._t('mode_surplus')}</b> — ${this._t('help_mode_surplus')}</div>
+                        <div class="help-item"><b>${this._t('mode_solar_only')}</b> — ${this._t('help_mode_surplus')}</div>
+                        <div class="help-item"><b>${this._t('mode_solar_battery')}</b> — ${this._t('battery_overnight_hint')}</div>
                         <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
                         <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
                         <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
@@ -684,10 +685,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderGoalProgress(device) {
-        // Only meaningful when SEM manages the device (Surplus). In Off /
-        // Peak-only the daily solar budget doesn't apply, so hide the row
-        // rather than show a stale/counting timer (#559 alex "Issue 6").
-        if (this._mergedMode(device) !== 'surplus') return nothing;
+        // Only meaningful in the two solar modes (#620) — in Off / Peak-only
+        // the daily solar budget doesn't apply, so hide the row rather than
+        // show a stale/counting timer (#559 alex "Issue 6").
+        const _m = this._mergedMode(device);
+        if (_m !== 'solar_only' && _m !== 'solar_battery') return nothing;
         const pct = this._goalPct(device);
         if (pct === null) return nothing;
         const g = device.goals, p = device.progress;

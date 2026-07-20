@@ -4012,12 +4012,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # #537) — so the battery tops loads up out of surplus it would
                 # otherwise export, never below the buffer. Reserve floor for
                 # Tier-2 is the load reclaim reserve (``battery_priority_soc``).
+                from ..consts.core import (
+                    DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST,
+                    DEFAULT_BATTERY_BUFFER_SOC as _DEF_BUFFER,
+                    DEFAULT_BATTERY_ASSIST_MIN_SURPLUS as _DEF_GATE,
+                )
                 _b_soc = getattr(power, "battery_soc", None)
-                _b_buffer = float(self.config.get("battery_buffer_soc", 70) or 70)
+                _b_buffer = float(self.config.get("battery_buffer_soc", _DEF_BUFFER) or _DEF_BUFFER)
                 _b_reserve = float(self.config.get("battery_priority_soc", 30) or 30)
-                _solar_gate = float(self.config.get("battery_assist_min_surplus", 1200) or 1200)
+                _solar_gate = float(self.config.get("battery_assist_min_surplus", _DEF_GATE) or _DEF_GATE)
                 _assist_budget = (
-                    float(self.config.get("battery_assist_max_power", 3000) or 3000)
+                    float(self.config.get("battery_assist_max_power", _DEF_ASSIST) or _DEF_ASSIST)
                     if (_b_soc is not None and _b_soc > _b_buffer and true_surplus_w >= _solar_gate)
                     else 0.0
                 )
@@ -4068,9 +4073,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Surplus controller update failed: %s", e)
 
-        # Device runtimes
+        # Device runtimes. (#620 + Guido) The load "day" rolls over only once
+        # we're OUT of night mode — i.e. after sunrise — NOT at calendar
+        # midnight. Same reasoning as the EV's sunrise reset: if the counter
+        # reset at 00:00, a Tier-2 battery-eligible load would see 0/target in
+        # the small hours and start draining the battery overnight to refill a
+        # brand-new day's target BEFORE the day's surplus has any chance. By
+        # holding the meter day through the night, an overnight run keeps
+        # counting to the SAME day; the reset lands after sunrise when solar is
+        # already available, so the load fills from surplus first.
         try:
-            meter_day = dt_util.now().date()
+            _cal_day = dt_util.now().date()
+            if not self.time_manager.is_night_mode():
+                self._load_meter_day = _cal_day
+            meter_day = getattr(self, "_load_meter_day", None) or _cal_day
+            self._load_meter_day = meter_day
             for device in self._surplus_controller._devices.values():
                 device.update_daily_runtime(meter_day)
         except (AttributeError, TypeError) as e:
