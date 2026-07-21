@@ -296,6 +296,20 @@ class TestTier2Overnight:
         # SoC 50 > reserve 20, same day, normal tariff → NOT expired.
         d.deactivate.assert_not_awaited()
 
+    async def test_toggle_off_stops_running_overnight_load(self, mock_hass):
+        """The 'Use battery overnight' toggle gates activation, but a load
+        already running off the battery must STOP the moment the user turns it
+        off — else it keeps draining until reserve/rollover (caught live on the
+        Heizband toggle test)."""
+        sc = SurplusController(mock_hass)
+        d = _mock(is_active=True, battery_eligible_overnight=False,
+                  _batt_overnight_forced=True, consumption=800)
+        sc.register_device(d)
+        await sc.update(0.0, price_level="normal", battery_soc=90,
+                        battery_reserve_soc=20)  # SoC ≫ reserve, same day
+        d.deactivate.assert_awaited()
+        assert d._batt_overnight_forced is False
+
     async def test_overnight_expires_at_reserve(self, mock_hass):
         """The Reserve floor DOES end a Tier-2 run — battery protected."""
         sc = SurplusController(mock_hass)

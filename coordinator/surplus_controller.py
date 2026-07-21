@@ -499,13 +499,20 @@ class SurplusController:
                 elif price_level not in ("cheap", "very_cheap", "negative"):
                     reason = f"tariff now {price_level}"
             # (#620) Tier-2 overnight battery force expiry — its OWN terms: the
-            # Reserve floor was crossed (battery must be protected) or the day
-            # rolled over. NOT expired by tariff (it isn't tariff-driven). The
+            # user turned the "Use battery overnight" toggle OFF, the Reserve
+            # floor was crossed (battery must be protected), or the day rolled
+            # over. NOT expired by tariff (it isn't tariff-driven). The
             # daily-target-met stop is handled by the goal gate below.
             if reason is None and getattr(device, "_batt_overnight_forced", False):
                 soc = self._batt_soc
                 _bo_date = getattr(device, "_batt_overnight_forced_date", None)
-                if (_bo_date is not None and _bo_date != today_local):
+                if not getattr(device, "battery_eligible_overnight", False):
+                    # The toggle gates ACTIVATION, but a load already running off
+                    # the battery must also STOP the moment the user disables it —
+                    # else it keeps draining until reserve/rollover (caught live
+                    # on the Heizband toggle test).
+                    reason = "overnight battery disabled by user"
+                elif (_bo_date is not None and _bo_date != today_local):
                     reason = "overnight battery force expired (day rollover)"
                 elif soc is not None and soc <= self._batt_reserve_soc:
                     reason = "overnight battery force ended (reserve SoC reached)"

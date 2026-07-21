@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a split (⬍) affordance was added for when Min and Max overlap (mirrors the EV slider, #355).
 - 🔎 **Stop-condition entity search** — the stop-sensor field is now an `ha-entity-picker`
   with a working clear (✕) button, instead of a free-text box.
+- 🌙 **"Use battery overnight" toggle now stops a running load** — turning it off gated
+  future activation but left a load already drawing the battery running until reserve/rollover
+  (caught on the real-hardware Heizband toggle test); it now ends the overnight draw at once.
 
 # [1.7.5-beta.20] — 20.07.2026
 
