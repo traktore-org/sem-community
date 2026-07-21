@@ -132,3 +132,76 @@ The layered trace (`diagnose`, `section: trace`) reports each device's list role
 — e.g. *"sink at list position 2"*, *"charging first — below reserve"* — so you can
 see who charges before whom each cycle. **Today's Plan** shows the pool pump / heat
 pump / hot water in the same forward timeline as the battery and EV.
+
+---
+
+# Daily runtime goals for a load (#620)
+
+*Added in 1.7.5. Design:
+`docs/superpowers/specs/2026-07-20-620-device-goal-model-design.md`.*
+
+The priority list decides **who gets surplus first**; the per-device **goal
+editor** (the 🎯 target button on a load's row) decides **how much that load
+should run and from what source**. It's the load-side analogue of the EV
+charge-target: continuous priority allocation bounded by two hard ceilings — the
+**grid peak limit** and the battery **reserve SoC** — and deliberately **no
+device deadlines** (see "Why no deadlines" below).
+
+## Mode — how SEM drives the load
+
+Each load's row has a **Mode** selector:
+
+| Mode | What SEM does |
+|---|---|
+| **Off** | Monitor only — SEM never turns it on or off. |
+| **Peak only** | Your automations run it; SEM only *sheds* it to protect the grid peak. |
+| **Solar only** | Runs on PV surplus; never force-imports and never touches the battery. |
+| **Solar + battery** | Runs on PV surplus **and** lets the home battery assist above the buffer (Tier 1); optionally down to the reserve overnight (Tier 2). |
+
+## Min / Max runtime (the dual slider)
+
+Under the 🎯 target button, a **dual-handle slider** sets the daily runtime
+window (shown only in the two solar modes):
+
+- **Minimum** (green handle) — the daily target. SEM keeps the load running
+  until it has accrued this much, then **stops it for the rest of the day**
+  (the *daily-target-met* stop). Set to 0 for "no target — just take surplus".
+- **Maximum** (orange handle) — a **hard cap**. The load **never runs past this
+  in a day**, even if the minimum isn't met and surplus is available. Full-scale
+  = *Uncapped*. The cap is **persisted across restarts** and **overrides the
+  minimum** — if a load is running when it hits the cap, SEM switches it off.
+
+If both handles land on the same spot, tap the **split button** (⬍) that appears
+to nudge them apart so each is grabbable again.
+
+The counter resets **after sunrise**, not at midnight — so a battery-eligible
+load isn't reset mid-night and re-drained before the new day's surplus arrives.
+
+## The two battery tiers ("Solar + battery" mode)
+
+| Tier | When | Source | Opt-in |
+|---|---|---|---|
+| **Tier 1 — daytime assist** | Solar surplus present, battery **above the Buffer SoC** | The above-buffer surplus that would otherwise export — mirrors the EV assist (Solar Gate, `battery_assist_min_surplus`) | Automatic in Solar+battery mode |
+| **Tier 2 — overnight** | No surplus, battery **above the Reserve SoC** | Stored house energy, down to the hard reserve floor | The **"Use battery overnight"** toggle |
+
+Tier 2 lets a load **finish its remaining runtime overnight off the battery**
+instead of missing the target on a short solar day. It stops at the reserve floor
+(`Battery priority SOC`, default 30 %) — the battery is never drained past it.
+
+## Optional stop condition
+
+Any load can also **end its run early** when a sensor crosses a value — pick the
+sensor with the **entity search** (the *Stop when ≥* picker: e.g. tank-level ≥
+full, water-temp ≥ 28 °C, car SOC ≥ 80 %). Clear it with the picker's ✕.
+
+## Why no deadlines (and no forced grid top-up)
+
+The originally-requested "guarantee the minimum by a deadline using grid" was
+**deliberately not built**. In winter, a high-priority load (the EV) can sit on
+the peak ceiling for hours, so a *deadline* would force lower-priority devices
+(the heat pump) to grid-import all at once against that ceiling — the exact
+contention we avoid. Field research (evcc, Solarmanager) confirmed neither ships
+generic-device deadlines; both throttle continuously by priority. #620 instead
+gives you the **battery tiers** to finish overnight from stored energy, and the
+`cheap_hours` top-up policy (heat pump / hot water) for tariff-window grid top-up
+— never a hard forced-import deadline.

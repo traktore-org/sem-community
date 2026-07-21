@@ -633,16 +633,38 @@ free solar power is available and turns them off when surplus disappears.
 
 ### The four control modes
 
-Every managed device has a **Mode** setting:
+Every managed device has a **Mode** setting on its Control-tab row:
 
 | Mode | SEM turns it ON? | SEM turns it OFF? | Best for |
 |------|-----------------|------------------|----------|
 | **Off** | Never | Never | Devices you control manually |
 | **Peak Only** | Never | Yes, during grid peaks | Devices that should run normally but can be temporarily shed |
-| **Surplus** | Yes, when surplus is available | Yes, when surplus drops or during peaks | Discretionary loads (hot water boiler, pool pump, dishwasher) |
+| **Solar only** | Yes, on PV surplus | Yes, when surplus drops or during peaks | Discretionary loads on sun alone (pool pump, boiler) |
+| **Solar + battery** | Yes, on PV surplus **+ home-battery assist** | Same | Loads you want to keep running through cloud/evening from the battery (#620) |
 
 **The default mode is Peak Only.** SEM will never turn a device ON unless you
-explicitly set its mode to Surplus.
+explicitly set its mode to a Solar mode.
+
+#### Daily runtime goals (#620)
+
+The 🎯 target button on a load's row (shown in the two Solar modes) opens the
+goal editor:
+
+- **Min / Max runtime** — a dual-handle slider. **Min** is the daily target
+  (SEM stops the load once it's accrued this much); **Max** is a hard daily
+  **cap** (persisted, overrides the Min — the load never runs past it). Full-scale
+  Max = *Uncapped*. If the handles overlap, tap the split (⬍) button to separate them.
+- **Use battery overnight** (Solar + battery only) — lets the load draw the
+  battery **below the buffer, down to the reserve floor** overnight to finish its
+  remaining runtime from stored energy. Off = the battery only assists above the
+  buffer during the day.
+- **Stop when ≥ sensor** — pick any sensor with the entity search to end the run
+  early (e.g. water-temp ≥ 28 °C, tank ≥ full). Clear it with the picker's ✕.
+
+The runtime counter resets **after sunrise** (not midnight), so an overnight-eligible
+load isn't reset mid-night and re-drained. There is **no forced-grid deadline** — a
+missed target waits for tomorrow's sun (or the overnight battery, if enabled). Full
+model: [`docs/LOAD_PRIORITY.md`](LOAD_PRIORITY.md).
 
 > EV chargers stay in this list for priority ordering, but they no longer show a
 > Mode dropdown — all EV charge-target controls live on the **EV charger card**

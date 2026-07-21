@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+<!-- #620 device goal model — soaking on the feature/620 branch, NOT yet tagged.
+     Re-header this block to the real version + date at merge/tag. -->
+# [Unreleased — #620 device goal model]
+
+### ✨ Features
+
+- 🎯 **Daily runtime goals for household loads** (#620, requested by @onkelfu) — a load's
+  🎯 target editor now offers a **Min / Max runtime** dual-slider (the Max is a persisted
+  hard cap that overrides the Min), a four-way **mode** (Off / Peak-only / Solar only /
+  **Solar + battery**), and an optional **stop condition** picked with an entity search.
+- 🔋 **Two battery tiers in "Solar + battery" mode** — **Tier 1** assists the load from the
+  home battery above the buffer during the day (mirrors the EV assist); **Tier 2** ("Use
+  battery overnight") lets it finish its remaining runtime overnight down to the reserve
+  floor. No forced-grid deadlines by design (winter peak-contention). Runtime resets after
+  sunrise so an overnight load isn't reset mid-night.
+
+### 🐛 Fixes
+
+- 🛑 **Daily-max cap now stops a running load** — the cap only blocked re-activation, so a
+  load already on when it crossed the cap kept running past it (caught on the real-hardware
+  Heizband test).
+- 🎚️ **Load min/max slider fixes** — handles were undraggable (`pointer-events:none`), and
+  a split (⬍) affordance was added for when Min and Max overlap (mirrors the EV slider, #355).
+- 🔎 **Stop-condition entity search** — the stop-sensor field is now an `ha-entity-picker`
+  with a working clear (✕) button, instead of a free-text box.
+
 # [1.7.5-beta.20] — 20.07.2026
 
 ### 🐛 Fixes
