@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.21] — 21.07.2026
+
+### 🐛 Fixes
+
+- 🔋 **Individual battery sensors returned on multi-battery installs** (#623, reported by
+  @RienduPre) — a fleet of two or more batteries that *also* set the combined
+  *battery power sensor* override lost every per-battery sensor (`sensor.sem_battery_b1_power`,
+  `…_soc`, `…_status`, `…_capacity` — all `unavailable`) partway through the 1.7.5 betas. The
+  #597 override was placed above the per-battery read loop, so it short-circuited before the
+  individual batteries were ever read. Per-battery (and per-inverter) readings are now populated
+  independently of which sensor supplies the fleet total, so the individual figures come back
+  while the combined override still wins the fleet scalar exactly where it should. The same latent
+  coupling on the solar per-inverter path was swept in the same change.
+
 # [1.7.5-beta.20] — 20.07.2026
 
 ### 🐛 Fixes
