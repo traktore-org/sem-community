@@ -156,7 +156,10 @@ Each load's row has a **Mode** selector:
 | **Off** | Monitor only — SEM never turns it on or off. |
 | **Peak only** | Your automations run it; SEM only *sheds* it to protect the grid peak. |
 | **Solar only** | Runs on PV surplus; never force-imports and never touches the battery. |
-| **Solar + battery** | Runs on PV surplus **and** lets the home battery assist above the buffer (Tier 1); optionally down to the reserve overnight (Tier 2). |
+| **Solar + battery** | Runs on PV surplus **and** lets the home battery assist above the buffer during the day (the load-side "solar + min"). |
+
+The Mode is **axis 1 — the daytime source**. What happens *overnight* (no sun) is a
+separate choice, the **"Finish overnight from"** picker below.
 
 ## Min / Max runtime (the dual slider)
 
@@ -177,16 +180,27 @@ to nudge them apart so each is grabbable again.
 The counter resets **after sunrise**, not at midnight — so a battery-eligible
 load isn't reset mid-night and re-drained before the new day's surplus arrives.
 
-## The two battery tiers ("Solar + battery" mode)
+## Finish overnight from — the overnight source (axis 2)
 
-| Tier | When | Source | Opt-in |
-|---|---|---|---|
-| **Tier 1 — daytime assist** | Solar surplus present, battery **above the Buffer SoC** | The above-buffer surplus that would otherwise export — mirrors the EV assist (Solar Gate, `battery_assist_min_surplus`) | Automatic in Solar+battery mode |
-| **Tier 2 — overnight** | No surplus, battery **above the Reserve SoC** | Stored house energy, down to the hard reserve floor | The **"Use battery overnight"** toggle |
+When the sun is gone and the daily target isn't met, a single **"Finish overnight
+from"** picker (shown for *both* solar modes) decides what — if anything — finishes
+the runtime:
 
-Tier 2 lets a load **finish its remaining runtime overnight off the battery**
-instead of missing the target on a short solar day. It stops at the reserve floor
-(`Battery priority SOC`, default 30 %) — the battery is never drained past it.
+| Choice | Overnight behavior | Backend |
+|---|---|---|
+| **Off** | The load just waits for sun — may miss its target on a dark day. | `solar_only`, no battery |
+| **Battery** | Runs off the **home battery**, down to the hard reserve floor — never past it. | `battery_eligible_overnight` |
+| **Grid** | Runs off the **grid** during your cheap-tariff window (needs a tariff/cheap window). | `top_up_policy = cheap_hours` |
+
+The two axes are independent: the **Mode** picks the daytime source (solar, or
+solar + battery assist above the buffer), and **Finish overnight from** picks the
+no-sun source (nothing / battery to reserve / cheap grid). Switching the picker
+also **stops a load that's already running** on the source you moved away from —
+you don't have to wait for the reserve floor or the cheap window to end.
+
+The daytime battery assist ("Solar + battery" mode) mirrors the EV assist
+(Solar Gate, `battery_assist_min_surplus`); the overnight battery drain stops at
+`Battery priority SOC` (default 30 %).
 
 ## Optional stop condition
 
@@ -202,6 +216,6 @@ the peak ceiling for hours, so a *deadline* would force lower-priority devices
 (the heat pump) to grid-import all at once against that ceiling — the exact
 contention we avoid. Field research (evcc, Solarmanager) confirmed neither ships
 generic-device deadlines; both throttle continuously by priority. #620 instead
-gives you the **battery tiers** to finish overnight from stored energy, and the
-`cheap_hours` top-up policy (heat pump / hot water) for tariff-window grid top-up
-— never a hard forced-import deadline.
+gives you the **"Finish overnight from"** picker — battery (stored solar) or grid
+(cheap-tariff window) — to complete the runtime when the sun runs short, never a
+hard forced-import deadline.

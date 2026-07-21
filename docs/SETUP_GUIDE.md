@@ -654,17 +654,23 @@ goal editor:
   (SEM stops the load once it's accrued this much); **Max** is a hard daily
   **cap** (persisted, overrides the Min — the load never runs past it). Full-scale
   Max = *Uncapped*. If the handles overlap, tap the split (⬍) button to separate them.
-- **Use battery overnight** (Solar + battery only) — lets the load draw the
-  battery **below the buffer, down to the reserve floor** overnight to finish its
-  remaining runtime from stored energy. Off = the battery only assists above the
-  buffer during the day.
+- **Finish overnight from** (shown in both solar modes) — what completes the
+  runtime when the sun is gone:
+  - **Off** — nothing; the load waits for sun and may miss its target.
+  - **Battery** — drains the home battery down to the reserve floor.
+  - **Grid** — tops up from the grid during your cheap-tariff window (needs a
+    tariff/cheap window configured).
+
+  This is **axis 2** — independent of the daytime **Mode** (axis 1: Solar only vs
+  Solar + battery). Switching the picker also stops a load already running on the
+  source you moved away from.
 - **Stop when ≥ sensor** — pick any sensor with the entity search to end the run
   early (e.g. water-temp ≥ 28 °C, tank ≥ full). Clear it with the picker's ✕.
 
 The runtime counter resets **after sunrise** (not midnight), so an overnight-eligible
 load isn't reset mid-night and re-drained. There is **no forced-grid deadline** — a
-missed target waits for tomorrow's sun (or the overnight battery, if enabled). Full
-model: [`docs/LOAD_PRIORITY.md`](LOAD_PRIORITY.md).
+missed target waits for tomorrow's sun, the overnight battery, or the cheap-grid
+window, per your picker choice. Full model: [`docs/LOAD_PRIORITY.md`](LOAD_PRIORITY.md).
 
 > EV chargers stay in this list for priority ordering, but they no longer show a
 > Mode dropdown — all EV charge-target controls live on the **EV charger card**
