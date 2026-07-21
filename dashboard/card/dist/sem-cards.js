@@ -5774,7 +5774,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                                .value=${i.stop_entity||""}
                                .includeDomains=${["sensor","number","input_number"]}
                                .placeholder=${this._t("stop_entity_placeholder")}
-                               allow-custom-entity hide-clear-icon
+                               allow-custom-entity
                                @value-changed=${t=>this._onStopEntity(e,t)}
                                @click=${e=>e.stopPropagation()}></ha-entity-picker>
                         `:W`

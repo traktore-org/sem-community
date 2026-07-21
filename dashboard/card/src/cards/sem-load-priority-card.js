@@ -799,7 +799,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                                .value=${g.stop_entity || ''}
                                .includeDomains=${['sensor', 'number', 'input_number']}
                                .placeholder=${this._t('stop_entity_placeholder')}
-                               allow-custom-entity hide-clear-icon
+                               allow-custom-entity
                                @value-changed=${(e) => this._onStopEntity(device, e)}
                                @click=${(e) => e.stopPropagation()}></ha-entity-picker>
                         ` : html`
