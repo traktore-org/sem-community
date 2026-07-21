@@ -174,6 +174,7 @@ def _mock_device(**kw):
     device.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     device.daily_min_runtime_sec = 0
     device.daily_targets_met = kw.get("targets_met", False)
+    device.daily_max_runtime_reached = kw.get("max_reached", False)
     device.stop_condition_met = kw.get("stop_met", False)
     device.top_up_policy = kw.get("policy", "solar_only")
     device._offpeak_forced_date = None

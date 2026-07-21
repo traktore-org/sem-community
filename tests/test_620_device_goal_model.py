@@ -149,6 +149,7 @@ def _mock(**kw):
     d.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     d.daily_min_runtime_sec = 0
     d.daily_targets_met = False
+    d.daily_max_runtime_reached = kw.get("max_reached", False)
     d.stop_condition_met = False
     d.top_up_policy = "solar_only"
     d.battery_assist_enabled = kw.get("battery_assist_enabled", False)
@@ -166,6 +167,33 @@ def _mock(**kw):
 def mock_hass():
     h = MagicMock()
     return h
+
+
+@pytest.mark.asyncio
+class TestMaxCapDeactivation:
+    """The hard cap must STOP a running device, not only block re-activation
+    (caught live on the Heizband PROD test — a load already on when it crossed
+    the cap kept running past it)."""
+
+    async def test_cap_reached_deactivates_running_device(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        d = _mock(is_active=True, consumption=800)
+        d.daily_max_runtime_reached = True      # crossed the cap this cycle
+        d.daily_targets_met = False             # still has a min deficit
+        d.stop_condition_met = False
+        sc.register_device(d)
+        await sc.update(5000.0)                 # plenty of surplus — must NOT keep it on
+        d.deactivate.assert_awaited()
+
+    async def test_below_cap_running_device_stays(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        d = _mock(is_active=True, consumption=800)
+        d.daily_max_runtime_reached = False
+        d.daily_targets_met = False
+        d.stop_condition_met = False
+        sc.register_device(d)
+        await sc.update(5000.0)
+        d.deactivate.assert_not_awaited()
 
 
 @pytest.mark.asyncio

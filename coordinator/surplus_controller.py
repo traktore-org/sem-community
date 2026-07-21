@@ -550,7 +550,13 @@ class SurplusController:
             # user-managed, SEM never proactively stops them.
             if device.control_mode == DeviceControlMode.SURPLUS:
                 done_reason = None
-                if device.daily_targets_met:
+                if device.daily_max_runtime_reached:
+                    # (#620) the hard cap must STOP a running device, not just
+                    # block re-activation — otherwise a load already on when it
+                    # crosses the cap keeps running past it (caught live on the
+                    # Heizband PROD test). The cap overrides the min deficit.
+                    done_reason = "daily max runtime cap reached"
+                elif device.daily_targets_met:
                     done_reason = "daily target met"
                 elif device.stop_condition_met:
                     done_reason = (
