@@ -176,6 +176,13 @@ class UnifiedDeviceRegistry:
         # top-up policy, stop condition) — device_id → dict. Applies to
         # BOTH auto-discovered and service-registered devices.
         self._device_goals: Dict[str, Dict[str, Any]] = {}
+        # Serialize goal writes: async_update_device_goal is a read-modify-write
+        # that snapshots the dict inside _save_storage across await points, so
+        # two concurrent updates (the card writes stop_entity + stop_at as two
+        # separate calls) could interleave and one stale snapshot would clobber
+        # the other — the value would silently drop back to 0 (caught live on
+        # the Heizband PROD test). One lock makes each update atomic.
+        self._goal_write_lock = asyncio.Lock()
         # (#622) Callback that re-applies persisted per-device accrued daily
         # runtime from the coordinator's storage onto any device that came back
         # EMPTY after a rebuild. Set by the coordinator after construction.
@@ -304,12 +311,13 @@ class UnifiedDeviceRegistry:
         """Set one goal property, persist it, and apply it live (#559)."""
         if prop not in self.GOAL_PROPERTIES:
             raise ValueError(f"Unknown goal property: {prop}")
-        goals = self._device_goals.setdefault(device_id, {})
-        goals[prop] = value
-        device = self._surplus_controller.get_device(device_id)
-        if device:
-            self._apply_goals(device)
-        await self._save_storage()
+        async with self._goal_write_lock:
+            goals = self._device_goals.setdefault(device_id, {})
+            goals[prop] = value
+            device = self._surplus_controller.get_device(device_id)
+            if device:
+                self._apply_goals(device)
+            await self._save_storage()
         _LOGGER.info("Device goal updated: %s.%s = %s", device_id, prop, value)
 
     def _register_service_devices(self) -> None:

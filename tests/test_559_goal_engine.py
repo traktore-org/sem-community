@@ -273,6 +273,35 @@ async def test_goal_update_persists_and_applies(registry):
 
 
 @pytest.mark.asyncio
+async def test_concurrent_goal_writes_dont_clobber(registry):
+    """Two goal props written concurrently (the card writes stop_entity +
+    stop_at as separate calls) must BOTH persist. Reproduces the live Heizband
+    race: _save_storage snapshots the dict across an await, and a stale snapshot
+    reload dropped one value back to 0. The _goal_write_lock serializes them."""
+    import asyncio as _aio
+    await registry.async_register_service_device({
+        "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
+        "rated_power": 800, "priority": 5,
+    })
+
+    async def _clobbering_save():
+        # snapshot at call time, yield, then reassign — exactly the
+        # reload-from-storage clobber the lock must prevent.
+        snap = {k: dict(v) for k, v in registry._device_goals.items()}
+        await _aio.sleep(0)
+        registry._device_goals = snap
+
+    registry._save_storage = _clobbering_save
+    await _aio.gather(
+        registry.async_update_device_goal("pump", "stop_entity", "sensor.t"),
+        registry.async_update_device_goal("pump", "stop_at", "88"),
+    )
+    g = registry._device_goals["pump"]
+    assert g.get("stop_entity") == "sensor.t"
+    assert g.get("stop_at") == "88"   # not dropped/clobbered
+
+
+@pytest.mark.asyncio
 async def test_goals_survive_reregistration(registry):
     await registry.async_register_service_device({
         "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
