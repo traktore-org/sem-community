@@ -1536,24 +1536,34 @@ class SensorReader:
         # by inverter (multi-inverter installs only — single-inverter
         # leaves the dict empty and falls back to readings.solar_power).
         from .charger_types import InverterPower
-        if self.config.solar_power_sensor:
-            # #592 — explicit SEM solar power override wins (sibling of the #597
-            # battery override). On energy-only installs the Energy Dashboard
-            # exposes solar ENERGY only, so ``ed.solar_power`` is None and the
-            # Home balance read solar=0 (→ Home clamped to 0); the override lets
-            # the user supply a real solar power sensor. Same fix as battery.
-            readings.solar_power = self._read_sensor(
-                self.config.solar_power_sensor, "solar"
-            )
-        elif len(ed.solar_power_list) > 1:
-            total = 0.0
+        # Per-inverter breakdown is DECOUPLED from fleet-scalar selection: the
+        # ``readings.inverters`` dict is populated whenever the Energy Dashboard
+        # exposes ≥2 inverters — INDEPENDENTLY of which sensor supplies the fleet
+        # scalar — so a higher-precedence fleet override can never suppress the
+        # per-unit surface (#623, sibling of the battery path below). The
+        # per-inverter sum then owns the fleet scalar, keeping the
+        # ``solar_power == fleet_solar_w`` pin (types.py) true by construction.
+        per_inverter_total = None
+        if len(ed.solar_power_list) > 1:
+            per_inverter_total = 0.0
             for entity in ed.solar_power_list:
                 w = self._read_sensor(entity, "solar")
-                total += w
+                per_inverter_total += w
                 readings.inverters[entity] = InverterPower(
                     inverter_id=entity, power_w=w, name=entity,
                 )
-            readings.solar_power = total
+        if per_inverter_total is not None:
+            readings.solar_power = per_inverter_total
+        elif self.config.solar_power_sensor:
+            # #592 — explicit SEM solar power override. Applies only when there
+            # is no ≥2 per-inverter breakdown to sum: on energy-only installs the
+            # Energy Dashboard exposes solar ENERGY only, so ``ed.solar_power`` is
+            # None and the Home balance read solar=0 (→ Home clamped to 0); the
+            # override lets the user supply a real solar power sensor. Sibling of
+            # the #597 battery override.
+            readings.solar_power = self._read_sensor(
+                self.config.solar_power_sensor, "solar"
+            )
         elif ed.solar_power:
             readings.solar_power = self._read_sensor(ed.solar_power, "solar")
 
@@ -1697,26 +1707,20 @@ class SensorReader:
         # #553 — a battery "unit" is either a combined power entity OR a
         # two-sensor pair (#551). Multi-battery handling counts both.
         n_units = len(ed.battery_power_list) + len(ed.battery_power_pairs)
-        if self.config.battery_power_sensor:
-            # #597 — the explicit SEM ``battery_power_sensor`` override wins,
-            # mirroring the ``battery_soc_sensor`` override precedence below.
-            # This was MISSING on the Energy-Dashboard path (present only on the
-            # legacy path), while SOC had it here — so an install whose Energy
-            # Dashboard exposes only charge/discharge ENERGY (``batt:pwr=none``,
-            # e.g. Huawei) but which set ``battery_power_sensor`` to a real
-            # combined power sensor read null. Read via ``_read_sensor(...,
-            # "battery")`` (same call the ED combined path uses); note the ED
-            # ``battery_power_inverted`` flag is intentionally NOT applied here
-            # — that flag describes HA's ED dialog sensor, whereas the SEM
-            # override is assumed already in SEM convention (and if it isn't,
-            # the battery-sign detector self-corrects, and the manual flip
-            # service is the escape hatch). Mirrors the SOC override, which
-            # likewise bypasses the ED ``stat_soc`` handling.
-            readings.battery_power = self._read_sensor(
-                self.config.battery_power_sensor, "battery"
-            )
-        elif n_units > 1:
-            total = 0.0
+        # Per-battery breakdown is DECOUPLED from fleet-scalar selection: the
+        # ``readings.batteries`` surface (which feeds the per-battery
+        # ``sensor.sem_battery_b*`` entities AND the actuator's
+        # ``BatteryRuntime.last_known_w``) is populated whenever the Energy
+        # Dashboard exposes ≥2 battery units — INDEPENDENTLY of which sensor
+        # supplies the fleet scalar. #597 inserted the ``battery_power_sensor``
+        # override ABOVE this loop, which silently suppressed every per-battery
+        # sensor for any multi-battery install that ALSO set the combined
+        # override (#623: RienduPre's 2×Sessy fleet lost all individual battery
+        # info). Mirrors the per-battery SOC path below and the per-inverter /
+        # per-PV-string surfaces, which are already decoupled.
+        per_battery_total = None
+        if n_units > 1:
+            per_battery_total = 0.0
             # Phase A of per-battery card mirror: assign short stable
             # slugs (``b1``, ``b2`` …) keyed by the Energy Dashboard
             # battery_power_list order so the SEM-side sensor IDs are
@@ -1727,7 +1731,7 @@ class SensorReader:
             for idx, entity in enumerate(ed.battery_power_list):
                 bid = f"b{idx + 1}"
                 w = self._read_sensor(entity, "battery")
-                total += w
+                per_battery_total += w
                 # Per-battery SOC via the same auto-detect heuristic
                 # the fleet average uses. Falls through to 0.0 when no
                 # matching SOC sensor is discoverable — card displays
@@ -1750,7 +1754,7 @@ class SensorReader:
                 bid = f"b{len(ed.battery_power_list) + k + 1}"
                 w = (self._read_sensor(p_to, "battery")
                      - self._read_sensor(p_from, "battery"))
-                total += w
+                per_battery_total += w
                 soc_val = 0.0
                 soc_entity = self._auto_detect_battery_soc(p_to)
                 if soc_entity:
@@ -1762,7 +1766,25 @@ class SensorReader:
                 readings.batteries[bid] = BatteryPower(
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=p_to,
                 )
-            readings.battery_power = total
+
+        # Fleet scalar precedence: a real ≥2 per-battery breakdown owns the fleet
+        # total (rebuilt sign-corrected in ``read_power``'s per_battery_mode →
+        # #404/#589 consistency-by-construction). The explicit SEM
+        # ``battery_power_sensor`` override (#597) applies only when there is no
+        # such breakdown to sum — e.g. a Huawei install whose ED exposes battery
+        # ENERGY only (``batt:pwr=none``). Read via ``_read_sensor(..., "battery")``
+        # (same call the ED combined path uses); the ED ``battery_power_inverted``
+        # flag is intentionally NOT applied to the override — that flag describes
+        # HA's ED dialog sensor, whereas the SEM override is assumed already in SEM
+        # convention (and if it isn't, the battery-sign detector self-corrects and
+        # the manual flip service is the escape hatch). Mirrors the SOC override
+        # precedence below.
+        if per_battery_total is not None:
+            readings.battery_power = per_battery_total
+        elif self.config.battery_power_sensor:
+            readings.battery_power = self._read_sensor(
+                self.config.battery_power_sensor, "battery"
+            )
         elif ed.battery_power:
             raw_batt = self._read_sensor(ed.battery_power, "battery")
             # #551 — the user chose "Inverted" in HA's battery dialog
