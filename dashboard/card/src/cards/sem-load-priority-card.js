@@ -249,6 +249,17 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 z-index:2;  /* sit above the fill so pointerdown lands */
             }
             .range-handle:active { cursor:grabbing; }
+            /* #355-style split affordance: sits ABOVE the stacked handles so a
+               tap can separate them when Min and Max share a spot. */
+            .range-split {
+                position:absolute; top:50%; transform:translate(-50%,-50%);
+                width:22px; height:22px; border-radius:50%;
+                display:flex; align-items:center; justify-content:center;
+                background:rgba(0,0,0,0.55); color:#fff; cursor:pointer;
+                box-shadow:0 1px 3px rgba(0,0,0,0.5);
+                pointer-events:auto; z-index:3;
+            }
+            .range-split:hover { background:rgba(0,0,0,0.75); }
             .range-handle-min { border:3px solid #8DC892; }
             .range-handle-max { border:3px solid #ff9800; }
             /* EV charge-target look (#559 UI merge) */
@@ -618,6 +629,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const maxPct = Math.min(100, (maxH / SCALE_H) * 100);
         const atFull = maxH >= SCALE_H - 1e-6;
         const fmt = (h) => (h % 1 === 0 ? String(h) : h.toFixed(1));
+        // Split affordance (mirrors the EV charge-target slider, #355): when the
+        // two handles land on the same spot (e.g. Min 12 h + Max Uncapped both at
+        // 100%) the top one eats every grab and the other is stuck. Show a split
+        // button that nudges Min down one step so both become grabbable again.
+        const STEP_H = 0.5;
+        const stacked = (maxH - minH) < STEP_H - 1e-6;
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
@@ -630,8 +647,33 @@ class SEMLoadPriorityCard extends SEMLitBase {
                          @pointerdown=${(e) => this._goalSliderStart(e, device, 'min')}></div>
                     <div class="range-handle range-handle-max" style="left:${maxPct}%"
                          @pointerdown=${(e) => this._goalSliderStart(e, device, 'max')}></div>
+                    ${stacked ? html`
+                        <span class="range-split" style="left:${minPct}%"
+                              title="${this._t('separate_handles')}"
+                              @click=${(ev) => this._splitGoalHandles(ev, device, minH, maxH)}>
+                            <ha-icon icon="mdi:arrow-split-vertical" style="--mdc-icon-size:14px"></ha-icon>
+                        </span>` : nothing}
                 </div>
             </div>`;
+    }
+
+    _splitGoalHandles(ev, device, minH, maxH) {
+        ev.stopPropagation();
+        const SCALE_H = 12, STEP_H = 0.5;
+        // Drop Min by a step so the handles separate; if Min is already at the
+        // floor, push Max down off full-scale instead so it becomes a real cap.
+        const g = device.goals = device.goals || {};
+        if (minH - STEP_H >= 0) {
+            const minutes = Math.round((minH - STEP_H) * 60);
+            g.daily_min_runtime_min = minutes;
+            this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
+        } else {
+            const capH = Math.min(SCALE_H - STEP_H, maxH - STEP_H);
+            const minutes = Math.round(capH * 60);
+            g.daily_max_runtime_min = minutes;
+            this._sendDeviceUpdate(device.id, 'daily_max_runtime_min', String(minutes));
+        }
+        this.requestUpdate();
     }
 
     _goalSliderStart(e, device, handle) {
