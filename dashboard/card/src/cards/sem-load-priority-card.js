@@ -325,6 +325,16 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 border-radius:50%; background:#fff; transition:left .2s;
             }
             .batt-toggle.on .knob { left:17px; }
+            /* (#620) "Finish overnight from" segmented picker */
+            .ov-picker { gap:0; border-radius:8px; overflow:hidden;
+                border:1px solid var(--divider-color, rgba(128,128,128,0.25)); }
+            .ov-opt {
+                border:none; padding:5px 12px; cursor:pointer; font-size:12px;
+                background:rgba(255,255,255,0.06); color:var(--primary-text-color,#e0e0e0);
+                border-right:1px solid var(--divider-color, rgba(128,128,128,0.25));
+            }
+            .ov-opt:last-child { border-right:none; }
+            .ov-opt.on { background:#4db6ac; color:#fff; font-weight:600; }
             .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `;
     }
@@ -736,11 +746,45 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._sendDeviceUpdate(device.id, 'stop_entity', v);
     }
 
-    _toggleBatteryOvernight(device) {
+    // (#620) "Finish overnight from" — one picker over the two independent
+    // axes: battery (Tier-2 overnight drain) vs grid (cheap_hours top-up) vs
+    // off. Daytime surplus assist stays on the Mode selector (Solar + battery).
+    _overnightSource(device) {
+        const g = device.goals || {};
+        if (g.battery_eligible_overnight) return 'battery';
+        if (g.top_up_policy === 'cheap_hours') return 'grid';
+        return 'off';
+    }
+
+    _renderOvernightPicker(device) {
+        const src = this._overnightSource(device);
+        const opt = (val, label) => html`
+            <button class="ov-opt ${src === val ? 'on' : ''}"
+                    data-action="set-overnight" data-overnight="${val}"
+                    data-device="${device.id}">${label}</button>`;
+        return html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('finish_overnight_from')}</span>
+                <span class="ge-ctl ov-picker">
+                    ${opt('off', this._t('overnight_off'))}
+                    ${opt('battery', this._t('overnight_battery'))}
+                    ${opt('grid', this._t('overnight_grid'))}
+                </span>
+            </div>
+            <div class="ge-hint">${this._t('overnight_' + src + '_hint')}</div>`;
+    }
+
+    _setOvernightSource(device, val) {
+        // Maps the single picker onto the two backend flags. Mutually exclusive:
+        // battery = Tier-2 battery; grid = cheap_hours grid; off = neither. The
+        // goal-write lock makes the two writes atomic.
         const g = device.goals = device.goals || {};
-        const next = !g.battery_eligible_overnight;
-        g.battery_eligible_overnight = next;
-        this._sendDeviceUpdate(device.id, 'battery_eligible_overnight', String(next));
+        const battery = val === 'battery';
+        const policy = val === 'grid' ? 'cheap_hours' : 'solar_only';
+        g.battery_eligible_overnight = battery;
+        g.top_up_policy = policy;
+        this._sendDeviceUpdate(device.id, 'battery_eligible_overnight', String(battery));
+        this._sendDeviceUpdate(device.id, 'top_up_policy', policy);
         this.requestUpdate();
     }
 
@@ -769,7 +813,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const mode = this._mergedMode(device);
         if (mode !== 'solar_only' && mode !== 'solar_battery') return nothing;
         const g = device.goals || {};
-        const overnight = !!g.battery_eligible_overnight;
         return html`
             <div class="goal-editor">
                 <div class="ge-title">
@@ -777,19 +820,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._t('daily_target')}
                 </div>
                 ${this._renderGoalSlider(device)}
-                ${mode === 'solar_battery' ? html`
-                <div class="ge-row">
-                    <span class="ge-label">${this._t('battery_overnight_label')}</span>
-                    <span class="ge-ctl">
-                        <button class="batt-toggle ${overnight ? 'on' : ''}"
-                                data-action="toggle-battery-overnight" data-device="${device.id}"
-                                title="${this._t('battery_overnight_help')}">
-                            <span class="knob"></span>
-                        </button>
-                    </span>
-                </div>
-                <div class="ge-hint">${this._t('battery_overnight_hint')}</div>
-                ` : html`<div class="ge-hint">${this._t('solar_only_hint')}</div>`}
+                ${this._renderOvernightPicker(device)}
                 <div class="ge-row">
                     <span class="ge-label">${this._t('stop_condition')}</span>
                     <span class="ge-ctl">
@@ -932,9 +963,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
             } else if (action === 'toggle-goal') {
                 this._goalOpen[deviceId] = !this._goalOpen[deviceId];
                 this.requestUpdate();
-            } else if (action === 'toggle-battery-overnight') {
+            } else if (action === 'set-overnight') {
                 const device = this.devices.find(d => d.id === deviceId);
-                if (device) this._toggleBatteryOvernight(device);
+                if (device) this._setOvernightSource(device, target.dataset.overnight);
             }
         };
 

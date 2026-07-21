@@ -1217,7 +1217,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Optional — end the run early when any sensor crosses a value (e.g. tank full, temperature reached)."
+    "stop_condition_hint": "Optional — end the run early when any sensor crosses a value (e.g. tank full, temperature reached).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "de": {
     "charging": "Laden",
@@ -2437,7 +2444,14 @@
     "battery_overnight_help": "Hausbatterie unter den Puffer (bis zur Reserve) entladen, um das Minimum ohne Sonne zu erreichen. Standard: aus.",
     "battery_overnight_hint": "Solar-Unterstützung tagsüber über dem Puffer gilt immer.",
     "solar_only_hint": "Nur Solar — die Batterie bleibt fürs Haus reserviert.",
-    "stop_condition_hint": "Optional — den Lauf früher beenden, wenn ein Sensor einen Wert überschreitet (z. B. Tank voll, Temperatur erreicht)."
+    "stop_condition_hint": "Optional — den Lauf früher beenden, wenn ein Sensor einen Wert überschreitet (z. B. Tank voll, Temperatur erreicht).",
+    "finish_overnight_from": "Nachts beenden über",
+    "overnight_off": "Aus",
+    "overnight_battery": "Batterie",
+    "overnight_grid": "Netz",
+    "overnight_off_hint": "Nur Solar — der Verbraucher wartet auf Sonne und verfehlt an trüben Tagen evtl. sein Ziel.",
+    "overnight_battery_hint": "Entlädt die Hausbatterie (bis zur Reserve), um das Ziel ohne Sonne zu erreichen.",
+    "overnight_grid_hint": "Lädt im Niedertarif-Fenster aus dem Netz nach, um das Ziel zu erreichen. Erfordert ein Tarif-/Niedertarif-Fenster."
   },
   "fr": {
     "charging": "En charge",
@@ -3657,7 +3671,14 @@
     "battery_overnight_help": "Puiser dans la batterie sous le tampon (jusqu’à la réserve) pour atteindre le minimum sans soleil. Désactivé par défaut.",
     "battery_overnight_hint": "L’assistance solaire de jour au-dessus du tampon s’applique toujours.",
     "solar_only_hint": "Solaire seul — la batterie reste réservée à la maison.",
-    "stop_condition_hint": "Optionnel — arrêter plus tôt quand un capteur dépasse une valeur (p. ex. réservoir plein, température atteinte)."
+    "stop_condition_hint": "Optionnel — arrêter plus tôt quand un capteur dépasse une valeur (p. ex. réservoir plein, température atteinte).",
+    "finish_overnight_from": "Terminer la nuit via",
+    "overnight_off": "Off",
+    "overnight_battery": "Batterie",
+    "overnight_grid": "Réseau",
+    "overnight_off_hint": "Solaire uniquement — la charge attend le soleil et peut manquer son objectif un jour sombre.",
+    "overnight_battery_hint": "Puise dans la batterie domestique (jusqu’au seuil de réserve) pour atteindre l’objectif sans soleil.",
+    "overnight_grid_hint": "Complète depuis le réseau pendant la fenêtre tarif creux pour atteindre l’objectif. Nécessite une fenêtre tarifaire creuse."
   },
   "es": {
     "charging": "Cargando",
@@ -4877,7 +4898,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Opcional — termina antes cuando un sensor supera un valor (p. ej. depósito lleno, temperatura alcanzada)."
+    "stop_condition_hint": "Opcional — termina antes cuando un sensor supera un valor (p. ej. depósito lleno, temperatura alcanzada).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "it": {
     "charging": "In carica",
@@ -6097,7 +6125,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Opzionale — termina prima quando un sensore supera un valore (es. serbatoio pieno, temperatura raggiunta)."
+    "stop_condition_hint": "Opzionale — termina prima quando un sensore supera un valore (es. serbatoio pieno, temperatura raggiunta).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "nl": {
     "charging": "Laden",
@@ -7317,7 +7352,14 @@
     "battery_overnight_help": "Trek de thuisbatterij onder de buffer (tot de reserve) om het minimum te halen als er geen zon is. Standaard uit.",
     "battery_overnight_hint": "Zonne-ondersteuning overdag boven de buffer geldt altijd.",
     "solar_only_hint": "Alleen zon — de batterij blijft gereserveerd voor het huis.",
-    "stop_condition_hint": "Optioneel — stop eerder wanneer een sensor een waarde overschrijdt (bijv. tank vol, temperatuur bereikt)."
+    "stop_condition_hint": "Optioneel — stop eerder wanneer een sensor een waarde overschrijdt (bijv. tank vol, temperatuur bereikt).",
+    "finish_overnight_from": "’s Nachts afmaken via",
+    "overnight_off": "Uit",
+    "overnight_battery": "Accu",
+    "overnight_grid": "Net",
+    "overnight_off_hint": "Alleen zon — het apparaat wacht op zon en haalt zijn doel op een donkere dag mogelijk niet.",
+    "overnight_battery_hint": "Ontlaadt de thuisaccu (tot de reservegrens) om het doel te halen als er geen zon is.",
+    "overnight_grid_hint": "Vult bij vanaf het net tijdens je goedkope-tariefvenster om het doel te halen. Vereist een tarief-/daltariefvenster."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -8537,7 +8579,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Volitelné — ukončit dříve, když čidlo překročí hodnotu (např. plná nádrž, dosažená teplota)."
+    "stop_condition_hint": "Volitelné — ukončit dříve, když čidlo překročí hodnotu (např. plná nádrž, dosažená teplota).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "da": {
     "charging": "Oplader",
@@ -9757,7 +9806,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Valgfrit — afslut tidligere, når en sensor overskrider en værdi (f.eks. tank fuld, temperatur nået)."
+    "stop_condition_hint": "Valgfrit — afslut tidligere, når en sensor overskrider en værdi (f.eks. tank fuld, temperatur nået).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "fi": {
     "charging": "Lataus",
@@ -10977,7 +11033,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Valinnainen — lopeta aikaisemmin, kun anturi ylittää arvon (esim. säiliö täynnä, lämpötila saavutettu)."
+    "stop_condition_hint": "Valinnainen — lopeta aikaisemmin, kun anturi ylittää arvon (esim. säiliö täynnä, lämpötila saavutettu).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "hu": {
     "charging": "Töltés",
@@ -12197,7 +12260,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Opcionális — korábban leáll, ha egy érzékelő átlép egy értéket (pl. tartály tele, hőmérséklet elérve)."
+    "stop_condition_hint": "Opcionális — korábban leáll, ha egy érzékelő átlép egy értéket (pl. tartály tele, hőmérséklet elérve).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "no": {
     "charging": "Lader",
@@ -13417,7 +13487,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Valgfritt — avslutt tidligere når en sensor passerer en verdi (f.eks. tank full, temperatur nådd)."
+    "stop_condition_hint": "Valgfritt — avslutt tidligere når en sensor passerer en verdi (f.eks. tank full, temperatur nådd).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -14637,7 +14714,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Opcjonalnie — zakończ wcześniej, gdy czujnik przekroczy wartość (np. zbiornik pełny, osiągnięta temperatura)."
+    "stop_condition_hint": "Opcjonalnie — zakończ wcześniej, gdy czujnik przekroczy wartość (np. zbiornik pełny, osiągnięta temperatura).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "pt": {
     "charging": "A carregar",
@@ -15857,7 +15941,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Opcional — termina mais cedo quando um sensor ultrapassa um valor (por ex. tanque cheio, temperatura atingida)."
+    "stop_condition_hint": "Opcional — termina mais cedo quando um sensor ultrapassa um valor (por ex. tanque cheio, temperatura atingida).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "ro": {
     "charging": "Încărcare",
@@ -17077,7 +17168,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Opțional — oprește mai devreme când un senzor depășește o valoare (de ex. rezervor plin, temperatură atinsă)."
+    "stop_condition_hint": "Opțional — oprește mai devreme când un senzor depășește o valoare (de ex. rezervor plin, temperatură atinsă).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "sv": {
     "charging": "Laddar",
@@ -18297,7 +18395,14 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "Valfritt — avsluta tidigare när en sensor passerar ett värde (t.ex. tank full, temperatur uppnådd)."
+    "stop_condition_hint": "Valfritt — avsluta tidigare när en sensor passerar ett värde (t.ex. tank full, temperatur uppnådd).",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   },
   "zh": {
     "charging": "充电中",
@@ -19517,6 +19622,13 @@
     "battery_overnight_help": "Draw the home battery below the buffer (down to the reserve) to meet the minimum when there is no sun. Off by default.",
     "battery_overnight_hint": "Daytime solar-assist above the buffer always applies.",
     "solar_only_hint": "Solar only — the battery stays reserved for the house.",
-    "stop_condition_hint": "可选 — 当任一传感器超过某个值时提前结束（例如水箱已满、达到温度）。"
+    "stop_condition_hint": "可选 — 当任一传感器超过某个值时提前结束（例如水箱已满、达到温度）。",
+    "finish_overnight_from": "Finish overnight from",
+    "overnight_off": "Off",
+    "overnight_battery": "Battery",
+    "overnight_grid": "Grid",
+    "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
+    "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
+    "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
   }
 }
