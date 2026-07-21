@@ -106,6 +106,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── Bind delegated handlers after first render ──
     async firstUpdated() {
         this._bindEvents();
+        // Load <ha-entity-picker> early so the stop-condition entity search is
+        // ready the moment a goal editor opens (reuses the config-modal loader).
+        this._ensureEntityPicker();
     }
 
     // ── Re-bind the delegated arrow/goal handlers when the list changes ──
@@ -679,6 +682,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
         window.addEventListener('pointercancel', onUp);
     }
 
+    _onStopEntity(device, e) {
+        // <ha-entity-picker> fires value-changed (not change) with the chosen
+        // entity in e.detail.value. Persist via the same goal path as the text
+        // input — the backend _goal_write_lock makes the entity + threshold
+        // writes atomic even though they arrive as two calls.
+        e.stopPropagation();
+        const v = (e.detail && e.detail.value) || '';
+        device.goals = device.goals || {};
+        device.goals.stop_entity = v;
+        this._sendDeviceUpdate(device.id, 'stop_entity', v);
+    }
+
     _toggleBatteryOvernight(device) {
         const g = device.goals = device.goals || {};
         const next = !g.battery_eligible_overnight;
@@ -736,9 +751,19 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 <div class="ge-row">
                     <span class="ge-label">${this._t('stop_condition')}</span>
                     <span class="ge-ctl">
+                        ${this.hass && customElements.get('ha-entity-picker') ? html`
+                        <ha-entity-picker class="ge-entity"
+                               .hass=${this.hass}
+                               .value=${g.stop_entity || ''}
+                               .includeDomains=${['sensor', 'number', 'input_number']}
+                               .placeholder=${this._t('stop_entity_placeholder')}
+                               allow-custom-entity hide-clear-icon
+                               @value-changed=${(e) => this._onStopEntity(device, e)}
+                               @click=${(e) => e.stopPropagation()}></ha-entity-picker>
+                        ` : html`
                         <input type="text" class="ge-entity" placeholder="${this._t('stop_entity_placeholder')}"
                                .value="${g.stop_entity || ''}"
-                               data-goal="stop_entity" data-device="${device.id}">
+                               data-goal="stop_entity" data-device="${device.id}">`}
                         <span class="ge-unit">≥</span>
                         <input type="number" min="0" step="1" style="width:56px"
                                .value="${String(g.stop_at || 0)}"
