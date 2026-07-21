@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a split (⬍) affordance was added for when Min and Max overlap (mirrors the EV slider, #355).
 - 🔎 **Stop-condition entity search** — the stop-sensor field is now an `ha-entity-picker`
   with a working clear (✕) button, instead of a free-text box.
+- 🔌 **"Finish overnight from" picker** replaces the battery toggle — one Off / Battery / Grid
+  choice over both overnight sources (battery drain vs cheap-hours grid top-up), shown in both
+  solar modes. Grid-path sibling of the battery-toggle stop: moving off Grid now stops a load
+  already importing on the cheap-hours force, instead of running until the window ends.
 - 🌙 **"Use battery overnight" toggle now stops a running load** — turning it off gated
   future activation but left a load already drawing the battery running until reserve/rollover
   (caught on the real-hardware Heizband toggle test); it now ends the overnight draw at once.

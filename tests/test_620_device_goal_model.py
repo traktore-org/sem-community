@@ -310,6 +310,18 @@ class TestTier2Overnight:
         d.deactivate.assert_awaited()
         assert d._batt_overnight_forced is False
 
+    async def test_grid_disabled_by_user_stops_offpeak_load(self, mock_hass):
+        """The picker moving off 'Grid' (top_up_policy → solar_only) must stop a
+        load already running on the cheap-hours force — the grid-path sibling of
+        the battery-toggle stop (caught live on the picker's Off test)."""
+        sc = SurplusController(mock_hass)
+        d = _mock(is_active=True, consumption=800)
+        d._offpeak_forced = True
+        d.top_up_policy = "solar_only"   # user picked Off / Battery
+        sc.register_device(d)
+        await sc.update(0.0, price_level="cheap", battery_soc=90)
+        d.deactivate.assert_awaited()
+
     async def test_overnight_expires_at_reserve(self, mock_hass):
         """The Reserve floor DOES end a Tier-2 run — battery protected."""
         sc = SurplusController(mock_hass)

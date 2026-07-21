@@ -494,7 +494,14 @@ class SurplusController:
                     device._offpeak_forced_date is not None
                     and device._offpeak_forced_date != today_local
                 )
-                if stale:
+                if getattr(device, "top_up_policy", "solar_only") == "solar_only":
+                    # (#620) the "Finish overnight from" picker moved off Grid
+                    # (top_up_policy → solar_only). A load already running on the
+                    # cheap-hours force must STOP, not keep importing until the
+                    # window ends — the grid-path sibling of the battery-toggle
+                    # fix (caught live on the picker's Off test).
+                    reason = "cheap-hours disabled by user"
+                elif stale:
                     reason = "cheap-hours force expired (day rollover)"
                 elif price_level not in ("cheap", "very_cheap", "negative"):
                     reason = f"tariff now {price_level}"
