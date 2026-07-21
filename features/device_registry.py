@@ -45,6 +45,15 @@ STORAGE_VERSION = 1
 STORAGE_KEY = "sem_device_mappings"
 
 
+def _goal_bool(value: Any) -> bool:
+    """(#620) Parse a stored goal bool. The service persists these as STRINGS
+    ("True"/"False"), and ``bool("False")`` is True in Python — so an explicit
+    truthiness test is required, never bool(). Accepts native bools too."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "on", "yes")
+
+
 @dataclass
 class UnifiedDevice:
     """A device from the Energy Dashboard with discovered/mapped control."""
@@ -167,6 +176,13 @@ class UnifiedDeviceRegistry:
         # top-up policy, stop condition) — device_id → dict. Applies to
         # BOTH auto-discovered and service-registered devices.
         self._device_goals: Dict[str, Dict[str, Any]] = {}
+        # Serialize goal writes: async_update_device_goal is a read-modify-write
+        # that snapshots the dict inside _save_storage across await points, so
+        # two concurrent updates (the card writes stop_entity + stop_at as two
+        # separate calls) could interleave and one stale snapshot would clobber
+        # the other — the value would silently drop back to 0 (caught live on
+        # the Heizband PROD test). One lock makes each update atomic.
+        self._goal_write_lock = asyncio.Lock()
         # (#622) Callback that re-applies persisted per-device accrued daily
         # runtime from the coordinator's storage onto any device that came back
         # EMPTY after a rebuild. Set by the coordinator after construction.
@@ -243,6 +259,9 @@ class UnifiedDeviceRegistry:
     GOAL_PROPERTIES = (
         "daily_min_runtime_min", "top_up_policy",
         "stop_entity", "stop_at",
+        # (#620) max cap + the two battery tiers.
+        "daily_max_runtime_min", "battery_assist_enabled",
+        "battery_eligible_overnight",
     )
 
     def _apply_goals(self, device) -> None:
@@ -266,6 +285,18 @@ class UnifiedDeviceRegistry:
         device.top_up_policy = policy
         device.stop_entity = str(goals.get("stop_entity", "") or "")
         device.stop_at = float(goals.get("stop_at", 0.0) or 0.0)
+        # (#620) daily max cap (persisted → restored, the #559 HIGH-1 fix) +
+        # the two battery tiers. All default off so an upgraded device with no
+        # stored values behaves exactly as before. NOTE: the service stores
+        # these as STRINGS ("True"/"False") — ``bool("False")`` is True in
+        # Python, so parse with an explicit truthiness test, never bool().
+        device.daily_max_runtime_sec = int(
+            float(goals.get("daily_max_runtime_min", 0) or 0) * 60
+        )
+        device.battery_assist_enabled = _goal_bool(goals.get("battery_assist_enabled"))
+        device.battery_eligible_overnight = _goal_bool(
+            goals.get("battery_eligible_overnight")
+        )
 
     def seed_goals(self, device_id: str, goals: "Dict[str, Any]") -> None:
         """Stage goal fields before registration (register_surplus_device
@@ -280,12 +311,13 @@ class UnifiedDeviceRegistry:
         """Set one goal property, persist it, and apply it live (#559)."""
         if prop not in self.GOAL_PROPERTIES:
             raise ValueError(f"Unknown goal property: {prop}")
-        goals = self._device_goals.setdefault(device_id, {})
-        goals[prop] = value
-        device = self._surplus_controller.get_device(device_id)
-        if device:
-            self._apply_goals(device)
-        await self._save_storage()
+        async with self._goal_write_lock:
+            goals = self._device_goals.setdefault(device_id, {})
+            goals[prop] = value
+            device = self._surplus_controller.get_device(device_id)
+            if device:
+                self._apply_goals(device)
+            await self._save_storage()
         _LOGGER.info("Device goal updated: %s.%s = %s", device_id, prop, value)
 
     def _register_service_devices(self) -> None:
@@ -957,6 +989,10 @@ class UnifiedDeviceRegistry:
             "control": {"type": "surplus"},
             "control_mode": mode,
             "sem_owned": bool(getattr(dev, "_sem_owned", False)),
+            # (#620) goals + progress so directly-registered surplus devices
+            # (heat pump / hot water / climate) expose the min/max/battery
+            # controls on the card, same as the load rows.
+            **self._goal_payload(did),
         }
 
     def refresh_direct_device_priorities(self) -> None:
@@ -1069,14 +1105,21 @@ class UnifiedDeviceRegistry:
         runtime_min = 0.0
         targets_met = False
         if live is not None:
-            runtime_min = live._daily_runtime_accumulated_sec / 60
-            targets_met = bool(live.daily_targets_met)
+            runtime_min = getattr(live, "_daily_runtime_accumulated_sec", 0) / 60
+            targets_met = bool(getattr(live, "daily_targets_met", False))
         return {
             "goals": {
                 "daily_min_runtime_min": goals.get("daily_min_runtime_min", 0),
                 "top_up_policy": goals.get("top_up_policy", "solar_only"),
                 "stop_entity": goals.get("stop_entity", ""),
                 "stop_at": goals.get("stop_at", 0),
+                # (#620) the card reads these to pick the mode (solar_only vs
+                # solar_battery), draw the Max handle and the overnight toggle.
+                "daily_max_runtime_min": goals.get("daily_max_runtime_min", 0),
+                "battery_assist_enabled": _goal_bool(goals.get("battery_assist_enabled")),
+                "battery_eligible_overnight": _goal_bool(
+                    goals.get("battery_eligible_overnight")
+                ),
             },
             "progress": {
                 "runtime_today_min": round(runtime_min, 1),

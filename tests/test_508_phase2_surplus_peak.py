@@ -60,9 +60,12 @@ def _make_device(
     # (#559) goal-engine fields — pin to defaults (MagicMock auto-attrs are
     # truthy and would trip the goal gates)
     device.daily_targets_met = False
+    device.daily_max_runtime_reached = False
     device.stop_condition_met = False
     device.top_up_policy = "solar_only"
     device._offpeak_forced_date = None
+    device._batt_overnight_forced = False
+    device._batt_overnight_forced_date = None
     device.__class__ = MagicMock
     if antiflicker_blocks:
         device.deactivate = AsyncMock()  # is_active stays True

@@ -132,3 +132,90 @@ The layered trace (`diagnose`, `section: trace`) reports each device's list role
 — e.g. *"sink at list position 2"*, *"charging first — below reserve"* — so you can
 see who charges before whom each cycle. **Today's Plan** shows the pool pump / heat
 pump / hot water in the same forward timeline as the battery and EV.
+
+---
+
+# Daily runtime goals for a load (#620)
+
+*Added in 1.7.5. Design:
+`docs/superpowers/specs/2026-07-20-620-device-goal-model-design.md`.*
+
+The priority list decides **who gets surplus first**; the per-device **goal
+editor** (the 🎯 target button on a load's row) decides **how much that load
+should run and from what source**. It's the load-side analogue of the EV
+charge-target: continuous priority allocation bounded by two hard ceilings — the
+**grid peak limit** and the battery **reserve SoC** — and deliberately **no
+device deadlines** (see "Why no deadlines" below).
+
+## Mode — how SEM drives the load
+
+Each load's row has a **Mode** selector:
+
+| Mode | What SEM does |
+|---|---|
+| **Off** | Monitor only — SEM never turns it on or off. |
+| **Peak only** | Your automations run it; SEM only *sheds* it to protect the grid peak. |
+| **Solar only** | Runs on PV surplus; never force-imports and never touches the battery. |
+| **Solar + battery** | Runs on PV surplus **and** lets the home battery assist above the buffer during the day (the load-side "solar + min"). |
+
+The Mode is **axis 1 — the daytime source**. What happens *overnight* (no sun) is a
+separate choice, the **"Finish overnight from"** picker below.
+
+## Min / Max runtime (the dual slider)
+
+Under the 🎯 target button, a **dual-handle slider** sets the daily runtime
+window (shown only in the two solar modes):
+
+- **Minimum** (green handle) — the daily target. SEM keeps the load running
+  until it has accrued this much, then **stops it for the rest of the day**
+  (the *daily-target-met* stop). Set to 0 for "no target — just take surplus".
+- **Maximum** (orange handle) — a **hard cap**. The load **never runs past this
+  in a day**, even if the minimum isn't met and surplus is available. Full-scale
+  = *Uncapped*. The cap is **persisted across restarts** and **overrides the
+  minimum** — if a load is running when it hits the cap, SEM switches it off.
+
+If both handles land on the same spot, tap the **split button** (⬍) that appears
+to nudge them apart so each is grabbable again.
+
+The counter resets **after sunrise**, not at midnight — so a battery-eligible
+load isn't reset mid-night and re-drained before the new day's surplus arrives.
+
+## Finish overnight from — the overnight source (axis 2)
+
+When the sun is gone and the daily target isn't met, a single **"Finish overnight
+from"** picker (shown for *both* solar modes) decides what — if anything — finishes
+the runtime:
+
+| Choice | Overnight behavior | Backend |
+|---|---|---|
+| **Off** | The load just waits for sun — may miss its target on a dark day. | `solar_only`, no battery |
+| **Battery** | Runs off the **home battery**, down to the hard reserve floor — never past it. | `battery_eligible_overnight` |
+| **Grid** | Runs off the **grid** during your cheap-tariff window (needs a tariff/cheap window). | `top_up_policy = cheap_hours` |
+
+The two axes are independent: the **Mode** picks the daytime source (solar, or
+solar + battery assist above the buffer), and **Finish overnight from** picks the
+no-sun source (nothing / battery to reserve / cheap grid). Switching the picker
+also **stops a load that's already running** on the source you moved away from —
+you don't have to wait for the reserve floor or the cheap window to end.
+
+The daytime battery assist ("Solar + battery" mode) mirrors the EV assist
+(Solar Gate, `battery_assist_min_surplus`); the overnight battery drain stops at
+`Battery priority SOC` (default 30 %).
+
+## Optional stop condition
+
+Any load can also **end its run early** when a sensor crosses a value — pick the
+sensor with the **entity search** (the *Stop when ≥* picker: e.g. tank-level ≥
+full, water-temp ≥ 28 °C, car SOC ≥ 80 %). Clear it with the picker's ✕.
+
+## Why no deadlines (and no forced grid top-up)
+
+The originally-requested "guarantee the minimum by a deadline using grid" was
+**deliberately not built**. In winter, a high-priority load (the EV) can sit on
+the peak ceiling for hours, so a *deadline* would force lower-priority devices
+(the heat pump) to grid-import all at once against that ceiling — the exact
+contention we avoid. Field research (evcc, Solarmanager) confirmed neither ships
+generic-device deadlines; both throttle continuously by priority. #620 instead
+gives you the **"Finish overnight from"** picker — battery (stored solar) or grid
+(cheap-tariff window) — to complete the runtime when the sun runs short, never a
+hard forced-import deadline.

@@ -101,6 +101,13 @@ class SurplusController:
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
+        # (#620) battery context, refreshed each update(); inert defaults so a
+        # helper called before the first update() is a no-op.
+        self._batt_soc: Optional[float] = None
+        self._batt_buffer_soc: float = 100.0
+        self._batt_reserve_soc: float = 100.0
+        self._batt_assist_budget_w: float = 0.0
+        self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
         # EV Intelligence: anticipated surplus from taper detection (#106)
@@ -356,6 +363,14 @@ class SurplusController:
         peak_state: Optional[str] = None,
         reclaim_w: float = 0.0,
         battery_priority: Optional[int] = None,
+        # (#620) battery context for the two device battery tiers. Defaults
+        # make the whole feature INERT: with no battery data and both
+        # per-device flags off (their default), _tier1/_tier2 are no-ops and
+        # allocation is byte-identical to pre-#620.
+        battery_soc: Optional[float] = None,
+        battery_buffer_soc: float = 100.0,
+        battery_reserve_soc: float = 100.0,
+        battery_assist_budget_w: float = 0.0,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -399,6 +414,11 @@ class SurplusController:
         # all of them at once; SHEDDING sheds gently (one per cycle) so the
         # combined load-manager + surplus back-off doesn't overshoot.
         from ..const import LoadManagementState
+        # (#620) stash the battery context for the tier helpers this cycle.
+        self._batt_soc = battery_soc
+        self._batt_buffer_soc = battery_buffer_soc
+        self._batt_reserve_soc = battery_reserve_soc
+        self._batt_assist_budget_w = max(0.0, float(battery_assist_budget_w or 0.0))
         peak_freeze = peak_state in (
             LoadManagementState.WARNING,
             LoadManagementState.SHEDDING,
@@ -453,6 +473,10 @@ class SurplusController:
         remaining_surplus = distributable + max(0.0, reclaim_w)
         _reclaim_handed_back = False
         active_count = 0
+        # (#620) Tier-1 running budget — the battery can only supply its assist
+        # budget ONCE, not once per device. Decremented as each battery-assist
+        # load draws from it, so N loads can't each claim the full budget.
+        self._tier1_budget_left = self._batt_assist_budget_w
 
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —
         # the tariff left the cheap window, OR the day rolled over (the deficit
@@ -470,15 +494,42 @@ class SurplusController:
                     device._offpeak_forced_date is not None
                     and device._offpeak_forced_date != today_local
                 )
-                if stale:
+                if getattr(device, "top_up_policy", "solar_only") == "solar_only":
+                    # (#620) the "Finish overnight from" picker moved off Grid
+                    # (top_up_policy → solar_only). A load already running on the
+                    # cheap-hours force must STOP, not keep importing until the
+                    # window ends — the grid-path sibling of the battery-toggle
+                    # fix (caught live on the picker's Off test).
+                    reason = "cheap-hours disabled by user"
+                elif stale:
                     reason = "cheap-hours force expired (day rollover)"
                 elif price_level not in ("cheap", "very_cheap", "negative"):
                     reason = f"tariff now {price_level}"
+            # (#620) Tier-2 overnight battery force expiry — its OWN terms: the
+            # user turned the "Use battery overnight" toggle OFF, the Reserve
+            # floor was crossed (battery must be protected), or the day rolled
+            # over. NOT expired by tariff (it isn't tariff-driven). The
+            # daily-target-met stop is handled by the goal gate below.
+            if reason is None and getattr(device, "_batt_overnight_forced", False):
+                soc = self._batt_soc
+                _bo_date = getattr(device, "_batt_overnight_forced_date", None)
+                if not getattr(device, "battery_eligible_overnight", False):
+                    # The toggle gates ACTIVATION, but a load already running off
+                    # the battery must also STOP the moment the user disables it —
+                    # else it keeps draining until reserve/rollover (caught live
+                    # on the Heizband toggle test).
+                    reason = "overnight battery disabled by user"
+                elif (_bo_date is not None and _bo_date != today_local):
+                    reason = "overnight battery force expired (day rollover)"
+                elif soc is not None and soc <= self._batt_reserve_soc:
+                    reason = "overnight battery force ended (reserve SoC reached)"
             if reason:
                 await device.deactivate()
                 if not device.is_active:
                     device._offpeak_forced = False
                     device._offpeak_forced_date = None
+                    device._batt_overnight_forced = False
+                    device._batt_overnight_forced_date = None
                     _LOGGER.info(
                         "Force ended for %s (%s)", device.name, reason,
                     )
@@ -513,7 +564,13 @@ class SurplusController:
             # user-managed, SEM never proactively stops them.
             if device.control_mode == DeviceControlMode.SURPLUS:
                 done_reason = None
-                if device.daily_targets_met:
+                if device.daily_max_runtime_reached:
+                    # (#620) the hard cap must STOP a running device, not just
+                    # block re-activation — otherwise a load already on when it
+                    # crosses the cap keeps running past it (caught live on the
+                    # Heizband PROD test). The cap overrides the min deficit.
+                    done_reason = "daily max runtime cap reached"
+                elif device.daily_targets_met:
                     done_reason = "daily target met"
                 elif device.stop_condition_met:
                     done_reason = (
@@ -527,6 +584,12 @@ class SurplusController:
                             device.record_deactivated()
                             device._offpeak_forced = False
                             device._offpeak_forced_date = None
+                            # (#620) done-for-the-day also ends any Tier-2
+                            # overnight force — otherwise the marker leaks until
+                            # day rollover and the LIFO exemption keeps shielding
+                            # an already-finished device.
+                            device._batt_overnight_forced = False
+                            device._batt_overnight_forced_date = None
                             _LOGGER.info(
                                 "%s: %s — deactivated for the rest of the day",
                                 device.name, done_reason,
@@ -546,7 +609,15 @@ class SurplusController:
                     ))
                     continue
 
-            if remaining_surplus >= device.min_power_threshold and not device.is_active:
+            # (#620) Tier 1 — daytime battery assist. A "Solar + battery"
+            # device (battery_assist_enabled) sees the raw surplus PLUS the
+            # battery-assist budget, but ONLY while the battery is above the
+            # Buffer SoC — mirrors the EV Solar Gate (#537/#545): the battery
+            # tops the device up out of the surplus-above-buffer it would
+            # otherwise export, never below the buffer. Off-flag / below-buffer
+            # → headroom is 0 and this is identical to pre-#620.
+            effective_surplus = remaining_surplus + self._tier1_headroom_w(device)
+            if effective_surplus >= device.min_power_threshold and not device.is_active:
                 # Only activate if device is in "surplus" mode
                 if device.control_mode != DeviceControlMode.SURPLUS:
                     continue  # peak_only: never proactively turn on
@@ -557,6 +628,12 @@ class SurplusController:
                     if consumed > 0:
                         device.record_activated()
                         device.reset_surplus_timer()
+                        # (#620) if the battery covered a shortfall for this
+                        # assist device, subtract that from the running budget.
+                        if getattr(device, "battery_assist_enabled", False):
+                            batt_covered = max(0.0, consumed - max(0.0, remaining_surplus))
+                            self._tier1_budget_left = max(
+                                0.0, self._tier1_budget_left - batt_covered)
                     remaining_surplus -= consumed
                     if consumed > 0:
                         active_count += 1
@@ -590,7 +667,11 @@ class SurplusController:
                 # (#559) off-peak-forced devices run WITHOUT surplus by
                 # design — the force-expiry section and the peak shed pass
                 # own their lifecycle; the deficit LIFO must not flap them off.
-                if device._offpeak_forced:
+                # (#620) same for a Tier-2 overnight-battery forced device: it
+                # runs off the battery by design and is only ended by its OWN
+                # terms (reserve SoC / day rollover), never by the deficit LIFO.
+                if device._offpeak_forced or getattr(
+                        device, "_batt_overnight_forced", False):
                     continue
                 if device.is_active and device.can_deactivate():
                     consumption = device.get_current_consumption()
@@ -635,6 +716,10 @@ class SurplusController:
         # back-off don't overshoot together. Externally-managed devices
         # (the EV) are already excluded by ``get_devices_sorted``; the load
         # manager owns the EV's peak shedding via ``shed_priority`` (#470).
+        # (#620) A Tier-2 overnight-battery device is NOT exempt here: the peak
+        # limit is a HARD grid ceiling that overrides the battery tiers. Shedding
+        # it relieves grid import; once peak clears the Tier-2 pass re-activates
+        # it. We clear its force marker so the shed device carries no stale state.
         if peak_shed:
             for device in reversed(devices):
                 if device.control_mode != DeviceControlMode.SURPLUS:
@@ -645,6 +730,8 @@ class SurplusController:
                 await device.deactivate()
                 if not device.is_active:
                     device.record_deactivated()
+                    device._batt_overnight_forced = False
+                    device._batt_overnight_forced_date = None
                     active_count = max(0, active_count - 1)
                     remaining_surplus += consumption
                     _LOGGER.info(
@@ -733,6 +820,54 @@ class SurplusController:
                             device.name, consumed, device.remaining_daily_runtime_sec,
                         )
 
+        # (#620) Tier 2 — overnight battery pass. A device that opted into
+        # "Use battery overnight" and still has a runtime deficit may run from
+        # the home battery when there is no surplus, PRIORITY-ORDERED, while
+        # the battery is above the hard Reserve SoC. Distinct from the cheap-
+        # hours off-peak pass (grid-sourced): this spends stored house energy,
+        # so it is gated on the explicit opt-in + the Reserve floor, not price.
+        # Suppressed under peak risk (same as the off-peak pass). can_activate()
+        # enforces the max cap + anti-cycle, so a capped or recently-toggled
+        # device is skipped. Inert for every device with the flag off (default).
+        if not peak_freeze:
+            for device in devices:
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue
+                if device.is_active or device.stop_condition_met:
+                    continue
+                if not device.needs_offpeak_activation:  # deficit + not capped
+                    continue
+                if not self._tier2_overnight_eligible(device):
+                    continue
+                if not device.can_activate():
+                    continue
+                consumed = await device.activate(device.min_power_threshold)
+                if consumed > 0:
+                    device._batt_overnight_forced = True  # (#620) own marker
+                    device._batt_overnight_forced_date = today_local
+                    active_count += 1
+                    for a in allocations:
+                        if a.device_id == device.device_id:
+                            a.allocated_watts = consumed
+                            a.actual_consumption_watts = consumed
+                            a.state = DeviceState.ACTIVE.value
+                            break
+                    else:
+                        allocations.append(SurplusAllocation(
+                            device_id=device.device_id,
+                            device_name=device.name,
+                            priority=device.priority,
+                            allocated_watts=consumed,
+                            actual_consumption_watts=consumed,
+                            state=DeviceState.ACTIVE.value,
+                        ))
+                    _LOGGER.info(
+                        "#620 Tier 2: %s on battery (%.0fW, deficit %.0fs, "
+                        "SoC %.0f%% > reserve %.0f%%)",
+                        device.name, consumed, device.remaining_daily_runtime_sec,
+                        self._batt_soc or 0.0, self._batt_reserve_soc,
+                    )
+
         # (#559 beta.19) The deadline-critical pass was removed: it grid/
         # battery-forced with no SOC gate (HIGH-2) to hit a per-device
         # deadline. solar_only (the switch-load default) never grid-forces;
@@ -753,6 +888,34 @@ class SurplusController:
         )
 
         return self._allocation_data
+
+    def _tier1_headroom_w(self, device) -> float:
+        """(#620) Tier 1 daytime battery-assist headroom for one device (W).
+
+        Non-zero ONLY when the device opted into ``battery_assist_enabled``
+        (the "Solar + battery" mode) AND the battery is above the Buffer SoC.
+        Returns the assist budget the coordinator passed (the same
+        surplus-above-buffer budget the EV assist uses, #537/#545) — so the
+        device may activate on surplus + battery down to the buffer, never
+        below it. Everything else → 0 (inert)."""
+        if not getattr(device, "battery_assist_enabled", False):
+            return 0.0
+        soc = self._batt_soc
+        if soc is None or soc <= self._batt_buffer_soc:
+            return 0.0
+        # Running budget: shrinks as earlier (higher-priority) battery-assist
+        # loads claim it this cycle, so the battery isn't multi-spent.
+        return max(0.0, min(self._batt_assist_budget_w, self._tier1_budget_left))
+
+    def _tier2_overnight_eligible(self, device) -> bool:
+        """(#620) Tier 2 — may this device draw the battery BELOW the buffer,
+        down to the Reserve SoC, to meet its runtime floor when there is no
+        surplus? Opt-in flag + battery strictly above the hard Reserve SoC.
+        The Reserve is never crossed."""
+        if not getattr(device, "battery_eligible_overnight", False):
+            return False
+        soc = self._batt_soc
+        return soc is not None and soc > self._batt_reserve_soc
 
     def _apply_price_adjustment(self, distributable: float, price_level: str) -> float:
         """Adjust distributable surplus based on electricity price level.

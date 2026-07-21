@@ -4005,12 +4005,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     true_surplus_w, reclaim_w=reclaim_w,
                 )
             else:
+                # (#620) battery context for the device battery tiers.
+                # Tier-1 assist budget = the battery-assist cap, offered ONLY
+                # when the battery is above the Buffer SoC AND there is real
+                # surplus past the Solar Gate (same gate the EV assist uses,
+                # #537) — so the battery tops loads up out of surplus it would
+                # otherwise export, never below the buffer. Reserve floor for
+                # Tier-2 is the load reclaim reserve (``battery_priority_soc``).
+                from ..consts.core import (
+                    DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST,
+                    DEFAULT_BATTERY_BUFFER_SOC as _DEF_BUFFER,
+                    DEFAULT_BATTERY_ASSIST_MIN_SURPLUS as _DEF_GATE,
+                )
+                _b_soc = getattr(power, "battery_soc", None)
+                _b_buffer = float(self.config.get("battery_buffer_soc", _DEF_BUFFER) or _DEF_BUFFER)
+                _b_reserve = float(self.config.get("battery_priority_soc", 30) or 30)
+                _solar_gate = float(self.config.get("battery_assist_min_surplus", _DEF_GATE) or _DEF_GATE)
+                _assist_budget = (
+                    float(self.config.get("battery_assist_max_power", _DEF_ASSIST) or _DEF_ASSIST)
+                    if (_b_soc is not None and _b_soc > _b_buffer and true_surplus_w >= _solar_gate)
+                    else 0.0
+                )
                 allocation = await self._surplus_controller.update(
                     true_surplus_w,
                     price_level=tariff_data.tariff_price_level,
                     peak_state=peak_state,
                     reclaim_w=reclaim_w,
                     battery_priority=battery_priority,
+                    battery_soc=_b_soc,
+                    battery_buffer_soc=_b_buffer,
+                    battery_reserve_soc=_b_reserve,
+                    battery_assist_budget_w=_assist_budget,
                 )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -4048,9 +4073,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Surplus controller update failed: %s", e)
 
-        # Device runtimes
+        # Device runtimes. (#620 + Guido) The load "day" rolls over only once
+        # we're OUT of night mode — i.e. after sunrise — NOT at calendar
+        # midnight. Same reasoning as the EV's sunrise reset: if the counter
+        # reset at 00:00, a Tier-2 battery-eligible load would see 0/target in
+        # the small hours and start draining the battery overnight to refill a
+        # brand-new day's target BEFORE the day's surplus has any chance. By
+        # holding the meter day through the night, an overnight run keeps
+        # counting to the SAME day; the reset lands after sunrise when solar is
+        # already available, so the load fills from surplus first.
         try:
-            meter_day = dt_util.now().date()
+            _cal_day = dt_util.now().date()
+            if not self.time_manager.is_night_mode():
+                self._load_meter_day = _cal_day
+            meter_day = getattr(self, "_load_meter_day", None) or _cal_day
+            self._load_meter_day = meter_day
             for device in self._surplus_controller._devices.values():
                 device.update_daily_runtime(meter_day)
         except (AttributeError, TypeError) as e:
@@ -6685,7 +6722,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if not self._storage:
             return
         for device in self._surplus_controller._devices.values():
-            if device.daily_min_runtime_sec > 0 and device._daily_runtime_meter_day:
+            # (#620) persist for a cap-ONLY device too — otherwise a restart
+            # loses its accrued runtime and the daily_max cap resets to 0, so
+            # it could run past the cap it had already hit.
+            _has_target = (
+                device.daily_min_runtime_sec > 0
+                or getattr(device, "daily_max_runtime_sec", 0) > 0
+            )
+            if _has_target and device._daily_runtime_meter_day:
                 self._storage.set_device_runtime(
                     device.device_id,
                     device._daily_runtime_accumulated_sec,

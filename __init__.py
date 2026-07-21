@@ -2897,8 +2897,11 @@ async def _async_register_services(
                 )
         elif prop in (
             "daily_min_runtime_min", "top_up_policy", "stop_entity", "stop_at",
+            # (#620) max cap + battery tiers
+            "daily_max_runtime_min", "battery_assist_enabled",
+            "battery_eligible_overnight",
         ):
-            # (#559) goal engine — grounded core, persisted + applied live
+            # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
             if not registry:
                 raise HomeAssistantError(
@@ -2913,6 +2916,10 @@ async def _async_register_services(
                     translation_key="invalid_device_property",
                     translation_placeholders={"property": f"{prop}={value}"},
                 )
+            # (#620) normalize the two battery flags to a canonical bool string
+            # so the stored dict + live apply agree regardless of "true"/"1"/"on".
+            if prop in ("battery_assist_enabled", "battery_eligible_overnight"):
+                value = str(str(value).strip().lower() in ("true", "1", "on", "yes"))
             await registry.async_update_device_goal(device_id, prop, value)
         else:
             raise ServiceValidationError(
@@ -2935,6 +2942,9 @@ async def _async_register_services(
                     # (#559) goal engine — grounded core
                     "daily_min_runtime_min", "top_up_policy",
                     "stop_entity", "stop_at",
+                    # (#620) max cap + battery tiers
+                    "daily_max_runtime_min", "battery_assist_enabled",
+                    "battery_eligible_overnight",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -3314,6 +3324,9 @@ async def _async_register_phase_services(
             for k in (
                 "daily_min_runtime_min", "top_up_policy",
                 "stop_entity", "stop_at",
+                # (#620) max cap + battery tiers
+                "daily_max_runtime_min", "battery_assist_enabled",
+                "battery_eligible_overnight",
             )
             if k in call.data
         }
@@ -3377,6 +3390,14 @@ async def _async_register_phase_services(
             ),
             vol.Optional("stop_entity"): cv.string,
             vol.Optional("stop_at"): vol.Coerce(float),
+            # (#620) max cap + battery tiers — must be in the schema too, else
+            # voluptuous rejects them as extra keys (400) even though the
+            # handler reads them into goal_fields.
+            vol.Optional("daily_max_runtime_min"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=1440)
+            ),
+            vol.Optional("battery_assist_enabled"): cv.boolean,
+            vol.Optional("battery_eligible_overnight"): cv.boolean,
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.22] — 21.07.2026
+
+### ✨ Features
+
+- 🎯 **Daily runtime goals for household loads** (#620, requested by @onkelfu) — a load's
+  🎯 target editor gives it a **Min / Max runtime** dual-slider (Max is a persisted hard cap
+  that overrides the Min), a daytime **Mode** (Off / Peak-only / Solar only / **Solar + battery**
+  assist), a **"Finish overnight from"** picker (**Off / Battery / Grid**) for completing the
+  runtime when the sun runs short, and an optional **stop condition** picked with an entity
+  search. Two independent axes — daytime source vs overnight source — bounded by the grid peak
+  limit and the battery reserve floor; no forced-grid deadlines by design.
+
+### 🐛 Fixes (all caught on the real-hardware Heizband soak)
+
+- 🛑 **Daily-max cap stops a running load** — the cap only blocked re-activation, so a load
+  already on when it crossed the cap kept running past it.
+- 🌙 **Overnight source change stops a running load** — moving the picker off Battery (or off
+  Grid) now ends an in-progress battery drain / cheap-hours grid import, instead of running until
+  the reserve floor or the cheap window ends.
+- 🎚️ **Min/Max slider fixes** — handles were undraggable (`pointer-events:none`); added a split
+  (⬍) affordance for when Min and Max overlap (mirrors the EV slider, #355).
+- 🔎 **Stop-condition entity search** — the stop-sensor field is an `ha-entity-picker` with a
+  working clear (✕) button, instead of free text.
+- 🔒 **Atomic goal writes** — serialized goal-config writes so two rapid field changes can't drop one.
+
+
 # [1.7.5-beta.21] — 21.07.2026
 
 ### 🐛 Fixes

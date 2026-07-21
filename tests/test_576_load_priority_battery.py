@@ -140,7 +140,10 @@ def _make_device(device_id, priority, min_power=500):
     d.status.state = MagicMock(value="idle")
     d._offpeak_forced = False
     d._offpeak_forced_date = None
+    d._batt_overnight_forced = False
+    d._batt_overnight_forced_date = None
     d.daily_targets_met = False
+    d.daily_max_runtime_reached = False
     d.stop_condition_met = False
     d.__class__ = MagicMock
     async def _deact():
