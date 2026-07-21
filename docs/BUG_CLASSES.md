@@ -241,6 +241,38 @@ energySensors collide` (two empty-energySensor rows → each id resolves to its 
 `switch_entity`, `power_entity` or `name`, all of which are null/blank/duplicable for some device
 family. Refs #621.
 
+### 16. Per-unit surface suppressed by a higher-precedence fleet override — GUARDED
+**Symptom:** a multi-unit install's INDIVIDUAL sensors all go `unavailable` while
+the fleet total keeps working — #623: RienduPre's 2×Sessy fleet lost every
+`sensor.sem_battery_b1_/b2_*` ("lost my individual battery information somewhere
+during the 1.7.5 betas") the moment they also set the combined
+`battery_power_sensor` override. **Root shape:** the per-UNIT population
+(`readings.batteries` / `readings.inverters`) lives *inside* the same `if/elif`
+chain that selects the *fleet scalar*. A newer, higher-precedence fleet-override
+branch added to the TOP of that chain (`if self.config.battery_power_sensor:` #597;
+`if self.config.solar_power_sensor:` #592) short-circuits *before* the per-unit
+loop runs, so the per-unit dict is silently never filled and every per-unit sensor
+reads unavailable — the fleet scalar is unaffected, so the regression is invisible
+until a multi-unit user reports it. **Where it lives:**
+`coordinator/sensor_reader.py::_read_from_energy_dashboard` — the solar (per-inverter)
+and battery (per-battery) blocks. The per-battery **SOC** path and the
+per-**PV-string** surface were already decoupled (population in its own
+`if len(...) >= 2:` block, independent of the fleet-scalar precedence) and were
+never hit. **Closure:** decouple per-unit population from fleet-scalar selection —
+populate `readings.batteries`/`readings.inverters` whenever the ED exposes ≥2 units,
+then let the per-unit *sum* own the fleet scalar (so `fleet == sum(per-unit)` /
+`solar_power == fleet_solar_w` holds by construction, #404/#589); the explicit
+override applies ONLY when there is no ≥2 breakdown to sum (single/combined installs,
+energy-only ED — the exact #597/#592 case). **Guard:**
+`tests/test_623_per_battery_override.py` — a combined battery override with a
+2-unit ED list still yields `{b1,b2}`; a solar override with a 2-inverter ED list
+still fills `readings.inverters`; the energy-only override cases (#597/#592) keep
+the fleet scalar with no per-unit surface. Refs #592 #597 #623.
+**Watch:** any FUTURE fleet-scalar branch (a new source override, a new aggregation
+mode) must be added to the *fleet-scalar precedence* block only — never above the
+per-unit population loop. Grep `_read_from_energy_dashboard` for any `readings.<x>[` 
+population nested under a `self.config.*_sensor` override branch.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
