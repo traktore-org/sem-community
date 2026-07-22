@@ -170,7 +170,38 @@ def _clear_source_markers(device: "ControllableDevice") -> None:
     device._offpeak_forced_date = None
 
 
-async def reconcile_load(device: "ControllableDevice", intent: LoadIntent) -> float:
+def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
+                            active: bool) -> float:
+    """OBSERVER mode = the layer-3 intercept, in one place.
+
+    Management (layer 1) + decision (layer 2) already ran live against the real
+    sensors and produced ``intent``. Here — the ONLY execution seam — we LOG the
+    command we WOULD send and return the load's OBSERVED draw, without actuating
+    or mutating any device state. The would-command log is the observation/test
+    surface: HA-TEST runs the full real pipeline and audits these lines with zero
+    hardware risk. This is why observer mode needs no separate ``observe_only``
+    path — a clean layer cut makes it a one-line branch in the actuator.
+    """
+    # Deliberately NOTHING is mutated here — not even the surplus debounce timer
+    # (the H2 reset in the actuating path). Observer is a pure shadow: each cycle
+    # independently says "given reality now, I would do X". (Belief-sync via
+    # reconcile_all at update()'s top is separate and permitted — see there.)
+    observed = device.get_current_consumption() if active else 0.0
+    name = getattr(device, "name", None) or getattr(device, "device_id", "?")
+    if intent.on and not active:
+        _LOGGER.info("OBSERVER · WOULD ACTIVATE %s @ %.0fW [source=%s] — %s",
+                     name, intent.power_w, intent.source, intent.reason)
+    elif not intent.on and active:
+        _LOGGER.info("OBSERVER · WOULD DEACTIVATE %s — %s", name, intent.reason)
+    elif intent.on and active and intent.source is not None:
+        _LOGGER.info("OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
+                     name, intent.power_w, intent.source, intent.reason)
+    # else: idle, or on-but-not-SEM-driven (source is None) → no command to log.
+    return observed
+
+
+async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
+                         *, observer: bool = False) -> float:
     """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
     the management layer's ``intent``. This is the SINGLE place a load is actuated.
 
@@ -178,8 +209,14 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent) -> fl
     min_off), so a stop can lag the intent by the anti-flicker window — but the
     *decision* has no separate stop path to forget. Returns the load's resulting
     consumption (for the caller's surplus accounting).
+
+    ``observer=True`` cuts the trigger: layers 1+2 still ran for real, but the
+    actuator only logs what it would do (see :func:`_reconcile_load_observe`).
     """
     active = bool(getattr(device, "is_active", False))
+
+    if observer:
+        return _reconcile_load_observe(device, intent, active)
 
     if intent.on and not active:
         if not device.can_activate():
@@ -563,10 +600,14 @@ class SurplusController:
 
     async def _finish_via_desired_state(self, devices, *, remaining_surplus,
             reclaim_w, battery_priority, price_level, peak_state, peak_freeze,
-            peak_shed, peak_shed_all, distributable, available_power_w):
+            peak_shed, peak_shed_all, distributable, available_power_w,
+            observer=False):
         """(desired-state, phase 3) Compute intents, reconcile every load (the
         single actuator), and assemble the same ``SurplusAllocationData`` the
-        imperative ``update()`` returns."""
+        imperative ``update()`` returns.
+
+        ``observer=True`` runs the exact same decision, but the reconcile step
+        only logs what it would command — the read-only path for observer mode."""
         intents = self._desired_intents(
             devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
             battery_priority=battery_priority, price_level=price_level,
@@ -575,7 +616,7 @@ class SurplusController:
         allocations: List[SurplusAllocation] = []
         active_count = 0
         for device in devices:
-            await reconcile_load(device, intents[device.device_id])
+            await reconcile_load(device, intents[device.device_id], observer=observer)
             active = bool(device.is_active)
             consumption = device.get_current_consumption() if active else 0.0
             if active:
@@ -597,38 +638,6 @@ class SurplusController:
             allocations=allocations, last_update=datetime.now())
         return self._allocation_data
 
-    def observe_only(
-        self,
-        available_power_w: float,
-        reclaim_w: float = 0.0,
-    ) -> SurplusAllocationData:
-        """Read-only surplus allocation for OBSERVER MODE — reports the surplus
-        figures and CURRENTLY-active devices WITHOUT commanding anything.
-
-        No ``reconcile_all``, no ``activate`` / ``deactivate`` / ``adjust_power``
-        — this method physically cannot issue a device command. The coordinator
-        calls it INSTEAD of :meth:`update` when ``_observer_mode`` is on, so
-        observation mode cuts every surplus command (loads / heat pump / hot
-        water / climate) the same way the battery pipeline and EV control are
-        already cut. The trace's integration layer then reports "observer mode
-        — not commanding".
-        """
-        total = float(available_power_w) + max(0.0, float(reclaim_w))
-        active = [d for d in self._devices.values()
-                  if getattr(d, "is_active", False)]
-        allocated = sum(
-            float(d.get_current_consumption() or 0.0) for d in active
-        )
-        data = SurplusAllocationData()
-        data.total_surplus_w = total
-        data.distributable_surplus_w = max(0.0, total - self.regulation_offset)
-        data.regulation_offset_w = self.regulation_offset
-        data.allocated_w = allocated
-        data.unallocated_w = max(0.0, total - allocated)
-        data.active_devices = len(active)
-        data.total_devices = len(self._devices)
-        return data
-
     async def update(
         self,
         available_power_w: float,
@@ -644,6 +653,7 @@ class SurplusController:
         battery_buffer_soc: float = 100.0,
         battery_reserve_soc: float = 100.0,
         battery_assist_budget_w: float = 0.0,
+        observer: bool = False,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -674,6 +684,10 @@ class SurplusController:
         # user isn't counted as active / credited runtime this cycle, and SEM
         # doesn't immediately re-fight a manual off. Scoped to on/off loads
         # (switch + climate); EV / heat-pump / setpoint keep their own handling.
+        # NB: reconcile_all is belief-sync, not actuation — it corrects SEM's
+        # view of reality (is_active, _sem_owned, off-grace) and NEVER issues a
+        # service call. It runs in observer mode too (permitted + wanted): on
+        # shared hardware the real decision needs accurate belief state.
         from ..devices.base import DeviceType
         from .device_reconciler import reconcile_all
         reconcile_all([
@@ -751,16 +765,20 @@ class SurplusController:
         # load draws from it, so N loads can't each claim the full budget.
         self._tier1_budget_left = self._batt_assist_budget_w
 
-        # (desired-state, phase 3) Delegate to the single declarative path when
-        # enabled — same shared setup above, then intents + one reconcile step
-        # instead of the 7 imperative passes below.
-        if self._use_desired_state:
+        # (desired-state) Delegate to the single declarative path when enabled
+        # for actuation (``_use_desired_state``) OR whenever we're observing.
+        # OBSERVER always takes this path: it's the only one with a single
+        # execution seam (``reconcile_load``) that can cut the trigger cleanly —
+        # so observer mode runs the FULL real decision against live sensors and
+        # merely logs what it would command. No separate ``observe_only`` path.
+        if self._use_desired_state or observer:
             return await self._finish_via_desired_state(
                 devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
                 battery_priority=battery_priority, price_level=price_level,
                 peak_state=peak_state, peak_freeze=peak_freeze,
                 peak_shed=peak_shed, peak_shed_all=peak_shed_all,
                 distributable=distributable, available_power_w=available_power_w,
+                observer=observer,
             )
 
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —

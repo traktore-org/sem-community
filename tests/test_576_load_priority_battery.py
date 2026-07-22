@@ -591,35 +591,38 @@ class TestDirectSurplusDeviceRows:
 @pytest.mark.unit
 class TestObserverModeCutsSurplus:
     """Observation mode must cut EVERY surplus command — loads, heat pump,
-    hot water, climate — not just the battery + EV. observe_only() is the
-    read-only path and physically cannot actuate."""
+    hot water, climate — not just the battery + EV. There is no separate
+    read-only path: ``update(observer=True)`` runs the SAME real decision and
+    the single execution seam (``reconcile_load``) only LOGS what it would do.
+    The invariant: no ``activate`` / ``deactivate`` / ``adjust_power`` ever
+    fires while observing."""
 
-    def test_observe_only_never_actuates(self, mock_hass):
+    @pytest.mark.asyncio
+    async def test_observer_never_actuates_a_running_load(self, mock_hass):
         sc = SurplusController(mock_hass, regulation_offset=0)
         dev = _make_device(device_id="pump", priority=2, min_power=500)
         dev.is_active = True
         dev.get_current_consumption = MagicMock(return_value=1000.0)
         sc.register_device(dev)
-        data = sc.observe_only(3000.0, reclaim_w=500.0)
-        # NO command of any kind fired
+        data = await sc.update(3000.0, reclaim_w=500.0, observer=True)
+        # NO command of any kind fired — the trigger is cut at the seam.
         dev.activate.assert_not_called()
         dev.deactivate.assert_not_called()
         dev.adjust_power.assert_not_called()
-        # read-only figures still populated for the sensors/trace
-        assert data.total_surplus_w == 3500.0     # 3000 + 500 reclaim
-        assert data.allocated_w == 1000.0         # the currently-active device
-        assert data.active_devices == 1
+        # allocation data still produced for the sensors/trace
+        assert data is not None
         assert data.total_devices == 1
 
-    def test_observe_only_ignores_inactive_devices(self, mock_hass):
+    @pytest.mark.asyncio
+    async def test_observer_never_activates_an_idle_load(self, mock_hass):
         sc = SurplusController(mock_hass, regulation_offset=0)
         off = _make_device(device_id="idle", priority=2, min_power=500)
         off.is_active = False
         sc.register_device(off)
-        data = sc.observe_only(2000.0)
+        data = await sc.update(2000.0, observer=True)
         off.activate.assert_not_called()
-        assert data.allocated_w == 0.0
-        assert data.active_devices == 0
+        assert data is not None
+        assert off.is_active is False
 
 
 # ── #576: draw learning promoted to all device types + 1kW default ────────

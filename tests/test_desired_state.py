@@ -202,6 +202,77 @@ async def test_reconcile_off_held_by_min_on():
     d.deactivate.assert_not_called()    # min-on anti-flicker holds it on
 
 
+# ─────────────────────────────────────────────────────────────────
+# OBSERVER mode — the layer-3 intercept. Layers 1+2 run for real;
+# ``reconcile_load(observer=True)`` may ONLY log, never actuate or
+# mutate device state. This is the safety invariant for HA-TEST
+# (shared real hardware): a WOULD-log, and nothing else.
+# ─────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_observer_would_activate_never_actuates(caplog):
+    d = _rec_dev(is_active=False, consumption=800.0)
+    import logging
+    with caplog.at_level(logging.INFO):
+        consumed = await reconcile_load(
+            d, LoadIntent(True, 800, "solar", "surplus>threshold"), observer=True)
+    d.activate.assert_not_called()
+    d.record_activated.assert_not_called()
+    d.reset_surplus_timer.assert_not_called()   # no state mutation at all
+    assert consumed == 0.0                       # idle load draws nothing
+    assert d.is_active is False                  # belief untouched
+    assert "WOULD ACTIVATE" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_observer_would_deactivate_never_actuates(caplog):
+    d = _rec_dev(is_active=True, consumption=800.0)
+    import logging
+    with caplog.at_level(logging.INFO):
+        consumed = await reconcile_load(
+            d, LoadIntent(False, 0, None, "cap reached"), observer=True)
+    d.deactivate.assert_not_called()
+    d.record_deactivated.assert_not_called()
+    assert consumed == 800.0                     # still drawing (real state)
+    assert d.is_active is True                    # belief untouched
+    assert "WOULD DEACTIVATE" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_observer_would_adjust_never_actuates(caplog):
+    d = _rec_dev(is_active=True, consumption=600.0)
+    import logging
+    with caplog.at_level(logging.INFO):
+        consumed = await reconcile_load(
+            d, LoadIntent(True, 900, "solar", "more surplus"), observer=True)
+    d.adjust_power.assert_not_called()
+    assert consumed == 600.0
+    assert "WOULD ADJUST" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_observer_idle_emits_no_command(caplog):
+    d = _rec_dev(is_active=False)
+    import logging
+    with caplog.at_level(logging.INFO):
+        await reconcile_load(d, LoadIntent(False, 0, None, "no surplus"), observer=True)
+    d.activate.assert_not_called()
+    d.deactivate.assert_not_called()
+    d.reset_surplus_timer.assert_not_called()
+    assert "WOULD" not in caplog.text            # nothing to command → nothing logged
+
+
+@pytest.mark.asyncio
+async def test_observer_never_touches_markers():
+    d = _rec_dev(is_active=True)
+    d._batt_overnight_forced = True
+    d._offpeak_forced = True
+    await reconcile_load(d, LoadIntent(False, 0, None, "cap"), observer=True)
+    # markers reflect real actuation only; observer must not clear them
+    assert d._batt_overnight_forced is True
+    assert d._offpeak_forced is True
+
+
 @pytest.mark.asyncio
 async def test_reconcile_adjusts_active_load():
     d = _rec_dev(is_active=True)
@@ -415,6 +486,28 @@ async def test_desired_state_parity(name):
     old = await _run(specs, kw, use_desired=False)
     new = await _run(specs, kw, use_desired=True)
     assert old == new, f"{name}: imperative={old} desired={new}"
+
+
+@pytest.mark.asyncio
+async def test_update_observer_computes_but_never_actuates(caplog):
+    """The clean cut, end-to-end. Observer mode runs the FULL real decision
+    (layers 1+2 against live inputs) and reconciles through the single seam in
+    log-only mode: nothing is actuated, the imperative passes are never reached,
+    and allocation data is still produced for the sensors. Works with
+    ``_use_desired_state`` OFF (the PROD-shipped default) — observer always takes
+    the clean path. This is the invariant that makes HA-TEST safe on shared
+    hardware."""
+    import logging
+    hass = MagicMock()
+    sc = SurplusController(hass)
+    sc.register_device(_PDev(device_id="a", priority=1, min_power=800, is_active=False))
+    assert sc._use_desired_state is False                 # PROD-shipped default
+    with caplog.at_level(logging.INFO):
+        data = await sc.update(available_power_w=5000.0, observer=True)
+    states = {d.device_id: d.is_active for d in sc._devices.values()}
+    assert states == {"a": False}                         # nothing actuated
+    assert "WOULD ACTIVATE" in caplog.text                # decision made + logged
+    assert data.total_surplus_w == 5000.0                 # sensors still fed
 
 
 # ── ruflo B1/H2 fixes ─────────────────────────────────────────────────────

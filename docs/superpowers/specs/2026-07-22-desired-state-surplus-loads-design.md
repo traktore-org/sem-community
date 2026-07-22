@@ -121,6 +121,37 @@ elif intent.on and device.is_active:                               adjust_power(
 - Reconcile is idempotent and order-free: run `compute_desired` for every load,
   then `reconcile` every load. No pass ordering, no LIFO, no cross-pass state.
 
+### 3a. Observer mode = the intercept at the seam (SHIPPED)
+
+Because reconcile is the *single* actuator, observer mode is one branch inside
+it — not a parallel implementation:
+
+```python
+async def reconcile_load(device, intent, *, observer=False):
+    if observer:
+        return _reconcile_load_observe(device, intent, active)  # LOG "WOULD …", mutate nothing
+    ... actuate ...
+```
+
+- **Layers 1 + 2 run for real in observer mode.** `update(observer=True)` executes
+  the full priority walk against live sensors and produces real intents; only the
+  trigger is cut. On HA-TEST (shared real hardware) this yields the complete real
+  decision trace (`OBSERVER · WOULD ACTIVATE Heizband @ 800W [source=solar] — …`)
+  with **zero** hardware risk.
+- **The old `observe_only()` is deleted.** It was a coarse parallel path (summed
+  active draw, no real decision) that existed *because* the imperative `update()`
+  scattered actuation across 10+ sites and couldn't be run safely on shared
+  hardware. Its removal is the proof the layers are now cut: observer mode reuses
+  the one real path.
+- **Decoupled from the flag flip.** Observer always routes to the desired-state
+  seam regardless of `use_desired_state`, so the HA-TEST testability win ships
+  *independently* of the PROD actuation parity work — in observer mode nothing
+  actuates, so the open parity gaps cannot bite.
+- Observer mutates nothing: no `activate/deactivate/adjust_power`, no timer reset,
+  no source markers. Markers reflect real actuation only. Guarded by
+  `tests/test_desired_state.py::test_observer_*` (never-actuates invariant) and
+  `test_update_observer_computes_but_never_actuates` (end-to-end, flag OFF).
+
 ### 4. Where the current passes fold
 
 | Old pass | Folds into |

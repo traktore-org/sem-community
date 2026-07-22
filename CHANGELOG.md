@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.24] — 22.07.2026
+
+### 🏗️ Architecture — one clean cut for load control
+
+- 🔭 **Observer mode now runs the *full* real decision and just logs what it would do.**
+  On a monitoring / secondary install (or HA-TEST on shared hardware), SEM used to fall
+  back to a separate, dumber read-only path. Now it runs the exact same three-layer load
+  pipeline — management → decision → **one** execution seam — against your live sensors,
+  and at the seam it logs the command it *would* send (`OBSERVER · WOULD ACTIVATE Heizband
+  @ 800W [source=solar]`) instead of actuating. You can watch precisely what SEM would do,
+  and verify it's right, before handing it control — with zero hardware risk.
+- 🧹 The parallel `observe_only()` implementation is **deleted** — observation is now a
+  single flag at the one actuator (`reconcile_load`). A cleaner arc: the next load feature
+  docks at exactly one layer (see `docs/ARCHITECTURE.md` → *Compute intent → reconcile*),
+  and the "gate blocks activation but doesn't stop a running device" bug class becomes
+  structurally impossible on the desired-state path (`docs/BUG_CLASSES.md` #17/#18).
+
 # [1.7.5-beta.23] — 22.07.2026
 
 ### 🐛 Fixes
