@@ -317,11 +317,20 @@ class SurplusController:
         Externally-managed devices (the EV, driven by the decide/actuate
         path) are excluded — their draw is already reflected in grid
         export and must not be re-credited here.
+
+        (#620) Loads running off the BATTERY (Tier-2 overnight) or the
+        cheap-hours GRID (off-peak) are also excluded: their draw is met by
+        stored/grid energy, not solar surplus, so adding it back would fabricate
+        phantom overnight "surplus" — which both mislabels the schedule and
+        could wrongly activate other surplus loads at night. Only solar-surplus-
+        driven active draw belongs in the feedback-free surplus signal.
         """
         return sum(
             d.get_current_consumption()
             for d in self.get_devices_sorted()
             if d.is_active
+            and not getattr(d, "_batt_overnight_forced", False)
+            and not getattr(d, "_offpeak_forced", False)
         )
 
     def observe_only(

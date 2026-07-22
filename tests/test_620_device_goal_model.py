@@ -169,6 +169,27 @@ def mock_hass():
     return h
 
 
+def test_active_surplus_draw_excludes_battery_and_grid_forced(mock_hass):
+    """(#620) A load running off the battery (Tier-2) or the cheap-hours grid
+    (off-peak) must NOT be added back into the feedback-free surplus signal —
+    else its own draw fabricates phantom overnight 'surplus' that mislabels the
+    schedule AND could wrongly activate other loads (caught on @onkelfu's
+    beta.22 report: a pool filter running overnight off the battery showed
+    ~1.6 kW 'surplus' at night)."""
+    sc = SurplusController(mock_hass)
+    solar = _mock(device_id="solar_load", is_active=True)      # surplus-driven
+    solar.get_current_consumption = MagicMock(return_value=1000.0)
+    batt = _mock(device_id="batt_load", is_active=True, _batt_overnight_forced=True)
+    batt.get_current_consumption = MagicMock(return_value=1600.0)
+    grid = _mock(device_id="grid_load", is_active=True)
+    grid._offpeak_forced = True
+    grid.get_current_consumption = MagicMock(return_value=800.0)
+    for d in (solar, batt, grid):
+        sc.register_device(d)
+    # only the solar-surplus-driven load's draw is credited back
+    assert sc.active_surplus_draw_w() == 1000.0
+
+
 @pytest.mark.asyncio
 class TestMaxCapDeactivation:
     """The hard cap must STOP a running device, not only block re-activation

@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.23] — 22.07.2026
+
+### 🐛 Fixes
+
+- 🌙 **Overnight loads no longer fabricate phantom "surplus"** (#620, reported by @onkelfu) — a
+  load running overnight off the **battery** (Tier-2) or the **cheap-hours grid** had its own draw
+  added back into the feedback-free surplus signal (a daytime convergence mechanism), so the
+  schedule and the surplus figure showed e.g. ~1.6 kW of "surplus" at night, and it could wrongly
+  activate other surplus loads. Battery/grid-forced draw is now excluded — only solar-surplus-driven
+  draw counts.
+
 # [1.7.5-beta.22] — 21.07.2026
 
 ### ✨ Features
