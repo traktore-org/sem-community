@@ -13,11 +13,15 @@ Decision tree (precedence top-down):
    charge window.
 2. STOP_FORCE_CHARGE — scheduler decided TARGET_REACHED / NOT_NEEDED /
    IDLE but the adapter is still in FORCE_CHARGE intent.
-3. LIMIT_DISCHARGE — EV charging AND either solar surplus is below the
-   ``battery_assist_min_surplus`` gate OR battery SoC is below the
+3. LIMIT_DISCHARGE (EV) — EV charging AND either solar surplus is below
+   the ``battery_assist_min_surplus`` gate OR battery SoC is below the
    ``battery_buffer_soc`` floor (any mode/time); clamp battery to home
-   consumption (1:1 protection) so grid+solar fund the car.
-4. NORMAL — default.
+   consumption (1:1 protection) so grid+solar fund the car. Grid-funded
+   cheap-hours load draw is excluded from the home budget.
+4. LIMIT_DISCHARGE (grid-funded loads, #620) — cheap-hours top-up loads
+   ("Finish overnight from: Grid") are running; clamp battery to
+   home − grid_funded so the grid, not the battery, feeds them.
+5. NORMAL — default.
 """
 from __future__ import annotations
 
@@ -258,8 +262,11 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             # #531: split the home budget across the fleet — N batteries each
             # told to inject the FULL home load over-injects N× and leaks the
             # surplus to the EV, defeating the protection. Each gets home/N.
+            # (#620) grid-funded cheap-hours loads are excluded from the home
+            # budget — the grid feeds them, not the battery (see below).
             n = max(1, int(getattr(f, "battery_count", 1) or 1))
-            home_w = max(0.0, view.home_consumption_w) / n
+            gf_w = max(0.0, float(getattr(view, "grid_funded_load_w", 0.0) or 0.0))
+            home_w = max(0.0, view.home_consumption_w - gf_w) / n
             if below_buffer:
                 why = (
                     f"ev plugged in + battery SoC {f.battery_soc:.0f}% < buffer "
@@ -270,12 +277,40 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                     f"ev plugged in + solar surplus {surplus_w:.0f}W < gate "
                     f"{gate_w:.0f}W"
                 )
+            if gf_w > 0:
+                why += f" (excl. {gf_w:.0f}W grid-funded load)"
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.LIMIT_DISCHARGE,
                 discharge_limit_w=home_w,
                 reason=(
                     f"{why} → discharge limit {home_w:.0f} W (home/{n} across fleet)"
+                ),
+            )
+
+    # ─── LIMIT_DISCHARGE for grid-funded loads (#620) ───
+    # "Finish overnight from: Grid" must actually pull from the GRID. The
+    # inverter's self-consumption logic covers any house load from the battery,
+    # so without a clamp the Battery/Grid picker choices are physically
+    # identical (observed live: identical discharge either way, PROD
+    # 2026-07-22). While cheap-hours loads run, cap discharge at the rest of
+    # the home load — the grid funds the forced loads, the battery still
+    # serves everything else. Independent of the EV (the branch above already
+    # subtracts when both are active).
+    if protection_enabled:
+        gf_w = max(0.0, float(getattr(view, "grid_funded_load_w", 0.0) or 0.0))
+        if gf_w > 0:
+            f = view.fleet
+            n = max(1, int(getattr(f, "battery_count", 1) or 1))
+            home_w = max(0.0, view.home_consumption_w - gf_w) / n
+            return BatteryDecision(
+                battery_id=rt.battery_id,
+                intent=BatteryIntent.LIMIT_DISCHARGE,
+                discharge_limit_w=home_w,
+                reason=(
+                    f"grid-funded load(s) {gf_w:.0f}W running (cheap-hours "
+                    f"top-up) → discharge limit {home_w:.0f} W (home/{n} "
+                    f"across fleet) so the grid feeds them"
                 ),
             )
 

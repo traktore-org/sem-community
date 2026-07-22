@@ -456,8 +456,54 @@ class SurplusController:
 
         return allocations
 
+    # Volatile per-device CONTROL state that must survive a device-object
+    # rebuild (config edit / rediscovery re-registers a FRESH object for the
+    # same device_id). Lost markers are how the deficit-LIFO killed a running
+    # Tier-2 load 23 min early on PROD (2026-07-22: rediscovery at 22:15:14
+    # wiped Heizband's _batt_overnight_forced; the LIFO exemption no longer
+    # matched). Bug class 14 (rebuilt device loses accrued state) × #620.
+    _VOLATILE_CONTROL_FIELDS = (
+        "_offpeak_forced", "_offpeak_forced_date",
+        "_batt_overnight_forced", "_batt_overnight_forced_date",
+        "_last_activated", "_last_deactivated",   # anti-cycle windows
+        "_observed_off_since", "_external_off_until",
+        "_surplus_since",                          # activation debounce
+    )
+    # _sem_owned is transplanted separately: only from an ACTIVE old object —
+    # a stale False (reconciler cleared it while the entity flickered) must not
+    # override adopt_if_running's re-own on the fresh object (ruflo M).
+
     def register_device(self, device: ControllableDevice) -> None:
-        """Register a device for surplus control."""
+        """Register a device for surplus control.
+
+        Replacing an existing registration (same ``device_id``) transplants the
+        volatile control state onto the new object — a rebuild must never reset
+        force markers, anti-cycle timing, or ownership of a RUNNING load.
+        """
+        old = self._devices.get(device.device_id)
+        if old is not None and old is not device:
+            for f in self._VOLATILE_CONTROL_FIELDS:
+                if hasattr(old, f) and hasattr(device, f):
+                    setattr(device, f, getattr(old, f))
+            # Belief: if the old object was ACTIVE and the fresh one defaults to
+            # idle, carry the active state — the physical load is still on and
+            # SEM is still driving it. Ownership travels with an active belief
+            # only (see _VOLATILE_CONTROL_FIELDS note).
+            if old.is_active:
+                if not device.is_active:
+                    device._status.state = old._status.state
+                if hasattr(old, "_sem_owned"):
+                    device._sem_owned = old._sem_owned
+            if (getattr(old, "_offpeak_forced", False)
+                    or getattr(old, "_batt_overnight_forced", False)):
+                _LOGGER.info(
+                    "Re-register %s: transplanted volatile control state "
+                    "(offpeak=%s, overnight_batt=%s, active=%s)",
+                    device.device_id,
+                    getattr(old, "_offpeak_forced", False),
+                    getattr(old, "_batt_overnight_forced", False),
+                    device.is_active,
+                )
         self._devices[device.device_id] = device
         device._controller = self  # Allow device to look up dependencies (#122)
         depends = getattr(device, 'depends_on', None) or "none"
@@ -552,6 +598,19 @@ class SurplusController:
             d.get_current_consumption()
             for d in self.get_devices_sorted()
             if d.is_active
+        )
+
+    def grid_funded_draw_w(self) -> float:
+        """(#620) Total draw of loads currently running on the cheap-hours GRID
+        top-up (``_offpeak_forced``). Fed into ``BatteryView.grid_funded_load_w``
+        so the battery discharge limit excludes them — the grid, not the
+        battery, funds a "Finish overnight from: Grid" load. Tier-2
+        (``_batt_overnight_forced``) loads are deliberately NOT counted: they
+        run off the battery by design."""
+        return sum(
+            float(d.get_current_consumption() or 0.0)
+            for d in self._devices.values()
+            if d.is_active and getattr(d, "_offpeak_forced", False)
         )
 
     def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,

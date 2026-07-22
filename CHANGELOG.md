@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.24] — 22.07.2026
 
+### 🐛 Fixes (both caught in the live #620 overnight test, PROD 22.07)
+
+- 🔁 **A config edit no longer resets running loads' protection state** — editing any device's
+  goals triggers a rediscovery that rebuilds the device objects, and the rebuilt objects lost
+  their volatile control state (overnight-battery/cheap-hours force markers, anti-flicker
+  timers, ownership). Live consequence: a second load starting on the cheap-hours window made
+  the deficit cleanup shut down a running battery-overnight load 23 minutes before its Min
+  runtime (the marker that exempts it had been silently wiped at 22:15:14). Re-registration now
+  transplants the volatile state onto the new object; regression test replays the exact
+  sequence.
+- 🔌 **"Finish overnight from: Grid" is now actually grid-fed** — on a battery install the
+  inverter's self-consumption logic covered cheap-hours loads from the battery, so the Battery
+  and Grid picker choices were physically identical (identical discharge either way, confirmed
+  live). While cheap-hours loads run, SEM now limits battery discharge to the rest of the home
+  load — the same protection mechanism the EV already uses — so the grid feeds exactly those
+  loads and the battery keeps serving the house.
+
 ### 🏗️ Architecture — one clean cut for load control
 
 - 🔭 **Observer mode now runs the *full* real decision and just logs what it would do.**

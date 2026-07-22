@@ -5105,6 +5105,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     getattr(power, "home_consumption_power", 0.0) or 0.0
                 ),
                 scheduler_decision=scheduler_decision,
+                grid_funded_load_w=self._surplus_controller.grid_funded_draw_w(),
             )
 
             # 3. Decide
