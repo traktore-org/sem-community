@@ -96,8 +96,9 @@ def compute_load_intent(
     if mode == DeviceControlMode.OFF:
         return LoadIntent(active, held, None, "off — monitor only")
     if mode == DeviceControlMode.PEAK_ONLY:
-        if is_shed_target:
-            return LoadIntent(False, 0.0, None, "peak shed (peak_only)")
+        # This controller never proactively sheds peak_only loads — the load
+        # manager owns their peak shedding via shed_priority. Matches the old
+        # peak-shed pass, which skipped non-SURPLUS devices (ruflo M1).
         return LoadIntent(active, held, None, "peak_only — user-managed")
 
     # --- SURPLUS mode below ---
@@ -112,6 +113,13 @@ def compute_load_intent(
         return LoadIntent(False, 0.0, None, "daily target met")
     if getattr(device, "stop_condition_met", False):
         return LoadIntent(False, 0.0, None, "stop condition met")
+
+    # 3b. A ScheduleDevice past its deadline is a hard commitment — force it on
+    #     regardless of surplus or peak posture (matches the old deadline pass,
+    #     which was deliberately not peak-gated). ruflo B1.
+    if getattr(device, "is_deadline_approaching", False) and not active:
+        return LoadIntent(True, float(getattr(device, "rated_power", 0.0) or 0.0),
+                          "solar", "deadline force")
 
     # 4. A source can power it. peak_freeze blocks *new* starts but keeps a
     #    running load on (only an explicit shed removes it, clause 2).
@@ -202,7 +210,12 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent) -> fl
         _apply_source_markers(device, intent)
         return consumed
 
-    return 0.0   # off/idle, or not-SEM-driven-and-idle — nothing to do
+    # not intent.on and not active — idle. Reset the sustained-surplus debounce
+    # so a cloud-shadow gap restarts the activation delay, matching the old
+    # activation pass's reset_surplus_timer (ruflo H2). Harmless for off/peak
+    # loads (their timer is never consulted).
+    device.reset_surplus_timer()
+    return 0.0
 
 
 @dataclass
@@ -505,7 +518,7 @@ class SurplusController:
         )
 
     def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
-                         battery_priority, price_level, peak_state,
+                         battery_priority, price_level,
                          peak_freeze, peak_shed, peak_shed_all):
         """(desired-state, phase 3) The management-layer decision for the whole
         load set: the priority walk → one ``LoadIntent`` per device. Pure of
@@ -557,7 +570,7 @@ class SurplusController:
         intents = self._desired_intents(
             devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
             battery_priority=battery_priority, price_level=price_level,
-            peak_state=peak_state, peak_freeze=peak_freeze, peak_shed=peak_shed,
+            peak_freeze=peak_freeze, peak_shed=peak_shed,
             peak_shed_all=peak_shed_all)
         allocations: List[SurplusAllocation] = []
         active_count = 0

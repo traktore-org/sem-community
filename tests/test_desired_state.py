@@ -45,13 +45,15 @@ def test_off_mode_is_left_alone():
                               remaining_surplus_w=5000)
     assert off.on is False and off.source is None
 
-def test_peak_only_user_managed_but_sheds():
+def test_peak_only_user_managed_not_shed():
     keep = compute_load_intent(_dev(control_mode=DeviceControlMode.PEAK_ONLY, is_active=True,
                                     consumption=900), remaining_surplus_w=0)
     assert keep.on is True and keep.source is None
-    shed = compute_load_intent(_dev(control_mode=DeviceControlMode.PEAK_ONLY, is_active=True),
-                               remaining_surplus_w=0, is_shed_target=True)
-    assert shed.on is False
+    # (ruflo M1) the surplus controller never sheds peak_only loads — the load
+    # manager owns their shedding via shed_priority (matches the old peak pass).
+    still = compute_load_intent(_dev(control_mode=DeviceControlMode.PEAK_ONLY, is_active=True,
+                                     consumption=900), remaining_surplus_w=0, is_shed_target=True)
+    assert still.on is True
 
 
 # ── Stop gates (precedence over any run reason) ───────────────────────────
@@ -413,3 +415,18 @@ async def test_desired_state_parity(name):
     old = await _run(specs, kw, use_desired=False)
     new = await _run(specs, kw, use_desired=True)
     assert old == new, f"{name}: imperative={old} desired={new}"
+
+
+# ── ruflo B1/H2 fixes ─────────────────────────────────────────────────────
+def test_deadline_force_ignores_surplus():
+    d = _dev(min_power_threshold=800, rated_power=800)
+    d.is_deadline_approaching = True
+    i = compute_load_intent(d, remaining_surplus_w=0)   # no surplus at all…
+    assert i.on is True and "deadline" in i.reason      # …still force-started
+
+
+@pytest.mark.asyncio
+async def test_reconcile_resets_debounce_when_idle_no_source():
+    d = _rec_dev(is_active=False)
+    await reconcile_load(d, LoadIntent(False, 0, None, "no source"))
+    d.reset_surplus_timer.assert_called()   # cloud-shadow gap restarts the delay
