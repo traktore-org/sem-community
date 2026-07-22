@@ -420,17 +420,25 @@ class ControllableDevice(ABC):
         return self._daily_runtime_accumulated_sec >= self.daily_max_runtime_sec
 
     @property
-    def needs_offpeak_activation(self) -> bool:
-        """True if device has a runtime deficit, is enabled, and not already active."""
+    def has_runtime_deficit(self) -> bool:
+        """Runtime target not yet met — **independent of whether the device is
+        currently active**. This is the deficit that drives the overnight-battery
+        and cheap-grid intents in the desired-state model: those sources must
+        KEEP a running load on until the deficit closes, so they can't use the
+        ``not is_active`` gate that ``needs_offpeak_activation`` carries."""
         if self.daily_min_runtime_sec <= 0:
             return False
         if not self._enabled:
             return False
-        if self.is_active:
-            return False
         if self.daily_max_runtime_reached:  # (#620) cap overrides the deficit
             return False
         return self.remaining_daily_runtime_sec > 0
+
+    @property
+    def needs_offpeak_activation(self) -> bool:
+        """True if device has a runtime deficit, is enabled, and not already
+        active. The activation-side view of ``has_runtime_deficit``."""
+        return self.has_runtime_deficit and not self.is_active
 
     # --- (#559) goal engine — grounded core (runtime target + stop condition) ---
 

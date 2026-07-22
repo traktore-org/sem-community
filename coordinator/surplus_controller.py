@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from ..devices.base import ControllableDevice, DeviceState
+from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +53,92 @@ def solar_bounded_surplus(
     if solar_w is not None:
         surplus = min(surplus, float(solar_w))
     return max(0.0, surplus)
+
+
+@dataclass(frozen=True)
+class LoadIntent:
+    """(desired-state, phase 1) The MANAGEMENT layer's decision for one load:
+    what state it should be in, and why. Execution reconciles reality to this —
+    it is the single source of truth for on/off, so a gate that yields ``on=False``
+    stops a running load *by construction* (no separate deactivation path to
+    forget). ``source`` derives the legacy force markers instead of hand-setting
+    them (``_batt_overnight_forced == source == 'tier2_battery'`` etc.)."""
+    on: bool
+    power_w: float
+    source: Optional[str]   # 'solar'|'tier1_battery'|'tier2_battery'|'cheap_grid'|None
+    reason: str
+
+
+def compute_load_intent(
+    device: "ControllableDevice",
+    *,
+    remaining_surplus_w: float,
+    tier1_headroom_w: float = 0.0,
+    price_is_cheap: bool = False,
+    peak_freeze: bool = False,
+    is_shed_target: bool = False,
+    soc_above_reserve: bool = False,
+) -> LoadIntent:
+    """(desired-state, phase 1) Pure precedence walk → the load's desired state.
+
+    Faithful to ``SurplusController.update()``'s 7 passes, collapsed into one
+    ordered decision (first match wins). ``remaining_surplus_w`` is the solar
+    surplus left for THIS device after higher-priority loads (the caller's
+    priority walk fills it); the battery/grid clauses don't consume it.
+    Everything else is read off ``device`` so it works on a real device or a mock.
+    """
+    mode = getattr(device, "control_mode", DeviceControlMode.SURPLUS)
+    active = bool(getattr(device, "is_active", False))
+    held = device.get_current_consumption() if active else 0.0
+
+    # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
+    #    still SHEDS it under peak risk.
+    if mode == DeviceControlMode.OFF:
+        return LoadIntent(active, held, None, "off — monitor only")
+    if mode == DeviceControlMode.PEAK_ONLY:
+        if is_shed_target:
+            return LoadIntent(False, 0.0, None, "peak shed (peak_only)")
+        return LoadIntent(active, held, None, "peak_only — user-managed")
+
+    # --- SURPLUS mode below ---
+    # 2. Peak shed wins over any run reason.
+    if is_shed_target:
+        return LoadIntent(False, 0.0, None, "peak shed")
+
+    # 3. Done for the day — the hard stops (cap overrides the deficit).
+    if getattr(device, "daily_max_runtime_reached", False):
+        return LoadIntent(False, 0.0, None, "daily max cap reached")
+    if getattr(device, "daily_targets_met", False):
+        return LoadIntent(False, 0.0, None, "daily target met")
+    if getattr(device, "stop_condition_met", False):
+        return LoadIntent(False, 0.0, None, "stop condition met")
+
+    # 4. A source can power it. peak_freeze blocks *new* starts but keeps a
+    #    running load on (only an explicit shed removes it, clause 2).
+    rated = float(getattr(device, "rated_power", 0.0) or 0.0)
+    threshold = float(getattr(device, "min_power_threshold", rated) or rated)
+    can_start = active or not peak_freeze
+    deficit = bool(getattr(device, "has_runtime_deficit", False))
+
+    effective = float(remaining_surplus_w) + float(tier1_headroom_w)
+    if effective >= threshold and can_start:
+        battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
+        src = "tier1_battery" if battery_assisted else "solar"
+        return LoadIntent(True, rated, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")
+
+    # Overnight battery (Tier-2): finish a runtime deficit off the battery.
+    if (deficit and can_start
+            and getattr(device, "battery_eligible_overnight", False)
+            and soc_above_reserve):
+        return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
+
+    # Cheap-hours grid: finish a runtime deficit off the grid in a cheap window.
+    if (deficit and can_start and price_is_cheap
+            and getattr(device, "top_up_policy", "solar_only") == "cheap_hours"):
+        return LoadIntent(True, rated, "cheap_grid", "cheap-hours grid — runtime deficit")
+
+    # 5. No source → off.
+    return LoadIntent(False, 0.0, None, "no source available")
 
 
 @dataclass
