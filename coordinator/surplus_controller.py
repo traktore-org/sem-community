@@ -194,11 +194,15 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent) -> fl
         return device.get_current_consumption()
 
     if intent.on and active:
+        # source is None ⇒ "not SEM-driven" (off / peak-only kept as observed):
+        # never actuate it — SEM only re-tunes loads it is actually driving.
+        if intent.source is None:
+            return device.get_current_consumption()
         consumed = await device.adjust_power(intent.power_w)
         _apply_source_markers(device, intent)
         return consumed
 
-    return 0.0   # off and idle — nothing to do
+    return 0.0   # off/idle, or not-SEM-driven-and-idle — nothing to do
 
 
 @dataclass
@@ -284,6 +288,11 @@ class SurplusController:
         # EV Intelligence: anticipated surplus from taper detection (#106)
         self._anticipated_surplus_w: float = 0.0
         self._anticipated_deadline: Optional[float] = None
+        # (desired-state, phase 3) When True, update() delegates to the single
+        # declarative decision + reconcile path instead of the 7 imperative
+        # passes. Default OFF — the passes stay authoritative until a parity
+        # corpus + a real-hardware soak prove the new path identical.
+        self._use_desired_state: bool = False
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -495,6 +504,86 @@ class SurplusController:
             if d.is_active
         )
 
+    def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
+                         battery_priority, price_level, peak_state,
+                         peak_freeze, peak_shed, peak_shed_all):
+        """(desired-state, phase 3) The management-layer decision for the whole
+        load set: the priority walk → one ``LoadIntent`` per device. Pure of
+        actuation (``reconcile_load`` applies them); the shared cycle context
+        (``self._batt_*`` / ``self._tier1_budget_left``) is already stamped by
+        ``update()``. This is what REPLACES the 7 imperative passes."""
+        price_is_cheap = price_level in ("cheap", "very_cheap", "negative")
+        soc_above = (self._batt_soc is not None
+                     and self._batt_soc > self._batt_reserve_soc)
+
+        # Peak-shed targets: reverse priority; EMERGENCY sheds all, SHEDDING one.
+        shed = set()
+        if peak_shed:
+            for d in reversed(devices):
+                if d.control_mode == DeviceControlMode.SURPLUS and d.is_active:
+                    shed.add(d.device_id)
+                    if not peak_shed_all:
+                        break
+
+        remaining = float(remaining_surplus)
+        reclaim_handed = False
+        intents = {}
+        for device in devices:
+            # (#576) hand the reclaim back at the battery's slot
+            if (not reclaim_handed and battery_priority is not None
+                    and reclaim_w > 0 and device.priority >= battery_priority):
+                remaining = max(0.0, remaining - reclaim_w)
+                reclaim_handed = True
+            tier1 = self._tier1_headroom_w(device)
+            intent = compute_load_intent(
+                device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
+                price_is_cheap=price_is_cheap, peak_freeze=peak_freeze,
+                is_shed_target=device.device_id in shed, soc_above_reserve=soc_above)
+            intents[device.device_id] = intent
+            # solar/tier1-driven loads consume surplus for lower-priority ones
+            if intent.on and intent.source in ("solar", "tier1_battery"):
+                if intent.source == "tier1_battery":
+                    batt = max(0.0, intent.power_w - max(0.0, remaining))
+                    self._tier1_budget_left = max(0.0, self._tier1_budget_left - batt)
+                remaining = max(0.0, remaining - intent.power_w)
+        return intents
+
+    async def _finish_via_desired_state(self, devices, *, remaining_surplus,
+            reclaim_w, battery_priority, price_level, peak_state, peak_freeze,
+            peak_shed, peak_shed_all, distributable, available_power_w):
+        """(desired-state, phase 3) Compute intents, reconcile every load (the
+        single actuator), and assemble the same ``SurplusAllocationData`` the
+        imperative ``update()`` returns."""
+        intents = self._desired_intents(
+            devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+            battery_priority=battery_priority, price_level=price_level,
+            peak_state=peak_state, peak_freeze=peak_freeze, peak_shed=peak_shed,
+            peak_shed_all=peak_shed_all)
+        allocations: List[SurplusAllocation] = []
+        active_count = 0
+        for device in devices:
+            await reconcile_load(device, intents[device.device_id])
+            active = bool(device.is_active)
+            consumption = device.get_current_consumption() if active else 0.0
+            if active:
+                active_count += 1
+            allocations.append(SurplusAllocation(
+                device_id=device.device_id, device_name=device.name,
+                priority=device.priority,
+                allocated_watts=(device.status.allocated_power_w if active else 0.0),
+                actual_consumption_watts=consumption,
+                state=DeviceState.ACTIVE.value if active else DeviceState.IDLE.value))
+        total_allocated = sum(a.actual_consumption_watts for a in allocations)
+        self._allocation_data = SurplusAllocationData(
+            total_surplus_w=available_power_w,
+            distributable_surplus_w=distributable,
+            regulation_offset_w=self.regulation_offset,
+            allocated_w=total_allocated,
+            unallocated_w=max(0.0, distributable - total_allocated),
+            active_devices=active_count, total_devices=len(self._devices),
+            allocations=allocations, last_update=datetime.now())
+        return self._allocation_data
+
     def observe_only(
         self,
         available_power_w: float,
@@ -648,6 +737,18 @@ class SurplusController:
         # budget ONCE, not once per device. Decremented as each battery-assist
         # load draws from it, so N loads can't each claim the full budget.
         self._tier1_budget_left = self._batt_assist_budget_w
+
+        # (desired-state, phase 3) Delegate to the single declarative path when
+        # enabled — same shared setup above, then intents + one reconcile step
+        # instead of the 7 imperative passes below.
+        if self._use_desired_state:
+            return await self._finish_via_desired_state(
+                devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+                battery_priority=battery_priority, price_level=price_level,
+                peak_state=peak_state, peak_freeze=peak_freeze,
+                peak_shed=peak_shed, peak_shed_all=peak_shed_all,
+                distributable=distributable, available_power_w=available_power_w,
+            )
 
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —
         # the tariff left the cheap window, OR the day rolled over (the deficit

@@ -226,3 +226,190 @@ async def test_reconcile_noop_when_off_and_idle():
     d.activate.assert_not_called()
     d.deactivate.assert_not_called()
     assert consumed == 0.0
+
+
+# ── Phase 3: parity harness (new desired-state path == old imperative passes) ─
+from custom_components.solar_energy_management.coordinator.surplus_controller import (
+    SurplusController,
+)
+from custom_components.solar_energy_management.const import LoadManagementState
+
+
+class _PDev:
+    """A switch-like device that behaves under BOTH the imperative passes and the
+    desired-state path (is_active follows activate/deactivate), for parity."""
+    def __init__(self, device_id, priority, **kw):
+        self.device_id = device_id
+        self.name = device_id
+        self.priority = priority
+        self.control_mode = kw.get("control_mode", DeviceControlMode.SURPLUS)
+        self.is_enabled = True
+        self.managed_externally = False
+        self.device_type = MagicMock(value="switch")
+        self.min_power_threshold = float(kw.get("min_power", 800.0))
+        self.rated_power = float(kw.get("rated_power", self.min_power_threshold))
+        self.daily_max_runtime_reached = kw.get("daily_max_runtime_reached", False)
+        self.daily_targets_met = kw.get("daily_targets_met", False)
+        self.stop_condition_met = kw.get("stop_condition_met", False)
+        self.has_runtime_deficit = kw.get("has_runtime_deficit", False)
+        self.remaining_daily_runtime_sec = 1800 if self.has_runtime_deficit else 0
+        self.battery_eligible_overnight = kw.get("battery_eligible_overnight", False)
+        self.battery_assist_enabled = kw.get("battery_assist_enabled", False)
+        self.top_up_policy = kw.get("top_up_policy", "solar_only")
+        self._offpeak_forced = kw.get("_offpeak_forced", False)
+        self._offpeak_forced_date = None
+        self._batt_overnight_forced = kw.get("_batt_overnight_forced", False)
+        self._batt_overnight_forced_date = None
+        self._active = kw.get("is_active", False)
+        self._draw = float(kw.get("draw", self.rated_power))
+        self._can_act = kw.get("can_activate", True)
+        self._can_deact = kw.get("can_deactivate", True)
+        self.status = MagicMock()
+        self.status.allocated_power_w = 0.0
+
+    @property
+    def is_active(self):
+        return self._active
+
+    @property
+    def needs_offpeak_activation(self):
+        return self.has_runtime_deficit and not self._active
+
+    def can_activate(self):
+        return self._can_act
+    def can_deactivate(self):
+        return self._can_deact
+    def get_current_consumption(self):
+        return self._draw if self._active else 0.0
+    def record_activated(self):
+        pass
+    def record_deactivated(self):
+        pass
+    def reset_surplus_timer(self):
+        pass
+    async def activate(self, target):
+        self._active = True
+        return self._draw
+    async def deactivate(self):
+        self._active = False
+    async def adjust_power(self, target):
+        return self._draw
+
+
+# id → (list of device kwargs, update() kwargs)
+_SCENARIOS = {
+    "abundant_surplus_two_idle": (
+        [dict(device_id="a", priority=1, min_power=800),
+         dict(device_id="b", priority=2, min_power=800)],
+        dict(available_power_w=5000.0),
+    ),
+    "low_surplus_one_fits_one_not": (
+        [dict(device_id="a", priority=1, min_power=800),
+         dict(device_id="b", priority=2, min_power=800)],
+        dict(available_power_w=1050.0),          # ~1000 distributable → only a
+    ),
+    "running_load_cap_reached": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True,
+              daily_max_runtime_reached=True)],
+        dict(available_power_w=5000.0),
+    ),
+    "running_load_target_met": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True,
+              daily_targets_met=True)],
+        dict(available_power_w=5000.0),
+    ),
+    "overnight_battery_activates": (
+        [dict(device_id="a", priority=1, min_power=800, has_runtime_deficit=True,
+              battery_eligible_overnight=True)],
+        dict(available_power_w=0.0, price_level="normal", battery_soc=90,
+             battery_reserve_soc=20),
+    ),
+    "overnight_disabled_stops": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True,
+              _batt_overnight_forced=True, battery_eligible_overnight=False)],
+        dict(available_power_w=0.0, price_level="normal", battery_soc=90,
+             battery_reserve_soc=20),
+    ),
+    "cheap_grid_activates": (
+        [dict(device_id="a", priority=1, min_power=800, has_runtime_deficit=True,
+              top_up_policy="cheap_hours")],
+        dict(available_power_w=0.0, price_level="cheap"),
+    ),
+    "grid_disabled_stops": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True,
+              _offpeak_forced=True, top_up_policy="solar_only")],
+        dict(available_power_w=0.0, price_level="cheap"),
+    ),
+    "peak_emergency_sheds_all": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True, draw=800),
+         dict(device_id="b", priority=2, min_power=800, is_active=True, draw=800)],
+        dict(available_power_w=0.0, peak_state=LoadManagementState.EMERGENCY),
+    ),
+    "off_mode_untouched": (
+        [dict(device_id="a", priority=1, min_power=800, control_mode=DeviceControlMode.OFF,
+              is_active=True, draw=800)],
+        dict(available_power_w=5000.0),
+    ),
+    "no_surplus_all_off": (
+        [dict(device_id="a", priority=1, min_power=800),
+         dict(device_id="b", priority=2, min_power=800)],
+        dict(available_power_w=0.0),
+    ),
+    "tier1_assist_activates": (
+        [dict(device_id="a", priority=1, min_power=800, battery_assist_enabled=True)],
+        dict(available_power_w=500.0, battery_soc=90, battery_buffer_soc=70,
+             battery_assist_budget_w=3000.0),
+    ),
+    "peak_shedding_one_per_cycle": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True, draw=800),
+         dict(device_id="b", priority=2, min_power=800, is_active=True, draw=800)],
+        dict(available_power_w=0.0, peak_state=LoadManagementState.SHEDDING),
+    ),
+    "reclaim_above_battery_only": (
+        [dict(device_id="above", priority=1, min_power=800),
+         dict(device_id="below", priority=3, min_power=800)],
+        dict(available_power_w=0.0, reclaim_w=2000.0, battery_priority=2),
+    ),
+    "peak_warning_freezes_new": (
+        [dict(device_id="a", priority=1, min_power=800)],
+        dict(available_power_w=5000.0, peak_state=LoadManagementState.WARNING),
+    ),
+}
+
+
+async def _run(specs, kw, use_desired):
+    hass = MagicMock()
+    sc = SurplusController(hass)
+    sc._use_desired_state = use_desired
+    for s in specs:
+        sc.register_device(_PDev(**s))
+    await sc.update(**kw)
+    return {d.device_id: d.is_active for d in sc._devices.values()}
+
+
+# Known remaining parity gaps — both trace to the old deficit-LIFO (its ~100 W
+# hysteresis band + battery-unaware accounting), which the per-device walk does
+# not model yet. MUST be closed before the flag can flip (Phase 4). strict=True
+# so a later fix flips the xfail to an error and forces removing the mark.
+_XFAIL = {
+    "tier1_assist_activates":
+        "old activates the tier1 load then the deficit-LIFO kills it (decrements "
+        "the full draw without crediting the battery); the new path keeps it on "
+        "(arguably correct). Model the LIFO's battery-aware accounting first.",
+    "peak_shedding_one_per_cycle":
+        "old keeps an active load on within the -100 W LIFO hysteresis band; the "
+        "new path stops any sourceless load. Model the band in the walk first.",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", [
+    pytest.param(n, marks=pytest.mark.xfail(reason=_XFAIL[n], strict=True))
+    if n in _XFAIL else n
+    for n in _SCENARIOS
+])
+async def test_desired_state_parity(name):
+    specs, kw = _SCENARIOS[name]
+    old = await _run(specs, kw, use_desired=False)
+    new = await _run(specs, kw, use_desired=True)
+    assert old == new, f"{name}: imperative={old} desired={new}"
