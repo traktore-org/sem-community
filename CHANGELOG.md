@@ -15,12 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
-- 🌙 **Overnight loads no longer fabricate phantom "surplus"** (#620, reported by @onkelfu) — a
-  load running overnight off the **battery** (Tier-2) or the **cheap-hours grid** had its own draw
-  added back into the feedback-free surplus signal (a daytime convergence mechanism), so the
-  schedule and the surplus figure showed e.g. ~1.6 kW of "surplus" at night, and it could wrongly
-  activate other surplus loads. Battery/grid-forced draw is now excluded — only solar-surplus-driven
-  draw counts.
+- 🌙 **Surplus is now physically bounded by solar production** (#620, reported by @onkelfu) — a load
+  running overnight off the **battery** made SEM show a phantom ~1.6 kW of "surplus" at night (its own
+  draw was added back into the feedback-free surplus signal, a daytime convergence trick). Fixed with a
+  single invariant — *you cannot have more solar surplus than the sun is producing* — so the surplus is
+  clamped to the live solar power: pinned to 0 between sunset and sunrise no matter what the add-back, a
+  noisy grid sensor, or a battery→grid discharge tries to fabricate.
 
 # [1.7.5-beta.22] — 21.07.2026
 

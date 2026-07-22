@@ -30,6 +30,31 @@ DEFAULT_REGULATION_OFFSET = 50  # Watts - always keep small export
 DEFAULT_MIN_SURPLUS_CHANGE = 100  # Watts - suppress adjustments below this
 
 
+def solar_bounded_surplus(
+    grid_export_w: float,
+    active_draw_w: float,
+    solar_w: "Optional[float]" = None,
+) -> float:
+    """The feedback-free SOLAR surplus, physically bounded by production (#620).
+
+    ``grid_export + active_draw`` reconstructs "the surplus that would exist if
+    the controller's own loads were off" — the stable quantity to allocate from
+    (without the add-back the signal chases its own tail as loads switch on).
+
+    The result is then clamped to ``[0, solar]``: **you cannot have more SOLAR
+    surplus than the sun is producing.** This one physical invariant is the whole
+    guard — between sunset and sunrise ``solar_w`` is ~0, so the surplus is
+    pinned to 0 no matter what the add-back, a noisy grid sensor, or a battery→
+    grid discharge tries to fabricate (the phantom overnight "surplus" @onkelfu
+    hit when a load ran off the battery at night). ``solar_w=None`` (sensor
+    unavailable) skips the cap and falls back to the raw add-back.
+    """
+    surplus = float(grid_export_w) + float(active_draw_w)
+    if solar_w is not None:
+        surplus = min(surplus, float(solar_w))
+    return max(0.0, surplus)
+
+
 @dataclass
 class SurplusAllocation:
     """Allocation result for a single device."""
@@ -317,20 +342,11 @@ class SurplusController:
         Externally-managed devices (the EV, driven by the decide/actuate
         path) are excluded — their draw is already reflected in grid
         export and must not be re-credited here.
-
-        (#620) Loads running off the BATTERY (Tier-2 overnight) or the
-        cheap-hours GRID (off-peak) are also excluded: their draw is met by
-        stored/grid energy, not solar surplus, so adding it back would fabricate
-        phantom overnight "surplus" — which both mislabels the schedule and
-        could wrongly activate other surplus loads at night. Only solar-surplus-
-        driven active draw belongs in the feedback-free surplus signal.
         """
         return sum(
             d.get_current_consumption()
             for d in self.get_devices_sorted()
             if d.is_active
-            and not getattr(d, "_batt_overnight_forced", False)
-            and not getattr(d, "_offpeak_forced", False)
         )
 
     def observe_only(

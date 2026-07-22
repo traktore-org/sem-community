@@ -169,25 +169,24 @@ def mock_hass():
     return h
 
 
-def test_active_surplus_draw_excludes_battery_and_grid_forced(mock_hass):
-    """(#620) A load running off the battery (Tier-2) or the cheap-hours grid
-    (off-peak) must NOT be added back into the feedback-free surplus signal —
-    else its own draw fabricates phantom overnight 'surplus' that mislabels the
-    schedule AND could wrongly activate other loads (caught on @onkelfu's
-    beta.22 report: a pool filter running overnight off the battery showed
-    ~1.6 kW 'surplus' at night)."""
-    sc = SurplusController(mock_hass)
-    solar = _mock(device_id="solar_load", is_active=True)      # surplus-driven
-    solar.get_current_consumption = MagicMock(return_value=1000.0)
-    batt = _mock(device_id="batt_load", is_active=True, _batt_overnight_forced=True)
-    batt.get_current_consumption = MagicMock(return_value=1600.0)
-    grid = _mock(device_id="grid_load", is_active=True)
-    grid._offpeak_forced = True
-    grid.get_current_consumption = MagicMock(return_value=800.0)
-    for d in (solar, batt, grid):
-        sc.register_device(d)
-    # only the solar-surplus-driven load's draw is credited back
-    assert sc.active_surplus_draw_w() == 1000.0
+def test_solar_bounded_surplus():
+    """(#620) The one physical invariant: solar surplus can never exceed the
+    live solar production. This is the whole night-surplus guard — the phantom
+    ~1.6 kW @onkelfu saw when a load ran overnight off the battery (solar 0) is
+    pinned to 0. Replaces the earlier per-load exclusion with a single rule."""
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        solar_bounded_surplus,
+    )
+    # NIGHT: solar 0 → any add-back (battery/grid-driven load) pinned to 0
+    assert solar_bounded_surplus(grid_export_w=0, active_draw_w=1600, solar_w=0) == 0.0
+    # DAY: export + own draw, under the solar ceiling → passes through unchanged
+    assert solar_bounded_surplus(grid_export_w=500, active_draw_w=1000, solar_w=5000) == 1500.0
+    # DAY: reconstructed surplus above what the sun makes → capped at solar
+    assert solar_bounded_surplus(grid_export_w=0, active_draw_w=1600, solar_w=800) == 800.0
+    # importing with no offsetting draw → clamped to 0, never negative
+    assert solar_bounded_surplus(grid_export_w=-500, active_draw_w=0, solar_w=1000) == 0.0
+    # solar sensor unavailable → no cap, raw add-back (still floored at 0)
+    assert solar_bounded_surplus(grid_export_w=0, active_draw_w=1600, solar_w=None) == 1600.0
 
 
 @pytest.mark.asyncio

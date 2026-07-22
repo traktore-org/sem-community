@@ -55,7 +55,7 @@ from .charging_control import ChargingStateMachine, ChargingContext
 from .per_charger_context import PerChargerContext, PerChargerState
 from .storage import SEMStorage
 from .notifications import NotificationManager
-from .surplus_controller import SurplusController
+from .surplus_controller import SurplusController, solar_bounded_surplus
 from .cycle_trace import (
     TraceCollector, LayerRecord, LayerStatus, CrossCheck,
     ev_layer_match, battery_layer_match, device_layer_match, battery_list_role,
@@ -3947,9 +3947,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # The controller offers the reclaim only to loads ABOVE the battery
             # and hands it back at the battery's slot, so its drag position
             # decides who charges before the battery.
-            true_surplus_w = (
-                float(getattr(power, "grid_export_power", 0.0) or 0.0)
-                + self._surplus_controller.active_surplus_draw_w()
+            # (#620) Feedback-free SOLAR surplus, physically bounded by the live
+            # solar production — one invariant ("surplus ≤ sun") that pins the
+            # figure to 0 overnight and kills phantom surplus from the add-back,
+            # a noisy sensor, or battery→grid flow (@onkelfu's night report).
+            true_surplus_w = solar_bounded_surplus(
+                grid_export_w=float(getattr(power, "grid_export_power", 0.0) or 0.0),
+                active_draw_w=self._surplus_controller.active_surplus_draw_w(),
+                solar_w=getattr(power, "solar_power", None),
             )
             battery_priority = None
             _reg = getattr(self, "_device_registry", None)
