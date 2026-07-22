@@ -17,6 +17,7 @@ from custom_components.solar_energy_management.devices.base import (
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
 )
+from custom_components.solar_energy_management.const import LoadManagementState
 
 
 def _switch(**kw):
@@ -187,6 +188,50 @@ def test_solar_bounded_surplus():
     assert solar_bounded_surplus(grid_export_w=-500, active_draw_w=0, solar_w=1000) == 0.0
     # solar sensor unavailable → no cap, raw add-back (still floored at 0)
     assert solar_bounded_surplus(grid_export_w=0, active_draw_w=1600, solar_w=None) == 1600.0
+
+
+@pytest.mark.asyncio
+class TestGateStopsRunningLoad:
+    """(bug-class 17 & 18) The family guard: EVERY reason a load should stop must
+    stop a load that is already RUNNING — not merely block its next activation.
+    This enumerates every stop gate; adding a new gate without adding it here
+    (and wiring the stop path) fails CI. Also pins the forced markers to False
+    after the stop, so they can't leak (class 18). See the desired-state spec:
+    docs/superpowers/specs/2026-07-22-desired-state-surplus-loads-design.md."""
+
+    @pytest.mark.parametrize("gate,overrides,kw", [
+        ("max_cap", {"daily_max_runtime_reached": True},
+            {"available_power_w": 5000.0}),
+        ("target_met", {"daily_targets_met": True},
+            {"available_power_w": 5000.0}),
+        ("stop_condition", {"stop_condition_met": True},
+            {"available_power_w": 5000.0}),
+        ("overnight_disabled", {"_batt_overnight_forced": True,
+                                "battery_eligible_overnight": False},
+            {"available_power_w": 0.0, "price_level": "normal",
+             "battery_soc": 90, "battery_reserve_soc": 20}),
+        ("grid_disabled", {"_offpeak_forced": True, "top_up_policy": "solar_only"},
+            {"available_power_w": 0.0, "price_level": "cheap"}),
+        ("reserve_floor", {"_batt_overnight_forced": True,
+                           "battery_eligible_overnight": True},
+            {"available_power_w": 0.0, "price_level": "normal",
+             "battery_soc": 20, "battery_reserve_soc": 20}),
+        ("peak_emergency", {},
+            {"available_power_w": 0.0, "peak_state": LoadManagementState.EMERGENCY}),
+    ])
+    async def test_gate_stops_a_running_load(self, mock_hass, gate, overrides, kw):
+        sc = SurplusController(mock_hass)
+        d = _mock(is_active=True)
+        d.get_current_consumption = MagicMock(return_value=800.0)
+        for k, v in overrides.items():
+            setattr(d, k, v)
+        sc.register_device(d)
+        await sc.update(**kw)
+        # a RUNNING load is stopped by the gate, not just blocked from restarting
+        d.deactivate.assert_awaited()
+        # class 18 — the transient force markers don't leak past the stop
+        assert d._batt_overnight_forced is False
+        assert d._offpeak_forced is False
 
 
 @pytest.mark.asyncio

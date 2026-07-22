@@ -273,6 +273,40 @@ mode) must be added to the *fleet-scalar precedence* block only — never above 
 per-unit population loop. Grep `_read_from_energy_dashboard` for any `readings.<x>[` 
 population nested under a `self.config.*_sensor` override branch.
 
+### 17. Gate blocks activation but doesn't stop a running device — PARTIAL
+**Symptom:** a new gate/mode/toggle correctly prevents a load from *starting*, but a load
+already *running* keeps running past it (until some unrelated timeout). **Root shape:** the
+management + execution layers are *fused* — `SurplusController.update()` decides on/off
+imperatively across ~7 passes with 9 scattered `activate/deactivate` calls, so every gate
+must be threaded into BOTH the "don't turn on" spot AND a "stop if running" spot; the second
+is easy to forget. **Where it lives:** `coordinator/surplus_controller.py::update()` — the
+activation pass, the goal gates, the cheap-hours + Tier-2 force-expiry sections, the deficit
+LIFO, the peak-shed pass. Recurred **4× in #620 alone** (daily-max cap; battery-overnight
+toggle; overnight-picker off-Battery and off-Grid). **Closure (planned):** authoritative
+`desired_state` — management computes ONE pure `LoadIntent(on, power, source, reason)` per
+load, execution is ONE reconcile step, so a gate is just a *term* and OFF stops a running load
+by construction (spec: `docs/superpowers/specs/2026-07-22-desired-state-surplus-loads-design.md`).
+**Guard (now):** `tests/test_620_device_goal_model.py::TestGateStopsRunningLoad` — a parametrized
+family test enumerating EVERY stop gate (cap / target-met / stop-sensor / overnight-off /
+grid-off / reserve / peak) and asserting each deactivates a *running* load. Add a new gate →
+add a row, or CI fails. Refs #559 #620.
+**Watch:** until `desired_state` lands, any new "reason a load should stop" must be added to
+BOTH `compute`-side (block activation) AND a force-expiry/goal-gate section (stop running) —
+and to the family guard's parametrize list.
+
+### 18. Forced-marker set in one pass, leaks because another pass didn't clear it — PARTIAL
+**Symptom:** a transient control marker (`_offpeak_forced`, `_batt_overnight_forced`) set when
+one pass activates a load stays `True` after the load stops, so later cycles mis-treat an
+idle/finished load as still "forced" (skipped by the LIFO, shielded from expiry). **Root
+shape:** a marker set in the pass that *activates* must be cleared in every pass that
+*deactivates* — a manual bookkeeping obligation spread across passes. **Where it lives:**
+`surplus_controller.py` — every `deactivate` site currently hand-clears the markers (goal
+gate, force-expiry, peak-shed). **Closure (planned):** in the `desired_state` model the markers
+become *derived views* of `LoadIntent.source` (`_batt_overnight_forced == source=='tier2_battery'`),
+recomputed each cycle — never manually set/cleared, so they can't leak. Same spec as class 17.
+**Guard (now):** the family test (class 17) also asserts the markers are `False` after a
+gate-driven stop. Refs #620.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
