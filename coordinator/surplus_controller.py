@@ -141,6 +141,66 @@ def compute_load_intent(
     return LoadIntent(False, 0.0, None, "no source available")
 
 
+def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> None:
+    """(desired-state, phase 2) The legacy force markers become a DERIVED VIEW of
+    the intent's source — recomputed each reconcile, never hand-set — so they
+    cannot leak (bug-class 18). Dates are stamped for the day it was set."""
+    from homeassistant.util import dt as dt_util
+    today = dt_util.now().date()
+    is_tier2 = intent.source == "tier2_battery"
+    is_grid = intent.source == "cheap_grid"
+    device._batt_overnight_forced = is_tier2
+    device._batt_overnight_forced_date = today if is_tier2 else None
+    device._offpeak_forced = is_grid
+    device._offpeak_forced_date = today if is_grid else None
+
+
+def _clear_source_markers(device: "ControllableDevice") -> None:
+    device._batt_overnight_forced = False
+    device._batt_overnight_forced_date = None
+    device._offpeak_forced = False
+    device._offpeak_forced_date = None
+
+
+async def reconcile_load(device: "ControllableDevice", intent: LoadIntent) -> float:
+    """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
+    the management layer's ``intent``. This is the SINGLE place a load is actuated.
+
+    Anti-cycle lives here (``can_activate`` / ``can_deactivate`` own min_on /
+    min_off), so a stop can lag the intent by the anti-flicker window — but the
+    *decision* has no separate stop path to forget. Returns the load's resulting
+    consumption (for the caller's surplus accounting).
+    """
+    active = bool(getattr(device, "is_active", False))
+
+    if intent.on and not active:
+        if not device.can_activate():
+            return 0.0
+        consumed = await device.activate(intent.power_w)
+        if consumed > 0:
+            device.record_activated()
+            device.reset_surplus_timer()
+            _apply_source_markers(device, intent)
+        return consumed
+
+    if not intent.on and active:
+        if not device.can_deactivate():
+            return device.get_current_consumption()   # anti-flicker holds it on
+        await device.deactivate()
+        if not device.is_active:
+            device.record_deactivated()
+            _clear_source_markers(device)
+            return 0.0
+        return device.get_current_consumption()
+
+    if intent.on and active:
+        consumed = await device.adjust_power(intent.power_w)
+        _apply_source_markers(device, intent)
+        return consumed
+
+    return 0.0   # off and idle — nothing to do
+
+
 @dataclass
 class SurplusAllocation:
     """Allocation result for a single device."""
