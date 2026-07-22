@@ -132,6 +132,7 @@ def _make_device(device_id, priority, min_power=500):
     d.is_active = False
     d.device_type = MagicMock(value="switch")
     d.control_mode = DeviceControlMode.SURPLUS
+    d._sem_owned = False
     d.activate = AsyncMock(return_value=min_power)
     d.adjust_power = AsyncMock(return_value=min_power)
     d.get_current_consumption = MagicMock(return_value=0.0)

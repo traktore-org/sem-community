@@ -38,12 +38,23 @@ def _dev(**kw):
 
 # ── Not SEM-driven ────────────────────────────────────────────────────────
 def test_off_mode_is_left_alone():
+    # user-turned-on load (not SEM-owned): mode Off means hands off
     on = compute_load_intent(_dev(control_mode=DeviceControlMode.OFF, is_active=True,
                                   consumption=900), remaining_surplus_w=5000)
     assert on.on is True and on.source is None          # SEM doesn't touch it
     off = compute_load_intent(_dev(control_mode=DeviceControlMode.OFF, is_active=False),
                               remaining_surplus_w=5000)
     assert off.on is False and off.source is None
+
+
+def test_off_mode_releases_sem_driven_load():
+    """(class-17 sibling, live PROD 2026-07-23) Switching to Off while SEM is
+    DRIVING the load must stop it — not strand it running forever."""
+    d = _dev(control_mode=DeviceControlMode.OFF, is_active=True, consumption=900)
+    d._sem_owned = True
+    i = compute_load_intent(d, remaining_surplus_w=5000)
+    assert i.on is False
+    assert "releasing" in i.reason
 
 def test_peak_only_user_managed_not_shed():
     keep = compute_load_intent(_dev(control_mode=DeviceControlMode.PEAK_ONLY, is_active=True,

@@ -142,6 +142,7 @@ def _mock(**kw):
     d.reset_surplus_timer = MagicMock()
     d.status = MagicMock()
     d.control_mode = kw.get("control_mode", DeviceControlMode.SURPLUS)
+    d._sem_owned = kw.get("sem_owned", False)
     d._offpeak_forced = False
     d._offpeak_forced_date = None
     d._batt_overnight_forced = kw.get("_batt_overnight_forced", False)
@@ -461,6 +462,31 @@ class TestInertByDefault:
         await sc.update(2000.0, battery_soc=90, battery_buffer_soc=70,
                         battery_reserve_soc=20, battery_assist_budget_w=3000)
         d.activate.assert_called_once()
+
+
+# ── Mode → Off releases a SEM-driven running load (class-17 sibling) ──────
+# Caught live (PROD 2026-07-23): switching a running load's mode to Off left
+# it on forever — the activation pass skips OFF devices, so nothing stopped it.
+@pytest.mark.asyncio
+class TestModeOffReleasesRunningLoad:
+    async def test_mode_off_stops_sem_owned_load(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        d = _mock(device_id="d", is_active=True, sem_owned=True,
+                  control_mode=DeviceControlMode.OFF,
+                  _batt_overnight_forced=True)
+        d.get_current_consumption = MagicMock(return_value=600.0)
+        sc.register_device(d)
+        await sc.update(0.0)
+        d.deactivate.assert_called()
+        assert d._batt_overnight_forced is False   # markers cleared on release
+
+    async def test_mode_off_leaves_user_turned_on_load_alone(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        d = _mock(device_id="d", is_active=True, sem_owned=False,
+                  control_mode=DeviceControlMode.OFF)
+        sc.register_device(d)
+        await sc.update(0.0)
+        d.deactivate.assert_not_called()           # user's own choice — hands off
 
 
 # ── Device-object rebuild must not reset volatile control state ───────────

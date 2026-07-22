@@ -13,7 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.24] — 22.07.2026
 
-### 🐛 Fixes (both caught in the live #620 overnight test, PROD 22.07)
+### 🐛 Fixes (caught in the live #620 overnight test, PROD 22.07)
+
+- 🛑 **Switching a device's mode to Off now releases a load SEM was driving** — the Off mode
+  only blocked new activations; a load SEM had already turned on stayed on forever ("SEM does
+  not touch the device any more"). Mode → Off now stops a SEM-driven load once (markers and
+  ownership cleared), then leaves it strictly alone. A load *you* turned on yourself is never
+  touched — Off still means SEM keeps its hands off your own choices.
 
 - 🔁 **A config edit no longer resets running loads' protection state** — editing any device's
   goals triggers a rediscovery that rebuilds the device objects, and the rebuilt objects lost

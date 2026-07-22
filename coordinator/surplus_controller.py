@@ -94,6 +94,13 @@ def compute_load_intent(
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
     if mode == DeviceControlMode.OFF:
+        # Switching the mode to Off while SEM is DRIVING the load must release
+        # it (stop once, clear ownership), not strand it running forever —
+        # class-17 sibling caught live (PROD 2026-07-23: mode→off, load stayed
+        # on and SEM never touched it again). A load the USER turned on
+        # (not _sem_owned) is left exactly as-is.
+        if active and getattr(device, "_sem_owned", False):
+            return LoadIntent(False, 0.0, None, "mode off — releasing SEM-driven load")
         return LoadIntent(active, held, None, "off — monitor only")
     if mode == DeviceControlMode.PEAK_ONLY:
         # This controller never proactively sheds peak_only loads — the load
@@ -846,12 +853,22 @@ class SurplusController:
         # into a cheap midnight window would re-fill the NEW day's target from
         # grid all night).
         from homeassistant.util import dt as dt_util
+        from ..devices.base import DeviceControlMode
         today_local = dt_util.now().date()
         for device in devices:
             if not device.is_active:
                 continue
             reason = None
-            if device._offpeak_forced:
+            # (class-17 sibling, caught live 2026-07-23) Mode switched to Off
+            # while SEM is DRIVING the load: release it — stop once, clear
+            # markers/ownership — instead of stranding it running forever
+            # (the activation pass just skips OFF devices; nothing else stops
+            # them). A user-turned-on load (not _sem_owned) stays untouched:
+            # Off means SEM keeps its hands off the user's own choices.
+            if (device.control_mode == DeviceControlMode.OFF
+                    and getattr(device, "_sem_owned", False)):
+                reason = "mode off — releasing SEM-driven load"
+            if reason is None and device._offpeak_forced:
                 stale = (
                     device._offpeak_forced_date is not None
                     and device._offpeak_forced_date != today_local
@@ -899,9 +916,6 @@ class SurplusController:
                     _LOGGER.debug(
                         "Force-end of %s blocked by anti-flicker", device.name,
                     )
-
-        # Import control mode enum
-        from ..devices.base import DeviceControlMode
 
         # Activation pass: iterate by priority, activate eligible devices
         # Only devices in "surplus" mode are candidates for activation (#49).
