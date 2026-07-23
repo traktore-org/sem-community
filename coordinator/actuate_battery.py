@@ -153,3 +153,19 @@ async def restore_discharge_limit_on_startup(hass, config: dict) -> None:
             "Startup: restored battery discharge limit from %dW to %dW",
             int(current_limit), max_discharge,
         )
+
+
+def active_discharge_limit(adapters) -> "float | None":
+    """(#625 phase 4, extracted) The tightest ACTIVE discharge limit across
+    the per-battery adapter fleet, for the discharge-limit sensor (#375).
+
+    The protection gate fires fleet-wide on EV night charging, so in
+    practice every adapter reports the same value — ``min()`` is defensive.
+    ``None`` when no adapter is currently in LIMIT_DISCHARGE.
+    """
+    limits = [
+        a._last_discharge_limit_w for a in (adapters or {}).values()
+        if a.last_intent is BatteryIntent.LIMIT_DISCHARGE
+        and a._last_discharge_limit_w is not None
+    ]
+    return min(limits) if limits else None

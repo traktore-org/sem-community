@@ -622,3 +622,102 @@ class TestPhase2Extractions625:
         assert reg._has_battery is True
         reg.set_ev_chargers.assert_called_once_with(["row"])
         reg.refresh_direct_device_priorities.assert_called_once()
+
+
+class TestPublishDiag625:
+    """(#625 phase 3) The extracted System-tab diagnostics assembly."""
+
+    def _coord(self, **over):
+        from datetime import timedelta
+        c = MagicMock()
+        c.config = over.get("config", {})
+        c._get_version = MagicMock(return_value="1.7.5-test")
+        r = MagicMock()
+        r._split_grid_discovery = over.get("disc", {})
+        r._grid_sign_inverted = over.get("grid_inv", False)
+        r._battery_sign_inverted = over.get("batt_inv", {})
+        r._battery_sign_detected = over.get("batt_det", {})
+        r._manual_grid_mismatch = over.get("mismatch", False)
+        r._sensor_unavailable = over.get("unavail", [])
+        c._sensor_reader = r
+        c.trace_health = MagicMock(return_value=over.get("health", {"ok": True}))
+        c._ev_devices = over.get("ev_devices", {})
+        c.update_interval = timedelta(seconds=10)
+        c._observer_mode = over.get("observer", False)
+        c._health_check = MagicMock(total_violations=0)
+        c._build_ed_config_summary = MagicMock(return_value="ed-summary")
+        return c
+
+    def _diag(self, **over):
+        from custom_components.solar_energy_management.coordinator.publish_diag import (
+            build_diagnostics)
+        return build_diagnostics(self._coord(**over))
+
+    def test_combined_grid_mode_default(self):
+        d = self._diag()
+        assert d["diag_grid_mode"] == "combined"
+        assert d["diag_grid_sign"] == "normal"
+        assert d["diag_battery_sign"] == "learning"
+        assert d["diag_ed_config"] == "ed-summary"
+
+    def test_manual_grid_mode_with_mismatch(self):
+        d = self._diag(config={"grid_import_power_entity": "sensor.x"}, mismatch=True)
+        assert d["diag_grid_mode"] == "manual"
+        assert d["diag_grid_manual_mismatch"] is True
+
+    def test_split_grid_confidence(self):
+        d = self._diag(disc={"import": "sensor.i", "confidence": "same-device"})
+        assert d["diag_grid_mode"] == "split"
+        d = self._diag(disc={"import": "sensor.i", "confidence": "weak"})
+        assert d["diag_grid_mode"] == "split-lowconf"
+
+    def test_layer_mismatch_from_trace_health(self):
+        d = self._diag(health={"ok": False, "subsystem": "perception:grid", "cycles": 4})
+        assert d["layer_mismatch"] is True
+        assert d["layer_mismatch_subsystem"] == "perception:grid"
+        assert d["layer_mismatch_cycles"] == 4
+
+    def test_charger_control_method(self):
+        assert self._diag()["diag_charger_control"] == "none"
+        num = MagicMock(); num.current_entity_id = "number.c"
+        assert self._diag(ev_devices={"a": num})["diag_charger_control"] == "number"
+        svc = MagicMock(spec=[]);
+        d = self._diag(ev_devices={"a": MagicMock(current_entity_id=None)})
+        assert d["diag_charger_control"] == "service"
+
+    def test_formatter_alias_still_importable(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            _format_battery_sign_diag)
+        assert _format_battery_sign_diag({}, {}) == "learning"
+        assert _format_battery_sign_diag({"b1": True}, {"b1": True}) == "negated"
+
+
+class TestActiveDischargeLimit625:
+    """(#625 phase 4) The extracted fleet discharge-limit surfacing (#375)."""
+
+    def _adapter(self, intent, limit):
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            BatteryIntent)
+        a = MagicMock()
+        a.last_intent = BatteryIntent.LIMIT_DISCHARGE if intent else BatteryIntent.NORMAL
+        a._last_discharge_limit_w = limit
+        return a
+
+    def test_none_when_no_adapters(self):
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            active_discharge_limit)
+        assert active_discharge_limit(None) is None
+        assert active_discharge_limit({}) is None
+
+    def test_none_when_no_active_limit(self):
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            active_discharge_limit)
+        assert active_discharge_limit({"b1": self._adapter(False, 900)}) is None
+        assert active_discharge_limit({"b1": self._adapter(True, None)}) is None
+
+    def test_tightest_limit_across_fleet(self):
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            active_discharge_limit)
+        fleet = {"b1": self._adapter(True, 900), "b2": self._adapter(True, 700),
+                 "b3": self._adapter(False, 100)}
+        assert active_discharge_limit(fleet) == 700
