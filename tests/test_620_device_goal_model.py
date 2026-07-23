@@ -690,3 +690,34 @@ class TestPublishDiag625:
             _format_battery_sign_diag)
         assert _format_battery_sign_diag({}, {}) == "learning"
         assert _format_battery_sign_diag({"b1": True}, {"b1": True}) == "negated"
+
+
+class TestActiveDischargeLimit625:
+    """(#625 phase 4) The extracted fleet discharge-limit surfacing (#375)."""
+
+    def _adapter(self, intent, limit):
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            BatteryIntent)
+        a = MagicMock()
+        a.last_intent = BatteryIntent.LIMIT_DISCHARGE if intent else BatteryIntent.NORMAL
+        a._last_discharge_limit_w = limit
+        return a
+
+    def test_none_when_no_adapters(self):
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            active_discharge_limit)
+        assert active_discharge_limit(None) is None
+        assert active_discharge_limit({}) is None
+
+    def test_none_when_no_active_limit(self):
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            active_discharge_limit)
+        assert active_discharge_limit({"b1": self._adapter(False, 900)}) is None
+        assert active_discharge_limit({"b1": self._adapter(True, None)}) is None
+
+    def test_tightest_limit_across_fleet(self):
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            active_discharge_limit)
+        fleet = {"b1": self._adapter(True, 900), "b2": self._adapter(True, 700),
+                 "b3": self._adapter(False, 100)}
+        assert active_discharge_limit(fleet) == 700

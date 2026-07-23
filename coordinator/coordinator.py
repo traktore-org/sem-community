@@ -2917,24 +2917,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if not self._observer_mode:
                 try:
                     await self._run_battery_pipeline(power, energy, charging_state)
-                    # Surface the most recent LIMIT_DISCHARGE for the
-                    # discharge-limit sensor. #375: now reads across
-                    # the per-battery adapter dict — picks the
-                    # tightest active limit if multiple batteries are
-                    # currently in LIMIT_DISCHARGE (the protection
-                    # gate fires fleet-wide on EV night charging, so
-                    # in practice all adapters report the same value
-                    # — min() is just defensive).
-                    adapters = getattr(self, "_battery_adapters", None) or {}
-                    if adapters:
-                        from .charger_types import BatteryIntent as _BI
-                        active_limits = [
-                            a._last_discharge_limit_w for a in adapters.values()
-                            if a.last_intent is _BI.LIMIT_DISCHARGE
-                            and a._last_discharge_limit_w is not None
-                        ]
-                        if active_limits:
-                            discharge_limit = min(active_limits)
+                    # (#625 phase 4) Surface the tightest ACTIVE
+                    # LIMIT_DISCHARGE for the sensor (#375) — extracted
+                    # to actuate_battery.active_discharge_limit.
+                    from .actuate_battery import active_discharge_limit
+                    discharge_limit = active_discharge_limit(
+                        getattr(self, "_battery_adapters", None))
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("Battery pipeline service failed: %s", e)
                 except Exception as e:  # noqa: BLE001
