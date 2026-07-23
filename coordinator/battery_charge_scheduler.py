@@ -11,7 +11,7 @@ closes (default 9 h later, 06:00). Each evaluation:
    day-ahead price series when a dynamic tariff is configured)
 4. Selects the cheapest contiguous price window (dynamic tariff) or
    uses the full NT window (static)
-5. Issues forced charge commands via BatteryChargeAdapter
+5. Publishes SchedulerDecision — the battery pipeline actuates it (#624)
 6. Monitors SOC and stops when target reached
 
 Re-plans immediately on day-ahead price updates, SOC drift and EV
@@ -28,7 +28,6 @@ from typing import List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .battery_charge_adapter import BatteryChargeAdapter
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -337,11 +336,14 @@ class BatteryChargeScheduler:
     def __init__(
         self,
         hass: HomeAssistant,
-        adapter: BatteryChargeAdapter,
         scheduler_config: SchedulerConfig,
     ) -> None:
+        # (#624) The scheduler is a pure planner: it produces
+        # SchedulerDecision; actuation belongs to the battery pipeline
+        # (decide_battery -> actuate_battery -> BatteryControlAdapter).
+        # The old standalone BatteryChargeAdapter dependency was
+        # vestigial (its is_active was always False here).
         self.hass = hass
-        self._adapter = adapter
         self._config = scheduler_config
         self._decision: SchedulerDecision = SchedulerDecision(state=SchedulerState.IDLE)
         self._last_evaluation_date: Optional[datetime] = None
@@ -1019,8 +1021,6 @@ class BatteryChargeScheduler:
 
     def reset(self) -> None:
         """Reset scheduler to idle state (call when night ends)."""
-        if self._adapter.is_active:
-            _LOGGER.warning("Resetting scheduler while charge still active")
         self._decision = SchedulerDecision(state=SchedulerState.IDLE)
         self._charge_started_at = None
         self._planned_soc = None

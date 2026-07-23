@@ -70,7 +70,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         self._took_control: bool = False
         # Lazy import for delegate
         try:
-            from ..battery_charge_adapter import GenericChargeAdapter
+            from .force_charge import GenericChargeAdapter
             self._charge_adapter = GenericChargeAdapter(hass, config)
         except Exception:  # noqa: BLE001
             self._charge_adapter = None
@@ -254,7 +254,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                 "command_force_charge ignored",
             )
             return
-        from ..battery_charge_adapter import ChargeCommand, ChargeCommandStatus
+        from .force_charge import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
             max_power_w=charge_power_w,

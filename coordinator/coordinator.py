@@ -6,7 +6,6 @@ This is a slim orchestrator that delegates to specialized modules:
 - FlowCalculator: Power and energy flow calculations
 - ChargingStateMachine: Charging mode selection (solar, night, Min+PV)
 - EVControlMixin: EV charging control (solar, night, Min+PV, session tracking)
-- BatteryProtectionMixin: Battery discharge protection during night charging
 - SEMStorage: Persistence
 - NotificationManager: Mobile/KEBA notifications
 """
@@ -65,7 +64,6 @@ from .energy_reclaim import reclaimable_battery_w
 from .forecast_reader import ForecastReader
 from .forecast_tracker import ForecastTracker
 from .ev_control import EVControlMixin
-from .battery_protection import BatteryProtectionMixin
 from ..tariff import StaticTariffProvider, DynamicTariffProvider, PriceLevel
 from ..tariff.calendar_provider import CalendarTariffProvider
 from ..tariff.tariff_provider import _local_date as _tariff_local_date
@@ -119,7 +117,7 @@ def _format_battery_sign_diag(inverted: dict, detected: dict) -> str:
     return ", ".join(f"{bid}: {_fmt(bid)}" for bid in sorted(inverted))
 
 
-class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMixin):
+class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
     Orchestrates the flow:
@@ -130,9 +128,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     5. Send notifications (NotificationManager)
     6. Persist data (SEMStorage)
 
-    EV control and battery protection are provided by mixins
-    (EVControlMixin, BatteryProtectionMixin) to keep this file focused
-    on orchestration.
+    EV control is provided by EVControlMixin to keep this file
+    focused on orchestration; the startup battery discharge restore is
+    ``actuate_battery.restore_discharge_limit_on_startup`` (#624).
     """
 
     # #485 G5: the reload-skip snapshot is a property so arming it
@@ -446,13 +444,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Phase 8: Consumption/solar predictor (#3)
         self._predictor = ConsumptionPredictor()
 
-        # Phase 9: Battery charge scheduler (#6)
-        from .battery_charge_adapter import create_charge_adapter
+        # Phase 9: Battery charge scheduler (#6). (#624) The scheduler is a
+        # pure planner — actuation goes through the battery pipeline's
+        # BatteryControlAdapter, so no standalone charge adapter exists.
         from .battery_charge_scheduler import BatteryChargeScheduler, SchedulerConfig
         self._battery_scheduler_config = SchedulerConfig.from_config(config)
-        self._battery_charge_adapter = create_charge_adapter(hass, config)
         self._battery_charge_scheduler = BatteryChargeScheduler(
-            hass, self._battery_charge_adapter, self._battery_scheduler_config,
+            hass, self._battery_scheduler_config,
         )
 
         # EV Intelligence: taper detection, virtual SOC, charge skip (#106)
@@ -569,7 +567,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Battery discharge protection state
         self._last_discharge_limit: Optional[float] = None
-        self._battery_protection_active: bool = False
 
         # Observer mode: read-only monitoring, no hardware control
         self._observer_mode = config.get("observer_mode", False)
@@ -2012,7 +2009,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Ensure battery discharge limit is restored after restart
             # (protects against stale limit left by previous run)
-            await self._restore_battery_discharge_limit_on_startup()
+            from .actuate_battery import restore_discharge_limit_on_startup
+            await restore_discharge_limit_on_startup(self.hass, self.config)
 
         # Run deployment health check once after startup
         if self._initial_update_done and not getattr(self, '_health_checked', False):
@@ -2927,7 +2925,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Step 7.5c+d (unified): Battery control via decide_battery + actuate_battery
             #
-            # Replaces the legacy split (7.5c BatteryProtectionMixin +
+            # Replaces the legacy split (7.5c the deleted BatteryProtectionMixin, #624, +
             # 7.5d BatteryChargeScheduler.update) with one pure pipeline
             # mirroring the EV-side rebuild.
             discharge_limit = None
@@ -4842,7 +4840,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         Replaces the legacy 7.5c + 7.5d hooks
         (``_apply_battery_discharge_protection`` from
-        BatteryProtectionMixin + ``_execute_battery_charge_scheduler``)
+        the deleted BatteryProtectionMixin (#624) + ``_execute_battery_charge_scheduler``)
         with the unified per-device-primary pipeline mirroring the EV
         side rebuild (PR #358).
 

@@ -681,7 +681,7 @@ class TestNightScheduleSlotAwareness:
             battery_max_charge_power_w=max_charge_w,
             peak_limit_w=0.0,
         )
-        return BatteryChargeScheduler(MagicMock(), MagicMock(), config)
+        return BatteryChargeScheduler(MagicMock(), config)
 
     def test_15min_slots_use_real_duration(self):
         """8 quarter-hour slots at 5 kW deliver 10 kWh — the hardcoded

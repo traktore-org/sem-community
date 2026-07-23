@@ -7,9 +7,9 @@ the adapter dispatches to the brand-specific HA service.
 
 Pre-v1.7.0 the battery command surface was split across:
 
-- ``coordinator/battery_protection.py`` (BatteryProtectionMixin) —
+- the deleted ``battery_protection.py`` (#624) —
   discharge limiting via ``number.set_value``
-- ``coordinator/battery_charge_adapter.py`` (BatteryChargeAdapter
+- ``battery_adapters/force_charge.py`` (brand force-charge impls
   + brand subclasses) — forced charge via brand services
 
 This protocol unifies both axes. New brand support: subclass
@@ -49,7 +49,7 @@ class BatteryControlAdapter(ABC):
         self._last_discharge_limit_w: float = -1.0
         """Last applied discharge limit — used by command_limit_discharge
         to de-dup consecutive same-value writes. Mirrors today's
-        100 W hysteresis in BatteryProtectionMixin
+        100 W hysteresis (formerly BatteryProtectionMixin)
         (battery_protection.py:106-109)."""
         # #523 export arbitrage — the number entity that sets the battery's
         # forcible discharge-to-grid power. Brand-agnostic: any battery whose

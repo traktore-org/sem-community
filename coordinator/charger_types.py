@@ -304,7 +304,7 @@ class BatteryIntent(Enum):
     LIMIT_DISCHARGE = "limit_discharge"
     """Reactive protection during night EV charging — hold
     discharge to a specific watts value (typically home consumption,
-    1:1 limit). Today's ``BatteryProtectionMixin`` logic."""
+    1:1 limit). Formerly the ``BatteryProtectionMixin`` logic (#624)."""
 
     FORCE_CHARGE = "force_charge"
     """Proactive grid-to-battery charge with target SOC and power.

@@ -32,7 +32,7 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # module's imports stay lightweight + the legacy adapter
         # can be deleted later without breaking the structural
         # plan.
-        from ..battery_charge_adapter import HuaweiChargeAdapter
+        from .force_charge import HuaweiChargeAdapter
         self._charge_adapter = HuaweiChargeAdapter(hass, config)
         # Config keys for discharge limit
         self._discharge_control_entity = config.get(
@@ -397,7 +397,7 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         if await self._stop_forcible():
             self._last_intent = BatteryIntent.FORCE_CHARGE
             return
-        from ..battery_charge_adapter import ChargeCommand, ChargeCommandStatus
+        from .force_charge import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
             max_power_w=charge_power_w,

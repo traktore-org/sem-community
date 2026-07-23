@@ -1,10 +1,10 @@
-"""Battery forced charge adapter — abstracts inverter-specific force-charge commands.
+"""Internal force-charge actuation per brand (#624).
 
-Provides a unified interface for commanding grid-to-battery charging across
-different inverter platforms (Huawei, SolarEdge, GoodWe, Fronius, SolAX, DEYE).
-
-Each platform has its own service call or entity to trigger forced charging.
-The adapter auto-detects the platform from config and dispatches accordingly.
+Moved from ``coordinator/battery_charge_adapter.py``: these classes are
+NOT a public adapter surface any more — they are the brand-specific
+force-charge implementation composed by the ``BatteryControlAdapter``
+subclasses in this package (see huawei.py / goodwe.py / generic.py).
+Nothing outside ``battery_adapters/`` may import them.
 """
 from __future__ import annotations
 

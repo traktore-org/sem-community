@@ -225,8 +225,8 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     "battery_discharge_control_entity",
     # #528: the discharge-protection toggle has no runtime switch entity, so a
     # set_option would otherwise hit the "unrouted → reload" path silently.
-    # Declare it structural so the reload is explicit (battery_protection reads
-    # it from the config snapshot, which is rebuilt on reload). Rarely changed.
+    # Declare it structural so the reload is explicit (decide_battery reads it
+    # from the config snapshot, which is rebuilt on reload). Rarely changed.
     "battery_discharge_protection_enabled",
     # #523 multi-battery: per-battery control-entity lists are read at
     # adapter construction too, so a change must reload.
