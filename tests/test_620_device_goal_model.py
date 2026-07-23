@@ -546,3 +546,44 @@ class TestRebuildKeepsControlState:
         await sc.update(0.0, price_level="cheap")
         maenner.activate.assert_called()          # grid top-up started
         heiz2.deactivate.assert_not_called()      # Tier-2 load survives
+
+
+# ── #625: battery-tier context extracted from the coordinator ─────────────
+class TestBatteryTierContext625:
+    """Pins the extracted build_battery_tier_context to the exact semantics
+    the inline coordinator block had (#620): assist budget only above buffer
+    AND past the solar gate; reserve = battery_priority_soc."""
+
+    def _ctx(self, cfg=None, soc=80.0, surplus=2000.0):
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            build_battery_tier_context)
+        return build_battery_tier_context(cfg or {}, soc, surplus)
+
+    def test_budget_opens_above_buffer_with_surplus(self):
+        c = self._ctx(cfg={"battery_buffer_soc": 75, "battery_assist_min_surplus": 1000,
+                           "battery_assist_max_power": 3000}, soc=80, surplus=1500)
+        assert c.assist_budget_w == 3000.0
+
+    def test_budget_zero_below_buffer(self):
+        c = self._ctx(cfg={"battery_buffer_soc": 75}, soc=70, surplus=99999)
+        assert c.assist_budget_w == 0.0
+
+    def test_budget_zero_below_solar_gate(self):
+        c = self._ctx(cfg={"battery_buffer_soc": 75, "battery_assist_min_surplus": 1000},
+                      soc=90, surplus=500)
+        assert c.assist_budget_w == 0.0
+
+    def test_budget_zero_when_soc_unknown(self):
+        c = self._ctx(soc=None, surplus=99999)
+        assert c.assist_budget_w == 0.0
+
+    def test_reserve_is_priority_soc(self):
+        c = self._ctx(cfg={"battery_priority_soc": 25})
+        assert c.reserve_soc == 25.0
+
+    def test_defaults_from_consts(self):
+        from custom_components.solar_energy_management.consts.core import (
+            DEFAULT_BATTERY_BUFFER_SOC, DEFAULT_BATTERY_ASSIST_MIN_SURPLUS)
+        c = self._ctx(cfg={}, soc=None, surplus=0)
+        assert c.buffer_soc == float(DEFAULT_BATTERY_BUFFER_SOC)
+        assert c.reserve_soc == 30.0

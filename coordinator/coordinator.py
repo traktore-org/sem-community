@@ -54,7 +54,9 @@ from .charging_control import ChargingStateMachine, ChargingContext
 from .per_charger_context import PerChargerContext, PerChargerState
 from .storage import SEMStorage
 from .notifications import NotificationManager
-from .surplus_controller import SurplusController, solar_bounded_surplus
+from .surplus_controller import (
+    SurplusController, solar_bounded_surplus, build_battery_tier_context,
+)
 from .cycle_trace import (
     TraceCollector, LayerRecord, LayerStatus, CrossCheck,
     ev_layer_match, battery_layer_match, device_layer_match, battery_list_role,
@@ -4007,26 +4009,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # path — a clean layer cut makes observation a one-flag branch, and
             # HA-TEST gets the full real decision trace with zero hardware risk.
             #
-            # (#620) battery context for the device battery tiers. Tier-1 assist
-            # budget = the battery-assist cap, offered ONLY when the battery is
-            # above the Buffer SoC AND there is real surplus past the Solar Gate
-            # (same gate the EV assist uses, #537) — so the battery tops loads up
-            # out of surplus it would otherwise export, never below the buffer.
-            # Reserve floor for Tier-2 is the load reclaim reserve
-            # (``battery_priority_soc``).
-            from ..consts.core import (
-                DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST,
-                DEFAULT_BATTERY_BUFFER_SOC as _DEF_BUFFER,
-                DEFAULT_BATTERY_ASSIST_MIN_SURPLUS as _DEF_GATE,
-            )
-            _b_soc = getattr(power, "battery_soc", None)
-            _b_buffer = float(self.config.get("battery_buffer_soc", _DEF_BUFFER) or _DEF_BUFFER)
-            _b_reserve = float(self.config.get("battery_priority_soc", 30) or 30)
-            _solar_gate = float(self.config.get("battery_assist_min_surplus", _DEF_GATE) or _DEF_GATE)
-            _assist_budget = (
-                float(self.config.get("battery_assist_max_power", _DEF_ASSIST) or _DEF_ASSIST)
-                if (_b_soc is not None and _b_soc > _b_buffer and true_surplus_w >= _solar_gate)
-                else 0.0
+            # (#620/#625) battery context for the device battery tiers —
+            # pure computation extracted to build_battery_tier_context.
+            btc = build_battery_tier_context(
+                self.config, getattr(power, "battery_soc", None), true_surplus_w,
             )
             allocation = await self._surplus_controller.update(
                 true_surplus_w,
@@ -4034,10 +4020,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 peak_state=peak_state,
                 reclaim_w=reclaim_w,
                 battery_priority=battery_priority,
-                battery_soc=_b_soc,
-                battery_buffer_soc=_b_buffer,
-                battery_reserve_soc=_b_reserve,
-                battery_assist_budget_w=_assist_budget,
+                battery_soc=btc.soc,
+                battery_buffer_soc=btc.buffer_soc,
+                battery_reserve_soc=btc.reserve_soc,
+                battery_assist_budget_w=btc.assist_budget_w,
                 observer=self._observer_mode,
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
