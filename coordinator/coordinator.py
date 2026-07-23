@@ -98,26 +98,8 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
     return default
 
 
-def _format_battery_sign_diag(inverted: dict, detected: dict) -> str:
-    """Serialise the per-bid battery-sign state to a SCALAR string for the
-    ``diag_battery_sign`` sensor (#588 M-2).
-
-    HA sensor state must be a scalar — a raw dict is an invalid state and
-    renders as ``[object Object]`` in the config card. Mirrors the plain-string
-    ``diag_grid_sign``. Single battery → bare value; multi-battery →
-    ``"b1: negated, b2: normal (learning)"``.
-    """
-    if not inverted:
-        return "learning"
-
-    def _fmt(bid):
-        return ("negated" if inverted.get(bid) else "normal") + (
-            "" if detected.get(bid) else " (learning)"
-        )
-
-    if len(inverted) == 1:
-        return _fmt(next(iter(inverted)))
-    return ", ".join(f"{bid}: {_fmt(bid)}" for bid in sorted(inverted))
+# (#625 phase 3) moved to publish_diag; alias kept for existing imports.
+from .publish_diag import format_battery_sign_diag as _format_battery_sign_diag
 
 
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
@@ -3370,54 +3352,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result.update(getattr(self, "_vpp_publish", None)
                           or {"vpp_event": "idle", "vpp_event_observer": True})
 
-            # Diagnostics summary for dashboard System tab
-            result["diag_version"] = self._get_version()
-            _disc = getattr(self._sensor_reader, "_split_grid_discovery", None) or {}
-            if self.config.get("grid_import_power_entity") or self.config.get("grid_export_power_entity"):
-                result["diag_grid_mode"] = "manual"
-                # #461 follow-up: observe-only audit verdict — True when the
-                # manual import/export assignment has contradicted the
-                # Energy Dashboard counters for 5+ cycles (swapped fields).
-                result["diag_grid_manual_mismatch"] = bool(
-                    getattr(self._sensor_reader, "_manual_grid_mismatch", False)
-                )
-            elif _disc.get("import"):
-                result["diag_grid_mode"] = "split" if _disc.get("confidence") == "same-device" else "split-lowconf"
-            else:
-                result["diag_grid_mode"] = "combined"
-            result["diag_grid_sign"] = "negated" if self._sensor_reader._grid_sign_inverted else "normal"
-            # #588 — battery sign summary per bid (mirrors diag_grid_sign).
-            _batt_inv = getattr(self._sensor_reader, "_battery_sign_inverted", {})
-            _batt_det = getattr(self._sensor_reader, "_battery_sign_detected", {})
-            result["diag_battery_sign"] = _format_battery_sign_diag(_batt_inv, _batt_det)
-            # #590 — the layered-trace health signal, surfaced as ONE queryable
-            # binary sensor (binary_sensor.sem_layer_mismatch). ON when a
-            # control OR perception layer-boundary fault has PERSISTED; the
-            # ``perception:<signal>`` subsystem tag names a sign contradiction.
-            # This replaces the retired per-signal diag_*_sign_contradiction
-            # sensors — the audit flags still feed _trace_perception (Phase 1),
-            # and the diagnose cross_checks dump carries the per-cycle detail.
-            _health = self.trace_health()
-            result["layer_mismatch"] = not bool(_health.get("ok", True))
-            result["layer_mismatch_subsystem"] = _health.get("subsystem")
-            result["layer_mismatch_cycles"] = int(_health.get("cycles", 0) or 0)
-            result["diag_charger_count"] = len(self._ev_devices)
-            result["diag_charger_control"] = "number" if any(
-                getattr(d, 'current_entity_id', None) for d in self._ev_devices.values()
-            ) else "service" if self._ev_devices else "none"
-            result["diag_battery_capacity"] = self.config.get("battery_capacity_kwh", 0)
-            result["diag_update_interval"] = self.update_interval.total_seconds()
-            result["diag_observer_mode"] = self._observer_mode
-            # diag_ev_assist_headroom removed — #545 instrumentation, fixed+closed.
-            unavail_count = sum(1 for eid in self._sensor_reader._sensor_unavailable)
-            result["diag_sensors_unavailable"] = unavail_count
-            result["diag_health_violations"] = self._health_check.total_violations
-
-            # Energy Dashboard config summary — surfaces whether power AND energy are
-            # configured per source, and where power came from. Pasted via the System
-            # card's "Copy diagnostics" so "all values 0" reports (#250) are self-
-            # diagnosing: all pwr=none / energy=MISSING ⇒ the dashboard isn't wired up.
-            result["diag_ed_config"] = self._build_ed_config_summary()
+            # (#625 phase 3) Diagnostics summary for the System tab —
+            # read-only assembly extracted to publish_diag.build_diagnostics.
+            from .publish_diag import build_diagnostics
+            result.update(build_diagnostics(self))
 
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
