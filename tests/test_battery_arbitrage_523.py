@@ -49,7 +49,7 @@ def _scheduler(**over):
         battery_cycle_cost=0.0,
     )
     base.update(over)
-    return BatteryChargeScheduler(MagicMock(), MagicMock(), SchedulerConfig(**base))
+    return BatteryChargeScheduler(MagicMock(), SchedulerConfig(**base))
 
 
 # ── scheduler owns the decision (reusing its economics) ─────────────
@@ -1026,6 +1026,6 @@ def test_arbitrage_off_by_default_stays_deactivated():
     # leaves it disabled, and a disabled scheduler never fires.
     cfg = SchedulerConfig.from_config({})
     assert cfg.arbitrage_enabled is False
-    s = BatteryChargeScheduler(MagicMock(), MagicMock(), cfg)
+    s = BatteryChargeScheduler(MagicMock(), cfg)
     assert s.evaluate_arbitrage(80.0, 0.45, 0.20).state is not \
         SchedulerState.DISCHARGING_ARBITRAGE
