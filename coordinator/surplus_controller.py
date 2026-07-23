@@ -30,6 +30,54 @@ DEFAULT_REGULATION_OFFSET = 50  # Watts - always keep small export
 DEFAULT_MIN_SURPLUS_CHANGE = 100  # Watts - suppress adjustments below this
 
 
+@dataclass(frozen=True)
+class BatteryTierContext:
+    """(#620/#625) Pure inputs for the device battery tiers, computed from
+    config + live readings. Tier-1 assist budget is offered ONLY when the
+    battery is above the Buffer SoC AND there is real surplus past the Solar
+    Gate (the same gate the EV assist uses, #537) — so the battery tops loads
+    up out of surplus it would otherwise export, never below the buffer.
+    Reserve floor for Tier-2 is the load reclaim reserve
+    (``battery_priority_soc``)."""
+    soc: Optional[float]
+    buffer_soc: float
+    reserve_soc: float
+    assist_budget_w: float
+
+
+def build_battery_tier_context(config, battery_soc, true_surplus_w) -> BatteryTierContext:
+    """(#625, extracted from the coordinator's update cycle) Pure computation
+    of the battery-tier context handed to :meth:`SurplusController.update`."""
+    from ..consts.core import (
+        DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST,
+        DEFAULT_BATTERY_BUFFER_SOC as _DEF_BUFFER,
+        DEFAULT_BATTERY_ASSIST_MIN_SURPLUS as _DEF_GATE,
+    )
+    buffer_soc = float(config.get("battery_buffer_soc", _DEF_BUFFER) or _DEF_BUFFER)
+    reserve_soc = float(config.get("battery_priority_soc", 30) or 30)
+    solar_gate = float(config.get("battery_assist_min_surplus", _DEF_GATE) or _DEF_GATE)
+    assist_budget = (
+        float(config.get("battery_assist_max_power", _DEF_ASSIST) or _DEF_ASSIST)
+        if (battery_soc is not None and battery_soc > buffer_soc
+            and true_surplus_w >= solar_gate)
+        else 0.0
+    )
+    return BatteryTierContext(
+        soc=battery_soc, buffer_soc=buffer_soc,
+        reserve_soc=reserve_soc, assist_budget_w=assist_budget,
+    )
+
+
+def effective_peak_state(load_manager_state, vpp_shed_loads: bool):
+    """(#625, extracted) The peak posture handed to the surplus controller:
+    the load-manager's state, escalated to EMERGENCY while a VPP export
+    event wants discretionary loads shed (#580 → #508 W2 peak_shed_all)."""
+    if vpp_shed_loads:
+        from ..const import LoadManagementState
+        return LoadManagementState.EMERGENCY
+    return load_manager_state
+
+
 def solar_bounded_surplus(
     grid_export_w: float,
     active_draw_w: float,

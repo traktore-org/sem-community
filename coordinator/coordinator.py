@@ -54,7 +54,10 @@ from .charging_control import ChargingStateMachine, ChargingContext
 from .per_charger_context import PerChargerContext, PerChargerState
 from .storage import SEMStorage
 from .notifications import NotificationManager
-from .surplus_controller import SurplusController, solar_bounded_surplus
+from .surplus_controller import (
+    SurplusController, solar_bounded_surplus, build_battery_tier_context,
+    effective_peak_state,
+)
 from .cycle_trace import (
     TraceCollector, LayerRecord, LayerStatus, CrossCheck,
     ev_layer_match, battery_layer_match, device_layer_match, battery_list_role,
@@ -3954,44 +3957,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 active_draw_w=self._surplus_controller.active_surplus_draw_w(),
                 solar_w=getattr(power, "solar_power", None),
             )
-            battery_priority = None
+            # (#625) per-cycle registry priority sync + peak posture — both
+            # extracted; see UnifiedDeviceRegistry.sync_cycle_priorities and
+            # surplus_controller.effective_peak_state for the full rationale.
             _reg = getattr(self, "_device_registry", None)
-            if _reg is not None:
-                try:
-                    # (#576) only surface the battery priority row on installs
-                    # that actually have a battery. LATCH it: once we've seen a
-                    # real battery reading it stays shown — a transient SOC
-                    # "unavailable" must NOT flicker the row out of the list.
-                    if getattr(power, "battery_soc", None) is not None:
-                        _reg._has_battery = True
-                    battery_priority = _reg.battery_surplus_priority()
-                    # (#576 P2.1) hand the configured chargers to the registry
-                    # so each is a first-class list row keyed by its CONTROL id
-                    # (mirrors _has_battery). The ED is_ev guess is suppressed
-                    # for these — one identity across row/drag/distribution.
-                    _reg.set_ev_chargers(self._charger_priority_rows())
-                    # (#602/#576) the HP/HW controllers are surfaced as draggable
-                    # rows by the registry's direct-registration path itself; the
-                    # refresh below makes the drag store authoritative for them.
-                    # (#576) make the drag store authoritative for directly-
-                    # registered surplus devices (heat pump / hot water /
-                    # climate) too, so their list slot governs the walk below.
-                    _reg.refresh_direct_device_priorities()
-                except Exception:  # pragma: no cover - never break the cycle
-                    battery_priority = None
-            # #508 W2 — hand the load-manager's peak posture to the surplus
-            # controller so it stops adding discretionary load (and backs
-            # its own devices off) when grid import is at risk, instead of
-            # re-activating next cycle whatever the load manager just shed.
-            peak_state = (
-                self._load_manager.get_state() if self._load_manager else None
+            battery_priority = (
+                _reg.sync_cycle_priorities(
+                    getattr(power, "battery_soc", None) is not None,
+                    self._charger_priority_rows(),
+                ) if _reg is not None else None
             )
-            # #580 — a VPP export event sheds discretionary surplus loads via
-            # the EXISTING peak gate: EMERGENCY posture ⇒ peak_shed_all in the
-            # SurplusController (#508 W2). Per-cycle; drops with the event.
-            if getattr(self, "_vpp_shed_loads", False):
-                from ..const import LoadManagementState as _LMS
-                peak_state = _LMS.EMERGENCY
+            peak_state = effective_peak_state(
+                self._load_manager.get_state() if self._load_manager else None,
+                bool(getattr(self, "_vpp_shed_loads", False)),
+            )
             # (#576) stash the priority-walk inputs for the 3-layer trace so
             # "why did the pool pump stop early?" is answerable: the battery's
             # slot, how much charge power it yielded, and whether it's commanded.
@@ -4007,26 +3986,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # path — a clean layer cut makes observation a one-flag branch, and
             # HA-TEST gets the full real decision trace with zero hardware risk.
             #
-            # (#620) battery context for the device battery tiers. Tier-1 assist
-            # budget = the battery-assist cap, offered ONLY when the battery is
-            # above the Buffer SoC AND there is real surplus past the Solar Gate
-            # (same gate the EV assist uses, #537) — so the battery tops loads up
-            # out of surplus it would otherwise export, never below the buffer.
-            # Reserve floor for Tier-2 is the load reclaim reserve
-            # (``battery_priority_soc``).
-            from ..consts.core import (
-                DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST,
-                DEFAULT_BATTERY_BUFFER_SOC as _DEF_BUFFER,
-                DEFAULT_BATTERY_ASSIST_MIN_SURPLUS as _DEF_GATE,
-            )
-            _b_soc = getattr(power, "battery_soc", None)
-            _b_buffer = float(self.config.get("battery_buffer_soc", _DEF_BUFFER) or _DEF_BUFFER)
-            _b_reserve = float(self.config.get("battery_priority_soc", 30) or 30)
-            _solar_gate = float(self.config.get("battery_assist_min_surplus", _DEF_GATE) or _DEF_GATE)
-            _assist_budget = (
-                float(self.config.get("battery_assist_max_power", _DEF_ASSIST) or _DEF_ASSIST)
-                if (_b_soc is not None and _b_soc > _b_buffer and true_surplus_w >= _solar_gate)
-                else 0.0
+            # (#620/#625) battery context for the device battery tiers —
+            # pure computation extracted to build_battery_tier_context.
+            btc = build_battery_tier_context(
+                self.config, getattr(power, "battery_soc", None), true_surplus_w,
             )
             allocation = await self._surplus_controller.update(
                 true_surplus_w,
@@ -4034,10 +3997,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 peak_state=peak_state,
                 reclaim_w=reclaim_w,
                 battery_priority=battery_priority,
-                battery_soc=_b_soc,
-                battery_buffer_soc=_b_buffer,
-                battery_reserve_soc=_b_reserve,
-                battery_assist_budget_w=_assist_budget,
+                battery_soc=btc.soc,
+                battery_buffer_soc=btc.buffer_soc,
+                battery_reserve_soc=btc.reserve_soc,
+                battery_assist_budget_w=btc.assist_budget_w,
                 observer=self._observer_mode,
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
