@@ -1,0 +1,58 @@
+"""#629 — EV orchestration decomposition slices (behaviour pins)."""
+from unittest.mock import MagicMock
+
+from custom_components.solar_energy_management.coordinator.ev_night_targets import (
+    build_night_target_map,
+)
+
+
+def _coord(chargers=None, config=None, fallback_logged=None,
+           soc_need=5.5, daily_kwh=2.0):
+    c = MagicMock()
+    c.config = config or {}
+    c._ev_devices = chargers or {}
+    c._night_global_fallback_logged = (
+        set() if fallback_logged is None else fallback_logged)
+    c._resolve_charger_soc = MagicMock(return_value=80.0)
+    c._calculate_remaining_need = MagicMock(return_value=soc_need)
+    c._charger_daily_kwh = MagicMock(return_value=daily_kwh)
+    return c
+
+
+class TestNightTargetMap629:
+    def test_kwh_mode_per_charger_target_minus_delivered(self):
+        c = _coord(chargers={"a": object()},
+                   config={"ev_chargers": [{"id": "a", "daily_ev_target": 8}]},
+                   daily_kwh=3.0)
+        assert build_night_target_map(c, MagicMock()) == {"a": 5.0}
+
+    def test_kwh_mode_clamps_at_zero(self):
+        c = _coord(chargers={"a": object()},
+                   config={"ev_chargers": [{"id": "a", "daily_ev_target": 2}]},
+                   daily_kwh=9.0)
+        assert build_night_target_map(c, MagicMock()) == {"a": 0}
+
+    def test_global_inheritance_logged_once(self):
+        logged = set()
+        c = _coord(chargers={"a": object()},
+                   config={"ev_chargers": [{"id": "a"}], "daily_ev_target": 12},
+                   fallback_logged=logged, daily_kwh=2.0)
+        out = build_night_target_map(c, MagicMock())
+        assert out == {"a": 10.0}
+        assert logged == {"a"}                    # #259 surfaced once
+        build_night_target_map(c, MagicMock())    # second cycle: no re-log
+        assert logged == {"a"}
+
+    def test_soc_mode_delegates_to_remaining_need(self):
+        c = _coord(chargers={"a": object()},
+                   config={"ev_chargers": [{"id": "a", "ev_target_type": "soc"}]},
+                   soc_need=6.25)
+        out = build_night_target_map(c, MagicMock())
+        assert out == {"a": 6.25}
+        c._calculate_remaining_need.assert_called_once()
+        _, kwargs = c._calculate_remaining_need.call_args
+        assert kwargs.get("bound") == "min"       # the #245 floor, not max
+
+    def test_unconfigured_charger_uses_global_default(self):
+        c = _coord(chargers={"x": object()}, config={}, daily_kwh=0.0)
+        assert build_night_target_map(c, MagicMock()) == {"x": 10}   # default 10
