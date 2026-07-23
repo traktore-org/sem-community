@@ -1141,6 +1141,12 @@ Enable Observer Mode on the secondary instance. Both instances can read
 sensors simultaneously without conflict. Toggle via `switch.sem_observer_mode`
 or the Configure screen — no reinstall needed.
 
+In Observer Mode SEM still runs its **full** decision logic against your live
+sensors every cycle — it just never actuates. It logs each command it *would*
+have sent (e.g. `OBSERVER · WOULD ACTIVATE Heizband @ 800W [source=solar]`), so
+you can watch exactly what SEM would do — and verify it's right — before you
+ever hand it control of your hardware.
+
 **How does SEM know which direction my grid power sensor reads?**
 
 SEM compares your grid sensor's sign against the Energy Dashboard import and

@@ -11,6 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.24] — 22.07.2026
+
+### 🐛 Fixes (caught in the live #620 overnight test, PROD 22.07)
+
+- 🛑 **Switching a device's mode to Off now releases a load SEM was driving** — the Off mode
+  only blocked new activations; a load SEM had already turned on stayed on forever ("SEM does
+  not touch the device any more"). Mode → Off now stops a SEM-driven load once (markers and
+  ownership cleared), then leaves it strictly alone. A load *you* turned on yourself is never
+  touched — Off still means SEM keeps its hands off your own choices.
+
+- 🔁 **A config edit no longer resets running loads' protection state** — editing any device's
+  goals triggers a rediscovery that rebuilds the device objects, and the rebuilt objects lost
+  their volatile control state (overnight-battery/cheap-hours force markers, anti-flicker
+  timers, ownership). Live consequence: a second load starting on the cheap-hours window made
+  the deficit cleanup shut down a running battery-overnight load 23 minutes before its Min
+  runtime (the marker that exempts it had been silently wiped at 22:15:14). Re-registration now
+  transplants the volatile state onto the new object; regression test replays the exact
+  sequence.
+- 🔌 **"Finish overnight from: Grid" is now actually grid-fed** — on a battery install the
+  inverter's self-consumption logic covered cheap-hours loads from the battery, so the Battery
+  and Grid picker choices were physically identical (identical discharge either way, confirmed
+  live). While cheap-hours loads run, SEM now limits battery discharge to the rest of the home
+  load — the same protection mechanism the EV already uses — so the grid feeds exactly those
+  loads and the battery keeps serving the house.
+
+### 🏗️ Architecture — one clean cut for load control
+
+- 🔭 **Observer mode now runs the *full* real decision and just logs what it would do.**
+  On a monitoring / secondary install (or HA-TEST on shared hardware), SEM used to fall
+  back to a separate, dumber read-only path. Now it runs the exact same three-layer load
+  pipeline — management → decision → **one** execution seam — against your live sensors,
+  and at the seam it logs the command it *would* send (`OBSERVER · WOULD ACTIVATE Heizband
+  @ 800W [source=solar]`) instead of actuating. You can watch precisely what SEM would do,
+  and verify it's right, before handing it control — with zero hardware risk.
+- 🧹 The parallel `observe_only()` implementation is **deleted** — observation is now a
+  single flag at the one actuator (`reconcile_load`). A cleaner arc: the next load feature
+  docks at exactly one layer (see `docs/ARCHITECTURE.md` → *Compute intent → reconcile*),
+  and the "gate blocks activation but doesn't stop a running device" bug class becomes
+  structurally impossible on the desired-state path (`docs/BUG_CLASSES.md` #17/#18).
+
 # [1.7.5-beta.23] — 22.07.2026
 
 ### 🐛 Fixes

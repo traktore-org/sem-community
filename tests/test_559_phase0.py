@@ -296,6 +296,33 @@ async def test_control_mode_update_persists_to_spec(registry):
     assert device.control_mode == DeviceControlMode.PEAK_ONLY
 
 
+@pytest.mark.asyncio
+async def test_mode_off_transition_releases_running_load(registry):
+    """(class-17 sibling, live PROD 2026-07-23) Setting mode → off must turn a
+    running load off ONCE — regardless of ownership (which a restart may have
+    wiped) — then leave it alone."""
+    await registry.async_register_service_device(dict(SPEC))
+    device = registry._surplus_controller.get_device("kia_socket")
+    device.observed_on = MagicMock(return_value=True)     # entity is ON
+    device._sem_owned = False                              # ownership lost (restart)
+    device._offpeak_forced = True                          # stale marker
+    device.deactivate = AsyncMock()
+    await registry.update_device_control_mode("kia_socket", "off")
+    device.deactivate.assert_awaited()
+    assert device._offpeak_forced is False
+    assert device._sem_owned is False
+
+
+@pytest.mark.asyncio
+async def test_mode_off_transition_leaves_off_load_alone(registry):
+    await registry.async_register_service_device(dict(SPEC))
+    device = registry._surplus_controller.get_device("kia_socket")
+    device.observed_on = MagicMock(return_value=False)     # entity already OFF
+    device.deactivate = AsyncMock()
+    await registry.update_device_control_mode("kia_socket", "off")
+    device.deactivate.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Surplus availability debounce
 # ---------------------------------------------------------------------------

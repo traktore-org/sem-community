@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from ..devices.base import ControllableDevice, DeviceState
+from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +53,213 @@ def solar_bounded_surplus(
     if solar_w is not None:
         surplus = min(surplus, float(solar_w))
     return max(0.0, surplus)
+
+
+@dataclass(frozen=True)
+class LoadIntent:
+    """(desired-state, phase 1) The MANAGEMENT layer's decision for one load:
+    what state it should be in, and why. Execution reconciles reality to this —
+    it is the single source of truth for on/off, so a gate that yields ``on=False``
+    stops a running load *by construction* (no separate deactivation path to
+    forget). ``source`` derives the legacy force markers instead of hand-setting
+    them (``_batt_overnight_forced == source == 'tier2_battery'`` etc.)."""
+    on: bool
+    power_w: float
+    source: Optional[str]   # 'solar'|'tier1_battery'|'tier2_battery'|'cheap_grid'|None
+    reason: str
+
+
+def compute_load_intent(
+    device: "ControllableDevice",
+    *,
+    remaining_surplus_w: float,
+    tier1_headroom_w: float = 0.0,
+    price_is_cheap: bool = False,
+    peak_freeze: bool = False,
+    is_shed_target: bool = False,
+    soc_above_reserve: bool = False,
+) -> LoadIntent:
+    """(desired-state, phase 1) Pure precedence walk → the load's desired state.
+
+    Faithful to ``SurplusController.update()``'s 7 passes, collapsed into one
+    ordered decision (first match wins). ``remaining_surplus_w`` is the solar
+    surplus left for THIS device after higher-priority loads (the caller's
+    priority walk fills it); the battery/grid clauses don't consume it.
+    Everything else is read off ``device`` so it works on a real device or a mock.
+    """
+    mode = getattr(device, "control_mode", DeviceControlMode.SURPLUS)
+    active = bool(getattr(device, "is_active", False))
+    held = device.get_current_consumption() if active else 0.0
+
+    # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
+    #    still SHEDS it under peak risk.
+    if mode == DeviceControlMode.OFF:
+        # Switching the mode to Off while SEM is DRIVING the load must release
+        # it (stop once, clear ownership), not strand it running forever —
+        # class-17 sibling caught live (PROD 2026-07-23: mode→off, load stayed
+        # on and SEM never touched it again). A load the USER turned on
+        # (not _sem_owned) is left exactly as-is.
+        if active and getattr(device, "_sem_owned", False):
+            return LoadIntent(False, 0.0, None, "mode off — releasing SEM-driven load")
+        return LoadIntent(active, held, None, "off — monitor only")
+    if mode == DeviceControlMode.PEAK_ONLY:
+        # This controller never proactively sheds peak_only loads — the load
+        # manager owns their peak shedding via shed_priority. Matches the old
+        # peak-shed pass, which skipped non-SURPLUS devices (ruflo M1).
+        return LoadIntent(active, held, None, "peak_only — user-managed")
+
+    # --- SURPLUS mode below ---
+    # 2. Peak shed wins over any run reason.
+    if is_shed_target:
+        return LoadIntent(False, 0.0, None, "peak shed")
+
+    # 3. Done for the day — the hard stops (cap overrides the deficit).
+    if getattr(device, "daily_max_runtime_reached", False):
+        return LoadIntent(False, 0.0, None, "daily max cap reached")
+    if getattr(device, "daily_targets_met", False):
+        return LoadIntent(False, 0.0, None, "daily target met")
+    if getattr(device, "stop_condition_met", False):
+        return LoadIntent(False, 0.0, None, "stop condition met")
+
+    # 3b. A ScheduleDevice past its deadline is a hard commitment — force it on
+    #     regardless of surplus or peak posture (matches the old deadline pass,
+    #     which was deliberately not peak-gated). ruflo B1.
+    if getattr(device, "is_deadline_approaching", False) and not active:
+        return LoadIntent(True, float(getattr(device, "rated_power", 0.0) or 0.0),
+                          "solar", "deadline force")
+
+    # 4. A source can power it. peak_freeze blocks *new* starts but keeps a
+    #    running load on (only an explicit shed removes it, clause 2).
+    rated = float(getattr(device, "rated_power", 0.0) or 0.0)
+    threshold = float(getattr(device, "min_power_threshold", rated) or rated)
+    can_start = active or not peak_freeze
+    deficit = bool(getattr(device, "has_runtime_deficit", False))
+
+    effective = float(remaining_surplus_w) + float(tier1_headroom_w)
+    if effective >= threshold and can_start:
+        battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
+        src = "tier1_battery" if battery_assisted else "solar"
+        return LoadIntent(True, rated, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")
+
+    # Overnight battery (Tier-2): finish a runtime deficit off the battery.
+    if (deficit and can_start
+            and getattr(device, "battery_eligible_overnight", False)
+            and soc_above_reserve):
+        return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
+
+    # Cheap-hours grid: finish a runtime deficit off the grid in a cheap window.
+    if (deficit and can_start and price_is_cheap
+            and getattr(device, "top_up_policy", "solar_only") == "cheap_hours"):
+        return LoadIntent(True, rated, "cheap_grid", "cheap-hours grid — runtime deficit")
+
+    # 5. No source → off.
+    return LoadIntent(False, 0.0, None, "no source available")
+
+
+def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> None:
+    """(desired-state, phase 2) The legacy force markers become a DERIVED VIEW of
+    the intent's source — recomputed each reconcile, never hand-set — so they
+    cannot leak (bug-class 18). Dates are stamped for the day it was set."""
+    from homeassistant.util import dt as dt_util
+    today = dt_util.now().date()
+    is_tier2 = intent.source == "tier2_battery"
+    is_grid = intent.source == "cheap_grid"
+    device._batt_overnight_forced = is_tier2
+    device._batt_overnight_forced_date = today if is_tier2 else None
+    device._offpeak_forced = is_grid
+    device._offpeak_forced_date = today if is_grid else None
+
+
+def _clear_source_markers(device: "ControllableDevice") -> None:
+    device._batt_overnight_forced = False
+    device._batt_overnight_forced_date = None
+    device._offpeak_forced = False
+    device._offpeak_forced_date = None
+
+
+def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
+                            active: bool) -> float:
+    """OBSERVER mode = the layer-3 intercept, in one place.
+
+    Management (layer 1) + decision (layer 2) already ran live against the real
+    sensors and produced ``intent``. Here — the ONLY execution seam — we LOG the
+    command we WOULD send and return the load's OBSERVED draw, without actuating
+    or mutating any device state. The would-command log is the observation/test
+    surface: HA-TEST runs the full real pipeline and audits these lines with zero
+    hardware risk. This is why observer mode needs no separate ``observe_only``
+    path — a clean layer cut makes it a one-line branch in the actuator.
+    """
+    # Deliberately NOTHING is mutated here — not even the surplus debounce timer
+    # (the H2 reset in the actuating path). Observer is a pure shadow: each cycle
+    # independently says "given reality now, I would do X". (Belief-sync via
+    # reconcile_all at update()'s top is separate and permitted — see there.)
+    observed = device.get_current_consumption() if active else 0.0
+    name = getattr(device, "name", None) or getattr(device, "device_id", "?")
+    if intent.on and not active:
+        _LOGGER.info("OBSERVER · WOULD ACTIVATE %s @ %.0fW [source=%s] — %s",
+                     name, intent.power_w, intent.source, intent.reason)
+    elif not intent.on and active:
+        _LOGGER.info("OBSERVER · WOULD DEACTIVATE %s — %s", name, intent.reason)
+    elif intent.on and active and intent.source is not None:
+        _LOGGER.info("OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
+                     name, intent.power_w, intent.source, intent.reason)
+    # else: idle, or on-but-not-SEM-driven (source is None) → no command to log.
+    return observed
+
+
+async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
+                         *, observer: bool = False) -> float:
+    """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
+    the management layer's ``intent``. This is the SINGLE place a load is actuated.
+
+    Anti-cycle lives here (``can_activate`` / ``can_deactivate`` own min_on /
+    min_off), so a stop can lag the intent by the anti-flicker window — but the
+    *decision* has no separate stop path to forget. Returns the load's resulting
+    consumption (for the caller's surplus accounting).
+
+    ``observer=True`` cuts the trigger: layers 1+2 still ran for real, but the
+    actuator only logs what it would do (see :func:`_reconcile_load_observe`).
+    """
+    active = bool(getattr(device, "is_active", False))
+
+    if observer:
+        return _reconcile_load_observe(device, intent, active)
+
+    if intent.on and not active:
+        if not device.can_activate():
+            return 0.0
+        consumed = await device.activate(intent.power_w)
+        if consumed > 0:
+            device.record_activated()
+            device.reset_surplus_timer()
+            _apply_source_markers(device, intent)
+        return consumed
+
+    if not intent.on and active:
+        if not device.can_deactivate():
+            return device.get_current_consumption()   # anti-flicker holds it on
+        await device.deactivate()
+        if not device.is_active:
+            device.record_deactivated()
+            _clear_source_markers(device)
+            return 0.0
+        return device.get_current_consumption()
+
+    if intent.on and active:
+        # source is None ⇒ "not SEM-driven" (off / peak-only kept as observed):
+        # never actuate it — SEM only re-tunes loads it is actually driving.
+        if intent.source is None:
+            return device.get_current_consumption()
+        consumed = await device.adjust_power(intent.power_w)
+        _apply_source_markers(device, intent)
+        return consumed
+
+    # not intent.on and not active — idle. Reset the sustained-surplus debounce
+    # so a cloud-shadow gap restarts the activation delay, matching the old
+    # activation pass's reset_surplus_timer (ruflo H2). Harmless for off/peak
+    # loads (their timer is never consulted).
+    device.reset_surplus_timer()
+    return 0.0
 
 
 @dataclass
@@ -138,6 +345,11 @@ class SurplusController:
         # EV Intelligence: anticipated surplus from taper detection (#106)
         self._anticipated_surplus_w: float = 0.0
         self._anticipated_deadline: Optional[float] = None
+        # (desired-state, phase 3) When True, update() delegates to the single
+        # declarative decision + reconcile path instead of the 7 imperative
+        # passes. Default OFF — the passes stay authoritative until a parity
+        # corpus + a real-hardware soak prove the new path identical.
+        self._use_desired_state: bool = False
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -251,8 +463,54 @@ class SurplusController:
 
         return allocations
 
+    # Volatile per-device CONTROL state that must survive a device-object
+    # rebuild (config edit / rediscovery re-registers a FRESH object for the
+    # same device_id). Lost markers are how the deficit-LIFO killed a running
+    # Tier-2 load 23 min early on PROD (2026-07-22: rediscovery at 22:15:14
+    # wiped Heizband's _batt_overnight_forced; the LIFO exemption no longer
+    # matched). Bug class 14 (rebuilt device loses accrued state) × #620.
+    _VOLATILE_CONTROL_FIELDS = (
+        "_offpeak_forced", "_offpeak_forced_date",
+        "_batt_overnight_forced", "_batt_overnight_forced_date",
+        "_last_activated", "_last_deactivated",   # anti-cycle windows
+        "_observed_off_since", "_external_off_until",
+        "_surplus_since",                          # activation debounce
+    )
+    # _sem_owned is transplanted separately: only from an ACTIVE old object —
+    # a stale False (reconciler cleared it while the entity flickered) must not
+    # override adopt_if_running's re-own on the fresh object (ruflo M).
+
     def register_device(self, device: ControllableDevice) -> None:
-        """Register a device for surplus control."""
+        """Register a device for surplus control.
+
+        Replacing an existing registration (same ``device_id``) transplants the
+        volatile control state onto the new object — a rebuild must never reset
+        force markers, anti-cycle timing, or ownership of a RUNNING load.
+        """
+        old = self._devices.get(device.device_id)
+        if old is not None and old is not device:
+            for f in self._VOLATILE_CONTROL_FIELDS:
+                if hasattr(old, f) and hasattr(device, f):
+                    setattr(device, f, getattr(old, f))
+            # Belief: if the old object was ACTIVE and the fresh one defaults to
+            # idle, carry the active state — the physical load is still on and
+            # SEM is still driving it. Ownership travels with an active belief
+            # only (see _VOLATILE_CONTROL_FIELDS note).
+            if old.is_active:
+                if not device.is_active:
+                    device._status.state = old._status.state
+                if hasattr(old, "_sem_owned"):
+                    device._sem_owned = old._sem_owned
+            if (getattr(old, "_offpeak_forced", False)
+                    or getattr(old, "_batt_overnight_forced", False)):
+                _LOGGER.info(
+                    "Re-register %s: transplanted volatile control state "
+                    "(offpeak=%s, overnight_batt=%s, active=%s)",
+                    device.device_id,
+                    getattr(old, "_offpeak_forced", False),
+                    getattr(old, "_batt_overnight_forced", False),
+                    device.is_active,
+                )
         self._devices[device.device_id] = device
         device._controller = self  # Allow device to look up dependencies (#122)
         depends = getattr(device, 'depends_on', None) or "none"
@@ -349,37 +607,102 @@ class SurplusController:
             if d.is_active
         )
 
-    def observe_only(
-        self,
-        available_power_w: float,
-        reclaim_w: float = 0.0,
-    ) -> SurplusAllocationData:
-        """Read-only surplus allocation for OBSERVER MODE — reports the surplus
-        figures and CURRENTLY-active devices WITHOUT commanding anything.
-
-        No ``reconcile_all``, no ``activate`` / ``deactivate`` / ``adjust_power``
-        — this method physically cannot issue a device command. The coordinator
-        calls it INSTEAD of :meth:`update` when ``_observer_mode`` is on, so
-        observation mode cuts every surplus command (loads / heat pump / hot
-        water / climate) the same way the battery pipeline and EV control are
-        already cut. The trace's integration layer then reports "observer mode
-        — not commanding".
-        """
-        total = float(available_power_w) + max(0.0, float(reclaim_w))
-        active = [d for d in self._devices.values()
-                  if getattr(d, "is_active", False)]
-        allocated = sum(
-            float(d.get_current_consumption() or 0.0) for d in active
+    def grid_funded_draw_w(self) -> float:
+        """(#620) Total draw of loads currently running on the cheap-hours GRID
+        top-up (``_offpeak_forced``). Fed into ``BatteryView.grid_funded_load_w``
+        so the battery discharge limit excludes them — the grid, not the
+        battery, funds a "Finish overnight from: Grid" load. Tier-2
+        (``_batt_overnight_forced``) loads are deliberately NOT counted: they
+        run off the battery by design."""
+        return sum(
+            float(d.get_current_consumption() or 0.0)
+            for d in self._devices.values()
+            if d.is_active and getattr(d, "_offpeak_forced", False)
         )
-        data = SurplusAllocationData()
-        data.total_surplus_w = total
-        data.distributable_surplus_w = max(0.0, total - self.regulation_offset)
-        data.regulation_offset_w = self.regulation_offset
-        data.allocated_w = allocated
-        data.unallocated_w = max(0.0, total - allocated)
-        data.active_devices = len(active)
-        data.total_devices = len(self._devices)
-        return data
+
+    def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
+                         battery_priority, price_level,
+                         peak_freeze, peak_shed, peak_shed_all):
+        """(desired-state, phase 3) The management-layer decision for the whole
+        load set: the priority walk → one ``LoadIntent`` per device. Pure of
+        actuation (``reconcile_load`` applies them); the shared cycle context
+        (``self._batt_*`` / ``self._tier1_budget_left``) is already stamped by
+        ``update()``. This is what REPLACES the 7 imperative passes."""
+        price_is_cheap = price_level in ("cheap", "very_cheap", "negative")
+        soc_above = (self._batt_soc is not None
+                     and self._batt_soc > self._batt_reserve_soc)
+
+        # Peak-shed targets: reverse priority; EMERGENCY sheds all, SHEDDING one.
+        shed = set()
+        if peak_shed:
+            for d in reversed(devices):
+                if d.control_mode == DeviceControlMode.SURPLUS and d.is_active:
+                    shed.add(d.device_id)
+                    if not peak_shed_all:
+                        break
+
+        remaining = float(remaining_surplus)
+        reclaim_handed = False
+        intents = {}
+        for device in devices:
+            # (#576) hand the reclaim back at the battery's slot
+            if (not reclaim_handed and battery_priority is not None
+                    and reclaim_w > 0 and device.priority >= battery_priority):
+                remaining = max(0.0, remaining - reclaim_w)
+                reclaim_handed = True
+            tier1 = self._tier1_headroom_w(device)
+            intent = compute_load_intent(
+                device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
+                price_is_cheap=price_is_cheap, peak_freeze=peak_freeze,
+                is_shed_target=device.device_id in shed, soc_above_reserve=soc_above)
+            intents[device.device_id] = intent
+            # solar/tier1-driven loads consume surplus for lower-priority ones
+            if intent.on and intent.source in ("solar", "tier1_battery"):
+                if intent.source == "tier1_battery":
+                    batt = max(0.0, intent.power_w - max(0.0, remaining))
+                    self._tier1_budget_left = max(0.0, self._tier1_budget_left - batt)
+                remaining = max(0.0, remaining - intent.power_w)
+        return intents
+
+    async def _finish_via_desired_state(self, devices, *, remaining_surplus,
+            reclaim_w, battery_priority, price_level, peak_state, peak_freeze,
+            peak_shed, peak_shed_all, distributable, available_power_w,
+            observer=False):
+        """(desired-state, phase 3) Compute intents, reconcile every load (the
+        single actuator), and assemble the same ``SurplusAllocationData`` the
+        imperative ``update()`` returns.
+
+        ``observer=True`` runs the exact same decision, but the reconcile step
+        only logs what it would command — the read-only path for observer mode."""
+        intents = self._desired_intents(
+            devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+            battery_priority=battery_priority, price_level=price_level,
+            peak_freeze=peak_freeze, peak_shed=peak_shed,
+            peak_shed_all=peak_shed_all)
+        allocations: List[SurplusAllocation] = []
+        active_count = 0
+        for device in devices:
+            await reconcile_load(device, intents[device.device_id], observer=observer)
+            active = bool(device.is_active)
+            consumption = device.get_current_consumption() if active else 0.0
+            if active:
+                active_count += 1
+            allocations.append(SurplusAllocation(
+                device_id=device.device_id, device_name=device.name,
+                priority=device.priority,
+                allocated_watts=(device.status.allocated_power_w if active else 0.0),
+                actual_consumption_watts=consumption,
+                state=DeviceState.ACTIVE.value if active else DeviceState.IDLE.value))
+        total_allocated = sum(a.actual_consumption_watts for a in allocations)
+        self._allocation_data = SurplusAllocationData(
+            total_surplus_w=available_power_w,
+            distributable_surplus_w=distributable,
+            regulation_offset_w=self.regulation_offset,
+            allocated_w=total_allocated,
+            unallocated_w=max(0.0, distributable - total_allocated),
+            active_devices=active_count, total_devices=len(self._devices),
+            allocations=allocations, last_update=datetime.now())
+        return self._allocation_data
 
     async def update(
         self,
@@ -396,6 +719,7 @@ class SurplusController:
         battery_buffer_soc: float = 100.0,
         battery_reserve_soc: float = 100.0,
         battery_assist_budget_w: float = 0.0,
+        observer: bool = False,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -426,6 +750,10 @@ class SurplusController:
         # user isn't counted as active / credited runtime this cycle, and SEM
         # doesn't immediately re-fight a manual off. Scoped to on/off loads
         # (switch + climate); EV / heat-pump / setpoint keep their own handling.
+        # NB: reconcile_all is belief-sync, not actuation — it corrects SEM's
+        # view of reality (is_active, _sem_owned, off-grace) and NEVER issues a
+        # service call. It runs in observer mode too (permitted + wanted): on
+        # shared hardware the real decision needs accurate belief state.
         from ..devices.base import DeviceType
         from .device_reconciler import reconcile_all
         reconcile_all([
@@ -503,18 +831,44 @@ class SurplusController:
         # load draws from it, so N loads can't each claim the full budget.
         self._tier1_budget_left = self._batt_assist_budget_w
 
+        # (desired-state) Delegate to the single declarative path when enabled
+        # for actuation (``_use_desired_state``) OR whenever we're observing.
+        # OBSERVER always takes this path: it's the only one with a single
+        # execution seam (``reconcile_load``) that can cut the trigger cleanly —
+        # so observer mode runs the FULL real decision against live sensors and
+        # merely logs what it would command. No separate ``observe_only`` path.
+        if self._use_desired_state or observer:
+            return await self._finish_via_desired_state(
+                devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+                battery_priority=battery_priority, price_level=price_level,
+                peak_state=peak_state, peak_freeze=peak_freeze,
+                peak_shed=peak_shed, peak_shed_all=peak_shed_all,
+                distributable=distributable, available_power_w=available_power_w,
+                observer=observer,
+            )
+
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —
         # the tariff left the cheap window, OR the day rolled over (the deficit
         # it served was YESTERDAY's — without the date check a device forced
         # into a cheap midnight window would re-fill the NEW day's target from
         # grid all night).
         from homeassistant.util import dt as dt_util
+        from ..devices.base import DeviceControlMode
         today_local = dt_util.now().date()
         for device in devices:
             if not device.is_active:
                 continue
             reason = None
-            if device._offpeak_forced:
+            # (class-17 sibling, caught live 2026-07-23) Mode switched to Off
+            # while SEM is DRIVING the load: release it — stop once, clear
+            # markers/ownership — instead of stranding it running forever
+            # (the activation pass just skips OFF devices; nothing else stops
+            # them). A user-turned-on load (not _sem_owned) stays untouched:
+            # Off means SEM keeps its hands off the user's own choices.
+            if (device.control_mode == DeviceControlMode.OFF
+                    and getattr(device, "_sem_owned", False)):
+                reason = "mode off — releasing SEM-driven load"
+            if reason is None and device._offpeak_forced:
                 stale = (
                     device._offpeak_forced_date is not None
                     and device._offpeak_forced_date != today_local
@@ -562,9 +916,6 @@ class SurplusController:
                     _LOGGER.debug(
                         "Force-end of %s blocked by anti-flicker", device.name,
                     )
-
-        # Import control mode enum
-        from ..devices.base import DeviceControlMode
 
         # Activation pass: iterate by priority, activate eligible devices
         # Only devices in "surplus" mode are candidates for activation (#49).

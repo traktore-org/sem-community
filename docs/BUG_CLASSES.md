@@ -290,9 +290,16 @@ by construction (spec: `docs/superpowers/specs/2026-07-22-desired-state-surplus-
 family test enumerating EVERY stop gate (cap / target-met / stop-sensor / overnight-off /
 grid-off / reserve / peak) and asserting each deactivates a *running* load. Add a new gate →
 add a row, or CI fails. Refs #559 #620.
-**Watch:** until `desired_state` lands, any new "reason a load should stop" must be added to
-BOTH `compute`-side (block activation) AND a force-expiry/goal-gate section (stop running) —
-and to the family guard's parametrize list.
+**Built (not yet default):** the `desired_state` path — `compute_load_intent` (layer 1) +
+`_desired_intents` (layer 2) + `reconcile_load` (layer 3, the single actuator) — is implemented
+and is now the path **observer mode always runs** (HA-TEST). In it, OFF *is* the intent, so a
+gate stops a running load by construction; markers derive from `intent.source` (closes #18).
+Full closure = flip `_use_desired_state` for PROD actuation and delete the 7 imperative passes
+(gated on the 2 LIFO parity xfails in `test_desired_state.py`).
+**Watch:** until the flag flips for actuation, any new "reason a load should stop" must be added
+to BOTH `compute`-side (block activation) AND a force-expiry/goal-gate section (stop running) in
+the imperative `update()` — AND to `compute_load_intent`'s precedence — AND to the family
+guard's parametrize list.
 
 ### 18. Forced-marker set in one pass, leaks because another pass didn't clear it — PARTIAL
 **Symptom:** a transient control marker (`_offpeak_forced`, `_batt_overnight_forced`) set when
@@ -304,8 +311,12 @@ shape:** a marker set in the pass that *activates* must be cleared in every pass
 gate, force-expiry, peak-shed). **Closure (planned):** in the `desired_state` model the markers
 become *derived views* of `LoadIntent.source` (`_batt_overnight_forced == source=='tier2_battery'`),
 recomputed each cycle — never manually set/cleared, so they can't leak. Same spec as class 17.
+**Built (not yet default):** `_apply_source_markers` / `_clear_source_markers` in the
+`desired_state` path derive the markers from `intent.source` — live in observer mode, and behind
+the flag for actuation. Full closure = the flag flip that retires the hand-clearing passes.
 **Guard (now):** the family test (class 17) also asserts the markers are `False` after a
-gate-driven stop. Refs #620.
+gate-driven stop; `test_desired_state.py::test_reconcile_markers_derive_from_source` pins the
+derivation. Refs #620.
 
 ---
 

@@ -394,6 +394,14 @@ class BatteryView:
     Typed as ``Any`` so importing scheduler types in this module
     isn't load-bearing — the actual type is
     :class:`SchedulerDecision` from ``battery_charge_scheduler.py``."""
+    grid_funded_load_w: float = 0.0
+    """(#620) Total draw of loads currently running on the cheap-hours
+    GRID top-up ("Finish overnight from: Grid"). The battery must not
+    fund these — decide_battery subtracts this from the home-load
+    discharge limit so the grid actually feeds them. Without it the
+    inverter's self-consumption logic covers the load from the battery
+    and the Battery/Grid picker choices behave identically
+    (observed live, PROD 2026-07-22)."""
 
 
 # ─────────────────────────────────────────────────────────────────

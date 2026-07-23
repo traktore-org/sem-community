@@ -1226,6 +1226,31 @@ class UnifiedDeviceRegistry:
             _LOGGER.info(
                 "Updated %s control mode to %s", device_id, mode,
             )
+            # (class-17 sibling, live PROD 2026-07-23) One-shot release on the
+            # transition INTO Off: turn the load off once — regardless of who
+            # started it or whether ownership survived a restart — then SEM
+            # keeps its hands off. Without this, a running load was stranded
+            # on forever ("mode off and SEM does not touch the device any
+            # more"). The user's explicit mode change overrides the min_on
+            # anti-flicker (a deliberate command beats flicker protection).
+            if control_mode is DeviceControlMode.OFF:
+                try:
+                    obs = surplus_device.observed_on()
+                except Exception:  # noqa: BLE001
+                    obs = None
+                if obs is True or (obs is None and surplus_device.is_active):
+                    if getattr(surplus_device, "_status", None) is not None:
+                        surplus_device._status.last_activated = None
+                    await surplus_device.deactivate()
+                    surplus_device._offpeak_forced = False
+                    surplus_device._offpeak_forced_date = None
+                    surplus_device._batt_overnight_forced = False
+                    surplus_device._batt_overnight_forced_date = None
+                    surplus_device._sem_owned = False
+                    _LOGGER.info(
+                        "Mode off: released %s (turned off once — SEM will "
+                        "not touch it again while mode stays off)", device_id,
+                    )
 
         await self._save_storage()
 

@@ -50,7 +50,7 @@ def _runtime(battery_id="batt1", **kw):
 
 def _view(*, runtime=None, charging_state="idle", ev_charging=False,
           ev_connected=None, home_w=500.0, scheduler_decision=None,
-          config=None, fleet=None):
+          config=None, fleet=None, grid_funded_w=0.0):
     return BatteryView(
         runtime=runtime or _runtime(),
         config=config or {},
@@ -63,6 +63,7 @@ def _view(*, runtime=None, charging_state="idle", ev_charging=False,
         ev_connected=ev_charging if ev_connected is None else ev_connected,
         home_consumption_w=home_w,
         scheduler_decision=scheduler_decision,
+        grid_funded_load_w=grid_funded_w,
     )
 
 
@@ -198,6 +199,77 @@ class TestI18LimitDischargeGate:
             config={"battery_discharge_protection_enabled": False},
         ))
         assert d.intent is BatteryIntent.NORMAL
+
+
+class TestGridFundedLoadClamp:
+    """(#620) "Finish overnight from: Grid" must be GRID-fed. Observed live
+    (PROD 2026-07-22): with no clamp the inverter's self-consumption covered
+    the cheap-hours load from the battery — Battery and Grid picker choices
+    were physically identical. While grid-funded loads run, discharge is
+    capped at home − grid_funded so the grid feeds exactly those loads."""
+
+    def test_grid_funded_load_limits_without_ev(self):
+        # Night, no EV plugged: a 600 W cheap-hours load runs. home=1250
+        # (includes the load) → limit 650: battery serves the rest of the
+        # house, grid imports the load's 600 W.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=False, ev_connected=False,
+            home_w=1250.0, grid_funded_w=600.0,
+            fleet=FleetContext(solar_w=0.0, home_w=1250.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == 650.0
+        assert "grid" in d.reason.lower()
+
+    def test_ev_clamp_also_excludes_grid_funded_load(self):
+        # EV plugged at night (surplus 0 < gate) AND a 600 W cheap-hours
+        # load running: the EV clamp fires and must subtract the load too.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=False, ev_connected=True,
+            home_w=1250.0, grid_funded_w=600.0,
+            fleet=FleetContext(solar_w=0.0, home_w=1250.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == 650.0
+        assert "grid-funded" in d.reason
+
+    def test_no_grid_funded_load_no_extra_clamp(self):
+        # Nothing on cheap-hours → the new branch is inert; battery free.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=False, ev_connected=False,
+            home_w=1250.0, grid_funded_w=0.0,
+            fleet=FleetContext(solar_w=0.0, home_w=1250.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.NORMAL
+
+    def test_grid_funded_respects_protection_disable(self):
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=False, ev_connected=False,
+            home_w=1250.0, grid_funded_w=600.0,
+            fleet=FleetContext(solar_w=0.0, home_w=1250.0),
+            config={"battery_discharge_protection_enabled": False},
+        ))
+        assert d.intent is BatteryIntent.NORMAL
+
+    def test_grid_funded_larger_than_home_clamps_to_zero(self):
+        # Defensive: load draw exceeding measured home (sensor skew) must
+        # floor at 0, never a negative limit.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=False, ev_connected=False,
+            home_w=500.0, grid_funded_w=800.0,
+            fleet=FleetContext(solar_w=0.0, home_w=500.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == 0.0
 
     def test_plugged_but_not_drawing_still_limits(self):
         # The coupling fix: a bursty car (Renault Zoe) is plugged in
