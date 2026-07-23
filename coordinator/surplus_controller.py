@@ -68,6 +68,16 @@ def build_battery_tier_context(config, battery_soc, true_surplus_w) -> BatteryTi
     )
 
 
+def effective_peak_state(load_manager_state, vpp_shed_loads: bool):
+    """(#625, extracted) The peak posture handed to the surplus controller:
+    the load-manager's state, escalated to EMERGENCY while a VPP export
+    event wants discretionary loads shed (#580 → #508 W2 peak_shed_all)."""
+    if vpp_shed_loads:
+        from ..const import LoadManagementState
+        return LoadManagementState.EMERGENCY
+    return load_manager_state
+
+
 def solar_bounded_surplus(
     grid_export_w: float,
     active_draw_w: float,

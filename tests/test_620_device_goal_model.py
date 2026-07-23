@@ -587,3 +587,38 @@ class TestBatteryTierContext625:
         c = self._ctx(cfg={}, soc=None, surplus=0)
         assert c.buffer_soc == float(DEFAULT_BATTERY_BUFFER_SOC)
         assert c.reserve_soc == 30.0
+
+
+class TestPhase2Extractions625:
+    def test_effective_peak_state_passthrough(self):
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            effective_peak_state)
+        assert effective_peak_state("whatever", False) == "whatever"
+        assert effective_peak_state(None, False) is None
+
+    def test_effective_peak_state_vpp_escalates(self):
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            effective_peak_state)
+        from custom_components.solar_energy_management.const import LoadManagementState
+        assert effective_peak_state(None, True) is LoadManagementState.EMERGENCY
+        assert effective_peak_state(LoadManagementState.NORMAL, True) is LoadManagementState.EMERGENCY
+
+    def test_registry_sync_never_raises(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        reg = MagicMock(spec=UnifiedDeviceRegistry)
+        reg.battery_surplus_priority = MagicMock(side_effect=RuntimeError("boom"))
+        # call the real method on the mock instance
+        out = UnifiedDeviceRegistry.sync_cycle_priorities(reg, True, [])
+        assert out is None                     # swallowed, cycle survives
+
+    def test_registry_sync_latches_battery_and_returns_priority(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        reg = MagicMock(spec=UnifiedDeviceRegistry)
+        reg.battery_surplus_priority = MagicMock(return_value=3)
+        out = UnifiedDeviceRegistry.sync_cycle_priorities(reg, True, ["row"])
+        assert out == 3
+        assert reg._has_battery is True
+        reg.set_ev_chargers.assert_called_once_with(["row"])
+        reg.refresh_direct_device_priorities.assert_called_once()

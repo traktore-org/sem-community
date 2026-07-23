@@ -1254,6 +1254,24 @@ class UnifiedDeviceRegistry:
 
         await self._save_storage()
 
+    def sync_cycle_priorities(self, has_battery_reading, charger_rows):
+        """(#625, extracted from the coordinator cycle) Per-cycle priority-list
+        upkeep: latch the battery row once a real reading was seen (#576 — a
+        transient SOC dropout must not flicker the row out), hand the
+        configured chargers to the registry as first-class rows (#576 P2.1),
+        and make the drag store authoritative for directly-registered devices
+        (#602/#576). Returns the battery's list priority (or None).
+        Never raises — a registry hiccup must not break the cycle."""
+        try:
+            if has_battery_reading:
+                self._has_battery = True
+            battery_priority = self.battery_surplus_priority()
+            self.set_ev_chargers(charger_rows)
+            self.refresh_direct_device_priorities()
+            return battery_priority
+        except Exception:  # pragma: no cover - never break the cycle
+            return None
+
     async def async_set_dependency(self, device_id: str, depends_on) -> None:
         """Set (or clear) a device's "Requires" link and persist it (#122/#576).
 

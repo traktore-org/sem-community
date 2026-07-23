@@ -56,6 +56,7 @@ from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import (
     SurplusController, solar_bounded_surplus, build_battery_tier_context,
+    effective_peak_state,
 )
 from .cycle_trace import (
     TraceCollector, LayerRecord, LayerStatus, CrossCheck,
@@ -3956,44 +3957,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 active_draw_w=self._surplus_controller.active_surplus_draw_w(),
                 solar_w=getattr(power, "solar_power", None),
             )
-            battery_priority = None
+            # (#625) per-cycle registry priority sync + peak posture — both
+            # extracted; see UnifiedDeviceRegistry.sync_cycle_priorities and
+            # surplus_controller.effective_peak_state for the full rationale.
             _reg = getattr(self, "_device_registry", None)
-            if _reg is not None:
-                try:
-                    # (#576) only surface the battery priority row on installs
-                    # that actually have a battery. LATCH it: once we've seen a
-                    # real battery reading it stays shown — a transient SOC
-                    # "unavailable" must NOT flicker the row out of the list.
-                    if getattr(power, "battery_soc", None) is not None:
-                        _reg._has_battery = True
-                    battery_priority = _reg.battery_surplus_priority()
-                    # (#576 P2.1) hand the configured chargers to the registry
-                    # so each is a first-class list row keyed by its CONTROL id
-                    # (mirrors _has_battery). The ED is_ev guess is suppressed
-                    # for these — one identity across row/drag/distribution.
-                    _reg.set_ev_chargers(self._charger_priority_rows())
-                    # (#602/#576) the HP/HW controllers are surfaced as draggable
-                    # rows by the registry's direct-registration path itself; the
-                    # refresh below makes the drag store authoritative for them.
-                    # (#576) make the drag store authoritative for directly-
-                    # registered surplus devices (heat pump / hot water /
-                    # climate) too, so their list slot governs the walk below.
-                    _reg.refresh_direct_device_priorities()
-                except Exception:  # pragma: no cover - never break the cycle
-                    battery_priority = None
-            # #508 W2 — hand the load-manager's peak posture to the surplus
-            # controller so it stops adding discretionary load (and backs
-            # its own devices off) when grid import is at risk, instead of
-            # re-activating next cycle whatever the load manager just shed.
-            peak_state = (
-                self._load_manager.get_state() if self._load_manager else None
+            battery_priority = (
+                _reg.sync_cycle_priorities(
+                    getattr(power, "battery_soc", None) is not None,
+                    self._charger_priority_rows(),
+                ) if _reg is not None else None
             )
-            # #580 — a VPP export event sheds discretionary surplus loads via
-            # the EXISTING peak gate: EMERGENCY posture ⇒ peak_shed_all in the
-            # SurplusController (#508 W2). Per-cycle; drops with the event.
-            if getattr(self, "_vpp_shed_loads", False):
-                from ..const import LoadManagementState as _LMS
-                peak_state = _LMS.EMERGENCY
+            peak_state = effective_peak_state(
+                self._load_manager.get_state() if self._load_manager else None,
+                bool(getattr(self, "_vpp_shed_loads", False)),
+            )
             # (#576) stash the priority-walk inputs for the 3-layer trace so
             # "why did the pool pump stop early?" is answerable: the battery's
             # slot, how much charge power it yielded, and whether it's commanded.
