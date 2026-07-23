@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.25] — 23.07.2026
+
+### 🧹 Code quality
+
+- 🔋 **Retired the deprecated coordinator-level battery shells** (#624, surfaced by the
+  knowledge-graph audit) — \`BatteryProtectionMixin\` deleted (its one job, the startup
+  discharge-limit restore, relocated to the battery pipeline module), and the standalone
+  \`BatteryChargeAdapter\` instance + the scheduler's dead adapter dependency removed
+  (provably vestigial: its \`is_active\` could never be true). The brand force-charge
+  implementations moved into \`battery_adapters/force_charge.py\` where their real
+  consumers live. Pure structural cleanup — zero behaviour change, guarded by
+  module-gone + pure-planner + no-import-outside-package tests.
+
 # [1.7.5-beta.24] — 22.07.2026
 
 ### 🐛 Fixes (caught in the live #620 overnight test, PROD 22.07)

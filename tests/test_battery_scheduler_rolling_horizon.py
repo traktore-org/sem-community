@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.solar_energy_management.coordinator.battery_charge_adapter import (
+from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
     BatteryChargeAdapter,
 )
 from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
@@ -68,10 +68,10 @@ def _provider_with_series(price_seq, slot_minutes=60, start=None):
 
 def _make_scheduler(scheduler_config, adapter=None):
     if adapter is None:
-        adapter = MagicMock(spec=BatteryChargeAdapter)
+        adapter = MagicMock(spec=BatteryChargeAdapter)  # unused since #624
         adapter.is_active = False
         adapter.stop_forced_charge = AsyncMock()
-    return BatteryChargeScheduler(MagicMock(), adapter, scheduler_config)
+    return BatteryChargeScheduler(MagicMock(), scheduler_config)
 
 
 @pytest.fixture

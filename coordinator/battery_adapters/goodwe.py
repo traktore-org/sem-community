@@ -24,7 +24,7 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
             config.get("battery_max_discharge_power", 5000),
         )
         # Lazy import the existing forced-charge adapter
-        from ..battery_charge_adapter import GoodWeChargeAdapter
+        from .force_charge import GoodWeChargeAdapter
         self._charge_adapter = GoodWeChargeAdapter(hass, config)
 
     @property
@@ -58,7 +58,7 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        from ..battery_charge_adapter import ChargeCommand, ChargeCommandStatus
+        from .force_charge import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
             max_power_w=charge_power_w,

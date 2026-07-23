@@ -117,3 +117,39 @@ async def actuate_battery(
         "actuate_battery(%s): unknown intent %r",
         decision.battery_id, decision.intent,
     )
+
+
+async def restore_discharge_limit_on_startup(hass, config: dict) -> None:
+    """Startup-only: push the configured max discharge limit.
+
+    (#624 — relocated from the deleted ``BatteryProtectionMixin``.)
+    After a restart the adapter's ``last_discharge_limit_w`` hysteresis
+    is empty, so a stale limit left behind by a previous run could leak
+    past ``decide_battery``'s NORMAL intent. This unconditionally pushes
+    the configured max on startup.
+    """
+    control_entity = config.get("battery_discharge_control_entity", "")
+    max_discharge = config.get("battery_max_discharge_power", 5000)
+
+    if not control_entity:
+        return
+
+    current_state = hass.states.get(control_entity)
+    if current_state is None:
+        return
+
+    try:
+        current_limit = float(current_state.state)
+    except (ValueError, TypeError):
+        return
+
+    if current_limit < max_discharge:
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": control_entity, "value": max_discharge},
+            blocking=True,
+        )
+        _LOGGER.info(
+            "Startup: restored battery discharge limit from %dW to %dW",
+            int(current_limit), max_discharge,
+        )

@@ -54,7 +54,7 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.gene
 from custom_components.solar_energy_management.coordinator.charger_types import (
     BatteryIntent,
 )
-from custom_components.solar_energy_management.coordinator.battery_charge_adapter import (
+from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
     ChargeCommandStatus,
     ChargeStatus,
 )

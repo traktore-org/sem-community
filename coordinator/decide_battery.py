@@ -1,7 +1,7 @@
 """Pure ``decide_battery(view) → BatteryDecision`` (Group B Step 3).
 
 One pure function per cycle per battery. Replaces the branching
-in :class:`BatteryProtectionMixin` + :meth:`BatteryChargeScheduler.update`
+in the deleted ``BatteryProtectionMixin`` (#624) + :meth:`BatteryChargeScheduler.update`
 that pre-v1.7.0 spread across two modules.
 
 Pure: no ``self``, no HA calls. Input :class:`BatteryView`, output
