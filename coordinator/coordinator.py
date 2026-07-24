@@ -3879,6 +3879,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 battery_reserve_soc=btc.reserve_soc,
                 battery_assist_budget_w=btc.assist_budget_w,
                 observer=self._observer_mode,
+                # (#633) overnight sources are NIGHT sources.
+                is_night=bool(self.time_manager.is_night_mode()),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
