@@ -759,7 +759,7 @@ class TestTier2NightGate633:
         d.deactivate.assert_called()
         assert d._batt_overnight_forced is False
 
-    def test_compute_intent_tier2_gated_on_night(self):
+    async def test_compute_intent_tier2_gated_on_night(self):
         d = _mock(battery_eligible_overnight=True)
         d.has_runtime_deficit = True
         d.can_activate = MagicMock(return_value=True)

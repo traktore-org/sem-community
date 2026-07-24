@@ -99,8 +99,16 @@ def test_tier1_assist_lifts_below_threshold():
 
 def test_tier2_overnight_battery():
     i = compute_load_intent(_dev(has_runtime_deficit=True, battery_eligible_overnight=True),
-                            remaining_surplus_w=0, soc_above_reserve=True)
+                            remaining_surplus_w=0, soc_above_reserve=True, is_night=True)
     assert i.on is True and i.source == "tier2_battery"
+
+def test_tier2_blocked_in_daytime_633():
+    """(#633) the same inputs with is_night=False must NOT fire tier-2."""
+    d = _dev(has_runtime_deficit=True, battery_eligible_overnight=True)
+    i = compute_load_intent(d, remaining_surplus_w=0,
+                            soc_above_reserve=True, is_night=False)
+    assert i.on is False
+
 
 def test_tier2_blocked_below_reserve():
     i = compute_load_intent(_dev(has_runtime_deficit=True, battery_eligible_overnight=True),

@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.25] — 24.07.2026
 
+### 🏗️ Code quality (#629 — EV orchestration decomposition, complete)
+
+- 🧩 **Step 7.5a decomposed in four slices** (#629): per-charger night-target map,
+  canonical solar-budget distribution (#282 B.5 total, #351 M5 off-exclusion), the pure
+  night tri-state resolution (#247), and per-charger mode resolution — all in
+  \`ev_night_targets.py\` with 18 behaviour-pinning tests. What remains in the loop
+  (PerChargerContext lifecycle, build_view → decide → actuate, budget threading) is the
+  reconciler architecture by design. Slice 1 was live-proven by the 23.07 night session.
+
+### 🐛 Fixes (from live testing, 24.07)
+
+- 🌙 **"Finish overnight from: Battery" now only runs at night** (#633) — the Tier-2
+  battery source had no time gate and fed a load "from the battery" at 09:10 in full sun.
+  Gated on night in both control paths, and a load still running at daybreak is stopped
+  (the class-17 pair: gate + stop). "Overnight" now means overnight.
+
 ### 🐛 Fixes (from the #629 overnight soak)
 
 - ⚡ **Night top-up now runs at the peak-managed headroom rate** (#630, Guido) — the plain

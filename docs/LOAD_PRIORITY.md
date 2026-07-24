@@ -182,6 +182,9 @@ load isn't reset mid-night and re-drained before the new day's surplus arrives.
 
 ## Finish overnight from — the overnight source (axis 2)
 
+These sources are **night-only** (#633): they engage after night mode starts and a
+load still running at daybreak is stopped — daytime supply is always the Mode above.
+
 When the sun is gone and the daily target isn't met, a single **"Finish overnight
 from"** picker (shown for *both* solar modes) decides what — if anything — finishes
 the runtime:

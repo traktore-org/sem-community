@@ -390,6 +390,9 @@ class EVControlMixin:
         except Exception:
             return None
 
+    # Dead in the cycle: superseded by the planner's top_up_amps path (#630).
+    # Kept for reference until the #629 arc's final sweep; do not wire it back
+    # without removing the grid_funded double-count noted in the #630 review.
     def _night_peak_managed_amps(
         self,
         power: PowerReadings,
