@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (PerChargerContext lifecycle, build_view → decide → actuate, budget threading) is the
   reconciler architecture by design. Slice 1 was live-proven by the 23.07 night session.
 
+### ✨ Features
+
+- ☀️🌙 **The "At least" floor is now the overnight guarantee in every mode — Solar only
+  included** (#634, Guido's design) — the charge mode is the *daytime* axis; if the day's
+  solar charging delivered less than the "At least" floor, the DIFFERENCE tops up overnight
+  from grid by the Charge-by time (deadline-sized, peak-managed #630). On good-solar days it
+  never runs; floor 0 keeps the classic "Solar only never grids at night" contract exactly.
+  Internally mirrors the loads' three-source design (auto-derived, no new UI) — and the home
+  battery is never used for the EV.
+
 ### 🐛 Fixes (from live testing, 24.07)
 
 - 🌙 **"Finish overnight from: Battery" now only runs at night** (#633) — the Tier-2

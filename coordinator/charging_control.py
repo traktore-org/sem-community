@@ -366,12 +366,25 @@ class ChargingStateMachine:
             # legacy global ``switch.sem_night_charging`` was removed
             # in #277 Phase C, so there is no fallback to consult.
             return False
-        return any(
-            effective_charge_mode_for(self.hass, self.config, c)
-            in MODE_NIGHT_ALLOWED
-            for c in chargers
-            if isinstance(c, dict)
-        )
+        def _night_capable(c):
+            mode = effective_charge_mode_for(self.hass, self.config, c)
+            if mode in MODE_NIGHT_ALLOWED:
+                return True
+            # (#634) solar_only joins the night lane ONLY when its "At least"
+            # floor is set — the floor is the mode-independent guarantee
+            # (overnight source auto-derives to GRID; floor 0 = classic
+            # never-grids-at-night). Mirrors the #620 axis, no GUI surface.
+            if mode == "solar_only":
+                target = c.get("daily_ev_target")
+                if target is None:
+                    target = self.config.get("daily_ev_target", 0)
+                try:
+                    return float(target or 0) > 0.1
+                except (TypeError, ValueError):
+                    return False
+            return False
+
+        return any(_night_capable(c) for c in chargers if isinstance(c, dict))
 
     def _night_state_machine(self, ctx: ChargingContext) -> str:
         """Night charging state machine.

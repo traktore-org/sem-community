@@ -238,3 +238,66 @@ class TestPerChargerMode629:
             out = resolve_per_charger_mode(c, "c1", {"id": "c1", "charge_mode": "always_max"})
         assert out == "off"
         assert "mode mismatch" in caplog.text
+
+
+class TestFloorDrivenNightTopUp634:
+    """(#634) Mode = daytime axis; the "At least" floor is the guarantee."""
+
+    def _night_view(self, mode, target_kwh, top_up_amps=0):
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerView, ChargerPower, ChargerEnergy, FleetContext)
+        return ChargerView(
+            power=ChargerPower(charger_id="c1", power_w=0.0, connected=True),
+            energy=ChargerEnergy(charger_id="c1"),
+            mode=mode,
+            config={"ev_min_current": 10, "ev_phases": 3, "ev_max_current": 32},
+            fleet=FleetContext(solar_w=0.0, home_w=500.0, battery_soc=60.0,
+                               is_night=True),
+            target_kwh=target_kwh,
+            top_up_amps=top_up_amps,
+        )
+
+    def test_solar_only_with_floor_tops_up_at_night(self):
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerIntent)
+        d = decide(self._night_view("solar_only", target_kwh=0.9))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 10
+        assert "solar_only night" in d.reason        # honest mode in the reason
+
+    def test_solar_only_floor_zero_never_grids_at_night(self):
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerIntent)
+        d = decide(self._night_view("solar_only", target_kwh=0.0))
+        assert d.intent is ChargerIntent.IDLE         # classic #346 behaviour
+
+    def test_solar_only_night_inherits_peak_managed_rate_630(self):
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        d = decide(self._night_view("solar_only", target_kwh=5.0, top_up_amps=16))
+        assert d.commanded_amps == 16                 # #630 rate flows through
+
+    def test_min_plus_solar_night_unchanged(self):
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerIntent)
+        d = decide(self._night_view("min_plus_solar", target_kwh=2.0))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert "min_plus_solar night" in d.reason
+
+    def test_night_lane_gate_floor_aware(self):
+        from custom_components.solar_energy_management.coordinator.charging_control import (
+            ChargingStateMachine)
+        sm = ChargingStateMachine.__new__(ChargingStateMachine)
+        sm.hass = MagicMock()
+        sm._night_enabled_cached = None      # debounce cache (first call commits)
+        sm._night_enabled_pending = None
+        sm._night_enabled_pending_cycles = 0
+        sm.config = {"ev_chargers": [{"id": "a", "charge_mode": "solar_only",
+                                      "daily_ev_target": 1.5}]}
+        assert sm._any_night_charging_enabled() is True     # floor > 0 → night lane
+        sm._night_enabled_cached = None      # fresh commit for the second config
+        sm.config = {"ev_chargers": [{"id": "a", "charge_mode": "solar_only",
+                                      "daily_ev_target": 0}]}
+        assert sm._any_night_charging_enabled() is False    # floor 0 → classic
