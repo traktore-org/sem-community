@@ -212,3 +212,29 @@ class TestNightEffectiveState629:
     def test_no_plan_defaults_active(self):
         # pc_target > 0.1 but plan missing (defensive) → charge, don't wait
         assert self._resolve("NIGHT_ACTIVE", 5.0, None) == "NIGHT_ACTIVE"
+
+
+class TestPerChargerMode629:
+    """(#629 slice 4) Mode resolution + mismatch diagnostic."""
+
+    def test_resolves_and_no_warning_on_default(self, caplog):
+        import logging
+        from custom_components.solar_energy_management.coordinator.ev_night_targets import (
+            resolve_per_charger_mode)
+        c = MagicMock()
+        c._effective_charge_mode_for = MagicMock(return_value="solar_only")
+        with caplog.at_level(logging.WARNING):
+            out = resolve_per_charger_mode(c, "c1", {"id": "c1"})   # no explicit mode
+        assert out == "solar_only"
+        assert "mode mismatch" not in caplog.text
+
+    def test_warns_on_explicit_disagreement(self, caplog):
+        import logging
+        from custom_components.solar_energy_management.coordinator.ev_night_targets import (
+            resolve_per_charger_mode)
+        c = MagicMock()
+        c._effective_charge_mode_for = MagicMock(return_value="off")
+        with caplog.at_level(logging.WARNING):
+            out = resolve_per_charger_mode(c, "c1", {"id": "c1", "charge_mode": "always_max"})
+        assert out == "off"
+        assert "mode mismatch" in caplog.text

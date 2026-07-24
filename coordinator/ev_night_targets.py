@@ -105,3 +105,20 @@ def resolve_night_effective_state(base_state, charging_state, pc_target, plan,
     if plan is not None and plan.should_wait_for_cheap:
         return tariff_wait_state
     return night_active_state
+
+
+def resolve_per_charger_mode(coord, cid, charger_cfg):
+    """(#629 slice 4) Per-charger effective mode + the mismatch diagnostic.
+
+    ``_effective_charge_mode_for`` corrects the primary-only mode for THIS
+    charger (an OFF primary must not bleed its terminate into siblings).
+    The warning fires only when an explicitly-set mode disagrees with the
+    resolution — ``raw_mode = None`` is the legitimate default fallback."""
+    per_mode = coord._effective_charge_mode_for(charger_cfg)
+    raw_mode = charger_cfg.get("charge_mode") if isinstance(charger_cfg, dict) else None
+    if raw_mode is not None and raw_mode != per_mode:
+        _LOGGER.warning(
+            "per-charger mode mismatch: cid=%s raw_cfg=%r per_mode=%r",
+            cid, raw_mode, per_mode,
+        )
+    return per_mode

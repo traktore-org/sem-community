@@ -2518,18 +2518,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # charger only — the multi-charger loop needs to correct it
                         # per charger so an OFF primary doesn't bleed its terminate
                         # into the other chargers. See the helper for details.
-                        per_mode = self._effective_charge_mode_for(charger_cfg)
-                        # Diagnostic check — only fire when an explicit mode
-                        # was set AND it disagrees with what effective_charge_
-                        # mode_for resolved. ``raw_mode = None`` is the
-                        # legitimate "user hasn't picked a mode yet → use
-                        # DEFAULT_EV_CHARGE_MODE" fallback and is not a bug.
-                        _raw_mode = charger_cfg.get("charge_mode") if isinstance(charger_cfg, dict) else None
-                        if _raw_mode is not None and _raw_mode != per_mode:
-                            _LOGGER.warning(
-                                "per-charger mode mismatch: cid=%s raw_cfg=%r per_mode=%r",
-                                cid, _raw_mode, per_mode,
-                            )
+                        # (#629 slice 4) mode resolution + mismatch diagnostic
+                        # extracted to ev_night_targets.resolve_per_charger_mode.
+                        from .ev_night_targets import resolve_per_charger_mode
+                        per_mode = resolve_per_charger_mode(self, cid, charger_cfg)
                         effective_state = self._apply_per_charger_off_override(
                             charging_state, per_mode
                         )
