@@ -146,3 +146,41 @@ class TestNightTopUpRate630:
         )
         d = decide(view)
         assert d.commanded_amps == 10          # legacy Min creep preserved
+
+
+class TestSolarBudgetDistribution629:
+    """(#629 slice 2) The extracted canonical-budget distribution."""
+
+    def _coord(self, net_w=3000.0, chargers_cfg=None, modes=None):
+        from custom_components.solar_energy_management.coordinator.ev_night_targets import (
+            distribute_solar_budget)
+        c = MagicMock()
+        c._cycle_ev_budget = MagicMock(net_w=net_w)
+        c.config = {"ev_chargers": chargers_cfg or []}
+        modes = modes or {}
+        c._effective_charge_mode_for = lambda cfg: modes.get(cfg.get("id"), "solar_only")
+        c._ev_devices = {"a": MagicMock(), "b": MagicMock()}
+        c._surplus_controller.distribute_ev_budget = MagicMock(return_value={"a": 2000, "b": 1000})
+        return c, distribute_solar_budget
+
+    def test_uses_canonical_net_and_delegates(self):
+        c, f = self._coord(net_w=3000.0)
+        out = f(c)
+        assert out == {"a": 2000, "b": 1000}
+        args, kwargs = c._surplus_controller.distribute_ev_budget.call_args
+        assert args[0] == 3000.0                       # the ONE canonical total
+        assert kwargs["excluded_charger_ids"] == set()
+
+    def test_off_mode_chargers_excluded(self):
+        c, f = self._coord(chargers_cfg=[{"id": "a"}, {"id": "b"}],
+                           modes={"b": "off"})
+        f(c)
+        _, kwargs = c._surplus_controller.distribute_ev_budget.call_args
+        assert kwargs["excluded_charger_ids"] == {"b"}     # #351 M5
+
+    def test_missing_budget_fails_safe_to_zero(self):
+        c, f = self._coord()
+        c._cycle_ev_budget = None
+        f(c)
+        args, _ = c._surplus_controller.distribute_ev_budget.call_args
+        assert args[0] == 0.0                          # fail-safe, never legacy base

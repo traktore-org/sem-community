@@ -1,4 +1,4 @@
-"""Per-charger night-target computation (#629 slice 1, from step 7.5a).
+"""Step-7.5a orchestration helpers (#629): night targets + solar budget.
 
 Extracted from the coordinator's multi-charger orchestration block: the
 per-charger kWh-remaining map used for night charging (#193). Pure READ
@@ -54,3 +54,35 @@ def build_night_target_map(coord, energy) -> Dict[str, float]:
             daily = coord._charger_daily_kwh(cid, energy)
             out[cid] = max(0, target - daily)
     return out
+
+
+def distribute_solar_budget(coord) -> Dict[str, float]:
+    """(#629 slice 2) The per-charger solar-budget distribution (step 7.5a).
+
+    Reads the canonical cycle ``EVBudget`` (#282 Phase B.5 — the ONE total,
+    never the legacy ev_power+export base), excludes chargers whose effective
+    mode is ``off`` (#351 M5 — the dashboard reads this output directly), and
+    delegates the priority-weighted split to
+    ``SurplusController.distribute_ev_budget``. Caller gates on the solar
+    charging states."""
+    cycle_budget = getattr(coord, "_cycle_ev_budget", None)
+    if cycle_budget is None:
+        # Phase D.2 cleanup (#282): set unconditionally every cycle by
+        # _build_charging_context — this branch only fires on an init bug.
+        _LOGGER.error(
+            "Canonical EV budget not set in multi-charger distribution — "
+            "coordinator init bug. Distributing 0 W to fail safe. "
+            "Investigate _build_charging_context."
+        )
+        total_budget = 0.0
+    else:
+        total_budget = cycle_budget.net_w
+    excluded_cids = {
+        c["id"] for c in (coord.config.get("ev_chargers") or [])
+        if isinstance(c, dict) and "id" in c
+        and coord._effective_charge_mode_for(c) == "off"
+    }
+    return coord._surplus_controller.distribute_ev_budget(
+        total_budget, coord._ev_devices,
+        excluded_charger_ids=excluded_cids,
+    )
