@@ -156,7 +156,10 @@ class EVControlMixin:
         # a load already on is never squeezed by the EV's top-up rate).
         _sc = getattr(self, "_surplus_controller", None)
         if _sc is not None:
-            committed_w += float(_sc.grid_funded_draw_w() or 0.0)
+            try:
+                committed_w += float(_sc.grid_funded_draw_w() or 0.0)
+            except (TypeError, ValueError, AttributeError):
+                pass  # no controller / mock host — no load draw to reserve
         peak_managed_amps = max(
             min_amps,
             min(max_amps, round((peak_limit_w - expected_home_w - committed_w) / watts_per_amp)),
@@ -438,7 +441,10 @@ class EVControlMixin:
         # a load already on is never squeezed by the EV's top-up rate).
         _sc = getattr(self, "_surplus_controller", None)
         if _sc is not None:
-            committed_w += float(_sc.grid_funded_draw_w() or 0.0)
+            try:
+                committed_w += float(_sc.grid_funded_draw_w() or 0.0)
+            except (TypeError, ValueError, AttributeError):
+                pass  # no controller / mock host — no load draw to reserve
         peak_15min_w = self._get_peak_15min_w()
         if peak_15min_w is not None:
             # Production path: bill-aligned 15-min rolling. Self-balancing —
