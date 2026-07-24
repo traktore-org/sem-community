@@ -301,3 +301,35 @@ class TestFloorDrivenNightTopUp634:
         sm.config = {"ev_chargers": [{"id": "a", "charge_mode": "solar_only",
                                       "daily_ev_target": 0}]}
         assert sm._any_night_charging_enabled() is False    # floor 0 → classic
+
+
+class TestPerChargerNightGate634:
+    """(#634) The per-charger loop gate mirrors the state machine: solar_only
+    joins night charging only with a floor set. This was the THIRD gate —
+    caught live 2026-07-24 21:3x: decision charged, loop skipped the charger."""
+
+    def _c(self, config=None):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator)
+        c = SEMCoordinator.__new__(SEMCoordinator)
+        c.config = config or {}
+        c._effective_charge_mode_for = lambda cfg: cfg.get("charge_mode", "solar_only")
+        return c
+
+    def test_solar_only_with_floor_participates(self):
+        c = self._c()
+        assert c._mode_allows_night_charging({"charge_mode": "solar_only",
+                                              "daily_ev_target": 1.5}) is True
+
+    def test_solar_only_floor_zero_skips(self):
+        c = self._c()
+        assert c._mode_allows_night_charging({"charge_mode": "solar_only",
+                                              "daily_ev_target": 0}) is False
+
+    def test_min_plus_solar_always_participates(self):
+        c = self._c()
+        assert c._mode_allows_night_charging({"charge_mode": "min_plus_solar"}) is True
+
+    def test_global_floor_fallback(self):
+        c = self._c(config={"daily_ev_target": 2})
+        assert c._mode_allows_night_charging({"charge_mode": "solar_only"}) is True
