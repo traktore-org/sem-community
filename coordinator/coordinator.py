@@ -2344,40 +2344,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ChargingState.NIGHT_CHARGING_ACTIVE,
                     ChargingState.TARIFF_WAITING_FOR_CHEAP,
                 ):
-                    ev_chargers_cfg = self.config.get("ev_chargers", [])
-                    charger_cfg_by_id = {c.get("id"): c for c in ev_chargers_cfg}
-
-                    for cid in self._ev_devices:
-                        cfg = charger_cfg_by_id.get(cid, {})
-                        ttype = (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
-                                 or self.config.get("ev_target_type", "kwh"))
-                        if ttype == "soc":
-                            # SOC mode: kWh to reach the PER-CHARGER SOC floor (#245
-                            # propagation fix) — not the kWh daily_ev_target.
-                            per_soc = self._resolve_charger_soc(cid, cfg)
-                            self._night_target_per_charger_map[cid] = (
-                                self._calculate_remaining_need(energy, per_soc, cfg, bound="min")
-                            )
-                        else:
-                            # kWh mode: per-charger daily target − this charger's delivered energy
-                            target = cfg.get("daily_ev_target")
-                            if target is None:
-                                target = self.config.get("daily_ev_target", 10)
-                                # Surface the inheritance once per charger (#259): a charger
-                                # with no own target silently adopts the global floor (the
-                                # #256 class). Behaviour change deferred to #255.
-                                if cid not in self._night_global_fallback_logged:
-                                    _LOGGER.info(
-                                        "Charger %s has no per-charger night target; "
-                                        "inheriting global %.1f kWh", cid, target,
-                                    )
-                                    self._night_global_fallback_logged.add(cid)
-                            # Display-consistent basis via the ONE accessor
-                            # (#536 single-charger global substitution +
-                            # 2026-07-17 night-idle basis-mismatch fix).
-                            daily = self._charger_daily_kwh(cid, energy)
-                            self._night_target_per_charger_map[cid] = max(0, target - daily)
-
+                    # (#629 slice 1) per-charger night-need computation
+                    # extracted to ev_night_targets.build_night_target_map.
+                    from .ev_night_targets import build_night_target_map
+                    self._night_target_per_charger_map = build_night_target_map(
+                        self, energy,
+                    )
                     # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
 
