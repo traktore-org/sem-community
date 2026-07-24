@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
+- 🔋 **The EV card's estimated SOC no longer blanks after a restart** (#635) — the boot
+  restore has always read per-charger intelligence from \`ev_intelligence.chargers.<id>\`,
+  but no save path ever wrote that key, and the primary save *replaced* the whole dict
+  each cycle (also silently wiping the bounded session history). Saves now merge and the
+  per-charger taper/SOC state persists — the battery graphic keeps its last-known value
+  across restarts and between sessions. Display-only: charging decisions never use the
+  estimate (they read the real vehicle SOC exclusively).
 - ☀️🌙 **The "At least" floor is now the overnight guarantee in every mode — Solar only
   included** (#634, Guido's design) — the charge mode is the *daytime* axis; if the day's
   solar charging delivered less than the "At least" floor, the DIFFERENCE tops up overnight

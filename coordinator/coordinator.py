@@ -3061,6 +3061,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._storage._daily_data["predictor"] = self._predictor.get_state()
                 # Persist EV intelligence state (#106)
                 self._storage.set_ev_intelligence_state(self._ev_taper_detector.get_state())
+                # (#635) per-charger detectors persist too — the restore has
+                # always read chargers.<cid>; without this every restart
+                # blanked the estimated SOC (not anchored → sensor None).
+                for _cid, _det in (getattr(self, "_ev_taper_detectors", None) or {}).items():
+                    self._storage.set_per_charger_intelligence_state(_cid, _det.get_state())
                 # Persist per-charger daily EV energy so it survives restarts (so the
                 # per-charger night-charge remaining + daily sensor stay correct).
                 self._storage._daily_data["per_charger_daily"] = {

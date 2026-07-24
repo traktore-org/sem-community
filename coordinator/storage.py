@@ -383,8 +383,28 @@ class SEMStorage:
         })
 
     def set_ev_intelligence_state(self, state: Dict[str, Any]) -> None:
-        """Persist EV intelligence state."""
-        self._energy_data["ev_intelligence"] = state
+        """Store the PRIMARY detector's state. (#635) MERGES over the existing
+        dict instead of replacing it — the per-charger states under
+        ``chargers`` and the bounded ``session_history`` live in the same
+        dict and were silently wiped by the wholesale replace every cycle
+        (the restart-blank estimated-SOC bug: restore read ``chargers.<cid>``
+        that no save path ever preserved)."""
+        current = self._energy_data.get("ev_intelligence") or {}
+        preserved = {k: current[k] for k in ("chargers", "session_history")
+                     if k in current}
+        merged = dict(state)
+        merged.update(preserved)
+        self._energy_data["ev_intelligence"] = merged
+
+    def set_per_charger_intelligence_state(self, cid: str, state: Dict[str, Any]) -> None:
+        """(#635) Persist one charger's taper/estimated-SOC state under
+        ``ev_intelligence.chargers.<cid>`` — the key the boot-time restore
+        has always read but nothing ever wrote."""
+        intel = self._energy_data.get("ev_intelligence") or {}
+        chargers = intel.get("chargers") or {}
+        chargers[cid] = state
+        intel["chargers"] = chargers
+        self._energy_data["ev_intelligence"] = intel
 
     # Sign-detection persistence (#476 item 5) — locked grid/battery
     # sign flags survive restarts so the autodetect can't re-learn a
