@@ -189,7 +189,7 @@ SEM supports five EV charging modes (v1.7.3), selectable per charger via **`sele
 
 ### Solar Only (`solar_only`)
 
-Charges **exclusively from solar surplus** — no grid power at any time. The EV waits for surplus to appear and pauses when it drops. Best when you have abundant solar and can be flexible about when the car charges.
+Charges **exclusively from solar surplus** during the day. The EV waits for surplus to appear and pauses when it drops. If an **"At least" floor** is set on the charge target, any shortfall vs the floor is topped up **overnight from grid** by the Charge-by time (#634) — with the floor at 0 the mode never touches the grid, day or night. Best when you have abundant solar and can be flexible about when the car charges.
 
 | Time | Solar | Surplus | EV State |
 |---|---|---|---|
@@ -202,7 +202,7 @@ Charges **exclusively from solar surplus** — no grid power at any time. The EV
 
 ### Min + Solar (`min_plus_solar`) — Default
 
-Charges at a minimum current from the grid (6A ≈ 4.1 kW on 3-phase), plus any solar surplus on top. The EV always starts, even without sun. Best for: you need the car ready by a specific time and can accept a small grid import.
+Charges from the grid plus any solar surplus on top. The EV always starts, even without sun. At night the charge rate is sized to your available peak headroom (peak limit minus expected home consumption and any running loads), so the session finishes early instead of creeping at the minimum — installs without a peak limit keep the minimum-current behaviour. Best for: you need the car ready by a specific time and can accept a grid import.
 
 | Time | Grid + Solar | EV State |
 |---|---|---|

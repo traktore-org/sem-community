@@ -797,9 +797,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # ─────────────────────────────────────────────────────────────────
 
     def _mode_allows_night_charging(self, charger_cfg: dict) -> bool:
-        """Does this charger's mode permit night/grid charging at all?"""
+        """Does this charger's mode permit night/grid charging at all?
+
+        (#634) solar_only participates ONLY when its "At least" floor is set —
+        the floor is the mode-independent overnight guarantee (same rule as the
+        state machine's night-lane gate in charging_control; keep in sync).
+        Floor 0 keeps the classic never-grids-at-night contract."""
         from ..consts.ev_charge_modes import MODE_NIGHT_ALLOWED
-        return self._effective_charge_mode_for(charger_cfg) in MODE_NIGHT_ALLOWED
+        mode = self._effective_charge_mode_for(charger_cfg)
+        if mode in MODE_NIGHT_ALLOWED:
+            return True
+        if mode == "solar_only":
+            target = (charger_cfg or {}).get("daily_ev_target")
+            if target is None:
+                target = self.config.get("daily_ev_target", 0)
+            try:
+                return float(target or 0) > 0.1
+            except (TypeError, ValueError):
+                return False
+        return False
 
     def _mode_uses_tariff(self, charger_cfg: dict) -> bool:
         """Does this charger's mode defer to tariff-cheap windows?
@@ -2370,34 +2386,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ChargingState.SOLAR_CHARGING_ALLOWED,
                     ChargingState.SOLAR_MIN_PV,
                 ):
-                    cycle_budget = getattr(self, "_cycle_ev_budget", None)
-                    if cycle_budget is None:
-                        # Phase D.2 cleanup (#282). ``_cycle_ev_budget`` is set
-                        # unconditionally by ``_build_charging_context`` every
-                        # cycle, so this branch only fires on a coordinator
-                        # init bug. Fail-safe: log + 0 W = no distribution.
-                        _LOGGER.error(
-                            "Canonical EV budget not set in multi-charger "
-                            "distribution — coordinator init bug. Distributing "
-                            "0 W to fail safe. Investigate _build_charging_context."
-                        )
-                        total_budget = 0.0
-                    else:
-                        total_budget = cycle_budget.net_w
-                    # #351 M5 — chargers in ``off`` mode must NOT receive
-                    # an allocation. The actuator's #346 guard already
-                    # refuses to actuate them, but the dashboard reads
-                    # the distribution output directly and would otherwise
-                    # show ``sem_charger_<id>_allocated_w > 0``.
-                    excluded_cids = {
-                        c["id"] for c in (self.config.get("ev_chargers") or [])
-                        if isinstance(c, dict) and "id" in c
-                        and self._effective_charge_mode_for(c) == "off"
-                    }
-                    ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
-                        total_budget, self._ev_devices,
-                        excluded_charger_ids=excluded_cids,
-                    )
+                    # (#629 slice 2) canonical-budget distribution extracted to
+                    # ev_night_targets.distribute_solar_budget.
+                    from .ev_night_targets import distribute_solar_budget
+                    ev_budget_per_charger = distribute_solar_budget(self)
 
                 sorted_chargers = sorted(
                     self._ev_devices.items(),
@@ -2542,18 +2534,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # charger only — the multi-charger loop needs to correct it
                         # per charger so an OFF primary doesn't bleed its terminate
                         # into the other chargers. See the helper for details.
-                        per_mode = self._effective_charge_mode_for(charger_cfg)
-                        # Diagnostic check — only fire when an explicit mode
-                        # was set AND it disagrees with what effective_charge_
-                        # mode_for resolved. ``raw_mode = None`` is the
-                        # legitimate "user hasn't picked a mode yet → use
-                        # DEFAULT_EV_CHARGE_MODE" fallback and is not a bug.
-                        _raw_mode = charger_cfg.get("charge_mode") if isinstance(charger_cfg, dict) else None
-                        if _raw_mode is not None and _raw_mode != per_mode:
-                            _LOGGER.warning(
-                                "per-charger mode mismatch: cid=%s raw_cfg=%r per_mode=%r",
-                                cid, _raw_mode, per_mode,
-                            )
+                        # (#629 slice 4) mode resolution + mismatch diagnostic
+                        # extracted to ev_night_targets.resolve_per_charger_mode.
+                        from .ev_night_targets import resolve_per_charger_mode
+                        per_mode = resolve_per_charger_mode(self, cid, charger_cfg)
                         effective_state = self._apply_per_charger_off_override(
                             charging_state, per_mode
                         )
@@ -2562,21 +2546,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             ChargingState.TARIFF_WAITING_FOR_CHEAP,
                         ):
                             pc_target = charging_context.night_target_kwh
-                            if pc_target <= 0.1:
-                                effective_state = ChargingState.NIGHT_TARGET_REACHED
-                            else:
+                            plan = None
+                            if pc_target > 0.1:
                                 plan = self._compute_night_plan(charger_cfg, pc_target, energy)
                                 self._night_plan_per_charger[cid] = plan
                                 charging_context.night_deadline_amps = plan.deadline_amps
+                                charging_context.night_top_up_amps = plan.top_up_amps
                                 charging_context.night_deadline_active = plan.deadline_active
                                 charging_context.night_tariff_wait = plan.should_wait_for_cheap
                                 charging_context.night_deadline_reachable = plan.reachable
-                                effective_state = (
-                                    ChargingState.TARIFF_WAITING_FOR_CHEAP
-                                    if plan.should_wait_for_cheap
-                                    else ChargingState.NIGHT_CHARGING_ACTIVE
-                                )
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
+                            # (#629 slice 3) the tri-state resolution is pure —
+                            # see ev_night_targets.resolve_night_effective_state.
+                            from .ev_night_targets import resolve_night_effective_state
+                            effective_state = resolve_night_effective_state(
+                                effective_state, charging_state, pc_target, plan,
+                                ChargingState.NIGHT_CHARGING_ACTIVE,
+                                ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                                ChargingState.NIGHT_TARGET_REACHED,
+                            )
 
                         # #526: surface (as a repair) when an SOC-% cap can't be
                         # enforced because no real vehicle SOC is readable.
@@ -2666,6 +2654,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
                             target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
+                            top_up_amps=int(getattr(charging_context, "night_top_up_amps", 0) or 0),
                             tariff_wait=bool(charging_context.night_tariff_wait),
                             solar_committed_w=self._solar_committed_w_per_cycle,
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
@@ -2855,6 +2844,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
                     target_kwh=getattr(charging_context, "night_target_kwh", None),
                     deadline_amps=int(getattr(charging_context, "night_deadline_amps", 0) or 0),
+                    top_up_amps=int(getattr(charging_context, "night_top_up_amps", 0) or 0),
                     tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
                     night_deliverable_kwh=self._night_deliverable_kwh(
                         self._primary_charger_cfg()
@@ -3087,6 +3077,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._storage._daily_data["predictor"] = self._predictor.get_state()
                 # Persist EV intelligence state (#106)
                 self._storage.set_ev_intelligence_state(self._ev_taper_detector.get_state())
+                # (#635) per-charger detectors persist too — the restore has
+                # always read chargers.<cid>; without this every restart
+                # blanked the estimated SOC (not anchored → sensor None).
+                for _cid, _det in (getattr(self, "_ev_taper_detectors", None) or {}).items():
+                    self._storage.set_per_charger_intelligence_state(_cid, _det.get_state())
                 # Persist per-charger daily EV energy so it survives restarts (so the
                 # per-charger night-charge remaining + daily sensor stay correct).
                 self._storage._daily_data["per_charger_daily"] = {
@@ -3900,6 +3895,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 battery_reserve_soc=btc.reserve_soc,
                 battery_assist_budget_w=btc.assist_budget_w,
                 observer=self._observer_mode,
+                # (#633) overnight sources are NIGHT sources.
+                is_night=bool(self.time_manager.is_night_mode()),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -5755,6 +5752,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # multi-charger loop downstream gets.
             tariff_wait=tariff_wait,
             deadline_amps=deadline_amps,
+            top_up_amps=int(getattr(night_plan, "top_up_amps", 0) or 0) if night_plan else 0,
             night_deliverable_kwh=self._night_deliverable_kwh(_primary_cfg),
             # #548 — max-SOC ceiling; stop surplus charging at the car's max.
             soc_ceiling_reached=soc_limit_active,

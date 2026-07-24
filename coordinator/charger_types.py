@@ -735,6 +735,7 @@ class ChargerView:
     """Per-charger SOC target (#245). ``None`` when kWh-bound."""
 
     deadline_amps: int = 0
+    top_up_amps: int = 0  # (#630) peak-managed plain night top-up rate
     """The peak-aware required current to reach Min by the per-
     charger ``ev_target_time`` (#246). ``0`` when no deadline."""
 

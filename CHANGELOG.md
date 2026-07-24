@@ -13,8 +13,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.25] — 24.07.2026
 
+### 🏗️ Code quality (#629 — EV orchestration decomposition, complete)
+
+- 🧩 **Step 7.5a decomposed in four slices** (#629): per-charger night-target map,
+  canonical solar-budget distribution (#282 B.5 total, #351 M5 off-exclusion), the pure
+  night tri-state resolution (#247), and per-charger mode resolution — all in
+  \`ev_night_targets.py\` with 18 behaviour-pinning tests. What remains in the loop
+  (PerChargerContext lifecycle, build_view → decide → actuate, budget threading) is the
+  reconciler architecture by design. Slice 1 was live-proven by the 23.07 night session.
+
+### ✨ Features
+
+- 🔋 **The EV card's estimated SOC no longer blanks after a restart** (#635) — the boot
+  restore has always read per-charger intelligence from \`ev_intelligence.chargers.<id>\`,
+  but no save path ever wrote that key, and the primary save *replaced* the whole dict
+  each cycle (also silently wiping the bounded session history). Saves now merge and the
+  per-charger taper/SOC state persists — the battery graphic keeps its last-known value
+  across restarts and between sessions. Display-only: charging decisions never use the
+  estimate (they read the real vehicle SOC exclusively).
+- ☀️🌙 **The "At least" floor is now the overnight guarantee in every mode — Solar only
+  included** (#634, Guido's design) — the charge mode is the *daytime* axis; if the day's
+  solar charging delivered less than the "At least" floor, the DIFFERENCE tops up overnight
+  from grid by the Charge-by time (deadline-sized, peak-managed #630). On good-solar days it
+  never runs; floor 0 keeps the classic "Solar only never grids at night" contract exactly.
+  Internally mirrors the loads' three-source design (auto-derived, no new UI) — and the home
+  battery is never used for the EV.
+
+### 🐛 Fixes (from live testing, 24.07)
+
+- 🌙 **"Finish overnight from: Battery" now only runs at night** (#633) — the Tier-2
+  battery source had no time gate and fed a load "from the battery" at 09:10 in full sun.
+  Gated on night in both control paths, and a load still running at daybreak is stopped
+  (the class-17 pair: gate + stop). "Overnight" now means overnight.
+
 ### 🐛 Fixes (from the #629 overnight soak)
 
+- ⚡ **Night top-up now runs at the peak-managed headroom rate** (#630, Guido) — the plain
+  \`min_plus_solar\` night top-up crept at the Min floor even with kilowatts of peak headroom
+  free. It now charges at the #274/C1 peak-managed rate (peak limit − expected home −
+  higher-priority chargers − **live cheap-hours load draw**, so a running #620 load is never
+  squeezed), finishing early and freeing the window for lower-priority loads. Installs
+  without peak info keep the legacy Min-floor behaviour unchanged.
 - 🔔 **Night-start notification now quotes the value the decision actually used** (#631) —
   it read the config snapshot (stale the moment you edit the target entity) instead of the
   live per-charger night-target map: the push said "8.0 kWh remaining" while SEM correctly

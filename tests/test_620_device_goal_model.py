@@ -143,6 +143,7 @@ def _mock(**kw):
     d.status = MagicMock()
     d.control_mode = kw.get("control_mode", DeviceControlMode.SURPLUS)
     d._sem_owned = kw.get("sem_owned", False)
+    d.is_deadline_approaching = False
     d._offpeak_forced = False
     d._offpeak_forced_date = None
     d._batt_overnight_forced = kw.get("_batt_overnight_forced", False)
@@ -721,3 +722,52 @@ class TestActiveDischargeLimit625:
         fleet = {"b1": self._adapter(True, 900), "b2": self._adapter(True, 700),
                  "b3": self._adapter(False, 100)}
         assert active_discharge_limit(fleet) == 700
+
+
+@pytest.mark.asyncio
+class TestTier2NightGate633:
+    """(#633) 'Finish overnight from: Battery' is a NIGHT source — no daytime
+    activation, and a still-running Tier-2 load stops when the night ends."""
+
+    def _dev(self):
+        return _mock(device_id="d", needs_offpeak=True, remaining_sec=3600,
+                     battery_eligible_overnight=True)
+
+    async def test_no_tier2_activation_in_daytime(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        d = self._dev()
+        sc.register_device(d)
+        await sc.update(0.0, battery_soc=90, battery_reserve_soc=30, is_night=False)
+        d.activate.assert_not_called()
+
+    async def test_tier2_activates_at_night(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        d = self._dev()
+        sc.register_device(d)
+        await sc.update(0.0, battery_soc=90, battery_reserve_soc=30, is_night=True)
+        d.activate.assert_called()
+
+    async def test_running_tier2_load_stops_at_daybreak(self, mock_hass):
+        sc = SurplusController(mock_hass)
+        d = self._dev()
+        d.is_active = True
+        d._batt_overnight_forced = True
+        from datetime import date
+        d._batt_overnight_forced_date = date.today()
+        sc.register_device(d)
+        await sc.update(0.0, battery_soc=90, battery_reserve_soc=30, is_night=False)
+        d.deactivate.assert_called()
+        assert d._batt_overnight_forced is False
+
+    async def test_compute_intent_tier2_gated_on_night(self):
+        d = _mock(battery_eligible_overnight=True)
+        d.has_runtime_deficit = True
+        d.can_activate = MagicMock(return_value=True)
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent)
+        night = compute_load_intent(d, remaining_surplus_w=0,
+                                    soc_above_reserve=True, is_night=True)
+        day = compute_load_intent(d, remaining_surplus_w=0,
+                                  soc_above_reserve=True, is_night=False)
+        assert night.source == "tier2_battery"
+        assert day.on is False

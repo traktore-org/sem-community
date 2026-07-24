@@ -151,6 +151,15 @@ class EVControlMixin:
         # Subtract draw already committed to higher-priority chargers this cycle
         # so the fleet shares one peak budget (#274/H1).
         committed_w = getattr(self, "_night_committed_w", 0.0)
+        # (#630) running cheap-hours loads keep their power — the EV's
+        # headroom is what's left AFTER them (device-priority agreement:
+        # a load already on is never squeezed by the EV's top-up rate).
+        _sc = getattr(self, "_surplus_controller", None)
+        if _sc is not None:
+            try:
+                committed_w += float(_sc.grid_funded_draw_w() or 0.0)
+            except (TypeError, ValueError, AttributeError):
+                pass  # no controller / mock host — no load draw to reserve
         peak_managed_amps = max(
             min_amps,
             min(max_amps, round((peak_limit_w - expected_home_w - committed_w) / watts_per_amp)),
@@ -381,6 +390,9 @@ class EVControlMixin:
         except Exception:
             return None
 
+    # Dead in the cycle: superseded by the planner's top_up_amps path (#630).
+    # Kept for reference until the #629 arc's final sweep; do not wire it back
+    # without removing the grid_funded double-count noted in the #630 review.
     def _night_peak_managed_amps(
         self,
         power: PowerReadings,
@@ -427,6 +439,15 @@ class EVControlMixin:
         inverter-managed charging it doesn't control.
         """
         committed_w = getattr(self, "_night_committed_w", 0.0)
+        # (#630) running cheap-hours loads keep their power — the EV's
+        # headroom is what's left AFTER them (device-priority agreement:
+        # a load already on is never squeezed by the EV's top-up rate).
+        _sc = getattr(self, "_surplus_controller", None)
+        if _sc is not None:
+            try:
+                committed_w += float(_sc.grid_funded_draw_w() or 0.0)
+            except (TypeError, ValueError, AttributeError):
+                pass  # no controller / mock host — no load draw to reserve
         peak_15min_w = self._get_peak_15min_w()
         if peak_15min_w is not None:
             # Production path: bill-aligned 15-min rolling. Self-balancing —

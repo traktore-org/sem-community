@@ -126,6 +126,7 @@ def compute_load_intent(
     peak_freeze: bool = False,
     is_shed_target: bool = False,
     soc_above_reserve: bool = False,
+    is_night: bool = True,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
 
@@ -190,7 +191,9 @@ def compute_load_intent(
         return LoadIntent(True, rated, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")
 
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
-    if (deficit and can_start
+    # (#633) gated on night — "Finish overnight from: Battery" must not fire
+    # in daytime (caught live at 09:10 in full sun).
+    if (deficit and can_start and is_night
             and getattr(device, "battery_eligible_overnight", False)
             and soc_above_reserve):
         return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
@@ -702,6 +705,7 @@ class SurplusController:
             intent = compute_load_intent(
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 price_is_cheap=price_is_cheap, peak_freeze=peak_freeze,
+                is_night=getattr(self, "_is_night_cycle", True),
                 is_shed_target=device.device_id in shed, soc_above_reserve=soc_above)
             intents[device.device_id] = intent
             # solar/tier1-driven loads consume surplus for lower-priority ones
@@ -768,6 +772,7 @@ class SurplusController:
         battery_reserve_soc: float = 100.0,
         battery_assist_budget_w: float = 0.0,
         observer: bool = False,
+        is_night: bool = True,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -820,6 +825,9 @@ class SurplusController:
         self._batt_buffer_soc = battery_buffer_soc
         self._batt_reserve_soc = battery_reserve_soc
         self._batt_assist_budget_w = max(0.0, float(battery_assist_budget_w or 0.0))
+        # (#633) "Finish overnight from: Battery" is a NIGHT source — the
+        # Tier-2 pass and its force-expiry both gate on this cycle flag.
+        self._is_night_cycle = bool(is_night)
         peak_freeze = peak_state in (
             LoadManagementState.WARNING,
             LoadManagementState.SHEDDING,
@@ -948,6 +956,11 @@ class SurplusController:
                     reason = "overnight battery disabled by user"
                 elif (_bo_date is not None and _bo_date != today_local):
                     reason = "overnight battery force expired (day rollover)"
+                elif not getattr(self, "_is_night_cycle", True):
+                    # (#633) the overnight window ended — a load still running
+                    # off the battery must stop, not ride into the day
+                    # (class-17: the gate alone only blocks re-activation).
+                    reason = "overnight battery window ended (daytime)"
                 elif soc is not None and soc <= self._batt_reserve_soc:
                     reason = "overnight battery force ended (reserve SoC reached)"
             if reason:
@@ -1337,6 +1350,10 @@ class SurplusController:
         surplus? Opt-in flag + battery strictly above the hard Reserve SoC.
         The Reserve is never crossed."""
         if not getattr(device, "battery_eligible_overnight", False):
+            return False
+        # (#633) overnight means overnight — no Tier-2 activation in daytime
+        # (caught live: a load fed "from the battery" at 09:10 in full sun).
+        if not getattr(self, "_is_night_cycle", True):
             return False
         soc = self._batt_soc
         return soc is not None and soc > self._batt_reserve_soc
