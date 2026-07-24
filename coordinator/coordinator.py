@@ -2370,34 +2370,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ChargingState.SOLAR_CHARGING_ALLOWED,
                     ChargingState.SOLAR_MIN_PV,
                 ):
-                    cycle_budget = getattr(self, "_cycle_ev_budget", None)
-                    if cycle_budget is None:
-                        # Phase D.2 cleanup (#282). ``_cycle_ev_budget`` is set
-                        # unconditionally by ``_build_charging_context`` every
-                        # cycle, so this branch only fires on a coordinator
-                        # init bug. Fail-safe: log + 0 W = no distribution.
-                        _LOGGER.error(
-                            "Canonical EV budget not set in multi-charger "
-                            "distribution — coordinator init bug. Distributing "
-                            "0 W to fail safe. Investigate _build_charging_context."
-                        )
-                        total_budget = 0.0
-                    else:
-                        total_budget = cycle_budget.net_w
-                    # #351 M5 — chargers in ``off`` mode must NOT receive
-                    # an allocation. The actuator's #346 guard already
-                    # refuses to actuate them, but the dashboard reads
-                    # the distribution output directly and would otherwise
-                    # show ``sem_charger_<id>_allocated_w > 0``.
-                    excluded_cids = {
-                        c["id"] for c in (self.config.get("ev_chargers") or [])
-                        if isinstance(c, dict) and "id" in c
-                        and self._effective_charge_mode_for(c) == "off"
-                    }
-                    ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
-                        total_budget, self._ev_devices,
-                        excluded_charger_ids=excluded_cids,
-                    )
+                    # (#629 slice 2) canonical-budget distribution extracted to
+                    # ev_night_targets.distribute_solar_budget.
+                    from .ev_night_targets import distribute_solar_budget
+                    ev_budget_per_charger = distribute_solar_budget(self)
 
                 sorted_chargers = sorted(
                     self._ev_devices.items(),
