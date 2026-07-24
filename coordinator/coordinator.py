@@ -5144,6 +5144,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "charging_strategy_reason": charging_context.charging_strategy_reason,
             "canonical_strategy": charging_context.canonical_strategy,
             "discharge_limit": discharge_limit,
+            # (#631) the authoritative per-charger night remaining — what the
+            # night decision actually consumed this cycle.
+            "night_remaining_map": dict(
+                getattr(self, "_night_target_per_charger_map", None) or {}),
         }
         per_charger_states = getattr(self, "_effective_states_per_charger", None) or {}
         if per_charger_states:

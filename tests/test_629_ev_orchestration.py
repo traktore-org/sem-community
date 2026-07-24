@@ -56,3 +56,32 @@ class TestNightTargetMap629:
     def test_unconfigured_charger_uses_global_default(self):
         c = _coord(chargers={"x": object()}, config={}, daily_kwh=0.0)
         assert build_night_target_map(c, MagicMock()) == {"x": 10}   # default 10
+
+
+class TestNightNotificationTruth631:
+    """(#631) The night-start notification must quote the SAME remaining the
+    decision consumed (the per-charger map), not the stale config snapshot."""
+
+    def _messages(self, data, config=None):
+        from custom_components.solar_energy_management.coordinator.notifications import (
+            NotificationManager)
+        nm = NotificationManager.__new__(NotificationManager)
+        nm.config = config or {"daily_ev_target": 8}
+        nm.hass = MagicMock()
+        return NotificationManager._get_notification_messages(
+            nm, "night_charging_active", data)
+
+    def test_prefers_per_charger_map_value(self):
+        m = self._messages({"daily_ev_energy": 0.0, "_charger_id": "ev_charger",
+                            "night_remaining_map": {"ev_charger": 2.0}})
+        assert "2.0" in m["mobile"]           # live map, not the config 8
+
+    def test_fleet_fallback_sums_map(self):
+        m = self._messages({"daily_ev_energy": 0.0, "_charger_id": None,
+                            "night_remaining_map": {"a": 1.5, "b": 2.5}})
+        assert "4.0" in m["mobile"]
+
+    def test_no_map_falls_back_to_config(self):
+        m = self._messages({"daily_ev_energy": 3.0, "_charger_id": None,
+                            "night_remaining_map": {}})
+        assert "5.0" in m["mobile"]           # 8 - 3 legacy path

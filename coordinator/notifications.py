@@ -168,7 +168,8 @@ class NotificationManager:
         if not (keba_enabled or mobile_enabled):
             return
 
-        messages = self._get_notification_messages(new_state, data)
+        messages = self._get_notification_messages(
+            new_state, {**data, "_charger_id": charger_id})
 
         # v1.6.9 multi-charger: prefix mobile messages with the charger
         # name in square brackets so the user knows which charger fired
@@ -356,7 +357,18 @@ class NotificationManager:
         ev_session_energy = data.get("ev_session_energy", 0)
         daily_ev_energy = data.get("daily_ev_energy", 0)
         daily_ev_target = self.config.get("daily_ev_target", DEFAULT_DAILY_EV_TARGET)
-        remaining_needed = max(0, daily_ev_target - daily_ev_energy)
+        # (#631) Prefer the live per-charger night-target map — the SAME value
+        # the night decision consumed — over the config snapshot, which goes
+        # stale the moment the user edits the target entity (live: notification
+        # said 8.0 kWh while the decision correctly charged 2.0).
+        night_map = data.get("night_remaining_map") or {}
+        _cid = data.get("_charger_id")
+        if _cid and _cid in night_map:
+            remaining_needed = night_map[_cid]
+        elif night_map:
+            remaining_needed = sum(night_map.values())
+        else:
+            remaining_needed = max(0, daily_ev_target - daily_ev_energy)
 
         from ..utils.translate import get_text
         _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
