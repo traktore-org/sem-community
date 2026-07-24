@@ -2568,6 +2568,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 plan = self._compute_night_plan(charger_cfg, pc_target, energy)
                                 self._night_plan_per_charger[cid] = plan
                                 charging_context.night_deadline_amps = plan.deadline_amps
+                                charging_context.night_top_up_amps = plan.top_up_amps
                                 charging_context.night_deadline_active = plan.deadline_active
                                 charging_context.night_tariff_wait = plan.should_wait_for_cheap
                                 charging_context.night_deadline_reachable = plan.reachable
@@ -2666,6 +2667,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
                             target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
+                            top_up_amps=int(getattr(charging_context, "night_top_up_amps", 0) or 0),
                             tariff_wait=bool(charging_context.night_tariff_wait),
                             solar_committed_w=self._solar_committed_w_per_cycle,
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
@@ -2855,6 +2857,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
                     target_kwh=getattr(charging_context, "night_target_kwh", None),
                     deadline_amps=int(getattr(charging_context, "night_deadline_amps", 0) or 0),
+                    top_up_amps=int(getattr(charging_context, "night_top_up_amps", 0) or 0),
                     tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
                     night_deliverable_kwh=self._night_deliverable_kwh(
                         self._primary_charger_cfg()
@@ -5755,6 +5758,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # multi-charger loop downstream gets.
             tariff_wait=tariff_wait,
             deadline_amps=deadline_amps,
+            top_up_amps=int(getattr(night_plan, "top_up_amps", 0) or 0) if night_plan else 0,
             night_deliverable_kwh=self._night_deliverable_kwh(_primary_cfg),
             # #548 — max-SOC ceiling; stop surplus charging at the car's max.
             soc_ceiling_reached=soc_limit_active,

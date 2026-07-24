@@ -48,6 +48,11 @@ class NightChargePlan:
 
     should_wait_for_cheap: bool = False
     deadline_amps: int = 0
+    # (#630) Peak-managed top-up rate: the plain night top-up runs at the
+    # available peak headroom instead of creeping at Min — finish early,
+    # free the window for lower-priority cheap-hours loads. 0 = no info
+    # (caller falls back to the Min floor, pre-#630 behaviour).
+    top_up_amps: int = 0
     deadline_active: bool = False
     reachable: bool = True
     should_warn_unreachable: bool = False
@@ -188,6 +193,9 @@ def plan_night_charge(
     max_rate_kw = max_amps * watts_per_amp / 1000.0
     pm_amps = max_amps if peak_managed_amps is None else max(min_amps, min(max_amps, int(peak_managed_amps)))
     peak_rate_kw = pm_amps * watts_per_amp / 1000.0
+    # (#630) the plain top-up charges at the peak-managed headroom rate when
+    # known; without peak info keep the legacy Min-floor creep (0 = unset).
+    plan.top_up_amps = pm_amps if peak_managed_amps is not None else 0
     effective_rate_kw = max_rate_kw if is_forcing else peak_rate_kw
 
     # --- Deadline scaling (#246) ---------------------------------------------

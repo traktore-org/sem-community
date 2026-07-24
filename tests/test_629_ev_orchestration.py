@@ -85,3 +85,64 @@ class TestNightNotificationTruth631:
         m = self._messages({"daily_ev_energy": 3.0, "_charger_id": None,
                             "night_remaining_map": {}})
         assert "5.0" in m["mobile"]           # 8 - 3 legacy path
+
+
+class TestNightTopUpRate630:
+    """(#630) The plain night top-up runs at the peak-managed headroom rate,
+    bounded [min, max]; without peak info it keeps the legacy Min creep."""
+
+    def _plan(self, **kw):
+        from datetime import datetime
+        from custom_components.solar_energy_management.coordinator.ev_tariff_planner import (
+            plan_night_charge)
+        args = dict(now=datetime(2026, 7, 24, 1, 0),
+                    remaining_to_min_kwh=8.0, min_amps=10, max_amps=32,
+                    watts_per_amp=690.0, night_end="06:00")
+        args.update(kw)
+        return plan_night_charge(**args)
+
+    def test_top_up_uses_peak_managed_rate(self):
+        p = self._plan(peak_managed_amps=16)
+        assert p.top_up_amps == 16
+
+    def test_top_up_clamped_to_charger_limits(self):
+        assert self._plan(peak_managed_amps=64).top_up_amps == 32
+        assert self._plan(peak_managed_amps=4).top_up_amps == 10
+
+    def test_no_peak_info_keeps_legacy_floor(self):
+        p = self._plan(peak_managed_amps=None)
+        assert p.top_up_amps == 0                 # decide falls back to Min
+
+    def test_decide_plain_topup_uses_rate(self):
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerView, ChargerPower, ChargerEnergy, FleetContext)
+        view = ChargerView(
+            power=ChargerPower(charger_id="c1", power_w=0.0, connected=True),
+            energy=ChargerEnergy(charger_id="c1"),
+            mode="min_plus_solar",
+            config={"ev_min_current": 10, "ev_phases": 3, "ev_max_current": 32},
+            fleet=FleetContext(solar_w=0.0, home_w=500.0, battery_soc=60.0,
+                               is_night=True),
+            target_kwh=8.0,
+            top_up_amps=16,
+        )
+        d = decide(view)
+        assert d.commanded_amps == 16
+        assert "peak-managed" in d.reason
+
+    def test_decide_no_topup_info_keeps_min(self):
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerView, ChargerPower, ChargerEnergy, FleetContext)
+        view = ChargerView(
+            power=ChargerPower(charger_id="c1", power_w=0.0, connected=True),
+            energy=ChargerEnergy(charger_id="c1"),
+            mode="min_plus_solar",
+            config={"ev_min_current": 10, "ev_phases": 3, "ev_max_current": 32},
+            fleet=FleetContext(solar_w=0.0, home_w=500.0, battery_soc=60.0,
+                               is_night=True),
+            target_kwh=8.0,
+        )
+        d = decide(view)
+        assert d.commanded_amps == 10          # legacy Min creep preserved

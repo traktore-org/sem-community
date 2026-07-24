@@ -561,17 +561,22 @@ class MinPlusSolarMode(ModeStrategy):
                 ),
             )
 
-        # Plain night top-up at Min current (the floor).
+        # Plain night top-up. (#630) Run at the peak-managed headroom rate
+        # when the planner computed one — finish early and free the window
+        # for lower-priority cheap-hours loads — else the legacy Min floor.
+        amps = max(min_amps, min(max_amps, view.top_up_amps)) \
+            if view.top_up_amps > 0 else min_amps
         remaining_str = (
             f"{view.target_kwh:.1f}" if view.target_kwh is not None else "?"
         )
         return ChargerDecision(
             charger_id=cid, mode="min_plus_solar",
             intent=ChargerIntent.CHARGE_AT_AMPS,
-            commanded_amps=min_amps,
+            commanded_amps=amps,
             reason=(
-                f"min_plus_solar night: top-up at {min_amps}A, "
-                f"remaining {remaining_str} kWh"
+                f"min_plus_solar night: top-up at {amps}A"
+                + (" (peak-managed)" if amps != min_amps else "")
+                + f", remaining {remaining_str} kWh"
             ),
         )
 

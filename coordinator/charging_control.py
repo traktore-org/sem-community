@@ -117,6 +117,8 @@ class ChargingContext:
     # night_tariff_wait: tariff mode wants to idle now and charge in a cheaper window.
     # night_deadline_reachable: Min can still be met by the deadline at max current.
     night_deadline_amps: int = 0
+    # (#630) peak-managed plain top-up rate (0 = fall back to Min floor).
+    night_top_up_amps: int = 0
     night_deadline_active: bool = False
     night_tariff_wait: bool = False
     night_deadline_reachable: bool = True

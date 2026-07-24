@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes (from the #629 overnight soak)
 
+- ⚡ **Night top-up now runs at the peak-managed headroom rate** (#630, Guido) — the plain
+  \`min_plus_solar\` night top-up crept at the Min floor even with kilowatts of peak headroom
+  free. It now charges at the #274/C1 peak-managed rate (peak limit − expected home −
+  higher-priority chargers − **live cheap-hours load draw**, so a running #620 load is never
+  squeezed), finishing early and freeing the window for lower-priority loads. Installs
+  without peak info keep the legacy Min-floor behaviour unchanged.
 - 🔔 **Night-start notification now quotes the value the decision actually used** (#631) —
   it read the config snapshot (stale the moment you edit the target entity) instead of the
   live per-charger night-target map: the push said "8.0 kWh remaining" while SEM correctly
