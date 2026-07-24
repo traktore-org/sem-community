@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.25] — 24.07.2026
+
+### 🐛 Fixes (from the #629 overnight soak)
+
+- 🔔 **Night-start notification now quotes the value the decision actually used** (#631) —
+  it read the config snapshot (stale the moment you edit the target entity) instead of the
+  live per-charger night-target map: the push said "8.0 kWh remaining" while SEM correctly
+  charged 2.0. Both now come from the same map.
+- 📖 **KEBA post-stop auto-start retries documented as bounded known behaviour** (#632) —
+  the vehicle re-requests every ~11 min, the KEBA auto-authorizes, SEM kills each rogue
+  session within one cycle (#552 guard) under the 1 kWh runaway cap (#553). Deliberately
+  NOT "fixed" via the auth lock (a failure while locked would strand the car). See
+  KEBA_FAILSAFE.md.
+
+<!-- folded -->
 # [1.7.5-beta.25] — 23.07.2026
 
 ### 🧹 Code quality
