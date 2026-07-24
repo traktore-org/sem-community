@@ -86,3 +86,22 @@ def distribute_solar_budget(coord) -> Dict[str, float]:
         total_budget, coord._ev_devices,
         excluded_charger_ids=excluded_cids,
     )
+
+
+def resolve_night_effective_state(base_state, charging_state, pc_target, plan,
+                                  night_active_state, tariff_wait_state,
+                                  target_reached_state):
+    """(#629 slice 3) The per-charger NIGHT effective-state tri-state, pure.
+
+    Given the off-override-adjusted ``base_state``: outside the two night
+    states it passes through unchanged. Inside them: a met target (< 0.1 kWh)
+    is NIGHT_TARGET_REACHED; otherwise the plan's tariff-wait flag picks
+    TARIFF_WAITING_FOR_CHEAP vs NIGHT_CHARGING_ACTIVE (#247). The state
+    enums are passed in so this module stays import-light."""
+    if charging_state not in (night_active_state, tariff_wait_state):
+        return base_state
+    if pc_target is None or pc_target <= 0.1:
+        return target_reached_state
+    if plan is not None and plan.should_wait_for_cheap:
+        return tariff_wait_state
+    return night_active_state

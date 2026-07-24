@@ -2538,9 +2538,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             ChargingState.TARIFF_WAITING_FOR_CHEAP,
                         ):
                             pc_target = charging_context.night_target_kwh
-                            if pc_target <= 0.1:
-                                effective_state = ChargingState.NIGHT_TARGET_REACHED
-                            else:
+                            plan = None
+                            if pc_target > 0.1:
                                 plan = self._compute_night_plan(charger_cfg, pc_target, energy)
                                 self._night_plan_per_charger[cid] = plan
                                 charging_context.night_deadline_amps = plan.deadline_amps
@@ -2548,12 +2547,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 charging_context.night_deadline_active = plan.deadline_active
                                 charging_context.night_tariff_wait = plan.should_wait_for_cheap
                                 charging_context.night_deadline_reachable = plan.reachable
-                                effective_state = (
-                                    ChargingState.TARIFF_WAITING_FOR_CHEAP
-                                    if plan.should_wait_for_cheap
-                                    else ChargingState.NIGHT_CHARGING_ACTIVE
-                                )
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
+                            # (#629 slice 3) the tri-state resolution is pure —
+                            # see ev_night_targets.resolve_night_effective_state.
+                            from .ev_night_targets import resolve_night_effective_state
+                            effective_state = resolve_night_effective_state(
+                                effective_state, charging_state, pc_target, plan,
+                                ChargingState.NIGHT_CHARGING_ACTIVE,
+                                ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                                ChargingState.NIGHT_TARGET_REACHED,
+                            )
 
                         # #526: surface (as a repair) when an SOC-% cap can't be
                         # enforced because no real vehicle SOC is readable.

@@ -184,3 +184,31 @@ class TestSolarBudgetDistribution629:
         f(c)
         args, _ = c._surplus_controller.distribute_ev_budget.call_args
         assert args[0] == 0.0                          # fail-safe, never legacy base
+
+
+class TestNightEffectiveState629:
+    """(#629 slice 3) The pure per-charger night tri-state resolution."""
+
+    def _resolve(self, charging_state, pc_target, plan, base="BASE"):
+        from custom_components.solar_energy_management.coordinator.ev_night_targets import (
+            resolve_night_effective_state)
+        return resolve_night_effective_state(
+            base, charging_state, pc_target, plan,
+            "NIGHT_ACTIVE", "TARIFF_WAIT", "TARGET_REACHED")
+
+    def test_day_state_passes_through(self):
+        assert self._resolve("SOLAR_ACTIVE", 5.0, None) == "BASE"
+
+    def test_target_met_wins(self):
+        assert self._resolve("NIGHT_ACTIVE", 0.05, None) == "TARGET_REACHED"
+        assert self._resolve("TARIFF_WAIT", None, None) == "TARGET_REACHED"
+
+    def test_wait_vs_active_follows_plan(self):
+        plan = MagicMock(should_wait_for_cheap=True)
+        assert self._resolve("NIGHT_ACTIVE", 5.0, plan) == "TARIFF_WAIT"
+        plan.should_wait_for_cheap = False
+        assert self._resolve("TARIFF_WAIT", 5.0, plan) == "NIGHT_ACTIVE"
+
+    def test_no_plan_defaults_active(self):
+        # pc_target > 0.1 but plan missing (defensive) → charge, don't wait
+        assert self._resolve("NIGHT_ACTIVE", 5.0, None) == "NIGHT_ACTIVE"
