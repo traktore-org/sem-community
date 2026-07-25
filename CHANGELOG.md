@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registered — a silent no-op, so every restart read "999 h overdue" and grid-heated the
   boiler to the legionella target. The seed now happens at the registration site (stored
   time restored; fresh installs seed "now"), and a guard keeps the dead parallel restore out.
+- 🔁 **One anti-cycle clock, rebuild-proof** (#644, coherence-audit) — switch and climate
+  devices kept a SECOND min-on/min-off timer on \`_status.last_*\`, wiped on every
+  rediscovery rebuild, so a compressor could restart seconds after stopping. The legacy
+  \`min_on_time\`/\`min_off_time\` knobs now map onto the base-layer
+  \`min_on_seconds\`/\`min_off_seconds\`, whose epochs are rebuild-transplanted
+  (\`_VOLATILE_CONTROL_FIELDS\`) — one clock, one enforcement, and a grep-lint guard
+  keeps the \`_status\` clock from creeping back in as a gate.
 - 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
   \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
   dropped them to the entry-write + reload path: a slider change during a charge session

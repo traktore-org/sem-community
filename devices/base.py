@@ -741,12 +741,36 @@ class SwitchDevice(ControllableDevice):
             energy_entity_id=energy_entity_id,
         )
         self.rated_power = rp
-        self.min_on_time = min_on_time
-        self.min_off_time = min_off_time
+        # (#644) ONE anti-cycle mechanism: the legacy min_on_time/min_off_time
+        # knobs map onto the base-layer min_on_seconds/min_off_seconds, whose
+        # epochs (_last_activated/_last_deactivated) are rebuild-transplanted
+        # (#620 _VOLATILE_CONTROL_FIELDS). Pre-#644 the subclasses kept a
+        # SECOND clock on _status.last_* — wiped on every rediscovery rebuild,
+        # so a compressor could short-cycle 20 s after stopping.
+        self.min_on_seconds = int(min_on_time)
+        self.min_off_seconds = int(min_off_time)
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.daily_max_runtime_sec = daily_max_runtime_sec
         self.battery_assist_enabled = battery_assist_enabled
         self.battery_eligible_overnight = battery_eligible_overnight
+
+    @property
+    def min_on_time(self) -> int:
+        """(#644) alias of the unified anti-cycle knob."""
+        return self.min_on_seconds
+
+    @min_on_time.setter
+    def min_on_time(self, v: int) -> None:
+        self.min_on_seconds = int(v)
+
+    @property
+    def min_off_time(self) -> int:
+        """(#644) alias of the unified anti-cycle knob."""
+        return self.min_off_seconds
+
+    @min_off_time.setter
+    def min_off_time(self, v: int) -> None:
+        self.min_off_seconds = int(v)
 
     @property
     def device_type(self) -> DeviceType:
@@ -769,6 +793,7 @@ class SwitchDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._last_activated = self._status.last_activated  # (#644) unified clock
         self._sem_owned = True  # (arc) re-own on restart → SEM manages it
         _LOGGER.info(
             "%s: switch %s was ON at registration — re-owned as active",
@@ -780,10 +805,11 @@ class SwitchDevice(ControllableDevice):
         if not self.entity_id:
             return 0.0
 
-        # Anti-flicker: check minimum off time
-        if self._status.last_deactivated:
-            elapsed = (datetime.now() - self._status.last_deactivated).total_seconds()
-            if elapsed < self.min_off_time:
+        # Anti-flicker: minimum off time — the UNIFIED clock (#644): the
+        # base-layer epoch survives rediscovery rebuilds via the transplant.
+        if self._last_deactivated:
+            elapsed = (datetime.now() - self._last_deactivated).total_seconds()
+            if elapsed < self.min_off_seconds:
                 return 0.0
 
         try:
@@ -796,6 +822,7 @@ class SwitchDevice(ControllableDevice):
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
             self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated  # (#644) unified clock
             self._status.activation_count += 1
             _LOGGER.info("Activated switch device %s (%dW)", self.name, self.rated_power)
             return self.rated_power
@@ -809,10 +836,10 @@ class SwitchDevice(ControllableDevice):
         if not self.entity_id:
             return
 
-        # Anti-flicker: check minimum on time
-        if self._status.last_activated:
-            elapsed = (datetime.now() - self._status.last_activated).total_seconds()
-            if elapsed < self.min_on_time:
+        # Anti-flicker: minimum on time — the UNIFIED clock (#644).
+        if self._last_activated:
+            elapsed = (datetime.now() - self._last_activated).total_seconds()
+            if elapsed < self.min_on_seconds:
                 return
 
         try:
@@ -825,6 +852,7 @@ class SwitchDevice(ControllableDevice):
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
             self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             _LOGGER.info("Deactivated switch device %s", self.name)
         except Exception as e:
             _LOGGER.error("Failed to deactivate %s: %s", self.name, e)
@@ -886,8 +914,9 @@ class ClimateDevice(ControllableDevice):
         self.rated_power = rated_power
         self.hvac_mode = hvac_mode or "cool"
         self.target_temperature = target_temperature
-        self.min_on_time = min_on_time
-        self.min_off_time = min_off_time
+        # (#644) unified anti-cycle knobs (see SwitchDevice)
+        self.min_on_seconds = int(min_on_time)
+        self.min_off_seconds = int(min_off_time)
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.daily_max_runtime_sec = daily_max_runtime_sec
         self.battery_assist_enabled = battery_assist_enabled
@@ -919,6 +948,7 @@ class ClimateDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._last_activated = self._status.last_activated  # (#644) unified clock
         self._sem_owned = True  # (arc) re-own on restart → SEM manages it
         _LOGGER.info(
             "%s: climate %s was %s at registration — re-owned as active",
@@ -943,10 +973,11 @@ class ClimateDevice(ControllableDevice):
         if not self.entity_id:
             return 0.0
 
-        # Anti-flicker: check minimum off time
-        if self._status.last_deactivated:
-            elapsed = (datetime.now() - self._status.last_deactivated).total_seconds()
-            if elapsed < self.min_off_time:
+        # Anti-flicker: minimum off time — the UNIFIED clock (#644): the
+        # base-layer epoch survives rediscovery rebuilds via the transplant.
+        if self._last_deactivated:
+            elapsed = (datetime.now() - self._last_deactivated).total_seconds()
+            if elapsed < self.min_off_seconds:
                 return 0.0
 
         # Set the mode first. If THIS fails the unit never turned on — report
@@ -971,6 +1002,7 @@ class ClimateDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._last_activated = self._status.last_activated  # (#644) unified clock
         self._status.activation_count += 1
 
         if self.target_temperature is not None:
@@ -1006,10 +1038,10 @@ class ClimateDevice(ControllableDevice):
         if not self.entity_id:
             return
 
-        # Anti-flicker: check minimum on time
-        if self._status.last_activated:
-            elapsed = (datetime.now() - self._status.last_activated).total_seconds()
-            if elapsed < self.min_on_time:
+        # Anti-flicker: minimum on time — the UNIFIED clock (#644).
+        if self._last_activated:
+            elapsed = (datetime.now() - self._last_activated).total_seconds()
+            if elapsed < self.min_on_seconds:
                 return
 
         try:
@@ -1022,6 +1054,7 @@ class ClimateDevice(ControllableDevice):
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
             self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             _LOGGER.info("Deactivated climate device %s", self.name)
         except Exception as e:
             _LOGGER.error("Failed to deactivate %s: %s", self.name, e)
@@ -1438,6 +1471,7 @@ class CurrentControlDevice(ControllableDevice):
             else:
                 self._status.state = DeviceState.IDLE
                 self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             return consumed
 
         except Exception as e:
@@ -1943,6 +1977,7 @@ class SetpointDevice(ControllableDevice):
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
             self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated  # (#644) unified clock
             self._status.activation_count += 1
             _LOGGER.info("Boosted %s setpoint to %.1f", self.name, target)
             return self.rated_power
@@ -1967,6 +2002,7 @@ class SetpointDevice(ControllableDevice):
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
             self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             _LOGGER.info("Restored %s setpoint to %.1f", self.name, self.normal_setpoint)
         except Exception as e:
             _LOGGER.error("Failed to restore %s setpoint: %s", self.name, e)
@@ -2078,6 +2114,7 @@ class ScheduleDevice(ControllableDevice):
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
             self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated  # (#644) unified clock
             self._status.activation_count += 1
             _LOGGER.info("Started scheduled device %s", self.name)
             return self.rated_power
