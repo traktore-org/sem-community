@@ -366,3 +366,43 @@ reachability/coverage check against scenario corpora catches this class.)
 - **Marginal refactor (do NOT force)** — a dedup that needs a shim or wide test churn for a
   maintainability-only gain (e.g. the MagnitudeVoter proxy, the debounce-primitive). Recorded so
   we don't keep re-litigating them.
+
+---
+
+## 2026-07-25 coherence sweep — confirmed instances (adversarially verified)
+
+The full-repo sweep (34 agents, refute-first verification) confirmed 16 findings.
+Fixed same-day: **#639** (class 3, taper double-feed), **#640** (class 14, legionella
+restore no-op), **#644** (duplicated-mechanism, dual anti-cycle clocks). Filed open:
+
+- **#647** — class 1: the battery perception audit gates on the `__fleet__` lock that
+  per-battery mode never sets → the ledger's battery guard is DEAD on multi-battery
+  installs (and fleet-summed comparison is cancellation-blind).
+- **#648** — class 3: `apply_daily_decay` + the fleet `ev_connected` gate reach only the
+  primary taper detector; secondary chargers' virtual SOC never decays.
+- **#649** — the #461-peak single-writer class, unswept to loads: LM shed/restore AND
+  the surplus controller both own surplus-mode devices; LM's restore re-starts a load
+  against surplus intent (then class-17: nobody stops it).
+- **#650** — class 14: `critical`/`controllable` land in the LM dict only; every registry
+  rebuild wholesale-replaces them with defaults (no override store, the pre-#122 shape).
+- **#651** — parallel-systems: zombie `distribute_ev_budget` cascade runs every solar
+  cycle, output (`pcc.budget_w`) has zero readers, docstring claims it's the single source.
+- **#652** — parallel-systems: the battery scheduler's peak-limit split uses its own
+  phantom EV night model; the real EV stack (tariff planner + night targets) never agrees.
+  Structural closure = #638.
+- **#653** — spec-vs-reality: `ApplianceScheduler.update_schedules` has zero callers; a
+  scheduled appliance force-starts then allocates phantom rated power forever.
+- **#654** — spec-vs-reality: ripple-control shedding is observe-only; the WARNING log
+  claims shedding that never happens.
+- **#655** — spec-vs-reality (docs): SETUP_GUIDE's SG-Ready relay table still documents
+  the pre-#523 mapping the code explicitly calls a bug.
+
+Re-verified dormant (no new issue): the arbitrage FORCE_DISCHARGE fleet-split (class 6
+open sibling) stays triple-fenced (migration v14 forces the toggle off, no UI path,
+`_any_allow_arb` hardcode); the in-code re-enable checklist at `decide_battery.py:160-180`
+MUST become code+test before any re-enable. The VPP export force_discharge is NOT an
+instance (per-battery max is the intended semantics, reporter-confirmed).
+
+Structural guard idea from the sweep (not yet built): an orphan-method lint — any public
+method in `coordinator/`/`devices/`/`features/` with zero call sites outside tests fails
+CI unless annotated `# ENTRY-POINT: <who calls it>`. It would have caught #651/#653/#654.
