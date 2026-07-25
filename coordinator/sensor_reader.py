@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .types import FleetEvPower, PowerReadings
-from .sign_audit import CounterCorrelationAudit
+from .sign_audit import CounterCorrelationAudit, SplitSensorExclusivityAudit
 from .units import (
     energy_state_to_kwh,
     is_energy_unit,
@@ -340,6 +340,17 @@ class SensorReader:
         # charge/discharge counters. ``__fleet__`` stays the key for the
         # single/combined-battery path.
         self._battery_sign_audits: Dict[str, CounterCorrelationAudit] = {}
+        # #661 — split-pair exclusivity, audited at the NETTING site because
+        # that is the last moment both raw readings exist. One audit per pair
+        # id ("grid" for whichever grid path is active, "b1"/"b2"/… per battery
+        # pair), created on first use by ``_audit_split_pair``.
+        self._split_pair_audits: Dict[str, SplitSensorExclusivityAudit] = {}
+        # Pair ids audited during the current cycle. The Energy-Dashboard config
+        # can change under a live reader (the user edits HA's energy settings
+        # without reloading SEM), and a battery that goes away would otherwise
+        # leave a permanently-flagged ``b2`` in the perception trace — a fault
+        # reported for hardware that no longer exists. Pruned each cycle.
+        self._split_pair_seen: set = set()
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -500,10 +511,16 @@ class SensorReader:
             self._sign_vote_warmup -= 1
 
         # Try Energy Dashboard config first, then legacy config
+        self._split_pair_seen = set()
         if self._energy_dashboard_config:
             readings = self._read_from_energy_dashboard()
         else:
             readings = self._read_from_legacy_config()
+
+        # #661 — forget audits for pairs that are no longer being netted, so a
+        # removed battery can't leave a stale fault in the trace.
+        for gone in set(self._split_pair_audits) - self._split_pair_seen:
+            del self._split_pair_audits[gone]
 
         # Calculate derived values
         readings.calculate_derived()
@@ -1682,6 +1699,11 @@ class SensorReader:
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
             self._audit_manual_grid_sign(readings.grid_power, ed)
+            if manual_import and manual_export:
+                self._audit_split_pair(
+                    "grid", "Grid (manual import/export override)",
+                    import_w, manual_import, export_w, manual_export,
+                )
         elif ed.grid_power_from and ed.grid_power_to:
             # #553 — declared two-sensor pair from HA's grid dialog
             # (power_config.stat_rate_from/to). Same semantics as the manual
@@ -1692,6 +1714,10 @@ class SensorReader:
             export_w = self._read_sensor(ed.grid_power_to, "grid_export")
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
+            self._audit_split_pair(
+                "grid", "Grid (declared two-sensor pair)",
+                import_w, ed.grid_power_from, export_w, ed.grid_power_to,
+            )
         elif len(ed.grid_power_list) > 1:
             # Multiple grid power sensors — sum all (e.g. multi-meter setups)
             readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")
@@ -1769,6 +1795,11 @@ class SensorReader:
                 # SEM convention: negative = import, positive = export
                 readings.grid_power = export_w - import_w
                 self._grid_sign_detected = True  # No sign correction needed
+                if disc["export"]:
+                    self._audit_split_pair(
+                        "grid", "Grid (auto-discovered split pair)",
+                        import_w, disc["import"], export_w, disc["export"],
+                    )
             elif not disc["warned"]:
                 disc["warned"] = True
                 _LOGGER.warning(
@@ -1833,8 +1864,16 @@ class SensorReader:
             # pair IS the sign convention, so these are never sign-flipped.
             for k, (p_from, p_to) in enumerate(ed.battery_power_pairs):
                 bid = f"b{len(ed.battery_power_list) + k + 1}"
-                w = (self._read_sensor(p_to, "battery")
-                     - self._read_sensor(p_from, "battery"))
+                charge_w = self._read_sensor(p_to, "battery")
+                discharge_w = self._read_sensor(p_from, "battery")
+                w = charge_w - discharge_w
+                # #661 — same shape as the split grid pair: netting is about to
+                # make "charging AND discharging" unrepresentable, so judge it
+                # while both raw sides are still here.
+                self._audit_split_pair(
+                    bid, f"Battery {bid} (declared two-sensor pair)",
+                    discharge_w, p_from, charge_w, p_to,
+                )
                 per_battery_total += w
                 soc_val = 0.0
                 soc_entity = self._auto_detect_battery_soc(p_to)
@@ -1880,6 +1919,15 @@ class SensorReader:
             # net = charge − discharge (SEM convention: positive = charging).
             charge_w = self._read_sensor(ed.battery_power_to, "battery")
             discharge_w = self._read_sensor(ed.battery_power_from, "battery")
+            # #661 — the single-battery twin of the pairs loop above. This is
+            # the branch a one-battery Fronius Verto takes (n_units == 1, so
+            # the loop never ran), and it nets exactly the same way, so it
+            # needs the same audit before the evidence is gone.
+            self._audit_split_pair(
+                "b1", "Battery (declared two-sensor pair)",
+                discharge_w, ed.battery_power_from,
+                charge_w, ed.battery_power_to,
+            )
             readings.battery_power = charge_w - discharge_w
 
         # Battery SOC — precedence (#551): SEM's own explicit override
@@ -2194,6 +2242,62 @@ class SensorReader:
             except (ValueError, TypeError):
                 return None
         return total
+
+    def _audit_split_pair(
+        self, pair_id: str, label: str,
+        a_w: float, a_entity, b_w: float, b_entity,
+    ) -> None:
+        """Observe-only exclusivity check on a split sensor pair (#661).
+
+        Called at each netting site with the two RAW, always-positive sides.
+        Argument order is the netting order: ``a_w`` is the side SUBTRACTED and
+        ``b_w`` the side added, so ``b_w - a_w`` in the log is the exact scalar
+        the caller is about to store (import→export for grid,
+        discharge→charge for battery — both SEM convention).
+
+        One meter cannot import and export at the same instant; one battery
+        cannot charge and discharge at the same instant. Sustained
+        both-sides-active means swapped roles, a stale sensor, or two sensors
+        pointed at different hardware — and the netted result (≈0 W) is
+        indistinguishable from a genuinely balanced house, which is why this
+        has to be judged here rather than downstream.
+
+        Observe-only: SEM does not re-net or re-role anything on the strength
+        of it. It raises a flag (surfaced in the perception trace) and logs one
+        WARNING naming both entities; recovery and any later episode are
+        reported at INFO so an intermittent pair doesn't go dark.
+        """
+        self._split_pair_seen.add(pair_id)
+        audit = self._split_pair_audits.get(pair_id)
+        if audit is None:
+            audit = SplitSensorExclusivityAudit()
+            self._split_pair_audits[pair_id] = audit
+
+        verdict = audit.update(a_w, b_w)
+        if verdict == "warn":
+            _LOGGER.warning(
+                "%s: both sides of the split pair are reporting power at once "
+                "(%s=%.0fW, %s=%.0fW) for %d consecutive cycles. One meter "
+                "cannot do both — check that the two sensors are not swapped, "
+                "stale, or pointed at different hardware. SEM nets them to "
+                "%.0fW, which is indistinguishable from a genuinely quiet "
+                "one (#661).",
+                label, a_entity, a_w, b_entity, b_w, audit.votes, b_w - a_w,
+            )
+        elif verdict == "reflag":
+            # Already warned once this lifetime. Still say something — a pair
+            # that keeps coming back is the case a warn-once detector would
+            # otherwise go dark on (#661).
+            _LOGGER.info(
+                "%s: split pair is contradicting again (%s=%.0fW, %s=%.0fW) — "
+                "episode %d (#661).",
+                label, a_entity, a_w, b_entity, b_w, audit.episodes,
+            )
+        elif verdict == "clear":
+            _LOGGER.info(
+                "%s: split pair is exclusive again (%s=%.0fW, %s=%.0fW) (#661).",
+                label, a_entity, a_w, b_entity, b_w,
+            )
 
     def _audit_manual_grid_sign(self, grid_power: float, ed) -> None:
         """Observe-only cross-check of the manual grid sign (#461).

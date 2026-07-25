@@ -87,8 +87,18 @@ deep-deficit battery-drain bridge). **Where it lives:** `charge_stability.py`. *
 **Symptom:** a "health check" that is algebraically incapable of firing (the energy-balance check is
 `0 = 0` because `home` is defined by the balance) → a whole error class stays silent.
 **Closure:** the *independent* perception cross-check (counter-vs-power) catches sign errors the
-balance can't. **Open:** any other self-referential check; audit for them in `/coherence-audit`.
-Refs #589.
+balance can't. **Second instance (#661, 2026-07-25):** `health_check` flagged "grid import AND
+export both > 10 W" (and the battery twin) — but `calculate_derived` re-derives all four fields from
+ONE signed scalar via `max(0, ±x)`, so both-active is *unrepresentable*. The netting happens on
+split-sensor installs too, which are exactly the installs the check existed for. Its test passed
+only by hand-setting the fields on a `MagicMock`, bypassing the derivation — that bypass is the tell
+for this whole class. **Closure pattern:** move the check UPSTREAM to where the raw evidence still
+exists (each netting site in `SensorReader`, via `SplitSensorExclusivityAudit`), and DELETE the
+downstream copy rather than leaving it as decoration. A check that cannot fire is worse than no
+check: it reads as coverage. **Open:** any other self-referential check; audit for them in
+`/coherence-audit`. **Sweep question:** for every check, can you name an input that makes it fire —
+and can that input survive the transforms between where it is produced and where it is checked?
+Refs #589, #661.
 
 ### 9. Engine-specific SVG/SMIL form (renders on Blink/Gecko, silent on WebKit) — GUARDED
 **Symptom:** a dashboard-card visual works on desktop Chrome/Firefox and Android but is dead on
