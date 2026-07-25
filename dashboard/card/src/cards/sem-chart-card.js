@@ -45,13 +45,27 @@ let _chartJsReady = null;
 function _loadChartJs() {
     if (_chartJsReady) return _chartJsReady;
     _chartJsReady = new Promise((resolve, reject) => {
-        if (window.Chart) { resolve(window.Chart); return; }
-        _loadScriptChain(_CHARTJS_SOURCES, () => {
-            // adapter is optional — resolve with Chart either way
-            _loadScriptChain(_ADAPTER_SOURCES,
-                () => resolve(window.Chart),
-                () => resolve(window.Chart));
-        }, () => reject(new Error('Failed to load Chart.js')));
+        // adapter is optional — resolve with Chart either way
+        const loadAdapter = () => _loadScriptChain(_ADAPTER_SOURCES,
+            () => resolve(window.Chart),
+            () => resolve(window.Chart));
+        if (window.Chart) {
+            // (#646) another card's bundle may have defined window.Chart
+            // WITHOUT the date adapter — the old early-exit skipped the
+            // adapter entirely, so time-scale presets (energy "Last 7 Days")
+            // threw "a complete date adapter is provided". The adapter
+            // registers against the existing Chart; double-load is harmless.
+            const hasDateAdapter = (() => {
+                // the unextended stub's formats() just throws
+                try { new window.Chart._adapters._date({}).formats(); return true; }
+                catch { return false; }
+            })();
+            if (hasDateAdapter) { resolve(window.Chart); return; }
+            loadAdapter();
+            return;
+        }
+        _loadScriptChain(_CHARTJS_SOURCES, loadAdapter,
+            () => reject(new Error('Failed to load Chart.js')));
     });
     return _chartJsReady;
 }

@@ -525,7 +525,10 @@ class CostData:
     lifetime_total_savings: float = 0.0  # all-time savings (solar + export + battery)
     lifetime_grid_cost: float = 0.0  # all-time grid spend
     roi_percentage: float = 0.0  # savings / investment × 100
-    roi_payback_years: float = 0.0  # estimated years to payback
+    # (#646) None until there is enough savings history to estimate —
+    # the 0.0 default published as "0.0 years", reading as already-paid-off
+    # on fresh installs.
+    roi_payback_years: float | None = None  # estimated years to payback
     roi_annual_savings: float = 0.0  # projected annual savings rate
 
 

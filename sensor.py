@@ -481,7 +481,9 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="roi_annual_savings",
         device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.MEASUREMENT,
+        # (#646) monetary permits only state_class None/TOTAL — MEASUREMENT
+        # was invalid and broke long-term statistics.
+        state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="CHF",
         icon="mdi:cash-fast",
         suggested_display_precision=0,
@@ -501,7 +503,9 @@ SENSOR_TYPES = [
     # (#544) forecast_deviation_kwh removed — dead.
     SensorEntityDescription(
         key="forecast_corrected_today",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646) no ENERGY device_class — this is a *prediction* that moves
+        # up and down, not measured energy accumulation; energy permits only
+        # TOTAL/TOTAL_INCREASING, so the pairing was invalid.
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         icon="mdi:crystal-ball",
@@ -954,7 +958,9 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="forecast_surplus_kwh",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646 sweep) no ENERGY device_class — a forecast fluctuates; the
+        # energy+MEASUREMENT pairing was invalid (4th sibling, found by the
+        # whole-table guard).
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1156,7 +1162,8 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="battery_scheduler_deficit_kwh",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646) no ENERGY device_class — a computed deficit fluctuates;
+        # the energy+MEASUREMENT pairing was invalid.
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=1,
