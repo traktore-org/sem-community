@@ -765,6 +765,15 @@ class UnifiedDeviceRegistry:
                 "is_controllable": device.is_controllable,
                 "is_ev": device.is_ev,
                 "control_mode": self._control_mode_overrides.get(device.device_id, "peak_only"),
+                # (#649) Is this device driven by the surplus controller? Only
+                # then may load_management stand down from shedding it — a
+                # surplus-mode device with no live controller object (e.g. a
+                # service-control type, which _sync_to_surplus_controller
+                # skips) would otherwise be shed by nobody. This sync runs
+                # right after _sync_to_surplus_controller, so the lookup sees
+                # this cycle's registrations.
+                "surplus_managed": self._surplus_controller is not None
+                and self._surplus_controller.get_device(device.device_id) is not None,
             }
 
             # Backwards-compatible switch_entity
@@ -1371,6 +1380,18 @@ class UnifiedDeviceRegistry:
                         "Mode off: released %s (turned off once — SEM will "
                         "not touch it again while mode stays off)", device_id,
                     )
+
+        # (#649) Keep the load manager's copy in step NOW. It is only rebuilt by
+        # the 35 s rediscovery, so until then a device the user has just handed
+        # to the surplus controller would still be a peak-shed candidate there —
+        # two writers on the same switch, which is the bug this flag exists for.
+        lm_info = (
+            self._load_manager._devices.get(device_id)
+            if self._load_manager is not None else None
+        )
+        if lm_info is not None:
+            lm_info["control_mode"] = mode
+            lm_info["surplus_managed"] = surplus_device is not None
 
         await self._save_storage()
 

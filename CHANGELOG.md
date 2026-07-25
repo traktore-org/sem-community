@@ -59,6 +59,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per charger too. Coordinator-side consumers (session attribution, diagnostics, taper feed,
   the priority rows) go through one sanctioned accessor — which also fixes a kW-reporting
   charger showing ~0 W in the device-priority list. AST-linted so the raw shape can't return.
+- 🔌 **A surplus load is no longer switched back on at dusk by the peak manager** (#649,
+  coherence-audit) — peak shed/restore for surplus-mode loads ran in TWO engines with
+  separate state, anti-flicker and restore criteria. Shedding twice was survivable;
+  restoring was not: when the peak receded after sunset the load manager turned the switch
+  back ON — zero surplus, surplus intent OFF — and the reconciler then read it as
+  "the user turned this on" and left it running on grid all night. Surplus-mode loads the
+  surplus controller actually drives are now excluded from load-manager shedding, restore
+  and the "available reduction" figure, exactly as EV chargers already were (#461-peak).
+  The load manager keeps sole ownership of *Peak-only* devices, and a load nothing else
+  drives stays its responsibility — so no load ends up owned by nobody.
 - 🛡️ **"Critical" and "hands off" survive the next rebuild** (#650, coherence-audit) — both
   toggles were written ONLY into the load manager's device dict, which the registry sync
   REPLACES wholesale on every rebuild (a drag, the 35 s re-discovery, a config change, a
