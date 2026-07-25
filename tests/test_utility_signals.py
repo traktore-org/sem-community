@@ -1,4 +1,6 @@
 """Tests for UtilitySignalMonitor ripple control signal handling."""
+import logging
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -126,50 +128,46 @@ class TestUtilitySignalUpdate:
         assert monitor.signal_data.signal_count_today == 2
 
 
-class TestGetDevicesToBlock:
-    """Test get_devices_to_block() method."""
+class TestTheMonitorDoesNotClaimToShed654:
+    """#654 — this monitor observes and reports. It must not say otherwise.
 
-    def test_get_devices_to_block_active(self, mock_hass):
+    ``TestGetDevicesToBlock`` used to live here: four tests proving that
+    ``get_devices_to_block`` picked the right devices, passing green for
+    eight releases while nothing in production ever called it. They are the
+    reason the feature read as shipped. The method is gone (#664 re-adds it
+    with the wiring); what replaces its tests is an assertion that the
+    surface makes no claim it cannot keep.
+    """
+
+    def test_the_blocking_surface_is_gone(self, mock_hass):
+        monitor = UtilitySignalMonitor(mock_hass, signal_entity_id="binary_sensor.ripple")
+        assert not hasattr(monitor, "get_devices_to_block"), (
+            "blocking was re-added without wiring — see #664"
+        )
+        assert "utility_loads_blocked" not in monitor.signal_data.to_dict()
+        assert "utility_block_path" not in monitor.signal_data.to_dict()
+
+    def test_the_active_log_does_not_claim_shedding(self, mock_hass, caplog):
+        """The old WARNING read 'shedding non-critical loads'. A user with a
+        ripple-control contract would take that as confirmation of
+        compliance, and it was false."""
         mock_hass.states.get = MagicMock(return_value=_make_state("on"))
         monitor = UtilitySignalMonitor(mock_hass, signal_entity_id="binary_sensor.ripple")
-        blocked = monitor.get_devices_to_block(
-            all_device_ids=["dev1", "dev2", "dev3"],
-            solar_powered_device_ids=[],
-        )
-        assert blocked == ["dev1", "dev2", "dev3"]
+        with caplog.at_level(logging.WARNING):
+            monitor.update()
+        assert "ACTIVE" in caplog.text, "the signal must still be reported"
+        assert "shedding non-critical loads" not in caplog.text
+        assert "no loads are being shed" in caplog.text
 
-    def test_get_devices_to_block_solar_exempt(self, mock_hass):
-        mock_hass.states.get = MagicMock(return_value=_make_state("on"))
-        monitor = UtilitySignalMonitor(
-            mock_hass, signal_entity_id="binary_sensor.ripple", solar_loads_exempt=True
-        )
-        blocked = monitor.get_devices_to_block(
-            all_device_ids=["dev1", "dev2", "dev3"],
-            solar_powered_device_ids=["dev2"],
-        )
-        assert "dev1" in blocked
-        assert "dev2" not in blocked  # Solar-powered, exempt
-        assert "dev3" in blocked
+    def test_the_docstrings_do_not_claim_an_integration(self):
+        """The class docstring claimed SurplusController integration that
+        grep proved absent."""
+        import custom_components.solar_energy_management.utility_signals as mod
 
-    def test_get_devices_to_block_not_exempt(self, mock_hass):
-        mock_hass.states.get = MagicMock(return_value=_make_state("on"))
-        monitor = UtilitySignalMonitor(
-            mock_hass, signal_entity_id="binary_sensor.ripple", solar_loads_exempt=False
-        )
-        blocked = monitor.get_devices_to_block(
-            all_device_ids=["dev1", "dev2", "dev3"],
-            solar_powered_device_ids=["dev2"],
-        )
-        assert blocked == ["dev1", "dev2", "dev3"]  # All blocked
-
-    def test_get_devices_to_block_inactive(self, mock_hass):
-        mock_hass.states.get = MagicMock(return_value=_make_state("off"))
-        monitor = UtilitySignalMonitor(mock_hass, signal_entity_id="binary_sensor.ripple")
-        blocked = monitor.get_devices_to_block(
-            all_device_ids=["dev1", "dev2"],
-            solar_powered_device_ids=[],
-        )
-        assert blocked == []
+        assert "does not shed" in mod.__doc__.lower()
+        assert "integrates with surpluscontroller" not in (
+            UtilitySignalMonitor.__doc__ or ""
+        ).lower()
 
 
 class TestResetDailyCounters:
@@ -192,17 +190,10 @@ class TestSignalDataSerialization:
             signal_active=True,
             signal_source="ripple_control",
             signal_count_today=3,
-            loads_blocked=["dev1", "dev2"],
             solar_loads_exempt=True,
         )
         d = data.to_dict()
         assert d["utility_signal_active"] is True
         assert d["utility_signal_source"] == "ripple_control"
         assert d["utility_signal_count_today"] == 3
-        assert d["utility_loads_blocked"] == "dev1, dev2"
         assert d["utility_solar_exempt"] is True
-
-    def test_signal_data_to_dict_no_blocked(self):
-        data = UtilitySignalData()
-        d = data.to_dict()
-        assert d["utility_loads_blocked"] == "none"

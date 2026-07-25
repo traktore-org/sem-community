@@ -940,7 +940,9 @@ Each charger has independent:
 tariff/tariff_provider.py       — StaticTariffProvider, DynamicTariffProvider
 analytics/pv_performance.py     — PVPerformanceAnalyzer
 analytics/energy_assistant.py   — EnergyAssistant (tips, optimization score)
-utility_signals.py              — UtilitySignalMonitor (ripple control signal)
+utility_signals.py              — UtilitySignalMonitor (ripple control signal;
+                                  OBSERVE ONLY — reports the signal, sheds
+                                  nothing. Wiring tracked in #664)
 utils/time_manager.py           — TimeManager (sunrise, night mode/end, meter day)
 utils/helpers.py                — safe_float, safe_format, convert_power_to_watts
 ha_energy_reader.py             — Read HA Energy Dashboard config

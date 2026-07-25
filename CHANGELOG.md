@@ -145,6 +145,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surviving check to be demonstrated firing on a deliberately violating input built through
   the real derivation, and an AST guard stops clamped fields from drifting back into the
   non-negative list.
+- ⚡ **SEM no longer claims to obey your utility's ripple-control signal** (#654,
+  coherence-audit) — on a ripple-control (*Rundsteuerung*) signal, SEM logged a WARNING
+  reading "shedding non-critical loads", turned on a binary sensor, and then shed
+  precisely nothing: the function that chose which devices to block had no caller, and
+  the heat pump and every surplus load carried on. For a user with a contractual block
+  window, that log line was confirmation of compliance they did not have — the kind of
+  discrepancy that only surfaces on the utility's meter. Nothing acts on the signal
+  today, so SEM now says so: the log reports the signal and states plainly that no loads
+  are being shed, the module and class docstrings describe what the code does instead of
+  a SurplusController integration that grep proves absent, and the dead selection code is
+  gone along with a diagnostic field that could only ever read "nothing blocked" — which
+  reads as *the block ran and matched nothing* rather than *there is no block*. Building
+  the real thing is #664, which first has to settle a question SEM cannot infer: whether
+  a load running on your own PV is inside the block, which depends on your operator and
+  contract. The heat pump's SG-Ready `block()`/`unblock()` were deliberately **kept**
+  even though nothing calls them — they implement state 1 of the 4-state protocol SEM
+  advertises during setup, and deleting them would make that promise unkeepable.
+- 🍽️ **A finished dishwasher stops hogging the surplus for the rest of the day** (#653,
+  coherence-audit) — the appliance scheduler's lifecycle half was never wired up.
+  `update_schedules()` — the code that moves a run scheduled → running → completed and
+  releases the appliance — carried a docstring reading "called during coordinator update"
+  and had **zero** production callers. That is not a cosmetic status bug: a scheduled
+  appliance deliberately refuses to be switched off mid-cycle and claims its full rated
+  power while it believes it is running, and nothing ever told it the run had ended. So a
+  dishwasher that finished at 15:00 held 2 kW of the allocation against every
+  lower-priority load until the next restart, and neither LIFO shed nor peak shed could
+  take it back. The cycle now ticks the scheduler *before* allocating, so a run that ended
+  this cycle has released its claim by the time the surplus is shared out. Cancelling is
+  reachable for the first time via a new `cancel_appliance_schedule` service (previously a
+  mistyped deadline could only be undone by restarting HA), the #426 transition telemetry
+  is finally readable in the diagnostics download, and a timezone-aware template deadline
+  (`{{ today_at('18:00') }}`) is normalised at the service boundary — it would otherwise
+  have thrown on every cycle now that something actually runs the comparison. A new AST
+  ratchet fails CI on any new public method with no production call site, which is the
+  class this belongs to: designed, unit-tested, and unreachable. It found one more on its
+  first run (#663).
 - 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
   coherence-audit) — while a car is away SEM can't watch it being driven, so each day
   rollover advances the taper detector's virtual state of charge by the predicted daily

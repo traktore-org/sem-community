@@ -427,7 +427,15 @@ restore no-op), **#644** (duplicated-mechanism, dual anti-cycle clocks). Filed o
 - **#653** — spec-vs-reality: `ApplianceScheduler.update_schedules` has zero callers; a
   scheduled appliance force-starts then allocates phantom rated power forever.
 - **#654** — spec-vs-reality: ripple-control shedding is observe-only; the WARNING log
-  claims shedding that never happens.
+  claims shedding that never happens. **Closed by amputation**: the log, both docstrings,
+  `get_devices_to_block`, and the `block_path` / `loads_blocked` telemetry are gone; the
+  monitor now says only what it does, which is observe. Wiring is #664, where the open
+  question is whether a load running on own PV is covered by the block — contract- and
+  operator-dependent, not inferable. `HeatPumpController.block()`/`unblock()` were
+  **kept** despite being orphans: they implement SG-Ready state 1, which `config_flow.py`
+  advertises to the user as part of the "standard 4-state protocol", so deleting them
+  would make an advertised promise permanently unfulfillable. They sit in the orphan
+  baseline pointing at #664.
 - **#655** — spec-vs-reality (docs): SETUP_GUIDE's SG-Ready relay table still documents
   the pre-#523 mapping the code explicitly calls a bug.
 
@@ -437,9 +445,24 @@ open sibling) stays triple-fenced (migration v14 forces the toggle off, no UI pa
 MUST become code+test before any re-enable. The VPP export force_discharge is NOT an
 instance (per-battery max is the intended semantics, reporter-confirmed).
 
-Structural guard idea from the sweep (not yet built): an orphan-method lint — any public
-method in `coordinator/`/`devices/`/`features/` with zero call sites outside tests fails
-CI unless annotated `# ENTRY-POINT: <who calls it>`. It would have caught #651/#653/#654.
+**Structural guard — BUILT** (`tests/test_653_orphan_methods.py`, shipped with #653): a
+public method in `coordinator/`/`devices/`/`features/` with no production call site fails
+CI. It is a **ratchet**, not a clean-room rule — the orphans that existed when it was
+written are listed in `_BASELINE` with a reason, and the assertion is that the set must
+not GROW; a second test fails if a baseline entry gains a caller and is not removed, so
+the list cannot rot into noise. Detection is deliberately generous (attribute access
+*and* string literals across Python/JS/YAML, because SEM dispatches via
+`getattr(obj, "method", None)` in the charger adapters), which means it under-reports
+rather than blocking CI on reachable code.
+
+It found a real orphan on its first run — `set_ev_daily_energy_sensor`, filed as #663 and
+closed as a duplicate of #658, which the sweep had already found. That is the honest
+statement of what this guard is worth: it independently rediscovered a verified finding,
+and it could **not** see the part that makes #658 hard (the sunrise/midnight key mismatch
+that makes naive wiring corrupt data). It tells you an edge is missing, not whether the
+node at the far end is safe to connect.
+
+It would have caught #651/#653/#654.
 
 ### Second pass — the 8 findings the session-limit interrupted (verified 2026-07-25)
 
