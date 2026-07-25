@@ -110,6 +110,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   charge/discharge pairs as well. It warns once after five consecutive contradicting cycles
   and reports recovery, and it ignores meter bleed — an export sensor idling at 15 W under a
   3 kW import is noise, not a contradiction.
+- 🔍 **"Why is my car not charging?" is answerable again** (#657, coherence-audit) — the EV
+  charging-status sensor exposes `battery_too_low`, `battery_needs_priority` and
+  `solar_sufficient` attributes, and all three were permanently empty: the coordinator
+  decided them every cycle and the sensor formatted them, but the value was never written
+  onto the data the sensor reads. The one surface designed to explain a blocked charge
+  explained nothing, so the support thread went in circles. Eight attributes across four
+  sensors were wired to keys no code has ever published — the available-power sensor's
+  house-consumption, battery-allowance and excess-solar breakdown, and the load-management
+  card's device table (which the load manager had been computing all along) are back too.
+  The top-5 peak history was removed instead: no producer for it was ever written, and a
+  real one means querying long-term statistics — a feature, not a bug fix. The suite had
+  been *masking* this, because the test fixtures injected exactly these keys; a new contract
+  test now reads the actual producers and fails CI for any attribute wired to a phantom key.
 - 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
   coherence-audit) — while a car is away SEM can't watch it being driven, so each day
   rollover advances the taper detector's virtual state of charge by the predicted daily

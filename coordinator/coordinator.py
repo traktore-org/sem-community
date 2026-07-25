@@ -459,6 +459,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
         self._cycle_vehicle_soc: Optional[float] = None
+        # (#657) The cycle's canonical EVBudget. ``_build_charging_context``
+        # sets it on every cycle before ``SEMData`` is built, so this default
+        # is never read on a healthy path — it exists so the ordering contract
+        # is explicit rather than "it will exist by then", and so a future
+        # early-return between the two can't turn into an AttributeError.
+        self._cycle_ev_budget = None
         # Night charge plan for the (primary) charger this cycle (#246/#247)
         self._cycle_night_plan = None
         # Per-charger night plans for surfacing + the "unreachable deadline" notify
@@ -3009,6 +3015,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # third lower number from calculate_available_power.
                 available_power=charging_context.available_power,
                 calculated_current=charging_context.calculated_current,
+                # (#657) The EV "why am I blocked" flags + budget internals.
+                # Computed in _build_charging_context every cycle; the hop
+                # onto coordinator.data was missing, so the attributes on
+                # sem_ev_charging_status / sem_available_power were null.
+                battery_too_low=charging_context.battery_too_low,
+                battery_needs_priority=charging_context.battery_needs_priority,
+                solar_sufficient=charging_context.solar_sufficient,
+                excess_solar=charging_context.excess_solar,
+                # The SOC-graduated battery allowance the canonical EVBudget
+                # actually granted (0 below the buffer SOC or below the solar
+                # gate) — i.e. how much the car may take from the battery now.
+                safe_discharge_power=float(
+                    getattr(self._cycle_ev_budget, "battery_assist", 0.0) or 0.0
+                ),
                 surplus_control=surplus_data,
                 forecast=forecast_data,
                 tariff=tariff_data,
@@ -5729,6 +5749,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         strategy = _primary_decision.intent.value
         reason = _primary_decision.reason
 
+        # (#657) "Is there meaningful sun?" — read off the SAME view decide()
+        # just consumed, so the flag the user sees can't disagree with the
+        # gate that produced the decision (``decide.py`` calls the sun gone
+        # below ``min_solar_w``). Deliberately not re-derived from config:
+        # the min_solar_w fallback chain lives in build_view and duplicating
+        # it is how the 200-vs-1000 divergence happened.
+        #
+        # Scope note: this is the SOLAR gate only, not "everything is fine".
+        # A car can be blocked with solar_sufficient=True — by tariff (see the
+        # already-published ``ev_tariff_waiting`` / ``ev_next_cheap_window``
+        # attributes) or by the battery buffer (``battery_too_low`` /
+        # ``battery_needs_priority``). The three flags plus the tariff pair are
+        # the answer set; none of them alone is.
+        solar_sufficient = (
+            float(_primary_view.fleet.solar_w)
+            >= float(_primary_view.fleet.min_solar_w)
+        )
+
         # Map ChargerIntent → EVBudgetStrategy for the canonical budget
         # consumer (sem_available_power, sem_calculated_current).
         if _primary_decision.intent is _CI.DISABLE:
@@ -5823,6 +5861,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             battery_soc=power.battery_soc,
             battery_too_low=battery_too_low,
             battery_needs_priority=battery_needs_priority,
+            solar_sufficient=solar_sufficient,
             calculated_current=ev_current,
             excess_solar=excess_solar,
             available_power=ev_budget,
@@ -7059,6 +7098,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Get consecutive peak values (15min rolling average)
                 lm_data.consecutive_peak_15min = lm_info.get("consecutive_peak_15min", current_import_kw)
                 lm_data.monthly_consecutive_peak = lm_info.get("monthly_consecutive_peak", 0.0)
+
+                # (#657) The device table itself. Every other field of
+                # lm_info was copied across; this one wasn't, so the load
+                # management card's device list read a key nothing wrote.
+                # ``or {}`` on purpose: a LoadManager with no managed devices
+                # may report ``{"devices": None}``, and the card iterates this.
+                lm_data.devices = lm_info.get("devices") or {}
 
                 # Tariff info
                 lm_data.controlled_tariff_status = lm_info.get("controlled_tariff_status", "unknown")

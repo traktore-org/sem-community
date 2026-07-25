@@ -1837,8 +1837,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "schedule_ev_hours",
         "energy_dashboard",
         "schedule",
-        "top_5_peaks",
-        "top_5_peaks_formatted",
+        # (#657) ``top_5_peaks`` / ``top_5_peaks_formatted`` were dropped —
+        # they were built from a coordinator key no producer ever wrote, so
+        # neither attribute ever reached a state to be recorded.
         # #580 — VPP event history (UI/accounting helper, no charting value)
         "events",
         "last_event",
@@ -2242,7 +2243,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         elif self.entity_description.key == "available_power":
             attrs.update({
                 "solar_production": self.coordinator.data.get("solar_production_total"),
-                "home_consumption": self.coordinator.data.get("home_consumption_total"),
+                # (#657) ``home_consumption_total`` was never published — the
+                # coordinator's key is ``home_consumption_power``.
+                "home_consumption": self.coordinator.data.get("home_consumption_power"),
                 "safe_discharge_power": self.coordinator.data.get("safe_discharge_power"),
                 "excess_solar": self.coordinator.data.get("excess_solar"),
             })
@@ -2325,6 +2328,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # Add device list details for dashboard table
             devices = self.coordinator.data.get("load_management_devices", {})
             if devices:
+                # Attribute is ``devices``; the coordinator key it comes from
+                # is ``load_management_devices`` (both are in
+                # ``_unrecorded_attributes`` under the ATTRIBUTE name).
                 attrs["devices"] = devices
                 # Also add a formatted list for easy display
                 device_list = []
@@ -2369,15 +2375,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             except Exception:
                 pass
         elif self.entity_description.key == "monthly_consecutive_peak":
-            # Add historical top 5 peaks from HA statistics
-            peak_history = self.coordinator.data.get("peak_history_top5", [])
-            if peak_history:
-                attrs["top_5_peaks"] = peak_history
-                # Also format as readable strings
-                attrs["top_5_peaks_formatted"] = [
-                    f"{p['value']} kW ({p['date']} {p['time']})"
-                    for p in peak_history
-                ]
+            # (#657) The ``top_5_peaks`` / ``top_5_peaks_formatted`` pair used
+            # to be built here from ``peak_history_top5`` — a key no producer
+            # was ever written for, in this repo's whole history. The
+            # formatter ran on an empty list every cycle and the attributes
+            # never appeared. Removed rather than invented: a real top-5 peak
+            # history means querying recorder statistics, which is a feature,
+            # not a bug fix. ``monthly_consecutive_peak`` (the state) and the
+            # three attributes below are unaffected.
             attrs["target_peak_limit"] = self.coordinator.data.get("target_peak_limit", 5.0)
             attrs["peak_trend"] = self.coordinator.data.get("peak_trend", "Unknown")
             attrs["tariff_type"] = self.coordinator.data.get("tariff_type", "unknown")
