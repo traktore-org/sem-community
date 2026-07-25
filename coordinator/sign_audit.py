@@ -1,4 +1,8 @@
-"""Counter-correlation audit shared logic (#589).
+"""Sensor-contradiction audits (#589, #661).
+
+Two observe-only detectors live here. Both are five-vote, warn-once, and both
+return the same ``"warn"``/``"clear"``/``None`` sentinel so the adapter methods
+on ``SensorReader`` own the logging and the SEM-specific entity names.
 
 ``CounterCorrelationAudit`` is the single extracted implementation of the
 five-vote, warn-once pattern shared across:
@@ -132,5 +136,123 @@ class CounterCorrelationAudit:
             if not self.warned:
                 self.warned = True
                 return "warn"
+
+        return None
+
+
+class SplitSensorExclusivityAudit:
+    """Five-vote, warn-once detector for a split sensor pair that contradicts
+    itself — both sides reporting real power at the same instant (#661).
+
+    Why this can't live downstream of the netting
+    ---------------------------------------------
+    Every split pair in SEM is immediately netted into ONE signed scalar
+    (``grid_power = export − import``, ``battery_power = charge − discharge``),
+    and ``PowerReadings.calculate_derived`` re-derives the two directional
+    fields from that scalar with ``max(0, ±x)``. That derivation makes "both
+    sides above zero" *unrepresentable*: whichever side is smaller becomes
+    exactly 0.0 W.
+
+    ``health_check`` nonetheless carried a mutual-exclusivity check on those
+    derived fields. It could never fire in production — the netting had already
+    destroyed the evidence — and its unit test passed only because it built a
+    ``PowerReadings`` by hand, bypassing ``calculate_derived``. A check that
+    cannot fail is worse than no check: it reads as coverage. (Bug class 8.)
+
+    So the audit has to run at the netting site, on the RAW pair, which is the
+    only moment both readings still exist. A real 3 kW import together with a
+    real 3 kW export is not a physical state for one meter — it means swapped
+    roles, a stale sensor, or two sensors pointed at different meters — and the
+    netted 0 W it produces looks exactly like a balanced house.
+
+    Vote semantics
+    --------------
+    * both sides genuinely active → contradiction, vote
+    * exactly one side active     → agreement, reset votes (and clear)
+    * neither side active         → sit out; a quiet house is not evidence
+      either way, and must not reset an accumulating vote count.
+
+    "Genuinely active" is deliberately stricter than ``> threshold_w`` on BOTH
+    sides. Real meters bleed: an export sensor idling at 15 W while the house
+    imports 3 kW is standby noise, not a meter claiming to do both at once. So
+    the smaller side must additionally be worth ``min_ratio`` of the larger.
+    Without that floor this warns at the *first* install with a slightly noisy
+    idle sensor — which is how #461 ended up with 69 spurious "violations" in
+    one dump. A detector nobody trusts is not a detector.
+
+    Repeat episodes
+    ---------------
+    The WARNING fires once per lifetime, as everywhere else in this module —
+    a genuinely miswired pair contradicts continuously and does not need the
+    log every cycle. But a pair that contradicts, recovers, and contradicts
+    again must not go permanently dark, or this becomes the very thing #661 is
+    about: a detector that reads as coverage while saying nothing. Each later
+    episode therefore returns ``"reflag"``, which the adapter logs at INFO with
+    the episode number. That is bounded by construction — an episode costs five
+    contradicting cycles plus an exclusive one.
+    """
+
+    def __init__(
+        self, threshold: int = 5, threshold_w: float = 10.0,
+        min_ratio: float = 0.05,
+    ) -> None:
+        self._threshold = threshold
+        self._threshold_w = threshold_w
+        self._min_ratio = min_ratio
+
+        self.votes: int = 0
+        self.flagged: bool = False
+        self.warned: bool = False
+        self.episodes: int = 0
+        # Kept for the diagnostic line the adapter logs / the trace surfaces.
+        self.last_a: float = 0.0
+        self.last_b: float = 0.0
+
+    def update(self, val_a: float, val_b: float) -> Optional[str]:
+        """Run one cycle against the raw, pre-netting pair.
+
+        Parameters
+        ----------
+        val_a, val_b:
+            The two always-positive sides of the pair, in watts
+            (import/export, or charge/discharge).
+
+        Returns
+        -------
+        ``"warn"`` when the flag was raised for the first time, ``"reflag"``
+        when a later episode raised it again, ``"clear"`` when it was just
+        cleared, ``None`` otherwise.
+        """
+        self.last_a = val_a
+        self.last_b = val_b
+
+        a_active = val_a > self._threshold_w
+        b_active = val_b > self._threshold_w
+
+        both = a_active and b_active
+        if both:
+            # The smaller side must be a real share of the larger, not bleed.
+            larger = max(val_a, val_b)
+            both = min(val_a, val_b) >= larger * self._min_ratio
+
+        if both:
+            self.votes += 1
+        elif a_active or b_active:
+            self.votes = 0
+            if self.flagged:
+                self.flagged = False
+                return "clear"
+            return None
+        else:
+            # Both quiet — no information. Deliberately NOT a reset.
+            return None
+
+        if self.votes >= self._threshold and not self.flagged:
+            self.flagged = True
+            self.episodes += 1
+            if not self.warned:
+                self.warned = True
+                return "warn"
+            return "reflag"
 
         return None

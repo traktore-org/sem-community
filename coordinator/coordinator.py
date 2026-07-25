@@ -1564,6 +1564,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             data={"agree": (not batt_fault), "batteries": batt_bids},
             pre_debounced=True,
         )
+        # #661 — split-pair exclusivity. Judged at the netting site (the last
+        # moment both raw sides exist); this only reports what the audits
+        # already decided. ``health_check`` used to "check" this on the NETTED
+        # readings, where max(0, ±x) had already made a contradiction
+        # unrepresentable — so the fault had no way to reach the trace at all.
+        pair_audits = dict(getattr(reader, "_split_pair_audits", None) or {})
+        pair_faults = sorted(pid for pid, a in pair_audits.items() if a.flagged)
+        trace.cross_checks["split_pair_exclusivity"] = CrossCheck(
+            signal="split_pair_exclusivity",
+            status=LayerStatus.OK,
+            detail="split import/export and charge/discharge pairs are exclusive",
+            data={"agree": (not pair_faults), "pairs": pair_faults},
+            pre_debounced=True,
+        )
 
     def _trace_ev(self, trace, sem_data, power) -> None:
         st = trace.subsystem("ev")

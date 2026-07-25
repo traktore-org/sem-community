@@ -84,6 +84,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **no** unit at all is now read as watts everywhere, including the charging-history
   bootstrap, which used to assume kilowatts and so disagreed with the live reader by 1000×
   about the very same sensor.
+- ⚖️ **A miswired import/export sensor pair is now caught instead of averaged away** (#661,
+  coherence-audit) — installs without a single signed grid sensor (Growatt and friends) give
+  SEM two always-positive sensors, and SEM nets them into one number. If those two are
+  swapped, stale, or pointed at different meters they can both report power at the same
+  instant — 3.0 kW in *and* 2.8 kW out — which nets to 200 W and looks exactly like a quiet,
+  balanced house. Every downstream number then absorbs the error silently, because home
+  consumption is derived from the balance. There *was* a mutual-exclusivity check for this,
+  but it sat downstream of the netting, where "both directions at once" is not merely absent
+  but unrepresentable: the two directional figures are re-derived from the single netted
+  value, so the smaller side is always exactly zero (ledger class 8 — its test only passed by
+  hand-building the impossible state). The check now runs at the netting site, on the raw
+  pair, while both readings still exist, and covers the declared two-sensor battery
+  charge/discharge pairs as well. It warns once after five consecutive contradicting cycles
+  and reports recovery, and it ignores meter bleed — an export sensor idling at 15 W under a
+  3 kW import is noise, not a contradiction.
 - 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
   coherence-audit) — while a car is away SEM can't watch it being driven, so each day
   rollover advances the taper detector's virtual state of charge by the predicted daily

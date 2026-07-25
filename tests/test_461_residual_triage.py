@@ -60,16 +60,22 @@ class TestBalanceCheckDuringHomeHold:
         assert any(v.startswith("Energy balance:") for v in violations)
 
     def test_hold_does_not_mask_other_violations(self):
-        # The hold flag must scope to the balance identity only —
-        # a negative reading or import+export both active are
-        # independent integrity violations.
+        # The hold flag must scope to the balance identity only — a negative
+        # reading is an independent integrity violation and still fires.
+        #
+        # #661: this used to also assert an "import and export both active"
+        # violation, built by hand-setting both fields on a MagicMock. No
+        # production path can produce that state — ``calculate_derived``
+        # re-derives both from one signed scalar — so the assertion proved only
+        # that the test could bypass the derivation. Split-pair exclusivity is
+        # now audited at the netting site instead; see
+        # ``tests/test_661_split_pair_exclusivity.py``.
         hc = HealthCheck()
         violations = hc.run_all_checks(
             _power(solar_power=-500.0, grid_import_power=200.0),
             home_hold_active=True,
         )
         assert any("solar_power is negative" in v for v in violations)
-        assert any("both active" in v for v in violations)
         assert not any(v.startswith("Energy balance:") for v in violations)
 
     def test_balanced_cycle_unaffected(self):

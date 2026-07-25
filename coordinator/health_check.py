@@ -79,18 +79,20 @@ class HealthCheck:
             if val < -1:  # Allow -1 W for rounding
                 violations.append(f"{name} is negative: {val:.1f}W")
 
-        # Mutual exclusivity
-        if power.grid_import_power > 10 and power.grid_export_power > 10:
-            violations.append(
-                f"Grid import ({power.grid_import_power:.0f}W) and export"
-                f" ({power.grid_export_power:.0f}W) both active"
-            )
-
-        if power.battery_charge_power > 10 and power.battery_discharge_power > 10:
-            violations.append(
-                f"Battery charge ({power.battery_charge_power:.0f}W) and discharge"
-                f" ({power.battery_discharge_power:.0f}W) both active"
-            )
+        # Mutual exclusivity is NOT checked here — it cannot be (#661).
+        #
+        # ``grid_import_power`` / ``grid_export_power`` (and the battery pair)
+        # are not inputs: ``PowerReadings.calculate_derived`` re-derives all
+        # four from ONE signed scalar with ``max(0, ±x)``. "Both active" is
+        # therefore unrepresentable by construction on every production path,
+        # and the check that used to live here could not fail — it read as
+        # coverage while detecting nothing. Its unit test passed only because
+        # it hand-built a ``PowerReadings``, bypassing the derivation.
+        #
+        # The real check runs where the evidence still exists: at each split
+        # netting site in ``SensorReader``, via ``SplitSensorExclusivityAudit``
+        # (``_audit_split_pair``), surfaced as the ``split_pair_exclusivity``
+        # cross-check in the perception trace.
 
         return violations
 
