@@ -84,6 +84,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **no** unit at all is now read as watts everywhere, including the charging-history
   bootstrap, which used to assume kilowatts and so disagreed with the live reader by 1000×
   about the very same sensor.
+- 🧯 **Removing SEM no longer leaves your heating latched on** (#656, coherence-audit) — if you
+  removed the integration while it was holding a hot-water boost temperature, an SG-Ready
+  relay or a surplus-controlled switch, teardown dropped its references to those devices
+  without ever turning them off. The device stayed commanded on indefinitely, with nothing
+  left in the system that could expire it — and reinstalling didn't help either: the
+  reconciler sees a load that is on but not SEM-owned, calls it externally controlled and
+  deliberately refuses to fight it. The purpose-built cleanup method for this existed and
+  had never been called from anywhere. It is now, with the distinctions that matter: a
+  **removal** or a **disable** releases every load SEM was holding, while a **reload** (any
+  options change) and an **HA restart** deliberately do not — bouncing a running heat pump
+  every time you change a setting is not a safety improvement.
 - ⚖️ **A miswired import/export sensor pair is now caught instead of averaged away** (#661,
   coherence-audit) — installs without a single signed grid sensor (Growatt and friends) give
   SEM two always-positive sensors, and SEM nets them into one number. If those two are
