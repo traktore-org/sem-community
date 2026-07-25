@@ -62,6 +62,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Internally mirrors the loads' three-source design (auto-derived, no new UI) — and the home
   battery is never used for the EV.
 
+### 🐛 Fixes (#646 — stable-line field report, by @michelangelomonako-cmyk)
+
+- 📊 **Valid state_class on 4 sensors** (#646) — `roi_annual_savings` (monetary) moves to
+  `total`; `forecast_corrected_today`, `battery_scheduler_deficit_kwh` and
+  `forecast_surplus_kwh` (found by the new whole-table sweep guard) drop the `energy`
+  device_class — predictions/deficits fluctuate, so the pairing was invalid and broke
+  long-term statistics. Warnings on every restart are gone.
+- 💰 **ROI payback no longer claims "0.0 years" on fresh installs** (#646) — with too
+  little savings history to estimate, the sensor now reads *unknown* instead of the 0.0
+  default that looked like "already paid off" next to ~0 € annual savings.
+- 📈 **Chart date adapter loads even when another card ships Chart.js** (#646) — the
+  loader short-circuited when `window.Chart` already existed (defined by some other
+  card's internal bundle) and never loaded the date-fns adapter, so time-scale presets
+  (energy "Last 7 Days") rendered empty with "a complete date adapter" errors. The
+  adapter now loads in that path too.
+- 🎨 **System diagram readable on light themes** (#646) — sunrise/sunset, forecast-kWh
+  and inverter-status labels were hardcoded pale dark-theme fills inside the SVG (out of
+  card_mod's reach); they now switch to darker, higher-opacity variants via the theme
+  helper when the active theme is light.
+
 ### 🐛 Fixes (from live testing, 24.07)
 
 - 🌙 **"Finish overnight from: Battery" now only runs at night** (#633) — the Tier-2

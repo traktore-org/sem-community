@@ -25,7 +25,7 @@
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import {
     semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_ACCENT,
-    semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey,
+    semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey, semTheme,
 } from '../base/sem-shared.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -546,6 +546,20 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const sunRiseStr = sunAttrs?.next_rising ? semFormatTime(sunAttrs.next_rising, _tz) : '';
         const sunSetStr  = sunAttrs?.next_setting ? semFormatTime(sunAttrs.next_setting, _tz) : '';
 
+        // (#646) The pale label fills were designed for the dark glass theme
+        // and are illegible on light HA themes (the fills live inside this
+        // card's shadow-DOM SVG, so card_mod can't reach them). Switch the
+        // four low-contrast labels to darker, higher-opacity variants when
+        // the active theme is light.
+        const _dark = semTheme(this).isDark;
+        const sunLabelFill   = _dark ? '#FCD170' : '#a06a00';
+        const sunLabelOp     = _dark ? 0.45 : 0.8;
+        const fcstLabelFill  = _dark ? '#ff9800' : '#b35c00';
+        const fcstLabelOp    = _dark ? 0.4 : 0.8;
+        const invLabelFill   = _dark ? '#96CAEE' : '#3d6e94';
+        const invTempOp      = _dark ? 0.6 : 0.85;
+        const invStatusOp    = _dark ? 0.35 : 0.8;
+
         // Battery SOC geometry (mirrors _illustrationBattery scale)
         const battS = L.B.r / 50;
         const battBH = 64 * battS;
@@ -756,10 +770,10 @@ class SEMSystemDiagramCard extends SEMLitBase {
                               stroke-width="2" stroke-dasharray="4,8"/>
                         <text x="${L.sunRisingX}" y="${L.sunLabelY}"
                               text-anchor="middle" font-family="${F}" font-size="${fs}"
-                              fill="#FCD170" opacity="0.45">${sunRiseStr}</text>
+                              fill="${sunLabelFill}" opacity="${sunLabelOp}">${sunRiseStr}</text>
                         <text x="${L.sunSettingX}" y="${L.sunLabelY}"
                               text-anchor="middle" font-family="${F}" font-size="${fs}"
-                              fill="#FCD170" opacity="0.45">${sunSetStr}</text>
+                              fill="${sunLabelFill}" opacity="${sunLabelOp}">${sunSetStr}</text>
 
                         <g filter="url(#glowSun)" style="opacity:${sunOpacity}"
                            transform="${this._sunTransform ?? ''}">
@@ -846,7 +860,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <text x="${L.S.cx}" y="${L.S.labelY + fv * 1.1 + (fs + 3) * 2}" class="clickable"
                           @click=${() => this._showMoreInfo('forecast_today_kwh')}
                           text-anchor="middle" font-family="${F}" font-size="${fs}"
-                          fill="#ff9800" opacity="0.4" font-weight="500">${solarFcst}</text>
+                          fill="${fcstLabelFill}" opacity="${fcstLabelOp}" font-weight="500">${solarFcst}</text>
 
                     <!-- Inverter -->
                     <g filter="url(#glowInverter)">
@@ -854,10 +868,10 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     </g>
                     <text x="${L.I.cx}" y="${L.I.cy + L.I.r + 14}"
                           text-anchor="middle" font-family="${F}" font-size="${fs}"
-                          fill="#96CAEE" opacity="0.6" font-weight="600">${invTempStr}</text>
+                          fill="${invLabelFill}" opacity="${invTempOp}" font-weight="600">${invTempStr}</text>
                     <text x="${L.I.cx}" y="${L.I.cy + L.I.r + 14 + fs + 2}"
                           text-anchor="middle" font-family="${F}" font-size="${fs - 1}"
-                          fill="#96CAEE" opacity="0.35">${invStatusStr}</text>
+                          fill="${invLabelFill}" opacity="${invStatusOp}">${invStatusStr}</text>
 
                     <!-- Battery (omitted entirely when show_battery: false,
                          #614 — the ghost-node class's battery sibling).
