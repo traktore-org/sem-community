@@ -311,6 +311,205 @@ class TestDependencyGraphGuards:
 
 
 @pytest.mark.unit
+class TestDependencyCycleGuard662:
+    """#662 — the gaps the retired ``validate_dependencies`` left open.
+
+    That orphan walked ``dep_list[0]`` only, so a cycle running through a
+    device's SECOND dependency was reported clean. It also only ever saw
+    live devices, while dependency edges persist in two separate stores.
+    Nothing called it, so neither limitation ever surfaced. The write-path
+    guard has to cover both.
+    """
+
+    def _reg(self):
+        reg = _make_registry()
+        reg._dependency_overrides = {}
+        reg._service_registrations = {}
+        reg._surplus_controller = MagicMock(get_device=MagicMock(return_value=None))
+        reg._save_storage = AsyncMock()
+        return reg
+
+    async def test_cycle_through_the_second_dependency_is_caught(self):
+        """The exact shape the ``[0]``-walk was blind to.
+
+        ``b`` requires ``[x, a]``: the loop runs through the SECOND entry.
+        Walking only ``deps[0]`` follows the dead-end ``x``-chain, finds
+        nothing and reports clean.
+
+        Honest note: this one is a PIN, not a fix-proof. It passes against
+        the pre-#662 registry too — only the deleted
+        ``validate_dependencies`` had the ``[0]``-walk; the registry guard
+        always extended its stack with every parent. It is here so the
+        multi-parent property is asserted somewhere that actually runs,
+        which is precisely what the orphan never was.
+        """
+        reg = self._reg()
+        await reg.async_set_dependency("a", "b")
+        await reg.async_set_dependency("b", ["x", "a"])
+        assert "a" not in (reg._dependency_overrides.get("b") or []), (
+            "cycle through deps[1] was not detected — the walk is only "
+            "following the first dependency again"
+        )
+        assert reg._dependency_overrides.get("b") == ["x"]
+
+    async def test_cycle_spanning_both_stores_is_caught(self):
+        """A→B written by the service, B→A written by the UI.
+
+        The guard used to walk ``_dependency_overrides`` only, so the
+        service-registered half of the graph was invisible and this pair
+        deadlocked silently.
+        """
+        reg = self._reg()
+        reg._service_registrations = {"a": {"depends_on": ["b"]}}
+        await reg.async_set_dependency("b", "a")
+        assert "b" not in reg._dependency_overrides, (
+            "cycle invisible because half the graph lives in "
+            "_service_registrations"
+        )
+
+    async def test_register_surplus_device_rejects_a_cyclic_dep(self):
+        """``register_surplus_device`` is the only MULTI-dependency write
+        path SEM has, and it had no guard at all."""
+        reg = self._reg()
+        reg._save_storage = AsyncMock()
+        reg._apply_goals = MagicMock()
+        reg._drop_discovered_duplicates = MagicMock()
+        await reg.async_set_dependency("pump", "heater")
+        await reg.async_register_service_device({
+            "device_id": "heater", "entity_id": "switch.heater",
+            "name": "Heater", "depends_on": ["pool", "pump"],
+        })
+        stored = reg._service_registrations["heater"]["depends_on"]
+        assert "pump" not in stored, (
+            "register_surplus_device created heater→pump on top of "
+            "pump→heater — both loads deadlock under must_active"
+        )
+        assert stored == ["pool"], "the non-cyclic dependency must survive"
+
+    async def test_self_dependency_via_service_is_rejected(self):
+        reg = self._reg()
+        reg._save_storage = AsyncMock()
+        reg._apply_goals = MagicMock()
+        reg._drop_discovered_duplicates = MagicMock()
+        await reg.async_register_service_device({
+            "device_id": "pump", "entity_id": "switch.pump",
+            "name": "Pump", "depends_on": ["pump"],
+        })
+        assert reg._service_registrations["pump"]["depends_on"] == []
+
+    def test_stored_cycle_is_broken_on_load(self):
+        """A store written before the guard existed (≤ beta.2), or edited
+        by hand, can hold a loop. Both devices then wait on each other
+        forever. Break it at load instead of deadlocking."""
+        reg = self._reg()
+        reg._dependency_overrides = {"a": ["b"], "b": ["a"], "c": ["a"]}
+        reg._sanitize_dependency_cycles()
+        graph = reg._dependency_overrides
+        assert graph.get("a") == ["b"]
+        assert "a" not in (graph.get("b") or []), "the loop survived load"
+        assert graph.get("c") == ["a"], "an innocent edge was dropped"
+
+    def test_sanitize_leaves_an_acyclic_graph_alone(self):
+        reg = self._reg()
+        reg._dependency_overrides = {"a": ["b"], "b": ["c"], "d": ["b", "c"]}
+        assert reg._sanitize_dependency_cycles() is False
+        assert reg._dependency_overrides == {
+            "a": ["b"], "b": ["c"], "d": ["b", "c"],
+        }
+
+    def test_sanitize_also_cleans_service_registration_cycles(self):
+        """A cycle written entirely through ``register_surplus_device``
+        (ruflo review MEDIUM).
+
+        Cleaning only ``_dependency_overrides`` left this shape deadlocked:
+        both devices are re-registered from ``_service_registrations`` after
+        load and each waits on the other.
+        """
+        reg = self._reg()
+        reg._service_registrations = {
+            "a": {"depends_on": ["b"]},
+            "b": {"depends_on": ["a"]},
+        }
+        assert reg._sanitize_dependency_cycles() is True
+        deps = {k: v["depends_on"] for k, v in reg._service_registrations.items()}
+        assert deps["a"] == ["b"]
+        assert deps["b"] == [], "the service-side loop survived load"
+
+    def test_sanitize_breaks_a_cycle_that_spans_the_two_stores(self):
+        """The shape neither single-store test covers (ruflo review INFO).
+
+        ``a→b`` lives in ``_dependency_overrides`` (user set it in the config
+        card) and ``b→a`` in ``_service_registrations`` (an integration
+        registered it). Neither store holds a loop on its own, so a
+        per-store sanitizer sees nothing wrong — but the runtime walk spans
+        both, so ``a`` and ``b`` still deadlock waiting on each other.
+
+        Also pins the documented tiebreak: override edges replay first, so
+        the hand-set link survives and the service one is dropped.
+        """
+        reg = self._reg()
+        reg._dependency_overrides = {"a": ["b"]}
+        reg._service_registrations = {"b": {"depends_on": ["a"]}}
+
+        assert reg._sanitize_dependency_cycles() is True, (
+            "a cycle spanning the two stores went unnoticed"
+        )
+        assert reg._dependency_overrides == {"a": ["b"]}, (
+            "the user's hand-set link should win the tiebreak"
+        )
+        assert reg._service_registrations["b"]["depends_on"] == [], (
+            "the service-side half of the cross-store loop survived"
+        )
+        # And the graph is genuinely acyclic afterwards: re-running is a no-op.
+        assert reg._sanitize_dependency_cycles() is False
+
+    async def test_stale_service_cycle_does_not_falsely_reject_re_registration(self):
+        """The knock-on the ruflo review flagged HIGH.
+
+        With a stale ``a↔b`` pair left in ``_service_registrations``,
+        re-registering the innocent direction (``a`` requires ``b``, which
+        is what the user meant) walks up through the surviving reverse edge
+        and gets rejected — the user's own valid config becomes unwritable.
+        Sanitizing both stores at load is what prevents it.
+        """
+        reg = self._reg()
+        reg._save_storage = AsyncMock()
+        reg._apply_goals = MagicMock()
+        reg._drop_discovered_duplicates = MagicMock()
+        reg._service_registrations = {
+            "a": {"depends_on": ["b"]},
+            "b": {"depends_on": ["a"]},
+        }
+        reg._sanitize_dependency_cycles()
+        await reg.async_register_service_device({
+            "device_id": "a", "entity_id": "switch.a",
+            "name": "A", "depends_on": ["b"],
+        })
+        assert reg._service_registrations["a"]["depends_on"] == ["b"], (
+            "a valid re-registration was rejected by a stale cycle the "
+            "load-time sanitize should have cleared"
+        )
+
+    def test_effective_parents_survives_a_hand_edited_bare_string(self):
+        """``list("pump")`` would push ``p, u, m, p`` onto the walk as if
+        they were device ids (ruflo review MEDIUM). Skip non-lists."""
+        reg = self._reg()
+        reg._dependency_overrides = {"a": "pump"}
+        reg._service_registrations = {"a": {"depends_on": "pump"}}
+        assert reg._effective_parents("a") == []
+        assert reg._dependency_would_cycle("p", "a") is False
+
+    def test_effective_parents_dedupes_the_mirrored_edge(self):
+        """``async_set_dependency`` mirrors an edge into both stores for a
+        service-registered device, so the same parent legitimately appears
+        twice. Return it once."""
+        reg = self._reg()
+        reg._dependency_overrides = {"a": ["b"]}
+        reg._service_registrations = {"a": {"depends_on": ["b"]}}
+        assert reg._effective_parents("a") == ["b"]
+
+
+@pytest.mark.unit
 class TestDependencyMigration:
     """Every install upgrading from before this branch has a Store with no
     `dependencies` key — loading must default cleanly, never KeyError."""

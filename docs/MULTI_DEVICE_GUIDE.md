@@ -409,4 +409,4 @@ data:
 5. **Dashboard**: blocked devices show "⏳ Waiting for: {device}" and are visually indented
 6. **Drag protection**: children can't be dragged — they stay locked under their parent. Only parents can be reordered
 7. **Persistence**: dependency settings survive HA restarts
-8. **Circular detection**: SEM validates that dependencies don't form circular chains (A→B→A)
+8. **Circular protection**: a link that would form a loop (A→B→A, or a longer chain) is **rejected when you set it** — from the dashboard, from `set_device_property` and from `register_surplus_device` alike. SEM keeps your existing link and logs a warning naming the rejected one; there is no separate validation report to run. A loop already sitting in storage from an older version is broken automatically on the next restart, again with a warning naming the dropped link.

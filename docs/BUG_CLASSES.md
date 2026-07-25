@@ -536,9 +536,19 @@ the sanctioned `_charger_power_w` accessor). Filed open:
   evidence is destroyed upstream of the check. Move it into `sensor_reader` on the raw
   sides, reusing the `CounterCorrelationAudit` 5-vote pattern.
 - **#662** — class 8 inside an orphan: `validate_dependencies` walks only `dep_list[0]`,
-  AND has zero production callers. Real surviving gap: `async_set_dependency` has no cycle
-  guard, so a UI-only A↔B cycle deadlocks both loads undetected. Fix = DFS **and** wire it
-  into the write paths; fixing only the walk hardens dead code.
+  AND has zero production callers. **CLOSED — but not as filed.** The premise that
+  `async_set_dependency` had no cycle guard was stale (one landed in beta.3); the audit
+  read the orphan and inferred the live path from it. What the fix actually found:
+  (1) the live guard walked only ONE of the two stores dependency edges persist in, so a
+  loop spanning `_dependency_overrides` and `_service_registrations` was invisible;
+  (2) `register_surplus_device` — the only MULTI-dependency write path — had no guard at
+  all; (3) a stale loop in storage *poisons the guard*, falsely rejecting the innocent
+  direction on re-registration. Closure was prevention at every write path plus a
+  load-time sanitize of both stores; the orphan was deleted, not repaired.
+  **Lesson: an orphan is not evidence about the live path.** Reading it as a spec for
+  what production does gave a correct verdict on the dead code and a wrong one on
+  everything around it — the same trap as #651, where a dead allocator's tests and
+  refactoring history read as proof it mattered.
 
 Cross-cutting lesson from this pass: **class 8 is under-counted in the ledger.** Five of
 the eight are checks that cannot fail, and each one was previously read as evidence of

@@ -276,6 +276,20 @@ class UnifiedDeviceRegistry:
         except Exception as e:
             _LOGGER.warning("Could not load device mappings: %s", e)
 
+        # (#662) Both dependency stores are loaded now — break any cycle a
+        # pre-guard or hand-edited store carried in, before a device can
+        # deadlock on it. Persist the repair so the warning doesn't fire again
+        # on every future restart. Deliberately outside the load try/except:
+        # a failure here is a SAVE failure and must not be reported as
+        # "could not load device mappings". The repair itself already holds
+        # in memory either way, so a failed save only costs us a repeat on the
+        # next restart.
+        try:
+            if self._sanitize_dependency_cycles():
+                await self._save_storage()
+        except Exception as e:  # pragma: no cover - defensive
+            _LOGGER.warning("Could not persist dependency-cycle repair: %s", e)
+
         await self.async_refresh_devices()
 
         # (#559 Phase 0) Re-register persisted service devices — pre-fix a
@@ -393,6 +407,25 @@ class UnifiedDeviceRegistry:
         Returns a summary dict for the service response.
         """
         device_id = spec["device_id"]
+        # (#662) This is the ONLY multi-dependency write path SEM has (the UI
+        # select is single-value), and it was the one with no cycle guard.
+        # Validate against the current graph BEFORE storing, so the edges
+        # being checked aren't already in it.
+        # Self-dependency is caught by the same call — ``_dependency_would_cycle``
+        # returns True for device_id == parent (this path has no separate
+        # self-filter the way ``async_set_dependency`` does).
+        requested_deps = [str(d) for d in (spec.get("depends_on") or [])]
+        safe_deps = []
+        for dep in requested_deps:
+            if self._dependency_would_cycle(device_id, dep):
+                _LOGGER.warning(
+                    "register_surplus_device %s: dropped circular dependency "
+                    "on %s (would deadlock both devices); registering without "
+                    "it", device_id, dep,
+                )
+                continue
+            safe_deps.append(dep)
+        spec = {**spec, "depends_on": safe_deps}
         stored = {
             "entity_id": spec.get("entity_id", ""),
             "name": spec.get("name") or device_id,
@@ -1451,13 +1484,45 @@ class UnifiedDeviceRegistry:
         await self._save_storage()
         _LOGGER.info("Device dependency set: %s requires %s", device_id, deps or "nothing")
 
+    def _effective_parents(self, node: str) -> list:
+        """Every device ``node`` currently requires, across BOTH stores (#662).
+
+        A "requires" edge can be written from two places that persist
+        separately: the UI / ``set_device_property`` path lands in
+        ``_dependency_overrides``, the ``register_surplus_device`` service
+        lands in ``_service_registrations[id]["depends_on"]``. Walking only
+        the first made the cycle guard blind to any loop whose other half
+        came from a service registration — service sets a→b, UI sets b→a,
+        the walk from ``a`` found no parents and the cycle was created.
+
+        Both branches gate on ``isinstance`` before iterating: a hand-edited
+        store can hold a bare string, and ``list("pump")`` would push the
+        characters ``p, u, m, p`` onto the walk as if they were device ids.
+        The result is de-duplicated — ``async_set_dependency`` deliberately
+        mirrors an edge into both stores for service-registered devices, so
+        the same parent legitimately appears twice.
+        """
+        parents: list = []
+        for store in (
+            self._dependency_overrides.get(node),
+            (self._service_registrations.get(node) or {}).get("depends_on"),
+        ):
+            if isinstance(store, (list, tuple)):
+                parents.extend(str(d) for d in store)
+        seen: set = set()
+        return [p for p in parents if not (p in seen or seen.add(p))]
+
     def _dependency_would_cycle(self, device_id: str, new_parent: str) -> bool:
         """Would making ``device_id`` require ``new_parent`` close a cycle?
 
         True iff ``device_id`` is already reachable UP the existing "requires"
         graph from ``new_parent`` (so the new edge would loop back). Walks ALL
-        parents (a device can require several) with a visited-set, so it's
-        bounded even if the stored graph already contains a stray cycle."""
+        parents (a device can require several — the ``[0]``-only walk of the
+        retired ``validate_dependencies`` missed every cycle that ran through
+        a second dependency, #662) with a visited-set, so it's bounded even if
+        the stored graph already contains a stray cycle."""
+        if device_id == new_parent:
+            return True
         stack = [new_parent]
         seen = set()
         while stack:
@@ -1467,8 +1532,95 @@ class UnifiedDeviceRegistry:
             if node in seen:
                 continue
             seen.add(node)
-            stack.extend(self._dependency_overrides.get(node, []))
+            stack.extend(self._effective_parents(node))
         return False
+
+    def _sanitize_dependency_cycles(self) -> bool:
+        """Break any cycle already present in restored storage (#662).
+
+        The write-path guard rejects new cyclic edges, but it can only
+        protect writes it sees: a store written before the guard existed
+        (≤ v1.7.5-beta.2), or hand-edited, can hold a loop. Both devices in
+        a cycle then wait on each other forever under the default
+        ``dependency_mode='must_active'`` and never start.
+
+        Cleans **both** stores in one pass. Doing only
+        ``_dependency_overrides`` would leave two failure modes (ruflo
+        review): a cycle written entirely through ``register_surplus_device``
+        survives untouched and still deadlocks, and — worse — it then
+        poisons the guard, because re-registering the *innocent* direction
+        of that stale pair walks up through the surviving reverse edge and
+        gets falsely rejected.
+
+        Rebuilds edge by edge in deterministic order against a graph that
+        starts empty, keeping only edges that don't close a loop, so an
+        already-cyclic store can't make the walk itself wrong. Returns True
+        if anything was dropped, so the caller can persist the repair —
+        otherwise the warning would fire on every restart forever.
+
+        **Tiebreak, when a cycle spans the two stores:** every edge is a
+        candidate for dropping, and which one survives is decided purely by
+        replay order — ``_dependency_overrides`` edges are replayed first, so
+        the UI-set link wins and the service-registered one is dropped. That
+        is the deliberate choice: the override store is what the user set by
+        hand in the config card, while ``depends_on`` comes from an
+        integration's ``register_surplus_device`` call, which will be replayed
+        (and re-validated by the write-path guard) on its next registration.
+        Within a single store the tiebreak is ``sorted()`` by device id.
+        """
+        orig_ovr = self._dependency_overrides
+        orig_svc_deps = {
+            did: reg.get("depends_on")
+            for did, reg in (self._service_registrations or {}).items()
+            if isinstance(reg, dict) and reg.get("depends_on")
+        }
+        cleaned_ovr: Dict[str, list] = {}
+        cleaned_svc: Dict[str, list] = {}
+        dropped: list = []
+
+        def _edges(store, tag):
+            for node in sorted(store):
+                raw = store.get(node)
+                if not isinstance(raw, (list, tuple)):
+                    continue
+                for parent in raw:
+                    yield node, str(parent), tag
+
+        try:
+            # Swap in the empty graph so each candidate edge is validated
+            # against only the edges already admitted. Safe without a lock:
+            # this is sync, on HA's single-threaded event loop, with no
+            # await between the swap and the restore below.
+            self._dependency_overrides = cleaned_ovr
+            for did in orig_svc_deps:
+                self._service_registrations[did]["depends_on"] = []
+            for node, parent, tag in [
+                *_edges(orig_ovr, "ovr"),
+                *_edges(orig_svc_deps, "svc"),
+            ]:
+                if self._dependency_would_cycle(node, parent):
+                    dropped.append(f"{node}→{parent}")
+                    continue
+                target = cleaned_ovr if tag == "ovr" else cleaned_svc
+                target.setdefault(node, []).append(parent)
+                if tag == "svc":
+                    self._service_registrations[node]["depends_on"] = list(
+                        target[node]
+                    )
+        except Exception:  # pragma: no cover — never block startup
+            self._dependency_overrides = orig_ovr
+            for did, deps in orig_svc_deps.items():
+                self._service_registrations[did]["depends_on"] = deps
+            return False
+        if dropped:
+            _LOGGER.warning(
+                "Dropped %d circular dependency link(s) found in stored "
+                "device config: %s. Those devices would each have waited on "
+                "the other and never started; re-add the link in the "
+                "direction you meant.",
+                len(dropped), ", ".join(dropped),
+            )
+        return bool(dropped)
 
     async def _save_storage(self) -> None:
         """Persist manual mappings, priority overrides, and control modes."""

@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.25] — 24.07.2026
 
+### 🐛 Fixes
+
+- 🔗 **A circular "Requires" link between two loads can no longer be created — from any
+  path** (#662, coherence-audit) — the drag-and-drop UI already refused to close a loop,
+  but `register_surplus_device` (SEM's *only* multi-dependency write path) had no guard at
+  all, and the guard the UI used walked just one of the two stores dependency links live
+  in: service-registers-A→B then UI-sets-B→A slipped through. Under the default
+  `must_active` mode both loads then wait on each other and neither ever starts. The walk
+  now covers both stores and every write path, and a cycle already sitting in storage
+  (written before the guard existed, or hand-edited) is broken at load with a warning
+  naming the dropped link. **Removed:** `SurplusController.validate_dependencies` — a
+  cycle *report* with no production caller whose walk hard-coded `deps[0]`, so a loop
+  through a device's second dependency was reported clean. Nothing consumed the report,
+  so neither limitation ever surfaced. Prevention at the write path replaces detection
+  nobody read.
+
 ### 🧹 Dead code removed (#651 — the second EV surplus allocator)
 
 - 🗑️ **SEM had two EV-surplus allocators; only one of them ran** (#651, coherence-audit) —
