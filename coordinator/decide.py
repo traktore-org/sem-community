@@ -544,13 +544,21 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
     # required current and put it on the view. If the deadline
     # is active, use it as the floor.
     if view.deadline_amps > 0:
-        amps = min(max_amps, max(min_amps, view.deadline_amps))
+        # (#630 precedence fix) The deadline gives the REQUIRED floor; the
+        # peak-managed top-up rate (#630) may charge FASTER than required —
+        # finish early, free the window. Take whichever is higher, clamped.
+        # Pre-fix the deadline branch shadowed top_up_amps entirely, so the
+        # peak-managed rate never engaged at night (deadline_amps is always
+        # >0 once a night window resolves).
+        governed = max(view.deadline_amps, view.top_up_amps)
+        amps = min(max_amps, max(min_amps, governed))
+        tag = " (peak-managed)" if view.top_up_amps > view.deadline_amps else ""
         return ChargerDecision(
             charger_id=cid, mode=mode_name,
             intent=ChargerIntent.CHARGE_AT_AMPS,
             commanded_amps=amps,
             reason=(
-                f"{mode_name} night: deadline floor {amps}A, "
+                f"{mode_name} night: deadline floor {amps}A{tag}, "
                 f"remaining {view.target_kwh:.1f} kWh"
             ),
         )

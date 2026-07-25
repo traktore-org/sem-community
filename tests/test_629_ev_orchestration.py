@@ -333,3 +333,68 @@ class TestPerChargerNightGate634:
     def test_global_floor_fallback(self):
         c = self._c(config={"daily_ev_target": 2})
         assert c._mode_allows_night_charging({"charge_mode": "solar_only"}) is True
+
+
+class TestNightRatePrecedence630:
+    """(#630 hold-back) The peak-managed rate must not be shadowed by the
+    always-present window deadline: amps = max(deadline_required, top_up)."""
+
+    def _decide(self, deadline_amps, top_up_amps):
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerView, ChargerPower, ChargerEnergy, FleetContext)
+        view = ChargerView(
+            power=ChargerPower(charger_id="c1", power_w=0.0, connected=True),
+            energy=ChargerEnergy(charger_id="c1"),
+            mode="min_plus_solar",
+            config={"ev_min_current": 10, "ev_phases": 3, "ev_max_current": 32},
+            fleet=FleetContext(solar_w=0.0, home_w=500.0, battery_soc=60.0,
+                               is_night=True),
+            target_kwh=6.0,
+            deadline_amps=deadline_amps, top_up_amps=top_up_amps,
+        )
+        return decide(view)
+
+    def test_top_up_wins_over_lazy_deadline(self):
+        d = self._decide(deadline_amps=10, top_up_amps=16)
+        assert d.commanded_amps == 16
+        assert "(peak-managed)" in d.reason
+
+    def test_tight_deadline_wins_over_top_up(self):
+        d = self._decide(deadline_amps=24, top_up_amps=16)
+        assert d.commanded_amps == 24
+        assert "(peak-managed)" not in d.reason
+
+    def test_clamped_to_charger_max(self):
+        d = self._decide(deadline_amps=10, top_up_amps=64)
+        assert d.commanded_amps == 32
+
+
+class TestLoadDrawReducesNightRate630:
+    """(#630 review hold-back) Integration: a RUNNING cheap-hours load's live
+    draw reduces the peak-managed rate the planner computes."""
+
+    def test_grid_funded_draw_shrinks_top_up_amps(self):
+        from custom_components.solar_energy_management.coordinator.ev_control import (
+            EVControlMixin)
+        host = MagicMock()
+        host.config = {"ev_max_current": 32, "ev_phases": 3}
+        host._night_committed_w = 0.0
+        # bind the real method
+        import types
+        host._compute_night_plan = types.MethodType(
+            EVControlMixin._compute_night_plan, host)
+        host._tariff_optimized_for = MagicMock(return_value=False)
+        host._charger_target_time = MagicMock(return_value=None)
+        host.time_manager.get_night_end_time = MagicMock(return_value="06:00")
+        host.time_manager.get_night_window_hours = MagicMock(return_value=8.0)
+        host._get_peak_limit_w = MagicMock(return_value=12000)
+        host._expected_night_home_w = MagicMock(return_value=600)
+        host._ev_device = None
+        cfg = {"ev_min_current": 6, "ev_phases": 3}
+
+        host._surplus_controller.grid_funded_draw_w = MagicMock(return_value=0.0)
+        free = host._compute_night_plan(cfg, 6.0)
+        host._surplus_controller.grid_funded_draw_w = MagicMock(return_value=3000.0)
+        loaded = host._compute_night_plan(cfg, 6.0)
+        assert loaded.top_up_amps < free.top_up_amps   # the load reserved its draw

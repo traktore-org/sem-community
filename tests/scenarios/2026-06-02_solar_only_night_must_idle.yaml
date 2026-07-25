@@ -6,7 +6,8 @@ coverage:
     issue: "#346"
 
 description: |
-  Pins the #346 contract: ``charge_mode = solar_only`` MUST NOT
+  Pins the #346 contract (floor-scoped by #634: with NO 'At least'
+  floor set): ``charge_mode = solar_only`` MUST NOT
   charge the EV at night, regardless of what the legacy strategy
   layer used to do.
 
@@ -36,14 +37,14 @@ config:
   ev_max_current: 16
   ev_phases: 3
   ev_voltage: 230
-  daily_ev_target: 7.0
+  daily_ev_target: 0  # (#634) floor 0 = the classic never-grids-at-night contract
   # Scenario-controlled time flag (new in v1.7 prep). The legacy
   # bug fired only in night mode — set the flag here.
   is_night: true
   ev_chargers:
     - id: "ev_charger"
       charge_mode: "solar_only"
-      daily_ev_target: 7.0
+      daily_ev_target: 0  # (#634) floor 0 = the classic never-grids-at-night contract
 
 cycle_seconds: 30
 

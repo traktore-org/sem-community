@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-charger taper/SOC state persists — the battery graphic keeps its last-known value
   across restarts and between sessions. Display-only: charging decisions never use the
   estimate (they read the real vehicle SOC exclusively).
+- ⚡ **The peak-managed night rate now actually engages** (#630 follow-up) — the
+  always-present window deadline shadowed the new rate entirely (it computes first and
+  clamps tiny requirements up to Min, so \`top_up_amps\` was never consulted). The night
+  amps are now \`max(deadline-required, peak-managed)\`, so a lazy deadline no longer
+  pins the session at the floor; a tight deadline still forces the required rate.
 - ☀️🌙 **The "At least" floor is now the overnight guarantee in every mode — Solar only
   included** (#634, Guido's design) — the charge mode is the *daytime* axis; if the day's
   solar charging delivered less than the "At least" floor, the DIFFERENCE tops up overnight
