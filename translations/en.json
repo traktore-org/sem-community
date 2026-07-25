@@ -1144,6 +1144,9 @@
     "invalid_device_property": {
       "message": "Invalid device property: “{property}”."
     },
+    "unknown_appliance_schedule": {
+      "message": "No appliance schedule found for {device_id}. Check the device ID you used with the schedule_appliance service."
+    },
     "invalid_deadline_format": {
       "message": "Invalid deadline format: “{deadline}”. Use ISO 8601 format, for example 2026-05-27T07:00:00."
     }

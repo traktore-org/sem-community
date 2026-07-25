@@ -121,6 +121,9 @@ class PowerReadings:
     # ``docs/MULTI_CHARGER.md`` for the full invariant.
     ev_power: "FleetEvPower" = field(default_factory=lambda: FleetEvPower(0.0))
     home_consumption_power: float = 0.0
+    # (#660) Watts the ``max(0, …)`` clamp removed from the home-consumption
+    # residual this cycle. Set by ``calculate_derived``; see there.
+    home_residual_clamped_w: float = 0.0
 
     # Per-charger EV power (v1.6.9). Populated by ``sensor_reader`` for
     # multi-charger setups (``len(ev_chargers) > 1``); each key is a
@@ -225,7 +228,15 @@ class PowerReadings:
         # Home consumption from energy balance
         energy_in = self.solar_power + self.grid_import_power + self.battery_discharge_power
         energy_out = self.ev_power + self.grid_export_power + self.battery_charge_power
-        self.home_consumption_power = max(0, energy_in - energy_out)
+        residual = energy_in - energy_out
+        self.home_consumption_power = max(0, residual)
+        # (#660) How much that clamp removed. THIS is the honest signal:
+        # once clamped, ``home_consumption_power`` closes the balance by
+        # definition, so every downstream "is the balance OK?" check reads
+        # its own output. A negative residual means the inputs genuinely
+        # don't add up — a stale sensor, or a sign the autodetect got wrong.
+        # Zero on a healthy system; sustained non-zero IS the bug.
+        self.home_residual_clamped_w = max(0.0, -residual)
 
     # ─── arch/multi-inverter-battery-primary @property views ───
     #

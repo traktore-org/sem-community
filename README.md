@@ -537,7 +537,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - All three use deduplication (fire once per event, reset automatically)
 
 ### Heat Pump SG-Ready (#112)
-- **SG-Ready 4-state control** — BLOCKED (00), NORMAL (01), BOOST (10), FORCE_ON (11) via two relay entities
+- **SG-Ready 4-state control** — BLOCKED (1:0), NORMAL (0:0), BOOST (0:1), FORCE_ON (1:1) via two relay entities. (This line originally documented a plain 2-bit count, 00/01/10/11, which is not the SG-Ready standard — corrected in #523 in the code and in #655 here.)
 - **Surplus-driven** — BOOST mode activates on solar surplus, FORCE_ON on high surplus (configurable threshold)
 - **Temperature boost** — optionally raises climate entity setpoint during surplus periods
 - **Config flow** — new Heat Pump step in options flow (relay1, relay2, climate, power sensor, priority)

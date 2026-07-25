@@ -427,6 +427,13 @@ async def async_get_config_entry_diagnostics(
         },
         "battery_control": battery_info,
         "surplus": surplus_info,
+        # (#653) Appliance schedules — the run state machine and the #426
+        # transition telemetry. ``None`` on the vast majority of installs,
+        # which never call ``schedule_appliance``. This is the READER for
+        # ``diag_appliance_schedules``: publishing the summary into
+        # ``coordinator.data`` with nothing consuming it would repeat the
+        # exact defect this issue fixes.
+        "appliance_schedules": data.get("diag_appliance_schedules"),
         "load_management": load_info,
         "energy_dashboard": ed_info,
         "battery_sign": battery_sign_info,

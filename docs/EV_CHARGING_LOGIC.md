@@ -220,7 +220,11 @@ For Nibe units without Modbus, or any heat pump whose only SG-Ready interface is
 2. In HA: confirm both switches appear under Developer Tools → States and toggle correctly.
 3. In SEM: open Configuration tab → Heat pump section → set `heat_pump_relay1_entity` and `heat_pump_relay2_entity` to those two switches.
 
-SEM commands the SG-Ready four states (BLOCKED / NORMAL / BOOST / FORCE_ON) by toggling the two switches as a 2-bit binary code, exactly as a hardware utility-signal box would.
+SEM commands the SG-Ready four states by driving the two switches to the contact
+pairs the standard defines, exactly as a hardware utility-signal box would — see
+[the relay table in SETUP_GUIDE.md](SETUP_GUIDE.md#what-is-sg-ready). It is **not**
+a plain 2-bit count: BLOCKED is `1:0`, NORMAL is `0:0`. If your contacts are wired
+normally-closed, flip *Invert SG-Ready* rather than rewiring.
 
 ### Path B — Software SG-Ready via Modbus / vendor integration
 

@@ -3058,9 +3058,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._health_check.run_all_checks(
                 power,
                 flows=power_flows,
-                autarky=performance.autarky_rate,
-                self_consumption=performance.self_consumption_rate,
                 costs=costs,
+                # (#660) the autarky / self-consumption range check is gone —
+                # their producer clamps them into range, so it could never
+                # fire. What the calculator's clamps HAD to remove is passed
+                # instead, and a sustained correction is the violation.
+                clamp_engagement=getattr(
+                    self._energy_calculator, "clamp_engagement", {},
+                ),
                 home_hold_active=getattr(self, "_home_hold_active", False),
             )
 
@@ -3872,6 +3877,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             btc = build_battery_tier_context(
                 self.config, getattr(power, "battery_soc", None), true_surplus_w,
             )
+            # (#653) Tick the appliance scheduler BEFORE allocation.
+            #
+            # ``schedule_appliance`` registers a ``ScheduleDevice`` with the
+            # surplus controller and the deadline force-start works, but the
+            # lifecycle half was never called from anywhere — so a dishwasher
+            # that finished at 15:00 stayed ``_started`` for the rest of the
+            # day. That is not merely a stale status: ``ScheduleDevice``
+            # refuses to deactivate while ``_started`` and ``adjust_power``
+            # keeps returning ``rated_power``, so the finished appliance held
+            # its full allocation against every lower-priority load until the
+            # next restart. Ticking here (before ``update``) means a run that
+            # completed this cycle has already released its claim by the time
+            # the controller allocates.
+            self._tick_appliance_scheduler()
             allocation = await self._surplus_controller.update(
                 true_surplus_w,
                 price_level=tariff_data.tariff_price_level,
@@ -4374,6 +4393,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             pv_data, assistant_data, utility_data, heat_pump_data,
             hot_water_data,
         )
+
+    def _tick_appliance_scheduler(self) -> None:
+        """Advance appliance schedules one cycle (#653).
+
+        The scheduler is lazily created by the ``schedule_appliance``
+        service, so on the overwhelming majority of installs this is a
+        single ``getattr`` returning ``None``. It is deliberately
+        fail-soft: a scheduler fault must not take the coordinator cycle
+        down with it, because the cycle is also what publishes every
+        sensor in the integration.
+        """
+        scheduler = getattr(self, "_appliance_scheduler", None)
+        if scheduler is None:
+            return
+        try:
+            scheduler.update_schedules()
+        except Exception as err:
+            # Covered by test_a_scheduler_fault_does_not_kill_the_cycle.
+            _LOGGER.warning("Appliance scheduler tick failed: %s", err)
 
     def _per_battery_config(self, idx: int, count: int = 1) -> dict:
         """Config for the battery at position ``idx`` with per-battery

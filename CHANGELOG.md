@@ -123,6 +123,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real one means querying long-term statistics — a feature, not a bug fix. The suite had
   been *masking* this, because the test fixtures injected exactly these keys; a new contract
   test now reads the actual producers and fails CI for any attribute wired to a phantom key.
+- 🩺 **"Health check: 0 violations" now means something was actually checked** (#660,
+  coherence-audit) — nearly every check verified a value against a constraint its own
+  producer had enforced three lines earlier: `0 ≤ autarky ≤ 100` on a number assigned
+  `max(0, min(100, …))`, "cost is not negative" on `max(0, …)` fields, "solar is not
+  over-allocated" and "no flow is negative" on the output of a greedy allocator that
+  hands out `min(available, needed)`. Those are theorems, not tests. They could not fail,
+  so the diagnostic reported a clean bill of health straight through the autarky bug that
+  sat pinned at 0 % while self-consumption read 98 % — an in-range wrong number, which is
+  the only kind a range check cannot see. The instrument is now **clamp engagement**: the
+  clamped output is clean by definition, so what gets recorded is how much each guard had
+  to *remove*. One engaged cycle is a transient; the same clamp engaged for five straight
+  minutes is a wrong formula being held inside the valid range, and that is the violation.
+  The negative house-consumption residual is reported the same way, and the remaining flow
+  check is the one that spans two independent producers (per-string sensors vs the inverter
+  total, over-count direction only — string discovery caps at four slots, so a legitimate
+  under-count must not fire). Two thresholds were retuned off real hardware while we were
+  in here: the −1 W floor called an inverter's overnight standby draw a fault every night,
+  and the savings floor is deliberately left *un*instrumented because a negative raw saving
+  is correct behaviour under a negative import price. A standing test now requires every
+  surviving check to be demonstrated firing on a deliberately violating input built through
+  the real derivation, and an AST guard stops clamped fields from drifting back into the
+  non-negative list.
+- 🔥 **The setup guide's SG-Ready table told installers to invert a correct heat-pump
+  install** (#655, coherence-audit) — the relay table in `SETUP_GUIDE.md` still showed the
+  mapping SEM used *before* #523 fixed it: a plain 2-bit count (Blocked `0:0`, Normal
+  `0:1`, Boost `1:0`) instead of the SG-Ready standard the pumps implement (Blocked `1:0`,
+  Normal `0:0`, Boost `0:1`). Following it does real damage, because the user is the
+  actuator: you wire the contacts, ask SEM for Boost, watch relay **2** close while the
+  guide promises relay 1, conclude your install is inverted, and switch on *Invert
+  SG-Ready* — which inverts a correct install and makes SEM drive Boost as `1:0`, which a
+  standard pump reads as EVU-block. Your heat pump then switches **off** on solar surplus.
+  That is #523 exactly — RienduPre's Nibe report — reintroduced by the documentation while
+  the code was right the whole time. The table is corrected and now names the trap that
+  caused it (the four states look like they should count in binary and don't), the
+  README's four-state line carried the same stale count and is fixed, and a new test
+  parses the shipped table and compares it row-by-row against `SG_READY_RELAY_MAP` so the
+  guide and the code can never disagree again.
+- ⚡ **SEM no longer claims to obey your utility's ripple-control signal** (#654,
+  coherence-audit) — on a ripple-control (*Rundsteuerung*) signal, SEM logged a WARNING
+  reading "shedding non-critical loads", turned on a binary sensor, and then shed
+  precisely nothing: the function that chose which devices to block had no caller, and
+  the heat pump and every surplus load carried on. For a user with a contractual block
+  window, that log line was confirmation of compliance they did not have — the kind of
+  discrepancy that only surfaces on the utility's meter. Nothing acts on the signal
+  today, so SEM now says so: the log reports the signal and states plainly that no loads
+  are being shed, the module and class docstrings describe what the code does instead of
+  a SurplusController integration that grep proves absent, and the dead selection code is
+  gone along with a diagnostic field that could only ever read "nothing blocked" — which
+  reads as *the block ran and matched nothing* rather than *there is no block*. Building
+  the real thing is #664, which first has to settle a question SEM cannot infer: whether
+  a load running on your own PV is inside the block, which depends on your operator and
+  contract. The heat pump's SG-Ready `block()`/`unblock()` were deliberately **kept**
+  even though nothing calls them — they implement state 1 of the 4-state protocol SEM
+  advertises during setup, and deleting them would make that promise unkeepable.
+- 🍽️ **A finished dishwasher stops hogging the surplus for the rest of the day** (#653,
+  coherence-audit) — the appliance scheduler's lifecycle half was never wired up.
+  `update_schedules()` — the code that moves a run scheduled → running → completed and
+  releases the appliance — carried a docstring reading "called during coordinator update"
+  and had **zero** production callers. That is not a cosmetic status bug: a scheduled
+  appliance deliberately refuses to be switched off mid-cycle and claims its full rated
+  power while it believes it is running, and nothing ever told it the run had ended. So a
+  dishwasher that finished at 15:00 held 2 kW of the allocation against every
+  lower-priority load until the next restart, and neither LIFO shed nor peak shed could
+  take it back. The cycle now ticks the scheduler *before* allocating, so a run that ended
+  this cycle has released its claim by the time the surplus is shared out. Cancelling is
+  reachable for the first time via a new `cancel_appliance_schedule` service (previously a
+  mistyped deadline could only be undone by restarting HA), the #426 transition telemetry
+  is finally readable in the diagnostics download, and a timezone-aware template deadline
+  (`{{ today_at('18:00') }}`) is normalised at the service boundary — it would otherwise
+  have thrown on every cycle now that something actually runs the comparison. A new AST
+  ratchet fails CI on any new public method with no production call site, which is the
+  class this belongs to: designed, unit-tested, and unreachable. It found one more on its
+  first run (#663).
 - 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
   coherence-audit) — while a car is away SEM can't watch it being driven, so each day
   rollover advances the taper detector's virtual state of charge by the predicted daily

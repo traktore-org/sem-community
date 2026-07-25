@@ -969,16 +969,29 @@ SG-Ready (Smart Grid Ready) is a German standard for heat pump control that
 uses two digital relay signals to communicate four operating states to the
 heat pump's internal controller:
 
-| SG State | Relays | What the heat pump does |
-|----------|--------|-------------------------|
-| 1 — Blocked | Off, Off | Reduces consumption on utility request |
-| 2 — Normal | Off, On | Standard operation (default) |
-| 3 — Boost | On, Off | Recommended to increase consumption — heat more now |
-| 4 — Force On | On, On | Maximum consumption — use available power |
+| SG State | Relay 1 | Relay 2 | What the heat pump does |
+|----------|---------|---------|-------------------------|
+| 1 — Blocked | **On** | Off | Reduces consumption on utility request (EVU block) |
+| 2 — Normal | Off | Off | Standard operation (default) |
+| 3 — Boost | Off | **On** | Recommended to increase consumption — heat more now |
+| 4 — Force On | **On** | **On** | Maximum consumption — use available power |
+
+> **This is not a 2-bit count.** State 1 is `1:0` and state 2 is `0:0` — the
+> standard puts the EVU-block on relay 1 alone, so the states do not run in
+> binary order. Until v1.7.5 this table showed a plain 00/01/10/11 count,
+> which is what the code did too until #523: SEM's Boost drove `1:0`, a
+> standard pump read that as EVU-block, and the pump switched **off** on
+> surplus instead of on. If you are verifying an install against an older
+> copy of this guide, use the table above.
 
 SEM sets State 3 (Boost) when moderate solar surplus is available, and
 State 4 (Force On) when surplus is high. The heat pump responds by heating
 more aggressively, using surplus solar instead of exporting it.
+
+**Contacts read inverted?** If SEM commands Boost and your pump blocks, the
+contacts are probably wired normally-closed rather than normally-open. Turn
+on *Invert SG-Ready* in the heat pump section — it flips both contacts —
+rather than rewiring or swapping the two relay entities.
 
 ### Relay configuration
 

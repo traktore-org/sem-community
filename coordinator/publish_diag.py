@@ -91,6 +91,15 @@ def build_diagnostics(coord) -> Dict[str, Any]:
     )
     out["diag_health_violations"] = coord._health_check.total_violations
 
+    # (#653) Appliance schedules. Absent on installs that never called the
+    # ``schedule_appliance`` service — which is why this is conditional
+    # rather than a permanent empty block. ``get_schedule_summary`` had no
+    # reader at all before this: the #426 transition telemetry it carries was
+    # being recorded into a dict nothing ever looked at.
+    _scheduler = getattr(coord, "_appliance_scheduler", None)
+    if _scheduler is not None:
+        out["diag_appliance_schedules"] = _scheduler.get_schedule_summary()
+
     # Energy Dashboard config summary — surfaces whether power AND energy are
     # configured per source, and where power came from (#250 self-diagnosis).
     out["diag_ed_config"] = coord._build_ed_config_summary()
