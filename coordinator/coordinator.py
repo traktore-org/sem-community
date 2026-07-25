@@ -1552,11 +1552,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             data={"agree": (not grid_fault)},
             pre_debounced=True,
         )
+        # #647 — name the offending unit. On a multi-battery install "battery
+        # sign disagrees" is not actionable; "b2 disagrees" points at one
+        # inverter's power sensor.
+        batt_bids = list(getattr(reader, "battery_sign_contradiction_bids", []) or [])
         trace.cross_checks["battery_sign"] = CrossCheck(
             signal="battery_sign",
             status=LayerStatus.OK,
             detail="battery sign vs charge/discharge counters",
-            data={"agree": (not batt_fault)},
+            data={"agree": (not batt_fault), "batteries": batt_bids},
             pre_debounced=True,
         )
 
