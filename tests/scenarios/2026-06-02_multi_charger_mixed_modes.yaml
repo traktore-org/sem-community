@@ -2,8 +2,8 @@ name: "2026-06-02 multi-charger priority cascade with mixed modes"
 
 coverage:
   - mode: multi_charger
-    regime: priority_cascade_with_mixed_modes
-    issue: "Mixed-mode multi-charger"
+    regime: fleet_cycle_with_multiple_chargers
+    issue: "Mixed-mode multi-charger"   # was priority_cascade_with_mixed_modes until #651
 
 description: |
   Three chargers, three different modes, three priorities. The
@@ -96,14 +96,23 @@ expect:
   # canonical strategy → NOW intent → EVBudgetStrategy.NOW.
   strategy_substring: "now"
 
-  multi_charger:
-    # The same conservation invariant from #284 Phase B.5 must hold:
-    # per-charger budgets sum to <= canonical net_w.
-    total_equals_canonical: true
-    tolerance_w: 1.0
-
-    # With 20 kW solar and 3 chargers needing up to 11 kW each, at
-    # least one must get a positive allocation — the failure mode this
-    # catches is "everything gets 0 because the cascade subtracted too
-    # eagerly".
-    at_least_one_charger_gets_positive: true
+  # The multi_charger block (total_equals_canonical +
+  # at_least_one_charger_gets_positive) was removed in #651. Read the
+  # description above and note what it promised: "the cascade must
+  # service priority 1 first, pass the remainder to priority 2...". The
+  # cascade it described — SurplusController.distribute_ev_budget — was
+  # never reached in a shipped install; its output went to
+  # pcc.budget_w, which nothing read. So this scenario has never
+  # verified the priority ordering it is named after.
+  #
+  # The live ordering mechanism is different in kind: the per-charger
+  # loop accumulates _solar_committed_w_per_cycle from each charger's
+  # ACTUAL decision, so charger N+1 sees a smaller surplus rather than a
+  # pre-divided slice. The harness does not drive that loop, so it
+  # cannot assert it here. Unit coverage:
+  # tests/test_step6_multi_charger_surplus_sharing.py (two- and
+  # three-charger ordering, including a mixed case where the first
+  # charger takes everything).
+  #
+  # What still runs: three chargers in three modes through a full cycle,
+  # landing on the right canonical strategy.

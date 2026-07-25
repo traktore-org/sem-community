@@ -2,8 +2,8 @@ name: "2026-05-29 multi-charger split — Phase B.5 distribution (#284)"
 
 coverage:
   - mode: multi_charger
-    regime: split_canonical_total_equals_sum
-    issue: "#284"
+    regime: fleet_cycle_with_multiple_chargers
+    issue: "#284"   # was split_canonical_total_equals_sum until #651
 description: |
   Phase B.5 scenario for #284 (@RienduPre, two-charger Wallbox Pulsar
   on Growatt). When SEM has 2+ chargers, the multi-charger distribution
@@ -120,14 +120,12 @@ expect:
   # Here we just confirm it lands somewhere sensible.
   strategy_substring: "battery_assist"
 
-  multi_charger:
-    # The defining Phase B.5 invariant: distribution sums to ≤ canonical
-    # net_w. No silent over-allocation, no leakage from the legacy
-    # formula.
-    total_equals_canonical: true
-    tolerance_w: 1.0
-
-    # When net_w is above the lowest charger threshold (4140 W), at
-    # least ONE charger should get a positive allocation. Catches the
-    # regression where the distributor silently zeros everyone out.
-    at_least_one_charger_gets_positive: true
+  # The multi_charger block here asserted total_equals_canonical +
+  # at_least_one_charger_gets_positive. Both were removed in #651: they
+  # checked the output of SurplusController.distribute_ev_budget, a
+  # split production wrote to pcc.budget_w and never read. What this
+  # scenario still proves is that a two-charger fleet runs a full cycle
+  # and lands on the right canonical strategy — real, but fleet-level.
+  # Per-charger behaviour is asserted in 2026-05-31_off_plus_solar_only
+  # and 2026-06-09_rienduPre_dual_wallbox, which use the live
+  # per_charger_effective_states / per_charger_flow_max surfaces.

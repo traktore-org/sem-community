@@ -354,7 +354,8 @@ def _registry_for_rows():
 @pytest.mark.unit
 class TestEvChargerRows:
     """The charger's CONTROL id is the single identity — the card row, the
-    drag store, distribute_ev_budget and the reclaim gate all use it. Sourced
+    drag store and the reclaim gate all use it (``distribute_ev_budget``
+    was in this list until #651 deleted it). Sourced
     from the coordinator's configured chargers (set_ev_chargers), NOT from the
     ED is_ev naming guess (which is suppressed to avoid a double-add)."""
 

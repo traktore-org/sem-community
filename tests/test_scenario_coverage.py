@@ -119,13 +119,29 @@ MUST_COVER: tuple[Cell, ...] = (
     Cell("always_max", "ignores_zone_and_tariff",
          "always_max contract — charge at max regardless of regime"),
 
-    # ─── multi-charger distribution ───────────────────────────
-    Cell("multi_charger", "split_canonical_total_equals_sum",
-         "#284 Phase B.5 — distribution must sum to canonical"),
+    # ─── multi-charger ────────────────────────────────────────
+    Cell("multi_charger", "fleet_cycle_with_multiple_chargers",
+         "2+ chargers run a full cycle and land on the right "
+         "canonical strategy"),
     Cell("multi_charger", "off_plus_solar_only_per_charger_state",
          "#315/#316 — per-charger effective state isolation"),
-    Cell("multi_charger", "priority_cascade_with_mixed_modes",
-         "Mixed-mode multi-charger — priority cascade isolation"),
+    Cell("multi_charger", "priority_cascade_mixed_modes",
+         "#462/#464 — per-charger flow isolation under mixed modes "
+         "(@RienduPre dual-Wallbox replay)"),
+
+    # Retired in #651: ``split_canonical_total_equals_sum`` and
+    # ``priority_cascade_with_mixed_modes``. Both named invariants of
+    # ``SurplusController.distribute_ev_budget``, whose output
+    # production wrote to ``pcc.budget_w`` and never read — so the
+    # cells claimed coverage of an allocator no install ran.
+    #
+    # State this plainly rather than quietly renaming: there is NO
+    # scenario-level coverage of the allocator that DOES run (the
+    # per-charger loop threading ``_solar_committed_w_per_cycle`` into
+    # each charger's view). The harness never drove it. Unit coverage
+    # is tests/test_step6_multi_charger_surplus_sharing.py. Teaching
+    # the harness the real loop is worth doing; it is a bigger job than
+    # deleting the dead one, and it is not done.
 )
 
 

@@ -194,7 +194,7 @@ class UnifiedDeviceRegistry:
         # (#576 P2.1) Configured EV chargers, handed over each cycle by the
         # coordinator (mirrors ``_has_battery``). Each is the authoritative
         # source for that charger's priority-list row, keyed by its CONTROL
-        # id — so the card row, the drag store, ``distribute_ev_budget`` and
+        # id — so the card row, the drag store, the per-charger loop and
         # the reclaim gate all share ONE identity. The ED ``is_ev`` naming
         # guess is suppressed when chargers are configured (no double-add).
         self._ev_charger_rows: List[Dict[str, Any]] = []

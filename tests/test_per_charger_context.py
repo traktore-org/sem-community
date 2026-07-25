@@ -58,8 +58,8 @@ class TestSwapInvariant:
     """#589 swap retirement — the context no longer touches the
     coordinator's primary attributes at all. The primary view is
     trivially preserved because nothing writes it; the per-charger view
-    lives on the context (``pcc.ev_dev``, ``pcc.budget_w``, …) and the
-    real coordinator's PROPERTIES dispatch on ``_current_pcc``
+    lives on the context (``pcc.ev_dev``, ``pcc.skipped_for_night``, …)
+    and the real coordinator's PROPERTIES dispatch on ``_current_pcc``
     (tested against a real SEMCoordinator below and in
     test_589_followup.py)."""
 
@@ -72,7 +72,7 @@ class TestSwapInvariant:
         coord._cycle_vehicle_soc = 42.0
 
         ev_dev = MagicMock(name="left_dev")
-        with PerChargerContext.for_charger(coord, "left", ev_dev, {"left": 4000.0}) as pcc:
+        with PerChargerContext.for_charger(coord, "left", ev_dev) as pcc:
             # The per-charger view is ON THE CONTEXT. NOTE (review): on
             # this MagicMock stub the coordinator PROPERTIES don't exist,
             # so we deliberately assert only what the stub can prove —
@@ -82,7 +82,6 @@ class TestSwapInvariant:
             # test_ev_device_property_dispatches_on_real_coordinator and
             # test_589_followup.py::TestSwapRetirementInterleaved.
             assert pcc.ev_dev is ev_dev
-            assert pcc.budget_w == 4000.0
             assert coord._current_pcc is pcc
 
         # Outside: pointer cleared, primary attrs never changed.
@@ -99,7 +98,7 @@ class TestSwapInvariant:
 
         ev_dev = MagicMock(name="left_dev")
         with pytest.raises(RuntimeError, match="boom"):
-            with PerChargerContext.for_charger(coord, "left", ev_dev, {"left": 4000.0}) as pcc:
+            with PerChargerContext.for_charger(coord, "left", ev_dev) as pcc:
                 assert coord._current_pcc is pcc
                 raise RuntimeError("boom")
 
@@ -200,7 +199,7 @@ class TestSkipFlag:
 
     def test_skip_default_false(self):
         coord = _make_coord()
-        pcc = PerChargerContext.for_charger(coord, "left", MagicMock(), {})
+        pcc = PerChargerContext.for_charger(coord, "left", MagicMock())
         assert pcc.skipped_for_night is False
 
 
@@ -211,7 +210,7 @@ class TestNestingGuard:
     def test_nested_entry_raises(self):
         coord = _make_coord()
         ev_dev = MagicMock()
-        with PerChargerContext.for_charger(coord, "left", ev_dev, {}) as pcc:
+        with PerChargerContext.for_charger(coord, "left", ev_dev) as pcc:
             with pytest.raises(RuntimeError, match="entered twice"):
                 pcc.__enter__()
 
@@ -225,14 +224,14 @@ class TestCfgLookup:
             {"id": "left", "name": "Wallbox Left"},
             {"id": "right", "name": "Wallbox Right"},
         ])
-        pcc = PerChargerContext.for_charger(coord, "right", MagicMock(), {})
+        pcc = PerChargerContext.for_charger(coord, "right", MagicMock())
         assert pcc.charger_cfg == {"id": "right", "name": "Wallbox Right"}
 
     def test_missing_id_yields_empty_cfg(self):
         """A charger present in ``_ev_devices`` but not in ``ev_chargers``
         (mid-migration state) gets an empty dict rather than crashing."""
         coord = _make_coord([{"id": "left"}])
-        pcc = PerChargerContext.for_charger(coord, "ghost", MagicMock(), {})
+        pcc = PerChargerContext.for_charger(coord, "ghost", MagicMock())
         assert pcc.charger_cfg == {}
 
     def test_prebuilt_lookup_used_when_passed(self):
@@ -241,7 +240,7 @@ class TestCfgLookup:
         coord = _make_coord([{"id": "left", "name": "from-config"}])
         prebuilt = {"left": {"id": "left", "name": "from-prebuilt"}}
         pcc = PerChargerContext.for_charger(
-            coord, "left", MagicMock(), {}, chargers_by_id=prebuilt,
+            coord, "left", MagicMock(), chargers_by_id=prebuilt,
         )
         assert pcc.charger_cfg["name"] == "from-prebuilt"
 
@@ -255,29 +254,35 @@ class TestCfgLookup:
             {"id": "right", "name": "rebuilt-right"},
         ])
         pcc = PerChargerContext.for_charger(
-            coord, "right", MagicMock(), {},  # no chargers_by_id arg
+            coord, "right", MagicMock(),  # no chargers_by_id arg
         )
         assert pcc.charger_cfg["name"] == "rebuilt-right"
 
 
-class TestBudget:
-    """The budget passed to ``for_charger`` lives on ``pcc.budget_w`` —
-    the single source that flows into ``build_charger_view``. (#589 swap
-    retirement: the coordinator scalar ``_current_charger_budget`` it
-    used to mirror was dead and is deleted; the context no longer pushes
-    anything onto the coordinator for the budget.)"""
+class TestThereIsNoPerChargerBudget651:
+    """#651 — the context carried a ``budget_w`` whose docstring called it
+    "the single source for this charger's budget", fed from a priority
+    cascade that ran every solar cycle. ``build_charger_view`` takes no
+    budget argument and never did; nothing outside the writer read the
+    field. Two allocators for one concept, one of them invisible.
 
-    def test_budget_on_context(self):
-        coord = _make_coord()
-        with PerChargerContext.for_charger(coord, "left", MagicMock(), {"left": 6800.0}) as pcc:
-            assert pcc.budget_w == 6800.0
+    The surviving one is ``fleet.solar_committed_w`` — see
+    ``test_step6_multi_charger_surplus_sharing.py``. Pin the absence so a
+    parallel budget cannot quietly reappear next to it."""
 
-    def test_budget_none_when_charger_not_in_dict(self):
-        """The night-state path doesn't populate ``ev_budget_per_charger`` —
-        in that case the per-charger budget is ``None`` rather than 0."""
+    def test_the_context_has_no_budget_field(self):
         coord = _make_coord()
-        with PerChargerContext.for_charger(coord, "left", MagicMock(), {}) as pcc:
-            assert pcc.budget_w is None
+        with PerChargerContext.for_charger(coord, "left", MagicMock()) as pcc:
+            assert not hasattr(pcc, "budget_w"), (
+                "PerChargerContext grew a budget_w again — if a per-charger "
+                "budget is genuinely needed, it must REPLACE "
+                "fleet.solar_committed_w, not run beside it (#651)"
+            )
+
+    def test_the_factory_takes_no_budget_map(self):
+        import inspect
+        params = inspect.signature(PerChargerContext.for_charger).parameters
+        assert "ev_budget_per_charger" not in params
 
 
 class TestEffectiveStateField:
@@ -294,7 +299,7 @@ class TestEffectiveStateField:
         ev_dev = MagicMock(name="left_dev")
         cfg = {"id": "left", "name": "Wallbox Left"}
         with PerChargerContext.for_charger(
-            coord, "left", ev_dev, {"left": 4000.0},
+            coord, "left", ev_dev,
             chargers_by_id={"left": cfg},
         ) as pcc:
             pcc.effective_state = "CHARGING_ACTIVE"
@@ -306,7 +311,7 @@ class TestEffectiveStateField:
         """Skipped chargers (e.g. ``solar_only`` during night) never
         set ``pcc.effective_state``; the dict stays empty for them."""
         coord = _make_coord()
-        with PerChargerContext.for_charger(coord, "left", MagicMock(), {}):
+        with PerChargerContext.for_charger(coord, "left", MagicMock()):
             pass  # no assignment to pcc.effective_state
         assert coord._effective_states_per_charger == {}
 
@@ -315,7 +320,7 @@ class TestEffectiveStateField:
         display name (matches legacy behaviour at coordinator.py:1245)."""
         coord = _make_coord()
         with PerChargerContext.for_charger(
-            coord, "left", MagicMock(), {"left": 4000.0},
+            coord, "left", MagicMock(),
             chargers_by_id={"left": {"id": "left"}},
         ) as pcc:
             pcc.effective_state = "CHARGING_ACTIVE"
@@ -328,12 +333,12 @@ class TestEffectiveStateField:
         own key into the dict; no cross-contamination."""
         coord = _make_coord()
         with PerChargerContext.for_charger(
-            coord, "left", MagicMock(), {"left": 4000.0},
+            coord, "left", MagicMock(),
             chargers_by_id={"left": {"id": "left", "name": "A"}},
         ) as pcc_left:
             pcc_left.effective_state = "CHARGING_ACTIVE"
         with PerChargerContext.for_charger(
-            coord, "right", MagicMock(), {"right": 0.0},
+            coord, "right", MagicMock(),
             chargers_by_id={"right": {"id": "right", "name": "B"}},
         ) as pcc_right:
             pcc_right.effective_state = "IDLE"
@@ -356,7 +361,7 @@ class TestThisPowerWField:
         ev_dev = MagicMock(name="left_dev")
         power = MagicMock()
         with PerChargerContext.for_charger(
-            coord, "left", ev_dev, {"left": 4000.0}, power=power,
+            coord, "left", ev_dev, power=power,
         ) as pcc:
             assert pcc.this_power_w == 4150.0
             # Helper called with this charger's ev_dev + the cycle power.
@@ -367,7 +372,7 @@ class TestThisPowerWField:
         the in-loop helper then falls back to direct compute."""
         coord = _make_coord()
         with PerChargerContext.for_charger(
-            coord, "left", MagicMock(), {"left": 4000.0},
+            coord, "left", MagicMock(),
         ) as pcc:
             assert pcc.this_power_w is None
         # Helper not called when power wasn't supplied.
@@ -381,7 +386,7 @@ class TestThisPowerWField:
         coord = _make_coord()
         coord._this_charger_power.side_effect = ValueError("bad state")
         with PerChargerContext.for_charger(
-            coord, "left", MagicMock(), {"left": 4000.0}, power=MagicMock(),
+            coord, "left", MagicMock(), power=MagicMock(),
         ) as pcc:
             assert pcc.this_power_w is None
         # Swap still restored.
@@ -397,7 +402,7 @@ class TestCurrentPccPointer:
         coord = _make_coord()
         assert coord._current_pcc is None
         with PerChargerContext.for_charger(
-            coord, "left", MagicMock(), {"left": 4000.0},
+            coord, "left", MagicMock(),
         ) as pcc:
             assert coord._current_pcc is pcc
         assert coord._current_pcc is None
@@ -406,7 +411,7 @@ class TestCurrentPccPointer:
         coord = _make_coord()
         with pytest.raises(RuntimeError, match="boom"):
             with PerChargerContext.for_charger(
-                coord, "left", MagicMock(), {"left": 4000.0},
+                coord, "left", MagicMock(),
             ):
                 assert coord._current_pcc is not None
                 raise RuntimeError("boom")

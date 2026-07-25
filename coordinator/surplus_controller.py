@@ -465,93 +465,17 @@ class SurplusController:
         self._anticipated_deadline = _time.monotonic() + minutes * 60
         _LOGGER.debug("Anticipated surplus: %.0fW in %.0f min", watts, minutes)
 
-    def distribute_ev_budget(
-        self,
-        budget_w: float,
-        ev_devices: Dict[str, "ControllableDevice"],
-        excluded_charger_ids: Optional[set[str]] = None,
-    ) -> Dict[str, float]:
-        """Distribute EV charging budget across multiple chargers by priority.
-
-        Priority-based cascade: highest priority (lowest number) gets power
-        first, up to its max. Remainder cascades to next charger if it meets
-        the minimum threshold. 60s hysteresis between reallocations.
-
-        Args:
-            budget_w: Total watts available for EV charging.
-            ev_devices: Dict of charger_id → CurrentControlDevice.
-            excluded_charger_ids: Charger IDs that must NOT receive any
-                allocation regardless of priority (e.g. ``charge_mode=off``).
-                Returned in the output dict with ``0`` so dashboards still
-                see the entry. The actuator's #346 mode guard is the
-                last-line defence; this gate stops the dashboard from
-                misreporting allocated W on disabled chargers. #351 M5.
-
-        Returns:
-            Dict of charger_id → allocated watts.
-        """
-        if not ev_devices:
-            return {}
-
-        excluded = excluded_charger_ids or set()
-
-        import time as _time
-
-        # Sort by priority (lower = higher priority); excluded chargers
-        # are still iterated so they appear in the output with 0 W —
-        # but they're filtered out of the budget cascade.
-        sorted_chargers = sorted(ev_devices.items(), key=lambda x: x[1].priority)
-
-        # Hysteresis: don't reallocate more than once per 60s
-        now = _time.monotonic()
-        last_realloc = getattr(self, "_ev_last_realloc_time", 0.0)
-        prev_alloc = getattr(self, "_ev_prev_allocation", {})
-
-        # Check if budget changed significantly (>500W) since last reallocation
-        prev_total = sum(prev_alloc.values()) if prev_alloc else 0
-        budget_changed = abs(budget_w - prev_total) > 500
-
-        if not budget_changed and (now - last_realloc) < 60:
-            # Within hysteresis window and no significant change → keep previous
-            return prev_alloc
-
-        allocations: Dict[str, float] = {}
-        remaining = budget_w
-
-        for charger_id, device in sorted_chargers:
-            if charger_id in excluded:
-                # Mode-disabled chargers (#351 M5) — appear in the output
-                # with 0 W so dashboards see the entry, but don't consume
-                # any of the budget cascade.
-                allocations[charger_id] = 0
-                continue
-            if remaining <= 0:
-                allocations[charger_id] = 0
-                continue
-
-            max_power = device.max_current * device.phases * device.voltage
-            min_threshold = device.min_power_threshold
-
-            if remaining >= min_threshold:
-                alloc = min(remaining, max_power)
-                allocations[charger_id] = alloc
-                remaining -= alloc
-            else:
-                allocations[charger_id] = 0
-
-        self._ev_last_realloc_time = now
-        self._ev_prev_allocation = allocations
-
-        if len(ev_devices) > 1:
-            alloc_summary = ", ".join(
-                f"{cid}={w:.0f}W" for cid, w in allocations.items() if w > 0
-            )
-            _LOGGER.debug(
-                "EV budget distribution: %.0fW → %s (remaining=%.0fW)",
-                budget_w, alloc_summary or "none", remaining,
-            )
-
-        return allocations
+    # ``distribute_ev_budget`` lived here until #651: a priority cascade
+    # that split the fleet EV budget across chargers, with its own 60 s /
+    # 500 W reallocation hysteresis in ``_ev_last_realloc_time`` /
+    # ``_ev_prev_allocation``. It ran every solar cycle and its result
+    # reached exactly one place — ``PerChargerContext.budget_w`` — which
+    # nothing read. Two allocators for one concept, one of them invisible:
+    # a contributor fixing a multi-charger allocation bug would have edited
+    # this one, watched its unit tests pass, and changed nothing on the
+    # hardware. The surviving allocator is ``decide`` subtracting
+    # ``fleet.solar_committed_w``, accumulated per charger in the
+    # coordinator's priority loop from each charger's actual decision.
 
     # Volatile per-device CONTROL state that must survive a device-object
     # rebuild (config edit / rediscovery re-registers a FRESH object for the

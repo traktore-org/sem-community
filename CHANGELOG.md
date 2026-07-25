@@ -13,6 +13,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.25] — 24.07.2026
 
+### 🧹 Dead code removed (#651 — the second EV surplus allocator)
+
+- 🗑️ **SEM had two EV-surplus allocators; only one of them ran** (#651, coherence-audit) —
+  \`SurplusController.distribute_ev_budget\` was a full priority cascade with its own
+  60 s / 500 W hysteresis, a caller in the coordinator, 25 tests, five scenario YAMLs, two
+  coverage-matrix cells and a three-refactoring history. Its output was written to
+  \`PerChargerContext.budget_w\` — and **no consumer ever read that field**. The allocator
+  that actually decides how surplus is shared is \`decide.self_consumption_surplus_w\`
+  (\`solar − home − solar_committed\`), fed by \`_solar_committed_w_per_cycle\`, which the
+  per-charger loop accumulates from each charger's *real* decision. The dead path, its
+  field, its caller and its tests are gone. No behaviour change on any install: nothing
+  read the value being computed.
+- 🛡️ **The #351 M5 invariant was kept and retargeted, not deleted** — "an off-mode charger
+  must not consume surplus its sibling could use" was a genuinely valuable contract that
+  happened to be pinned on the dead path. It now drives the live one: an \`off\` charger
+  decides \`DISABLE\`, commits 0 W, and the next charger in priority order sees the full
+  undiminished surplus.
+- 🐛 **Correction to the #629 entry below**: its "canonical solar-budget distribution
+  (#282 B.5 total, #351 M5 off-exclusion)" slice and the "budget threading" it named as
+  remaining loop architecture were both part of this dead path. The decomposition was
+  real work on unreachable code — slice 2 made the dead path *cleaner*, which reads as
+  progress. **Structure is not reachability.**
+- 🔍 **Bug class 8 gained a test-side twin** (\`docs/BUG_CLASSES.md\`) — the scenario
+  harness's \`priority_order\` assertion had a loop body of a bare \`pass\` under a comment
+  saying it "can't reliably check from this side": a named, documented,
+  scenario-selected assertion that could not fail. \`test_multi_charger_canonical_budget\`
+  hand-copied the production branch into the test file and asserted it against itself —
+  it stayed green through the branch being wrong *and* through it being deleted. New
+  sweep question: **does this test call production code, or a local restatement of it?
+  If you deleted the production function, would this test go red?**
+
 ### 🏗️ Code quality (#629 — EV orchestration decomposition, complete)
 
 - 🧩 **Step 7.5a decomposed in four slices** (#629): per-charger night-target map,
@@ -21,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   \`ev_night_targets.py\` with 18 behaviour-pinning tests. What remains in the loop
   (PerChargerContext lifecycle, build_view → decide → actuate, budget threading) is the
   reconciler architecture by design. Slice 1 was live-proven by the 23.07 night session.
+  *(Superseded in part by #651 above — the budget-distribution slice and the budget
+  threading were dead code; both are now deleted.)*
 
 ### ✨ Features
 
