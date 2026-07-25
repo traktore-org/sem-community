@@ -501,12 +501,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # ``None`` outside any per-charger iteration.
         self._current_pcc = None
 
-        # _current_charger_budget was DELETED (#589 swap retirement): the
-        # per-charger budget flows through ``pcc.budget_w`` →
-        # ``build_charger_view`` since the per-device-primary rebuild; the
-        # coordinator scalar had no remaining reader — only the swap that
-        # set and cleared it (and the v1.6.7-crash init this comment block
-        # used to defend, which the deletion makes moot).
+        # _current_charger_budget was DELETED (#589 swap retirement) and
+        # ``pcc.budget_w``, which it mirrored, followed it in #651 — that
+        # whole distribution had no reader at either end. The per-charger
+        # solar share is ``fleet.solar_committed_w``, threaded into each
+        # charger's view from the previous charger's actual decision.
 
         # EV stall detection for self-healing.
         # #589 Surface-A: ALL of these are PROPERTIES backed by the current
@@ -740,9 +739,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         The registry emits these (suppressing the ED ``is_ev`` naming guess)
         so a charger's list position is its single authoritative priority —
-        the same id the drag store, ``distribute_ev_budget`` and the reclaim
-        gate use. Live power is best-effort from the charger's power sensor;
-        the priority itself comes from ``dev.priority`` (already resolved from
+        the same id the drag store and the reclaim gate use. Live power is
+        best-effort from the charger's power sensor; the priority itself
+        comes from ``dev.priority`` (already resolved from
         the drag store this cycle).
         """
         rows: "List[Dict[str, Any]]" = []
@@ -2339,8 +2338,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._zero_charger_setpoints()
 
             if self._ev_devices and not self._observer_mode:
-                # Multi-charger (#112): distribute budget + night target
-                ev_budget_per_charger = {}
+                # Multi-charger (#112): night targets. There is exactly ONE
+                # solar allocator across chargers and it is
+                # ``_solar_committed_w_per_cycle`` below — each charger's
+                # decision subtracts what higher-priority chargers actually
+                # committed. A second priority cascade
+                # (``SurplusController.distribute_ev_budget`` →
+                # ``pcc.budget_w``) used to run here every solar cycle with
+                # its own 60 s / 500 W hysteresis; nothing ever read its
+                # output. Deleted in #651 — do not reintroduce a parallel
+                # per-charger budget without deleting this one.
                 num_chargers = len(self._ev_devices)
 
                 # Night target: use per-charger targets if configured (#193).
@@ -2364,28 +2371,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
-
-                # Solar budget: distribute by priority. Use the canonical
-                # EVBudget computed in _build_charging_context (#282 Phase B.5).
-                # Before this, multi-charger setups went through
-                # _calculate_solar_ev_budget here, which has the legacy
-                # ev_power + grid_export base — exactly the disagreement
-                # mode Phase B eliminated for single-charger but left in
-                # place for multi-charger distribution. Reported by @RienduPre
-                # in #284 (Growatt + Wallbox Pulsar, 2-charger). The
-                # distribution math (priority-weighted split across
-                # chargers) is unchanged; we only swap the TOTAL the
-                # distributor sees.
-                if num_chargers >= 1 and charging_state in (
-                    ChargingState.SOLAR_CHARGING_ACTIVE,
-                    ChargingState.SOLAR_SUPER_CHARGING,
-                    ChargingState.SOLAR_CHARGING_ALLOWED,
-                    ChargingState.SOLAR_MIN_PV,
-                ):
-                    # (#629 slice 2) canonical-budget distribution extracted to
-                    # ev_night_targets.distribute_solar_budget.
-                    from .ev_night_targets import distribute_solar_budget
-                    ev_budget_per_charger = distribute_solar_budget(self)
 
                 sorted_chargers = sorted(
                     self._ev_devices.items(),
@@ -2444,7 +2429,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # v1.6.7 and migrates onto the context object in
                     # v1.6.8/v1.6.9.
                     pcc = PerChargerContext.for_charger(
-                        self, cid, ev_dev, ev_budget_per_charger,
+                        self, cid, ev_dev,
                         chargers_by_id=_chargers_by_id,
                         power=power,
                     )
@@ -6980,8 +6965,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ))
                     # (#576 P2.1) the drag list is the single authoritative
                     # priority axis: a drag override wins over the config seed,
-                    # so distribute_ev_budget honours where the charger sits in
-                    # the one list. ev_surplus_priority is now the seed default.
+                    # so the per-charger loop walks the chargers in the order
+                    # the one list gives. ev_surplus_priority is now the seed
+                    # default.
                     seed_prio = max(1, min(10, surplus_prio))
                     reg = getattr(self, "_device_registry", None)
                     dev.priority = (

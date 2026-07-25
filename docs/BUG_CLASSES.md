@@ -95,10 +95,21 @@ only by hand-setting the fields on a `MagicMock`, bypassing the derivation — t
 for this whole class. **Closure pattern:** move the check UPSTREAM to where the raw evidence still
 exists (each netting site in `SensorReader`, via `SplitSensorExclusivityAudit`), and DELETE the
 downstream copy rather than leaving it as decoration. A check that cannot fire is worse than no
-check: it reads as coverage. **Open:** any other self-referential check; audit for them in
+check: it reads as coverage. **Third instance (#651, 2026-07-25) — the test-side twin:**
+`test_multi_charger_canonical_budget.py` defined a local
+`_select_multi_charger_total_budget()` that, in its own docstring, "inline[d] the relevant lines
+verbatim" from the coordinator — then asserted against that copy. A hand-copy of the code under
+test cannot fail when the original is wrong, and it stayed green when #651 deleted the original
+outright. Same file, a scenario-harness key named `priority_order` whose loop body was a bare
+`pass` under the comment "can't reliably check from this side" — a named, documented, YAML-selected
+assertion with no teeth, referenced by 1 scenario. **Sweep question (test side):** does this test
+call production code, or a local restatement of it? If you deleted the production function, would
+this test go red? **Guard:** `tests/scenario_harness.py` now rejects unknown `expect.multi_charger`
+keys, so a silently-ignored expectation fails instead of passing.
+**Open:** any other self-referential check; audit for them in
 `/coherence-audit`. **Sweep question:** for every check, can you name an input that makes it fire —
 and can that input survive the transforms between where it is produced and where it is checked?
-Refs #589, #661.
+Refs #589, #651, #661.
 
 ### 9. Engine-specific SVG/SMIL form (renders on Blink/Gecko, silent on WebKit) — GUARDED
 **Symptom:** a dashboard-card visual works on desktop Chrome/Firefox and Android but is dead on
@@ -390,6 +401,15 @@ state, is there exactly ONE place that decides its magnitude?
   sign-audit debounce vs the trace streak; the CounterCorrelationAudit dedup). Unify into one.
 - **Parallel systems that are one concept** — two things modeled separately that should be one
   (e.g. arbitrage folded INTO the scheduler; the canonical `EVBudget`; the ONE priority list).
+  *Sub-shape — one of the two is invisible (#651):* SEM had two EV-surplus allocators. The visible
+  one (`SurplusController.distribute_ev_budget`, a priority cascade with its own 60 s / 500 W
+  hysteresis) had a caller, tests, scenario coverage, a `#284` issue history and three rounds of
+  refactoring — and terminated in `pcc.budget_w`, which no consumer read. The live one is
+  `decide.self_consumption_surplus_w`, subtracting `_solar_committed_w_per_cycle` accumulated from
+  each charger's *actual* decision. Nobody was choosing between them; the loud one was simply not
+  connected. **Tell:** a value with many producers and no reader. **Sweep:** for each allocator /
+  budget / plan object, grep its output field for *reads*, not writes. Tests and dashboards writing
+  it don't count.
   *Sub-shape — a parallel priority/ordering knob that clobbers the unified list:* a standalone
   `*_priority` config re-set onto a device's `.priority` every cycle, killing its drag position
   (`heat_pump_priority`/`hot_water_priority` at coordinator 6439/6464 — #602/#576; the retired

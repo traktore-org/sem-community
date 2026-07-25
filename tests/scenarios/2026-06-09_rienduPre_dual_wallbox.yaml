@@ -139,16 +139,16 @@ expect:
   strategy_substring: "now"
 
   multi_charger:
-    # Phase B.5 invariant: per-charger budgets sum to the canonical
-    # total. Catches budget double-counting in the cascade.
-    total_equals_canonical: true
-    tolerance_w: 1.0
-    at_least_one_charger_gets_positive: true
-    # Priority cascade: charger 1 (priority 5) must receive budget
-    # before charger 2 (priority 8) in the priority-sorted ordering.
-    # Catches regressions where the cascade leaks budget to a lower-
-    # priority charger before the higher-priority one is satisfied.
-    priority_order: true
+    # Removed in #651: total_equals_canonical, tolerance_w,
+    # at_least_one_charger_gets_positive, priority_order. All four
+    # asserted over SurplusController.distribute_ev_budget's split,
+    # which production wrote to pcc.budget_w and never read.
+    # priority_order in particular could not have caught the leak it
+    # named — its loop body was a bare ``pass``.
+    #
+    # per_charger_flow_max below is the part of this replay that always
+    # tested @RienduPre's actual complaint, and it stays.
+    #
     # Mode isolation: charger 2 is in ``solar_plus_cheap`` mode. With
     # no cheap-tariff window active in this scenario it behaves like
     # ``solar_only`` — must NEVER take from grid. Charger 1 in
