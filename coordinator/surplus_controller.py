@@ -539,29 +539,19 @@ class SurplusController:
         return [d for d in self._devices.values()
                 if device_id in getattr(d, 'depends_on', [])]
 
-    def validate_dependencies(self) -> list:
-        """Check for circular dependencies. Returns list of errors."""
-        errors = []
-        for device in self._devices.values():
-            dep_list = getattr(device, 'depends_on', None)
-            if not dep_list:
-                continue
-            visited = set()
-            current = device.device_id
-            chain = [current]
-            while True:
-                deps = self._devices.get(current)
-                dep_list = getattr(deps, 'depends_on', None) if deps else None
-                if not deps or not dep_list:
-                    break
-                next_dep = dep_list[0]  # Check first dependency for cycles
-                if next_dep in visited:
-                    errors.append(f"Circular dependency: {' → '.join(chain + [next_dep])}")
-                    break
-                visited.add(next_dep)
-                chain.append(next_dep)
-                current = next_dep
-        return errors
+    # ``validate_dependencies`` lived here until #662. It was a cycle
+    # detector with no production caller (only tests), and its walk
+    # hard-coded ``dep_list[0]`` — so for a device requiring [a, b] with the
+    # loop through ``b`` it followed the ``a``-chain, found nothing and
+    # reported clean. A validator that can't see half the graph and that
+    # nothing calls is not a safety net; it is a second, weaker
+    # implementation of a concept the registry already owns correctly.
+    #
+    # Cycles are now prevented where they are created, not reported after
+    # the fact: DeviceRegistry._dependency_would_cycle walks ALL parents
+    # across BOTH persisted stores and rejects the write, on every path
+    # (UI select, set_device_property, register_surplus_device), plus a
+    # load-time sanitize for stores written before the guard existed.
 
     def unregister_device(self, device_id: str) -> None:
         """Remove a device from surplus control."""

@@ -162,46 +162,58 @@ class TestDeactivationCascade:
 # ════════════════════════════════════════════
 
 class TestCircularDetection:
-    """Circular dependencies should be detected."""
+    """Circular dependencies are PREVENTED at the write path (#662).
 
-    def test_no_circular(self, mock_hass):
-        """Linear chain has no circular dependencies."""
+    This class used to call ``SurplusController.validate_dependencies``.
+    That method is deleted: it had no production caller (so no install
+    ever saw its report, clean or otherwise) and its walk hard-coded
+    ``dep_list[0]`` — a device requiring ``[a, b]`` with the loop through
+    ``b`` was reported clean. These tests were green against it the whole
+    time because they only ever built single-parent graphs: the one shape
+    the ``[0]``-walk could see.
+
+    Detection-after-the-fact is now prevention-at-the-write.
+    ``DeviceRegistry._dependency_would_cycle`` walks ALL parents across
+    both persisted stores and rejects the edge; its tests are
+    ``tests/test_576_load_priority_battery.py::TestDependencyGraphGuards``
+    plus the #662 additions there.
+    """
+
+    def test_validator_stays_deleted(self):
+        """The half-blind orphan must not come back.
+
+        Re-adding a ``validate_dependencies`` report means re-adding a
+        second implementation of a concept the registry already owns —
+        and, on past form, one nothing calls.
+        """
+        assert not hasattr(SurplusController, "validate_dependencies"), (
+            "SurplusController.validate_dependencies was deleted in #662 "
+            "(no production caller + dep_list[0]-only walk). Cycles are "
+            "rejected by DeviceRegistry._dependency_would_cycle at the "
+            "write path. Do not reintroduce a reporting-only validator."
+        )
+
+    def test_runtime_gate_walks_all_deps_not_just_the_first(self, mock_hass):
+        """The runtime gate has no ``[0]``-walk twin.
+
+        This is the sibling that would have made the bug user-visible, so
+        pin it: a device requiring two parents stays blocked while EITHER
+        is inactive — i.e. the second dependency is really consulted.
+        """
         a = _make_switch(mock_hass, "a", "A")
-        b = _make_switch(mock_hass, "b", "B", depends_on=["a"])
-        c = _make_switch(mock_hass, "c", "C", depends_on=["b"])
+        b = _make_switch(mock_hass, "b", "B")
+        c = _make_switch(mock_hass, "c", "C", depends_on=["a", "b"])
 
         controller = _make_controller(mock_hass)
         for d in [a, b, c]:
             controller.register_device(d)
 
-        errors = controller.validate_dependencies()
-        assert len(errors) == 0
-
-    def test_direct_circular(self, mock_hass):
-        """A→B→A is circular."""
-        a = _make_switch(mock_hass, "a", "A", depends_on=["b"])
-        b = _make_switch(mock_hass, "b", "B", depends_on=["a"])
-
-        controller = _make_controller(mock_hass)
-        controller.register_device(a)
-        controller.register_device(b)
-
-        errors = controller.validate_dependencies()
-        assert len(errors) > 0
-        assert "Circular" in errors[0]
-
-    def test_indirect_circular(self, mock_hass):
-        """A→B→C→A is circular."""
-        a = _make_switch(mock_hass, "a", "A", depends_on=["c"])
-        b = _make_switch(mock_hass, "b", "B", depends_on=["a"])
-        c = _make_switch(mock_hass, "c", "C", depends_on=["b"])
-
-        controller = _make_controller(mock_hass)
-        for d in [a, b, c]:
-            controller.register_device(d)
-
-        errors = controller.validate_dependencies()
-        assert len(errors) > 0
+        a._status.state = DeviceState.ACTIVE
+        assert c.can_activate() is False, (
+            "second dependency ignored — a [0]-only walk would pass here"
+        )
+        b._status.state = DeviceState.ACTIVE
+        assert c.can_activate() is True
 
 
 # ════════════════════════════════════════════
@@ -401,20 +413,22 @@ class TestSiblingDependencies:
 class TestEdgeCases:
     """Edge cases that should be handled gracefully."""
 
-    def test_self_dependency_ignored(self, mock_hass):
-        """Device depending on itself should not block."""
+    def test_self_dependency_deadlocks_at_runtime(self, mock_hass):
+        """A self-requiring device can never start — which is why the
+        write path refuses to create one (#662).
+
+        The old assertion here read ``validate_dependencies() > 0``: it
+        checked that a report *nothing consumed* mentioned the problem,
+        while the device sat deadlocked either way. Pin the consequence
+        instead — this is what the write-path guard exists to prevent.
+        """
         device = _make_switch(mock_hass, "a", "A", depends_on=["a"])
         controller = _make_controller(mock_hass)
         controller.register_device(device)
 
-        # Self-reference: device looks itself up, sees it's not active
-        # but should not block (circular)
-        # Our implementation: get_device("a") returns self which is IDLE
-        # _check_dependencies returns False — this IS blocking
-        # This is actually correct: a device can't depend on itself
-        # The circular validator should catch this
-        errors = controller.validate_dependencies()
-        assert len(errors) > 0  # Self-reference IS circular
+        # It waits on itself to be ACTIVE before it may become ACTIVE.
+        assert device.can_activate() is False
+        assert device.blocked_by_dependency == "a"
 
     def test_remove_parent_unblocks_child(self, mock_hass):
         """Unregistering parent should not crash children."""

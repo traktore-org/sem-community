@@ -89,7 +89,10 @@ _BASELINE = {
     # permanently unfulfillable. Their caller is #664 (#654 amputated the
     # ripple-control surface that lied about calling them).
     "unblock",
-    "validate_dependencies",
+    # ``validate_dependencies`` left this allowlist in #662 because the
+    # method is deleted, not because it grew a caller. Cycles are now
+    # rejected at the write path (DeviceRegistry._dependency_would_cycle)
+    # instead of reported after the fact to nobody. Do not re-add.
 }
 
 
