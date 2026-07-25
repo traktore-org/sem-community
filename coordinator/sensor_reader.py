@@ -1857,24 +1857,8 @@ class SensorReader:
         # consumption spike and the surplus budget oscillated (flap). Falls
         # through to ED / top-level only when NO charger has a nested sensor,
         # so legacy single-charger configs keep working.
-        if any(c.get("ev_charging_power_sensor") for c in ev_chargers):
-            total_ev = 0.0
-            for charger_cfg in ev_chargers:
-                cid = charger_cfg.get("id")
-                cps = charger_cfg.get("ev_charging_power_sensor")
-                if cps:
-                    # Smooth per charger so the per-charger dict stays
-                    # consistent with the fleet sum (both blip-filtered).
-                    cw = self._smooth_ev_power(
-                        self._read_sensor(cps, "ev"), key=cid or cps,
-                    )
-                    total_ev += cw
-                    if cid:
-                        # Per-charger draw in watts, exposed for
-                        # ``flow_calculator`` per-charger split.
-                        readings.ev_power_per_charger[cid] = cw
-            # total_ev is already the sum of smoothed per-charger values.
-            readings.ev_power = FleetEvPower(total_ev)
+        if self._read_ev_fleet_power(readings, ev_chargers):
+            pass  # nested per-charger sensors handled the read (#642 helper)
         elif ed.ev_power:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(ed.ev_power, "ev")))
@@ -2618,13 +2602,8 @@ class SensorReader:
         # block above for why ``len > 1`` was wrong (single-charger-in-list
         # read ev_power=0 → false home spike → surplus-budget flap).
         ev_chargers = self._raw_config.get("ev_chargers", [])
-        if any(c.get("ev_charging_power_sensor") for c in ev_chargers):
-            total_ev = 0.0
-            for charger_cfg in ev_chargers:
-                cps = charger_cfg.get("ev_charging_power_sensor")
-                if cps:
-                    total_ev += self._read_sensor(cps, "ev")
-            readings.ev_power = FleetEvPower(self._smooth_ev_power(total_ev))
+        if self._read_ev_fleet_power(readings, ev_chargers):
+            pass  # nested per-charger sensors handled the read (#642 helper)
         elif self.config.ev_power_sensor:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(self.config.ev_power_sensor, "ev")
@@ -2653,6 +2632,48 @@ class SensorReader:
         self._infer_per_charger_connection_from_physics(readings)
 
         return readings
+
+    def _read_ev_fleet_power(self, readings, ev_chargers) -> bool:
+        """(#642) ONE fleet + per-charger EV power read, shared by BOTH read
+        paths (energy-dashboard and legacy) — the ``_read_ev_connection_status``
+        precedent (#616), applied to the ev_power sibling.
+
+        The two hand-maintained copies had already drifted: the legacy path
+        smoothed the fleet SUM (one median over the sum half-passes a single
+        charger's UDP 0-blip) and never populated ``ev_power_per_charger`` —
+        so on a legacy-path multi-charger install ``build_charger_view``'s
+        fleet fallback fed every charger the whole fleet draw (the
+        #556/#616 per-charger-reads-fleet-sum class, again).
+
+        Returns True when ANY charger carries a nested
+        ``ev_charging_power_sensor`` (the read is then complete, per-charger
+        smoothed, dict populated); False lets the caller run its own
+        fallback chain (ED sensor / legacy top-level sensor).
+
+        Chargers without a nested power sensor (misconfig) are excluded from
+        both the dict AND the fleet sum — consumers must ``.get(cid)``.
+        """
+        if not any(c.get("ev_charging_power_sensor") for c in ev_chargers):
+            return False
+        total_ev = 0.0
+        for charger_cfg in ev_chargers:
+            cid = charger_cfg.get("id")
+            cps = charger_cfg.get("ev_charging_power_sensor")
+            if cps:
+                # Smooth per charger so the per-charger dict stays
+                # consistent with the fleet sum (both blip-filtered).
+                cw = self._smooth_ev_power(
+                    self._read_sensor(cps, "ev"), key=cid or cps,
+                )
+                total_ev += cw
+                if cid:
+                    # Per-charger draw in watts, exposed for
+                    # ``flow_calculator`` per-charger split and
+                    # ``build_charger_view``'s this-charger read.
+                    readings.ev_power_per_charger[cid] = cw
+        # total_ev is already the sum of smoothed per-charger values.
+        readings.ev_power = FleetEvPower(total_ev)
+        return True
 
     def _smooth_ev_power(self, raw: float, key: str = "_fleet") -> float:
         """Median-of-3 filter for EV power (2026-07-10 flap fix).

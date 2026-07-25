@@ -50,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   \`min_on_seconds\`/\`min_off_seconds\`, whose epochs are rebuild-transplanted
   (\`_VOLATILE_CONTROL_FIELDS\`) — one clock, one enforcement, and a grep-lint guard
   keeps the \`_status\` clock from creeping back in as a gate.
+- 🚗 **Every charger reads its OWN draw, on both read paths** (#642 + #643, coherence-audit) —
+  the legacy (non-Energy-Dashboard) sensor path had drifted from its twin: it smoothed the
+  fleet SUM and never filled the per-charger map, so on a multi-charger install every charger
+  was told it was drawing the *whole fleet's* power — a second charger's session could make
+  the first look "already at target". Both paths now share one \`_read_ev_fleet_power\` read
+  (the #616 precedent applied to its \`ev_power\` sibling), so the median-of-3 blip filter is
+  per charger too. Coordinator-side consumers (session attribution, diagnostics, taper feed,
+  the priority rows) go through one sanctioned accessor — which also fixes a kW-reporting
+  charger showing ~0 W in the device-priority list. AST-linted so the raw shape can't return.
 - 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
   \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
   dropped them to the entry-write + reload path: a slider change during a charge session
