@@ -740,15 +740,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         rows: "List[Dict[str, Any]]" = []
         for cid, dev in (self._ev_devices or {}).items():
-            ent = getattr(dev, "power_entity_id", None)
-            pw = 0.0
-            if ent and getattr(self, "hass", None) is not None:
-                st = self.hass.states.get(ent)
-                if st and st.state not in ("unknown", "unavailable"):
-                    try:
-                        pw = float(st.state)
-                    except (ValueError, TypeError):
-                        pw = 0.0
+            # (#643) canonical read path (raw fallback inside normalizes
+            # kW — this display read previously showed a kW charger as ~0 W).
+            pw = (
+                self._charger_power_w(cid, None, dev)
+                if getattr(self, "hass", None) is not None else 0.0
+            )
+            ent = getattr(dev, "power_entity_id", None)  # metadata only
             ph = int(getattr(dev, "phases", 3) or 3)
             volt = float(getattr(dev, "voltage", 230) or 230)
             max_a = float(getattr(dev, "max_current", 32) or 32)
@@ -2139,21 +2137,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Collect per-charger power to proportionally attribute flows (#15)
                 charger_powers: Dict[str, float] = {}
                 for cid, ev_dev in self._ev_devices.items():
-                    cp = 0.0
-                    if ev_dev.power_entity_id:
-                        pstate = self.hass.states.get(ev_dev.power_entity_id)
-                        if pstate and pstate.state not in ("unknown", "unavailable"):
-                            try:
-                                cp = float(pstate.state)
-                                unit = pstate.attributes.get("unit_of_measurement", "W")
-                                if unit == "kW":
-                                    cp *= 1000
-                            except (ValueError, TypeError):
-                                _LOGGER.debug(
-                                    "Charger %s power not numeric: %r (#259)",
-                                    cid, getattr(pstate, "state", None),
-                                )
-                    charger_powers[cid] = cp
+                    # (#643) canonical smoothed per-charger read — the raw
+                    # entity blips to 0 mid-charge on UDP-polled chargers.
+                    charger_powers[cid] = self._charger_power_w(cid, power, ev_dev)
                 total_charger_power = sum(charger_powers.values())
 
                 for cid, ev_dev in self._ev_devices.items():
@@ -3112,17 +3098,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Add per-charger data (#131): power + session
             per_charger_soc: Dict[str, float] = {}
             for cid, ev_dev in self._ev_devices.items():
-                charger_power = 0.0
-                if ev_dev.power_entity_id:
-                    pstate = self.hass.states.get(ev_dev.power_entity_id)
-                    if pstate and pstate.state not in ("unknown", "unavailable"):
-                        try:
-                            charger_power = float(pstate.state)
-                            unit = pstate.attributes.get("unit_of_measurement", "W")
-                            if unit.lower() == "kw":
-                                charger_power *= 1000
-                        except (ValueError, TypeError):
-                            pass
+                # (#643) canonical smoothed per-charger read
+                charger_power = self._charger_power_w(cid, power, ev_dev)
                 result[f"charger_{cid}_power"] = round(charger_power, 0)
                 result[f"charger_{cid}_name"] = ev_dev.name
                 result[f"charger_{cid}_connected"] = self._last_ev_connected_per_charger.get(cid, False)
@@ -6187,6 +6164,45 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     pass
         detector.update_energy(per_increment, per_hw_total)
 
+    def _charger_power_w(self, cid: str, power, ev_dev=None) -> float:
+        """(#643) THIS charger's draw for coordinator-side consumers.
+
+        Canonical read: the cycle's ``power.ev_power_per_charger[cid]`` —
+        already median-of-3 smoothed and unit-normalized by the sensor
+        reader (UDP-polled chargers blip to 0 for a cycle mid-charge; the
+        raw entity is exactly the signal the rest of the system rejects
+        as noise). Falls back to a raw entity read ONLY when the
+        per-charger dict has no entry for this cid (legacy top-level-sensor
+        configs never populate it — see sensor_reader misconfig note).
+
+        Replaces three hand-rolled ``hass.states.get(power_entity_id)``
+        blocks that each had their own kW rule and no blip filter (the
+        class-3 sanctioned-accessor bypass, coordinator flavour of
+        ``_this_charger_power``).
+        """
+        per = (getattr(power, "ev_power_per_charger", None) or {}) if power is not None else {}
+        if cid in per:
+            return float(per[cid] or 0.0)
+        dev = ev_dev if ev_dev is not None else self._ev_devices.get(cid)
+        eid = getattr(dev, "power_entity_id", None)
+        if not eid:
+            return 0.0
+        pstate = self.hass.states.get(eid)
+        if not pstate or pstate.state in ("unknown", "unavailable"):
+            return 0.0
+        try:
+            w = float(pstate.state)
+        except (ValueError, TypeError):
+            _LOGGER.debug(
+                "Charger %s power not numeric: %r (#259)",
+                cid, getattr(pstate, "state", None),
+            )
+            return 0.0
+        unit = pstate.attributes.get("unit_of_measurement", "W")
+        if isinstance(unit, str) and unit.lower() == "kw":
+            w *= 1000
+        return w
+
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,
     ) -> "EVIntelligenceData":
@@ -6217,19 +6233,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         if per_charger_state:
                             self._ev_taper_detectors[cid].restore_state(per_charger_state)
 
-                # Read per-charger power from device's power entity
-                charger_power = 0.0
-                if ev_dev.power_entity_id:
-                    pstate = self.hass.states.get(ev_dev.power_entity_id)
-                    if pstate and pstate.state not in ("unknown", "unavailable"):
-                        try:
-                            charger_power = float(pstate.state)
-                            # Auto-convert kW to W
-                            unit = pstate.attributes.get("unit_of_measurement", "W")
-                            if unit == "kW":
-                                charger_power *= 1000
-                        except (ValueError, TypeError):
-                            pass
+                # (#643) canonical smoothed per-charger read — the taper
+                # detector was ingesting the raw 0-blip the rest of the
+                # system median-filters away.
+                charger_power = self._charger_power_w(cid, power, ev_dev)
 
                 charger_setpoint = getattr(ev_dev, "_current_setpoint", 0.0)
                 # Use per-charger session state; fall back to power threshold

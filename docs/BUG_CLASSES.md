@@ -406,3 +406,55 @@ instance (per-battery max is the intended semantics, reporter-confirmed).
 Structural guard idea from the sweep (not yet built): an orphan-method lint — any public
 method in `coordinator/`/`devices/`/`features/` with zero call sites outside tests fails
 CI unless annotated `# ENTRY-POINT: <who calls it>`. It would have caught #651/#653/#654.
+
+### Second pass — the 8 findings the session-limit interrupted (verified 2026-07-25)
+
+The sweep was resumed (cached prefix, live tail) and confirmed 8 more. **#642 + #643**
+were fixed same-day (class 3 + class 13: the legacy EV read path smoothed the fleet SUM
+and never filled the per-charger map, so every charger read the whole fleet's draw; the
+two read paths now share `_read_ev_fleet_power`, and coordinator-side consumers go through
+the sanctioned `_charger_power_w` accessor). Filed open:
+
+- **#656** — class 4, the LOAD-side sibling of the battery strand closed in #589:
+  `deactivate_all()` has zero callers, so removing SEM leaves a boosted HP/HW/switch
+  latched ON forever. The reconciler does NOT heal it — it classifies the leftover as
+  `external_on`, disowns it, and refuses to fight it, so the strand survives reloads too.
+  Note: the hook must go in `async_unload_entry` BEFORE `clear_devices()` — HA runs
+  unload before remove, so an `async_remove_entry` hook would iterate nothing.
+- **#657** — spec-vs-reality (the #590 mechanism, sensor-attribute variant, ×8):
+  attributes read `coordinator.data` keys no code has ever written. The EV
+  "why am I blocked" surface (`battery_too_low` / `battery_needs_priority` /
+  `solar_sufficient`) is null on every install. **The suite masks it** — `conftest.py`
+  injects those exact keys into the mocked data (the #610 harness-fidelity lesson again).
+- **#658** — spec-vs-reality, sibling-asymmetry: `_reconcile_ev_energy` is dead on two
+  axes while `_reconcile_solar_energy` is wired. ⚠️ It was parked DELIBERATELY and the
+  method is buggy (accumulates on the sunrise day key, reconciles on the midnight key →
+  would corrupt the overnight window; also fleet-reads one charger's counter). Wiring it
+  as-is re-enables the corruption. Depends on #645 (day-key unification).
+- **#659** — spec-vs-reality, unreachable feature branch: 1p/3p `check_phase_switch` is
+  dead on two axes (no caller since `561e28a`, and `phase_switch_entity` has no config
+  surface). Delete-or-wire, with 4 same-shape siblings listed (`set_anticipated_surplus`,
+  `validate_dependencies`, `force_charge.should_stop`, `create_charge_adapter`).
+- **#660** — class 8 ×2: `check_metrics`/`check_costs`/`non_negative_fields` validate
+  ranges their producers already clamped (`max(0, min(100, …))`), and `check_flows`
+  validates the greedy allocator's output against the allocator's own inputs —
+  conservation is a theorem there, not an observation. The documented 2026-06-01 PROD
+  autarky bug (0 % vs 98 % self-consumption) passed with 0 violations. Closure: check
+  CLAMP ENGAGEMENT (pre-clamp) and the per-charger↔fleet sum invariant `check_flows`
+  never looks at. Guard: a **no-vacuous-health-check meta-test** — every check must be
+  demonstrably fireable or CI fails.
+- **#661** — class 8 whose closure is a real class-1 detector: the both-directions-active
+  check runs on fields netted from ONE signed scalar, so it is unfireable — and it stays
+  unfireable on the split-sensor installs it was written for (Growatt Pattern E, #553
+  pairs, two-sensor batteries all net BEFORE `calculate_derived`). The crossed-sensor
+  evidence is destroyed upstream of the check. Move it into `sensor_reader` on the raw
+  sides, reusing the `CounterCorrelationAudit` 5-vote pattern.
+- **#662** — class 8 inside an orphan: `validate_dependencies` walks only `dep_list[0]`,
+  AND has zero production callers. Real surviving gap: `async_set_dependency` has no cycle
+  guard, so a UI-only A↔B cycle deadlocks both loads undetected. Fix = DFS **and** wire it
+  into the write paths; fixing only the walk hardens dead code.
+
+Cross-cutting lesson from this pass: **class 8 is under-counted in the ledger.** Five of
+the eight are checks that cannot fail, and each one was previously read as evidence of
+health. The meta-test in #660 ("every check must be demonstrably fireable") is the
+structural close for the whole class — prefer it over fixing the instances one at a time.
