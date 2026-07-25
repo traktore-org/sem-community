@@ -66,6 +66,12 @@ class UnifiedDevice:
     control: Optional[Dict[str, Any]] = None
     is_critical: bool = False
     has_manual_mapping: bool = False
+    # (#650) "hands off this device" — the user's explicit opt-out, applied from
+    # the registry's ``_controllable_overrides`` at build. Only ever RESTRICTS:
+    # ``True`` can't invent controllability on a device with no control config
+    # (LoadManagement would count it as sheddable and then have nothing to
+    # switch), so re-enabling clears the override back to the derived value.
+    controllable_override: Optional[bool] = None
 
     @property
     def device_id(self) -> str:
@@ -82,7 +88,14 @@ class UnifiedDevice:
 
     @property
     def is_controllable(self) -> bool:
-        """Device is controllable if it has a control config."""
+        """Device is controllable if it has a control config.
+
+        (#650) A stored ``controllable_override`` of ``False`` wins — that's the
+        user saying "never touch this load". See the field's docstring for why
+        ``True`` is not the symmetric case.
+        """
+        if self.controllable_override is False:
+            return False
         return self.control is not None
 
     @property
@@ -145,6 +158,25 @@ class UnifiedDeviceRegistry:
         # transient live device and got wiped on every re-sync ("separated all
         # the time").
         self._dependency_overrides: Dict[str, list] = {}
+        # (#650) device_id → user's "critical" / "controllable" toggles from the
+        # priority card. Persisted HERE, exactly like the dependency and
+        # priority overrides above, because ``_sync_to_load_manager``
+        # WHOLESALE-REPLACES the LoadManagement entry on every rebuild (drag,
+        # the 35 s re-discovery, a config change, restart). Pre-fix these two
+        # flags lived only in that dict, so "hands off the pond pump" or "the
+        # freezer is critical" silently reverted to the defaults within 35 s and
+        # the next peak event shed the device anyway.
+        # ``_critical_overrides`` stores BOTH values (False is a meaningful
+        # "un-mark it"); ``_controllable_overrides`` stores only False — a True
+        # override can't invent controllability, so re-enabling deletes the key.
+        self._critical_overrides: Dict[str, bool] = {}
+        self._controllable_overrides: Dict[str, bool] = {}
+        # (#650) the legacy adoption must run EXACTLY ONCE. On any later refresh
+        # the LoadManagement dict is the registry's OWN last sync, so re-reading
+        # it resurrects a flag the user just cleared: re-enabling "controllable"
+        # DELETES the key, and a second adoption pass would immediately put it
+        # back from the not-yet-resynced LM entry. That is this very bug, rebuilt.
+        self._legacy_flags_adopted: bool = False
         # (#576) device_id → learned rated_power (W). A sensor-equipped load
         # self-calibrates its real draw at runtime (calibrate_rated_power); we
         # PERSIST that here so it survives a restart instead of resetting to the
@@ -211,6 +243,13 @@ class UnifiedDeviceRegistry:
                 self._priority_overrides = data.get("priority_overrides", {})
                 self._control_mode_overrides: Dict[str, str] = data.get("control_modes", {})
                 self._dependency_overrides = data.get("dependencies", {})
+                # (#650) tolerate legacy/hand-edited stores: coerce to bool
+                self._critical_overrides = {
+                    k: bool(v) for k, v in data.get("critical_overrides", {}).items()
+                }
+                self._controllable_overrides = {
+                    k: bool(v) for k, v in data.get("controllable_overrides", {}).items()
+                }
                 self._rated_power_overrides = {
                     k: float(v) for k, v in
                     data.get("rated_power_overrides", {}).items()
@@ -450,6 +489,12 @@ class UnifiedDeviceRegistry:
             _LOGGER.info("No individual devices in Energy Dashboard")
             return
 
+        # (#650) One-time adoption: users who toggled critical/controllable
+        # BEFORE the override stores existed have their choice only in the
+        # LoadManagement store. Read it once into the registry so the upgrade
+        # doesn't hand them the very reset this issue is about.
+        await self._adopt_legacy_device_flags()
+
         devices: List[UnifiedDevice] = []
 
         for position, dev_info in enumerate(individual_devices, start=1):
@@ -493,6 +538,10 @@ class UnifiedDeviceRegistry:
                 is_ev=is_ev,
                 control=control,
                 has_manual_mapping=has_manual,
+                # (#650) re-apply the user's flags — the rebuild is exactly
+                # where they used to be lost.
+                is_critical=bool(self._critical_overrides.get(device_id, False)),
+                controllable_override=self._controllable_overrides.get(device_id),
             )
             devices.append(device)
 
@@ -1171,6 +1220,77 @@ class UnifiedDeviceRegistry:
             "Manual mapping set: %s → %s (%s)", energy_sensor, detail, control_type
         )
 
+    async def _adopt_legacy_device_flags(self) -> None:
+        """Seed the #650 override stores from LoadManagement — ONCE per session.
+
+        Only non-default values are adopted (critical=True, controllable=False):
+        those are the ones a user had to click for, and only the OLD code path
+        could have put them in the LM dict without a matching override.
+
+        One-shot by design. After the first sync the LM dict holds the
+        REGISTRY's values, so a second pass would read our own output back — and
+        would re-apply an opt-out the user had just cleared (re-enabling
+        "controllable" removes the key, which this would helpfully restore).
+        Deferred, not skipped, while the load manager is still empty.
+        """
+        if self._legacy_flags_adopted:
+            return
+        lm = self._load_manager
+        if not lm or not getattr(lm, "_devices", None):
+            return  # LM not up yet — try again on the next refresh
+        self._legacy_flags_adopted = True
+        crit = ctrl = 0
+        for did, info in lm._devices.items():
+            if not did.startswith("energy_dashboard_") or not isinstance(info, dict):
+                continue
+            if info.get("is_critical") is True and did not in self._critical_overrides:
+                self._critical_overrides[did] = True
+                crit += 1
+            if info.get("is_controllable") is False and did not in self._controllable_overrides:
+                self._controllable_overrides[did] = False
+                ctrl += 1
+        if crit or ctrl:
+            await self._save_storage()
+            _LOGGER.info(
+                "Adopted %d critical / %d controllable flag(s) from LoadManagement (#650)",
+                crit, ctrl,
+            )
+
+    async def async_set_device_flag(
+        self, device_id: str, flag: str, value: bool
+    ) -> None:
+        """Persist a "critical" / "controllable" toggle from the priority card (#650).
+
+        Pre-fix these two went straight into ``LoadManagement._devices`` and
+        nowhere else, so ``_sync_to_load_manager`` — which REPLACES that entry
+        wholesale — dropped them on the next rebuild (drag, the 35 s
+        re-discovery, a config change, restart). Stored here alongside the
+        priority / control-mode / dependency overrides so the rebuild re-applies
+        them instead of wiping them.
+
+        Args:
+            device_id: e.g. ``energy_dashboard_pond_pump``
+            flag: ``"critical"`` or ``"controllable"``
+            value: the toggle's new state.
+        """
+        if flag == "critical":
+            self._critical_overrides[device_id] = bool(value)
+        elif flag == "controllable":
+            if value:
+                # Re-enabling means "go back to what the control config says" —
+                # an override of True can't create controllability that isn't
+                # there (see UnifiedDevice.controllable_override).
+                self._controllable_overrides.pop(device_id, None)
+            else:
+                self._controllable_overrides[device_id] = False
+        else:
+            _LOGGER.warning("Unknown device flag %r for %s (#650)", flag, device_id)
+            return
+
+        await self._save_storage()
+        await self.async_refresh_devices()
+        _LOGGER.info("Updated %s %s = %s (persisted)", device_id, flag, bool(value))
+
     async def async_remove_manual_mapping(self, energy_sensor: str) -> bool:
         """Remove a manual mapping so the device reverts to auto-discovery (#219).
 
@@ -1336,6 +1456,8 @@ class UnifiedDeviceRegistry:
             "priority_overrides": self._priority_overrides,
             "control_modes": self._control_mode_overrides,
             "dependencies": self._dependency_overrides,
+            "critical_overrides": self._critical_overrides,          # (#650)
+            "controllable_overrides": self._controllable_overrides,  # (#650)
             "rated_power_overrides": self._rated_power_overrides,
             "service_registrations": self._service_registrations,
             "device_goals": self._device_goals,

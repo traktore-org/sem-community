@@ -2880,10 +2880,22 @@ async def _async_register_services(
         prop = call.data.get("property")
         value = call.data.get("value")
 
-        if prop == "critical":
-            await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
-        elif prop == "controllable":
-            await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+        if prop in ("critical", "controllable"):
+            # (#650) Persist via the REGISTRY. Writing only into the
+            # LoadManagement dict — as this did pre-fix — lost the flag on the
+            # next `_sync_to_load_manager`, which replaces that entry wholesale
+            # (drag / 35 s re-discovery / config change / restart). The registry
+            # re-applies its overrides at device build, so the toggle sticks.
+            # The LoadManagement write stays: it takes effect this cycle and it
+            # is the ONLY store for devices the registry doesn't build
+            # (per-charger `load_device_*` entries, service registrations).
+            if prop == "critical":
+                await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
+            else:
+                await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+            reg = getattr(coordinator, "_device_registry", None)
+            if reg is not None:
+                await reg.async_set_device_flag(device_id, prop, bool(value))
         elif prop == "control_mode":
             # Update device control mode: off / peak_only / surplus (#49)
             registry = getattr(coordinator, '_device_registry', None)
