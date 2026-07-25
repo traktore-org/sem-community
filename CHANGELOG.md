@@ -123,6 +123,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real one means querying long-term statistics — a feature, not a bug fix. The suite had
   been *masking* this, because the test fixtures injected exactly these keys; a new contract
   test now reads the actual producers and fails CI for any attribute wired to a phantom key.
+- 🩺 **"Health check: 0 violations" now means something was actually checked** (#660,
+  coherence-audit) — nearly every check verified a value against a constraint its own
+  producer had enforced three lines earlier: `0 ≤ autarky ≤ 100` on a number assigned
+  `max(0, min(100, …))`, "cost is not negative" on `max(0, …)` fields, "solar is not
+  over-allocated" and "no flow is negative" on the output of a greedy allocator that
+  hands out `min(available, needed)`. Those are theorems, not tests. They could not fail,
+  so the diagnostic reported a clean bill of health straight through the autarky bug that
+  sat pinned at 0 % while self-consumption read 98 % — an in-range wrong number, which is
+  the only kind a range check cannot see. The instrument is now **clamp engagement**: the
+  clamped output is clean by definition, so what gets recorded is how much each guard had
+  to *remove*. One engaged cycle is a transient; the same clamp engaged for five straight
+  minutes is a wrong formula being held inside the valid range, and that is the violation.
+  The negative house-consumption residual is reported the same way, and the remaining flow
+  check is the one that spans two independent producers (per-string sensors vs the inverter
+  total, over-count direction only — string discovery caps at four slots, so a legitimate
+  under-count must not fire). Two thresholds were retuned off real hardware while we were
+  in here: the −1 W floor called an inverter's overnight standby draw a fault every night,
+  and the savings floor is deliberately left *un*instrumented because a negative raw saving
+  is correct behaviour under a negative import price. A standing test now requires every
+  surviving check to be demonstrated firing on a deliberately violating input built through
+  the real derivation, and an AST guard stops clamped fields from drifting back into the
+  non-negative list.
 - 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
   coherence-audit) — while a car is away SEM can't watch it being driven, so each day
   rollover advances the taper detector's virtual state of charge by the predicted daily

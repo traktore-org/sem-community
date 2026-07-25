@@ -3058,9 +3058,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._health_check.run_all_checks(
                 power,
                 flows=power_flows,
-                autarky=performance.autarky_rate,
-                self_consumption=performance.self_consumption_rate,
                 costs=costs,
+                # (#660) the autarky / self-consumption range check is gone —
+                # their producer clamps them into range, so it could never
+                # fire. What the calculator's clamps HAD to remove is passed
+                # instead, and a sustained correction is the violation.
+                clamp_engagement=getattr(
+                    self._energy_calculator, "clamp_engagement", {},
+                ),
                 home_hold_active=getattr(self, "_home_hold_active", False),
             )
 

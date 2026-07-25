@@ -62,6 +62,20 @@ class EnergyCalculator:
         # Rate history for 7-day averaging (dynamic tariffs)
         self._rate_history: deque = deque(maxlen=30)
 
+        # (#660) Clamp engagement — how much each ``max(0, …)`` /
+        # ``min(100, …)`` guard below actually REMOVED this cycle.
+        #
+        # The guards make every downstream range check unfireable: HealthCheck
+        # used to verify ``0 ≤ autarky ≤ 100`` on a value clamped to that
+        # range three lines after it was computed. Those checks reported
+        # "clean" through the whole HA-PROD sign-bug family, and the autarky
+        # bug of 2026-06-01 sat inside the range the whole time — the clamped
+        # OUTPUT of a guard is definitionally fine;
+        # what carries information is whether the clamp had to DO anything.
+        # A single engagement is a rounding/transient artefact — a sustained
+        # one is the formula being wrong (see ``HealthCheck.check_clamps``).
+        self.clamp_engagement: Dict[str, float] = {}
+
         # Accumulated savings/costs (running totals for accurate ROI)
         self._accumulated_savings: float = 0.0
         self._accumulated_battery_savings: float = 0.0
@@ -91,6 +105,20 @@ class EnergyCalculator:
         self._yearly_cost_seeded: bool = False
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
+
+    def _record_clamp(
+        self, name: str, raw: float, clamped: float, eps: float,
+    ) -> float:
+        """Record how much a clamp removed, and return the clamped value.
+
+        Writes (or clears) only its own key, so calculators that run at
+        different points in the cycle don't wipe each other's records.
+        """
+        if abs(raw - clamped) > eps:
+            self.clamp_engagement[name] = round(abs(raw - clamped), 3)
+        else:
+            self.clamp_engagement.pop(name, None)
+        return clamped
 
     def _ev_reset_day(self, now: datetime):
         """Return today's EV-day bucket key, deadline-based (#279 follow-up).
@@ -917,8 +945,22 @@ class EnergyCalculator:
         costs.daily_costs = self._get_daily_cost("cost_import", today)
         costs.daily_export_revenue = self._get_daily_cost("cost_export", today)
         costs.daily_net_cost = round(costs.daily_costs - costs.daily_export_revenue, 2)
+        # (#660) These two floors are what made HealthCheck's "cost is
+        # negative" check unfireable on them, and the check was duly removed.
+        # They are deliberately NOT instrumented as clamp engagement, unlike
+        # the rate clamps below: under a dynamic tariff with a genuinely
+        # negative import price (Nord Pool / ENTSO-E intraday go below zero)
+        # ``solar_self_consumed × import_rate`` is legitimately negative — the
+        # grid would have paid you to consume, so self-consuming saved nothing.
+        # The floor engaging there is correct behaviour, not a fault, and
+        # recording it would raise a violation every negative-price hour on
+        # exactly the installs that need trustworthy diagnostics most. An
+        # instrument that fires on a legitimate condition is the noise this
+        # issue set out to delete.
         costs.daily_savings = max(0, self._get_daily_cost("cost_savings", today))
-        costs.daily_battery_savings = max(0, self._get_daily_cost("cost_batt_savings", today))
+        costs.daily_battery_savings = max(
+            0, self._get_daily_cost("cost_batt_savings", today)
+        )
         # #351 M2 — headline total spans both. Pre-fix users comparing
         # daily_savings to import costs saw battery_to_ev portion
         # missing.
@@ -1039,6 +1081,14 @@ class EnergyCalculator:
         """
         metrics = PerformanceMetrics()
 
+        # (#660) Both rate clamps live inside conditional branches (no solar
+        # yet today, no consumption yet today). If a branch is skipped the
+        # record from an earlier cycle would linger and keep incrementing its
+        # streak into a violation that nothing is currently producing. Clear
+        # first, so a key present after this call means "engaged THIS cycle".
+        self.clamp_engagement.pop("self_consumption_rate", None)
+        self.clamp_engagement.pop("autarky_rate", None)
+
         # Self consumption rate = (solar - export) / solar — direction-of-
         # flow-agnostic; whatever solar didn't go to the grid was
         # consumed locally (by home, battery, or EV). No flow attribution
@@ -1048,7 +1098,13 @@ class EnergyCalculator:
             metrics.self_consumption_rate = round(
                 (solar_used / energy.daily_solar) * 100, 1
             )
-            metrics.self_consumption_rate = max(0, min(100, metrics.self_consumption_rate))
+            # (#660) record what the range clamp removed before applying it.
+            metrics.self_consumption_rate = self._record_clamp(
+                "self_consumption_rate",
+                metrics.self_consumption_rate,
+                max(0, min(100, metrics.self_consumption_rate)),
+                eps=0.1,
+            )
 
         # Autarky rate — share of consumption supplied from "own"
         # sources (solar + battery) vs grid.
@@ -1097,7 +1153,14 @@ class EnergyCalculator:
                 metrics.autarky_rate = round(
                     (own_supply / total_consumption) * 100, 1,
                 )
-                metrics.autarky_rate = max(0, min(100, metrics.autarky_rate))
+                # (#660) see ``_record_clamp`` — the removed amount is the
+                # signal, the clamped value never is.
+                metrics.autarky_rate = self._record_clamp(
+                    "autarky_rate",
+                    metrics.autarky_rate,
+                    max(0, min(100, metrics.autarky_rate)),
+                    eps=0.1,
+                )
         else:
             # Legacy path — kept for v1.6.x compatibility and the
             # two-arg call shape used in pre-v1.7.0 test fixtures.
@@ -1107,7 +1170,14 @@ class EnergyCalculator:
                 metrics.autarky_rate = round(
                     (own_supply / total_consumption) * 100, 1,
                 )
-                metrics.autarky_rate = max(0, min(100, metrics.autarky_rate))
+                # (#660) see ``_record_clamp`` — the removed amount is the
+                # signal, the clamped value never is.
+                metrics.autarky_rate = self._record_clamp(
+                    "autarky_rate",
+                    metrics.autarky_rate,
+                    max(0, min(100, metrics.autarky_rate)),
+                    eps=0.1,
+                )
 
         # Simple efficiency estimates
         metrics.solar_efficiency = 85.0 if power.solar_power > 0 else 0.0
