@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-charger taper/SOC state persists — the battery graphic keeps its last-known value
   across restarts and between sessions. Display-only: charging decisions never use the
   estimate (they read the real vehicle SOC exclusively).
+- 🔋 **Per-charger installs no longer double-feed the primary EV taper detector** (#639,
+  coherence-audit) — the fleet energy block ran unconditionally alongside the per-charger
+  feeder, so \`energy_since_full\` accrued at ~2× (virtual SOC read LOW → night over-charging,
+  delayed "nearly full") and a sibling charger's draw could land on the primary's detector.
+  The fleet block is now legacy-only (the #589 W2/W3 gate, completed on the energy path),
+  with a top-level-counter fallback for the primary so legacy configs keep their drift-free
+  hardware anchor. Shape-guarded so the gate can't be lost again.
 - 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
   \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
   dropped them to the entry-write + reload path: a slider change during a charge session
