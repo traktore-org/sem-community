@@ -360,6 +360,45 @@ class SurplusAllocationData:
         }
 
 
+async def deactivate_devices(devices, reason: str = "teardown") -> int:
+    """Command every active device in ``devices`` back to normal (#656).
+
+    Module-level so the teardown path can use it after the registry has been
+    detached — at removal time there is no controller left to ask, only the
+    devices themselves.
+
+    Deliberately takes the RAW device collection rather than
+    ``get_devices_sorted()``: that view hides ``is_enabled=False`` and
+    ``managed_externally`` devices, both of which can be latched ON right now,
+    and a teardown that skips them leaves exactly the strand this exists to
+    prevent. Lowest priority first, so the log reads like a normal shed.
+
+    Best-effort: one device failing must not abort the rest. The alternative
+    to swallowing here is an unattended heating device left commanded on by an
+    integration on its way out.
+    """
+    devices = sorted(
+        devices, key=lambda d: getattr(d, "priority", 99) or 99, reverse=True,
+    )
+    stopped = 0
+    for device in devices:
+        if not getattr(device, "is_active", False):
+            continue
+        try:
+            await device.deactivate()
+            stopped += 1
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "Could not deactivate %s during %s (continuing): %s",
+                getattr(device, "device_id", device), reason, e,
+            )
+    _LOGGER.info(
+        "Deactivated %d of %d surplus-controlled devices (%s)",
+        stopped, len(devices), reason,
+    )
+    return stopped
+
+
 class SurplusController:
     """Controls surplus power distribution across multiple devices.
 
@@ -619,6 +658,20 @@ class SurplusController:
             count = len(self._devices)
             self._devices.clear()
             _LOGGER.info("Cleared %d registered devices on unload", count)
+
+    def detach_devices(self) -> List[ControllableDevice]:
+        """Clear the registry and hand the devices back to the caller (#656).
+
+        ``clear_devices()`` on its own is what stranded loads: unload dropped
+        the references to devices SEM had switched ON, and nothing was left
+        that could turn them off. Teardown needs both halves — the registry
+        emptied (so a reload can't leak the prior cycle's registrations) AND
+        something still holding the actuators, in case this unload turns out
+        to be a removal rather than a reload.
+        """
+        devices = list(self._devices.values())
+        self.clear_devices()
+        return devices
 
     def get_device(self, device_id: str) -> Optional[ControllableDevice]:
         """Get a registered device by ID."""
@@ -1376,9 +1429,21 @@ class SurplusController:
             return max(0, distributable - 500)
         return distributable
 
-    async def deactivate_all(self) -> None:
-        """Deactivate all devices (emergency or shutdown)."""
-        for device in reversed(self.get_devices_sorted()):
-            if device.is_active:
-                await device.deactivate()
-        _LOGGER.info("Deactivated all surplus-controlled devices")
+    async def deactivate_all(self, reason: str = "emergency") -> None:
+        """Deactivate all devices (emergency stop, or SEM going away).
+
+        Iterates ``self._devices`` rather than ``get_devices_sorted()`` (#656).
+        That view hides devices that are ``is_enabled=False`` or
+        ``managed_externally`` — both of which can be latched ON right now, and
+        a teardown that skips them leaves exactly the strand this exists to
+        prevent. Lowest priority first, so the log reads like a normal shed.
+
+        One device failing must not abort the rest: this runs on the
+        unload/remove path, where the alternative to a best-effort loop is an
+        unattended heating device left commanded on by an integration that is
+        on its way out.
+
+        ``reason`` only labels the log line, so an emergency stop doesn't read
+        as a teardown in the journal.
+        """
+        await deactivate_devices(self._devices.values(), reason)

@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
@@ -35,6 +35,9 @@ from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
+
+if TYPE_CHECKING:
+    from .devices.base import ControllableDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +69,15 @@ def _content_hash_cache_bust(card_root: str, base_url: str, version: str) -> str
 
 _VERSION_STORE_VERSION = 1
 _VERSION_STORE_KEY_PREFIX = "sem_seen_version_"
+
+# #656 — entry_id → the devices detached at unload, parked so
+# ``async_remove_entry`` still has something to deactivate. HA runs unload
+# FIRST and pops the coordinator out of ``hass.data``, so by remove time there
+# is no other way back to the loads SEM is holding. The controller's registry
+# is still cleared at unload (the reload-leak contract); only the detached
+# device objects live here. A reload drops the stash in ``async_setup_entry``
+# without deactivating anything.
+_PENDING_LOAD_TEARDOWN: Dict[str, List["ControllableDevice"]] = {}
 
 
 async def _maybe_emit_upgrade_notification(hass, entry) -> None:
@@ -1409,6 +1421,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Initialize domain data storage (kept for backward compatibility with services)
     hass.data.setdefault(DOMAIN, {})
 
+    # #656 — we're setting up, so the preceding unload was a reload (or an
+    # HA start), not a removal. Drop the teardown stash WITHOUT deactivating:
+    # the devices it holds are about to be re-registered on a fresh controller,
+    # and bouncing a running heat pump on every options change is not a safety
+    # improvement.
+    _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
+
     # In-memory SEM log ring buffer for the diagnose surface (#461/#462
     # triage gap on Supervisor installs — no flat log file to tail).
     # Idempotent across reloads. Stored under its own key so code that
@@ -2197,6 +2216,42 @@ async def async_remove_config_entry_device(
     return True
 
 
+async def _async_deactivate_surplus_loads(devices, reason: str) -> None:
+    """Command every SEM-controlled load back to normal (#656).
+
+    Best-effort and never raises: this runs on teardown paths where the
+    alternative to swallowing an error is an unattended heating device left
+    latched on by an integration that no longer exists.
+    """
+    if not devices:
+        return
+    try:
+        from .coordinator.surplus_controller import deactivate_devices
+
+        await deactivate_devices(devices, reason)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.warning(
+            "Could not deactivate SEM-controlled loads on %s "
+            "(non-blocking): %s", reason, e,
+        )
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
+    """Release any load SEM was still holding when it was removed (#656).
+
+    ``async_unload_entry`` has already run and taken the coordinator out of
+    ``hass.data``, so it detached the devices and parked them for us. Without
+    this, a hot-water boost temperature, an SG-Ready relay or a SEM-forced
+    switch stays commanded indefinitely with nothing left to expire it — and a
+    re-install won't fix it either: ``DeviceReconciler`` classifies a
+    leftover-ON load as ``external_on`` and deliberately refuses to fight it.
+    """
+    devices = _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
+    if not devices:
+        return
+    await _async_deactivate_surplus_loads(devices, "integration removed")
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Unload a config entry."""
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
@@ -2225,9 +2280,36 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
                         "(non-blocking): %s", _bid, _e,
                     )
 
+            # #656 — loads must not be stranded ON when SEM goes away.
+            #
+            # HA calls this for a reload, a disable AND a removal, and the
+            # right answer differs per case:
+            #
+            # * reload — SEM is coming back in seconds. Turning the hot-water
+            #   boost or the SG-Ready relay off here would bounce a running
+            #   heating device on every options change (and trip its
+            #   compressor anti-short-cycle timer), so don't.
+            #   (An HA shutdown/restart never reaches this function at all —
+            #   HA fires EVENT_HOMEASSISTANT_STOP → ConfigEntries.
+            #   _async_shutdown → entry.async_shutdown(), which does not
+            #   unload entries. So no stash is created on that path, and the
+            #   load simply stays as it was until SEM comes back up.)
+            # * disabled — nothing is coming back. Deactivate now.
+            # * removed — HA runs THIS first and then ``async_remove_entry``,
+            #   by which point the coordinator is out of ``hass.data``. So the
+            #   controller is stashed here and deactivated there. The stash is
+            #   dropped by the next ``async_setup_entry`` (i.e. a reload), so a
+            #   device list only lingers between an unload and whatever
+            #   follows it.
             sc = getattr(coordinator, "_surplus_controller", None)
-            if sc is not None and hasattr(sc, "clear_devices"):
-                sc.clear_devices()
+            if sc is not None:
+                # detach_devices() clears the registry AND hands the devices
+                # back, so the reload-leak contract holds on every path below.
+                devices = sc.detach_devices()
+                if entry.disabled_by is not None:
+                    await _async_deactivate_surplus_loads(devices, "disabled")
+                elif devices:
+                    _PENDING_LOAD_TEARDOWN[entry.entry_id] = devices
 
         hass.data[DOMAIN].pop(entry.entry_id, None)
 

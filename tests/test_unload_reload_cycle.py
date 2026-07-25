@@ -142,6 +142,12 @@ async def test_unload_clears_surplus_controller_devices(
         f"{list(sc._devices.keys())}"
     )
 
+    # #656 — unload parks the detached devices for a possible removal. Nothing
+    # here removes the entry, so drop the stash rather than leaving this
+    # MagicMock (and the hass it closes over) alive in a module-level dict.
+    import custom_components.solar_energy_management as sem
+    sem._PENDING_LOAD_TEARDOWN.pop(sem_config_entry.entry_id, None)
+
 
 # ---------------------------------------------------------------------------
 # Reload — idempotent
