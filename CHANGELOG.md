@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-charger taper/SOC state persists — the battery graphic keeps its last-known value
   across restarts and between sessions. Display-only: charging decisions never use the
   estimate (they read the real vehicle SOC exclusively).
+- 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
+  \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
+  dropped them to the entry-write + reload path: a slider change during a charge session
+  never reached the running planner (caught live when a mid-charge peak change didn't step
+  the EV night rate). The three keys now route through the load manager's live updaters —
+  applied within one cycle, persisted, no reload.
 - ⚡ **The peak-managed night rate now actually engages** (#630 follow-up) — the
   always-present window deadline shadowed the new rate entirely (it computes first and
   clamps tiny requirements up to Min, so \`top_up_amps\` was never consulted). The night

@@ -3611,9 +3611,25 @@ async def _async_register_phase_services(
         # and snapshots _skip_options_reload — so no reload, AND
         # entity state is fresh. Unrecognized keys fall through to
         # the direct write.
+        # (#636) Load-management peaks have LIVE updaters but no number
+        # entities — pre-fix they fell to the unrouted → entry-write →
+        # RELOAD path, so a card slider change never reached the running
+        # planner mid-session (the #462 silent-no-op class, caught live
+        # when a mid-charge peak change didn't step the EV night rate).
+        _LM_LIVE_KEYS = {
+            "target_peak_limit": "update_target_peak_limit",
+            "warning_peak_level": "update_warning_peak_level",
+            "emergency_peak_level": "update_emergency_peak_level",
+        }
         unrouted: list[str] = []
         for key in tunable_keys:
             value = options[key]
+            _coord = getattr(target_entry, "runtime_data", None)
+            if (key in _LM_LIVE_KEYS and _coord is not None
+                    and getattr(_coord, "_load_manager", None)):
+                await getattr(_coord._load_manager, _LM_LIVE_KEYS[key])(
+                    float(value))
+                continue
             if hass.states.get(f"number.sem_{key}") is not None:
                 await hass.services.async_call(
                     "number", "set_value",

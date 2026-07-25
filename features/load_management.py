@@ -390,6 +390,28 @@ class LoadManagementCoordinator:
         _LOGGER.info("Updated target peak limit to %skW", new_limit)
         self._trigger_callbacks()
 
+    async def update_warning_peak_level(self, new_level: float):
+        """(#636) Live-apply + persist the warning peak level."""
+        self._warning_level = new_level
+        coordinator = getattr(self.config_entry, "runtime_data", None)
+        if coordinator:
+            coordinator._skip_options_reload = True
+        new_options = {**self.config_entry.options, "warning_peak_level": new_level}
+        self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
+        _LOGGER.info("Updated warning peak level to %skW", new_level)
+        self._trigger_callbacks()
+
+    async def update_emergency_peak_level(self, new_level: float):
+        """(#636) Live-apply + persist the emergency peak level."""
+        self._emergency_level = new_level
+        coordinator = getattr(self.config_entry, "runtime_data", None)
+        if coordinator:
+            coordinator._skip_options_reload = True
+        new_options = {**self.config_entry.options, "emergency_peak_level": new_level}
+        self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
+        _LOGGER.info("Updated emergency peak level to %skW", new_level)
+        self._trigger_callbacks()
+
     async def update_device_priority(self, device_id: str, priority: int):
         """Update device priority."""
         if device_id in self._devices:
