@@ -14,6 +14,7 @@ from .types import (
     PowerFlows, EnergyFlows,
 )
 from ..utils.time_manager import TimeManager
+from .units import energy_state_to_kwh
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -433,19 +434,10 @@ class EnergyCalculator:
         70% cap). Unknown/missing units keep the previous assume-kWh
         behavior.
         """
-        try:
-            v = float(state.state)
-        except (ValueError, TypeError):
-            return 0.0
-        unit = str(
-            (getattr(state, "attributes", {}) or {}).get("unit_of_measurement")
-            or ""
-        ).strip().lower()
-        if unit == "wh":
-            return v / 1000.0
-        if unit == "mwh":
-            return v * 1000.0
-        return v
+        # #641 — this rule was the reference for the shared one; the body now
+        # delegates so there is exactly one Wh/MWh table. The method stays as
+        # the name the rest of the class (and its tests) call.
+        return energy_state_to_kwh(state, default=0.0)
 
     def seed_lifetime_from_hardware(self, hass: HomeAssistant, ed_config) -> None:
         """Seed lifetime accumulators from hardware energy counters.

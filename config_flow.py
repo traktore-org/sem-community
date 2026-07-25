@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     DEFAULT_OBSERVER_MODE,
 )
+from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
 from .hardware_detection import (
     HardwareDetector,
@@ -68,11 +69,16 @@ def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
             if fnmatch.fnmatch(state.entity_id, pattern):
                 try:
                     val = float(state.state)
-                    unit = state.attributes.get("unit_of_measurement", "")
                     if val > 0:
-                        # Convert Wh to kWh if needed
-                        if unit.lower() == "wh" or val > 500:
-                            val = val / 1000
+                        # #641 — the unit half goes through units.py (so MWh
+                        # converts too). The ``> 500`` magnitude heuristic
+                        # applies ONLY to an UNLABELLED counter, which is the
+                        # case it was written for: applying it after a unit
+                        # conversion would divide a labelled 600 kWh bank twice.
+                        labelled = bool(normalize_unit(state))
+                        val = energy_state_to_kwh(state, default=val)
+                        if not labelled and val > 500:
+                            val = val / 1000  # unlabelled Wh → kWh
                         detected["battery_capacity_kwh"] = round(val, 1)
                         break
                 except (ValueError, TypeError):

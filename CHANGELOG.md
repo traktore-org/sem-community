@@ -70,6 +70,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the health surface names the offending unit (\`b2\`) instead of just "the battery".
   Two-sensor pair batteries are untouched — their direction is user-declared, so there is
   no lock to contradict.
+- 📏 **A sensor reporting in kW is now read as kW everywhere** (#641, coherence-audit) — the
+  "sensor value → watts" conversion was copy-pasted into eight places and every copy had
+  picked its own rule for what counts as a kilowatt: exact-case \`kW\`, lowercase \`kw\`, the
+  long spellings, or no check at all. So the *same* sensor could be read at 1000× different
+  magnitudes by two subsystems in the same cycle — a charger sensor labelled \`kw\` (common on
+  template and MQTT sensors) counted as 11 kW by the energy balance and 11 **watts** by the
+  per-charger budget math. Worse, generic devices did no conversion at all: a heat pump or
+  pool pump on a kW power sensor taught SEM a ~3 W rated power, which quietly wrecked its
+  activation threshold, its solar-runtime credit and its shed decisions. There is now one
+  rule, in one file, covering W/kW/MW/GW and Wh/kWh/MWh/GWh — and a CI lint that fails the
+  build if anyone writes a ninth copy. One behaviour change worth naming: a power sensor with
+  **no** unit at all is now read as watts everywhere, including the charging-history
+  bootstrap, which used to assume kilowatts and so disagreed with the live reader by 1000×
+  about the very same sensor.
 - 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
   coherence-audit) — while a car is away SEM can't watch it being driven, so each day
   rollover advances the taper detector's virtual state of charge by the predicted daily

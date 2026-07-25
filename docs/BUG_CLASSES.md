@@ -350,6 +350,30 @@ reachability/coverage check against scenario corpora catches this class.)
 
 ---
 
+### 21. Per-site unit normalization with divergent match rules — GUARDED
+**Symptom:** the "sensor state → watts (or kWh)" conversion is a copy-pasted inline block, and
+each copy picked its own unit-match rule, so the SAME physical sensor is read at DIFFERENT
+magnitudes by different subsystems in the same cycle — with no error anywhere, because every
+copy is individually correct-looking. A cousin of class 10 (that one is a keyword gap for entity
+*resolution*; this is a unit-string gap for value *conversion*). **Instances (#641, 2026-07-25):**
+five live rules across eight sites — exact-case `== "kW"` (`ev_control._this_charger_power`,
+which `per_charger_context` funnels the whole multi-charger loop through), lowercase `== "kw"`
+with no strip (`sensor_reader._read_sensor`, `coordinator._charger_power_w`),
+strip+lower+long-form synonyms (`forecast_reader`, added by #575 — a prior bug in this same
+family), Wh+MWh (`energy_calculator._energy_state_kwh`, added by #551 — Fronius Gen24 lifetime
+counters really do report Wh), and **no check at all** (`devices/base.observed_power_w` /
+`get_current_consumption`, where a kW heat-pump sensor taught `calibrate_rated_power` a ~3 W
+rated power and collapsed the activation threshold). **Fix pattern:** ONE
+`power_state_to_watts()` / `energy_state_to_kwh()` pair in `coordinator/units.py`, adopting the
+union of the strictest copies; every site routes through it, including the ones that had no
+conversion. Unit *predicates* (`is_power_unit`/`is_energy_unit`) live there too, so a detection
+site can't drift from a conversion site. **Guard:** AST lint in `tests/test_641_units.py` — any
+`unit_of_measurement`-derived name compared against a power/energy literal outside `units.py`
+fails CI, making a sixth copy unrepresentable. **Sweep question:** for any value read off a HA
+state, is there exactly ONE place that decides its magnitude?
+
+---
+
 ## Meta-classes (the coherence audit hunts these too)
 
 - **Duplicated mechanism** — the same debounce/retry/reconcile/swap built in 2+ places (e.g. the
