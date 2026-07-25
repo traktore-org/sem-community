@@ -196,6 +196,11 @@ per-charger flow *entities*, ~line 1618) legitimately keep `len > 1` — they su
 registry entities, they don't read config; do NOT "fix" those. Refs #536 #616.
 
 ### 14. One-shot restore vs a late/rebuilt device (accrued per-device state resets) — PARTIAL
+**New instance (2026-07-24, #635):** the per-charger EV-intelligence restore read
+``ev_intelligence.chargers.<cid>`` that NO save path ever wrote, and the primary save
+REPLACED the whole dict each cycle (also wiping session_history) — estimated SOC blanked on
+every restart. The save/restore ASYMMETRY variant: audit every restore reader for a matching
+writer and vice versa.
 **Symptom:** a load's accrued daily progress ("X/Y h on solar today", the runtime toward its
 minimum-runtime goal) resets to 0 on every HA restart and the load re-runs its whole daily target —
 even though a persist+restore for it exists. **Root shape:** per-device state that lives in the
@@ -317,6 +322,31 @@ the flag for actuation. Full closure = the flag flip that retires the hand-clear
 **Guard (now):** the family test (class 17) also asserts the markers are `False` after a
 gate-driven stop; `test_desired_state.py::test_reconcile_markers_derive_from_source` pins the
 derivation. Refs #620.
+
+### 19. UI write path never reaches the runtime reader (unrouted option / dual storage) — GUARDED
+**Symptom:** a card control writes somewhere (entry option, entity) that the running consumer
+never reads — silently no-op until a reload/restart, or forever (dual storage aligned only by
+coincidence of defaults). **Live catches (2026-07-24/25):** the config-card peak slider
+(unrouted \`set_option\` key → reload-or-nothing, #636); the legionella target (Control card
+wrote the entity, the coordinator read the config option — equal only because both sat at the
+default). **Root shape:** writer and reader bind to different stores/names; name-based routing
+(\`number.sem_<key>\`) misses mapped entities (#542's CONFIG_KEY_MAP). **Guard:**
+\`tests/test_637_live_options.py\` — every card option must declare its routing class
+(LM_LIVE / LIVE_CONFIG / STRUCTURAL_RELOAD / entity-backed), and every LIVE_CONFIG key must
+prove a runtime read exists. **Sweep question:** for every UI control, WHERE does the write
+land and WHO reads that exact store at runtime?
+
+### 20. Shadowed decision branch (an always-true earlier branch starves a newer one) — PARTIAL
+**Symptom:** a new decision branch is added, tested in isolation, and never executes in
+production because an earlier branch in the same function is effectively always true on real
+inputs. **Live catch (2026-07-24):** #630's peak-managed night rate — \`deadline_amps\` is
+always >0 once a night window resolves, so the deadline branch clamped everything to Min and
+\`top_up_amps\` was never consulted; the feature shipped inert and only reasoning over live
+logs exposed it. **Fix pattern:** merge the branches' authorities explicitly
+(\`max(deadline, top_up)\`) rather than ordering them. **Guard (partial):** precedence pins in
+\`test_629_ev_orchestration.py\`. **Sweep question:** for every decision function with ordered
+branches, can the LATER branches actually be reached under production-shaped inputs? (A
+reachability/coverage check against scenario corpora catches this class.)
 
 ---
 
