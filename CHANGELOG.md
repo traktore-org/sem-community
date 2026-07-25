@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The fleet block is now legacy-only (the #589 W2/W3 gate, completed on the energy path),
   with a top-level-counter fallback for the primary so legacy configs keep their drift-free
   hardware anchor. Shape-guarded so the gate can't be lost again.
+- 🔥 **No more forced 65 °C disinfection cycle after every restart** (#640, coherence-audit) —
+  the legionella-timestamp restore ran at first refresh, BEFORE the hot-water device was
+  registered — a silent no-op, so every restart read "999 h overdue" and grid-heated the
+  boiler to the legionella target. The seed now happens at the registration site (stored
+  time restored; fresh installs seed "now"), and a guard keeps the dead parallel restore out.
 - 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
   \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
   dropped them to the entry-write + reload path: a slider change during a charge session

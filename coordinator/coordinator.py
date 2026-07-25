@@ -1916,25 +1916,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._storage.get_sign_state()
             )
 
-            # Restore the legionella timestamp (#508 I2). With the cycle
-            # now driven every coordinator tick (#508 C1), a None
-            # timestamp reads as "overdue" and would force a disinfection
-            # run on every restart. Restore the persisted time; on a
-            # fresh install (no stored time) seed to NOW so the first
-            # cycle is ~interval_hours away, not immediate.
-            hw_dev = self._surplus_controller._devices.get("hot_water") \
-                if hasattr(self, "_surplus_controller") else None
-            if hw_dev is not None and hasattr(hw_dev, "record_legionella_cycle"):
-                stored_leg = self._storage.get_legionella_time()
-                if stored_leg:
-                    try:
-                        hw_dev.record_legionella_cycle(
-                            dt_util.parse_datetime(stored_leg)
-                        )
-                    except (ValueError, TypeError):
-                        hw_dev.record_legionella_cycle(dt_util.now())
-                else:
-                    hw_dev.record_legionella_cycle(dt_util.now())
+            # (#640) The legionella-timestamp restore MOVED to the hot_water
+            # registration site in __init__.py — this first-refresh block runs
+            # BEFORE the device exists, so restoring here was a no-op and every
+            # restart forced a 65°C disinfection cycle (audit class 14).
 
             # Restore per-charger daily EV energy. It was in-memory only, so it reset to
             # 0 on every restart while the global daily_ev persisted — desyncing the
