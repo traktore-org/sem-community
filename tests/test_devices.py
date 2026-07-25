@@ -192,7 +192,7 @@ async def test_switch_device_activate_no_entity(mock_hass):
 async def test_switch_device_anti_flicker_off(switch_device):
     """Test activate respects min_off_time (anti-flicker)."""
     # Simulate recent deactivation
-    switch_device._status.last_deactivated = datetime.now()
+    switch_device._last_deactivated = datetime.now()  # (#644) unified clock
     result = await switch_device.activate(3000.0)
     assert result == 0.0
 
@@ -212,7 +212,7 @@ async def test_switch_device_deactivate_after_min_on_time(switch_device):
     """Test deactivate works after min_on_time has elapsed."""
     await switch_device.activate(3000.0)
     # Fake that activation happened long ago
-    switch_device._status.last_activated = datetime.now() - timedelta(seconds=400)
+    switch_device._last_activated = datetime.now() - timedelta(seconds=400)  # (#644) unified clock
     await switch_device.deactivate()
     assert not switch_device.is_active
     assert switch_device._status.state == DeviceState.IDLE
@@ -304,7 +304,7 @@ async def test_climate_device_activate_no_entity(mock_hass):
 @pytest.mark.asyncio
 async def test_climate_device_anti_flicker_off(climate_device):
     """Activate respects min_off_time."""
-    climate_device._status.last_deactivated = datetime.now()
+    climate_device._last_deactivated = datetime.now()  # (#644) unified clock
     result = await climate_device.activate(3000.0)
     assert result == 0.0
 
@@ -314,7 +314,7 @@ async def test_climate_device_deactivate_sets_off(climate_device):
     """Deactivate turns the unit off via hvac_mode: off."""
     await climate_device.activate(3000.0)
     climate_device.hass.services.async_call.reset_mock()
-    climate_device._status.last_activated = datetime.now() - timedelta(seconds=400)
+    climate_device._last_activated = datetime.now() - timedelta(seconds=400)  # (#644) unified clock
     await climate_device.deactivate()
     assert not climate_device.is_active
     assert climate_device._status.state == DeviceState.IDLE
