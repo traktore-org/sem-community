@@ -82,6 +82,12 @@ class ChargingContext:
     calculated_current: float = 0.0
     excess_solar: float = 0.0
     available_power: float = 0.0
+    # (#657) Is there meaningful sun right now — the same
+    # ``solar_w >= min_solar_w`` threshold ``decide.py`` uses to call the sun
+    # gone. The state machine doesn't read it; it exists so the EV status
+    # sensor can say WHY charging is or isn't happening. That attribute used
+    # to read a ``coordinator.data`` key nothing ever wrote.
+    solar_sufficient: bool = False
 
     # Targets
     daily_target_reached: bool = False

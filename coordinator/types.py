@@ -571,6 +571,13 @@ class LoadManagementData:
     power_charge_cost: float = 0.0
     peak_trend: str = "stable"
     tariff_type: str = "unknown"
+    # (#657) The managed-device table the load-management card renders.
+    # ``LoadManager.get_load_management_data()["devices"]`` has always
+    # computed it; ``_build_load_management_data`` copied every OTHER field,
+    # so ``sensor.sem_load_management_status`` read a key nothing wrote and
+    # its device table was permanently empty. Excluded from the recorder by
+    # the sensor (see #581) — it's a live-only structure.
+    devices: Dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
@@ -841,6 +848,19 @@ class SEMData:
     charging_strategy_reason: str = ""
     available_power: float = 0.0
     calculated_current: float = 0.0
+    # (#657) The "why is my car not charging" flags. All three are decided
+    # every cycle inside ``_build_charging_context`` and were consumed by
+    # ``sensor.sem_ev_charging_status``'s attributes — but the hop onto
+    # ``coordinator.data`` was never written, so the one surface designed to
+    # answer that question returned null for all of them.
+    battery_too_low: bool = False
+    battery_needs_priority: bool = False
+    solar_sufficient: bool = False
+    # (#657) Budget internals behind ``sensor.sem_available_power``:
+    # solar minus home minus battery charge, and the SOC-graduated battery
+    # allowance the canonical EVBudget actually granted this cycle.
+    excess_solar: float = 0.0
+    safe_discharge_power: float = 0.0
 
     # New phase data
     surplus_control: SurplusControlData = field(default_factory=SurplusControlData)
@@ -1044,6 +1064,12 @@ class SEMData:
             "charging_strategy_reason": self.charging_strategy_reason,
             "available_power": self.available_power,
             "calculated_current": self.calculated_current,
+            # (#657) EV block reasons + budget internals.
+            "battery_too_low": self.battery_too_low,
+            "battery_needs_priority": self.battery_needs_priority,
+            "solar_sufficient": self.solar_sufficient,
+            "excess_solar": self.excess_solar,
+            "safe_discharge_power": self.safe_discharge_power,
 
             # EV aliases and routing
             "ev_charging_power": self.power.ev_power,
@@ -1075,6 +1101,7 @@ class SEMData:
             "power_charge_cost": self.load_management.power_charge_cost,
             "peak_trend": self.load_management.peak_trend,
             "tariff_type": self.load_management.tariff_type,
+            "load_management_devices": self.load_management.devices,
 
             # Timestamp
             "last_update": self.last_update,

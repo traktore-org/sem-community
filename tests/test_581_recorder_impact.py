@@ -74,8 +74,9 @@ class TestRecorderImpact581:
             "schedule_ev_hours",
             "energy_dashboard",
             "schedule",
-            "top_5_peaks",
-            "top_5_peaks_formatted",
+            # top_5_peaks / top_5_peaks_formatted were removed in #657 — the
+            # attributes were built from a coordinator key nothing ever wrote,
+            # so they never reached a state for the recorder to store.
         ):
             assert key in unrecorded, f"{key} should be excluded from recorder"
 
