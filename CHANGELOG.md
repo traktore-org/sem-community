@@ -70,6 +70,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the health surface names the offending unit (\`b2\`) instead of just "the battery".
   Two-sensor pair batteries are untouched — their direction is user-declared, so there is
   no lock to contradict.
+- 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
+  coherence-audit) — while a car is away SEM can't watch it being driven, so each day
+  rollover advances the taper detector's virtual state of charge by the predicted daily
+  consumption. That decay only ever reached the PRIMARY charger's detector, and it was gated
+  on the *fleet* "an EV is plugged in" flag (ledger class 3). So a second car charged full on
+  Sunday, drove all week, and its estimate still read ~100 % — and any one car sitting plugged
+  in overnight froze the decay for every other car too. This is load-bearing when the real
+  SOC entity is offline: the night-target planner falls back to the virtual SOC, sees
+  "nothing to charge", and silently skips a charge that was needed. Each detector is now
+  decayed on its own connection state. Single-charger installs are unaffected.
 - 🔌 **A surplus load is no longer switched back on at dusk by the peak manager** (#649,
   coherence-audit) — peak shed/restore for surplus-mode loads ran in TWO engines with
   separate state, anti-flicker and restore criteria. Shedding twice was survivable;

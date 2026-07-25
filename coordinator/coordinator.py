@@ -3563,15 +3563,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._today_surplus_hours = [False] * 24
                 self._today_ev_hours = [False] * 24
                 # Day rollover: decay virtual SOC when car is unplugged (#106)
-                if (
-                    not power.ev_connected
-                    and self._ev_taper_detector.last_full_timestamp
-                ):
-                    predicted = self._predictor.predict_ev_consumption_tomorrow(now_time)
-                    fallback = self.config.get("daily_ev_target", 10)
-                    outdoor_temp = self._read_outdoor_temperature()
-                    temp_factor = EVTaperDetector.temperature_correction_factor(outdoor_temp)
-                    self._ev_taper_detector.apply_daily_decay(predicted, fallback, temp_factor)
+                self._apply_daily_taper_decay(now_time, power)
                 self._tracker_date = today_date
             hour = now_time.hour
             if surplus_data.surplus_total_w > 100:
@@ -6517,6 +6509,65 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             }
 
         return result
+
+    def _apply_daily_taper_decay(self, now_time, power) -> None:
+        """Day-rollover virtual-SOC decay, PER charger (#106, #648).
+
+        While a car is away SEM can't see it being driven, so at each day
+        rollover the taper detector's ``energy_since_full`` is advanced by the
+        predicted daily consumption — that's what keeps the virtual SOC from
+        reading "still full from Sunday" all week.
+
+        It used to run through the ``_ev_taper_detector`` property, which
+        resolves the PRIMARY detector only, gated on the FLEET
+        ``power.ev_connected``. Two ways that goes wrong on a multi-charger
+        install (ledger class 3, fleet-read-for-one):
+
+        * **Secondary detectors never decayed at all.** Car 2 charges full on
+          Sunday and drives all week; its detector still believes ~100 %. That
+          is load-bearing, not cosmetic: ``_resolve_charger_soc`` falls back to
+          the per-charger virtual SOC when the real SOC entity is offline, so
+          ``build_night_target_map`` computes remaining ≈ 0 and silently skips
+          a night charge that was needed.
+        * **One plugged car suppressed decay for every other car.** The fleet
+          gate is true while ANY charger is connected, so car 2 sitting plugged
+          in overnight froze car 1's virtual SOC too.
+
+        Each detector is now gated on its OWN
+        ``_last_ev_connected_per_charger[cid]`` — the same per-charger
+        connection state published as ``charger_<cid>_connected``.
+        """
+        detectors = dict(getattr(self, "_ev_taper_detectors", None) or {})
+        if detectors:
+            connected = getattr(self, "_last_ev_connected_per_charger", None) or {}
+            targets = [
+                (cid, det) for cid, det in detectors.items()
+                if det is not None and not connected.get(cid, False)
+            ]
+        else:
+            # Legacy / pre-first-loop: one default detector and no per-charger
+            # connection state to consult, so the fleet flag IS this charger's.
+            # FLEET-READ: single-detector install — no per-charger state exists.
+            targets = (
+                [] if power.ev_connected
+                else [(None, self._ev_taper_detector)]
+            )
+
+        targets = [(cid, det) for cid, det in targets if det is not None
+                   and det.last_full_timestamp]
+        if not targets:
+            return
+
+        # Shared across chargers — computed once, only when something decays.
+        predicted = self._predictor.predict_ev_consumption_tomorrow(now_time)
+        fallback = self.config.get("daily_ev_target", 10)
+        temp_factor = EVTaperDetector.temperature_correction_factor(
+            self._read_outdoor_temperature()
+        )
+        for cid, det in targets:
+            if cid is not None:
+                _LOGGER.debug("Day rollover: decaying virtual SOC for %s", cid)
+            det.apply_daily_decay(predicted, fallback, temp_factor)
 
     def _read_outdoor_temperature(self) -> float:
         """Read outdoor temperature from weather entity or configured sensor.
