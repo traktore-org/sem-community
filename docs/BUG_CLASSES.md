@@ -521,6 +521,28 @@ the sanctioned `_charger_power_w` accessor). Filed open:
   dead on two axes (no caller since `561e28a`, and `phase_switch_entity` has no config
   surface). Delete-or-wire, with 4 same-shape siblings listed (`set_anticipated_surplus`,
   `validate_dependencies`, `force_charge.should_stop`, `create_charge_adapter`).
+  **CLOSED — deleted, all of them** (`validate_dependencies` went in #662). Docs never
+  promised any of it; the only mentions of 3φ↔1φ are two design docs listing it as
+  *future work*. Each deletion leaves a tombstone naming what replaced it, because the
+  danger here isn't the dead code, it's the next contributor finding working-looking
+  code and shipping a config key on top of it. Two lessons worth keeping:
+  1. **"Complete implementation" is the tell, not the reassurance.** All four read as
+     finished features — hysteresis, entity actuation, auto-detect order, docstrings
+     describing behaviour ("will factor this in 2 min before the deadline") that no
+     code anywhere implemented. Nothing about the *code* said dead; only the call
+     graph did.
+  2. **The sweep found a fifth.** `force_charge.get_status()` is in exactly the
+     position `should_stop` was — abstract, implemented 3×, zero production callers,
+     computing a `TARGET_REACHED` nobody reads (the live verdict is the scheduler's
+     own SOC comparison). Deliberately *not* deleted: removing an adapter's read-back
+     surface is an interface decision, not a cleanup. Moved from UNTRIAGED to
+     **triaged-but-kept** in the allowlist, so it reads as a decision, not a gap.
+  Guard: no new mechanism. The issue proposed an `# ENTRY-POINT:` annotation, but
+  `tests/test_653_orphan_methods.py` is already that ratchet and is *stricter* — an
+  annotation is an escape hatch a contributor can add in the same commit as the dead
+  method, whereas the allowlist must be edited deliberately and shrinks on every sweep
+  (three names removed here). A second mechanism would have been the #612 mistake:
+  new code for a guarantee that already exists.
 - **#660** — class 8 ×2: `check_metrics`/`check_costs`/`non_negative_fields` validate
   ranges their producers already clamped (`max(0, min(100, …))`), and `check_flows`
   validates the greedy allocator's output against the allocator's own inputs —

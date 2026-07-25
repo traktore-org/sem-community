@@ -1164,12 +1164,6 @@ class CurrentControlDevice(ControllableDevice):
         self.start_service_data: Optional[Dict] = None  # e.g. {"action_command": "resume"}
         self.stop_service: Optional[str] = None
         self.stop_service_data: Optional[Dict] = None
-        # Phase switching (1p/3p)
-        self.min_phases: int = 1
-        self.max_phases: int = phases
-        self.phase_switch_entity: Optional[str] = None  # Entity to call for switching
-        self._phase_switch_hysteresis_up: float = 500  # W above 3p threshold to switch up
-        self._phase_switch_hysteresis_down: float = 200  # W below 3p threshold to switch down
         self._current_setpoint: float = 0.0
         # #392: monotonic timestamp of the last successful write to the
         # device's current-control surface. Used by _set_current to decide
@@ -1194,55 +1188,32 @@ class CurrentControlDevice(ControllableDevice):
     def device_type(self) -> DeviceType:
         return DeviceType.CURRENT_CONTROL
 
-    async def check_phase_switch(self, available_watts: float) -> None:
-        """Switch between 1-phase and 3-phase based on available surplus.
-
-        1-phase min = 6A × 230V = 1380W (usable with small surplus)
-        3-phase min = 6A × 3 × 230V = 4140W (needs large surplus)
-
-        Switches down when surplus drops below 3-phase minimum.
-        Switches up when surplus exceeds 3-phase minimum + hysteresis.
-        """
-        if not self.phase_switch_entity or self.min_phases == self.max_phases:
-            return
-
-        three_phase_min = self.min_current * self.max_phases * self.voltage
-
-        if self.phases == self.max_phases and available_watts < three_phase_min - self._phase_switch_hysteresis_down:
-            # Switch down to 1-phase
-            await self._set_phases(self.min_phases)
-            _LOGGER.info("Phase switch: %dp → %dp (surplus %.0fW < %.0fW)",
-                         self.max_phases, self.min_phases, available_watts, three_phase_min)
-
-        elif self.phases == self.min_phases and available_watts > three_phase_min + self._phase_switch_hysteresis_up:
-            # Switch up to 3-phase
-            await self._set_phases(self.max_phases)
-            _LOGGER.info("Phase switch: %dp → %dp (surplus %.0fW > %.0fW)",
-                         self.min_phases, self.max_phases, available_watts, three_phase_min)
-
-    async def _set_phases(self, phases: int) -> None:
-        """Set charging phases via entity or service."""
-        self.phases = phases
-        self.min_power_threshold = self.min_current * phases * self.voltage
-        if self.phase_switch_entity:
-            try:
-                # Support switch entity (relay) or number entity
-                domain = self.phase_switch_entity.split(".")[0]
-                if domain == "switch":
-                    action = "turn_on" if phases == self.max_phases else "turn_off"
-                    await self.hass.services.async_call(
-                        "switch", action,
-                        {"entity_id": self.phase_switch_entity},
-                        blocking=True,
-                    )
-                elif domain == "number":
-                    await self.hass.services.async_call(
-                        "number", "set_value",
-                        {"entity_id": self.phase_switch_entity, "value": phases},
-                        blocking=True,
-                    )
-            except Exception as e:
-                _LOGGER.warning("Phase switch failed: %s", e)
+    # Dynamic 1p/3p phase switching lived here until #659:
+    # ``check_phase_switch`` + ``_set_phases``, plus the ``min_phases`` /
+    # ``max_phases`` / ``phase_switch_entity`` / hysteresis fields. The
+    # implementation looked complete — switch- and number-entity actuation,
+    # up/down hysteresis, min_power_threshold recomputation — and it could
+    # never run, dead on two independent axes:
+    #
+    #   * No production caller. The only one there ever was, the legacy
+    #     ``_execute_ev_control``, was deleted as dead in 561e28a
+    #     (2026-06-22), which also removed the method's unit tests. What
+    #     remained were two ``AsyncMock`` assignments in test fixtures.
+    #   * No way to configure it. ``phase_switch_entity`` was written
+    #     nowhere outside this file — not in config_flow.py, __init__.py,
+    #     services.yaml or the config card. It was always None, so the very
+    #     first line returned early even if something had called it.
+    #
+    # This is the #219-shaped trap: a contributor answering a go-e/Wattpilot
+    # 1p/3p request finds working-looking code, adds only the config key, and
+    # ships switching that still never runs.
+    #
+    # To actually implement it: add the config key, call it from the live EV
+    # actuation path (charger_adapters / ev_control), and test the
+    # interplay with ``min_power_threshold`` — changing phases changes the
+    # charger's minimum, which the budget logic reads. ``self.phases``,
+    # ``watts_to_current`` and ``current_to_watts`` below are the live
+    # surface and are unaffected.
 
     def watts_to_current(self, watts: float) -> float:
         """Convert watts to amperes."""

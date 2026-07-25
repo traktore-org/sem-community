@@ -75,11 +75,16 @@ _BASELINE = {
     "create_dashboard",                        # generator entry point, service-driven
     # UNTRIAGED — each is a candidate finding
     "add_update_callback", "remove_update_callback",
-    "check_phase_switch",
     "get_diagnostics",
     "get_peak_margin",
-    "get_status", "should_stop",
-    "set_anticipated_surplus",
+    # TRIAGED, KEPT (#659): ``get_status`` is abstract on
+    # BatteryChargeAdapter, implemented three times, and has ZERO production
+    # callers — it computes a TARGET_REACHED nobody reads (the live
+    # target-reached verdict is the scheduler's own SOC comparison). Unlike
+    # its ``should_stop`` sibling, which #659 deleted, removing this is an
+    # interface decision rather than a cleanup, so it is deliberately
+    # deferred. Known-dead, not unknown.
+    "get_status",
     "set_ev_daily_energy_sensor",             # confirmed dead — #658 (via #663)
     # HeatPumpController.unblock (and its block sibling, which this scan
     # can't see because "block" matches unrelated string literals). Kept
@@ -93,6 +98,13 @@ _BASELINE = {
     # method is deleted, not because it grew a caller. Cycles are now
     # rejected at the write path (DeviceRegistry._dependency_would_cycle)
     # instead of reported after the fact to nobody. Do not re-add.
+    #
+    # ``check_phase_switch``, ``should_stop`` and ``set_anticipated_surplus``
+    # left in #659 for the same reason: all three are deleted, not wired.
+    # Each was a whole feature that could never execute — 1p/3p switching
+    # (no caller AND no config key), the force-charge stop rule (the
+    # scheduler decides), and the #106 pre-warm hint (never called, never
+    # read). If one of them reappears here, something re-added dead code.
 }
 
 

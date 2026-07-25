@@ -432,9 +432,6 @@ class SurplusController:
         self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
-        # EV Intelligence: anticipated surplus from taper detection (#106)
-        self._anticipated_surplus_w: float = 0.0
-        self._anticipated_deadline: Optional[float] = None
         # (desired-state, phase 3) When True, update() delegates to the single
         # declarative decision + reconcile path instead of the 7 imperative
         # passes. Default OFF — the passes stay authoritative until a parity
@@ -454,16 +451,18 @@ class SurplusController:
     def price_responsive_mode(self, value: bool) -> None:
         self._price_responsive_mode = value
 
-    def set_anticipated_surplus(self, watts: float, minutes: float) -> None:
-        """Hint that watts will free up when EV taper completes (#106).
-
-        The surplus controller will factor this in 2 min before the
-        deadline to pre-warm devices.
-        """
-        import time as _time
-        self._anticipated_surplus_w = watts
-        self._anticipated_deadline = _time.monotonic() + minutes * 60
-        _LOGGER.debug("Anticipated surplus: %.0fW in %.0f min", watts, minutes)
+    # ``set_anticipated_surplus`` lived here until #659, together with the
+    # ``_anticipated_surplus_w`` / ``_anticipated_deadline`` fields. It was
+    # the #106 "pre-warm devices before the EV taper completes" promise, and
+    # it was dead on both ends: nothing ever called it, and nothing ever read
+    # the two fields it set. The docstring described behaviour ("will factor
+    # this in 2 min before the deadline") that no code implemented — the kind
+    # of spec-vs-reality gap that reads as a working feature to the next
+    # person who greps for it.
+    #
+    # If pre-warming is wanted, it belongs in the surplus computation itself
+    # (``_compute_surplus`` / the desired-state ``compute_load_intent`` path),
+    # not in a setter that hopes someone downstream looks.
 
     # ``distribute_ev_budget`` lived here until #651: a priority cascade
     # that split the fleet EV budget across chargers, with its own 60 s /
