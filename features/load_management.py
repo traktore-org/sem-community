@@ -382,10 +382,15 @@ class LoadManagementCoordinator:
         """Update the target peak limit and persist to config entry."""
         self._target_peak_limit = new_limit
         # Persist to config_entry.options so value survives restart (#199)
+        new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
         coordinator = getattr(self.config_entry, "runtime_data", None)
         if coordinator:
-            coordinator._skip_options_reload = True
-        new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
+            # (#636b) the listener honors a SNAPSHOT (dict == new options,
+            # recently armed) — the legacy bool True never matched and a
+            # redundant reload followed every live-apply (seen 05:49:39).
+            from homeassistant.util import dt as dt_util
+            coordinator._skip_options_reload = dict(new_options)
+            coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
         self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
         _LOGGER.info("Updated target peak limit to %skW", new_limit)
         self._trigger_callbacks()
@@ -393,10 +398,15 @@ class LoadManagementCoordinator:
     async def update_warning_peak_level(self, new_level: float):
         """(#636) Live-apply + persist the warning peak level."""
         self._warning_level = new_level
+        new_options = {**self.config_entry.options, "warning_peak_level": new_level}
         coordinator = getattr(self.config_entry, "runtime_data", None)
         if coordinator:
-            coordinator._skip_options_reload = True
-        new_options = {**self.config_entry.options, "warning_peak_level": new_level}
+            # (#636b) the listener honors a SNAPSHOT (dict == new options,
+            # recently armed) — the legacy bool True never matched and a
+            # redundant reload followed every live-apply (seen 05:49:39).
+            from homeassistant.util import dt as dt_util
+            coordinator._skip_options_reload = dict(new_options)
+            coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
         self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
         _LOGGER.info("Updated warning peak level to %skW", new_level)
         self._trigger_callbacks()
@@ -404,10 +414,15 @@ class LoadManagementCoordinator:
     async def update_emergency_peak_level(self, new_level: float):
         """(#636) Live-apply + persist the emergency peak level."""
         self._emergency_level = new_level
+        new_options = {**self.config_entry.options, "emergency_peak_level": new_level}
         coordinator = getattr(self.config_entry, "runtime_data", None)
         if coordinator:
-            coordinator._skip_options_reload = True
-        new_options = {**self.config_entry.options, "emergency_peak_level": new_level}
+            # (#636b) the listener honors a SNAPSHOT (dict == new options,
+            # recently armed) — the legacy bool True never matched and a
+            # redundant reload followed every live-apply (seen 05:49:39).
+            from homeassistant.util import dt as dt_util
+            coordinator._skip_options_reload = dict(new_options)
+            coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
         self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
         _LOGGER.info("Updated emergency peak level to %skW", new_level)
         self._trigger_callbacks()
