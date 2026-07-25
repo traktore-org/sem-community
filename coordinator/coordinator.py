@@ -6185,6 +6185,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         per_increment = charger_power * interval_hours / 1000
         per_hw_total = None
         per_hw_entity = per_charger_cfg.get("ev_total_energy_sensor")
+        # (#639) legacy configs carry only the TOP-LEVEL counter: it belongs
+        # to the PRIMARY charger by the auto-fill convention (__init__), so
+        # fall back for the primary only — never for siblings (that would be
+        # the cross-contamination this fix removes).
+        if not per_hw_entity:
+            _primary = (self.config.get("ev_chargers") or [{}])[0].get("id")
+            if cid == _primary:
+                per_hw_entity = self.config.get("ev_total_energy_sensor")
         if per_hw_entity:
             hw_state = self.hass.states.get(per_hw_entity)
             if hw_state and hw_state.state not in ("unknown", "unavailable"):
@@ -6344,8 +6352,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         else:
             taper_data = EVTaperData()
 
-        # Track energy since last full charge (hardware counter preferred)
-        if hasattr(energy, "daily_ev"):
+        # Track energy since last full charge (hardware counter preferred).
+        # (#639, audit class 3) LEGACY-ONLY like the #589 W2/W3 update() gate:
+        # on per-charger installs the primary detector is already fed its OWN
+        # increment + counter by _update_per_charger_detector_energy — running
+        # this fleet-sum block too double-fed it (energy_since_full at ~2x →
+        # virtual SOC reads LOW → night over-charge + delayed nearly-full).
+        if hasattr(energy, "daily_ev") and not self._ev_devices:
             # FLEET-READ: ``daily_ev`` is the fleet daily total; matches
             # the fleet-level ``sensor.sem_daily_ev_energy``. Per-charger
             # daily energy is on ``charger_<id>_daily_energy`` populated
