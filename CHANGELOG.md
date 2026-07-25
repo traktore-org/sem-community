@@ -59,6 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per charger too. Coordinator-side consumers (session attribution, diagnostics, taper feed,
   the priority rows) go through one sanctioned accessor — which also fixes a kW-reporting
   charger showing ~0 W in the device-priority list. AST-linted so the raw shape can't return.
+- 🛡️ **"Critical" and "hands off" survive the next rebuild** (#650, coherence-audit) — both
+  toggles were written ONLY into the load manager's device dict, which the registry sync
+  REPLACES wholesale on every rebuild (a drag, the 35 s re-discovery, a config change, a
+  restart). So marking the freezer critical or a pond pump un-controllable reverted to the
+  defaults within ~35 s and the next peak event shed the device anyway — ledger class 14,
+  the same shape as the #122 dependency wipe. The flags now live in registry override stores
+  next to priority / control-mode / dependencies, are re-applied at device build, and flow
+  back into the load manager. Toggles set before this release are adopted once on upgrade,
+  so nobody has to re-click them.
 - 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
   \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
   dropped them to the entry-write + reload path: a slider change during a charge session
