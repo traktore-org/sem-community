@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-charger taper/SOC state persists — the battery graphic keeps its last-known value
   across restarts and between sessions. Display-only: charging decisions never use the
   estimate (they read the real vehicle SOC exclusively).
+- 🔥 **No more forced 65 °C disinfection cycle after every restart** (#640, coherence-audit) —
+  the legionella-timestamp restore ran at first refresh, BEFORE the hot-water device was
+  registered — a silent no-op, so every restart read "999 h overdue" and grid-heated the
+  boiler to the legionella target. The seed now happens at the registration site (stored
+  time restored; fresh installs seed "now"), and a guard keeps the dead parallel restore out.
 - 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
   \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
   dropped them to the entry-write + reload path: a slider change during a charge session

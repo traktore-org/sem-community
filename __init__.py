@@ -402,6 +402,25 @@ def _refresh_runtime_config(coordinator) -> None:
             _LOGGER.debug("refresh_runtime_config failed", exc_info=True)
 
 
+def _seed_legionella_time(coordinator, hw_device) -> None:
+    """(#640) Seed the hot-water legionella timestamp AT registration.
+
+    The old first-refresh restore ran BEFORE the device was registered —
+    always a no-op — so a None timestamp read as 999 h overdue and every
+    restart forced a grid-powered 65°C disinfection cycle (audit class 14).
+    Stored time → restore; fresh install / unparsable → seed NOW so the
+    first cycle is ~interval_hours away, not immediate. Idempotent across
+    reloads (re-seeds from the same persisted value)."""
+    from homeassistant.util import dt as dt_util
+    try:
+        stored = coordinator._storage.get_legionella_time() \
+            if getattr(coordinator, "_storage", None) else None
+        ts = dt_util.parse_datetime(stored) if stored else None
+        hw_device.record_legionella_cycle(ts or dt_util.now())
+    except (ValueError, TypeError):
+        hw_device.record_legionella_cycle(dt_util.now())
+
+
 def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
     """Persist ONE scalar option key without an integration reload (#523).
 
@@ -1906,6 +1925,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 legionella_interval_hours=float(full_config.get("hot_water_legionella_interval_hours", 168.0)),
             )
             coordinator._surplus_controller.register_device(hw_device)
+            _seed_legionella_time(coordinator, hw_device)
             _LOGGER.info(
                 "Hot water registered (entity=%s, priority=%d, "
                 "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
