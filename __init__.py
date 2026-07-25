@@ -394,6 +394,12 @@ def _refresh_runtime_config(coordinator) -> None:
     those no-reload writes apply immediately too. Defensive: never let a
     refresh hiccup break the option persist itself.
     """
+
+    # (#637) a changed mobile_notification_service must re-run service
+    # detection — the notifier caches validation on first send (#47).
+    _nm = getattr(coordinator, "_notification_manager", None)
+    if _nm is not None:
+        _nm._mobile_service_checked = False
     fn = getattr(coordinator, "refresh_runtime_config", None)
     if callable(fn):
         try:
@@ -3611,6 +3617,24 @@ async def _async_register_phase_services(
         # and snapshots _skip_options_reload — so no reload, AND
         # entity state is fresh. Unrecognized keys fall through to
         # the direct write.
+        # (#637) Keys that the runtime re-reads from coordinator.config every
+        # cycle (hw/hp refresh block, vpp_dispatch, the notifier) — route via
+        # persist_global_option: in-place config update + _refresh_runtime_
+        # config + snapshot, NO reload. Keys consumed only at construction
+        # (tariff_mode, battery scheduler params) deliberately stay on the
+        # reload path — live-applying them would be the #462 lie.
+        _SET_OPTION_LIVE_CONFIG_KEYS = {
+            "hot_water_minimum_temperature", "hot_water_legionella_target",
+            "heat_pump_max_setpoint", "vpp_reserve_soc",
+            "mobile_notification_service",
+        }
+        # (#637) Some options are backed by number entities under a DIFFERENT
+        # name (number.py CONFIG_KEY_MAP, #542) — the naive number.sem_<key>
+        # check missed them (the legionella dual-path confusion). Reverse-map
+        # option key → entity suffix so they entity-route like any other.
+        from .number import CONFIG_KEY_MAP as _NUM_MAP
+        _OPTION_TO_ENTITY = {v: k for k, v in _NUM_MAP.items()}
+
         # (#636) Load-management peaks have LIVE updaters but no number
         # entities — pre-fix they fell to the unrouted → entry-write →
         # RELOAD path, so a card slider change never reached the running
@@ -3629,6 +3653,19 @@ async def _async_register_phase_services(
                     and getattr(_coord, "_load_manager", None)):
                 await getattr(_coord._load_manager, _LM_LIVE_KEYS[key])(
                     float(value))
+                continue
+            if key in _SET_OPTION_LIVE_CONFIG_KEYS:
+                _c2 = getattr(target_entry, "runtime_data", None)
+                if _c2 is not None:
+                    persist_global_option(hass, target_entry, _c2, key, value)
+                    continue
+            _ent_suffix = _OPTION_TO_ENTITY.get(key, key)
+            if hass.states.get(f"number.sem_{_ent_suffix}") is not None:
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": f"number.sem_{_ent_suffix}", "value": value},
+                    blocking=True,
+                )
                 continue
             if hass.states.get(f"number.sem_{key}") is not None:
                 await hass.services.async_call(
