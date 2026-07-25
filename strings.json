@@ -1135,6 +1135,9 @@
     "device_not_found": {
       "message": "Device {device_id} not found in surplus controller."
     },
+    "unknown_appliance_schedule": {
+      "message": "No appliance schedule found for {device_id}. Check the device ID you used with the schedule_appliance service."
+    },
     "invalid_deadline_format": {
       "message": "Invalid deadline format: {deadline}. Use ISO format (YYYY-MM-DDTHH:MM:SS)."
     },

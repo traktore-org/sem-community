@@ -420,6 +420,17 @@ schedule_appliance:
           max: 10
           step: 1
 
+cancel_appliance_schedule:
+  name: Cancel Appliance Schedule
+  description: Cancel a pending appliance schedule created with schedule_appliance. The appliance is released from surplus control and will not be force-started at its deadline.
+  fields:
+    device_id:
+      name: Device ID
+      description: The identifier used when the appliance was scheduled (e.g., "dishwasher")
+      required: true
+      selector:
+        text:
+
 reset_sign_detection:
   name: Reset sign detection
   description: >

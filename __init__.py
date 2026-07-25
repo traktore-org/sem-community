@@ -2323,6 +2323,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "update_target_peak",
             "register_surplus_device",
             "schedule_appliance",
+            "cancel_appliance_schedule",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 
@@ -3572,6 +3573,19 @@ async def _async_register_phase_services(
                 translation_placeholders={"deadline": str(deadline_str)},
             )
 
+        # (#653) Normalise to LOCAL-naive. The scheduler compares deadlines
+        # against ``datetime.now()``, which is naive, and an HA template
+        # deadline — ``{{ today_at('18:00') }}``, the obvious way to write
+        # this in an automation — is timezone-AWARE. Comparing the two
+        # raises TypeError. That was harmless while nothing ticked the
+        # scheduler; now that the coordinator cycle does, it would raise
+        # every cycle and the run would never complete or release its
+        # allocation, silently reinstating the very bug #653 fixes.
+        # ``as_local`` first, so an explicit offset lands on the right wall
+        # clock instead of being truncated.
+        if deadline.tzinfo is not None:
+            deadline = dt_util.as_local(deadline).replace(tzinfo=None)
+
         # Lazy-init appliance scheduler
         if not hasattr(coordinator, '_appliance_scheduler'):
             from .devices.appliance_scheduler import ApplianceScheduler
@@ -3614,7 +3628,41 @@ async def _async_register_phase_services(
         }),
     )
 
-    _LOGGER.debug("Phase services registered: register_surplus_device, schedule_appliance")
+    async def async_cancel_appliance_schedule(call) -> None:
+        """Cancel a pending appliance schedule (#653).
+
+        ``ApplianceScheduler.cancel_schedule`` existed from the start with
+        no way to reach it: no service, no button, no automation hook. The
+        only way to undo a mis-typed deadline was to restart HA (which drops
+        the in-memory scheduler entirely).
+        """
+        device_id = call.data.get("device_id")
+        scheduler = getattr(coordinator, "_appliance_scheduler", None)
+        # Raise only when the device is genuinely unknown. For a KNOWN
+        # device with no pending entry, ``cancel_schedule`` still clears the
+        # device's deadline and returns False — a real state change. Raising
+        # there would report a failure after having done the work, on
+        # exactly the path someone uses to unstick a device.
+        known = scheduler is not None and device_id in scheduler._devices
+        cancelled = scheduler.cancel_schedule(device_id) if scheduler else False
+        if not cancelled and not known:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_appliance_schedule",
+                translation_placeholders={"device_id": str(device_id)},
+            )
+
+    hass.services.async_register(
+        DOMAIN,
+        "cancel_appliance_schedule",
+        async_cancel_appliance_schedule,
+        schema=vol.Schema({vol.Required("device_id"): cv.string}),
+    )
+
+    _LOGGER.debug(
+        "Phase services registered: register_surplus_device, "
+        "schedule_appliance, cancel_appliance_schedule"
+    )
 
     # #442: in-dashboard option writes. The Configuration tab card
     # writes one key at a time via this service rather than walking the
