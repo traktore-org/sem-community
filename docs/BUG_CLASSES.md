@@ -437,7 +437,16 @@ restore no-op), **#644** (duplicated-mechanism, dual anti-cycle clocks). Filed o
   would make an advertised promise permanently unfulfillable. They sit in the orphan
   baseline pointing at #664.
 - **#655** — spec-vs-reality (docs): SETUP_GUIDE's SG-Ready relay table still documents
-  the pre-#523 mapping the code explicitly calls a bug.
+  the pre-#523 mapping the code explicitly calls a bug. **FIXED.** Worth keeping in the
+  ledger as the sharpest example of a sub-class the other entries don't cover: *the docs
+  are part of the control path when the user is the actuator.* Nothing in the code was
+  wrong. The user reads the table, sees SEM's (correct) output disagree with it, and
+  reaches for the one toggle that "fixes" the disagreement — `invert_sg_ready` — thereby
+  hand-installing the exact regression #523 removed. No test of the code could have caught
+  it, because the code was right. Guard: `tests/test_655_sg_ready_doc_table.py` parses the
+  shipped Markdown table and diffs it against `SG_READY_RELAY_MAP`. Generalisable rule —
+  **when a doc states a value the code also states, the doc needs a test.** Same shape as
+  the #618 anchor guard.
 
 Re-verified dormant (no new issue): the arbitrage FORCE_DISCHARGE fleet-split (class 6
 open sibling) stays triple-fenced (migration v14 forces the toggle off, no UI path,

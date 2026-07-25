@@ -145,6 +145,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surviving check to be demonstrated firing on a deliberately violating input built through
   the real derivation, and an AST guard stops clamped fields from drifting back into the
   non-negative list.
+- 🔥 **The setup guide's SG-Ready table told installers to invert a correct heat-pump
+  install** (#655, coherence-audit) — the relay table in `SETUP_GUIDE.md` still showed the
+  mapping SEM used *before* #523 fixed it: a plain 2-bit count (Blocked `0:0`, Normal
+  `0:1`, Boost `1:0`) instead of the SG-Ready standard the pumps implement (Blocked `1:0`,
+  Normal `0:0`, Boost `0:1`). Following it does real damage, because the user is the
+  actuator: you wire the contacts, ask SEM for Boost, watch relay **2** close while the
+  guide promises relay 1, conclude your install is inverted, and switch on *Invert
+  SG-Ready* — which inverts a correct install and makes SEM drive Boost as `1:0`, which a
+  standard pump reads as EVU-block. Your heat pump then switches **off** on solar surplus.
+  That is #523 exactly — RienduPre's Nibe report — reintroduced by the documentation while
+  the code was right the whole time. The table is corrected and now names the trap that
+  caused it (the four states look like they should count in binary and don't), the
+  README's four-state line carried the same stale count and is fixed, and a new test
+  parses the shipped table and compares it row-by-row against `SG_READY_RELAY_MAP` so the
+  guide and the code can never disagree again.
 - ⚡ **SEM no longer claims to obey your utility's ripple-control signal** (#654,
   coherence-audit) — on a ripple-control (*Rundsteuerung*) signal, SEM logged a WARNING
   reading "shedding non-critical loads", turned on a binary sensor, and then shed
