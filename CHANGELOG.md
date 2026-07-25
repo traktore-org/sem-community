@@ -29,6 +29,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so neither limitation ever surfaced. Prevention at the write path replaces detection
   nobody read.
 
+### 🧹 Dead code removed (#659 — four features that could never run)
+
+- 🗑️ **Dynamic 1p/3p charger phase switching was unreachable on two independent axes**
+  (#659, coherence-audit) — `check_phase_switch` had no production caller since the legacy
+  `_execute_ev_control` was deleted in `561e28a` (2026-06-22), *and* its
+  `phase_switch_entity` config key was written nowhere: not in the config flow, not in
+  `services.yaml`, not in the config card. It was always `None`, so the very first line
+  returned early even if something had called it. Deleted, with a tombstone spelling out
+  what wiring it would actually take. No user-visible change — it never ran. (Docs never
+  promised the feature; the only mentions are two design docs listing it as future work.)
+- 🗑️ **`set_anticipated_surplus` — the #106 "pre-warm devices before the EV taper
+  completes" promise** (#659) — never called, and the two fields it set were never read.
+  Its docstring described behaviour ("will factor this in 2 min before the deadline") that
+  no code implemented, which is exactly what makes this shape dangerous: it reads as a
+  working feature to the next person who greps for it.
+- 🗑️ **A second battery force-charge brand factory** (#659) — `create_charge_adapter` ran
+  the same platform key and the same auto-detect order as the live
+  `battery_adapters.adapter_for`, in parallel and invisibly; nothing in production called
+  it, only its own six unit tests did. Same shape as #651. The brand *classes* are
+  untouched and still live. `should_stop` went with it — the real target-reached verdict
+  is the scheduler's own SOC comparison, not a method on an object it never consults.
+- 🧪 The orphan-method ratchet (`tests/test_653_orphan_methods.py`) shrank by three
+  names. A fifth orphan found in the same sweep, `force_charge.get_status`, was
+  deliberately **kept** and re-labelled *triaged* rather than *untriaged*: deleting an
+  adapter's read-back surface is an interface decision, not a cleanup.
+
 ### 🧹 Dead code removed (#651 — the second EV surplus allocator)
 
 - 🗑️ **SEM had two EV-surplus allocators; only one of them ran** (#651, coherence-audit) —

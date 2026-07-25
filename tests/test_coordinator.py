@@ -31,7 +31,12 @@ def mock_hass():
     hass.data = {}
     hass.config = Mock()
     hass.config.config_dir = "/config"
-    hass.config.components = set()  # For battery_charge_adapter._has_integration()
+    # Plain HA-shaped stub. It used to be annotated "for
+    # battery_charge_adapter._has_integration()" — that helper was deleted
+    # with the dead create_charge_adapter factory in #659, and the live brand
+    # detection (battery_adapters._integration_loaded) doesn't read
+    # config.components at all; it looks at hass.data / hass.config_entries.
+    hass.config.components = set()
     hass.states = Mock()
     hass.states.get = Mock(return_value=None)
     hass.states.is_state = Mock(return_value=False)

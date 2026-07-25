@@ -50,7 +50,6 @@ def make_mock_charger(charger_id: str, name: str, priority: int = 3,
     device.stop_session = AsyncMock()
     device._set_current = AsyncMock()
     device.watts_to_current = lambda w: w / (phases * 230)
-    device.check_phase_switch = AsyncMock()
     return device
 
 
