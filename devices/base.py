@@ -55,6 +55,7 @@ _BRAND_WATCHDOG_REFRESH_S = {
 FAILSAFE_TIMEOUT_S = 600
 
 from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
+from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -354,21 +355,19 @@ class ControllableDevice(ABC):
         present and readable, else derived from an energy (kWh) counter, else
         None. A power sensor ALWAYS wins; the energy deriver is the fallback for
         kWh-only devices (e.g. Viessmann ViCare yearly counter)."""
+        # #641 — this read did NO unit conversion at all. A heat-pump or
+        # pool-pump power sensor reporting kW taught ``calibrate_rated_power`` a
+        # ~3 W rated power, which collapses the activation threshold and makes
+        # runtime-on-solar credit and shed decisions garbage, silently.
         if self.hass and self.power_entity_id:
-            state = self.hass.states.get(self.power_entity_id)
-            if state and state.state not in ("unknown", "unavailable", None):
-                try:
-                    return float(state.state)
-                except (ValueError, TypeError):
-                    pass
+            watts = power_state_to_watts(self.hass.states.get(self.power_entity_id))
+            if watts is not None:
+                return watts
         if self.hass and self.energy_entity_id:
-            state = self.hass.states.get(self.energy_entity_id)
-            energy = None
-            if state and state.state not in ("unknown", "unavailable", None):
-                try:
-                    energy = float(state.state)
-                except (ValueError, TypeError):
-                    energy = None
+            # Same gap on the energy side: a raw float went into
+            # ``EnergyRateDeriver`` with no unit check, so a Wh counter derived
+            # a 1000x power.
+            energy = energy_state_to_kwh(self.hass.states.get(self.energy_entity_id))
             if self._energy_deriver is None:
                 from ..coordinator.energy_rate_deriver import EnergyRateDeriver
                 self._energy_deriver = EnergyRateDeriver()
@@ -633,14 +632,12 @@ class ControllableDevice(ABC):
         return True
 
     def get_current_consumption(self) -> float:
-        """Get current power consumption from HA entity or estimate."""
+        """Get current power consumption in W from HA entity or estimate."""
         if self.power_entity_id:
-            state = self.hass.states.get(self.power_entity_id)
-            if state and state.state not in ("unknown", "unavailable"):
-                try:
-                    return float(state.state)
-                except (ValueError, TypeError):
-                    pass
+            # #641 — unit-aware; this copy had no conversion either.
+            watts = power_state_to_watts(self.hass.states.get(self.power_entity_id))
+            if watts is not None:
+                return watts
         return self._status.current_consumption_w
 
     @property

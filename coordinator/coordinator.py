@@ -46,6 +46,7 @@ from .types import (
     UtilitySignalSensorData, SessionData, BatterySessionData,
 )
 from .health_check import HealthCheck
+from .units import energy_state_to_kwh, power_state_to_watts
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -3151,16 +3152,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _ext_sensor_id = _per_charger_cfg.get("ev_session_energy_sensor", "")
                 _ext_value = 0.0
                 if _ext_sensor_id:
-                    _state = self.hass.states.get(_ext_sensor_id)
-                    if _state and _state.state not in ("unavailable", "unknown", None):
-                        try:
-                            _ext_value = float(_state.state)
-                            # Auto-convert Wh → kWh if the source reports in Wh.
-                            _unit = _state.attributes.get("unit_of_measurement", "").lower()
-                            if _unit == "wh":
-                                _ext_value = _ext_value / 1000.0
-                        except (ValueError, TypeError):
-                            _ext_value = 0.0
+                    # #641 — was Wh-only; MWh counters now convert too, and the
+                    # rule is shared with the rest of the energy path.
+                    _ext_value = energy_state_to_kwh(
+                        self.hass.states.get(_ext_sensor_id), default=0.0,
+                    )
                 result[f"charger_{cid}_session_energy_external"] = round(_ext_value, 2)
                 # Per-charger taper detection (#138)
                 taper_det = self._ev_taper_detectors.get(cid)
@@ -6186,17 +6182,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         pstate = self.hass.states.get(eid)
         if not pstate or pstate.state in ("unknown", "unavailable"):
             return 0.0
-        try:
-            w = float(pstate.state)
-        except (ValueError, TypeError):
+        # #641 — one shared rule. The non-numeric DEBUG line is kept: it is the
+        # #259 diagnostic, and units.py returns the default silently.
+        w = power_state_to_watts(pstate)
+        if w is None:
             _LOGGER.debug(
                 "Charger %s power not numeric: %r (#259)",
                 cid, getattr(pstate, "state", None),
             )
             return 0.0
-        unit = pstate.attributes.get("unit_of_measurement", "W")
-        if isinstance(unit, str) and unit.lower() == "kw":
-            w *= 1000
         return w
 
     def _update_ev_intelligence(

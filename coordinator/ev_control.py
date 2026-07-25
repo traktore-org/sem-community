@@ -27,6 +27,7 @@ from ..const import (
 )
 from .types import PowerReadings, PowerFlows, SessionData
 from .ev_tariff_planner import NightChargePlan, plan_night_charge
+from .units import power_state_to_watts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -603,12 +604,12 @@ class EVControlMixin:
             charger_cfg = self._get_active_charger_config()
             cps = charger_cfg.get("ev_charging_power_sensor") if charger_cfg else None
             if cps and self.hass is not None:
-                state = self.hass.states.get(cps)
-                if state is not None and state.state not in (None, "unknown", "unavailable"):
-                    value = float(state.state)
-                    unit = (state.attributes or {}).get("unit_of_measurement", "W")
-                    if unit == "kW":
-                        value *= 1000
+                # #641 — was an exact-case ``== "kW"``, so a template/MQTT
+                # charger sensor emitting ``"kw"`` read 11 W here while
+                # ``sensor_reader`` (lowercase rule) read the same sensor as
+                # 11000 W. One shared rule now.
+                value = power_state_to_watts(self.hass.states.get(cps))
+                if value is not None:
                     return value
         except (AttributeError, ValueError, TypeError):
             pass

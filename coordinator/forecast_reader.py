@@ -21,6 +21,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 from homeassistant.util import dt as dt_util
 
+from .units import power_state_to_watts, power_unit_scale
+
 _LOGGER = logging.getLogger(__name__)
 
 # Known forecast entity patterns
@@ -435,14 +437,19 @@ class ForecastReader:
         if not state or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
             return default
         try:
+            # Load-bearing: a non-numeric state must return the CALLER's
+            # default, which units.py can't know. Once this succeeds the
+            # ``default=`` below is unreachable (#641).
             value = float(state.state)
         except (ValueError, TypeError):
             return default
-        unit = str(state.attributes.get("unit_of_measurement", "") or "").strip().lower()
-        if unit in ("kw", "kilowatt", "kilowatts"):
-            value *= 1000
+        # #641 — this rule (strip + lower + long-form synonyms) was the most
+        # robust of the five inline copies, so it became the shared one in
+        # units.py. The conversion counter is kept: it is the diagnostic that
+        # proved #575.
+        if power_unit_scale(state) != 1.0:
             self._last_unit_conversion_count += 1
-        return value
+        return power_state_to_watts(state, default=value)
 
     def _remaining_day_fraction(self) -> float:
         """Estimate fraction of daylight remaining (rough)."""

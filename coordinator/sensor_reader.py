@@ -11,6 +11,12 @@ from homeassistant.helpers import entity_registry as er
 
 from .types import FleetEvPower, PowerReadings
 from .sign_audit import CounterCorrelationAudit
+from .units import (
+    energy_state_to_kwh,
+    is_energy_unit,
+    normalize_unit,
+    power_state_to_watts,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -2117,9 +2123,11 @@ class SensorReader:
             state = self.hass.states.get(eid)
             if state is None:
                 continue  # unavailability is handled by _read_sensor/Repairs
-            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            unit = normalize_unit(state)
             device_class = state.attributes.get("device_class")
-            if device_class == "energy" or unit in ("wh", "kwh", "mwh"):
+            # #641 — GWh joins the list for free by asking units.py instead of
+            # re-listing the suffixes here.
+            if device_class == "energy" or is_energy_unit(state):
                 self._manual_grid_config_warned.add(eid)
                 _LOGGER.warning(
                     "grid_%s_power_entity is set to %s, which is an ENERGY "
@@ -2853,12 +2861,16 @@ class SensorReader:
             return None if allow_none else 0.0
 
         try:
+            # #641 — one shared rule (this copy was ``.lower() == "kw"``, no
+            # strip; four other spellings lived elsewhere). The bare ``float()``
+            # is kept and runs FIRST because it is load-bearing: a non-numeric
+            # state must raise into the ``except`` below (which owns the #259
+            # warning and the allow_none/0.0 choice), whereas units.py returns
+            # its default silently. The parse is therefore deliberately done
+            # twice, and ``default`` below is belt-and-braces (unreachable once
+            # the bare ``float()`` has succeeded on the same string).
             value = float(state.state)
-
-            # Convert kW to W if needed
-            unit = state.attributes.get("unit_of_measurement", "")
-            if unit.lower() == "kw":
-                value *= 1000
+            value = power_state_to_watts(state, default=value)
 
             # Detect transition from unavailable → available. Demoted
             # to DEBUG so a flapping upstream sensor (e.g. Huawei
@@ -3346,7 +3358,7 @@ class SensorReader:
                 continue
             if state.state in ("unknown", "unavailable", None):
                 continue
-            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            unit = normalize_unit(state)
             dc = state.attributes.get("device_class")
             # Skip SOC sensors: "Battery Capacity" matches the keyword above but on
             # SolaX (and others) it is the SOC percentage, not rated energy. A 80%
@@ -3357,8 +3369,14 @@ class SensorReader:
                 value = float(state.state)
                 if value <= 0:
                     continue
-                if unit == "wh" or value > 500:
-                    value /= 1000  # Wh → kWh
+                # #641 — the unit half goes through units.py (so an MWh-labelled
+                # counter converts too). The ``> 500`` magnitude heuristic
+                # applies ONLY to an UNLABELLED counter, which is the case it
+                # was written for: running it after a unit conversion would
+                # divide a labelled 600 kWh bank twice.
+                value = energy_state_to_kwh(state, default=value)
+                if not unit and value > 500:
+                    value /= 1000  # unlabelled Wh → kWh
                 if 1 <= value <= 200:  # Sanity: 1-200 kWh
                     _LOGGER.info(
                         "Auto-detected battery capacity: %s = %.1f kWh",

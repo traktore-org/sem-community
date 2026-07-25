@@ -27,6 +27,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from .types import EVTaperData
+from .units import power_unit_scale
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -589,21 +590,29 @@ class EVTaperDetector:
                 pass
             return None
 
-        # Detect sensor unit to apply correct scale factor.
-        # Some EV power sensors report in W (e.g. KEBA actual_power),
-        # others report in kW. Thresholds below assume kW, so W values need /1000.
+        # Detect sensor unit to apply correct scale factor. Some EV power
+        # sensors report in W (e.g. KEBA actual_power), others in kW. The
+        # thresholds below are in kW, so this converts to kW.
+        #
+        # #641 — this was its own sixth match rule: ``== "w"``, with everything
+        # else (including "kw", "KW", "kilowatt" AND an unlabelled sensor)
+        # assumed to be kW. Two consequences it now stops having:
+        #   * an MQTT/template sensor labelled "kw" was already kW and was left
+        #     alone by luck, but a "W "-with-trailing-space sensor was read
+        #     1000x too high;
+        #   * an UNLABELLED sensor was assumed kW here while
+        #     ``sensor_reader._read_sensor`` — reading the very same entity on
+        #     the live path — assumes W. The history bootstrap and the live
+        #     reader disagreed by 1000x about one sensor. Shared rule now, so
+        #     unlabelled means W in both.
         entity = hass.states.get(ev_power_entity)
-        is_watts = (
-            entity is not None
-            and entity.attributes.get("unit_of_measurement", "").strip().lower() == "w"
-        )
-        scale = 0.001 if is_watts else 1.0  # convert W → kW if needed
+        w_per_unit = power_unit_scale(entity)
 
         # Parse into (timestamp, power_kw) pairs
         readings = []
         for state in states:
             try:
-                val = float(state.state) * scale
+                val = float(state.state) * w_per_unit / 1000.0
                 readings.append((state.last_changed, val))
             except (ValueError, TypeError):
                 continue
