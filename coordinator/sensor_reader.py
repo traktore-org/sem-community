@@ -324,7 +324,16 @@ class SensorReader:
         self._grid_sign_audit = CounterCorrelationAudit()
         # #589 — observe-only battery sign contradiction audit (post-lock).
         # Separate baselines keep the voter's _battery_charge/discharge_baseline clean.
-        self._battery_sign_audit = CounterCorrelationAudit()
+        #
+        # #647 — ONE audit PER battery id, not one for the fleet. On a
+        # multi-battery install the fleet audit was doubly blind: it gated on
+        # the ``__fleet__`` lock (which per-battery mode never sets) and, even
+        # had it run, it compared SUMMED counters against the SUMMED power, so
+        # one battery signed wrong and one signed right cancel to ≈0 W and land
+        # under the 100 W skip. Each unit is now audited against its own
+        # charge/discharge counters. ``__fleet__`` stays the key for the
+        # single/combined-battery path.
+        self._battery_sign_audits: Dict[str, CounterCorrelationAudit] = {}
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -448,6 +457,31 @@ class SensorReader:
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""
         self._energy_dashboard_config = ed_config
+        # #647 — drop per-battery audits for units that no longer exist. A
+        # flagged ``b2`` whose battery has since been removed from the Energy
+        # Dashboard would otherwise keep the perception fault lit forever: no
+        # cycle can ever feed it the agreement that clears it. PRUNE, not
+        # clear — this setter also runs on the cold-start re-derivation retry
+        # (#274), and clearing there would reset the vote count every cycle
+        # and the audit could never reach its 5-vote threshold.
+        #
+        # Defensive throughout: this runs on every coordinator cycle during the
+        # cold-start retry, and an exception here would take the whole power
+        # read down. An unreadable config prunes nothing rather than raising.
+        per_bid = [b for b in self._battery_sign_audits if b != self._FLEET_BID]
+        if not per_bid:
+            return
+        try:
+            n_units = len(getattr(ed_config, "battery_power_list", None) or [])
+        except TypeError:           # not a sequence — can't tell, keep them all
+            return
+        for bid in per_bid:
+            try:
+                stale = int(bid[1:]) > n_units
+            except ValueError:      # not a b<N> key — leave it alone
+                continue
+            if stale:
+                del self._battery_sign_audits[bid]
 
     def read_power(self) -> PowerReadings:
         """Read all power values from sensors."""
@@ -612,12 +646,12 @@ class SensorReader:
                 readings.calculate_derived()
 
         # #589 — observe-only post-lock battery sign contradiction audit.
-        # Runs here so battery_power is final (all corrections applied).
-        # The method guards on the fleet lock being set, so it is a no-op
-        # until the sign is detected, and a no-op in per_battery_mode
-        # (where __fleet__ lock is never set).
+        # Runs here so the readings are final (all corrections applied, incl.
+        # the #588 user flip). #647 — ``readings`` is passed so per-battery
+        # mode can audit each unit against its own counters; the fleet path
+        # still no-ops until the __fleet__ sign is locked.
         if ed is not None:
-            self._audit_battery_sign_lock(readings.battery_power, ed)
+            self._audit_battery_sign_lock(readings.battery_power, ed, readings)
 
         return readings
 
@@ -835,6 +869,35 @@ class SensorReader:
 
     # ---- battery sign contradiction ----------------------------------
 
+    def _battery_audit_for(self, bid: str) -> CounterCorrelationAudit:
+        """The audit instance for one battery id, created on first use (#647)."""
+        audit = self._battery_sign_audits.get(bid)
+        if audit is None:
+            audit = CounterCorrelationAudit()
+            self._battery_sign_audits[bid] = audit
+        return audit
+
+    @property
+    def _battery_sign_audit(self) -> CounterCorrelationAudit:
+        """The fleet audit — what the single/combined-battery path uses.
+
+        Kept as the target of the four legacy shims below so the #589 audit
+        contract (and its test suite) is unchanged for single-battery installs.
+        """
+        return self._battery_audit_for(self._FLEET_BID)
+
+    @property
+    def battery_sign_contradiction_bids(self) -> "list[str]":
+        """Which batteries currently contradict their own counters (#647).
+
+        ``['__fleet__']`` on a single/combined install; ``['b2']`` when unit 2
+        of a multi-battery install is the one signed wrong — the detail that
+        makes the perception fault actionable instead of just "somewhere".
+        """
+        return sorted(
+            bid for bid, audit in self._battery_sign_audits.items() if audit.flagged
+        )
+
     @property
     def _battery_audit_charge_baseline(self) -> Optional[float]:
         return self._battery_sign_audit.baseline_a
@@ -851,17 +914,24 @@ class SensorReader:
     def _battery_audit_discharge_baseline(self, v: Optional[float]) -> None:
         self._battery_sign_audit.baseline_b = v
 
+    # The three flags below aggregate across every battery (#647). With one
+    # audit (the fleet) they are exactly the #589 values; with several, a
+    # contradiction on ANY unit must reach the perception health surface —
+    # reporting only the fleet instance would report "OK" for the one install
+    # shape where the fleet instance never runs at all.
     @property
     def _battery_sign_contradiction_votes(self) -> int:
-        return self._battery_sign_audit.votes
+        return max(
+            (a.votes for a in self._battery_sign_audits.values()), default=0
+        )
 
     @property
     def _battery_sign_contradiction(self) -> bool:
-        return self._battery_sign_audit.flagged
+        return any(a.flagged for a in self._battery_sign_audits.values())
 
     @property
     def _battery_sign_contradiction_warned(self) -> bool:
-        return self._battery_sign_audit.warned
+        return any(a.warned for a in self._battery_sign_audits.values())
 
     def export_sign_state(self) -> dict:
         """Snapshot the LOCKED sign-detection state for persistence."""
@@ -941,6 +1011,11 @@ class SensorReader:
         self._battery_charge_baseline.clear()
         self._battery_discharge_baseline.clear()
         self._battery_brand_seed_done.clear()
+        # #647 — drop the audits too. The user pressing "Reset sign detection"
+        # is usually acting ON the contradiction warning; leaving the flag
+        # raised would keep the perception fault lit through the re-learn,
+        # since the audit can only clear itself once a lock exists again.
+        self._battery_sign_audits.clear()
         self._sign_vote_warmup = 12
         _LOGGER.info(
             "Sign-detection state reset — grid and battery signs will be "
@@ -2246,41 +2321,78 @@ class SensorReader:
                 "import" if lock_says_export else "export",
             )
 
-    def _audit_battery_sign_lock(self, battery_power: float, ed) -> None:
-        """Observe-only post-lock contradiction check for the fleet battery sign (#589).
+    def _audit_battery_sign_lock(self, battery_power: float, ed, readings=None) -> None:
+        """Observe-only post-lock contradiction check for the battery sign (#589, #647).
 
-        Runs only when the fleet battery sign is locked
-        (``_battery_sign_detected[__fleet__]`` is True). Compares the
-        sign-corrected ``battery_power`` against which Energy Dashboard energy
-        counter (charge vs discharge) is rising.
+        Compares the sign-corrected battery power against which Energy
+        Dashboard energy counter (charge vs discharge) is rising.
 
         SEM convention (from types.py):
           battery_power > 0  → charging    → charge counter should be rising
           battery_power < 0  → discharging → discharge counter should be rising
 
-        Five consecutive contradictions set ``_battery_sign_contradiction``
-        (surfaced as ``diag_battery_sign_contradiction``) and log one WARNING.
+        Two install shapes, one check each — mirroring where the sign is
+        actually LOCKED, because auditing at a level nothing locks at is how
+        this check spent its life as a no-op (#647):
 
-        Observe-only by design: never re-flips the sign.
-        Uses ``_battery_audit_charge_baseline`` / ``_battery_audit_discharge_baseline``
+        * **single / combined battery** — the ``__fleet__`` lock is set, so the
+          summed counters are audited against the summed power, as in #589.
+        * **per-battery mode** — ``__fleet__`` is never locked; each combined
+          unit locks its OWN ``b<N>`` sign. So each unit is audited against its
+          own ``battery_charge_energy_list[idx]`` / ``…discharge…[idx]`` pair.
+          Summing here would have been worse than useless: one unit signed
+          wrong and one signed right cancel to ≈0 W and get skipped as "idle".
+
+        Two-sensor pair units (#553) are never sign-flipped — their direction
+        is declared by the user in the Energy Dashboard — so they have no lock
+        to contradict and are not audited.
+
+        Observe-only by design: never re-flips the sign. Uses its own baselines
         so the voter's ``_battery_charge_baseline`` is never disturbed.
-
-        Delegates to ``_battery_sign_audit`` (CounterCorrelationAudit).
-        Counter-A = charge; positive_power_means_a=True (positive = charging).
         """
-        if not self._battery_sign_detected.get(self._FLEET_BID):
-            return
-        if abs(battery_power) < 100:
+        if self._battery_sign_detected.get(self._FLEET_BID):
+            charge_entities = (
+                list(getattr(ed, "battery_charge_energy_list", None) or [])
+                or ([ed.battery_charge_energy] if getattr(ed, "battery_charge_energy", None) else [])
+            )
+            discharge_entities = (
+                list(getattr(ed, "battery_discharge_energy_list", None) or [])
+                or ([ed.battery_discharge_energy] if getattr(ed, "battery_discharge_energy", None) else [])
+            )
+            self._run_battery_sign_audit(
+                self._FLEET_BID, battery_power, charge_entities, discharge_entities,
+            )
             return
 
-        charge_entities = (
-            list(getattr(ed, "battery_charge_energy_list", None) or [])
-            or ([ed.battery_charge_energy] if getattr(ed, "battery_charge_energy", None) else [])
-        )
-        discharge_entities = (
-            list(getattr(ed, "battery_discharge_energy_list", None) or [])
-            or ([ed.battery_discharge_energy] if getattr(ed, "battery_discharge_energy", None) else [])
-        )
+        # Per-battery mode: audit each combined unit against its own counters.
+        if readings is None:
+            return
+        charge_list = list(getattr(ed, "battery_charge_energy_list", None) or [])
+        discharge_list = list(getattr(ed, "battery_discharge_energy_list", None) or [])
+        for idx in range(len(getattr(ed, "battery_power_list", None) or [])):
+            bid = f"b{idx + 1}"
+            if not self._battery_sign_detected.get(bid):
+                continue
+            bp = readings.batteries.get(bid)
+            if bp is None:
+                continue
+            if idx >= len(charge_list) or idx >= len(discharge_list):
+                continue
+            self._run_battery_sign_audit(
+                bid, bp.power_w, [charge_list[idx]], [discharge_list[idx]],
+            )
+
+    def _run_battery_sign_audit(
+        self, bid: str, power_w: float, charge_entities: list, discharge_entities: list,
+    ) -> None:
+        """One cycle of the battery counter-correlation audit for one bid (#647).
+
+        Counter-A = charge; ``positive_power_means_a=True`` (positive = charging).
+        Five consecutive contradictions raise this bid's flag (surfaced through
+        the perception health surface) and log one WARNING.
+        """
+        if abs(power_w) < 100:
+            return
         if not charge_entities or not discharge_entities:
             return
 
@@ -2289,35 +2401,34 @@ class SensorReader:
         if charge_val is None or discharge_val is None:
             return
 
-        # counter-A = charge, counter-B = discharge.
-        # positive_power_means_a=True: battery_power > 0 means charging (A rising).
-        signal = self._battery_sign_audit.update(
+        label = "" if bid == self._FLEET_BID else f" [{bid}]"
+        signal = self._battery_audit_for(bid).update(
             charge_val, discharge_val,
             positive_power_means_a=True,
-            power_positive=battery_power > 0,
+            power_positive=power_w > 0,
             counter_deltas_fn=self._counter_deltas,
         )
         if signal == "clear":
             _LOGGER.info(
-                "Battery sign now agrees with the Energy Dashboard "
-                "counters again — clearing the battery sign contradiction flag. (#589)"
+                "Battery sign%s now agrees with the Energy Dashboard "
+                "counters again — clearing the battery sign contradiction flag. (#589)",
+                label,
             )
         elif signal == "warn":
-            power_says_charging = battery_power > 0
-            charge_ent = charge_entities[0] if charge_entities else "unknown"
-            discharge_ent = discharge_entities[0] if discharge_entities else "unknown"
+            power_says_charging = power_w > 0
             _LOGGER.warning(
-                "Battery sign CONTRADICTS the Energy Dashboard counters "
+                "Battery sign%s CONTRADICTS the Energy Dashboard counters "
                 "for 5+ cycles: SEM computes battery_power=%.0f W (%s) "
                 "while the %s counter (%s / %s) is the one increasing. "
                 "The locked battery sign convention may be wrong. Use "
                 "'Reset sign detection' in the SEM Config tab to clear "
                 "the lock and re-learn it. (#589)",
-                battery_power,
+                label,
+                power_w,
                 "CHARGING" if power_says_charging else "DISCHARGING",
                 "discharge" if power_says_charging else "charge",
-                charge_ent,
-                discharge_ent,
+                charge_entities[0],
+                discharge_entities[0],
             )
 
     # With healthy two-sided any-device picks held, re-scan only every

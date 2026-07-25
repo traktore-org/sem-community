@@ -59,6 +59,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per charger too. Coordinator-side consumers (session attribution, diagnostics, taper feed,
   the priority rows) go through one sanctioned accessor — which also fixes a kW-reporting
   charger showing ~0 W in the device-priority list. AST-linted so the raw shape can't return.
+- 🔋 **The battery sign cross-check now actually runs on multi-battery installs** (#647,
+  coherence-audit) — the observe-only check that catches a battery reporting charge as
+  discharge was gated on the *fleet* sign lock, which only single/combined-battery installs
+  ever set. On a multi-battery install — the exact shape where one inverter can be signed
+  differently from another — it was a permanent no-op reporting a healthy perception layer
+  it had never tested (ledger class 8). And had it run, it compared SUMMED counters against
+  SUMMED power, so one battery signed wrong and one signed right cancel to ≈0 W and get
+  skipped as "idle". Each battery is now audited against its own charge/discharge counters,
+  and the health surface names the offending unit (\`b2\`) instead of just "the battery".
+  Two-sensor pair batteries are untouched — their direction is user-declared, so there is
+  no lock to contradict.
 - 🔌 **A surplus load is no longer switched back on at dusk by the peak manager** (#649,
   coherence-audit) — peak shed/restore for surplus-mode loads ran in TWO engines with
   separate state, anti-flicker and restore criteria. Shedding twice was survivable;
