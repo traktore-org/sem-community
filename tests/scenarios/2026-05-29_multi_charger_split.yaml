@@ -2,8 +2,11 @@ name: "2026-05-29 multi-charger split — Phase B.5 distribution (#284)"
 
 coverage:
   - mode: multi_charger
-    regime: split_canonical_total_equals_sum
-    issue: "#284"
+    regime: fleet_cycle_with_multiple_chargers
+    issue: "#284"   # was split_canonical_total_equals_sum until #651
+  - mode: multi_charger
+    regime: solar_commitment_cascade
+    issue: "#665"   # the allocator production actually runs
 description: |
   Phase B.5 scenario for #284 (@RienduPre, two-charger Wallbox Pulsar
   on Growatt). When SEM has 2+ chargers, the multi-charger distribution
@@ -120,14 +123,35 @@ expect:
   # Here we just confirm it lands somewhere sensible.
   strategy_substring: "battery_assist"
 
+  # #651 removed total_equals_canonical + at_least_one_charger_gets_positive
+  # from here: both checked SurplusController.distribute_ev_budget, whose
+  # split production wrote to pcc.budget_w and never read. #665 gives the
+  # scenario its subject back by asserting over the allocator that DOES
+  # run — the per-charger loop threading _solar_committed_w_per_cycle.
   multi_charger:
-    # The defining Phase B.5 invariant: distribution sums to ≤ canonical
-    # net_w. No silent over-allocation, no leakage from the legacy
-    # formula.
-    total_equals_canonical: true
-    tolerance_w: 1.0
+    # Priority 1 takes the surplus; priority 2 sees what's left, which
+    # here is nothing. This is the "priority takes all when the budget is
+    # tight" case the timeline comments above describe, now asserted
+    # rather than described. Note charger_left is commanded 16 A, not 22:
+    # before #678 the view carried no ev_max_current and decide fell back
+    # to its own 32 A literal, so the charger claimed 15180 W of a 14000 W
+    # solar regime and starved charger_right on watts it could not draw.
+    per_charger_intents:
+      charger_left: charge_at_amps
+      charger_right: idle
 
-    # When net_w is above the lowest charger threshold (4140 W), at
-    # least ONE charger should get a positive allocation. Catches the
-    # regression where the distributor silently zeros everyone out.
-    at_least_one_charger_gets_positive: true
+    # Each charger sees exactly the sum of its seniors' claims — no more
+    # (double-spending the same watts) and no less (a senior's claim
+    # silently dropped).
+    solar_commitment_cascade: true
+
+    # 16 A × 3 × 230 = 11040 W, charger_left's real nameplate. Both
+    # chargers together may not credit more solar than one of them can
+    # physically draw, because the second one never starts here. Every
+    # watt above this ceiling would be grid or battery watts wearing a
+    # solar label — the shape of "car charged partly from grid" (#284).
+    solar_committed_total_max: 11040
+
+  # Per-charger behaviour of a different kind (effective state, flow
+  # attribution) is asserted in 2026-05-31_off_plus_solar_only and
+  # 2026-06-09_rienduPre_dual_wallbox.

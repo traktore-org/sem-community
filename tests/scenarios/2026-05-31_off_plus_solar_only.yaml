@@ -122,11 +122,10 @@ expect:
   strategy_substring: "solar_only"
 
   multi_charger:
-    # Phase B.5 / #284 invariant re-asserted on top of the new mixed-mode
-    # case. Distribution math must not regress.
-    total_equals_canonical: true
-    tolerance_w: 1.0
-
+    # total_equals_canonical + tolerance_w removed in #651 — they
+    # asserted over a budget split production never read. The headline
+    # assertions below were always the real content of this scenario.
+    #
     # The headline v1.6.12 assertion: per-charger effective state
     # follows per-charger ``charge_mode``, not the fleet view.
     per_charger_effective_states:

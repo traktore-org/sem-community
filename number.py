@@ -456,7 +456,7 @@ async def async_setup_entry(
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
                     coordinator, base_desc, entry, cid, config_key,
-                    charger_cfg.get(config_key, default_val),
+                    charger_cfg.get(config_key, default_val), cname,
                 ))
 
     if per_charger_descriptions:
@@ -730,7 +730,21 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
 
 
 class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
-    """Per-charger number entity that stores its value in the charger's config dict (#193)."""
+    """Per-charger number entity that stores its value in the charger's config dict (#193).
+
+    The translation key is the **bare** ``config_key``, not ``description.key``.
+    The description key carries the charger id (``charger_keba_target_soc``),
+    so it can never be declared in ``strings.json`` — HA looked it up, missed,
+    and silently fell back to ``entity_description.name``, which was a hardcoded
+    English f-string. Nine per-charger sliders therefore read English on every
+    install regardless of language (#677). The charger discriminator moved into
+    a ``{charger}`` placeholder in the translated name instead, which keeps both
+    properties at once.
+
+    ``entity_id`` and ``unique_id`` still derive from ``description.key`` and
+    are unchanged — this renames nothing on an existing install, it only makes
+    the friendly name translatable.
+    """
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
@@ -743,12 +757,14 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         charger_id: str,
         config_key: str,
         initial_value: float,
+        charger_name: str = "EV Charger",
     ) -> None:
         """Initialize per-charger number entity."""
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_translation_key = description.key
+        self._attr_translation_key = config_key
+        self._attr_translation_placeholders = {"charger": charger_name}
         self._attr_suggested_object_id = f"sem_{description.key}"
         self.entity_id = f"number.sem_{description.key}"
         self._entry = entry

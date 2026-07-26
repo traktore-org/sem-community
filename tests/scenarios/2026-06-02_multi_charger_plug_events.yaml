@@ -2,8 +2,8 @@ name: "2026-06-02 multi-charger plug events — one plugs in, other unplugs"
 
 coverage:
   - mode: multi_charger
-    regime: split_canonical_total_equals_sum
-    issue: "transition"
+    regime: fleet_cycle_with_multiple_chargers
+    issue: "transition"   # was split_canonical_total_equals_sum until #651
 
 description: |
   Two-charger setup where the plug events are STAGGERED — the
@@ -84,7 +84,8 @@ expect:
   # Phase B.5 invariant: per-charger budgets sum to <= canonical.
   strategy_substring: "solar_only"
 
-  multi_charger:
-    total_equals_canonical: true
-    tolerance_w: 1.0
-    at_least_one_charger_gets_positive: true
+  # multi_charger block removed in #651 — see
+  # 2026-05-29_multi_charger_split.yaml for the reasoning. The staggered
+  # plug/unplug timeline still exercises connect/disconnect handling
+  # across two chargers for a full run; only the budget-split assertions
+  # are gone.

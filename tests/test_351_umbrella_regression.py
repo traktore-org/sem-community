@@ -267,105 +267,81 @@ class TestL2_LegacyFlowsDeprecated:
 
 
 # ---------------------------------------------------------------------------
-# M5 — SurplusController.distribute_ev_budget ignores per-charger mode
+# M5 — an off-mode charger must not consume the fleet's surplus
+#
+# Retargeted in #651. The original M5 fix added an ``excluded_charger_ids``
+# set to ``SurplusController.distribute_ev_budget``, and these tests called
+# that method directly. #651 established that the method never ran in a
+# shipped install — its one caller wrote the result into ``pcc.budget_w``,
+# which nothing read. So the M5 fix was correct code on a dead path, and
+# a test calling it proved nothing about a real install.
+#
+# The invariant M5 was actually about is still worth pinning, so it is
+# restated here against the allocator that DOES run: the per-charger loop
+# adds a charger's draw to ``_solar_committed_w_per_cycle`` only for
+# CHARGE_AT_AMPS / CHARGE_MAX (coordinator.py, after ``actuate``). An
+# off-mode charger decides DISABLE, so it commits nothing and the next
+# charger in priority order sees the surplus undiminished — exclusion by
+# construction rather than by an exclusion set.
 # ---------------------------------------------------------------------------
 
 
-class TestM5_DistributeRespectsOffMode:
-    """``SurplusController.distribute_ev_budget`` accepts an
-    ``excluded_charger_ids`` set. Excluded chargers appear in the output
-    with 0 W so dashboards still see the entry, but they don't consume
-    any of the budget cascade — leaving the available watts for the
-    other chargers.
-    """
+class TestM5_OffModeChargerConsumesNoSurplus:
 
-    def test_off_mode_charger_gets_zero_allocation(self) -> None:
-        from custom_components.solar_energy_management.coordinator.surplus_controller import (
-            SurplusController,
+    def test_off_mode_decides_disable_and_commits_nothing(self) -> None:
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerEnergy,
+            ChargerIntent,
+            ChargerPower,
+            ChargerView,
+            FleetContext,
+        )
+        from custom_components.solar_energy_management.coordinator.decide import (
+            decide,
+            self_consumption_surplus_w,
         )
 
-        hass = MagicMock()
-        hass.services = MagicMock()
-        hass.services.async_call = AsyncMock()
-        hass.states = MagicMock()
-        hass.states.get = MagicMock(return_value=None)
+        def _view(cid: str, mode: str, committed_w: float) -> ChargerView:
+            return ChargerView(
+                power=ChargerPower(charger_id=cid, connected=True),
+                energy=ChargerEnergy(charger_id=cid),
+                mode=mode,
+                config={"ev_min_current": 6, "ev_phases": 3,
+                        "ev_voltage": 230, "ev_max_current": 16},
+                fleet=FleetContext(
+                    solar_w=8000.0, home_w=500.0, battery_soc=95.0,
+                    solar_committed_w=committed_w,
+                ),
+            )
 
-        controller = SurplusController(hass)
-
-        # Two mock devices — A in active mode, B excluded (off).
-        def _dev(name: str, priority: int):
-            d = MagicMock()
-            d.name = name
-            d.priority = priority
-            d.max_current = 16
-            d.phases = 3
-            d.voltage = 230
-            d.min_power_threshold = 1500
-            return d
-
-        a = _dev("A", priority=1)
-        b = _dev("B", priority=2)
-        # Reset hysteresis state so the call is treated as a fresh
-        # allocation (no carry-forward from a prior cycle).
-        controller._ev_last_realloc_time = 0.0
-        controller._ev_prev_allocation = {}
-
-        result = controller.distribute_ev_budget(
-            budget_w=8000.0,
-            ev_devices={"a": a, "b": b},
-            excluded_charger_ids={"b"},
+        # Charger A is off and goes first in priority order.
+        d_a = decide(_view("a", "off", 0.0))
+        assert d_a.intent is ChargerIntent.DISABLE, (
+            f"M5 regression — an off-mode charger must decide DISABLE, "
+            f"got {d_a.intent}"
         )
 
-        assert "b" in result, (
-            "excluded charger must appear in output (with 0) — "
-            "dashboards rely on the key being present."
+        # The commitment rule in the per-charger loop only credits
+        # CHARGE_AT_AMPS / CHARGE_MAX, so A contributes 0 W.
+        committed_after_a = (
+            d_a.commanded_amps * 3 * 230
+            if d_a.intent in (ChargerIntent.CHARGE_AT_AMPS,
+                              ChargerIntent.CHARGE_MAX)
+            else 0.0
         )
-        assert result["b"] == 0, (
-            f"M5 regression — excluded charger B got non-zero alloc: "
-            f"{result['b']}"
-        )
-        assert result["a"] > 0, (
-            f"M5 regression — charger A (active) got no budget despite "
-            f"plenty of watts available: {result['a']}"
-        )
-
-    def test_no_exclusion_keeps_legacy_behaviour(self) -> None:
-        """Backward-compat: omitting ``excluded_charger_ids`` is identical
-        to the pre-#351 behaviour (no filter applied)."""
-        from custom_components.solar_energy_management.coordinator.surplus_controller import (
-            SurplusController,
+        assert committed_after_a == 0.0, (
+            f"M5 regression — off-mode charger A committed "
+            f"{committed_after_a} W of solar; it must consume none."
         )
 
-        hass = MagicMock()
-        hass.services = MagicMock()
-        hass.services.async_call = AsyncMock()
-        hass.states = MagicMock()
-        hass.states.get = MagicMock(return_value=None)
-        controller = SurplusController(hass)
-
-        def _dev(name: str, priority: int, max_current: int):
-            d = MagicMock()
-            d.name = name
-            d.priority = priority
-            d.max_current = max_current
-            d.phases = 3
-            d.voltage = 230
-            d.min_power_threshold = 1500
-            return d
-
-        # Cap A at 8A (~5.5 kW) so the budget cascade has a remainder
-        # for B at priority 2 — otherwise A consumes the whole 8 kW.
-        a = _dev("A", priority=1, max_current=8)
-        b = _dev("B", priority=2, max_current=16)
-        controller._ev_last_realloc_time = 0.0
-        controller._ev_prev_allocation = {}
-
-        result = controller.distribute_ev_budget(
-            budget_w=8000.0,
-            ev_devices={"a": a, "b": b},
+        # Charger B, next in priority order, sees the full surplus.
+        v_b = _view("b", "solar_only", committed_after_a)
+        assert self_consumption_surplus_w(v_b) == pytest.approx(7500, abs=1)
+        d_b = decide(v_b)
+        assert d_b.intent is ChargerIntent.CHARGE_AT_AMPS, (
+            f"M5 regression — charger B got no budget despite plenty of "
+            f"watts available: {d_b.intent} / {d_b.reason}"
         )
-        # Both should get a non-zero allocation in legacy mode.
-        assert result["a"] > 0 and result["b"] > 0
 
 
 # ---------------------------------------------------------------------------

@@ -39,6 +39,9 @@ _LOGGER = logging.getLogger(__name__)
 #   B2 coordinator.py:2589 `ev_budget` in `_build_charging_context`
 #                                          → state machine input
 #   B3 ev_control.py:440-452 `budget_w` → the actuator
+#      (all three line references are historical — B3's actuator-local
+#      budget was folded into EVBudget by Phase A on 2026-05-29 and no
+#      longer exists in ev_control.py)
 #
 # Live evidence captured 2026-05-29 (PROD): state machine returned
 # SOLAR_CHARGING_ACTIVE because its budget view included battery_redirect

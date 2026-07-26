@@ -87,8 +87,48 @@ deep-deficit battery-drain bridge). **Where it lives:** `charge_stability.py`. *
 **Symptom:** a "health check" that is algebraically incapable of firing (the energy-balance check is
 `0 = 0` because `home` is defined by the balance) → a whole error class stays silent.
 **Closure:** the *independent* perception cross-check (counter-vs-power) catches sign errors the
-balance can't. **Open:** any other self-referential check; audit for them in `/coherence-audit`.
-Refs #589.
+balance can't. **Second instance (#661, 2026-07-25):** `health_check` flagged "grid import AND
+export both > 10 W" (and the battery twin) — but `calculate_derived` re-derives all four fields from
+ONE signed scalar via `max(0, ±x)`, so both-active is *unrepresentable*. The netting happens on
+split-sensor installs too, which are exactly the installs the check existed for. Its test passed
+only by hand-setting the fields on a `MagicMock`, bypassing the derivation — that bypass is the tell
+for this whole class. **Closure pattern:** move the check UPSTREAM to where the raw evidence still
+exists (each netting site in `SensorReader`, via `SplitSensorExclusivityAudit`), and DELETE the
+downstream copy rather than leaving it as decoration. A check that cannot fire is worse than no
+check: it reads as coverage. **Third instance (#651, 2026-07-25) — the test-side twin:**
+`test_multi_charger_canonical_budget.py` defined a local
+`_select_multi_charger_total_budget()` that, in its own docstring, "inline[d] the relevant lines
+verbatim" from the coordinator — then asserted against that copy. A hand-copy of the code under
+test cannot fail when the original is wrong, and it stayed green when #651 deleted the original
+outright. Same file, a scenario-harness key named `priority_order` whose loop body was a bare
+`pass` under the comment "can't reliably check from this side" — a named, documented, YAML-selected
+assertion with no teeth, referenced by 1 scenario. **Sweep question (test side):** does this test
+call production code, or a local restatement of it? If you deleted the production function, would
+this test go red? **Guard:** `tests/scenario_harness.py` now rejects unknown `expect.multi_charger`
+keys, so a silently-ignored expectation fails instead of passing.
+**Fourth instance (#676, 2026-07-26) — the budgeted variant:**
+`test_no_orphaned_translations` failed only above ten orphans ("Allow some orphans (keys used by
+other systems) but warn if there are many"). There were **exactly ten**, and nothing was using any
+of them — the allowance had been sized to the debt, so a full load passed indefinitely. This is the
+subtlest form in the class: the check *can* fire in principle, which is why it survives review, but
+its threshold was set by measuring the current state rather than by stating a rule. Note that the
+comment did the concealing work — it supplied a plausible reason ("keys used by other systems")
+that nobody verified, and once written it read as a decision rather than a guess. **Closure:**
+threshold to zero, and every genuine exception named individually with its reason
+(`_DYNAMIC_TRANSLATION_KEYS`, two entries, each checked against the code — both turned out to be
+live keys a static scan cannot see, so the naive delete-them-all fix would have broken real
+entities), plus an assertion that the exception list stays small so it cannot regrow into the
+tolerance that was just removed. **Sweep question (thresholds):** for every `> N`, `at least N%` or
+"allow some" in a correctness check — where did N come from? If it came from running the check and
+picking a number just above the result, it is not a threshold, it is a snapshot of the debt.
+*Swept 2026-07-26 across every lint/meta test:* the only other count comparisons are **vacuity
+floors** (`len(scan) > 30` / `>= 16` / `> 50_000`, "the scan broke") — the inverse shape, requiring
+at least N rather than tolerating up to N, which is this class's own closure pattern. #676 was the
+sole instance.
+**Open:** any other self-referential check; audit for them in
+`/coherence-audit`. **Sweep question:** for every check, can you name an input that makes it fire —
+and can that input survive the transforms between where it is produced and where it is checked?
+Refs #589, #651, #661, #676.
 
 ### 9. Engine-specific SVG/SMIL form (renders on Blink/Gecko, silent on WebKit) — GUARDED
 **Symptom:** a dashboard-card visual works on desktop Chrome/Firefox and Android but is dead on
@@ -196,6 +236,11 @@ per-charger flow *entities*, ~line 1618) legitimately keep `len > 1` — they su
 registry entities, they don't read config; do NOT "fix" those. Refs #536 #616.
 
 ### 14. One-shot restore vs a late/rebuilt device (accrued per-device state resets) — PARTIAL
+**New instance (2026-07-24, #635):** the per-charger EV-intelligence restore read
+``ev_intelligence.chargers.<cid>`` that NO save path ever wrote, and the primary save
+REPLACED the whole dict each cycle (also wiping session_history) — estimated SOC blanked on
+every restart. The save/restore ASYMMETRY variant: audit every restore reader for a matching
+writer and vice versa.
 **Symptom:** a load's accrued daily progress ("X/Y h on solar today", the runtime toward its
 minimum-runtime goal) resets to 0 on every HA restart and the load re-runs its whole daily target —
 even though a persist+restore for it exists. **Root shape:** per-device state that lives in the
@@ -318,6 +363,283 @@ the flag for actuation. Full closure = the flag flip that retires the hand-clear
 gate-driven stop; `test_desired_state.py::test_reconcile_markers_derive_from_source` pins the
 derivation. Refs #620.
 
+### 19. UI write path never reaches the runtime reader (unrouted option / dual storage) — GUARDED
+**Symptom:** a card control writes somewhere (entry option, entity) that the running consumer
+never reads — silently no-op until a reload/restart, or forever (dual storage aligned only by
+coincidence of defaults). **Live catches (2026-07-24/25):** the config-card peak slider
+(unrouted \`set_option\` key → reload-or-nothing, #636); the legionella target (Control card
+wrote the entity, the coordinator read the config option — equal only because both sat at the
+default). **Root shape:** writer and reader bind to different stores/names; name-based routing
+(\`number.sem_<key>\`) misses mapped entities (#542's CONFIG_KEY_MAP). **Guard:**
+\`tests/test_637_live_options.py\` — every card option must declare its routing class
+(LM_LIVE / LIVE_CONFIG / STRUCTURAL_RELOAD / entity-backed), and every LIVE_CONFIG key must
+prove a runtime read exists. **Sweep question:** for every UI control, WHERE does the write
+land and WHO reads that exact store at runtime?
+
+### 20. Shadowed decision branch (an always-true earlier branch starves a newer one) — PARTIAL
+**Symptom:** a new decision branch is added, tested in isolation, and never executes in
+production because an earlier branch in the same function is effectively always true on real
+inputs. **Live catch (2026-07-24):** #630's peak-managed night rate — \`deadline_amps\` is
+always >0 once a night window resolves, so the deadline branch clamped everything to Min and
+\`top_up_amps\` was never consulted; the feature shipped inert and only reasoning over live
+logs exposed it. **Fix pattern:** merge the branches' authorities explicitly
+(\`max(deadline, top_up)\`) rather than ordering them. **Guard (partial):** precedence pins in
+\`test_629_ev_orchestration.py\`. **Sweep question:** for every decision function with ordered
+branches, can the LATER branches actually be reached under production-shaped inputs? (A
+reachability/coverage check against scenario corpora catches this class.)
+
+---
+
+### 21. Per-site unit normalization with divergent match rules — GUARDED
+**Symptom:** the "sensor state → watts (or kWh)" conversion is a copy-pasted inline block, and
+each copy picked its own unit-match rule, so the SAME physical sensor is read at DIFFERENT
+magnitudes by different subsystems in the same cycle — with no error anywhere, because every
+copy is individually correct-looking. A cousin of class 10 (that one is a keyword gap for entity
+*resolution*; this is a unit-string gap for value *conversion*). **Instances (#641, 2026-07-25):**
+five live rules across eight sites — exact-case `== "kW"` (`ev_control._this_charger_power`,
+which `per_charger_context` funnels the whole multi-charger loop through), lowercase `== "kw"`
+with no strip (`sensor_reader._read_sensor`, `coordinator._charger_power_w`),
+strip+lower+long-form synonyms (`forecast_reader`, added by #575 — a prior bug in this same
+family), Wh+MWh (`energy_calculator._energy_state_kwh`, added by #551 — Fronius Gen24 lifetime
+counters really do report Wh), and **no check at all** (`devices/base.observed_power_w` /
+`get_current_consumption`, where a kW heat-pump sensor taught `calibrate_rated_power` a ~3 W
+rated power and collapsed the activation threshold). **Fix pattern:** ONE
+`power_state_to_watts()` / `energy_state_to_kwh()` pair in `coordinator/units.py`, adopting the
+union of the strictest copies; every site routes through it, including the ones that had no
+conversion. Unit *predicates* (`is_power_unit`/`is_energy_unit`) live there too, so a detection
+site can't drift from a conversion site. **Guard:** AST lint in `tests/test_641_units.py` — any
+`unit_of_measurement`-derived name compared against a power/energy literal outside `units.py`
+fails CI, making a sixth copy unrepresentable. **Sweep question:** for any value read off a HA
+state, is there exactly ONE place that decides its magnitude?
+
+### 22. String-keyed store where the write site and a read site disagree — GUARDED
+**Symptom:** a value is written into a dict under a key built from a category string, and read
+back somewhere else with the category spelled out *again* at the call site. Nothing joins the
+two. A disagreement raises nothing, logs nothing and leaves no missing entity — the reader just
+gets the default (`0.0`, or `set()`) forever. Distinct from class 19 (that one is a *write path*
+that never reaches the runtime reader; here both paths work perfectly, on different keys).
+**Instances:** **#666** — EV energy accumulated under `ev_daily_sun` while four independent sites
+(both yearly reads, the recorder year-seeding, the reconcile's monthly write) had each
+independently guessed the obvious `ev`; yearly and lifetime EV were frozen at zero for the life
+of the feature, self-healing for one cycle after every restart (the recorder re-seed) and then
+freezing again, which is why nobody reported it. **#667** — `SENSOR_LABEL_MAPPING.get(key, set())`:
+44 of 116 label keys (38%) named no entity, including *every* `sem_monthly` one, so filtering HA's
+entity list by that label returned nothing while all six sensors existed and held data.
+**Tell:** a category/name string that is a *literal* at more than one site. Also: any period or
+sibling of a group sitting at exactly `0` while its siblings move — one `_accumulate` writes
+daily, monthly, yearly and lifetime in the *same call*, so a lone zero is arithmetically
+impossible without a key mismatch. **Fix pattern:** promote the string to ONE constant
+(`EV_CATEGORY`), migrate stored keys in place (sum on collision — both halves are real data),
+and prefer putting qualifiers (a day boundary, a scope) in the *key* rather than the *namespace*:
+`ev_daily_sun` claimed "daily" while writing four periods. **Guards:**
+`tests/test_666_ev_accumulator_keys.py` runs one real integration cycle and asserts
+daily/monthly/yearly move together for every category *derived from the dataclass* (not a list to
+keep in sync — that is this same class one level up); `tests/test_667_label_registry.py` is a
+shrink-only ratchet over label keys with no entity. **Sweep question:** for every string-keyed
+store, is the key built in exactly one place — and if a lookup misses, does anything at all say so?
+
+### 23. Reference written to a host registry that never validates it — GUARDED
+**Symptom:** we write an *identifier* into a Home Assistant registry and the API stores it
+verbatim — it neither validates the reference nor creates the thing it points at. Every
+inspection from our side passes, because we are reading back our own write. The direction that
+was actually the point — the host resolving the reference — is dead, and reports nothing.
+**Instance:** **#670** — `entity_registry.async_update_entity(labels={...})` takes label *IDs*.
+SEM never called `label_registry` at all, so its 19 labels were strings on entity rows and
+nothing else. `labels('sensor.sem_monthly_solar_yield_energy')` returned all four labels ✅ while
+`label_entities('sem_monthly')` returned `0` and `label_id('sem_monthly')` returned `None` — and
+the reverse lookup is what the entity-list filter, label-scoped automations and auto-entities all
+use. It compounded with class 22 (#667): with the registry side missing, a *correct* label and a
+typo'd one behaved identically, which is how 38% drift survived for years.
+**Tell:** any `async_update_*(... = <id or list of ids>)` against a host registry where we never
+call that registry's own `async_create` / `async_get`. Also: a feature whose verification only
+ever reads back the field we wrote. **Fix pattern:** create-if-missing against the owning
+registry *before* the reference is written, matched on **id** (never name), and never delete,
+rename or recolour — the user owns those objects. **Guards:**
+`tests/test_670_label_registration.py` asserts through `template.label_entities` — the real
+consumer path — rather than through the entity registry's own index, plus idempotency across
+restarts and non-clobbering of user renames. **Sweep question:** for every id we hand to HA
+(labels, areas, floors, categories, devices), who *creates* it — and has anyone ever tested the
+lookup in the direction the user actually uses?
+
+### 24. Hand-maintained key whitelist mirroring a structure that grows — GUARDED
+**Symptom:** a serialization boundary carries values through a *literal list of key names*
+written by hand. The structure on either side of it gains a field; the list does not. The new
+field is written on the way out, silently dropped in the middle, and read back on the way in
+with `.get(key, default)` — so it does not raise, does not warn, and does not go missing. It
+resets to the default on every restart, forever. Distinct from class 22 (there the two sides
+disagree on *one* key's spelling; here they agree on spelling and one side simply doesn't list
+the key at all). **Instance:** **#668** — `SEMStorage.export_energy_calculator_state()` and
+`import_energy_calculator_state()` were two *separate* hand-written lists across the calculator's
+save/restore boundary. `get_state()` emits 20 keys; export whitelisted 11. Nine were dropped: the
+seven `accumulated_*` lifetime running totals, `rate_history`, and `yearly_cost_seeded`. Effects:
+`pre_sem_*` absorbed the entire lifetime, so **Lifetime Total Savings degraded from a
+rate-weighted real figure to a 7-day-average estimate** that moved on every restart; and the reset
+`yearly_cost_seeded` re-ran seeding each start, **overwriting** exact live yearly accumulators
+with an estimate. The pair had already drifted twice — #351 M1 added the cost accumulators to
+both, and nine more were still missing after it. **Tell:** two functions on opposite sides of a
+persist boundary that each contain a literal tuple/list of the *same* field names; or any
+`for key in ("a", "b", ...)` copy loop. Ask what happens when someone adds field `c`. **Fix
+pattern:** ONE module-level constant both directions iterate (`CALCULATOR_STATE_KEYS`), with the
+deliberate exclusions named and justified *in* it (`last_update` is the save stamp, not the
+integration stamp). Coerce on restore too — a value that used to be reset by the drop now
+survives every restart once it actually persists. **Guards:**
+`tests/test_658_ev_counter_reconcile.py::TestStorageRoundTrip658` round-trips real values rather
+than comparing key *sets*, and `test_the_two_directions_cannot_drift_apart` uses `inspect
+.getsource` to assert both functions reference the shared constant. **Sweep question:** for every
+persist boundary, is the field list derived from the structure — or retyped beside it?
+
+**Second instance — #673, and the variant that cannot be de-duplicated.** `services.yaml` is a
+hand-maintained mirror of what `__init__.py` registers, and it had drifted to **14 of 18**:
+`diagnose`, `remove_charger`, `get_config`, `set_option` were registered and undeclared. Same
+silent shape — an undeclared service is still fully callable, so nothing raises. What it loses is
+its UI: no description, no field pickers, no validation in Developer Tools → Actions. Worst on
+`diagnose`, which `docs/SEM_TRACE.md` explicitly tells users to call with `section: trace` — they
+met an action with no `section` dropdown and no hint that `trace` was one of twelve valid values.
+
+The important difference from #668: **the #668 fix pattern does not apply here.** You cannot
+derive `services.yaml` from the code, because it holds descriptions and selectors only a human can
+write. When one list genuinely cannot be generated from the other, the closure is not "collapse
+them into one source of truth" — it is **assert the two agree, and name every deliberate
+divergence.** `tests/test_673_services_declared.py` checks both directions (a declared-but-
+unregistered service is the rarer and more user-hostile half: HA offers it in the picker and it
+fails on call) and additionally pins that the `section` dropdown offers every section the code
+actually handles — a field with the wrong option list leaves the docs as the only place the valid
+values exist, which is the bug not quite fixed.
+
+**Sweep question, widened:** for every hand-written list mirroring a code structure — persist
+whitelists, `services.yaml`, `strings.json`, `manifest.json` dependencies, platform lists — is it
+derived, or merely *asserted equal*? If it is neither, it is already drifting.
+
+**Third instance — #674, found by running that sweep question instead of writing it down and
+moving on.** `strings.json` ↔ `translations/*.json` had drifted **50 keys one way and 35 the
+other**, identically in all 16 languages. The trap is specific and worth naming: `strings.json` is
+where a developer naturally edits — it is HA's documented source file and the one hassfest
+validates — but **HA never reads it at runtime for a custom component.**
+`helpers/translation.py` loads `integration.file_path / "translations" / f"{language}.json"` and
+nothing else. HA *core* has a build step that copies one into the other; a custom component does
+not, so the "source" file is the one with no effect. Cost: the whole Heat Pump options step
+rendered with no title, no description and eight raw voluptuous keys as labels (the frontend falls
+back to the key name); the `soc_cap_unenforceable` repair issue had no title or description at all.
+
+Then the guard for it surfaced a second layer — **the two files agreeing with each other says
+nothing about either agreeing with the code**: two `async_abort` reasons had no message anywhere,
+so a new user installing SEM before configuring the Energy Dashboard read the literal string
+`energy_dashboard_not_configured` as their entire failure message; twelve `config.error` keys were
+never assigned by any code path (leftovers from validation the #397 slim-down replaced); and two
+live errors named placeholders (`{entity_id}`, `{service}`) that no `description_placeholders` ever
+supplies, so users read the raw token. **Fix pattern:** where the mirror *is* derivable, demand
+exact parity rather than one-way containment — plus check placeholders in both directions, since an
+*invented* placeholder is a `KeyError` at render time while a *dropped* one merely loses
+information. **Guard:** `tests/test_674_translation_parity.py`.
+
+**Meta-lesson:** three instances in, the class's real tell is not "a list" — it is **a file whose
+only consumer is a human**. `services.yaml`, `strings.json` and the persist whitelist all fail the
+same way because nothing *executes* them against their counterpart. Ask of any such file: if I
+delete a line, what breaks, and when? If the answer is "nothing, until a user opens the right
+screen in the right language", it needs a guard, not a review.
+
+**Fourth instance — #677, the same drift read from the other end.** #674 was *a key with no entity*.
+#677 is *an entity with no key*, and it is worth keeping both in the class because the search that
+finds one will not find the other. When nine EV settings became per-charger in #255, their entity
+description key started carrying the charger id — `charger_keba_target_soc` — and
+`SEMPerChargerNumber` kept using `description.key` as the translation key. No `strings.json` can
+declare a key containing a runtime id, so HA looked it up, missed, and fell through to
+`entity_description.name`, a hardcoded English f-string. Nine sliders read English on every install
+in every language, for over a year. The two per-charger *selects* had the complementary half of the
+same split: they keyed on the bare config key, so they translated fine — but the name carried no
+charger, so a two-charger install rendered two identically-labelled dropdowns. **One split, two
+opposite losses: numbers kept the discriminator and lost the translation, selects kept the
+translation and lost the discriminator.** Fix pattern for both: bare config key as the translation
+key, discriminator as a `{charger}` placeholder — which HA validates, since
+`Entity._substitute_name_placeholders` *raises* outside the stable channel when the name names a
+placeholder the entity does not supply.
+
+**The part worth stealing:** the guard does not list the eleven keys. It **derives** them from the
+construction call sites in `number.py`/`select.py` — and that same derivation then *replaced* the
+two-entry `_DYNAMIC_TRANSLATION_KEYS` exemption set #676 had added to `test_translations.py` days
+earlier. That set was correct, small, and documented, and it was already the first two rows of a
+hand-maintained mirror of a growing structure — this very class, in its egg. #677 would have taken
+it to eleven. **Tell:** an exemption list *inside a guard for this class* is the class recurring one
+level up. If you find yourself adding a third entry to one, ask whether the thing you keep listing
+can be read out of the source instead. **Guard:** `tests/test_677_per_charger_names.py`
+(`per_charger_translation_keys()` is the shared derivation).
+
+### 25. Mutual delegation — two layers each defer the action to the other — GUARDED
+**Symptom:** the intent is right, the command is issued, the logs say it was issued, and the
+thing never happens. Nothing raises, because from each layer's own point of view it behaved
+correctly: it declined to act *because the other layer handles it*.
+**Root shape:** two code paths that are each other's fallback. Layer A skips its own attempt
+and documents that B is responsible; layer B, finding nothing of its own to do, falls back to
+A. Neither is wrong in isolation — the defect only exists in the *composition*, which is why
+reviewing either file alone reads as correct. The tell is a pair of comments that point at
+each other; both were present here, in different files, and both were accurate.
+**Live catch (#627, reported by @onkelfu):** `_set_current(0)` skips the write when the control
+number's `min` is above 0 A ("the actual stop is the adapter's job", #487), and
+`stop_session()` — finding no stop service, charge-mode select, start/stop entity or
+`<domain>.disable` — warns that it is "relying on `_set_current(0)` alone". On a charger
+configured with only a current `number.*` entity, nothing stopped the car at all: 130
+consecutive commanded stops, 4.1 kW drawn against them, 3.5 kW of it out of the house
+batteries, at night, with the charger set to *off*.
+**Why the observability missed it:** #548 had already added `_stop_commanded_while_drawing`,
+which counted the failures correctly and warned at 3, 12 and 60 — then went quiet by design,
+while the condition ran for hours. A counter of a *symptom* answers "is it working?" with
+"I have seen it fail N times", which decays into background noise. The capability question
+("*can* this ever work?") is answerable up front and doesn't decay.
+**Closure:** don't assert the capability — compute it, from the same fields the action
+dispatches on, and let the consumer surface it. `CurrentControlDevice.can_stop_charging()`
+mirrors `stop_session()`'s dispatch chain and ends at `_bound_to_entity_range(entity, 0)` —
+the exact predicate that made the write unreachable — so the two cannot drift without the
+guard noticing. The reconciler carries it as `ObservedState.stop_controllable` and files a
+repair naming the charger, the power still flowing and the missing entity.
+**The trap that was avoided, and why it's part of the class:** the obvious home for the signal
+was the existing `enable_controllable`. It gates the CHARGE rows — reusing it would have
+short-circuited every number-entity-only charger to REPORT and cost it surplus charging
+entirely, trading a reporting gap for a functional loss. When a new capability signal *looks*
+like an existing one, check what the existing one gates before reusing it.
+**Sweep (done):** the other capability-shaped claims on this path were checked — `ensure_enabled`
+/ `command_enable` (no mutual-fallback pair: a missing switch is a no-op with no second layer
+claiming it), and the phase-switch path (deleted dead in #659).
+**Guard:** `tests/test_627_stop_unenforceable.py` — pins the probe per mechanism, its
+propagation through `observe()`, the reconciler row, the repair raise/clear, **and** that the
+CHARGE rows stay untouched when `stop_controllable=False`. Refs #487 #548 #627.
+**Watch:** any new "SEM couldn't actually do X" should be a *computed capability on the device*,
+not a counter of failed attempts in the caller.
+
+### 26. Config key every test injects and production never writes — GUARDED
+**Symptom:** none, for years. The code reads `cfg.get("some_key", <literal>)`, every test
+constructs a config dict containing `some_key`, and the tests pass. On a real install the key
+is absent from every entry, so the literal is what actually runs — a value nobody chose, in a
+branch everybody believes is covered.
+**Root shape:** a default argument turns "missing" into "plausible". A missing key that raised
+would be found in the first minute; a missing key that falls back reads as configuration. The
+test fixture is written from the *reader's* expectations rather than from a real stored entry,
+so the fixture documents the schema the reader wishes existed. Nothing in CI compares that to
+the schema the config flow actually writes.
+**Live catch (#678, found by #665's new coverage):** `decide()` reads `ev_max_current`,
+`ev_min_current`, `ev_phases` and `ev_voltage` off the per-charger entry. There is no
+config-flow field for max-current or voltage at all, and `_SEED_KEYS` covers only min-current
+and phases, only for entries migrated from schema v3 — so on a normally-installed entry all
+four read `None` (verified live against real `.storage`, top-level config included) and decide
+used 32 A / 6 A / 3 / 230 V. Hardware was never at risk: the adapters clamp every command to
+the charger's real ceiling, which is *why* it survived — the only visible effect was in the
+multi-charger priority cascade, where a 16 A charger commanded at 32 claims 22 kW of solar it
+cannot draw and that phantom claim is subtracted from what the next charger may see.
+**Why the type system didn't help:** the key is read from a `Mapping[str, Any]`, so there is no
+declaration anywhere that says "these four keys exist". The dict is the schema, and the schema
+is whatever the last writer happened to put in it.
+**Closure:** fill the keys at the one place that composes the view (`build_charger_view`), from
+the fleet config, and then clamp to the value the *hardware* enforces — `adapter.max_current_a`,
+the same number the adapter clamps every command to. Config may ask for less than the hardware
+allows, never more, so the computation ends at the ceiling the action is dispatched against.
+Same principle as class 25's `can_stop_charging`.
+**Sweep question:** for each `cfg.get("k", <literal>)` on a per-unit dict — *who writes `k` into
+that dict on a fresh install?* If the answer is "the tests", the literal is the live behaviour.
+**Guard:** `tests/test_665_allocator_coverage.py::TestHardwareMaxReachesDecide` — pins the
+absent-key case (the live shape) explicitly, plus fleet fallback, per-charger override,
+config-below-hardware, config-above-hardware, and no-information-at-all. Refs #678 #665 #536.
+**Watch:** a fixture that is hand-built rather than captured from a real entry. When adding a
+per-unit config read, add the absent-key test *first* — it is the case production runs.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
@@ -326,6 +648,15 @@ derivation. Refs #620.
   sign-audit debounce vs the trace streak; the CounterCorrelationAudit dedup). Unify into one.
 - **Parallel systems that are one concept** — two things modeled separately that should be one
   (e.g. arbitrage folded INTO the scheduler; the canonical `EVBudget`; the ONE priority list).
+  *Sub-shape — one of the two is invisible (#651):* SEM had two EV-surplus allocators. The visible
+  one (`SurplusController.distribute_ev_budget`, a priority cascade with its own 60 s / 500 W
+  hysteresis) had a caller, tests, scenario coverage, a `#284` issue history and three rounds of
+  refactoring — and terminated in `pcc.budget_w`, which no consumer read. The live one is
+  `decide.self_consumption_surplus_w`, subtracting `_solar_committed_w_per_cycle` accumulated from
+  each charger's *actual* decision. Nobody was choosing between them; the loud one was simply not
+  connected. **Tell:** a value with many producers and no reader. **Sweep:** for each allocator /
+  budget / plan object, grep its output field for *reads*, not writes. Tests and dashboards writing
+  it don't count.
   *Sub-shape — a parallel priority/ordering knob that clobbers the unified list:* a standalone
   `*_priority` config re-set onto a device's `.priority` every cycle, killing its drag position
   (`heat_pump_priority`/`hot_water_priority` at coordinator 6439/6464 — #602/#576; the retired
@@ -333,6 +664,235 @@ derivation. Refs #620.
   read `priority_for(id, seed=config)`, never assign the config directly. Adjacent leftovers: #604.
 - **Spec-vs-reality gap** — something *designed but never wired* (e.g. the layered-trace health
   signal was a spec + a method but never an entity until #590). Verify the assumed thing *exists*.
+  *Sub-shape — parked with a reason that outlived it (#658):* EV counter reconciliation was built,
+  found wrong for a real reason (it compared a midnight-resetting counter's *absolute* value
+  against a bucket that rolls at the charge deadline), and disabled with a comment stating that
+  reason plus a reassurance — "SEM's own power integration (10s cycles) is reliable enough" — that
+  was true only in the case the feature did not cover. Its six tests were then `@skip`ped with the
+  same sentence, so a full green suite reported nothing missing, for years. The objection was
+  fixable in an afternoon (deltas instead of absolutes: a counter reset is just a reset); nobody
+  re-read it because a comment explaining a decision reads like a closed question.
+  **Tell:** a disable comment that argues rather than states; `@pytest.mark.skip(reason=...)` where
+  the reason is a *design* objection rather than an environment one; a setter with no caller
+  (the orphan scan of #653 is what surfaced this one). **Sweep:** for every skipped test and every
+  "disabled because" comment — is the stated obstacle still true, and was it ever unfixable?
 - **Marginal refactor (do NOT force)** — a dedup that needs a shim or wide test churn for a
   maintainability-only gain (e.g. the MagnitudeVoter proxy, the debounce-primitive). Recorded so
   we don't keep re-litigating them.
+
+---
+
+## 2026-07-25 coherence sweep — confirmed instances (adversarially verified)
+
+The full-repo sweep (34 agents, refute-first verification) confirmed 16 findings.
+Fixed same-day: **#639** (class 3, taper double-feed), **#640** (class 14, legionella
+restore no-op), **#644** (duplicated-mechanism, dual anti-cycle clocks). Filed open:
+
+- **#645** — duplicated-mechanism, day-boundary variant: nine independent day-rollover
+  checks, each re-deriving "is it a new day?" from its own stored date. **CLOSED — but
+  the filed closure was wrong.** The audit's proposed fix ("compute the day key ONCE and
+  pass it to every consumer") would have *broken* the system: SEM has **four genuinely
+  distinct and intentional day boundaries** — calendar midnight (energy/flows, to match
+  the HA Energy Dashboard), EV deadline-based (#279), sunrise for the EV bucket
+  (`ev_daily_sun`), and sunrise-gated for the load day (#620). They are not accidental
+  duplication. What the sweep *did* find, underneath the false premise, is one real bug:
+  the EV virtual-SOC decay rode on `_tracker_date`, which `__init__` re-initialises to
+  today on purpose ("so restarts don't re-apply daily decay") — a deliberate trade-off
+  that conflated *never decay twice* with *never decay after a restart*, so a restart
+  spanning midnight skipped the day's decay entirely and the night-charge planner could
+  read a stale "still nearly full" virtual SOC. Fixed by persisting the date the decay
+  **last ran**, separately from the hour-bucket tracker.
+  **Lesson: repetition is not duplication.** Nine sites computing the same-looking thing
+  can be nine correct answers to nine different questions. The tell that separates them
+  is not the shape of the code — it's whether the *stored dates diverge on purpose*.
+  A comment explaining a trade-off ("initialize to today so…") is the highest-value
+  artifact in a sweep like this: it names the property that must survive the fix.
+  Sibling assessed and rejected: `surplus_controller`'s `_offpeak_forced_date` /
+  `_batt_overnight_forced_date` are per-device runtime flags that default False on
+  restart, so no stale force survives — not an instance.
+  **A second, cleaner class fell out of the sweep: *the OS clock is not the HA clock*.**
+  Four production sites named a calendar day with `date.today()` / `datetime.now().date()`,
+  which read the container's timezone — routinely UTC while `hass.config.time_zone` is the
+  user's, so near midnight they name different days (energy-assistant daily trend key and
+  its wall-clock "run appliances at HH:00" tips, the PV month-to-date divisor, the
+  appliance completed/missed-today counters). Unlike the day-boundary question this one
+  has a mechanical rule with no allowlist, so it is enforced absolutely.
+  Guard: `tests/test_645_day_boundary_registry.py` — **rule 1** bans naming a day off the
+  OS clock outright (duration arithmetic on `datetime.now()` stays allowed: both ends use
+  the same clock, so it was never wrong); **rule 2** is a ratchet over the remaining
+  `dt_util.now().date()` sites, each declared with which of the four boundaries it serves
+  and whether its memo survives a restart *across* that boundary. The registry is the
+  deliverable — you cannot dedupe boundaries that are deliberately different, but you can
+  make them declared, and the declaration forces the question that made this expensive.
+  Guard-design note: rule 1 ships with a test that the regex can actually fire (and does
+  not fire on the legitimate duration uses) — the #660 no-vacuous-check discipline applied
+  to a new guard at birth rather than years later.
+- **#647** — class 1: the battery perception audit gates on the `__fleet__` lock that
+  per-battery mode never sets → the ledger's battery guard is DEAD on multi-battery
+  installs (and fleet-summed comparison is cancellation-blind).
+- **#648** — class 3: `apply_daily_decay` + the fleet `ev_connected` gate reach only the
+  primary taper detector; secondary chargers' virtual SOC never decays.
+- **#649** — the #461-peak single-writer class, unswept to loads: LM shed/restore AND
+  the surplus controller both own surplus-mode devices; LM's restore re-starts a load
+  against surplus intent (then class-17: nobody stops it).
+- **#650** — class 14: `critical`/`controllable` land in the LM dict only; every registry
+  rebuild wholesale-replaces them with defaults (no override store, the pre-#122 shape).
+- **#651** — parallel-systems: zombie `distribute_ev_budget` cascade runs every solar
+  cycle, output (`pcc.budget_w`) has zero readers, docstring claims it's the single source.
+- **#652** — parallel-systems: the battery scheduler's peak-limit split uses its own
+  phantom EV night model; the real EV stack (tariff planner + night targets) never agrees.
+  Structural closure = #638.
+- **#653** — spec-vs-reality: `ApplianceScheduler.update_schedules` has zero callers; a
+  scheduled appliance force-starts then allocates phantom rated power forever.
+- **#654** — spec-vs-reality: ripple-control shedding is observe-only; the WARNING log
+  claims shedding that never happens. **Closed by amputation**: the log, both docstrings,
+  `get_devices_to_block`, and the `block_path` / `loads_blocked` telemetry are gone; the
+  monitor now says only what it does, which is observe. Wiring is #664, where the open
+  question is whether a load running on own PV is covered by the block — contract- and
+  operator-dependent, not inferable. `HeatPumpController.block()`/`unblock()` were
+  **kept** despite being orphans: they implement SG-Ready state 1, which `config_flow.py`
+  advertises to the user as part of the "standard 4-state protocol", so deleting them
+  would make an advertised promise permanently unfulfillable. They sit in the orphan
+  baseline pointing at #664.
+- **#655** — spec-vs-reality (docs): SETUP_GUIDE's SG-Ready relay table still documents
+  the pre-#523 mapping the code explicitly calls a bug. **FIXED.** Worth keeping in the
+  ledger as the sharpest example of a sub-class the other entries don't cover: *the docs
+  are part of the control path when the user is the actuator.* Nothing in the code was
+  wrong. The user reads the table, sees SEM's (correct) output disagree with it, and
+  reaches for the one toggle that "fixes" the disagreement — `invert_sg_ready` — thereby
+  hand-installing the exact regression #523 removed. No test of the code could have caught
+  it, because the code was right. Guard: `tests/test_655_sg_ready_doc_table.py` parses the
+  shipped Markdown table and diffs it against `SG_READY_RELAY_MAP`. Generalisable rule —
+  **when a doc states a value the code also states, the doc needs a test.** Same shape as
+  the #618 anchor guard.
+
+Re-verified dormant (no new issue): the arbitrage FORCE_DISCHARGE fleet-split (class 6
+open sibling) stays triple-fenced (migration v14 forces the toggle off, no UI path,
+`_any_allow_arb` hardcode); the in-code re-enable checklist at `decide_battery.py:160-180`
+MUST become code+test before any re-enable. The VPP export force_discharge is NOT an
+instance (per-battery max is the intended semantics, reporter-confirmed).
+
+**Structural guard — BUILT** (`tests/test_653_orphan_methods.py`, shipped with #653): a
+public method in `coordinator/`/`devices/`/`features/` with no production call site fails
+CI. It is a **ratchet**, not a clean-room rule — the orphans that existed when it was
+written are listed in `_BASELINE` with a reason, and the assertion is that the set must
+not GROW; a second test fails if a baseline entry gains a caller and is not removed, so
+the list cannot rot into noise. Detection is deliberately generous (attribute access
+*and* string literals across Python/JS/YAML, because SEM dispatches via
+`getattr(obj, "method", None)` in the charger adapters), which means it under-reports
+rather than blocking CI on reachable code.
+
+It found a real orphan on its first run — `set_ev_daily_energy_sensor`, filed as #663 and
+closed as a duplicate of #658, which the sweep had already found. That is the honest
+statement of what this guard is worth: it independently rediscovered a verified finding,
+and it could **not** see the part that makes #658 hard (the sunrise/midnight key mismatch
+that makes naive wiring corrupt data). It tells you an edge is missing, not whether the
+node at the far end is safe to connect.
+
+It would have caught #651/#653/#654.
+
+**Structural guard — EXTENDED to data (#669, 2026-07-26).** The orphan-method guard sees a
+missing *edge between functions*. It is blind to a **dangling data reference**: a string
+literal naming an entity that no platform declares. `consts/sensors.py` carried a 64-entry
+`SEM_SENSORS` map to `sensor.sem_*` ids, **45% of them dead**, with zero production readers
+— and it was still accreting rot right up to deletion (`ev_max_current_available` was added
+*after* the 45% was measured). It was deleted, not repaired: a map nothing reads is not an
+API, and a plausible map to ids that mostly do not exist is worse than no map, because
+anyone reaching for it gets `sensor.sem_home_consumption`, which never existed.
+
+The new rule (`tests/test_667_label_registry.py::TestConstsRegistriesDoNotRot669`) is scoped
+to the **reference**, not the container: every `<platform>.sem_<key>` literal under
+`consts/` must resolve to a key a platform file actually declares (`SEMSensor` builds
+`sensor.sem_{description.key}`, sensor.py:1942). Banning the map *shape* would have flagged
+three healthy named constants (`ENTITY_SOLAR_POWER` and siblings, live and used) and taught
+the next person to route around the rule.
+
+Two lessons worth carrying: (1) the registry kept rotting while it was already known-rotten,
+so a one-time repair could not have closed it — only a rule that fires on the next entry;
+(2) dead code that nothing asserts is merely waste, but **dead code with a green test that
+cannot fail is *claimed coverage*, and that is what keeps it alive for years.** The
+`SEM_SENSORS` test asserted a dict literal against itself.
+
+### Second pass — the 8 findings the session-limit interrupted (verified 2026-07-25)
+
+The sweep was resumed (cached prefix, live tail) and confirmed 8 more. **#642 + #643**
+were fixed same-day (class 3 + class 13: the legacy EV read path smoothed the fleet SUM
+and never filled the per-charger map, so every charger read the whole fleet's draw; the
+two read paths now share `_read_ev_fleet_power`, and coordinator-side consumers go through
+the sanctioned `_charger_power_w` accessor). Filed open:
+
+- **#656** — class 4, the LOAD-side sibling of the battery strand closed in #589:
+  `deactivate_all()` has zero callers, so removing SEM leaves a boosted HP/HW/switch
+  latched ON forever. The reconciler does NOT heal it — it classifies the leftover as
+  `external_on`, disowns it, and refuses to fight it, so the strand survives reloads too.
+  Note: the hook must go in `async_unload_entry` BEFORE `clear_devices()` — HA runs
+  unload before remove, so an `async_remove_entry` hook would iterate nothing.
+- **#657** — spec-vs-reality (the #590 mechanism, sensor-attribute variant, ×8):
+  attributes read `coordinator.data` keys no code has ever written. The EV
+  "why am I blocked" surface (`battery_too_low` / `battery_needs_priority` /
+  `solar_sufficient`) is null on every install. **The suite masks it** — `conftest.py`
+  injects those exact keys into the mocked data (the #610 harness-fidelity lesson again).
+- **#658** — spec-vs-reality, sibling-asymmetry: `_reconcile_ev_energy` is dead on two
+  axes while `_reconcile_solar_energy` is wired. ⚠️ It was parked DELIBERATELY and the
+  method is buggy (accumulates on the sunrise day key, reconciles on the midnight key →
+  would corrupt the overnight window; also fleet-reads one charger's counter). Wiring it
+  as-is re-enables the corruption. Depends on #645 (day-key unification).
+- **#659** — spec-vs-reality, unreachable feature branch: 1p/3p `check_phase_switch` is
+  dead on two axes (no caller since `561e28a`, and `phase_switch_entity` has no config
+  surface). Delete-or-wire, with 4 same-shape siblings listed (`set_anticipated_surplus`,
+  `validate_dependencies`, `force_charge.should_stop`, `create_charge_adapter`).
+  **CLOSED — deleted, all of them** (`validate_dependencies` went in #662). Docs never
+  promised any of it; the only mentions of 3φ↔1φ are two design docs listing it as
+  *future work*. Each deletion leaves a tombstone naming what replaced it, because the
+  danger here isn't the dead code, it's the next contributor finding working-looking
+  code and shipping a config key on top of it. Two lessons worth keeping:
+  1. **"Complete implementation" is the tell, not the reassurance.** All four read as
+     finished features — hysteresis, entity actuation, auto-detect order, docstrings
+     describing behaviour ("will factor this in 2 min before the deadline") that no
+     code anywhere implemented. Nothing about the *code* said dead; only the call
+     graph did.
+  2. **The sweep found a fifth.** `force_charge.get_status()` is in exactly the
+     position `should_stop` was — abstract, implemented 3×, zero production callers,
+     computing a `TARGET_REACHED` nobody reads (the live verdict is the scheduler's
+     own SOC comparison). Deliberately *not* deleted: removing an adapter's read-back
+     surface is an interface decision, not a cleanup. Moved from UNTRIAGED to
+     **triaged-but-kept** in the allowlist, so it reads as a decision, not a gap.
+  Guard: no new mechanism. The issue proposed an `# ENTRY-POINT:` annotation, but
+  `tests/test_653_orphan_methods.py` is already that ratchet and is *stricter* — an
+  annotation is an escape hatch a contributor can add in the same commit as the dead
+  method, whereas the allowlist must be edited deliberately and shrinks on every sweep
+  (three names removed here). A second mechanism would have been the #612 mistake:
+  new code for a guarantee that already exists.
+- **#660** — class 8 ×2: `check_metrics`/`check_costs`/`non_negative_fields` validate
+  ranges their producers already clamped (`max(0, min(100, …))`), and `check_flows`
+  validates the greedy allocator's output against the allocator's own inputs —
+  conservation is a theorem there, not an observation. The documented 2026-06-01 PROD
+  autarky bug (0 % vs 98 % self-consumption) passed with 0 violations. Closure: check
+  CLAMP ENGAGEMENT (pre-clamp) and the per-charger↔fleet sum invariant `check_flows`
+  never looks at. Guard: a **no-vacuous-health-check meta-test** — every check must be
+  demonstrably fireable or CI fails.
+- **#661** — class 8 whose closure is a real class-1 detector: the both-directions-active
+  check runs on fields netted from ONE signed scalar, so it is unfireable — and it stays
+  unfireable on the split-sensor installs it was written for (Growatt Pattern E, #553
+  pairs, two-sensor batteries all net BEFORE `calculate_derived`). The crossed-sensor
+  evidence is destroyed upstream of the check. Move it into `sensor_reader` on the raw
+  sides, reusing the `CounterCorrelationAudit` 5-vote pattern.
+- **#662** — class 8 inside an orphan: `validate_dependencies` walks only `dep_list[0]`,
+  AND has zero production callers. **CLOSED — but not as filed.** The premise that
+  `async_set_dependency` had no cycle guard was stale (one landed in beta.3); the audit
+  read the orphan and inferred the live path from it. What the fix actually found:
+  (1) the live guard walked only ONE of the two stores dependency edges persist in, so a
+  loop spanning `_dependency_overrides` and `_service_registrations` was invisible;
+  (2) `register_surplus_device` — the only MULTI-dependency write path — had no guard at
+  all; (3) a stale loop in storage *poisons the guard*, falsely rejecting the innocent
+  direction on re-registration. Closure was prevention at every write path plus a
+  load-time sanitize of both stores; the orphan was deleted, not repaired.
+  **Lesson: an orphan is not evidence about the live path.** Reading it as a spec for
+  what production does gave a correct verdict on the dead code and a wrong one on
+  everything around it — the same trap as #651, where a dead allocator's tests and
+  refactoring history read as proof it mattered.
+
+Cross-cutting lesson from this pass: **class 8 is under-counted in the ledger.** Five of
+the eight are checks that cannot fail, and each one was previously read as evidence of
+health. The meta-test in #660 ("every check must be demonstrably fireable") is the
+structural close for the whole class — prefer it over fixing the instances one at a time.

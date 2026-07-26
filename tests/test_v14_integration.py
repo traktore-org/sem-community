@@ -58,7 +58,6 @@ def make_mock_charger(charger_id, name, priority=3, max_current=32,
     device.stop_session = AsyncMock()
     device._set_current = AsyncMock()
     device.watts_to_current = lambda w: w / (phases * 230)
-    device.check_phase_switch = AsyncMock()
     return device
 
 
@@ -211,66 +210,20 @@ class TestMultiChargerContextSwap:
 
 
 # ============================================================
-# 2. Surplus distribution integration
+# 2. Surplus distribution integration — REMOVED in #651
+#
+# TestSurplusDistributionIntegration (5 tests) called
+# ``SurplusController.distribute_ev_budget`` directly and named its cases
+# after real installs ("Rien's setup (#112)", "KEBA + Easee"). The name
+# "integration" was the misleading part: the method's only production
+# caller wrote its result into ``pcc.budget_w``, and nothing read that
+# field. These installs never ran this cascade — #651.
+#
+# Real multi-charger sharing is covered by
+# tests/test_step6_multi_charger_surplus_sharing.py, which drives the
+# live path (``_solar_committed_w_per_cycle`` shrinking the surplus each
+# charger sees as the priority loop walks the fleet).
 # ============================================================
-
-class TestSurplusDistributionIntegration:
-    """End-to-end surplus distribution across multiple chargers."""
-
-    def test_dual_wallbox_scenario(self):
-        """Rien's setup (#112): 2 Wallbox Pulsars, 16kW total budget."""
-        sc = SurplusController(MagicMock())
-        c1 = make_mock_charger("wb_1", "Wallbox Links", priority=3, max_current=16)
-        c2 = make_mock_charger("wb_2", "Wallbox Rechts", priority=5, max_current=32)
-
-        result = sc.distribute_ev_budget(16000, {"wb_1": c1, "wb_2": c2})
-        # P3 (16A max) gets min(16000, 11040) = 11040
-        # P5 gets 4960 (≥ 4140 threshold)
-        assert result["wb_1"] == 11040
-        assert result["wb_2"] == 4960
-
-    def test_keba_plus_easee_scenario(self):
-        """KEBA 16A + Easee 32A, 8kW budget."""
-        sc = SurplusController(MagicMock())
-        c1 = make_mock_charger("keba", "KEBA", priority=3, max_current=16)
-        c2 = make_mock_charger("easee", "Easee", priority=5, max_current=32)
-
-        result = sc.distribute_ev_budget(8000, {"keba": c1, "easee": c2})
-        # KEBA gets all 8000 (below max 11040)
-        # Easee gets 0 (remainder 0)
-        assert result["keba"] == 8000
-        assert result["easee"] == 0
-
-    def test_high_solar_day_both_charge(self):
-        """20kW surplus: both chargers should charge."""
-        sc = SurplusController(MagicMock())
-        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
-        c2 = make_mock_charger("wb_2", "WB2", priority=5, max_current=16)
-
-        result = sc.distribute_ev_budget(20000, {"wb_1": c1, "wb_2": c2})
-        assert result["wb_1"] == 11040  # 16A max
-        assert result["wb_2"] == 8960   # remainder
-
-    def test_disconnect_reallocates_immediately(self):
-        """When P3 disconnects, P5 should get full budget on next call."""
-        sc = SurplusController(MagicMock())
-        c2 = make_mock_charger("wb_2", "WB2", priority=5)
-
-        # Only charger 2 connected
-        result = sc.distribute_ev_budget(8000, {"wb_2": c2})
-        assert result["wb_2"] == 8000
-
-    def test_three_chargers_cascade(self):
-        """3 chargers: budget cascades down priority."""
-        sc = SurplusController(MagicMock())
-        c1 = make_mock_charger("c1", "C1", priority=1, max_current=10)  # max 6900W
-        c2 = make_mock_charger("c2", "C2", priority=3, max_current=10)
-        c3 = make_mock_charger("c3", "C3", priority=5, max_current=10)
-
-        result = sc.distribute_ev_budget(18000, {"c1": c1, "c2": c2, "c3": c3})
-        assert result["c1"] == 6900
-        assert result["c2"] == 6900
-        assert result["c3"] == 4200  # 18000 - 6900 - 6900 = 4200 (≥ 4140)
 
 
 # ============================================================

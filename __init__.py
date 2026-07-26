@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
@@ -35,6 +35,9 @@ from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
+
+if TYPE_CHECKING:
+    from .devices.base import ControllableDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +69,15 @@ def _content_hash_cache_bust(card_root: str, base_url: str, version: str) -> str
 
 _VERSION_STORE_VERSION = 1
 _VERSION_STORE_KEY_PREFIX = "sem_seen_version_"
+
+# #656 — entry_id → the devices detached at unload, parked so
+# ``async_remove_entry`` still has something to deactivate. HA runs unload
+# FIRST and pops the coordinator out of ``hass.data``, so by remove time there
+# is no other way back to the loads SEM is holding. The controller's registry
+# is still cleared at unload (the reload-leak contract); only the detached
+# device objects live here. A reload drops the stash in ``async_setup_entry``
+# without deactivating anything.
+_PENDING_LOAD_TEARDOWN: Dict[str, List["ControllableDevice"]] = {}
 
 
 async def _maybe_emit_upgrade_notification(hass, entry) -> None:
@@ -406,6 +418,25 @@ def _refresh_runtime_config(coordinator) -> None:
             fn()
         except Exception:  # noqa: BLE001 — refresh must never break persist
             _LOGGER.debug("refresh_runtime_config failed", exc_info=True)
+
+
+def _seed_legionella_time(coordinator, hw_device) -> None:
+    """(#640) Seed the hot-water legionella timestamp AT registration.
+
+    The old first-refresh restore ran BEFORE the device was registered —
+    always a no-op — so a None timestamp read as 999 h overdue and every
+    restart forced a grid-powered 65°C disinfection cycle (audit class 14).
+    Stored time → restore; fresh install / unparsable → seed NOW so the
+    first cycle is ~interval_hours away, not immediate. Idempotent across
+    reloads (re-seeds from the same persisted value)."""
+    from homeassistant.util import dt as dt_util
+    try:
+        stored = coordinator._storage.get_legionella_time() \
+            if getattr(coordinator, "_storage", None) else None
+        ts = dt_util.parse_datetime(stored) if stored else None
+        hw_device.record_legionella_cycle(ts or dt_util.now())
+    except (ValueError, TypeError):
+        hw_device.record_legionella_cycle(dt_util.now())
 
 
 def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
@@ -1396,6 +1427,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Initialize domain data storage (kept for backward compatibility with services)
     hass.data.setdefault(DOMAIN, {})
 
+    # #656 — we're setting up, so the preceding unload was a reload (or an
+    # HA start), not a removal. Drop the teardown stash WITHOUT deactivating:
+    # the devices it holds are about to be re-registered on a fresh controller,
+    # and bouncing a running heat pump on every options change is not a safety
+    # improvement.
+    _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
+
     # In-memory SEM log ring buffer for the diagnose surface (#461/#462
     # triage gap on Supervisor installs — no flat log file to tail).
     # Idempotent across reloads. Stored under its own key so code that
@@ -1912,6 +1950,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 legionella_interval_hours=float(full_config.get("hot_water_legionella_interval_hours", 168.0)),
             )
             coordinator._surplus_controller.register_device(hw_device)
+            _seed_legionella_time(coordinator, hw_device)
             _LOGGER.info(
                 "Hot water registered (entity=%s, priority=%d, "
                 "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
@@ -2183,6 +2222,42 @@ async def async_remove_config_entry_device(
     return True
 
 
+async def _async_deactivate_surplus_loads(devices, reason: str) -> None:
+    """Command every SEM-controlled load back to normal (#656).
+
+    Best-effort and never raises: this runs on teardown paths where the
+    alternative to swallowing an error is an unattended heating device left
+    latched on by an integration that no longer exists.
+    """
+    if not devices:
+        return
+    try:
+        from .coordinator.surplus_controller import deactivate_devices
+
+        await deactivate_devices(devices, reason)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.warning(
+            "Could not deactivate SEM-controlled loads on %s "
+            "(non-blocking): %s", reason, e,
+        )
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
+    """Release any load SEM was still holding when it was removed (#656).
+
+    ``async_unload_entry`` has already run and taken the coordinator out of
+    ``hass.data``, so it detached the devices and parked them for us. Without
+    this, a hot-water boost temperature, an SG-Ready relay or a SEM-forced
+    switch stays commanded indefinitely with nothing left to expire it — and a
+    re-install won't fix it either: ``DeviceReconciler`` classifies a
+    leftover-ON load as ``external_on`` and deliberately refuses to fight it.
+    """
+    devices = _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
+    if not devices:
+        return
+    await _async_deactivate_surplus_loads(devices, "integration removed")
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Unload a config entry."""
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
@@ -2211,9 +2286,36 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
                         "(non-blocking): %s", _bid, _e,
                     )
 
+            # #656 — loads must not be stranded ON when SEM goes away.
+            #
+            # HA calls this for a reload, a disable AND a removal, and the
+            # right answer differs per case:
+            #
+            # * reload — SEM is coming back in seconds. Turning the hot-water
+            #   boost or the SG-Ready relay off here would bounce a running
+            #   heating device on every options change (and trip its
+            #   compressor anti-short-cycle timer), so don't.
+            #   (An HA shutdown/restart never reaches this function at all —
+            #   HA fires EVENT_HOMEASSISTANT_STOP → ConfigEntries.
+            #   _async_shutdown → entry.async_shutdown(), which does not
+            #   unload entries. So no stash is created on that path, and the
+            #   load simply stays as it was until SEM comes back up.)
+            # * disabled — nothing is coming back. Deactivate now.
+            # * removed — HA runs THIS first and then ``async_remove_entry``,
+            #   by which point the coordinator is out of ``hass.data``. So the
+            #   controller is stashed here and deactivated there. The stash is
+            #   dropped by the next ``async_setup_entry`` (i.e. a reload), so a
+            #   device list only lingers between an unload and whatever
+            #   follows it.
             sc = getattr(coordinator, "_surplus_controller", None)
-            if sc is not None and hasattr(sc, "clear_devices"):
-                sc.clear_devices()
+            if sc is not None:
+                # detach_devices() clears the registry AND hands the devices
+                # back, so the reload-leak contract holds on every path below.
+                devices = sc.detach_devices()
+                if entry.disabled_by is not None:
+                    await _async_deactivate_surplus_loads(devices, "disabled")
+                elif devices:
+                    _PENDING_LOAD_TEARDOWN[entry.entry_id] = devices
 
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
@@ -2227,6 +2329,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "update_target_peak",
             "register_surplus_device",
             "schedule_appliance",
+            "cancel_appliance_schedule",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 
@@ -2866,10 +2969,22 @@ async def _async_register_services(
         prop = call.data.get("property")
         value = call.data.get("value")
 
-        if prop == "critical":
-            await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
-        elif prop == "controllable":
-            await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+        if prop in ("critical", "controllable"):
+            # (#650) Persist via the REGISTRY. Writing only into the
+            # LoadManagement dict — as this did pre-fix — lost the flag on the
+            # next `_sync_to_load_manager`, which replaces that entry wholesale
+            # (drag / 35 s re-discovery / config change / restart). The registry
+            # re-applies its overrides at device build, so the toggle sticks.
+            # The LoadManagement write stays: it takes effect this cycle and it
+            # is the ONLY store for devices the registry doesn't build
+            # (per-charger `load_device_*` entries, service registrations).
+            if prop == "critical":
+                await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
+            else:
+                await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+            reg = getattr(coordinator, "_device_registry", None)
+            if reg is not None:
+                await reg.async_set_device_flag(device_id, prop, bool(value))
         elif prop == "control_mode":
             # Update device control mode: off / peak_only / surplus (#49)
             registry = getattr(coordinator, '_device_registry', None)
@@ -3464,6 +3579,19 @@ async def _async_register_phase_services(
                 translation_placeholders={"deadline": str(deadline_str)},
             )
 
+        # (#653) Normalise to LOCAL-naive. The scheduler compares deadlines
+        # against ``datetime.now()``, which is naive, and an HA template
+        # deadline — ``{{ today_at('18:00') }}``, the obvious way to write
+        # this in an automation — is timezone-AWARE. Comparing the two
+        # raises TypeError. That was harmless while nothing ticked the
+        # scheduler; now that the coordinator cycle does, it would raise
+        # every cycle and the run would never complete or release its
+        # allocation, silently reinstating the very bug #653 fixes.
+        # ``as_local`` first, so an explicit offset lands on the right wall
+        # clock instead of being truncated.
+        if deadline.tzinfo is not None:
+            deadline = dt_util.as_local(deadline).replace(tzinfo=None)
+
         # Lazy-init appliance scheduler
         if not hasattr(coordinator, '_appliance_scheduler'):
             from .devices.appliance_scheduler import ApplianceScheduler
@@ -3506,7 +3634,41 @@ async def _async_register_phase_services(
         }),
     )
 
-    _LOGGER.debug("Phase services registered: register_surplus_device, schedule_appliance")
+    async def async_cancel_appliance_schedule(call) -> None:
+        """Cancel a pending appliance schedule (#653).
+
+        ``ApplianceScheduler.cancel_schedule`` existed from the start with
+        no way to reach it: no service, no button, no automation hook. The
+        only way to undo a mis-typed deadline was to restart HA (which drops
+        the in-memory scheduler entirely).
+        """
+        device_id = call.data.get("device_id")
+        scheduler = getattr(coordinator, "_appliance_scheduler", None)
+        # Raise only when the device is genuinely unknown. For a KNOWN
+        # device with no pending entry, ``cancel_schedule`` still clears the
+        # device's deadline and returns False — a real state change. Raising
+        # there would report a failure after having done the work, on
+        # exactly the path someone uses to unstick a device.
+        known = scheduler is not None and device_id in scheduler._devices
+        cancelled = scheduler.cancel_schedule(device_id) if scheduler else False
+        if not cancelled and not known:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_appliance_schedule",
+                translation_placeholders={"device_id": str(device_id)},
+            )
+
+    hass.services.async_register(
+        DOMAIN,
+        "cancel_appliance_schedule",
+        async_cancel_appliance_schedule,
+        schema=vol.Schema({vol.Required("device_id"): cv.string}),
+    )
+
+    _LOGGER.debug(
+        "Phase services registered: register_surplus_device, "
+        "schedule_appliance, cancel_appliance_schedule"
+    )
 
     # #442: in-dashboard option writes. The Configuration tab card
     # writes one key at a time via this service rather than walking the

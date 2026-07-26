@@ -66,6 +66,12 @@ class UnifiedDevice:
     control: Optional[Dict[str, Any]] = None
     is_critical: bool = False
     has_manual_mapping: bool = False
+    # (#650) "hands off this device" — the user's explicit opt-out, applied from
+    # the registry's ``_controllable_overrides`` at build. Only ever RESTRICTS:
+    # ``True`` can't invent controllability on a device with no control config
+    # (LoadManagement would count it as sheddable and then have nothing to
+    # switch), so re-enabling clears the override back to the derived value.
+    controllable_override: Optional[bool] = None
 
     @property
     def device_id(self) -> str:
@@ -82,7 +88,14 @@ class UnifiedDevice:
 
     @property
     def is_controllable(self) -> bool:
-        """Device is controllable if it has a control config."""
+        """Device is controllable if it has a control config.
+
+        (#650) A stored ``controllable_override`` of ``False`` wins — that's the
+        user saying "never touch this load". See the field's docstring for why
+        ``True`` is not the symmetric case.
+        """
+        if self.controllable_override is False:
+            return False
         return self.control is not None
 
     @property
@@ -145,6 +158,25 @@ class UnifiedDeviceRegistry:
         # transient live device and got wiped on every re-sync ("separated all
         # the time").
         self._dependency_overrides: Dict[str, list] = {}
+        # (#650) device_id → user's "critical" / "controllable" toggles from the
+        # priority card. Persisted HERE, exactly like the dependency and
+        # priority overrides above, because ``_sync_to_load_manager``
+        # WHOLESALE-REPLACES the LoadManagement entry on every rebuild (drag,
+        # the 35 s re-discovery, a config change, restart). Pre-fix these two
+        # flags lived only in that dict, so "hands off the pond pump" or "the
+        # freezer is critical" silently reverted to the defaults within 35 s and
+        # the next peak event shed the device anyway.
+        # ``_critical_overrides`` stores BOTH values (False is a meaningful
+        # "un-mark it"); ``_controllable_overrides`` stores only False — a True
+        # override can't invent controllability, so re-enabling deletes the key.
+        self._critical_overrides: Dict[str, bool] = {}
+        self._controllable_overrides: Dict[str, bool] = {}
+        # (#650) the legacy adoption must run EXACTLY ONCE. On any later refresh
+        # the LoadManagement dict is the registry's OWN last sync, so re-reading
+        # it resurrects a flag the user just cleared: re-enabling "controllable"
+        # DELETES the key, and a second adoption pass would immediately put it
+        # back from the not-yet-resynced LM entry. That is this very bug, rebuilt.
+        self._legacy_flags_adopted: bool = False
         # (#576) device_id → learned rated_power (W). A sensor-equipped load
         # self-calibrates its real draw at runtime (calibrate_rated_power); we
         # PERSIST that here so it survives a restart instead of resetting to the
@@ -162,7 +194,7 @@ class UnifiedDeviceRegistry:
         # (#576 P2.1) Configured EV chargers, handed over each cycle by the
         # coordinator (mirrors ``_has_battery``). Each is the authoritative
         # source for that charger's priority-list row, keyed by its CONTROL
-        # id — so the card row, the drag store, ``distribute_ev_budget`` and
+        # id — so the card row, the drag store, the per-charger loop and
         # the reclaim gate all share ONE identity. The ED ``is_ev`` naming
         # guess is suppressed when chargers are configured (no double-add).
         self._ev_charger_rows: List[Dict[str, Any]] = []
@@ -211,6 +243,13 @@ class UnifiedDeviceRegistry:
                 self._priority_overrides = data.get("priority_overrides", {})
                 self._control_mode_overrides: Dict[str, str] = data.get("control_modes", {})
                 self._dependency_overrides = data.get("dependencies", {})
+                # (#650) tolerate legacy/hand-edited stores: coerce to bool
+                self._critical_overrides = {
+                    k: bool(v) for k, v in data.get("critical_overrides", {}).items()
+                }
+                self._controllable_overrides = {
+                    k: bool(v) for k, v in data.get("controllable_overrides", {}).items()
+                }
                 self._rated_power_overrides = {
                     k: float(v) for k, v in
                     data.get("rated_power_overrides", {}).items()
@@ -236,6 +275,20 @@ class UnifiedDeviceRegistry:
                 )
         except Exception as e:
             _LOGGER.warning("Could not load device mappings: %s", e)
+
+        # (#662) Both dependency stores are loaded now — break any cycle a
+        # pre-guard or hand-edited store carried in, before a device can
+        # deadlock on it. Persist the repair so the warning doesn't fire again
+        # on every future restart. Deliberately outside the load try/except:
+        # a failure here is a SAVE failure and must not be reported as
+        # "could not load device mappings". The repair itself already holds
+        # in memory either way, so a failed save only costs us a repeat on the
+        # next restart.
+        try:
+            if self._sanitize_dependency_cycles():
+                await self._save_storage()
+        except Exception as e:  # pragma: no cover - defensive
+            _LOGGER.warning("Could not persist dependency-cycle repair: %s", e)
 
         await self.async_refresh_devices()
 
@@ -354,6 +407,25 @@ class UnifiedDeviceRegistry:
         Returns a summary dict for the service response.
         """
         device_id = spec["device_id"]
+        # (#662) This is the ONLY multi-dependency write path SEM has (the UI
+        # select is single-value), and it was the one with no cycle guard.
+        # Validate against the current graph BEFORE storing, so the edges
+        # being checked aren't already in it.
+        # Self-dependency is caught by the same call — ``_dependency_would_cycle``
+        # returns True for device_id == parent (this path has no separate
+        # self-filter the way ``async_set_dependency`` does).
+        requested_deps = [str(d) for d in (spec.get("depends_on") or [])]
+        safe_deps = []
+        for dep in requested_deps:
+            if self._dependency_would_cycle(device_id, dep):
+                _LOGGER.warning(
+                    "register_surplus_device %s: dropped circular dependency "
+                    "on %s (would deadlock both devices); registering without "
+                    "it", device_id, dep,
+                )
+                continue
+            safe_deps.append(dep)
+        spec = {**spec, "depends_on": safe_deps}
         stored = {
             "entity_id": spec.get("entity_id", ""),
             "name": spec.get("name") or device_id,
@@ -450,6 +522,12 @@ class UnifiedDeviceRegistry:
             _LOGGER.info("No individual devices in Energy Dashboard")
             return
 
+        # (#650) One-time adoption: users who toggled critical/controllable
+        # BEFORE the override stores existed have their choice only in the
+        # LoadManagement store. Read it once into the registry so the upgrade
+        # doesn't hand them the very reset this issue is about.
+        await self._adopt_legacy_device_flags()
+
         devices: List[UnifiedDevice] = []
 
         for position, dev_info in enumerate(individual_devices, start=1):
@@ -493,6 +571,10 @@ class UnifiedDeviceRegistry:
                 is_ev=is_ev,
                 control=control,
                 has_manual_mapping=has_manual,
+                # (#650) re-apply the user's flags — the rebuild is exactly
+                # where they used to be lost.
+                is_critical=bool(self._critical_overrides.get(device_id, False)),
+                controllable_override=self._controllable_overrides.get(device_id),
             )
             devices.append(device)
 
@@ -716,6 +798,15 @@ class UnifiedDeviceRegistry:
                 "is_controllable": device.is_controllable,
                 "is_ev": device.is_ev,
                 "control_mode": self._control_mode_overrides.get(device.device_id, "peak_only"),
+                # (#649) Is this device driven by the surplus controller? Only
+                # then may load_management stand down from shedding it — a
+                # surplus-mode device with no live controller object (e.g. a
+                # service-control type, which _sync_to_surplus_controller
+                # skips) would otherwise be shed by nobody. This sync runs
+                # right after _sync_to_surplus_controller, so the lookup sees
+                # this cycle's registrations.
+                "surplus_managed": self._surplus_controller is not None
+                and self._surplus_controller.get_device(device.device_id) is not None,
             }
 
             # Backwards-compatible switch_entity
@@ -1171,6 +1262,77 @@ class UnifiedDeviceRegistry:
             "Manual mapping set: %s → %s (%s)", energy_sensor, detail, control_type
         )
 
+    async def _adopt_legacy_device_flags(self) -> None:
+        """Seed the #650 override stores from LoadManagement — ONCE per session.
+
+        Only non-default values are adopted (critical=True, controllable=False):
+        those are the ones a user had to click for, and only the OLD code path
+        could have put them in the LM dict without a matching override.
+
+        One-shot by design. After the first sync the LM dict holds the
+        REGISTRY's values, so a second pass would read our own output back — and
+        would re-apply an opt-out the user had just cleared (re-enabling
+        "controllable" removes the key, which this would helpfully restore).
+        Deferred, not skipped, while the load manager is still empty.
+        """
+        if self._legacy_flags_adopted:
+            return
+        lm = self._load_manager
+        if not lm or not getattr(lm, "_devices", None):
+            return  # LM not up yet — try again on the next refresh
+        self._legacy_flags_adopted = True
+        crit = ctrl = 0
+        for did, info in lm._devices.items():
+            if not did.startswith("energy_dashboard_") or not isinstance(info, dict):
+                continue
+            if info.get("is_critical") is True and did not in self._critical_overrides:
+                self._critical_overrides[did] = True
+                crit += 1
+            if info.get("is_controllable") is False and did not in self._controllable_overrides:
+                self._controllable_overrides[did] = False
+                ctrl += 1
+        if crit or ctrl:
+            await self._save_storage()
+            _LOGGER.info(
+                "Adopted %d critical / %d controllable flag(s) from LoadManagement (#650)",
+                crit, ctrl,
+            )
+
+    async def async_set_device_flag(
+        self, device_id: str, flag: str, value: bool
+    ) -> None:
+        """Persist a "critical" / "controllable" toggle from the priority card (#650).
+
+        Pre-fix these two went straight into ``LoadManagement._devices`` and
+        nowhere else, so ``_sync_to_load_manager`` — which REPLACES that entry
+        wholesale — dropped them on the next rebuild (drag, the 35 s
+        re-discovery, a config change, restart). Stored here alongside the
+        priority / control-mode / dependency overrides so the rebuild re-applies
+        them instead of wiping them.
+
+        Args:
+            device_id: e.g. ``energy_dashboard_pond_pump``
+            flag: ``"critical"`` or ``"controllable"``
+            value: the toggle's new state.
+        """
+        if flag == "critical":
+            self._critical_overrides[device_id] = bool(value)
+        elif flag == "controllable":
+            if value:
+                # Re-enabling means "go back to what the control config says" —
+                # an override of True can't create controllability that isn't
+                # there (see UnifiedDevice.controllable_override).
+                self._controllable_overrides.pop(device_id, None)
+            else:
+                self._controllable_overrides[device_id] = False
+        else:
+            _LOGGER.warning("Unknown device flag %r for %s (#650)", flag, device_id)
+            return
+
+        await self._save_storage()
+        await self.async_refresh_devices()
+        _LOGGER.info("Updated %s %s = %s (persisted)", device_id, flag, bool(value))
+
     async def async_remove_manual_mapping(self, energy_sensor: str) -> bool:
         """Remove a manual mapping so the device reverts to auto-discovery (#219).
 
@@ -1252,6 +1414,18 @@ class UnifiedDeviceRegistry:
                         "not touch it again while mode stays off)", device_id,
                     )
 
+        # (#649) Keep the load manager's copy in step NOW. It is only rebuilt by
+        # the 35 s rediscovery, so until then a device the user has just handed
+        # to the surplus controller would still be a peak-shed candidate there —
+        # two writers on the same switch, which is the bug this flag exists for.
+        lm_info = (
+            self._load_manager._devices.get(device_id)
+            if self._load_manager is not None else None
+        )
+        if lm_info is not None:
+            lm_info["control_mode"] = mode
+            lm_info["surplus_managed"] = surplus_device is not None
+
         await self._save_storage()
 
     def sync_cycle_priorities(self, has_battery_reading, charger_rows):
@@ -1310,13 +1484,45 @@ class UnifiedDeviceRegistry:
         await self._save_storage()
         _LOGGER.info("Device dependency set: %s requires %s", device_id, deps or "nothing")
 
+    def _effective_parents(self, node: str) -> list:
+        """Every device ``node`` currently requires, across BOTH stores (#662).
+
+        A "requires" edge can be written from two places that persist
+        separately: the UI / ``set_device_property`` path lands in
+        ``_dependency_overrides``, the ``register_surplus_device`` service
+        lands in ``_service_registrations[id]["depends_on"]``. Walking only
+        the first made the cycle guard blind to any loop whose other half
+        came from a service registration — service sets a→b, UI sets b→a,
+        the walk from ``a`` found no parents and the cycle was created.
+
+        Both branches gate on ``isinstance`` before iterating: a hand-edited
+        store can hold a bare string, and ``list("pump")`` would push the
+        characters ``p, u, m, p`` onto the walk as if they were device ids.
+        The result is de-duplicated — ``async_set_dependency`` deliberately
+        mirrors an edge into both stores for service-registered devices, so
+        the same parent legitimately appears twice.
+        """
+        parents: list = []
+        for store in (
+            self._dependency_overrides.get(node),
+            (self._service_registrations.get(node) or {}).get("depends_on"),
+        ):
+            if isinstance(store, (list, tuple)):
+                parents.extend(str(d) for d in store)
+        seen: set = set()
+        return [p for p in parents if not (p in seen or seen.add(p))]
+
     def _dependency_would_cycle(self, device_id: str, new_parent: str) -> bool:
         """Would making ``device_id`` require ``new_parent`` close a cycle?
 
         True iff ``device_id`` is already reachable UP the existing "requires"
         graph from ``new_parent`` (so the new edge would loop back). Walks ALL
-        parents (a device can require several) with a visited-set, so it's
-        bounded even if the stored graph already contains a stray cycle."""
+        parents (a device can require several — the ``[0]``-only walk of the
+        retired ``validate_dependencies`` missed every cycle that ran through
+        a second dependency, #662) with a visited-set, so it's bounded even if
+        the stored graph already contains a stray cycle."""
+        if device_id == new_parent:
+            return True
         stack = [new_parent]
         seen = set()
         while stack:
@@ -1326,8 +1532,95 @@ class UnifiedDeviceRegistry:
             if node in seen:
                 continue
             seen.add(node)
-            stack.extend(self._dependency_overrides.get(node, []))
+            stack.extend(self._effective_parents(node))
         return False
+
+    def _sanitize_dependency_cycles(self) -> bool:
+        """Break any cycle already present in restored storage (#662).
+
+        The write-path guard rejects new cyclic edges, but it can only
+        protect writes it sees: a store written before the guard existed
+        (≤ v1.7.5-beta.2), or hand-edited, can hold a loop. Both devices in
+        a cycle then wait on each other forever under the default
+        ``dependency_mode='must_active'`` and never start.
+
+        Cleans **both** stores in one pass. Doing only
+        ``_dependency_overrides`` would leave two failure modes (ruflo
+        review): a cycle written entirely through ``register_surplus_device``
+        survives untouched and still deadlocks, and — worse — it then
+        poisons the guard, because re-registering the *innocent* direction
+        of that stale pair walks up through the surviving reverse edge and
+        gets falsely rejected.
+
+        Rebuilds edge by edge in deterministic order against a graph that
+        starts empty, keeping only edges that don't close a loop, so an
+        already-cyclic store can't make the walk itself wrong. Returns True
+        if anything was dropped, so the caller can persist the repair —
+        otherwise the warning would fire on every restart forever.
+
+        **Tiebreak, when a cycle spans the two stores:** every edge is a
+        candidate for dropping, and which one survives is decided purely by
+        replay order — ``_dependency_overrides`` edges are replayed first, so
+        the UI-set link wins and the service-registered one is dropped. That
+        is the deliberate choice: the override store is what the user set by
+        hand in the config card, while ``depends_on`` comes from an
+        integration's ``register_surplus_device`` call, which will be replayed
+        (and re-validated by the write-path guard) on its next registration.
+        Within a single store the tiebreak is ``sorted()`` by device id.
+        """
+        orig_ovr = self._dependency_overrides
+        orig_svc_deps = {
+            did: reg.get("depends_on")
+            for did, reg in (self._service_registrations or {}).items()
+            if isinstance(reg, dict) and reg.get("depends_on")
+        }
+        cleaned_ovr: Dict[str, list] = {}
+        cleaned_svc: Dict[str, list] = {}
+        dropped: list = []
+
+        def _edges(store, tag):
+            for node in sorted(store):
+                raw = store.get(node)
+                if not isinstance(raw, (list, tuple)):
+                    continue
+                for parent in raw:
+                    yield node, str(parent), tag
+
+        try:
+            # Swap in the empty graph so each candidate edge is validated
+            # against only the edges already admitted. Safe without a lock:
+            # this is sync, on HA's single-threaded event loop, with no
+            # await between the swap and the restore below.
+            self._dependency_overrides = cleaned_ovr
+            for did in orig_svc_deps:
+                self._service_registrations[did]["depends_on"] = []
+            for node, parent, tag in [
+                *_edges(orig_ovr, "ovr"),
+                *_edges(orig_svc_deps, "svc"),
+            ]:
+                if self._dependency_would_cycle(node, parent):
+                    dropped.append(f"{node}→{parent}")
+                    continue
+                target = cleaned_ovr if tag == "ovr" else cleaned_svc
+                target.setdefault(node, []).append(parent)
+                if tag == "svc":
+                    self._service_registrations[node]["depends_on"] = list(
+                        target[node]
+                    )
+        except Exception:  # pragma: no cover — never block startup
+            self._dependency_overrides = orig_ovr
+            for did, deps in orig_svc_deps.items():
+                self._service_registrations[did]["depends_on"] = deps
+            return False
+        if dropped:
+            _LOGGER.warning(
+                "Dropped %d circular dependency link(s) found in stored "
+                "device config: %s. Those devices would each have waited on "
+                "the other and never started; re-add the link in the "
+                "direction you meant.",
+                len(dropped), ", ".join(dropped),
+            )
+        return bool(dropped)
 
     async def _save_storage(self) -> None:
         """Persist manual mappings, priority overrides, and control modes."""
@@ -1336,6 +1629,8 @@ class UnifiedDeviceRegistry:
             "priority_overrides": self._priority_overrides,
             "control_modes": self._control_mode_overrides,
             "dependencies": self._dependency_overrides,
+            "critical_overrides": self._critical_overrides,          # (#650)
+            "controllable_overrides": self._controllable_overrides,  # (#650)
             "rated_power_overrides": self._rated_power_overrides,
             "service_registrations": self._service_registrations,
             "device_goals": self._device_goals,

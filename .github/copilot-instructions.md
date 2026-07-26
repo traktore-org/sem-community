@@ -1,158 +1,125 @@
 # AI Agent Guidelines for Solar Energy Management (SEM)
 
+> **How to read this file.** It points at code and docs; it deliberately does **not**
+> restate values that the code already states. The previous version of this file sat
+> untouched from v1.0.0 (2026-04-12) through ~25 releases, and by the time anyone
+> re-read it, it claimed `DEFAULT_UPDATE_INTERVAL = 300  # 5 minutes` when the real
+> value is `10  # seconds`, and gave `DEFAULT_BATTERY_PRIORITY_SOC` both a wrong number
+> and an inverted meaning. A doc that quotes a constant will drift from it; a doc that
+> names the file the constant lives in cannot. See #671, and `docs/BUG_CLASSES.md` for
+> the class. **If you add a number here, add a test for it or don't add it.**
+
 ## Project Overview
-Solar Energy Management (SEM) is a Home Assistant integration for optimizing solar power, battery storage, and EV charging. It maximizes solar self-consumption while protecting battery levels and managing peak load.
 
-## Key Architecture Components
+SEM is a Home Assistant integration that optimises solar self-consumption across battery
+storage, EV charging, heat pumps, and generic switchable loads. It maximises own-use while
+protecting battery levels and managing peak load.
 
-### Core System (`const.py`, `coordinator.py`)
-- Energy flow management through dual state machine design
-- Sensor naming convention using `sensor.sem_*` prefix
-- Priority-based energy distribution (Home → Battery → EV → Grid)
-- Database protection with configurable update intervals
+Distribution is HACS with `content_in_root: true` — files live at the repo root, so this
+repo has **no** wrapper directory (CI and the test runner create one).
 
-### Sensor Framework
-```python
-# Example sensor structure from const.py
-SEM_SENSORS = {
-    "solar_power": "sensor.sem_solar_power",
-    "grid_power": "sensor.sem_grid_power",
-    "battery_power": "sensor.sem_battery_power"
-    # ...
-}
+## Before you change anything
+
+- **`docs/README.md` is the documentation index.** Start there. Root-level guide files
+  are stubs pointing into `docs/`.
+- **`docs/BUG_CLASSES.md` is the bug-class ledger.** Before fixing a bug, find its class,
+  sweep the siblings, and add a guard. A fix is instance-local; the class survives.
+- **`docs/adr/`** holds the architecture decisions that are load-bearing —
+  per-charger context, the unified EV budget, and the sign-convention boundary.
+- **`docs/MULTI_CHARGER.md` is mandatory reading** before touching anything under
+  `coordinator/` that participates in the multi-charger loop.
+
+## Key architecture
+
+### Core (`const.py`, `consts/`, `coordinator/`)
+
+- Constants live in the `consts/` package and are re-exported by `const.py`. Read the
+  values there; do not copy them into docs.
+- Entity naming: every SEM sensor is `sensor.sem_{description.key}`, built by `SEMSensor`
+  (`sensor.py`). The key in the `EntityDescription` **is** the entity id suffix.
+- The coordinator pipeline is
+  `SensorReader → PowerReadings.calculate_derived() → energy/flow/charging chain`.
+- `home_consumption_power` is derived from the energy balance and clamped to `>= 0`. That
+  clamp is intentional — do not make it report `unknown`.
+
+### Sign conventions
+
+Documented in `docs/adr/0003-sign-convention-boundary.md`. Summary: grid is
+`− import / + export`, battery is `− discharge / + charge`, solar and EV are positive-only.
+**Never negate a sensor "to follow HA convention" without checking the live source first** —
+that has broken Huawei installs before.
+
+### Device discovery (`hardware_detection.py`)
+
+Pattern-based auto-discovery with confidence scoring. The pattern tables are per-domain
+(`EV_INTEGRATION_PATTERNS`, `GENERIC_EV_PATTERNS`, `_PV_STRING_PATTERNS`, …) — read the
+module rather than assuming a single flat table.
+
+### Labels (`consts/labels.py`)
+
+`SENSOR_LABEL_MAPPING` maps **full** entity-description keys to HA entity-registry labels;
+`SEM_LABELS` is the label vocabulary. The lookup is exact-match, and a miss applies no
+labels and reports nothing, so this registry cannot detect its own rot — it is guarded by
+`tests/test_667_label_registry.py`. Per-device entities (`charger_<id>_*`,
+`battery_<id>_*`) cannot be labelled by it at all; that is a design limit, not drift.
+
+### Dashboard cards
+
+All cards are LitElement sources under `dashboard/card/src/cards/`, built by Rollup into a
+single bundle `dashboard/card/dist/sem-cards.js`. **Editing a card does nothing until
+`cd dashboard/card && npm run build` regenerates the bundle** — deploy scripts only rsync,
+they do not build. Never put a backtick inside a lit `html` template, including in HTML
+comments; it terminates the template literal and blanks the card at render time while
+passing every static check (guarded by `tests/test_card_template_lint.py`).
+
+## Workflows
+
+### Testing
+
+Run from a replica of the CI layout, **not** from the repo root — a repo-root `select.py`
+shadows the stdlib `select` module, and Python 3.12+ is required for the `type` statement:
+
+```bash
+rsync -a --delete --exclude=.git --exclude=node_modules ./ /tmp/ha-config/custom_components/solar_energy_management/
+cd /tmp/ha-config && PYTHONPATH=/tmp/ha-config python3.12 -m pytest custom_components/solar_energy_management/tests/ -q
 ```
 
-### Device Discovery (`hardware_detection.py`)
-- Pattern-based auto-discovery of solar, battery, and EV components
-- Confidence scoring system for hardware detection
-- Manufacturer-specific sensor patterns in `HARDWARE_MANUFACTURERS`
+CI runs the same layout on Python 3.12 and 3.13, plus Hassfest and HACS validation.
 
-## Critical Workflows
+### Deploying
 
-### 1. Test & Deploy
-- Always run test suite before changes: `./run_tests.sh`
-- Key test files: `test_flow_accumulation.py`, `test_coordinator.py`
-- CI/CD pipeline via n8n deploys to TEST (10.10.0.45) then PROD (10.10.0.150)
+Never deploy to HA-PROD without testing on HA-TEST first, and never without explicit
+approval. Deploy scripts rsync the **working tree**, not a git ref, so a feature branch can
+be soaked on real hardware without merging — and un-soaked work must stay off `develop`.
 
-### 2. Energy Flow Changes
-- Use `replace_string_in_file` carefully - include 3 lines of context
-- Test flow accumulation after changes to prevent bugs
-- Verify energy balance equation holds: Solar = Home + Battery + EV + Grid
+### Git
 
-### 3. UI Updates
-- Dashboard generation via `dashboard_generator.py`
-- Required HACS cards: mushroom-cards, apexcharts-card, etc.
-- Label-based entity organization using `SEM_LABELS`
+Feature branches for anything non-trivial. Every commit references an issue. `main` is
+PR-only with all CI checks green. Do not create release tags without being asked.
 
-## Project Conventions
+## Integration points
 
-### Database Protection
-```python
-# Use these update intervals (const.py)
-DEFAULT_UPDATE_INTERVAL = 300  # 5 minutes
-DEFAULT_POWER_DELTA = 1000    # Watts threshold
-DEFAULT_SOC_DELTA = 10        # Battery % threshold
-```
+### Supported hardware
 
-Protection levels for high-load environments:
-- MINIMAL: All sensors enabled, normal updates
-- BALANCED: Reduced flow sensors, longer delays
-- AGGRESSIVE: Essential sensors only, max delays
+Inverters and chargers are listed in `README.md`. **Every supported brand must have a
+pipeline test in `tests/test_split_grid_integration.py`** covering its grid/battery sign
+pattern — adding a brand to the supported list means adding its test.
 
-### Sensor Names
-- Hardware sensors mapped to standardized names
-- Flow sensors follow `flow_source_to_destination` pattern
-- Energy sensors use `daily_` or `monthly_` prefix
-- Always use constants from `const.py`
+### Services
 
-### State Machine States
-```python
-class ChargingState:
-    SOLAR_IDLE = "solar_idle"
-    SOLAR_CHARGING_ACTIVE = "solar_charging_active"
-    NIGHT_CHARGING_ACTIVE = "night_charging_active"
-    # ...
-```
+Registered services are declared in `services.yaml`; that file is the authoritative list.
 
-## Integration Points
+## Common failure modes
 
-### Hardware Integration
-- Support for Huawei, SolarEdge, Fronius, Enphase
-- EV chargers: KEBA, Wallbox, go-eCharger
-- Pattern-based sensor discovery in `hardware_scanner.py` with confidence scoring
-- Example hardware detection pattern:
-```python
-# From hardware_detection.py
-HARDWARE_PATTERNS = {
-    "solar_production": [
-        ("sensor.huawei_solar_active_power", "Huawei Solar Power"),
-        ("sensor.huawei_solar_*_active_power*", "Huawei Solar Multi Power"),
-        # Generic fallbacks
-        ("sensor.*solar*power*", "Generic Solar Power"),
-        ("sensor.*pv*power*", "Generic PV Power")
-    ]
-}
-```
-
-### Home Assistant Services
-1. `solar_energy_management.recreate_energy_dashboard`
-2. `solar_energy_management.generate_dashboard`
-3. KEBA services via `keba.set_current`, etc.
-
-### Data Flows
-```
-Solar Power → Home Priority → Battery Management → EV Charging → Grid Export
-```
-
-## Common Patterns
-
-### Flow Energy Calculation
-- Use accumulation guards to prevent duplicate counting
-- Reset daily totals at configured time (default 00:00)
-- Always validate against total energy sensors
-
-### Peak Load Management
-- Priority levels 1-10 for devices (1=Critical, never shed, 10=First to shed)
-- Hysteresis to prevent rapid switching with configurable thresholds
-- Critical device protection enabled by default
-- Controlled tariff support (<3kW for reduced demand charge)
-- Example load management configuration:
-```python
-# From const.py
-DEFAULT_TARGET_PEAK_LIMIT = 5.0  # kW - Main target to never exceed
-DEFAULT_WARNING_PEAK_LEVEL = 4.5  # kW - Early warning level
-DEFAULT_EMERGENCY_PEAK_LEVEL = 6.0  # kW - Hard emergency limit
-DEFAULT_PEAK_HYSTERESIS = 0.2  # kW - Prevent rapid cycling
-
-# Anti-flicker protection
-DEFAULT_MIN_ON_DURATION = 300  # seconds - Minimum time device stays on
-DEFAULT_MIN_OFF_DURATION = 60   # seconds - Minimum time device stays off
-```
-
-### Battery Management
-```python
-# Key thresholds (const.py)
-DEFAULT_BATTERY_PRIORITY_SOC = 90  # Battery first
-DEFAULT_BATTERY_MINIMUM_SOC = 30   # Stop EV charging
-DEFAULT_BATTERY_RESUME_SOC = 50    # Resume charging
-```
-
-## Debugging Tips
-
-### Common Issues
-1. Flow energy accumulation bugs - use `test_flow_accumulation.py` 
-2. Database locks - adjust update intervals
-3. Missing energy data - run backfill service from `migration/backfill_sem_statistics.py`
-4. Energy balance mismatch - check flow calculations in `coordinator.py`
-5. Sensor pattern mismatches - verify against `HARDWARE_PATTERNS` in `hardware_detection.py`
-
-### Verification Tools
-1. SEM Debug Template dashboard
-2. Energy balance check sensor
-3. Performance ratio monitoring
-
-## Documentation
-- User Guide: `USER_GUIDE.md`
-- Technical docs in `docs/technical/`
-- Dashboard guides in `dashboard/docs/`
-- Migration guides in `docs/migration/`
+1. **Flow-energy accumulation** — use `tests/test_flow_accumulation.py`; accumulation
+   guards exist to prevent double counting.
+2. **Fleet-vs-per-charger reads** — reading the fleet-summed `power.ev_power` inside a
+   per-charger loop caused four hotfixes for one bug class. Use `_this_charger_power`, and
+   annotate any deliberate fleet read with `# FLEET-READ: <reason>`; an AST lint enforces
+   this (`tests/test_ev_control_fleet_reads.py`).
+3. **A gate that blocks activation but does not stop an already-running device** — this
+   class has recurred four times. Check both directions.
+4. **Dead surface** — a key map, emit, or doc reference that nothing resolves. It fails
+   silently by construction (missing dict key, `states.get` returning `None`), so it rots
+   invisibly. Guards exist for the label registry, the `consts/` package, and doc anchors;
+   extend them rather than adding an unguarded registry.

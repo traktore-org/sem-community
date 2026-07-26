@@ -121,6 +121,9 @@ class PowerReadings:
     # ``docs/MULTI_CHARGER.md`` for the full invariant.
     ev_power: "FleetEvPower" = field(default_factory=lambda: FleetEvPower(0.0))
     home_consumption_power: float = 0.0
+    # (#660) Watts the ``max(0, …)`` clamp removed from the home-consumption
+    # residual this cycle. Set by ``calculate_derived``; see there.
+    home_residual_clamped_w: float = 0.0
 
     # Per-charger EV power (v1.6.9). Populated by ``sensor_reader`` for
     # multi-charger setups (``len(ev_chargers) > 1``); each key is a
@@ -225,7 +228,15 @@ class PowerReadings:
         # Home consumption from energy balance
         energy_in = self.solar_power + self.grid_import_power + self.battery_discharge_power
         energy_out = self.ev_power + self.grid_export_power + self.battery_charge_power
-        self.home_consumption_power = max(0, energy_in - energy_out)
+        residual = energy_in - energy_out
+        self.home_consumption_power = max(0, residual)
+        # (#660) How much that clamp removed. THIS is the honest signal:
+        # once clamped, ``home_consumption_power`` closes the balance by
+        # definition, so every downstream "is the balance OK?" check reads
+        # its own output. A negative residual means the inputs genuinely
+        # don't add up — a stale sensor, or a sign the autodetect got wrong.
+        # Zero on a healthy system; sustained non-zero IS the bug.
+        self.home_residual_clamped_w = max(0.0, -residual)
 
     # ─── arch/multi-inverter-battery-primary @property views ───
     #
@@ -361,6 +372,10 @@ class EnergyTotals:
     monthly_grid_export: float = 0.0
     monthly_battery_charge: float = 0.0
     monthly_battery_discharge: float = 0.0
+    # #666 — the accumulator has always been written; the label registry has
+    # always declared ``monthly_ev_consumption``; only the field and the sensor
+    # were missing, so the data had nowhere to surface.
+    monthly_ev: float = 0.0
 
     # Yearly totals (kWh)
     yearly_solar: float = 0.0
@@ -525,7 +540,10 @@ class CostData:
     lifetime_total_savings: float = 0.0  # all-time savings (solar + export + battery)
     lifetime_grid_cost: float = 0.0  # all-time grid spend
     roi_percentage: float = 0.0  # savings / investment × 100
-    roi_payback_years: float = 0.0  # estimated years to payback
+    # (#646) None until there is enough savings history to estimate —
+    # the 0.0 default published as "0.0 years", reading as already-paid-off
+    # on fresh installs.
+    roi_payback_years: float | None = None  # estimated years to payback
     roi_annual_savings: float = 0.0  # projected annual savings rate
 
 
@@ -534,8 +552,12 @@ class PerformanceMetrics:
     """System performance metrics."""
     self_consumption_rate: float = 0.0  # % of solar used locally
     autarky_rate: float = 0.0  # % of consumption from own generation
-    solar_efficiency: float = 0.0
-    battery_efficiency: float = 0.0
+    # Removed (#669): solar_efficiency / battery_efficiency. Both were
+    # hardcoded constants wearing the name of a measurement
+    # (``85.0 if solar_power > 0 else 0.0``), emitted every cycle and read by
+    # nothing. Had anything ever surfaced them they would have presented a
+    # made-up number as a real one — the dangerous half of the dead-surface
+    # class. Re-add only with an actual calculation behind them.
 
 
 @dataclass
@@ -568,6 +590,13 @@ class LoadManagementData:
     power_charge_cost: float = 0.0
     peak_trend: str = "stable"
     tariff_type: str = "unknown"
+    # (#657) The managed-device table the load-management card renders.
+    # ``LoadManager.get_load_management_data()["devices"]`` has always
+    # computed it; ``_build_load_management_data`` copied every OTHER field,
+    # so ``sensor.sem_load_management_status`` read a key nothing wrote and
+    # its device table was permanently empty. Excluded from the recorder by
+    # the sensor (see #581) — it's a live-only structure.
+    devices: Dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
@@ -838,6 +867,19 @@ class SEMData:
     charging_strategy_reason: str = ""
     available_power: float = 0.0
     calculated_current: float = 0.0
+    # (#657) The "why is my car not charging" flags. All three are decided
+    # every cycle inside ``_build_charging_context`` and were consumed by
+    # ``sensor.sem_ev_charging_status``'s attributes — but the hop onto
+    # ``coordinator.data`` was never written, so the one surface designed to
+    # answer that question returned null for all of them.
+    battery_too_low: bool = False
+    battery_needs_priority: bool = False
+    solar_sufficient: bool = False
+    # (#657) Budget internals behind ``sensor.sem_available_power``:
+    # solar minus home minus battery charge, and the SOC-graduated battery
+    # allowance the canonical EVBudget actually granted this cycle.
+    excess_solar: float = 0.0
+    safe_discharge_power: float = 0.0
 
     # New phase data
     surplus_control: SurplusControlData = field(default_factory=SurplusControlData)
@@ -921,6 +963,7 @@ class SEMData:
             "monthly_grid_export_energy": self.energy.monthly_grid_export,
             "monthly_battery_charge_energy": self.energy.monthly_battery_charge,
             "monthly_battery_discharge_energy": self.energy.monthly_battery_discharge,
+            "monthly_ev_consumption_energy": self.energy.monthly_ev,  # #666
 
             # Yearly energy
             "yearly_solar_yield_energy": self.energy.yearly_solar,
@@ -1024,8 +1067,6 @@ class SEMData:
             # Performance
             "self_consumption_rate": self.performance.self_consumption_rate,
             "autarky_rate": self.performance.autarky_rate,
-            "solar_efficiency": self.performance.solar_efficiency,
-            "battery_efficiency": self.performance.battery_efficiency,
 
             # Status
             "grid_status": self.status.grid_status,
@@ -1041,6 +1082,12 @@ class SEMData:
             "charging_strategy_reason": self.charging_strategy_reason,
             "available_power": self.available_power,
             "calculated_current": self.calculated_current,
+            # (#657) EV block reasons + budget internals.
+            "battery_too_low": self.battery_too_low,
+            "battery_needs_priority": self.battery_needs_priority,
+            "solar_sufficient": self.solar_sufficient,
+            "excess_solar": self.excess_solar,
+            "safe_discharge_power": self.safe_discharge_power,
 
             # EV aliases and routing
             "ev_charging_power": self.power.ev_power,
@@ -1051,8 +1098,10 @@ class SEMData:
             "solar_charging_status": self._get_solar_charging_status(),
             "night_charging_status": self._get_night_charging_status(),
             "battery_priority_status": self._get_battery_priority_status(),
-            "solar_optimization_status": "active" if self.power.solar_power > 50 else "idle",
-            "grid_management_status": self.status.grid_status,
+            # Removed (#669): solar_optimization_status / grid_management_status.
+            # Their sensors were deleted long ago (sensor.py:233-234 — "just
+            # checks solar_power > 50, no real logic" and "duplicate of
+            # grid_status"); only the emit survived, read by nothing.
 
             # Legacy aliases for compatibility
             "solar_production_total": self.power.solar_power,
@@ -1072,6 +1121,7 @@ class SEMData:
             "power_charge_cost": self.load_management.power_charge_cost,
             "peak_trend": self.load_management.peak_trend,
             "tariff_type": self.load_management.tariff_type,
+            "load_management_devices": self.load_management.devices,
 
             # Timestamp
             "last_update": self.last_update,

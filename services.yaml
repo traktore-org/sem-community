@@ -420,6 +420,17 @@ schedule_appliance:
           max: 10
           step: 1
 
+cancel_appliance_schedule:
+  name: Cancel Appliance Schedule
+  description: Cancel a pending appliance schedule created with schedule_appliance. The appliance is released from surplus control and will not be force-started at its deadline.
+  fields:
+    device_id:
+      name: Device ID
+      description: The identifier used when the appliance was scheduled (e.g., "dishwasher")
+      required: true
+      selector:
+        text:
+
 reset_sign_detection:
   name: Reset sign detection
   description: >
@@ -471,6 +482,111 @@ flip_battery_sign:
     entry_id:
       name: Config entry
       description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:
+
+# --- #673: these four were registered in __init__.py but missing here for
+# releases. An undeclared service is still callable, so nothing errored — it
+# just lost its whole UI affordance (no description, no field pickers, no
+# validation in Developer Tools → Actions). Worst for `diagnose`, which
+# docs/SEM_TRACE.md explicitly tells users to call. Guarded by
+# tests/test_673_services_declared.py.
+
+diagnose:
+  name: Diagnose
+  description: >
+    Return SEM's current configuration, live state and recent log lines for
+    one area, as a service response. This is the "what does SEM actually
+    think right now" tool — use it before filing an issue, and paste the
+    result in.
+
+    Read-only. Never changes configuration or touches hardware.
+  fields:
+    section:
+      name: Section
+      description: >
+        Which area to report on. "all" returns the overview; "trace" returns
+        the layered per-cycle decision chain (management → process →
+        integration) plus any layer-boundary mismatch, which is the fastest
+        way to explain an unexpected EV or load decision.
+      required: false
+      default: "all"
+      example: "trace"
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - "all"
+            - "trace"
+            - "ev_chargers"
+            - "battery_zones"
+            - "battery_scheduler"
+            - "heat_pump"
+            - "hot_water"
+            - "tariff"
+            - "load_management"
+            - "forecast"
+            - "notifications"
+            - "advanced"
+
+remove_charger:
+  name: Remove EV Charger
+  description: >
+    Remove an EV charger from SEM by id. `update_device_config` merges the
+    charger list additively (so adding one never drops its siblings), which
+    means it cannot express a removal — this service can.
+  fields:
+    charger_id:
+      name: Charger ID
+      description: "The id of the charger to remove, as shown on its dashboard card"
+      required: true
+      example: "ev_charger"
+      selector:
+        text:
+    entry_id:
+      name: Config Entry ID
+      description: "Only needed if you run more than one SEM config entry"
+      required: false
+      selector:
+        text:
+
+get_config:
+  name: Get Configuration
+  description: >
+    Return SEM's merged configuration (setup data + options) as a service
+    response. Home Assistant's own `config_entries/get` strips both for
+    security, so this is the only way to read back option-only fields.
+
+    Used by the dashboard's Configuration tab. Read-only.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: "Only needed if you run more than one SEM config entry"
+      required: false
+      selector:
+        text:
+
+set_option:
+  name: Set Configuration Option
+  description: >
+    Write one or more configuration options, merging them into the SEM
+    config entry exactly as the Options flow does.
+
+    Used by the dashboard's Configuration tab. Prefer the UI — this service
+    does not validate the way the config flow does, and an unknown key is
+    stored rather than rejected.
+  fields:
+    options:
+      name: Options
+      description: "Mapping of option key to value"
+      required: true
+      example: '{"battery_priority_soc": 30}'
+      selector:
+        object:
+    entry_id:
+      name: Config Entry ID
+      description: "Only needed if you run more than one SEM config entry"
       required: false
       selector:
         text:

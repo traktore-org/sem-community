@@ -1,8 +1,9 @@
 """Tests for battery charge scheduler and adapter.
 
 Covers:
-- Adapter factory and platform detection
 - Huawei/GoodWe/Generic adapter start/stop/status
+  (brand *selection* is not tested here — it lives in ``adapter_for``, see
+  test_inverter_battery_arch.py; the local factory went in #659)
 - Scheduler evaluation logic (deficit, break-even, SOC, thresholds)
 - Cheapest-hour selection with dynamic tariff
 - Update cycle (charge window, target reached, peak coordination)
@@ -22,7 +23,6 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.forc
     GenericChargeAdapter,
     GoodWeChargeAdapter,
     HuaweiChargeAdapter,
-    create_charge_adapter,
 )
 from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
     BatteryChargeScheduler,
@@ -128,39 +128,19 @@ def mock_tariff_provider():
 # ---------------------------------------------------------------------------
 # Adapter Factory Tests
 # ---------------------------------------------------------------------------
-
-class TestAdapterFactory:
-    """Test create_charge_adapter factory."""
-
-    def test_explicit_huawei(self, mock_hass, huawei_config):
-        adapter = create_charge_adapter(mock_hass, huawei_config)
-        assert isinstance(adapter, HuaweiChargeAdapter)
-
-    def test_explicit_goodwe(self, mock_hass, goodwe_config):
-        adapter = create_charge_adapter(mock_hass, goodwe_config)
-        assert isinstance(adapter, GoodWeChargeAdapter)
-
-    def test_explicit_generic(self, mock_hass, generic_config):
-        adapter = create_charge_adapter(mock_hass, generic_config)
-        assert isinstance(adapter, GenericChargeAdapter)
-
-    def test_auto_detect_huawei(self, mock_hass):
-        mock_hass.config.components = {"huawei_solar", "homeassistant"}
-        config = {"battery_charge_platform": "auto", "inverter_device_id": "abc"}
-        adapter = create_charge_adapter(mock_hass, config)
-        assert isinstance(adapter, HuaweiChargeAdapter)
-
-    def test_auto_detect_goodwe(self, mock_hass):
-        mock_hass.config.components = {"goodwe", "homeassistant"}
-        config = {"battery_charge_platform": "auto"}
-        adapter = create_charge_adapter(mock_hass, config)
-        assert isinstance(adapter, GoodWeChargeAdapter)
-
-    def test_auto_detect_fallback_generic(self, mock_hass):
-        mock_hass.config.components = {"homeassistant"}
-        config = {"battery_charge_platform": "auto"}
-        adapter = create_charge_adapter(mock_hass, config)
-        assert isinstance(adapter, GenericChargeAdapter)
+#
+# ``TestAdapterFactory`` (6 tests over ``create_charge_adapter``) was deleted
+# in #659 along with the factory it exercised. It was the *second* brand
+# selector; the live one is ``battery_adapters.adapter_for``, covered by
+# ``test_inverter_battery_arch.py`` (explicit huawei / goodwe / generic + the
+# no-brand fallback).
+#
+# The two auto-detect tests here are worth a note, because they were worse
+# than merely redundant: they asserted detection via ``hass.config.components``,
+# which is what the DEAD factory read. The live ``_integration_loaded`` never
+# looks at ``config.components`` — it checks ``hass.data`` / ``hass.config_entries``
+# (covered by test_battery_arbitrage_523.py::test_adapter_for_detects_huawei_via_config_entries).
+# So these were green about a detection mechanism production does not use.
 
 
 # ---------------------------------------------------------------------------
@@ -251,18 +231,10 @@ class TestHuaweiAdapter:
         assert status.status == ChargeCommandStatus.CHARGING
         assert status.current_soc == 60.0
 
-    def test_should_stop(self, mock_hass, huawei_config):
-        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
-        adapter._active = True
-        adapter._target_soc = 80.0
-
-        assert not adapter.should_stop(75.0)
-        assert adapter.should_stop(80.0)
-        assert adapter.should_stop(85.0)
-
-    def test_should_stop_inactive(self, mock_hass, huawei_config):
-        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
-        assert not adapter.should_stop(100.0)
+    # ``test_should_stop`` / ``test_should_stop_inactive`` went with
+    # ``should_stop`` in #659. The live target-reached rule is the
+    # scheduler's own SOC comparison, covered by the "already at target"
+    # planning tests further down — not by anything on the adapter.
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .types import FleetEvPower, PowerReadings
-from .sign_audit import CounterCorrelationAudit
+from .sign_audit import CounterCorrelationAudit, SplitSensorExclusivityAudit
+from .units import (
+    energy_state_to_kwh,
+    is_energy_unit,
+    normalize_unit,
+    power_state_to_watts,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -324,7 +330,27 @@ class SensorReader:
         self._grid_sign_audit = CounterCorrelationAudit()
         # #589 — observe-only battery sign contradiction audit (post-lock).
         # Separate baselines keep the voter's _battery_charge/discharge_baseline clean.
-        self._battery_sign_audit = CounterCorrelationAudit()
+        #
+        # #647 — ONE audit PER battery id, not one for the fleet. On a
+        # multi-battery install the fleet audit was doubly blind: it gated on
+        # the ``__fleet__`` lock (which per-battery mode never sets) and, even
+        # had it run, it compared SUMMED counters against the SUMMED power, so
+        # one battery signed wrong and one signed right cancel to ≈0 W and land
+        # under the 100 W skip. Each unit is now audited against its own
+        # charge/discharge counters. ``__fleet__`` stays the key for the
+        # single/combined-battery path.
+        self._battery_sign_audits: Dict[str, CounterCorrelationAudit] = {}
+        # #661 — split-pair exclusivity, audited at the NETTING site because
+        # that is the last moment both raw readings exist. One audit per pair
+        # id ("grid" for whichever grid path is active, "b1"/"b2"/… per battery
+        # pair), created on first use by ``_audit_split_pair``.
+        self._split_pair_audits: Dict[str, SplitSensorExclusivityAudit] = {}
+        # Pair ids audited during the current cycle. The Energy-Dashboard config
+        # can change under a live reader (the user edits HA's energy settings
+        # without reloading SEM), and a battery that goes away would otherwise
+        # leave a permanently-flagged ``b2`` in the perception trace — a fault
+        # reported for hardware that no longer exists. Pruned each cycle.
+        self._split_pair_seen: set = set()
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -448,6 +474,31 @@ class SensorReader:
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""
         self._energy_dashboard_config = ed_config
+        # #647 — drop per-battery audits for units that no longer exist. A
+        # flagged ``b2`` whose battery has since been removed from the Energy
+        # Dashboard would otherwise keep the perception fault lit forever: no
+        # cycle can ever feed it the agreement that clears it. PRUNE, not
+        # clear — this setter also runs on the cold-start re-derivation retry
+        # (#274), and clearing there would reset the vote count every cycle
+        # and the audit could never reach its 5-vote threshold.
+        #
+        # Defensive throughout: this runs on every coordinator cycle during the
+        # cold-start retry, and an exception here would take the whole power
+        # read down. An unreadable config prunes nothing rather than raising.
+        per_bid = [b for b in self._battery_sign_audits if b != self._FLEET_BID]
+        if not per_bid:
+            return
+        try:
+            n_units = len(getattr(ed_config, "battery_power_list", None) or [])
+        except TypeError:           # not a sequence — can't tell, keep them all
+            return
+        for bid in per_bid:
+            try:
+                stale = int(bid[1:]) > n_units
+            except ValueError:      # not a b<N> key — leave it alone
+                continue
+            if stale:
+                del self._battery_sign_audits[bid]
 
     def read_power(self) -> PowerReadings:
         """Read all power values from sensors."""
@@ -460,10 +511,16 @@ class SensorReader:
             self._sign_vote_warmup -= 1
 
         # Try Energy Dashboard config first, then legacy config
+        self._split_pair_seen = set()
         if self._energy_dashboard_config:
             readings = self._read_from_energy_dashboard()
         else:
             readings = self._read_from_legacy_config()
+
+        # #661 — forget audits for pairs that are no longer being netted, so a
+        # removed battery can't leave a stale fault in the trace.
+        for gone in set(self._split_pair_audits) - self._split_pair_seen:
+            del self._split_pair_audits[gone]
 
         # Calculate derived values
         readings.calculate_derived()
@@ -612,12 +669,12 @@ class SensorReader:
                 readings.calculate_derived()
 
         # #589 — observe-only post-lock battery sign contradiction audit.
-        # Runs here so battery_power is final (all corrections applied).
-        # The method guards on the fleet lock being set, so it is a no-op
-        # until the sign is detected, and a no-op in per_battery_mode
-        # (where __fleet__ lock is never set).
+        # Runs here so the readings are final (all corrections applied, incl.
+        # the #588 user flip). #647 — ``readings`` is passed so per-battery
+        # mode can audit each unit against its own counters; the fleet path
+        # still no-ops until the __fleet__ sign is locked.
         if ed is not None:
-            self._audit_battery_sign_lock(readings.battery_power, ed)
+            self._audit_battery_sign_lock(readings.battery_power, ed, readings)
 
         return readings
 
@@ -835,6 +892,35 @@ class SensorReader:
 
     # ---- battery sign contradiction ----------------------------------
 
+    def _battery_audit_for(self, bid: str) -> CounterCorrelationAudit:
+        """The audit instance for one battery id, created on first use (#647)."""
+        audit = self._battery_sign_audits.get(bid)
+        if audit is None:
+            audit = CounterCorrelationAudit()
+            self._battery_sign_audits[bid] = audit
+        return audit
+
+    @property
+    def _battery_sign_audit(self) -> CounterCorrelationAudit:
+        """The fleet audit — what the single/combined-battery path uses.
+
+        Kept as the target of the four legacy shims below so the #589 audit
+        contract (and its test suite) is unchanged for single-battery installs.
+        """
+        return self._battery_audit_for(self._FLEET_BID)
+
+    @property
+    def battery_sign_contradiction_bids(self) -> "list[str]":
+        """Which batteries currently contradict their own counters (#647).
+
+        ``['__fleet__']`` on a single/combined install; ``['b2']`` when unit 2
+        of a multi-battery install is the one signed wrong — the detail that
+        makes the perception fault actionable instead of just "somewhere".
+        """
+        return sorted(
+            bid for bid, audit in self._battery_sign_audits.items() if audit.flagged
+        )
+
     @property
     def _battery_audit_charge_baseline(self) -> Optional[float]:
         return self._battery_sign_audit.baseline_a
@@ -851,17 +937,24 @@ class SensorReader:
     def _battery_audit_discharge_baseline(self, v: Optional[float]) -> None:
         self._battery_sign_audit.baseline_b = v
 
+    # The three flags below aggregate across every battery (#647). With one
+    # audit (the fleet) they are exactly the #589 values; with several, a
+    # contradiction on ANY unit must reach the perception health surface —
+    # reporting only the fleet instance would report "OK" for the one install
+    # shape where the fleet instance never runs at all.
     @property
     def _battery_sign_contradiction_votes(self) -> int:
-        return self._battery_sign_audit.votes
+        return max(
+            (a.votes for a in self._battery_sign_audits.values()), default=0
+        )
 
     @property
     def _battery_sign_contradiction(self) -> bool:
-        return self._battery_sign_audit.flagged
+        return any(a.flagged for a in self._battery_sign_audits.values())
 
     @property
     def _battery_sign_contradiction_warned(self) -> bool:
-        return self._battery_sign_audit.warned
+        return any(a.warned for a in self._battery_sign_audits.values())
 
     def export_sign_state(self) -> dict:
         """Snapshot the LOCKED sign-detection state for persistence."""
@@ -941,6 +1034,11 @@ class SensorReader:
         self._battery_charge_baseline.clear()
         self._battery_discharge_baseline.clear()
         self._battery_brand_seed_done.clear()
+        # #647 — drop the audits too. The user pressing "Reset sign detection"
+        # is usually acting ON the contradiction warning; leaving the flag
+        # raised would keep the perception fault lit through the re-learn,
+        # since the audit can only clear itself once a lock exists again.
+        self._battery_sign_audits.clear()
         self._sign_vote_warmup = 12
         _LOGGER.info(
             "Sign-detection state reset — grid and battery signs will be "
@@ -1601,6 +1699,11 @@ class SensorReader:
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
             self._audit_manual_grid_sign(readings.grid_power, ed)
+            if manual_import and manual_export:
+                self._audit_split_pair(
+                    "grid", "Grid (manual import/export override)",
+                    import_w, manual_import, export_w, manual_export,
+                )
         elif ed.grid_power_from and ed.grid_power_to:
             # #553 — declared two-sensor pair from HA's grid dialog
             # (power_config.stat_rate_from/to). Same semantics as the manual
@@ -1611,6 +1714,10 @@ class SensorReader:
             export_w = self._read_sensor(ed.grid_power_to, "grid_export")
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
+            self._audit_split_pair(
+                "grid", "Grid (declared two-sensor pair)",
+                import_w, ed.grid_power_from, export_w, ed.grid_power_to,
+            )
         elif len(ed.grid_power_list) > 1:
             # Multiple grid power sensors — sum all (e.g. multi-meter setups)
             readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")
@@ -1688,6 +1795,11 @@ class SensorReader:
                 # SEM convention: negative = import, positive = export
                 readings.grid_power = export_w - import_w
                 self._grid_sign_detected = True  # No sign correction needed
+                if disc["export"]:
+                    self._audit_split_pair(
+                        "grid", "Grid (auto-discovered split pair)",
+                        import_w, disc["import"], export_w, disc["export"],
+                    )
             elif not disc["warned"]:
                 disc["warned"] = True
                 _LOGGER.warning(
@@ -1752,8 +1864,16 @@ class SensorReader:
             # pair IS the sign convention, so these are never sign-flipped.
             for k, (p_from, p_to) in enumerate(ed.battery_power_pairs):
                 bid = f"b{len(ed.battery_power_list) + k + 1}"
-                w = (self._read_sensor(p_to, "battery")
-                     - self._read_sensor(p_from, "battery"))
+                charge_w = self._read_sensor(p_to, "battery")
+                discharge_w = self._read_sensor(p_from, "battery")
+                w = charge_w - discharge_w
+                # #661 — same shape as the split grid pair: netting is about to
+                # make "charging AND discharging" unrepresentable, so judge it
+                # while both raw sides are still here.
+                self._audit_split_pair(
+                    bid, f"Battery {bid} (declared two-sensor pair)",
+                    discharge_w, p_from, charge_w, p_to,
+                )
                 per_battery_total += w
                 soc_val = 0.0
                 soc_entity = self._auto_detect_battery_soc(p_to)
@@ -1799,6 +1919,15 @@ class SensorReader:
             # net = charge − discharge (SEM convention: positive = charging).
             charge_w = self._read_sensor(ed.battery_power_to, "battery")
             discharge_w = self._read_sensor(ed.battery_power_from, "battery")
+            # #661 — the single-battery twin of the pairs loop above. This is
+            # the branch a one-battery Fronius Verto takes (n_units == 1, so
+            # the loop never ran), and it nets exactly the same way, so it
+            # needs the same audit before the evidence is gone.
+            self._audit_split_pair(
+                "b1", "Battery (declared two-sensor pair)",
+                discharge_w, ed.battery_power_from,
+                charge_w, ed.battery_power_to,
+            )
             readings.battery_power = charge_w - discharge_w
 
         # Battery SOC — precedence (#551): SEM's own explicit override
@@ -1857,24 +1986,8 @@ class SensorReader:
         # consumption spike and the surplus budget oscillated (flap). Falls
         # through to ED / top-level only when NO charger has a nested sensor,
         # so legacy single-charger configs keep working.
-        if any(c.get("ev_charging_power_sensor") for c in ev_chargers):
-            total_ev = 0.0
-            for charger_cfg in ev_chargers:
-                cid = charger_cfg.get("id")
-                cps = charger_cfg.get("ev_charging_power_sensor")
-                if cps:
-                    # Smooth per charger so the per-charger dict stays
-                    # consistent with the fleet sum (both blip-filtered).
-                    cw = self._smooth_ev_power(
-                        self._read_sensor(cps, "ev"), key=cid or cps,
-                    )
-                    total_ev += cw
-                    if cid:
-                        # Per-charger draw in watts, exposed for
-                        # ``flow_calculator`` per-charger split.
-                        readings.ev_power_per_charger[cid] = cw
-            # total_ev is already the sum of smoothed per-charger values.
-            readings.ev_power = FleetEvPower(total_ev)
+        if self._read_ev_fleet_power(readings, ev_chargers):
+            pass  # nested per-charger sensors handled the read (#642 helper)
         elif ed.ev_power:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(ed.ev_power, "ev")))
@@ -2058,9 +2171,11 @@ class SensorReader:
             state = self.hass.states.get(eid)
             if state is None:
                 continue  # unavailability is handled by _read_sensor/Repairs
-            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            unit = normalize_unit(state)
             device_class = state.attributes.get("device_class")
-            if device_class == "energy" or unit in ("wh", "kwh", "mwh"):
+            # #641 — GWh joins the list for free by asking units.py instead of
+            # re-listing the suffixes here.
+            if device_class == "energy" or is_energy_unit(state):
                 self._manual_grid_config_warned.add(eid)
                 _LOGGER.warning(
                     "grid_%s_power_entity is set to %s, which is an ENERGY "
@@ -2127,6 +2242,62 @@ class SensorReader:
             except (ValueError, TypeError):
                 return None
         return total
+
+    def _audit_split_pair(
+        self, pair_id: str, label: str,
+        a_w: float, a_entity, b_w: float, b_entity,
+    ) -> None:
+        """Observe-only exclusivity check on a split sensor pair (#661).
+
+        Called at each netting site with the two RAW, always-positive sides.
+        Argument order is the netting order: ``a_w`` is the side SUBTRACTED and
+        ``b_w`` the side added, so ``b_w - a_w`` in the log is the exact scalar
+        the caller is about to store (import→export for grid,
+        discharge→charge for battery — both SEM convention).
+
+        One meter cannot import and export at the same instant; one battery
+        cannot charge and discharge at the same instant. Sustained
+        both-sides-active means swapped roles, a stale sensor, or two sensors
+        pointed at different hardware — and the netted result (≈0 W) is
+        indistinguishable from a genuinely balanced house, which is why this
+        has to be judged here rather than downstream.
+
+        Observe-only: SEM does not re-net or re-role anything on the strength
+        of it. It raises a flag (surfaced in the perception trace) and logs one
+        WARNING naming both entities; recovery and any later episode are
+        reported at INFO so an intermittent pair doesn't go dark.
+        """
+        self._split_pair_seen.add(pair_id)
+        audit = self._split_pair_audits.get(pair_id)
+        if audit is None:
+            audit = SplitSensorExclusivityAudit()
+            self._split_pair_audits[pair_id] = audit
+
+        verdict = audit.update(a_w, b_w)
+        if verdict == "warn":
+            _LOGGER.warning(
+                "%s: both sides of the split pair are reporting power at once "
+                "(%s=%.0fW, %s=%.0fW) for %d consecutive cycles. One meter "
+                "cannot do both — check that the two sensors are not swapped, "
+                "stale, or pointed at different hardware. SEM nets them to "
+                "%.0fW, which is indistinguishable from a genuinely quiet "
+                "one (#661).",
+                label, a_entity, a_w, b_entity, b_w, audit.votes, b_w - a_w,
+            )
+        elif verdict == "reflag":
+            # Already warned once this lifetime. Still say something — a pair
+            # that keeps coming back is the case a warn-once detector would
+            # otherwise go dark on (#661).
+            _LOGGER.info(
+                "%s: split pair is contradicting again (%s=%.0fW, %s=%.0fW) — "
+                "episode %d (#661).",
+                label, a_entity, a_w, b_entity, b_w, audit.episodes,
+            )
+        elif verdict == "clear":
+            _LOGGER.info(
+                "%s: split pair is exclusive again (%s=%.0fW, %s=%.0fW) (#661).",
+                label, a_entity, a_w, b_entity, b_w,
+            )
 
     def _audit_manual_grid_sign(self, grid_power: float, ed) -> None:
         """Observe-only cross-check of the manual grid sign (#461).
@@ -2262,41 +2433,78 @@ class SensorReader:
                 "import" if lock_says_export else "export",
             )
 
-    def _audit_battery_sign_lock(self, battery_power: float, ed) -> None:
-        """Observe-only post-lock contradiction check for the fleet battery sign (#589).
+    def _audit_battery_sign_lock(self, battery_power: float, ed, readings=None) -> None:
+        """Observe-only post-lock contradiction check for the battery sign (#589, #647).
 
-        Runs only when the fleet battery sign is locked
-        (``_battery_sign_detected[__fleet__]`` is True). Compares the
-        sign-corrected ``battery_power`` against which Energy Dashboard energy
-        counter (charge vs discharge) is rising.
+        Compares the sign-corrected battery power against which Energy
+        Dashboard energy counter (charge vs discharge) is rising.
 
         SEM convention (from types.py):
           battery_power > 0  → charging    → charge counter should be rising
           battery_power < 0  → discharging → discharge counter should be rising
 
-        Five consecutive contradictions set ``_battery_sign_contradiction``
-        (surfaced as ``diag_battery_sign_contradiction``) and log one WARNING.
+        Two install shapes, one check each — mirroring where the sign is
+        actually LOCKED, because auditing at a level nothing locks at is how
+        this check spent its life as a no-op (#647):
 
-        Observe-only by design: never re-flips the sign.
-        Uses ``_battery_audit_charge_baseline`` / ``_battery_audit_discharge_baseline``
+        * **single / combined battery** — the ``__fleet__`` lock is set, so the
+          summed counters are audited against the summed power, as in #589.
+        * **per-battery mode** — ``__fleet__`` is never locked; each combined
+          unit locks its OWN ``b<N>`` sign. So each unit is audited against its
+          own ``battery_charge_energy_list[idx]`` / ``…discharge…[idx]`` pair.
+          Summing here would have been worse than useless: one unit signed
+          wrong and one signed right cancel to ≈0 W and get skipped as "idle".
+
+        Two-sensor pair units (#553) are never sign-flipped — their direction
+        is declared by the user in the Energy Dashboard — so they have no lock
+        to contradict and are not audited.
+
+        Observe-only by design: never re-flips the sign. Uses its own baselines
         so the voter's ``_battery_charge_baseline`` is never disturbed.
-
-        Delegates to ``_battery_sign_audit`` (CounterCorrelationAudit).
-        Counter-A = charge; positive_power_means_a=True (positive = charging).
         """
-        if not self._battery_sign_detected.get(self._FLEET_BID):
-            return
-        if abs(battery_power) < 100:
+        if self._battery_sign_detected.get(self._FLEET_BID):
+            charge_entities = (
+                list(getattr(ed, "battery_charge_energy_list", None) or [])
+                or ([ed.battery_charge_energy] if getattr(ed, "battery_charge_energy", None) else [])
+            )
+            discharge_entities = (
+                list(getattr(ed, "battery_discharge_energy_list", None) or [])
+                or ([ed.battery_discharge_energy] if getattr(ed, "battery_discharge_energy", None) else [])
+            )
+            self._run_battery_sign_audit(
+                self._FLEET_BID, battery_power, charge_entities, discharge_entities,
+            )
             return
 
-        charge_entities = (
-            list(getattr(ed, "battery_charge_energy_list", None) or [])
-            or ([ed.battery_charge_energy] if getattr(ed, "battery_charge_energy", None) else [])
-        )
-        discharge_entities = (
-            list(getattr(ed, "battery_discharge_energy_list", None) or [])
-            or ([ed.battery_discharge_energy] if getattr(ed, "battery_discharge_energy", None) else [])
-        )
+        # Per-battery mode: audit each combined unit against its own counters.
+        if readings is None:
+            return
+        charge_list = list(getattr(ed, "battery_charge_energy_list", None) or [])
+        discharge_list = list(getattr(ed, "battery_discharge_energy_list", None) or [])
+        for idx in range(len(getattr(ed, "battery_power_list", None) or [])):
+            bid = f"b{idx + 1}"
+            if not self._battery_sign_detected.get(bid):
+                continue
+            bp = readings.batteries.get(bid)
+            if bp is None:
+                continue
+            if idx >= len(charge_list) or idx >= len(discharge_list):
+                continue
+            self._run_battery_sign_audit(
+                bid, bp.power_w, [charge_list[idx]], [discharge_list[idx]],
+            )
+
+    def _run_battery_sign_audit(
+        self, bid: str, power_w: float, charge_entities: list, discharge_entities: list,
+    ) -> None:
+        """One cycle of the battery counter-correlation audit for one bid (#647).
+
+        Counter-A = charge; ``positive_power_means_a=True`` (positive = charging).
+        Five consecutive contradictions raise this bid's flag (surfaced through
+        the perception health surface) and log one WARNING.
+        """
+        if abs(power_w) < 100:
+            return
         if not charge_entities or not discharge_entities:
             return
 
@@ -2305,35 +2513,34 @@ class SensorReader:
         if charge_val is None or discharge_val is None:
             return
 
-        # counter-A = charge, counter-B = discharge.
-        # positive_power_means_a=True: battery_power > 0 means charging (A rising).
-        signal = self._battery_sign_audit.update(
+        label = "" if bid == self._FLEET_BID else f" [{bid}]"
+        signal = self._battery_audit_for(bid).update(
             charge_val, discharge_val,
             positive_power_means_a=True,
-            power_positive=battery_power > 0,
+            power_positive=power_w > 0,
             counter_deltas_fn=self._counter_deltas,
         )
         if signal == "clear":
             _LOGGER.info(
-                "Battery sign now agrees with the Energy Dashboard "
-                "counters again — clearing the battery sign contradiction flag. (#589)"
+                "Battery sign%s now agrees with the Energy Dashboard "
+                "counters again — clearing the battery sign contradiction flag. (#589)",
+                label,
             )
         elif signal == "warn":
-            power_says_charging = battery_power > 0
-            charge_ent = charge_entities[0] if charge_entities else "unknown"
-            discharge_ent = discharge_entities[0] if discharge_entities else "unknown"
+            power_says_charging = power_w > 0
             _LOGGER.warning(
-                "Battery sign CONTRADICTS the Energy Dashboard counters "
+                "Battery sign%s CONTRADICTS the Energy Dashboard counters "
                 "for 5+ cycles: SEM computes battery_power=%.0f W (%s) "
                 "while the %s counter (%s / %s) is the one increasing. "
                 "The locked battery sign convention may be wrong. Use "
                 "'Reset sign detection' in the SEM Config tab to clear "
                 "the lock and re-learn it. (#589)",
-                battery_power,
+                label,
+                power_w,
                 "CHARGING" if power_says_charging else "DISCHARGING",
                 "discharge" if power_says_charging else "charge",
-                charge_ent,
-                discharge_ent,
+                charge_entities[0],
+                discharge_entities[0],
             )
 
     # With healthy two-sided any-device picks held, re-scan only every
@@ -2618,13 +2825,8 @@ class SensorReader:
         # block above for why ``len > 1`` was wrong (single-charger-in-list
         # read ev_power=0 → false home spike → surplus-budget flap).
         ev_chargers = self._raw_config.get("ev_chargers", [])
-        if any(c.get("ev_charging_power_sensor") for c in ev_chargers):
-            total_ev = 0.0
-            for charger_cfg in ev_chargers:
-                cps = charger_cfg.get("ev_charging_power_sensor")
-                if cps:
-                    total_ev += self._read_sensor(cps, "ev")
-            readings.ev_power = FleetEvPower(self._smooth_ev_power(total_ev))
+        if self._read_ev_fleet_power(readings, ev_chargers):
+            pass  # nested per-charger sensors handled the read (#642 helper)
         elif self.config.ev_power_sensor:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
                 self._read_sensor(self.config.ev_power_sensor, "ev")
@@ -2653,6 +2855,48 @@ class SensorReader:
         self._infer_per_charger_connection_from_physics(readings)
 
         return readings
+
+    def _read_ev_fleet_power(self, readings, ev_chargers) -> bool:
+        """(#642) ONE fleet + per-charger EV power read, shared by BOTH read
+        paths (energy-dashboard and legacy) — the ``_read_ev_connection_status``
+        precedent (#616), applied to the ev_power sibling.
+
+        The two hand-maintained copies had already drifted: the legacy path
+        smoothed the fleet SUM (one median over the sum half-passes a single
+        charger's UDP 0-blip) and never populated ``ev_power_per_charger`` —
+        so on a legacy-path multi-charger install ``build_charger_view``'s
+        fleet fallback fed every charger the whole fleet draw (the
+        #556/#616 per-charger-reads-fleet-sum class, again).
+
+        Returns True when ANY charger carries a nested
+        ``ev_charging_power_sensor`` (the read is then complete, per-charger
+        smoothed, dict populated); False lets the caller run its own
+        fallback chain (ED sensor / legacy top-level sensor).
+
+        Chargers without a nested power sensor (misconfig) are excluded from
+        both the dict AND the fleet sum — consumers must ``.get(cid)``.
+        """
+        if not any(c.get("ev_charging_power_sensor") for c in ev_chargers):
+            return False
+        total_ev = 0.0
+        for charger_cfg in ev_chargers:
+            cid = charger_cfg.get("id")
+            cps = charger_cfg.get("ev_charging_power_sensor")
+            if cps:
+                # Smooth per charger so the per-charger dict stays
+                # consistent with the fleet sum (both blip-filtered).
+                cw = self._smooth_ev_power(
+                    self._read_sensor(cps, "ev"), key=cid or cps,
+                )
+                total_ev += cw
+                if cid:
+                    # Per-charger draw in watts, exposed for
+                    # ``flow_calculator`` per-charger split and
+                    # ``build_charger_view``'s this-charger read.
+                    readings.ev_power_per_charger[cid] = cw
+        # total_ev is already the sum of smoothed per-charger values.
+        readings.ev_power = FleetEvPower(total_ev)
+        return True
 
     def _smooth_ev_power(self, raw: float, key: str = "_fleet") -> float:
         """Median-of-3 filter for EV power (2026-07-10 flap fix).
@@ -2721,12 +2965,16 @@ class SensorReader:
             return None if allow_none else 0.0
 
         try:
+            # #641 — one shared rule (this copy was ``.lower() == "kw"``, no
+            # strip; four other spellings lived elsewhere). The bare ``float()``
+            # is kept and runs FIRST because it is load-bearing: a non-numeric
+            # state must raise into the ``except`` below (which owns the #259
+            # warning and the allow_none/0.0 choice), whereas units.py returns
+            # its default silently. The parse is therefore deliberately done
+            # twice, and ``default`` below is belt-and-braces (unreachable once
+            # the bare ``float()`` has succeeded on the same string).
             value = float(state.state)
-
-            # Convert kW to W if needed
-            unit = state.attributes.get("unit_of_measurement", "")
-            if unit.lower() == "kw":
-                value *= 1000
+            value = power_state_to_watts(state, default=value)
 
             # Detect transition from unavailable → available. Demoted
             # to DEBUG so a flapping upstream sensor (e.g. Huawei
@@ -3214,7 +3462,7 @@ class SensorReader:
                 continue
             if state.state in ("unknown", "unavailable", None):
                 continue
-            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            unit = normalize_unit(state)
             dc = state.attributes.get("device_class")
             # Skip SOC sensors: "Battery Capacity" matches the keyword above but on
             # SolaX (and others) it is the SOC percentage, not rated energy. A 80%
@@ -3225,8 +3473,14 @@ class SensorReader:
                 value = float(state.state)
                 if value <= 0:
                     continue
-                if unit == "wh" or value > 500:
-                    value /= 1000  # Wh → kWh
+                # #641 — the unit half goes through units.py (so an MWh-labelled
+                # counter converts too). The ``> 500`` magnitude heuristic
+                # applies ONLY to an UNLABELLED counter, which is the case it
+                # was written for: running it after a unit conversion would
+                # divide a labelled 600 kWh bank twice.
+                value = energy_state_to_kwh(state, default=value)
+                if not unit and value > 500:
+                    value /= 1000  # unlabelled Wh → kWh
                 if 1 <= value <= 200:  # Sanity: 1-200 kWh
                     _LOGGER.info(
                         "Auto-detected battery capacity: %s = %.1f kWh",

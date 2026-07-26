@@ -42,7 +42,11 @@ REQUIRED_SWAP_ATTRS = {
     #   _ev_last_change_time, _ev_reenable_attempts, _ev_charge_refused,
     #   _ev_last_set_amps_ts.
     # _current_charger_budget was deleted outright (#589 swap retirement —
-    # dead scalar; budget flows through pcc.budget_w → build_charger_view).
+    # dead scalar). This comment used to continue "budget flows through
+    # pcc.budget_w → build_charger_view", which was wrong in both halves:
+    # build_charger_view never took a budget argument, and pcc.budget_w
+    # had no reader either. #651 deleted that field too. Budget is
+    # computed inside decide(), per charger, per cycle.
     # _ev_device is a pcc-dispatching property now (#589) — the context no
     # longer snapshots it.
     # #589 — __enter__ binds the durable state store; a missing init would

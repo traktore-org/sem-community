@@ -108,15 +108,16 @@ class PerChargerContext:
     """The per-charger config dict from ``ev_chargers`` (or ``{}``)."""
 
     # ------------------------------------------------------------------
-    # Budget + skip flag (set by ``for_charger``)
+    # Skip flag (set by ``for_charger``)
     # ------------------------------------------------------------------
-    budget_w: Optional[float] = None
-    """Per-charger surplus budget in watts, or ``None`` outside a solar
-    state. The single source for this charger's budget — flows into
-    ``build_charger_view`` → ``decide``. (The coordinator scalar
-    ``_current_charger_budget`` it used to mirror was dead and is
-    deleted, #589 swap retirement.)"""
-
+    # There was a ``budget_w`` here until #651. Its docstring said it was
+    # "the single source for this charger's budget — flows into
+    # build_charger_view → decide"; ``build_charger_view`` takes no budget
+    # argument and never did. Nothing outside the writer and its own unit
+    # tests ever read it. The real per-charger solar allocation is
+    # ``decide.self_consumption_surplus_w`` subtracting
+    # ``fleet.solar_committed_w``, which the coordinator accumulates from
+    # each charger's ACTUAL decision as it walks the priority loop.
     skipped_for_night: bool = False
     """``True`` when the charger's mode opts it out of the current night
     state (set during ``for_charger`` based on ``_mode_allows_night_charging``)."""
@@ -197,14 +198,12 @@ class PerChargerContext:
         coordinator: "SEMCoordinator",
         cid: str,
         ev_dev: Any,
-        ev_budget_per_charger: dict,
         chargers_by_id: Optional[dict] = None,
         power: Any = None,
     ) -> "PerChargerContext":
         """Build a per-charger context.
 
-        Looks up the per-charger config dict and the per-charger budget
-        from the cycle-level distribution. Computes ``skipped_for_night``
+        Looks up the per-charger config dict. Computes ``skipped_for_night``
         based on the charger's mode and the current global charging
         state — but only when the global state is a night state; for
         solar states, ``skipped_for_night`` stays ``False`` and the
@@ -215,10 +214,6 @@ class PerChargerContext:
                 can mutate it in ``__enter__``).
             cid: this charger's id.
             ev_dev: this charger's ``EVDevice`` instance.
-            ev_budget_per_charger: the per-charger budget dict from
-                ``self._surplus_controller.distribute_ev_budget``. May
-                contain a value for ``cid`` (solar state) or be empty
-                (night state).
             chargers_by_id: optional pre-built ``{cid: cfg}`` lookup the
                 caller can pass to avoid rebuilding it inside the loop.
                 If ``None``, this method rebuilds it from
@@ -238,12 +233,10 @@ class PerChargerContext:
                 if isinstance(c, dict)
             }
         charger_cfg = chargers_by_id.get(cid, {})
-        budget_w = ev_budget_per_charger.get(cid) if ev_budget_per_charger else None
         return cls(
             cid=cid,
             ev_dev=ev_dev,
             charger_cfg=charger_cfg,
-            budget_w=budget_w,
             charger_name=charger_cfg.get("name") or cid,
             power=power,
             _coord=coordinator,

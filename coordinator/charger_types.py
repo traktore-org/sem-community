@@ -493,6 +493,56 @@ class ChargerDecision:
     downstream.'"""
 
 
+def solar_commitment_w(
+    decision: ChargerDecision,
+    *,
+    phases: int,
+    voltage: float,
+    max_current_a: float,
+) -> float:
+    """Solar this charger claims out of the cycle's shared surplus (#665).
+
+    The coordinator's per-charger loop accumulates this into
+    ``_solar_committed_w_per_cycle`` and threads the running total into
+    the next (lower-priority) charger's ``ChargerView.fleet.solar_committed_w``,
+    so the cascade hands each charger only the surplus its seniors left.
+
+    This lives here, named and importable, for one reason: it is the
+    arithmetic the scenario harness must run to have honest multi-charger
+    coverage. Before #665 it was inline in ``_async_update_data``, so the
+    harness could only re-implement it test-side — and a re-implementation
+    that drifts asserts nothing. One function, one caller in production,
+    one caller in the harness: the two cannot disagree.
+
+    Only the two CHARGE intents commit. IDLE and DISABLE claim nothing —
+    an off-mode or idling charger must not shrink the surplus its
+    lower-priority siblings can see (the invariant
+    ``test_351_umbrella_regression.py::TestM5`` pins from the other side).
+
+    Args:
+        decision: This charger's ``decide()`` output.
+        phases: The charger's phase count.
+        voltage: The charger's per-phase voltage.
+        max_current_a: The charger's ceiling, used for ``CHARGE_MAX``
+            where ``commanded_amps`` is not meaningful (the adapter
+            resolves the actual current).
+
+    Returns:
+        Watts of solar this charger claims — 0.0 for non-charging intents.
+    """
+    if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+        # Never credit more than the budget the decision was granted:
+        # commanded_amps can be raised by a floor (deadline / Min) that
+        # grid or battery funds, and grid-funded watts are not solar.
+        return max(0.0, min(
+            float(decision.budget_w),
+            float(decision.commanded_amps) * float(phases) * float(voltage),
+        ))
+    if decision.intent is ChargerIntent.CHARGE_MAX:
+        return max(0.0, float(max_current_a) * float(phases) * float(voltage))
+    return 0.0
+
+
 # ─────────────────────────────────────────────────────────────────
 # Per-charger view (the input to decide())
 # ─────────────────────────────────────────────────────────────────

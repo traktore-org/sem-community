@@ -13,24 +13,608 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.25] — 24.07.2026
 
+### 🐛 Fixes
+
+- 🔌 **A charger set to *off* kept charging out of the house batteries, and SEM's stop
+  could never have worked** (#627, reported by @onkelfu) — the diagnostics showed the mode
+  was right (`charge_mode: "off"`), the intent was right (`last_desired: "OFF"`) and the
+  command was issued 130 consecutive times (`last_actions: ["DISABLE"]`) while the car
+  pulled 4.1 kW, 3.5 kW of it out of the house batteries, at night. The stop was correct
+  and unenforceable: on a charger configured with only a current `number.*` entity, two
+  layers each delegated the stop to the other. `_set_current(0)` skips the write when that
+  entity's minimum is above 0 A — HA core rejects out-of-range writes (#487) — on the
+  understanding that "the actual stop is the adapter's job"; and the adapter's
+  `stop_session()`, finding no stop service, no charge-mode select, no start/stop switch
+  and no `<domain>.disable`, logged that it was "relying on `_set_current(0)` alone" — the
+  write that had just been skipped. Composed, nothing stopped the car at all. SEM now
+  *computes* whether it holds any mechanism that can open the contactor, from the same
+  fields the stop actually dispatches on, and surfaces it as a repair naming the charger,
+  the power still flowing and the missing entity — instead of counting failed stops into a
+  warning that fired three times and then went quiet. A capability that is asserted rather
+  than checked is the same shape as the bug. The DISABLE is still issued (it costs nothing
+  and starts working the moment you configure a start/stop entity), and — deliberately —
+  the charging path is untouched: a charger SEM can start but not stop keeps charging
+  normally while the un-stoppability is reported, because conflating the two signals would
+  have cost every such install its surplus charging. Guarded by
+  `tests/test_627_stop_unenforceable.py`.
+- 🔢 **On a multi-charger install, every charger decided against 32 A / 230 V regardless of
+  what it actually is** (#678, found by #665's new coverage) — `decide()` reads
+  `ev_max_current`, `ev_min_current`, `ev_phases` and `ev_voltage` off the per-charger
+  config entry, and **nothing ever writes the first or the last of them into it**: there is
+  no config-flow field for either, and the seed keys cover only min-current and phases, only
+  for entries migrated from schema v3. Verified live on a normally-installed entry: all four
+  read `None`, top-level config included, so decide silently used its own literals. No
+  over-current ever reached hardware — the adapters clamp every command to the charger's
+  real ceiling, which is exactly why this stayed invisible for so long. What it *did* break
+  is the priority cascade: a 16 A charger commanded at 32 A claims 22 kW of solar it cannot
+  physically draw, and that phantom claim is subtracted from what the next charger in the
+  priority list is allowed to see — the second car quietly gets nothing, or gets started on
+  watts the sun never produced. The view now fills those keys from the fleet config and
+  clamps them to the adapter's own `max_current_a` (which already folds in the control
+  entity's maximum, #536). A configured value may ask for *less* than the hardware allows,
+  never for more: the computation ends at the same ceiling the command is clamped to, so
+  probe and production cannot drift — the same principle as #627 above.
+- 🌙 **A restart just after midnight no longer swallows the day's EV virtual-SOC decay**
+  (#645, coherence-audit) — while a car is away SEM can't watch it being driven, so each
+  day rollover advances the estimated-SOC by the predicted daily consumption. That decay
+  rode on an in-memory date that is re-initialised to *today* on every start, so a restart
+  spanning midnight (nightly backup, HA update, power blip) made SEM believe the rollover
+  had already been handled and skip it. Not cosmetic: when the real SOC entity is offline
+  the night-charge planner falls back to the virtual SOC, reads "still nearly full", and
+  silently skips a charge the car needed. The date the decay *last ran* is now persisted
+  separately from the hour-bucket tracker, so "already decayed today" and "never decayed
+  today" stop being the same state — restart later the same day still decays exactly once,
+  and a multi-day outage catches up one decay per missed day (bounded).
+- 🕐 **Four places asked the container what day it is instead of asking Home Assistant**
+  (#645, coherence-audit) — swept while fixing the above. `date.today()` and
+  `datetime.now().date()` read the *operating system's* timezone, which on a supervised or
+  Docker install is routinely UTC while `hass.config.time_zone` is the user's. Near
+  midnight the two name different days. Affected: the energy-assistant daily trend key
+  (a day's stats could land on the wrong key or overwrite the previous day's), its
+  "best time to run appliances" tips (which quote a wall-clock hour to the user and were
+  off by the whole UTC offset), the PV month-to-date divisor, and the appliance
+  "completed/missed today" counters. All now use HA-local time. Duration arithmetic on
+  `datetime.now()` is untouched — both ends use the same clock, so it was never wrong.
+  Guarded by `tests/test_645_day_boundary_registry.py`, which also **declares** SEM's four
+  intentional day boundaries (calendar midnight, EV deadline, sunrise-EV, sunrise-load) so
+  the next contributor adding a daily counter has to answer "what happens if HA restarts
+  across your boundary?" — the question this whole issue turned out to be.
+
+- ⚡ **Yearly EV charging energy was frozen at zero while daily EV energy counted normally**
+  (#666, coherence-audit) — `sensor.sem_yearly_ev_energy` never moved, and neither did
+  lifetime EV. The cause is a one-word disagreement: EV energy was *written* under the
+  accumulator category `ev_daily_sun`, but four independent places — both yearly reads, the
+  year-start seeding from the recorder, and the hardware-counter reconcile — each read
+  plain `ev`. Since one call increments daily, monthly and yearly together, PROD showing
+  daily 10.77 kWh next to yearly 0.0 is only possible if the read and write keys differ.
+  It hid for so long because a restart re-seeds the year from HA's recorder, so the sensor
+  looks right for one cycle and then freezes again until the next restart. The category is
+  now plain `ev` — the sunrise/deadline reset lives in the day *key*, which is where a
+  boundary belongs; a name containing "daily" was wrong for three of the four periods it
+  actually wrote. Existing stores are migrated in place on first load (values summed, never
+  dropped), so your EV history carries over. **New:** `sensor.sem_monthly_ev_consumption_energy`
+  — the monthly EV accumulator has been written since day one and was the only period with
+  no sensor to surface it. Guarded by `tests/test_666_ev_accumulator_keys.py`, which runs
+  one real integration cycle and asserts daily/monthly/yearly move together for *every*
+  category, so the next read/write drift fails without anyone remembering to add a case.
+- 🏷️ **38% of SEM's entity labels named entities that don't exist — including every
+  `sem_monthly` one** (#667, found while fixing #666) — labels are applied with an
+  exact-match lookup on the entity key, and a miss applies nothing and reports nothing, so
+  the registry could not tell you it had rotted. Filtering the HA entity list by
+  `sem_monthly` returned *nothing* while all six monthly sensors existed and held data.
+  Eleven keys were pure suffix drift (the label key was the entity key minus its `_energy`
+  suffix) and are fixed — every monthly sensor now actually carries its label (live-checked
+  on HA-TEST). On its own that does **not** restore the filtering: live verification turned
+  up a second, independent cause — SEM never registered its labels with HA at all, so every
+  reverse lookup returned nothing even for correctly-attached labels. That is #670, fixed
+  below; you need both. The remaining 33 orphans were then triaged
+  individually and came back as one class rather than 33 judgement calls: **the sensor was
+  deleted and the label was left behind.** `sensor.py` names 26 of them outright in its own
+  `# Removed:` comments, so the file that dropped the entities is the file that says which
+  labels went stale — nobody had re-read it. Two were live entities under a drifted name
+  (`battery_cycles` → `battery_cycles_estimated`, `battery_health` →
+  `battery_health_score`) and are repointed; the other 31 are deleted, including the
+  near-misses of a *working* label (`daily_solar_yield` vs `daily_solar_energy`), which
+  would have double-labelled one entity if repointed. The registry is 116 → 85 keys with
+  **zero** orphans, and `tests/test_667_label_registry.py` now bans them outright instead of
+  ratcheting — plus a guard that the scan covers every platform SEM forwards to, since a
+  missed platform makes real entities look like orphans and invites allowlisting them.
+- 🏷️ **Filtering or automating by a SEM label now actually works — the labels had never
+  been registered with Home Assistant** (#670, found while live-verifying #667) — SEM wrote
+  label *ids* straight onto its entities, and `async_update_entity(labels=...)` stores them
+  verbatim: it neither validates nor creates them. So all 19 SEM labels were inert strings.
+  The forward direction looked fine (`labels('sensor.sem_monthly_solar_yield_energy')`
+  returned all four), but `label_entities('sem_monthly')` returned **0** and
+  `label_id('sem_monthly')` returned `None` — and the reverse lookup is the entire point:
+  it is what the entity-list label filter, label-scoped automations and auto-entities
+  dashboards use. SEM now creates each label in HA's label registry before applying it,
+  **create-only** — an id that already exists is left completely alone, so renames, colours
+  and your own labels are never touched. This is also why #667's drift survived for years:
+  with the registry side missing, a correct label and a typo'd one behaved identically.
+  `sem_exclude` is retired in the same pass (attached to nothing, read by nothing) — now
+  that these become real labels in your registry, a dead one would show up promising to
+  hide entities and do nothing.
+- 🧹 **A 180-line map of entity IDs that mostly didn't exist is gone** (#669,
+  coherence-audit) — `consts/sensors.py` held a 64-entry `key → entity_id` map that **no
+  production code ever read**, and 29 of those 64 (45%) named no entity: `home_consumption`
+  (the real one is `home_consumption_power`), all ten `solar_to_*` / `grid_to_*` flow keys
+  renamed to `flow_*_energy` long ago, and the same `_energy`-suffix drift #667 just fixed
+  in the *other* registry — uncaught here because this one is never looked up. Its only
+  test asserted a dict literal against itself, so it read as covered while being dead. The
+  danger was never the dead weight, it was that anyone reaching for it got a plausible
+  `sensor.sem_home_consumption` that has never existed. Deleted, and the one real guarantee
+  its test was reaching for (primary charger sensors keep unsuffixed names) is now checked
+  against the platform file that actually creates the entity, so it can fail. Also removed:
+  four values the coordinator emitted every cycle for no reader — two of them,
+  `solar_efficiency` and `battery_efficiency`, were **hardcoded constants wearing the name
+  of a measurement** (`85.0 if solar_power > 0`), which would have shown a made-up number
+  as a real one had anything ever surfaced them. A new guard checks that *every*
+  `sensor.sem_*` reference under `consts/` names an entity some platform actually declares.
+- 🤖 **The file every AI agent reads first had been wrong since v1.0.0** (#671,
+  coherence-audit) — `.github/copilot-instructions.md` sat untouched from April through
+  ~25 releases. Six file paths, five constants and one service it named no longer existed,
+  and it documented the registry deleted in #669. The dangerous part wasn't the dead
+  references though: it stated `DEFAULT_UPDATE_INTERVAL = 300  # 5 minutes` when the real
+  value is `10` **seconds** (30× off, with the wrong unit spelled out), and gave
+  `DEFAULT_BATTERY_PRIORITY_SOC` a wrong number *and* an inverted meaning. An agent has no
+  reason to re-derive a number a doc states, so those produce broken code rather than
+  confusion. Rewritten to point at the modules constants live in instead of quoting them —
+  a quoted number drifts, a file reference can't — and guarded: every path it names must
+  exist, every symbol it names must appear in the tree, and restating a numeric constant
+  now fails CI outright. No user-facing change; it protects everything downstream of it.
+- 🖼️ **Every screenshot in the user guide was a broken-image icon on GitHub** (#672,
+  coherence-audit) — when #618 moved the guides into `docs/`, the files moved but their
+  *relative* links didn't, so `docs/USER_GUIDE.md` still linked as if it sat at the repo
+  root and every target resolved one directory too deep. Four tab screenshots rendered
+  broken, and the ⭐ cross-reference the guide calls "the canonical reference"
+  (EV Charging Logic, linked from three places) 404'd. Every target existed the whole
+  time — only the prefix was wrong. The issue-template's playbook link was broken the
+  same way. Now guarded: **every** relative markdown link in the repo must resolve, not
+  just the 12 config-card help links #618 covered.
+- 🚦 **A new install with no Energy Dashboard failed with a bare error code instead of an
+  explanation** (#674, coherence-audit) — SEM reads your solar/grid/battery sensors from
+  Home Assistant's Energy Dashboard, so it aborts setup if that isn't configured yet. The
+  abort *reason* was raised correctly and the code even passed a link to `/config/energy`
+  — but the message it referred to had never been written, so HA rendered the raw key and
+  the very first thing SEM said to a new user was the literal string
+  `energy_dashboard_not_configured`. Both abort messages now exist, in all 16 languages,
+  and name exactly what to add and where.
+- 🌡️ **The whole Heat Pump settings screen showed raw field names instead of labels**
+  (#674, coherence-audit) — and so did the EV-charger add/remove menu. `strings.json` and
+  `translations/` are a hand-maintained mirror of each other, and they had drifted **50
+  keys one way and 35 the other, identically in all 16 languages**. The trap is worth
+  naming: `strings.json` is where a developer naturally edits — it is HA's documented
+  source file, and the one hassfest validates — but **HA never reads it at runtime for a
+  custom integration**; it loads `translations/<lang>.json` and nothing else. So the file
+  that looked authoritative was the one with no effect. Opening Configure → Heat Pump gave
+  you no title, no description, and eight rows reading `heat_pump_relay1_entity`,
+  `heat_pump_climate_entity` … because the frontend falls back to the key name when a
+  label is missing. The `soc_cap_unenforceable` repair (the one that explains SEM won't
+  trust an *estimated* SOC for a hard charge limit) had no title or description at all.
+  Everything is now translated in all 16 languages and the two files are held at exact
+  parity by CI.
+- 🔤 **Two error messages printed `{entity_id}` and `{service}` literally, and twelve more
+  could never appear** (#674, coherence-audit) — swept while fixing the above.
+  "Entity {entity_id} was not found" was shown verbatim, braces and all, because no call
+  site ever supplies that placeholder; five of the 16 language files carried the broken
+  wording and two carried a correct one, with nothing able to tell them apart. Twelve
+  further `config.error` entries — per-sensor validation messages left over from the
+  design the #397 setup slim-down replaced — were translated into every language for code
+  paths that no longer set them. Removed, and CI now checks three things it never did:
+  every error key is both declared and reachable, every abort reason has a message, and no
+  string names a placeholder the flow never passes.
+- 🧽 **A test that allowed "up to 10" dead translation keys was carrying exactly 10**
+  (#676, coherence-audit) — 170 strings across 17 files for number entities that stopped
+  existing in #255, when they became per-charger. The comment said "keys used by other
+  systems"; nothing was using any of them. The allowance had been sized to the debt, so a
+  full load passed. Deleted, and the threshold is now zero — a tolerance on a correctness
+  check is the same shape as the bug it hides. Two keys that *looked* dead turned out to be
+  live (the per-charger selects assign their translation key at runtime, which no static
+  scan can see), so each was checked against the code rather than trusted to the grep.
+- 🌍 **Nine per-charger sliders read English on every install, in every language** (#677,
+  coherence-audit) — the mirror image of the #674 bug above: there a translation had no
+  entity to reach it, here an entity had no translation to reach. When these settings
+  became per-charger in #255 their entity key started carrying the charger id
+  (`charger_keba_target_soc`), which no `strings.json` can declare — so Home Assistant
+  looked the key up, missed, and fell back to a hardcoded English name. Nothing raised,
+  because falling back renders *something*. Night Target, Min Amps, Vehicle Min Amps,
+  Target SOC, Solar Max, Solar Max SOC, Battery Capacity, Consumption and Phases are now
+  translated in all 16 languages. The two per-charger dropdowns had the opposite half of
+  the same split — properly translated, but with no charger in the name, so a two-charger
+  install showed two identically-labelled selects that only differed by entity_id. Both
+  fixed by one mechanism: the charger name is now a `{charger}` placeholder inside the
+  translated name. **Entity IDs are unchanged** — this renames nothing you have automated
+  against, it only makes the label follow your language. Guarded by
+  `tests/test_677_per_charger_names.py`, which derives the live key list from the platform
+  source instead of mirroring it by hand — and that derivation replaced the two-entry
+  exemption list #676 had just added, before it could grow into the next tolerance.
+- 🌐 **4,554 strings said to be translated were still English** (#675, coherence-audit) —
+  the last of the translation findings, and the only one no test can catch: every key
+  existed in every language file, so the parity guards were satisfied — the *values* had
+  simply been copied from English and never translated. It hid because "identical to
+  English" is not a defect signal (`OK` is `OK` in Danish, `kWh` is `kWh` everywhere), so
+  the only honest closure was to do the work rather than add a rule. Setup and options
+  screens, repair issues, error messages and the long help texts under each field are now
+  genuinely translated in **cs, da, de, es, fi, fr, hu, it, nl, no, pl, pt, ro and sv** —
+  Finnish, Hungarian, Norwegian, Polish, Portuguese, Romanian and Swedish were close to
+  fully English before this. Every string was checked back against its source for
+  placeholder, markdown and line-structure parity before it was written, so the
+  `{charger}`-style substitutions and the `**bold**` in help text survive intact.
+- 🎛️ **Four services SEM registers had no UI at all, including the one the docs tell you
+  to call** (#673, coherence-audit) — `services.yaml` declared 14 of the 18 services
+  `__init__.py` registers. An undeclared service is still fully callable, so nothing ever
+  raised and no test failed; what it loses is its entire affordance in
+  **Developer Tools → Actions** — no description, no field pickers, no validation, so you
+  had to already know the parameter names and hand-write the YAML. That landed hardest on
+  `diagnose`: `docs/SEM_TRACE.md` tells users to call it with `section: trace`, and anyone
+  following that instruction met an action with no `section` field and no hint that `trace`
+  was one of *twelve* valid values. `remove_charger`, `get_config` and `set_option` were
+  undeclared too. All four now ship full descriptions, fields and selectors — `diagnose`
+  gets a proper dropdown of all twelve sections — and a guard asserts the two lists agree
+  in **both** directions, so a service registered without a declaration (or advertised in
+  the UI without an implementation) fails CI.
+- 🌍 **288 translated strings in 16 languages described a settings step that has never
+  existed** (#673, coherence-audit) — found by running the sweep question this issue added
+  to the bug-class ledger rather than leaving it rhetorical. Every language file carried a
+  complete `options.step.dashboard_options` block — title, description, eight field labels
+  and eight field descriptions — for a config-flow step no `async_step_dashboard_options`
+  has ever existed to show. Harmless at runtime (HA only looks up steps it is asked for),
+  which is exactly why it survived: it read as a fully-localised feature. The cost was
+  translator effort spent on a screen nobody can open. Removed from all 16 files, and a
+  guard now rejects any translated step with no matching flow method.
+- 💰 **Nine energy-accounting values were being thrown away on every restart** (#668,
+  coherence-audit) — the calculator hands 20 values to the store on shutdown, but the
+  store's hand-written whitelist carried only 11 through. The nine it dropped were read
+  back with a default, so they reset silently: the seven `accumulated_*` running totals
+  (savings, battery savings, cost, export revenue, grid import, self-consumed, export),
+  the 30-day rate history, and the "yearly cost already seeded" flag. Two visible effects.
+  With the accumulators at zero, `pre_sem_*` swallowed your whole lifetime and **Lifetime
+  Total Savings became 100% a 7-day-average-rate estimate** instead of the rate-weighted
+  figure SEM had actually accumulated — it moved every restart. And with the seeded flag
+  reset, the yearly-cost seeding re-ran on every start and **overwrote** the live yearly
+  accumulators with an estimate, discarding exact numbers in favour of approximate ones.
+  Both directions now read ONE shared key list, so they cannot drift apart again — they had
+  already done so twice (#351 M1 found the cost accumulators missing from both; this found
+  nine more still missing after it), and a test asserts both functions use that same list.
+  Restored scalars are also coerced now: a corrupt value used to be wiped by the drop, and
+  once these actually persist it would otherwise survive every restart forever.
+- 🔌 **EV charging that happened while SEM wasn't running is now recovered from the wallbox
+  counter** (#658, coherence-audit) — SEM builds daily EV energy by integrating the
+  charger's power sensor every cycle, so anything charged while it wasn't integrating —
+  an HA restart, a core update, a power blip, a session started from the charger's own app
+  while HA was asleep — was simply never counted. The wallbox counted all of it, which is
+  why the two numbers disagreed. A reconciliation for this was written years ago and then
+  parked, disabled, with six of its tests born skipped: it compared the counter's *absolute*
+  value against the daily bucket, and the two don't share a day boundary (a KEBA counter
+  resets at midnight, SEM's EV day rolls at your Charge-by time), so at the rollover it
+  would have credited a whole night's charging to a freshly-reset day and told the planner
+  the target was already met. It now works on counter *deltas* — the same model daily solar
+  has used since #556 — which makes the boundary question disappear: a counter reset is just
+  a reset. Multi-charger installs sum every charger's counter, because the bucket being
+  corrected is the fleet total. Adoption stays upward-only, so an unavailable, stale or
+  partial counter can never shrink your day, and a counter SEM is seeing for the first time
+  is only a baseline — it is never claimed as today's charging. The baselines persist with
+  the accumulators, which is the whole point: the gap being recovered is exactly the one
+  where SEM was off. On by default, on the same `prefer_hardware_energy` setting that governs
+  solar, and it needs a charger energy counter to be configured (SEM's hardware detection
+  fills one in for most brands). Guarded by `tests/test_658_ev_counter_reconcile.py`,
+  including the deadline-rollover and midnight-reset cases that parked the original.
+- 🔗 **A circular "Requires" link between two loads can no longer be created — from any
+  path** (#662, coherence-audit) — the drag-and-drop UI already refused to close a loop,
+  but `register_surplus_device` (SEM's *only* multi-dependency write path) had no guard at
+  all, and the guard the UI used walked just one of the two stores dependency links live
+  in: service-registers-A→B then UI-sets-B→A slipped through. Under the default
+  `must_active` mode both loads then wait on each other and neither ever starts. The walk
+  now covers both stores and every write path, and a cycle already sitting in storage
+  (written before the guard existed, or hand-edited) is broken at load with a warning
+  naming the dropped link. **Removed:** `SurplusController.validate_dependencies` — a
+  cycle *report* with no production caller whose walk hard-coded `deps[0]`, so a loop
+  through a device's second dependency was reported clean. Nothing consumed the report,
+  so neither limitation ever surfaced. Prevention at the write path replaces detection
+  nobody read.
+
+### 🧹 Dead code removed (#659 — four features that could never run)
+
+- 🗑️ **Dynamic 1p/3p charger phase switching was unreachable on two independent axes**
+  (#659, coherence-audit) — `check_phase_switch` had no production caller since the legacy
+  `_execute_ev_control` was deleted in `561e28a` (2026-06-22), *and* its
+  `phase_switch_entity` config key was written nowhere: not in the config flow, not in
+  `services.yaml`, not in the config card. It was always `None`, so the very first line
+  returned early even if something had called it. Deleted, with a tombstone spelling out
+  what wiring it would actually take. No user-visible change — it never ran. (Docs never
+  promised the feature; the only mentions are two design docs listing it as future work.)
+- 🗑️ **`set_anticipated_surplus` — the #106 "pre-warm devices before the EV taper
+  completes" promise** (#659) — never called, and the two fields it set were never read.
+  Its docstring described behaviour ("will factor this in 2 min before the deadline") that
+  no code implemented, which is exactly what makes this shape dangerous: it reads as a
+  working feature to the next person who greps for it.
+- 🗑️ **A second battery force-charge brand factory** (#659) — `create_charge_adapter` ran
+  the same platform key and the same auto-detect order as the live
+  `battery_adapters.adapter_for`, in parallel and invisibly; nothing in production called
+  it, only its own six unit tests did. Same shape as #651. The brand *classes* are
+  untouched and still live. `should_stop` went with it — the real target-reached verdict
+  is the scheduler's own SOC comparison, not a method on an object it never consults.
+- 🧪 The orphan-method ratchet (`tests/test_653_orphan_methods.py`) shrank by three
+  names. A fifth orphan found in the same sweep, `force_charge.get_status`, was
+  deliberately **kept** and re-labelled *triaged* rather than *untriaged*: deleting an
+  adapter's read-back surface is an interface decision, not a cleanup.
+
+### 🧹 Dead code removed (#651 — the second EV surplus allocator)
+
+- 🗑️ **SEM had two EV-surplus allocators; only one of them ran** (#651, coherence-audit) —
+  `SurplusController.distribute_ev_budget` was a full priority cascade with its own
+  60 s / 500 W hysteresis, a caller in the coordinator, 25 tests, five scenario YAMLs, two
+  coverage-matrix cells and a three-refactoring history. Its output was written to
+  `PerChargerContext.budget_w` — and **no consumer ever read that field**. The allocator
+  that actually decides how surplus is shared is `decide.self_consumption_surplus_w`
+  (`solar − home − solar_committed`), fed by `_solar_committed_w_per_cycle`, which the
+  per-charger loop accumulates from each charger's *real* decision. The dead path, its
+  field, its caller and its tests are gone. No behaviour change on any install: nothing
+  read the value being computed.
+- 🛡️ **The #351 M5 invariant was kept and retargeted, not deleted** — "an off-mode charger
+  must not consume surplus its sibling could use" was a genuinely valuable contract that
+  happened to be pinned on the dead path. It now drives the live one: an `off` charger
+  decides `DISABLE`, commits 0 W, and the next charger in priority order sees the full
+  undiminished surplus.
+- 🐛 **Correction to the #629 entry below**: its "canonical solar-budget distribution
+  (#282 B.5 total, #351 M5 off-exclusion)" slice and the "budget threading" it named as
+  remaining loop architecture were both part of this dead path. The decomposition was
+  real work on unreachable code — slice 2 made the dead path *cleaner*, which reads as
+  progress. **Structure is not reachability.**
+- 🔍 **Bug class 8 gained a test-side twin** (`docs/BUG_CLASSES.md`) — the scenario
+  harness's `priority_order` assertion had a loop body of a bare `pass` under a comment
+  saying it "can't reliably check from this side": a named, documented,
+  scenario-selected assertion that could not fail. `test_multi_charger_canonical_budget`
+  hand-copied the production branch into the test file and asserted it against itself —
+  it stayed green through the branch being wrong *and* through it being deleted. New
+  sweep question: **does this test call production code, or a local restatement of it?
+  If you deleted the production function, would this test go red?**
+
+### 🧪 Coverage restored (#665 — the allocator that does run)
+
+- ✅ **The multi-charger scenarios now assert the cascade they are named after** (#665,
+  coherence-audit) — #651 above removed assertions over a dead allocator and left two
+  scenario files describing a priority cascade they had never verified. The harness now
+  drives the live one for real: `build_charger_view` → `decide` → the running
+  `solar_committed_w` total, per charger, in priority order. Three new expectations are
+  available to any scenario — `per_charger_intents` (what each charger decided),
+  `solar_commitment_cascade` (each charger saw exactly the sum of its seniors' claims, no
+  more and no less) and `solar_committed_total_max` (a solar-funded ceiling, opt-in per
+  scenario because `always_max` claims its nameplate on purpose, grid-funded if need be).
+- 🔒 **The arithmetic moved into `charger_types.solar_commitment_w`** — one function, one
+  caller in production, one in the harness. A test-side *re-implementation* of a formula
+  is free to drift from the original and assert nothing while staying green; sharing the
+  function makes any regression break both sides at once. This is the fix for the test-side
+  twin of bug class 8 that #651 named.
+- 🛡️ **AST guards for the half no harness can cover** (`tests/test_665_allocator_coverage.py`)
+  — a harness driving its own copy of the loop stays green while the coordinator drops the
+  per-cycle reset, drops the accumulation, or stops threading the total into each view.
+  Deleting any of the three now fails CI with a message saying what breaks in the field.
+- 🔍 **It found a live bug on its first run** — see #678 above. The scenario charger
+  configured at 16 A came back commanded at 22 A.
+
 ### 🏗️ Code quality (#629 — EV orchestration decomposition, complete)
 
 - 🧩 **Step 7.5a decomposed in four slices** (#629): per-charger night-target map,
   canonical solar-budget distribution (#282 B.5 total, #351 M5 off-exclusion), the pure
   night tri-state resolution (#247), and per-charger mode resolution — all in
-  \`ev_night_targets.py\` with 18 behaviour-pinning tests. What remains in the loop
+  `ev_night_targets.py` with 18 behaviour-pinning tests. What remains in the loop
   (PerChargerContext lifecycle, build_view → decide → actuate, budget threading) is the
   reconciler architecture by design. Slice 1 was live-proven by the 23.07 night session.
+  *(Superseded in part by #651 above — the budget-distribution slice and the budget
+  threading were dead code; both are now deleted.)*
+- 🔋 **Retired the deprecated coordinator-level battery shells** (#624, surfaced by the
+  knowledge-graph audit) — `BatteryProtectionMixin` deleted (its one job, the startup
+  discharge-limit restore, relocated to the battery pipeline module), and the standalone
+  `BatteryChargeAdapter` instance + the scheduler's dead adapter dependency removed
+  (provably vestigial: its `is_active` could never be true). The brand force-charge
+  implementations moved into `battery_adapters/force_charge.py` where their real
+  consumers live. Pure structural cleanup — zero behaviour change, guarded by
+  module-gone + pure-planner + no-import-outside-package tests.
 
 ### ✨ Features
 
 - 🔋 **The EV card's estimated SOC no longer blanks after a restart** (#635) — the boot
-  restore has always read per-charger intelligence from \`ev_intelligence.chargers.<id>\`,
+  restore has always read per-charger intelligence from `ev_intelligence.chargers.<id>`,
   but no save path ever wrote that key, and the primary save *replaced* the whole dict
   each cycle (also silently wiping the bounded session history). Saves now merge and the
   per-charger taper/SOC state persists — the battery graphic keeps its last-known value
   across restarts and between sessions. Display-only: charging decisions never use the
   estimate (they read the real vehicle SOC exclusively).
+- 🔋 **Per-charger installs no longer double-feed the primary EV taper detector** (#639,
+  coherence-audit) — the fleet energy block ran unconditionally alongside the per-charger
+  feeder, so `energy_since_full` accrued at ~2× (virtual SOC read LOW → night over-charging,
+  delayed "nearly full") and a sibling charger's draw could land on the primary's detector.
+  The fleet block is now legacy-only (the #589 W2/W3 gate, completed on the energy path),
+  with a top-level-counter fallback for the primary so legacy configs keep their drift-free
+  hardware anchor. Shape-guarded so the gate can't be lost again.
+- 🔥 **No more forced 65 °C disinfection cycle after every restart** (#640, coherence-audit) —
+  the legionella-timestamp restore ran at first refresh, BEFORE the hot-water device was
+  registered — a silent no-op, so every restart read "999 h overdue" and grid-heated the
+  boiler to the legionella target. The seed now happens at the registration site (stored
+  time restored; fresh installs seed "now"), and a guard keeps the dead parallel restore out.
+- 🔁 **One anti-cycle clock, rebuild-proof** (#644, coherence-audit) — switch and climate
+  devices kept a SECOND min-on/min-off timer on `_status.last_*`, wiped on every
+  rediscovery rebuild, so a compressor could restart seconds after stopping. The legacy
+  `min_on_time`/`min_off_time` knobs now map onto the base-layer
+  `min_on_seconds`/`min_off_seconds`, whose epochs are rebuild-transplanted
+  (`_VOLATILE_CONTROL_FIELDS`) — one clock, one enforcement, and a grep-lint guard
+  keeps the `_status` clock from creeping back in as a gate.
+- 🚗 **Every charger reads its OWN draw, on both read paths** (#642 + #643, coherence-audit) —
+  the legacy (non-Energy-Dashboard) sensor path had drifted from its twin: it smoothed the
+  fleet SUM and never filled the per-charger map, so on a multi-charger install every charger
+  was told it was drawing the *whole fleet's* power — a second charger's session could make
+  the first look "already at target". Both paths now share one `_read_ev_fleet_power` read
+  (the #616 precedent applied to its `ev_power` sibling), so the median-of-3 blip filter is
+  per charger too. Coordinator-side consumers (session attribution, diagnostics, taper feed,
+  the priority rows) go through one sanctioned accessor — which also fixes a kW-reporting
+  charger showing ~0 W in the device-priority list. AST-linted so the raw shape can't return.
+- 🔋 **The battery sign cross-check now actually runs on multi-battery installs** (#647,
+  coherence-audit) — the observe-only check that catches a battery reporting charge as
+  discharge was gated on the *fleet* sign lock, which only single/combined-battery installs
+  ever set. On a multi-battery install — the exact shape where one inverter can be signed
+  differently from another — it was a permanent no-op reporting a healthy perception layer
+  it had never tested (ledger class 8). And had it run, it compared SUMMED counters against
+  SUMMED power, so one battery signed wrong and one signed right cancel to ≈0 W and get
+  skipped as "idle". Each battery is now audited against its own charge/discharge counters,
+  and the health surface names the offending unit (`b2`) instead of just "the battery".
+  Two-sensor pair batteries are untouched — their direction is user-declared, so there is
+  no lock to contradict.
+- 📏 **A sensor reporting in kW is now read as kW everywhere** (#641, coherence-audit) — the
+  "sensor value → watts" conversion was copy-pasted into eight places and every copy had
+  picked its own rule for what counts as a kilowatt: exact-case `kW`, lowercase `kw`, the
+  long spellings, or no check at all. So the *same* sensor could be read at 1000× different
+  magnitudes by two subsystems in the same cycle — a charger sensor labelled `kw` (common on
+  template and MQTT sensors) counted as 11 kW by the energy balance and 11 **watts** by the
+  per-charger budget math. Worse, generic devices did no conversion at all: a heat pump or
+  pool pump on a kW power sensor taught SEM a ~3 W rated power, which quietly wrecked its
+  activation threshold, its solar-runtime credit and its shed decisions. There is now one
+  rule, in one file, covering W/kW/MW/GW and Wh/kWh/MWh/GWh — and a CI lint that fails the
+  build if anyone writes a ninth copy. One behaviour change worth naming: a power sensor with
+  **no** unit at all is now read as watts everywhere, including the charging-history
+  bootstrap, which used to assume kilowatts and so disagreed with the live reader by 1000×
+  about the very same sensor.
+- 🧯 **Removing SEM no longer leaves your heating latched on** (#656, coherence-audit) — if you
+  removed the integration while it was holding a hot-water boost temperature, an SG-Ready
+  relay or a surplus-controlled switch, teardown dropped its references to those devices
+  without ever turning them off. The device stayed commanded on indefinitely, with nothing
+  left in the system that could expire it — and reinstalling didn't help either: the
+  reconciler sees a load that is on but not SEM-owned, calls it externally controlled and
+  deliberately refuses to fight it. The purpose-built cleanup method for this existed and
+  had never been called from anywhere. It is now, with the distinctions that matter: a
+  **removal** or a **disable** releases every load SEM was holding, while a **reload** (any
+  options change) and an **HA restart** deliberately do not — bouncing a running heat pump
+  every time you change a setting is not a safety improvement.
+- ⚖️ **A miswired import/export sensor pair is now caught instead of averaged away** (#661,
+  coherence-audit) — installs without a single signed grid sensor (Growatt and friends) give
+  SEM two always-positive sensors, and SEM nets them into one number. If those two are
+  swapped, stale, or pointed at different meters they can both report power at the same
+  instant — 3.0 kW in *and* 2.8 kW out — which nets to 200 W and looks exactly like a quiet,
+  balanced house. Every downstream number then absorbs the error silently, because home
+  consumption is derived from the balance. There *was* a mutual-exclusivity check for this,
+  but it sat downstream of the netting, where "both directions at once" is not merely absent
+  but unrepresentable: the two directional figures are re-derived from the single netted
+  value, so the smaller side is always exactly zero (ledger class 8 — its test only passed by
+  hand-building the impossible state). The check now runs at the netting site, on the raw
+  pair, while both readings still exist, and covers the declared two-sensor battery
+  charge/discharge pairs as well. It warns once after five consecutive contradicting cycles
+  and reports recovery, and it ignores meter bleed — an export sensor idling at 15 W under a
+  3 kW import is noise, not a contradiction.
+- 🔍 **"Why is my car not charging?" is answerable again** (#657, coherence-audit) — the EV
+  charging-status sensor exposes `battery_too_low`, `battery_needs_priority` and
+  `solar_sufficient` attributes, and all three were permanently empty: the coordinator
+  decided them every cycle and the sensor formatted them, but the value was never written
+  onto the data the sensor reads. The one surface designed to explain a blocked charge
+  explained nothing, so the support thread went in circles. Eight attributes across four
+  sensors were wired to keys no code has ever published — the available-power sensor's
+  house-consumption, battery-allowance and excess-solar breakdown, and the load-management
+  card's device table (which the load manager had been computing all along) are back too.
+  The top-5 peak history was removed instead: no producer for it was ever written, and a
+  real one means querying long-term statistics — a feature, not a bug fix. The suite had
+  been *masking* this, because the test fixtures injected exactly these keys; a new contract
+  test now reads the actual producers and fails CI for any attribute wired to a phantom key.
+- 🩺 **"Health check: 0 violations" now means something was actually checked** (#660,
+  coherence-audit) — nearly every check verified a value against a constraint its own
+  producer had enforced three lines earlier: `0 ≤ autarky ≤ 100` on a number assigned
+  `max(0, min(100, …))`, "cost is not negative" on `max(0, …)` fields, "solar is not
+  over-allocated" and "no flow is negative" on the output of a greedy allocator that
+  hands out `min(available, needed)`. Those are theorems, not tests. They could not fail,
+  so the diagnostic reported a clean bill of health straight through the autarky bug that
+  sat pinned at 0 % while self-consumption read 98 % — an in-range wrong number, which is
+  the only kind a range check cannot see. The instrument is now **clamp engagement**: the
+  clamped output is clean by definition, so what gets recorded is how much each guard had
+  to *remove*. One engaged cycle is a transient; the same clamp engaged for five straight
+  minutes is a wrong formula being held inside the valid range, and that is the violation.
+  The negative house-consumption residual is reported the same way, and the remaining flow
+  check is the one that spans two independent producers (per-string sensors vs the inverter
+  total, over-count direction only — string discovery caps at four slots, so a legitimate
+  under-count must not fire). Two thresholds were retuned off real hardware while we were
+  in here: the −1 W floor called an inverter's overnight standby draw a fault every night,
+  and the savings floor is deliberately left *un*instrumented because a negative raw saving
+  is correct behaviour under a negative import price. A standing test now requires every
+  surviving check to be demonstrated firing on a deliberately violating input built through
+  the real derivation, and an AST guard stops clamped fields from drifting back into the
+  non-negative list.
+- 🔥 **The setup guide's SG-Ready table told installers to invert a correct heat-pump
+  install** (#655, coherence-audit) — the relay table in `SETUP_GUIDE.md` still showed the
+  mapping SEM used *before* #523 fixed it: a plain 2-bit count (Blocked `0:0`, Normal
+  `0:1`, Boost `1:0`) instead of the SG-Ready standard the pumps implement (Blocked `1:0`,
+  Normal `0:0`, Boost `0:1`). Following it does real damage, because the user is the
+  actuator: you wire the contacts, ask SEM for Boost, watch relay **2** close while the
+  guide promises relay 1, conclude your install is inverted, and switch on *Invert
+  SG-Ready* — which inverts a correct install and makes SEM drive Boost as `1:0`, which a
+  standard pump reads as EVU-block. Your heat pump then switches **off** on solar surplus.
+  That is #523 exactly — RienduPre's Nibe report — reintroduced by the documentation while
+  the code was right the whole time. The table is corrected and now names the trap that
+  caused it (the four states look like they should count in binary and don't), the
+  README's four-state line carried the same stale count and is fixed, and a new test
+  parses the shipped table and compares it row-by-row against `SG_READY_RELAY_MAP` so the
+  guide and the code can never disagree again.
+- ⚡ **SEM no longer claims to obey your utility's ripple-control signal** (#654,
+  coherence-audit) — on a ripple-control (*Rundsteuerung*) signal, SEM logged a WARNING
+  reading "shedding non-critical loads", turned on a binary sensor, and then shed
+  precisely nothing: the function that chose which devices to block had no caller, and
+  the heat pump and every surplus load carried on. For a user with a contractual block
+  window, that log line was confirmation of compliance they did not have — the kind of
+  discrepancy that only surfaces on the utility's meter. Nothing acts on the signal
+  today, so SEM now says so: the log reports the signal and states plainly that no loads
+  are being shed, the module and class docstrings describe what the code does instead of
+  a SurplusController integration that grep proves absent, and the dead selection code is
+  gone along with a diagnostic field that could only ever read "nothing blocked" — which
+  reads as *the block ran and matched nothing* rather than *there is no block*. Building
+  the real thing is #664, which first has to settle a question SEM cannot infer: whether
+  a load running on your own PV is inside the block, which depends on your operator and
+  contract. The heat pump's SG-Ready `block()`/`unblock()` were deliberately **kept**
+  even though nothing calls them — they implement state 1 of the 4-state protocol SEM
+  advertises during setup, and deleting them would make that promise unkeepable.
+- 🍽️ **A finished dishwasher stops hogging the surplus for the rest of the day** (#653,
+  coherence-audit) — the appliance scheduler's lifecycle half was never wired up.
+  `update_schedules()` — the code that moves a run scheduled → running → completed and
+  releases the appliance — carried a docstring reading "called during coordinator update"
+  and had **zero** production callers. That is not a cosmetic status bug: a scheduled
+  appliance deliberately refuses to be switched off mid-cycle and claims its full rated
+  power while it believes it is running, and nothing ever told it the run had ended. So a
+  dishwasher that finished at 15:00 held 2 kW of the allocation against every
+  lower-priority load until the next restart, and neither LIFO shed nor peak shed could
+  take it back. The cycle now ticks the scheduler *before* allocating, so a run that ended
+  this cycle has released its claim by the time the surplus is shared out. Cancelling is
+  reachable for the first time via a new `cancel_appliance_schedule` service (previously a
+  mistyped deadline could only be undone by restarting HA), the #426 transition telemetry
+  is finally readable in the diagnostics download, and a timezone-aware template deadline
+  (`{{ today_at('18:00') }}`) is normalised at the service boundary — it would otherwise
+  have thrown on every cycle now that something actually runs the comparison. A new AST
+  ratchet fails CI on any new public method with no production call site, which is the
+  class this belongs to: designed, unit-tested, and unreachable. It found one more on its
+  first run (#663).
+- 🚗 **A second car's charge estimate no longer freezes at "full from last Sunday"** (#648,
+  coherence-audit) — while a car is away SEM can't watch it being driven, so each day
+  rollover advances the taper detector's virtual state of charge by the predicted daily
+  consumption. That decay only ever reached the PRIMARY charger's detector, and it was gated
+  on the *fleet* "an EV is plugged in" flag (ledger class 3). So a second car charged full on
+  Sunday, drove all week, and its estimate still read ~100 % — and any one car sitting plugged
+  in overnight froze the decay for every other car too. This is load-bearing when the real
+  SOC entity is offline: the night-target planner falls back to the virtual SOC, sees
+  "nothing to charge", and silently skips a charge that was needed. Each detector is now
+  decayed on its own connection state. Single-charger installs are unaffected.
+- 🔌 **A surplus load is no longer switched back on at dusk by the peak manager** (#649,
+  coherence-audit) — peak shed/restore for surplus-mode loads ran in TWO engines with
+  separate state, anti-flicker and restore criteria. Shedding twice was survivable;
+  restoring was not: when the peak receded after sunset the load manager turned the switch
+  back ON — zero surplus, surplus intent OFF — and the reconciler then read it as
+  "the user turned this on" and left it running on grid all night. Surplus-mode loads the
+  surplus controller actually drives are now excluded from load-manager shedding, restore
+  and the "available reduction" figure, exactly as EV chargers already were (#461-peak).
+  The load manager keeps sole ownership of *Peak-only* devices, and a load nothing else
+  drives stays its responsibility — so no load ends up owned by nobody.
+- 🛡️ **"Critical" and "hands off" survive the next rebuild** (#650, coherence-audit) — both
+  toggles were written ONLY into the load manager's device dict, which the registry sync
+  REPLACES wholesale on every rebuild (a drag, the 35 s re-discovery, a config change, a
+  restart). So marking the freezer critical or a pond pump un-controllable reverted to the
+  defaults within ~35 s and the next peak event shed the device anyway — ledger class 14,
+  the same shape as the #122 dependency wipe. The flags now live in registry override stores
+  next to priority / control-mode / dependencies, are re-applied at device build, and flow
+  back into the load manager. Toggles set before this release are adopted once on upgrade,
+  so nobody has to re-click them.
 - 🎚️ **Five more config-card options now apply live, no reload** (#637) — hot-water
   min/legionella temperatures, heat-pump max setpoint, VPP reserve SoC and the mobile
   notification service route through the in-place config path (their consumers re-read
@@ -39,16 +623,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   legionella dual-path confusion. Construction-only keys (tariff mode, battery scheduler
   params) deliberately keep the reload. A classification guard test makes every card
   option declare its routing — nothing can silently join the reload-per-tweak set again.
-- 🎚️ **The config card's peak sliders now apply live** (#636) — \`target_peak_limit\` /
-  \`warning_peak_level\` / \`emergency_peak_level\` had no number entities, so \`set_option\`
+- 🎚️ **The config card's peak sliders now apply live** (#636) — `target_peak_limit` /
+  `warning_peak_level` / `emergency_peak_level` had no number entities, so `set_option`
   dropped them to the entry-write + reload path: a slider change during a charge session
   never reached the running planner (caught live when a mid-charge peak change didn't step
   the EV night rate). The three keys now route through the load manager's live updaters —
   applied within one cycle, persisted, no reload.
 - ⚡ **The peak-managed night rate now actually engages** (#630 follow-up) — the
   always-present window deadline shadowed the new rate entirely (it computes first and
-  clamps tiny requirements up to Min, so \`top_up_amps\` was never consulted). The night
-  amps are now \`max(deadline-required, peak-managed)\`, so a lazy deadline no longer
+  clamps tiny requirements up to Min, so `top_up_amps` was never consulted). The night
+  amps are now `max(deadline-required, peak-managed)`, so a lazy deadline no longer
   pins the session at the floor; a tight deadline still forces the required rate.
 - ☀️🌙 **The "At least" floor is now the overnight guarantee in every mode — Solar only
   included** (#634, Guido's design) — the charge mode is the *daytime* axis; if the day's
@@ -57,6 +641,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never runs; floor 0 keeps the classic "Solar only never grids at night" contract exactly.
   Internally mirrors the loads' three-source design (auto-derived, no new UI) — and the home
   battery is never used for the EV.
+
+### 🐛 Fixes (#646 — stable-line field report, by @michelangelomonako-cmyk)
+
+- 📊 **Valid state_class on 4 sensors** (#646) — `roi_annual_savings` (monetary) moves to
+  `total`; `forecast_corrected_today`, `battery_scheduler_deficit_kwh` and
+  `forecast_surplus_kwh` (found by the new whole-table sweep guard) drop the `energy`
+  device_class — predictions/deficits fluctuate, so the pairing was invalid and broke
+  long-term statistics. Warnings on every restart are gone.
+- 💰 **ROI payback no longer claims "0.0 years" on fresh installs** (#646) — with too
+  little savings history to estimate, the sensor now reads *unknown* instead of the 0.0
+  default that looked like "already paid off" next to ~0 € annual savings.
+- 📈 **Chart date adapter loads even when another card ships Chart.js** (#646) — the
+  loader short-circuited when `window.Chart` already existed (defined by some other
+  card's internal bundle) and never loaded the date-fns adapter, so time-scale presets
+  (energy "Last 7 Days") rendered empty with "a complete date adapter" errors. The
+  adapter now loads in that path too.
+- 🎨 **System diagram readable on light themes** (#646) — sunrise/sunset, forecast-kWh
+  and inverter-status labels were hardcoded pale dark-theme fills inside the SVG (out of
+  card_mod's reach); they now switch to darker, higher-opacity variants via the theme
+  helper when the active theme is light.
 
 ### 🐛 Fixes (from live testing, 24.07)
 
@@ -68,7 +672,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixes (from the #629 overnight soak)
 
 - ⚡ **Night top-up now runs at the peak-managed headroom rate** (#630, Guido) — the plain
-  \`min_plus_solar\` night top-up crept at the Min floor even with kilowatts of peak headroom
+  `min_plus_solar` night top-up crept at the Min floor even with kilowatts of peak headroom
   free. It now charges at the #274/C1 peak-managed rate (peak limit − expected home −
   higher-priority chargers − **live cheap-hours load draw**, so a running #620 load is never
   squeezed), finishing early and freeing the window for lower-priority loads. Installs
@@ -82,20 +686,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session within one cycle (#552 guard) under the 1 kWh runaway cap (#553). Deliberately
   NOT "fixed" via the auth lock (a failure while locked would strand the car). See
   KEBA_FAILSAFE.md.
-
-<!-- folded -->
-# [1.7.5-beta.25] — 23.07.2026
-
-### 🧹 Code quality
-
-- 🔋 **Retired the deprecated coordinator-level battery shells** (#624, surfaced by the
-  knowledge-graph audit) — \`BatteryProtectionMixin\` deleted (its one job, the startup
-  discharge-limit restore, relocated to the battery pipeline module), and the standalone
-  \`BatteryChargeAdapter\` instance + the scheduler's dead adapter dependency removed
-  (provably vestigial: its \`is_active\` could never be true). The brand force-charge
-  implementations moved into \`battery_adapters/force_charge.py\` where their real
-  consumers live. Pure structural cleanup — zero behaviour change, guarded by
-  module-gone + pure-planner + no-import-outside-package tests.
 
 # [1.7.5-beta.24] — 22.07.2026
 

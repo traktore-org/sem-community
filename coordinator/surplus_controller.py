@@ -360,6 +360,45 @@ class SurplusAllocationData:
         }
 
 
+async def deactivate_devices(devices, reason: str = "teardown") -> int:
+    """Command every active device in ``devices`` back to normal (#656).
+
+    Module-level so the teardown path can use it after the registry has been
+    detached — at removal time there is no controller left to ask, only the
+    devices themselves.
+
+    Deliberately takes the RAW device collection rather than
+    ``get_devices_sorted()``: that view hides ``is_enabled=False`` and
+    ``managed_externally`` devices, both of which can be latched ON right now,
+    and a teardown that skips them leaves exactly the strand this exists to
+    prevent. Lowest priority first, so the log reads like a normal shed.
+
+    Best-effort: one device failing must not abort the rest. The alternative
+    to swallowing here is an unattended heating device left commanded on by an
+    integration on its way out.
+    """
+    devices = sorted(
+        devices, key=lambda d: getattr(d, "priority", 99) or 99, reverse=True,
+    )
+    stopped = 0
+    for device in devices:
+        if not getattr(device, "is_active", False):
+            continue
+        try:
+            await device.deactivate()
+            stopped += 1
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "Could not deactivate %s during %s (continuing): %s",
+                getattr(device, "device_id", device), reason, e,
+            )
+    _LOGGER.info(
+        "Deactivated %d of %d surplus-controlled devices (%s)",
+        stopped, len(devices), reason,
+    )
+    return stopped
+
+
 class SurplusController:
     """Controls surplus power distribution across multiple devices.
 
@@ -393,9 +432,6 @@ class SurplusController:
         self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
-        # EV Intelligence: anticipated surplus from taper detection (#106)
-        self._anticipated_surplus_w: float = 0.0
-        self._anticipated_deadline: Optional[float] = None
         # (desired-state, phase 3) When True, update() delegates to the single
         # declarative decision + reconcile path instead of the 7 imperative
         # passes. Default OFF — the passes stay authoritative until a parity
@@ -415,104 +451,30 @@ class SurplusController:
     def price_responsive_mode(self, value: bool) -> None:
         self._price_responsive_mode = value
 
-    def set_anticipated_surplus(self, watts: float, minutes: float) -> None:
-        """Hint that watts will free up when EV taper completes (#106).
+    # ``set_anticipated_surplus`` lived here until #659, together with the
+    # ``_anticipated_surplus_w`` / ``_anticipated_deadline`` fields. It was
+    # the #106 "pre-warm devices before the EV taper completes" promise, and
+    # it was dead on both ends: nothing ever called it, and nothing ever read
+    # the two fields it set. The docstring described behaviour ("will factor
+    # this in 2 min before the deadline") that no code implemented — the kind
+    # of spec-vs-reality gap that reads as a working feature to the next
+    # person who greps for it.
+    #
+    # If pre-warming is wanted, it belongs in the surplus computation itself
+    # (``_compute_surplus`` / the desired-state ``compute_load_intent`` path),
+    # not in a setter that hopes someone downstream looks.
 
-        The surplus controller will factor this in 2 min before the
-        deadline to pre-warm devices.
-        """
-        import time as _time
-        self._anticipated_surplus_w = watts
-        self._anticipated_deadline = _time.monotonic() + minutes * 60
-        _LOGGER.debug("Anticipated surplus: %.0fW in %.0f min", watts, minutes)
-
-    def distribute_ev_budget(
-        self,
-        budget_w: float,
-        ev_devices: Dict[str, "ControllableDevice"],
-        excluded_charger_ids: Optional[set[str]] = None,
-    ) -> Dict[str, float]:
-        """Distribute EV charging budget across multiple chargers by priority.
-
-        Priority-based cascade: highest priority (lowest number) gets power
-        first, up to its max. Remainder cascades to next charger if it meets
-        the minimum threshold. 60s hysteresis between reallocations.
-
-        Args:
-            budget_w: Total watts available for EV charging.
-            ev_devices: Dict of charger_id → CurrentControlDevice.
-            excluded_charger_ids: Charger IDs that must NOT receive any
-                allocation regardless of priority (e.g. ``charge_mode=off``).
-                Returned in the output dict with ``0`` so dashboards still
-                see the entry. The actuator's #346 mode guard is the
-                last-line defence; this gate stops the dashboard from
-                misreporting allocated W on disabled chargers. #351 M5.
-
-        Returns:
-            Dict of charger_id → allocated watts.
-        """
-        if not ev_devices:
-            return {}
-
-        excluded = excluded_charger_ids or set()
-
-        import time as _time
-
-        # Sort by priority (lower = higher priority); excluded chargers
-        # are still iterated so they appear in the output with 0 W —
-        # but they're filtered out of the budget cascade.
-        sorted_chargers = sorted(ev_devices.items(), key=lambda x: x[1].priority)
-
-        # Hysteresis: don't reallocate more than once per 60s
-        now = _time.monotonic()
-        last_realloc = getattr(self, "_ev_last_realloc_time", 0.0)
-        prev_alloc = getattr(self, "_ev_prev_allocation", {})
-
-        # Check if budget changed significantly (>500W) since last reallocation
-        prev_total = sum(prev_alloc.values()) if prev_alloc else 0
-        budget_changed = abs(budget_w - prev_total) > 500
-
-        if not budget_changed and (now - last_realloc) < 60:
-            # Within hysteresis window and no significant change → keep previous
-            return prev_alloc
-
-        allocations: Dict[str, float] = {}
-        remaining = budget_w
-
-        for charger_id, device in sorted_chargers:
-            if charger_id in excluded:
-                # Mode-disabled chargers (#351 M5) — appear in the output
-                # with 0 W so dashboards see the entry, but don't consume
-                # any of the budget cascade.
-                allocations[charger_id] = 0
-                continue
-            if remaining <= 0:
-                allocations[charger_id] = 0
-                continue
-
-            max_power = device.max_current * device.phases * device.voltage
-            min_threshold = device.min_power_threshold
-
-            if remaining >= min_threshold:
-                alloc = min(remaining, max_power)
-                allocations[charger_id] = alloc
-                remaining -= alloc
-            else:
-                allocations[charger_id] = 0
-
-        self._ev_last_realloc_time = now
-        self._ev_prev_allocation = allocations
-
-        if len(ev_devices) > 1:
-            alloc_summary = ", ".join(
-                f"{cid}={w:.0f}W" for cid, w in allocations.items() if w > 0
-            )
-            _LOGGER.debug(
-                "EV budget distribution: %.0fW → %s (remaining=%.0fW)",
-                budget_w, alloc_summary or "none", remaining,
-            )
-
-        return allocations
+    # ``distribute_ev_budget`` lived here until #651: a priority cascade
+    # that split the fleet EV budget across chargers, with its own 60 s /
+    # 500 W reallocation hysteresis in ``_ev_last_realloc_time`` /
+    # ``_ev_prev_allocation``. It ran every solar cycle and its result
+    # reached exactly one place — ``PerChargerContext.budget_w`` — which
+    # nothing read. Two allocators for one concept, one of them invisible:
+    # a contributor fixing a multi-charger allocation bug would have edited
+    # this one, watched its unit tests pass, and changed nothing on the
+    # hardware. The surviving allocator is ``decide`` subtracting
+    # ``fleet.solar_committed_w``, accumulated per charger in the
+    # coordinator's priority loop from each charger's actual decision.
 
     # Volatile per-device CONTROL state that must survive a device-object
     # rebuild (config edit / rediscovery re-registers a FRESH object for the
@@ -576,29 +538,19 @@ class SurplusController:
         return [d for d in self._devices.values()
                 if device_id in getattr(d, 'depends_on', [])]
 
-    def validate_dependencies(self) -> list:
-        """Check for circular dependencies. Returns list of errors."""
-        errors = []
-        for device in self._devices.values():
-            dep_list = getattr(device, 'depends_on', None)
-            if not dep_list:
-                continue
-            visited = set()
-            current = device.device_id
-            chain = [current]
-            while True:
-                deps = self._devices.get(current)
-                dep_list = getattr(deps, 'depends_on', None) if deps else None
-                if not deps or not dep_list:
-                    break
-                next_dep = dep_list[0]  # Check first dependency for cycles
-                if next_dep in visited:
-                    errors.append(f"Circular dependency: {' → '.join(chain + [next_dep])}")
-                    break
-                visited.add(next_dep)
-                chain.append(next_dep)
-                current = next_dep
-        return errors
+    # ``validate_dependencies`` lived here until #662. It was a cycle
+    # detector with no production caller (only tests), and its walk
+    # hard-coded ``dep_list[0]`` — so for a device requiring [a, b] with the
+    # loop through ``b`` it followed the ``a``-chain, found nothing and
+    # reported clean. A validator that can't see half the graph and that
+    # nothing calls is not a safety net; it is a second, weaker
+    # implementation of a concept the registry already owns correctly.
+    #
+    # Cycles are now prevented where they are created, not reported after
+    # the fact: DeviceRegistry._dependency_would_cycle walks ALL parents
+    # across BOTH persisted stores and rejects the write, on every path
+    # (UI select, set_device_property, register_surplus_device), plus a
+    # load-time sanitize for stores written before the guard existed.
 
     def unregister_device(self, device_id: str) -> None:
         """Remove a device from surplus control."""
@@ -619,6 +571,20 @@ class SurplusController:
             count = len(self._devices)
             self._devices.clear()
             _LOGGER.info("Cleared %d registered devices on unload", count)
+
+    def detach_devices(self) -> List[ControllableDevice]:
+        """Clear the registry and hand the devices back to the caller (#656).
+
+        ``clear_devices()`` on its own is what stranded loads: unload dropped
+        the references to devices SEM had switched ON, and nothing was left
+        that could turn them off. Teardown needs both halves — the registry
+        emptied (so a reload can't leak the prior cycle's registrations) AND
+        something still holding the actuators, in case this unload turns out
+        to be a removal rather than a reload.
+        """
+        devices = list(self._devices.values())
+        self.clear_devices()
+        return devices
 
     def get_device(self, device_id: str) -> Optional[ControllableDevice]:
         """Get a registered device by ID."""
@@ -1376,9 +1342,21 @@ class SurplusController:
             return max(0, distributable - 500)
         return distributable
 
-    async def deactivate_all(self) -> None:
-        """Deactivate all devices (emergency or shutdown)."""
-        for device in reversed(self.get_devices_sorted()):
-            if device.is_active:
-                await device.deactivate()
-        _LOGGER.info("Deactivated all surplus-controlled devices")
+    async def deactivate_all(self, reason: str = "emergency") -> None:
+        """Deactivate all devices (emergency stop, or SEM going away).
+
+        Iterates ``self._devices`` rather than ``get_devices_sorted()`` (#656).
+        That view hides devices that are ``is_enabled=False`` or
+        ``managed_externally`` — both of which can be latched ON right now, and
+        a teardown that skips them leaves exactly the strand this exists to
+        prevent. Lowest priority first, so the log reads like a normal shed.
+
+        One device failing must not abort the rest: this runs on the
+        unload/remove path, where the alternative to a best-effort loop is an
+        unattended heating device left commanded on by an integration that is
+        on its way out.
+
+        ``reason`` only labels the log line, so an emergency stop doesn't read
+        as a teardown in the journal.
+        """
+        await deactivate_devices(self._devices.values(), reason)

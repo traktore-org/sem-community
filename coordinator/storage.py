@@ -33,6 +33,59 @@ ENERGY_SAVE_DELAY = 60
 # async_save_daily_throttled writes immediately at most this often instead.
 DAILY_SAVE_INTERVAL = 120
 
+# (#668) The keys of ``EnergyCalculator.get_state()`` that this layer carries.
+#
+# ONE list, deliberately. Before #668 the export and the import each had their
+# own hand-written list and they had drifted apart twice: #351 M1 found the
+# cost accumulators missing from both, and #668 found nine more still missing
+# after it. Neither drift could announce itself — the calculator reads its
+# state back with ``state.get(key, default)``, so a dropped key is
+# indistinguishable from a fresh install.
+#
+# ``last_update`` is NOT here and that is intentional: the calculator emits its
+# own integration timestamp, but on the way back in we deliberately hand it the
+# *save* timestamp from ``_energy_data`` instead (see the export below). It is
+# the one key whose two directions legitimately differ.
+CALCULATOR_STATE_KEYS: tuple[str, ...] = (
+    "daily_accumulators",
+    "monthly_accumulators",
+    "yearly_accumulators",
+    "lifetime_accumulators",
+    "daily_cost_accumulators",
+    "monthly_cost_accumulators",
+    "yearly_cost_accumulators",
+    "yearly_seeded",
+    # (#556) solar hardware-counter baselines
+    "solar_counter_baselines",
+    # (#658) EV wallbox-counter baselines
+    "ev_counter_baselines",
+    # (#668) lifetime running totals, summed at each day rollover. Dropped
+    # since they were introduced, so ``lifetime_total_savings`` fell back to a
+    # 7-day-average-rate ESTIMATE of the entire history after every restart
+    # instead of the rate-weighted real figure — a plausible number, which is
+    # why it was never reported.
+    "accumulated_savings",
+    "accumulated_battery_savings",
+    "accumulated_cost",
+    "accumulated_export_revenue",
+    "accumulated_grid_import_kwh",
+    "accumulated_self_consumed_kwh",
+    "accumulated_export_kwh",
+    # (#668) the 7-day rate window those estimates are built from, and the
+    # once-per-year cost seeding flag — both also reset on every restart.
+    "rate_history",
+    "yearly_cost_seeded",
+)
+
+
+def _copy_value(value: Any) -> Any:
+    """Shallow-copy containers so a caller cannot mutate the live store."""
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, list):
+        return list(value)
+    return value
+
 
 class SEMStorage:
     """Handles persistence of SEM data."""
@@ -440,6 +493,21 @@ class SEMStorage:
         if iso_ts:
             self._energy_data["legionella_last_time"] = iso_ts
 
+    # Day-rollover decay bookkeeping (#645) — the date the virtual-SOC daily
+    # decay LAST RAN, as an ISO date string. Distinct from the coordinator's
+    # in-memory ``_tracker_date`` (which only owns the hour-bucket arrays):
+    # without a persisted date, a restart that spans midnight initialises
+    # "today" and the decay for the day just ended is skipped entirely.
+    def get_last_decay_date(self) -> Optional[str]:
+        """Get the ISO date the daily virtual-SOC decay last ran, or None."""
+        value = self._energy_data.get("last_decay_date")
+        return value if isinstance(value, str) else None
+
+    def set_last_decay_date(self, iso_date: Optional[str]) -> None:
+        """Persist the ISO date the daily virtual-SOC decay last ran."""
+        if iso_date:
+            self._energy_data["last_decay_date"] = iso_date
+
     def add_session_to_history(self, session: Dict[str, Any]) -> None:
         """Append a completed session to bounded history (max 90 entries)."""
         state = self.get_ev_intelligence_state()
@@ -472,6 +540,28 @@ class SEMStorage:
             _LOGGER.debug("Scheduled delayed save of energy data")
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to schedule energy data save: %s", e)
+
+    async def async_save_energy_now(self) -> None:
+        """Write the energy store to disk immediately (#645).
+
+        Deliberately NOT ``async_save_energy_delayed``: ``async_delay_save``
+        re-arms its timer on every call, so under the continuous coordinator
+        update loop it never fires until updates pause — i.e. only at shutdown
+        (same trap ``async_save_daily_throttled`` documents). A value that only
+        exists to survive a restart cannot be written by a mechanism that only
+        runs at a clean one; an unclean reboot would lose it every time.
+
+        Only for rare, restart-critical writes — the decay date changes at most
+        once a day. Do NOT reach for this in the per-cycle path.
+        """
+        try:
+            await self._energy_store.async_save({
+                **self._energy_data,
+                "last_update": dt_util.now().isoformat(),
+            })
+            _LOGGER.debug("Saved energy data immediately")
+        except (OSError, TypeError) as e:
+            _LOGGER.warning("Failed to save energy data: %s", e)
 
     async def async_save_daily(self) -> None:
         """Save daily data immediately."""
@@ -533,53 +623,35 @@ class SEMStorage:
 
     # State export/import for calculators
     def export_energy_calculator_state(self) -> Dict[str, Any]:
-        """Export state for EnergyCalculator.
+        """Hand the stored calculator state back on load.
 
-        #351 M1 — cost accumulators are now round-tripped alongside the
-        energy ones. Pre-fix the calculator emitted them via
-        ``get_state()`` but this layer dropped them on export and
-        ``import_energy_calculator_state`` discarded them; ``daily_savings``
-        silently reset to 0 mid-day after any HA restart while
-        ``daily_solar`` / ``daily_grid_import`` resumed from storage.
+        Both directions are driven by ``CALCULATOR_STATE_KEYS`` — see the note
+        there for why that is one list and not two.
+
+        Keys absent from the store are simply not emitted; ``restore_state``
+        applies its own defaults, so an absent key and an explicitly-defaulted
+        one are the same thing to the calculator, and emitting a default here
+        would only mean guessing its type in a second place.
         """
-        return {
-            "daily_accumulators": dict(self._daily_data.get("daily_accumulators", {})),
-            "monthly_accumulators": dict(self._daily_data.get("monthly_accumulators", {})),
-            "yearly_accumulators": dict(self._daily_data.get("yearly_accumulators", {})),
-            "lifetime_accumulators": dict(self._daily_data.get("lifetime_accumulators", {})),
-            "daily_cost_accumulators": dict(self._daily_data.get("daily_cost_accumulators", {})),
-            "monthly_cost_accumulators": dict(self._daily_data.get("monthly_cost_accumulators", {})),
-            "yearly_cost_accumulators": dict(self._daily_data.get("yearly_cost_accumulators", {})),
-            "last_update": self._energy_data.get("last_update"),
-            "yearly_seeded": self._daily_data.get("yearly_seeded", False),
-            # (#556) solar hardware-counter baselines
-            "solar_counter_baselines": dict(
-                self._daily_data.get("solar_counter_baselines", {})
-            ),
+        state: Dict[str, Any] = {
+            key: _copy_value(self._daily_data[key])
+            for key in CALCULATOR_STATE_KEYS
+            if key in self._daily_data
         }
+        # Deliberately the SAVE timestamp, not the calculator's own integration
+        # timestamp: it bounds how much downtime the first cycle after a
+        # restart would otherwise try to integrate over. The calculator's
+        # MAX_INTEGRATION_GAP_SECONDS guard turns a stale one into a single
+        # skipped cycle.
+        state["last_update"] = self._energy_data.get("last_update")
+        return state
 
     def import_energy_calculator_state(self, state: Dict[str, Any]) -> None:
-        """Import state from EnergyCalculator. See export docstring."""
-        if "daily_accumulators" in state:
-            self._daily_data["daily_accumulators"] = state["daily_accumulators"]
-        if "monthly_accumulators" in state:
-            self._daily_data["monthly_accumulators"] = state["monthly_accumulators"]
-        if "yearly_accumulators" in state:
-            self._daily_data["yearly_accumulators"] = state["yearly_accumulators"]
-        if "lifetime_accumulators" in state:
-            self._daily_data["lifetime_accumulators"] = state["lifetime_accumulators"]
-        # #351 M1 — persist cost accumulators across restarts.
-        if "daily_cost_accumulators" in state:
-            self._daily_data["daily_cost_accumulators"] = state["daily_cost_accumulators"]
-        if "monthly_cost_accumulators" in state:
-            self._daily_data["monthly_cost_accumulators"] = state["monthly_cost_accumulators"]
-        if "yearly_cost_accumulators" in state:
-            self._daily_data["yearly_cost_accumulators"] = state["yearly_cost_accumulators"]
-        if "yearly_seeded" in state:
-            self._daily_data["yearly_seeded"] = state["yearly_seeded"]
-        # (#556) solar hardware-counter baselines
-        if "solar_counter_baselines" in state:
-            self._daily_data["solar_counter_baselines"] = state["solar_counter_baselines"]
+        """Take the calculator's state on save. See export docstring."""
+        for key in CALCULATOR_STATE_KEYS:
+            if key in state:
+                self._daily_data[key] = state[key]
+
 
     def export_forecast_tracker_state(self) -> Dict[str, Any]:
         """Export state for ForecastTracker."""

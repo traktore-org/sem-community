@@ -4,7 +4,9 @@ Moved from ``coordinator/battery_charge_adapter.py``: these classes are
 NOT a public adapter surface any more — they are the brand-specific
 force-charge implementation composed by the ``BatteryControlAdapter``
 subclasses in this package (see huawei.py / goodwe.py / generic.py).
-Nothing outside ``battery_adapters/`` may import them.
+No **production** module outside ``battery_adapters/`` may import them — that
+is what the arch test in test_battery_charge_scheduler.py enforces, and it
+scans production packages only. Tests import them directly on purpose.
 """
 from __future__ import annotations
 
@@ -78,11 +80,17 @@ class BatteryChargeAdapter(ABC):
     async def get_status(self) -> ChargeStatus:
         """Get current charge status (SOC, power, active state)."""
 
-    def should_stop(self, current_soc: float) -> bool:
-        """Check if target SOC has been reached."""
-        if not self._active:
-            return False
-        return current_soc >= self._target_soc
+    # ``should_stop(current_soc)`` lived here until #659. Nothing called it.
+    # The live target-reached decision is the scheduler's, made against the
+    # coordinator's SOC reading (``battery_charge_scheduler.py``, "Already at
+    # target SOC"). This was a second statement of the same rule, on an object
+    # the scheduler doesn't consult, kept alive only by its own unit tests.
+    #
+    # NOTE for the next sweep: ``get_status()`` below is in the same position
+    # — abstract, implemented three times, zero production callers, and it
+    # computes TARGET_REACHED that nobody reads. It is out of #659's scope
+    # (still UNTRIAGED in tests/test_653_orphan_methods.py) but it is the same
+    # finding, not a live consumer of these fields.
 
 
 class HuaweiChargeAdapter(BatteryChargeAdapter):
@@ -389,34 +397,15 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         )
 
 
-def create_charge_adapter(
-    hass: HomeAssistant, config: dict
-) -> BatteryChargeAdapter:
-    """Factory: create the appropriate charge adapter based on config/platform.
-
-    Detection order:
-    1. Explicit config key 'battery_charge_platform'
-    2. Auto-detect from available integrations
-    """
-    platform = config.get("battery_charge_platform", "auto")
-
-    if platform == "huawei" or (
-        platform == "auto" and _has_integration(hass, "huawei_solar")
-    ):
-        return HuaweiChargeAdapter(hass, config)
-
-    if platform == "goodwe" or (
-        platform == "auto" and _has_integration(hass, "goodwe")
-    ):
-        return GoodWeChargeAdapter(hass, config)
-
-    # Fallback to generic switch-based adapter
-    return GenericChargeAdapter(hass, config)
-
-
-def _has_integration(hass: HomeAssistant, domain: str) -> bool:
-    """Check if a HA integration is loaded."""
-    try:
-        return domain in hass.config.components
-    except AttributeError:
-        return False
+# ``create_charge_adapter`` (and its ``_has_integration`` helper) lived here
+# until #659. It was a second brand-selection factory — same platform key,
+# same auto-detect order — running in parallel with the live one,
+# ``battery_adapters.adapter_for`` (called from coordinator.py). Nothing in
+# production ever called this copy; only its own unit tests did, which is
+# what kept it looking healthy.
+#
+# The classes above are NOT dead: each brand adapter (huawei.py, goodwe.py,
+# generic.py) constructs its matching *ChargeAdapter directly to implement
+# ``command_force_charge``. It is only the selection of which one to build
+# that had two implementations, and this was the invisible one — the #651
+# shape. Brand selection belongs in ``adapter_for``; add new platforms there.

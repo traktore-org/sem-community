@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
+from .coordinator.units import is_power_unit
+
 _LOGGER = logging.getLogger(__name__)
 
 # Per-type keyword rules for deriving a power sensor from the energy sensor's
@@ -575,8 +577,9 @@ def _find_power_sensor_on_device(
             if not state:
                 continue
             dc = state.attributes.get("device_class")
-            unit = (state.attributes.get("unit_of_measurement") or "").lower()
-            if dc != "power" and unit not in ("w", "kw"):
+            # #641 — asking units.py instead of re-listing the suffixes, so a
+            # MW/GW-labelled sensor is recognised as power here too.
+            if dc != "power" and not is_power_unit(state):
                 continue
             candidates.append(eid)
 

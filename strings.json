@@ -21,7 +21,8 @@
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
           "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
+          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_current_control_entity": "Number Entity for Current Control (Wallbox-style chargers)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
@@ -30,7 +31,8 @@
           "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
           "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking."
+          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_current_control_entity": "Number entity SEM writes to so it can change the charging current (e.g. number.wallbox_charging_current). Use this for chargers that expose a number entity instead of a service call. Leave blank if you fill in the Service path below."
         }
       },
       "hardware": {
@@ -39,12 +41,14 @@
         "data": {
           "target_peak_limit": "Peak Power Limit (kW)",
           "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
-          "diagram_style": "System diagram style"
+          "diagram_style": "System diagram style",
+          "battery_capacity_kwh": "Home Battery Capacity (kWh)"
         },
         "data_description": {
           "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
           "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
-          "diagram_style": "Choose which system diagram card to use on the Home tab. 'SEM' uses the built-in animated diagram. 'K-Flow' uses the K-Flow HACS card (must be installed separately)."
+          "diagram_style": "Choose which system diagram card to use on the Home tab. 'SEM' uses the built-in animated diagram. 'K-Flow' uses the K-Flow HACS card (must be installed separately).",
+          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec."
         }
       },
       "reconfigure": {
@@ -82,24 +86,14 @@
     },
     "error": {
       "unknown": "An unexpected error occurred. Please try again.",
-      "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost.",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "entity_not_found": "Entity not found. Please verify the entity ID exists.",
+      "service_not_found": "Notification service not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
+      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed.",
+      "energy_dashboard_not_configured": "SEM reads your solar, grid and battery sensors from Home Assistant's Energy Dashboard, and it is not configured yet.\n\nSet it up first under Settings → Dashboards → Energy ({url}) — add at least your solar production and grid consumption sources — then start this installation again.",
+      "energy_dashboard_incomplete": "Your Energy Dashboard is configured but is missing: {missing}.\n\nSEM needs these sources to read your system. Add them under Settings → Dashboards → Energy ({url}), then start this installation again."
     }
   },
   "options": {
@@ -263,7 +257,10 @@
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
           "legionella_interval_hours": "Max hours between disinfection cycles",
-          "diagram_style": "System diagram style"
+          "diagram_style": "System diagram style",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)",
+          "vehicle_soc_entity": "Vehicle Battery SOC"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -378,29 +375,33 @@
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
         }
       },
-      "dashboard_options": {
-        "title": "Dashboard Installation",
-        "description": "Install or reinstall the SEM dashboard",
+      "battery_scheduler": {
         "data": {
-          "generate_dashboard": "Generate Dashboard",
-          "dashboard_title": "Dashboard Title",
-          "dashboard_path": "Dashboard Path (URL)",
-          "include_financial": "Include Financial Tracking",
-          "include_flows": "Include Power Flow Visualization",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "battery_capacity_kwh": "Battery Capacity",
+          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
+          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
+          "battery_force_charge_negative_price": "Force Charge on Negative Price",
+          "battery_max_charge_power_w": "Max Charge Power",
+          "battery_max_target_soc": "Maximum Target SOC",
+          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
+          "battery_pessimism_weight": "Forecast Pessimism",
+          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
+          "battery_roundtrip_efficiency": "Round-trip Efficiency"
         },
-        "data_description": {
-          "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
-          "dashboard_title": "Display name for the dashboard in the sidebar. Example: 'Solar Energy Management'",
-          "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
-          "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
-          "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
-        }
+        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "title": "Battery Charge Scheduler"
+      },
+      "pv_naming": {
+        "data": {
+          "pv_name_pv1": "PV1 name",
+          "pv_name_pv2": "PV2 name",
+          "pv_name_pv3": "PV3 name",
+          "pv_name_pv4": "PV4 name",
+          "pv_name_pv5": "PV5 name",
+          "pv_name_pv6": "PV6 name"
+        },
+        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "title": "Name your PV strings"
       }
     }
   },
@@ -516,6 +517,9 @@
       },
       "monthly_home_consumption_energy": {
         "name": "Monthly Home"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "Monthly EV"
       },
       "flow_solar_to_home_power": {
         "name": "Solar to Home"
@@ -1009,18 +1013,6 @@
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
       },
-      "daily_ev_target": {
-        "name": "Daily EV Target"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "EV Solar Charge Max (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "EV Solar Charge Max SOC (%)"
-      },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"
       },
@@ -1057,20 +1049,11 @@
       "night_latest_end": {
         "name": "Night Latest End"
       },
-      "initial_current": {
-        "name": "Vehicle Start Amps"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimum Current"
-      },
       "ev_enable_delay_seconds": {
         "name": "EV Start Delay (surplus)"
       },
       "ev_disable_delay_seconds": {
         "name": "EV Stop Delay (deficit)"
-      },
-      "ev_phases": {
-        "name": "EV Charger Phases"
       },
       "electricity_import_rate": {
         "name": "Electricity Import Rate"
@@ -1099,19 +1082,53 @@
       "legionella_interval_hours": {
         "name": "Legionella Interval Hours"
       },
-      "ev_kwh_per_100km": {
-        "name": "Vehicle consumption (kWh/100km)"
-      },
       "surplus_event_threshold": {
         "name": "Surplus Event Threshold"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Night Target"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min Amps"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Vehicle Min Amps"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Target SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Solar Max"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Solar Max SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Battery Capacity"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Consumption"
+      },
+      "ev_phases": {
+        "name": "{charger} Phases"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "{charger} EV Target Type",
         "state": {
           "kwh": "kWh target",
           "soc": "SOC % target"
+        }
+      },
+      "charge_mode": {
+        "name": "{charger} Charge Mode",
+        "state": {
+          "always_max": "Always (max)",
+          "min_plus_solar": "Min + Solar",
+          "off": "Off",
+          "solar_only": "Solar only",
+          "solar_plus_cheap": "Solar + cheapest hours"
         }
       }
     }
@@ -1134,6 +1151,9 @@
     },
     "device_not_found": {
       "message": "Device {device_id} not found in surplus controller."
+    },
+    "unknown_appliance_schedule": {
+      "message": "No appliance schedule found for {device_id}. Check the device ID you used with the schedule_appliance service."
     },
     "invalid_deadline_format": {
       "message": "Invalid deadline format: {deadline}. Use ISO format (YYYY-MM-DDTHH:MM:SS)."
@@ -1167,6 +1187,10 @@
     "charger_actuation_failed": {
       "title": "EV charger not accepting commands: {name}",
       "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+    },
+    "charger_stop_unenforceable": {
+      "title": "EV charger cannot be stopped: {name}",
+      "description": "SEM has told **{name}** to stop, but no configured mechanism can actually open its contactor — so the car is still drawing {power} W. The only control SEM has for this charger is `{entity}`, whose minimum is above 0 A, so writing 0 A does nothing (SEM never writes a value the entity would reject). If you have a house battery this power is coming out of it, at any hour of the day or night. Fix: configure a start/stop switch entity (`ev_start_stop_entity`), a charge-mode entity, or a stop service for this charger in the SEM options. This issue clears as soon as the charger stops drawing."
     },
     "no_forecast_integration": {
       "title": "No solar forecast integration detected",

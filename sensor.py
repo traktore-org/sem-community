@@ -29,8 +29,10 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 
 from .const import DOMAIN, STATUS_MESSAGES, ChargingState, SENSOR_LABEL_MAPPING
+from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -336,6 +338,15 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
+    # #666 — the last of its label-registry siblings to get an entity. The
+    # monthly EV accumulator was always written and ``consts/labels.py``
+    # always declared ``monthly_ev_consumption``; only this was missing.
+    SensorEntityDescription(
+        key="monthly_ev_consumption_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
     # Removed: Redundant (use monthly_home_consumption_energy instead)
     # monthly_home_consumption_actual_energy
 
@@ -481,7 +492,9 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="roi_annual_savings",
         device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.MEASUREMENT,
+        # (#646) monetary permits only state_class None/TOTAL — MEASUREMENT
+        # was invalid and broke long-term statistics.
+        state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="CHF",
         icon="mdi:cash-fast",
         suggested_display_precision=0,
@@ -501,7 +514,9 @@ SENSOR_TYPES = [
     # (#544) forecast_deviation_kwh removed — dead.
     SensorEntityDescription(
         key="forecast_corrected_today",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646) no ENERGY device_class — this is a *prediction* that moves
+        # up and down, not measured energy accumulation; energy permits only
+        # TOTAL/TOTAL_INCREASING, so the pairing was invalid.
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         icon="mdi:crystal-ball",
@@ -954,7 +969,9 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="forecast_surplus_kwh",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646 sweep) no ENERGY device_class — a forecast fluctuates; the
+        # energy+MEASUREMENT pairing was invalid (4th sibling, found by the
+        # whole-table guard).
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1156,7 +1173,8 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="battery_scheduler_deficit_kwh",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646) no ENERGY device_class — a computed deficit fluctuates;
+        # the energy+MEASUREMENT pairing was invalid.
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=1,
@@ -1361,8 +1379,58 @@ SENSOR_TYPES = [
 
 
 
+def _ensure_labels_registered(hass: HomeAssistant) -> None:
+    """Create SEM's labels in HA's label registry (#670).
+
+    ``async_update_entity(labels=...)`` stores label **IDs** verbatim: it does
+    not validate them and it does not create them. SEM never touched the label
+    registry, so for years it wrote ids HA had never heard of — the forward
+    lookup worked (``labels(entity)`` returned them) while every reverse lookup
+    returned nothing. ``label_entities('sem_monthly')`` -> 0, which is the
+    entire point of the feature and everything the HA UI's label filter uses.
+
+    That silence is also why the #667 drift went unnoticed for so long: with
+    the registry side missing, a correct label and a typo'd one behaved
+    identically.
+
+    ``label_id`` is ``slugify(name)``, so creating a label *named* ``sem_daily``
+    yields exactly the id ``SENSOR_LABEL_MAPPING`` already uses — no mapping
+    layer. Create-only: an id that already exists is left completely alone, so
+    a user who renamed or recoloured a SEM label keeps their change, and their
+    own labels are never touched.
+
+    Labels are cosmetic: nothing here may break sensor setup. The whole pass
+    is wrapped, not just the write — reading an *unloaded* registry raises too
+    (``AttributeError: no attribute '_label_data'``), which took the entire
+    sensor platform down with it before this guard.
+    """
+    try:
+        label_registry = lr.async_get(hass)
+    except Exception as err:  # pragma: no cover - defensive
+        _LOGGER.debug("Label registry unavailable — skipping registration: %s", err)
+        return
+
+    for label_id, description in SEM_LABELS.items():
+        try:
+            if label_registry.async_get_label(label_id) is not None:
+                continue
+            label_registry.async_create(name=label_id, description=description)
+        except ValueError:
+            # A label of that *name* exists under a different id — only
+            # reachable if a user renamed one of their own labels to ours.
+            # Theirs wins; we do not rename or delete user labels.
+            _LOGGER.debug("Label name %s already in use — not creating", label_id)
+        except Exception as err:
+            _LOGGER.debug("Could not register label %s: %s", label_id, err)
+            return
+
+
 async def _apply_labels_to_sensors(hass: HomeAssistant, sensors) -> None:
     """Apply labels to SEM sensors for dynamic dashboard support."""
+    # Must come first: applying an id that does not exist in the label
+    # registry is accepted without complaint and resolves to nothing (#670).
+    _ensure_labels_registered(hass)
+
     entity_registry = er.async_get(hass)
 
     for sensor in sensors:
@@ -1830,8 +1898,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "schedule_ev_hours",
         "energy_dashboard",
         "schedule",
-        "top_5_peaks",
-        "top_5_peaks_formatted",
+        # (#657) ``top_5_peaks`` / ``top_5_peaks_formatted`` were dropped —
+        # they were built from a coordinator key no producer ever wrote, so
+        # neither attribute ever reached a state to be recorded.
         # #580 — VPP event history (UI/accounting helper, no charting value)
         "events",
         "last_event",
@@ -2235,7 +2304,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         elif self.entity_description.key == "available_power":
             attrs.update({
                 "solar_production": self.coordinator.data.get("solar_production_total"),
-                "home_consumption": self.coordinator.data.get("home_consumption_total"),
+                # (#657) ``home_consumption_total`` was never published — the
+                # coordinator's key is ``home_consumption_power``.
+                "home_consumption": self.coordinator.data.get("home_consumption_power"),
                 "safe_discharge_power": self.coordinator.data.get("safe_discharge_power"),
                 "excess_solar": self.coordinator.data.get("excess_solar"),
             })
@@ -2318,6 +2389,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # Add device list details for dashboard table
             devices = self.coordinator.data.get("load_management_devices", {})
             if devices:
+                # Attribute is ``devices``; the coordinator key it comes from
+                # is ``load_management_devices`` (both are in
+                # ``_unrecorded_attributes`` under the ATTRIBUTE name).
                 attrs["devices"] = devices
                 # Also add a formatted list for easy display
                 device_list = []
@@ -2362,15 +2436,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             except Exception:
                 pass
         elif self.entity_description.key == "monthly_consecutive_peak":
-            # Add historical top 5 peaks from HA statistics
-            peak_history = self.coordinator.data.get("peak_history_top5", [])
-            if peak_history:
-                attrs["top_5_peaks"] = peak_history
-                # Also format as readable strings
-                attrs["top_5_peaks_formatted"] = [
-                    f"{p['value']} kW ({p['date']} {p['time']})"
-                    for p in peak_history
-                ]
+            # (#657) The ``top_5_peaks`` / ``top_5_peaks_formatted`` pair used
+            # to be built here from ``peak_history_top5`` — a key no producer
+            # was ever written for, in this repo's whole history. The
+            # formatter ran on an empty list every cycle and the attributes
+            # never appeared. Removed rather than invented: a real top-5 peak
+            # history means querying recorder statistics, which is a feature,
+            # not a bug fix. ``monthly_consecutive_peak`` (the state) and the
+            # three attributes below are unaffected.
             attrs["target_peak_limit"] = self.coordinator.data.get("target_peak_limit", 5.0)
             attrs["peak_trend"] = self.coordinator.data.get("peak_trend", "Unknown")
             attrs["tariff_type"] = self.coordinator.data.get("tariff_type", "unknown")
