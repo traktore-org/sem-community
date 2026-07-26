@@ -123,6 +123,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a quoted number drifts, a file reference can't — and guarded: every path it names must
   exist, every symbol it names must appear in the tree, and restating a numeric constant
   now fails CI outright. No user-facing change; it protects everything downstream of it.
+- 🖼️ **Every screenshot in the user guide was a broken-image icon on GitHub** (#672,
+  coherence-audit) — when #618 moved the guides into `docs/`, the files moved but their
+  *relative* links didn't, so `docs/USER_GUIDE.md` still linked as if it sat at the repo
+  root and every target resolved one directory too deep. Four tab screenshots rendered
+  broken, and the ⭐ cross-reference the guide calls "the canonical reference"
+  (EV Charging Logic, linked from three places) 404'd. Every target existed the whole
+  time — only the prefix was wrong. The issue-template's playbook link was broken the
+  same way. Now guarded: **every** relative markdown link in the repo must resolve, not
+  just the 12 config-card help links #618 covered.
 - 💰 **Nine energy-accounting values were being thrown away on every restart** (#668,
   coherence-audit) — the calculator hands 20 values to the store on shutdown, but the
   store's hand-written whitelist carried only 11 through. The nine it dropped were read
