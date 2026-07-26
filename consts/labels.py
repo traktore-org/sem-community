@@ -33,7 +33,11 @@ SEM_LABELS: Final[Dict[str, str]] = {
     "sem_realtime": "Real-time values",
 
     # Visibility labels
-    "sem_exclude": "Hide from dashboard",
+    # Removed (#670): sem_exclude ("Hide from dashboard") — attached to no
+    # entity and read by nothing anywhere in the codebase. Since #670 these
+    # keys are created as real labels in the user's HA registry, so a dead one
+    # is no longer inert: it would show up in their label list promising to
+    # hide entities and do nothing.
     "sem_graph": "Include in graphs",
     "sem_mobile": "Show on mobile view"
 }

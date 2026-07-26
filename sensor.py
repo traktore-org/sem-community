@@ -29,8 +29,10 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 
 from .const import DOMAIN, STATUS_MESSAGES, ChargingState, SENSOR_LABEL_MAPPING
+from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -1377,8 +1379,58 @@ SENSOR_TYPES = [
 
 
 
+def _ensure_labels_registered(hass: HomeAssistant) -> None:
+    """Create SEM's labels in HA's label registry (#670).
+
+    ``async_update_entity(labels=...)`` stores label **IDs** verbatim: it does
+    not validate them and it does not create them. SEM never touched the label
+    registry, so for years it wrote ids HA had never heard of — the forward
+    lookup worked (``labels(entity)`` returned them) while every reverse lookup
+    returned nothing. ``label_entities('sem_monthly')`` -> 0, which is the
+    entire point of the feature and everything the HA UI's label filter uses.
+
+    That silence is also why the #667 drift went unnoticed for so long: with
+    the registry side missing, a correct label and a typo'd one behaved
+    identically.
+
+    ``label_id`` is ``slugify(name)``, so creating a label *named* ``sem_daily``
+    yields exactly the id ``SENSOR_LABEL_MAPPING`` already uses — no mapping
+    layer. Create-only: an id that already exists is left completely alone, so
+    a user who renamed or recoloured a SEM label keeps their change, and their
+    own labels are never touched.
+
+    Labels are cosmetic: nothing here may break sensor setup. The whole pass
+    is wrapped, not just the write — reading an *unloaded* registry raises too
+    (``AttributeError: no attribute '_label_data'``), which took the entire
+    sensor platform down with it before this guard.
+    """
+    try:
+        label_registry = lr.async_get(hass)
+    except Exception as err:  # pragma: no cover - defensive
+        _LOGGER.debug("Label registry unavailable — skipping registration: %s", err)
+        return
+
+    for label_id, description in SEM_LABELS.items():
+        try:
+            if label_registry.async_get_label(label_id) is not None:
+                continue
+            label_registry.async_create(name=label_id, description=description)
+        except ValueError:
+            # A label of that *name* exists under a different id — only
+            # reachable if a user renamed one of their own labels to ours.
+            # Theirs wins; we do not rename or delete user labels.
+            _LOGGER.debug("Label name %s already in use — not creating", label_id)
+        except Exception as err:
+            _LOGGER.debug("Could not register label %s: %s", label_id, err)
+            return
+
+
 async def _apply_labels_to_sensors(hass: HomeAssistant, sensors) -> None:
     """Apply labels to SEM sensors for dynamic dashboard support."""
+    # Must come first: applying an id that does not exist in the label
+    # registry is accepted without complaint and resolves to nothing (#670).
+    _ensure_labels_registered(hass)
+
     entity_registry = er.async_get(hass)
 
     for sensor in sensors:

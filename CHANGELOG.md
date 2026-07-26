@@ -65,10 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sem_monthly` returned *nothing* while all six monthly sensors existed and held data.
   Eleven keys were pure suffix drift (the label key was the entity key minus its `_energy`
   suffix) and are fixed — every monthly sensor now actually carries its label (live-checked
-  on HA-TEST). On its own that does **not** yet restore the filtering: live verification
-  turned up a second, independent cause — SEM never registers its labels with HA at all, so
-  every reverse lookup returns nothing even for correctly-attached labels. Filed as #670.
-  The remaining 33 orphans were then triaged
+  on HA-TEST). On its own that does **not** restore the filtering: live verification turned
+  up a second, independent cause — SEM never registered its labels with HA at all, so every
+  reverse lookup returned nothing even for correctly-attached labels. That is #670, fixed
+  below; you need both. The remaining 33 orphans were then triaged
   individually and came back as one class rather than 33 judgement calls: **the sensor was
   deleted and the label was left behind.** `sensor.py` names 26 of them outright in its own
   `# Removed:` comments, so the file that dropped the entities is the file that says which
@@ -80,6 +80,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **zero** orphans, and `tests/test_667_label_registry.py` now bans them outright instead of
   ratcheting — plus a guard that the scan covers every platform SEM forwards to, since a
   missed platform makes real entities look like orphans and invites allowlisting them.
+- 🏷️ **Filtering or automating by a SEM label now actually works — the labels had never
+  been registered with Home Assistant** (#670, found while live-verifying #667) — SEM wrote
+  label *ids* straight onto its entities, and `async_update_entity(labels=...)` stores them
+  verbatim: it neither validates nor creates them. So all 19 SEM labels were inert strings.
+  The forward direction looked fine (`labels('sensor.sem_monthly_solar_yield_energy')`
+  returned all four), but `label_entities('sem_monthly')` returned **0** and
+  `label_id('sem_monthly')` returned `None` — and the reverse lookup is the entire point:
+  it is what the entity-list label filter, label-scoped automations and auto-entities
+  dashboards use. SEM now creates each label in HA's label registry before applying it,
+  **create-only** — an id that already exists is left completely alone, so renames, colours
+  and your own labels are never touched. This is also why #667's drift survived for years:
+  with the registry side missing, a correct label and a typo'd one behaved identically.
+  `sem_exclude` is retired in the same pass (attached to nothing, read by nothing) — now
+  that these become real labels in your registry, a dead one would show up promising to
+  hide entities and do nothing.
 - 🔌 **EV charging that happened while SEM wasn't running is now recovered from the wallbox
   counter** (#658, coherence-audit) — SEM builds daily EV energy by integrating the
   charger's power sensor every cycle, so anything charged while it wasn't integrating —
