@@ -831,22 +831,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """Does this charger's mode permit night/grid charging at all?
 
         (#634) solar_only participates ONLY when its "At least" floor is set —
-        the floor is the mode-independent overnight guarantee (same rule as the
-        state machine's night-lane gate in charging_control; keep in sync).
-        Floor 0 keeps the classic never-grids-at-night contract."""
-        from ..consts.ev_charge_modes import MODE_NIGHT_ALLOWED
-        mode = self._effective_charge_mode_for(charger_cfg)
-        if mode in MODE_NIGHT_ALLOWED:
-            return True
-        if mode == "solar_only":
-            target = (charger_cfg or {}).get("daily_ev_target")
-            if target is None:
-                target = self.config.get("daily_ev_target", 0)
-            try:
-                return float(target or 0) > 0.1
-            except (TypeError, ValueError):
-                return False
-        return False
+        the floor is the mode-independent overnight guarantee. Floor 0 keeps the
+        classic never-grids-at-night contract (#346).
+
+        (#679) The rule moved to ``consts.ev_charge_modes`` instead of being
+        hand-copied here and in ``ChargingStateMachine._night_capable``. Both
+        copies carried a "keep in sync" note; the shared function IS the sync.
+        It also fixes what made the #634 default unreachable — see
+        ``mode_allows_night_charging`` for why a *global* floor cannot serve as
+        an opt-in.
+        """
+        from ..consts.ev_charge_modes import mode_allows_night_charging
+        return mode_allows_night_charging(self.config, charger_cfg)
 
     def _mode_uses_tariff(self, charger_cfg: dict) -> bool:
         """Does this charger's mode defer to tariff-cheap windows?

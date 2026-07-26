@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- ☀️ **"Solar only" grid-charged at night on every install — the never-grids default was
+  unreachable** (#679, found while diagnosing @onkelfu's #627) — #634 settled the axis: the mode
+  is the *daytime* axis, the "At least X" floor is the overnight guarantee, and leaving that
+  floor at 0 is what keeps the "Solar only never charges from the grid" promise. The floor was
+  never 0. Setup writes a default daily target of 10 kWh into every entry, and an unset SOC
+  target reads as 80% — so the gate that asks "did you ask for an overnight guarantee?" was
+  reading a number the installer had filled in, and answered yes for every Solar-only charger
+  ever configured. Solar only therefore behaved exactly like Min + Solar, which makes it not a
+  separate mode at all. It also read the kWh target even on a charger targeting %, so an
+  SOC-targeted charger was opted in by a box it does not use. Now the overnight floor only
+  counts as an opt-in when it is set **on that charger**, in **the unit that charger targets**;
+  the other modes are unchanged, because for them the overnight top-up is the point of the mode.
+  If you had set a per-charger "At least" value under Solar only, nothing changes — if you had
+  not, your Solar-only chargers stop at sundown, as documented. The two copies of this gate
+  (coordinator + state machine) were hand-kept in sync and are now one function. Guarded by
+  `tests/test_679_solar_only_night_default.py`, which builds every case from a real install's
+  defaults rather than a hand-written config — the reason the existing contract test passed
+  while the contract was broken in the field.
 - 🔌 **A charger set to *off* kept charging out of the house batteries, and SEM's stop
   could never have worked** (#627, reported by @onkelfu) — the diagnostics showed the mode
   was right (`charge_mode: "off"`), the intent was right (`last_desired: "OFF"`) and the

@@ -307,9 +307,19 @@ class TestPerChargerNightGate634:
         c = self._c()
         assert c._mode_allows_night_charging({"charge_mode": "min_plus_solar"}) is True
 
-    def test_global_floor_fallback(self):
+    def test_global_floor_is_NOT_a_fallback_for_solar_only(self):
+        """Inverted by #679 — this used to assert the fallback, which was the bug.
+
+        A global ``daily_ev_target`` cannot opt a ``solar_only`` charger into
+        the night lane, because ``_install_defaults()`` seeds that global to 10
+        on every install: the value cannot distinguish "the user wants an
+        overnight guarantee" from "the installer filled the box in". The #634
+        deal was floor>0 ⇒ grid top-up, floor 0 ⇒ the #346 never-grids contract
+        — and with a seeded global, floor 0 was not a state a real install could
+        reach. The opt-in has to be per-charger to mean anything.
+        """
         c = self._c(config={"daily_ev_target": 2})
-        assert c._mode_allows_night_charging({"charge_mode": "solar_only"}) is True
+        assert c._mode_allows_night_charging({"charge_mode": "solar_only"}) is False
 
 
 class TestNightRatePrecedence630:
