@@ -111,6 +111,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a measurement** (`85.0 if solar_power > 0`), which would have shown a made-up number
   as a real one had anything ever surfaced them. A new guard checks that *every*
   `sensor.sem_*` reference under `consts/` names an entity some platform actually declares.
+- 🤖 **The file every AI agent reads first had been wrong since v1.0.0** (#671,
+  coherence-audit) — `.github/copilot-instructions.md` sat untouched from April through
+  ~25 releases. Six file paths, five constants and one service it named no longer existed,
+  and it documented the registry deleted in #669. The dangerous part wasn't the dead
+  references though: it stated `DEFAULT_UPDATE_INTERVAL = 300  # 5 minutes` when the real
+  value is `10` **seconds** (30× off, with the wrong unit spelled out), and gave
+  `DEFAULT_BATTERY_PRIORITY_SOC` a wrong number *and* an inverted meaning. An agent has no
+  reason to re-derive a number a doc states, so those produce broken code rather than
+  confusion. Rewritten to point at the modules constants live in instead of quoting them —
+  a quoted number drifts, a file reference can't — and guarded: every path it names must
+  exist, every symbol it names must appear in the tree, and restating a numeric constant
+  now fails CI outright. No user-facing change; it protects everything downstream of it.
 - 💰 **Nine energy-accounting values were being thrown away on every restart** (#668,
   coherence-audit) — the calculator hands 20 values to the store on shutdown, but the
   store's hand-written whitelist carried only 11 through. The nine it dropped were read
