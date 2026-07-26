@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import date, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -1138,6 +1138,52 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             cls._version_cache = "0.0.0"
         return cls._version_cache
 
+    def _collect_ev_counter_entities(self) -> List[str]:
+        """Every charger's own energy counter, for #658 reconciliation.
+
+        The bucket being reconciled is the FLEET daily total, so this must
+        gather the whole fleet — one charger's counter alone would be adopted
+        as if it were all of them.
+
+        Preference order, and why each level is exclusive rather than additive:
+
+        1. Each charger's ``ev_total_energy_sensor`` (lifetime, per-charger —
+           the drift-free source ``_update_per_charger_detector_energy``
+           already trusts). The top-level key belongs to the PRIMARY charger by
+           the auto-fill convention in ``__init__`` (#639), so it is a fallback
+           for the primary only — never for siblings.
+        2. Otherwise the legacy ``ev_daily_energy_sensor``, or
+        3. Otherwise the Energy Dashboard's ``ev_energy``.
+
+        2 and 3 are fallbacks and NOT merged into 1: a daily counter and a
+        lifetime counter for the same charger both report the same kWh, and
+        summing their deltas would double-count every session.
+        """
+        chargers = self.config.get("ev_chargers") or []
+        top_level = self.config.get("ev_total_energy_sensor")
+
+        counters: List[str] = []
+        for index, charger in enumerate(chargers):
+            entity = charger.get("ev_total_energy_sensor")
+            # "Primary" by POSITION, not by matching ``id`` against
+            # ``chargers[0]["id"]`` — an id-less legacy entry would make that
+            # comparison true for every sibling and lend them all the same
+            # counter, which is the cross-contamination #639 removed.
+            if not entity and index == 0:
+                entity = top_level
+            if entity:
+                counters.append(entity)
+        if not counters and top_level:
+            counters.append(top_level)  # counters configured, no charger list yet
+
+        if not counters:
+            legacy = self.config.get("ev_daily_energy_sensor")
+            ed_ev = getattr(self._energy_dashboard_config, "ev_energy", None)
+            fallback = legacy or ed_ev
+            if fallback:
+                counters.append(fallback)
+        return counters
+
     async def async_initialize_energy_dashboard(self, quiet: bool = False) -> bool:
         """Initialize sensors from HA Energy Dashboard.
 
@@ -1234,11 +1280,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self.config.get("prefer_hardware_energy", True),
                 )
 
-        # EV energy reconciliation disabled — keba_p30_charging_daily resets at
-        # midnight but daily_ev resets at sunrise, causing misalignment after sunrise
-        # where reconciliation imports the full midnight-based counter into the fresh
-        # sunrise counter, making SEM think the target is already reached.
-        # SEM's own power integration (10s cycles) is reliable enough.
+        # (#658) daily-EV reconciliation against the wallbox counters. This was
+        # parked for years because a midnight-resetting charger counter cannot be
+        # compared ABSOLUTELY against a bucket that rolls at the charge deadline —
+        # true, and no longer relevant: the reconciliation is delta-based now, and
+        # a counter reset is just a reset (see ``_reconcile_ev_energy``). Power
+        # integration is only "reliable enough" while SEM is running; the energy
+        # this recovers is precisely the energy charged while it was not.
+        self._energy_calculator.configure_ev_counters(
+            self.hass,
+            self._collect_ev_counter_entities(),
+            self.config.get("prefer_hardware_energy", True),
+        )
 
         # Log EV sensor configuration
         ev_power = self._sensor_reader.config.ev_power_sensor

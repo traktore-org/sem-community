@@ -85,7 +85,11 @@ _BASELINE = {
     # interface decision rather than a cleanup, so it is deliberately
     # deferred. Known-dead, not unknown.
     "get_status",
-    "set_ev_daily_energy_sensor",             # confirmed dead — #658 (via #663)
+    # ``set_ev_daily_energy_sensor`` left this allowlist in #658 because it was
+    # DELETED and replaced by a live one (``configure_ev_counters``), not
+    # because it grew a caller. It was the setter for a reconciliation that was
+    # written, parked, and never wired — the orphan scan is what found it. Do
+    # not re-add.
     # HeatPumpController.unblock (and its block sibling, which this scan
     # can't see because "block" matches unrelated string literals). Kept
     # deliberately though orphaned: they implement SG-Ready state 1, which

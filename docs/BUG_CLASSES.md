@@ -443,6 +443,18 @@ store, is the key built in exactly one place — and if a lookup misses, does an
   read `priority_for(id, seed=config)`, never assign the config directly. Adjacent leftovers: #604.
 - **Spec-vs-reality gap** — something *designed but never wired* (e.g. the layered-trace health
   signal was a spec + a method but never an entity until #590). Verify the assumed thing *exists*.
+  *Sub-shape — parked with a reason that outlived it (#658):* EV counter reconciliation was built,
+  found wrong for a real reason (it compared a midnight-resetting counter's *absolute* value
+  against a bucket that rolls at the charge deadline), and disabled with a comment stating that
+  reason plus a reassurance — "SEM's own power integration (10s cycles) is reliable enough" — that
+  was true only in the case the feature did not cover. Its six tests were then `@skip`ped with the
+  same sentence, so a full green suite reported nothing missing, for years. The objection was
+  fixable in an afternoon (deltas instead of absolutes: a counter reset is just a reset); nobody
+  re-read it because a comment explaining a decision reads like a closed question.
+  **Tell:** a disable comment that argues rather than states; `@pytest.mark.skip(reason=...)` where
+  the reason is a *design* objection rather than an environment one; a setter with no caller
+  (the orphan scan of #653 is what surfaced this one). **Sweep:** for every skipped test and every
+  "disabled because" comment — is the stated obstacle still true, and was it ever unfixable?
 - **Marginal refactor (do NOT force)** — a dedup that needs a shim or wide test churn for a
   maintainability-only gain (e.g. the MagnitudeVoter proxy, the debounce-primitive). Recorded so
   we don't keep re-litigating them.

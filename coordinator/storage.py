@@ -593,6 +593,10 @@ class SEMStorage:
             "solar_counter_baselines": dict(
                 self._daily_data.get("solar_counter_baselines", {})
             ),
+            # (#658) EV wallbox-counter baselines
+            "ev_counter_baselines": dict(
+                self._daily_data.get("ev_counter_baselines", {})
+            ),
         }
 
     def import_energy_calculator_state(self, state: Dict[str, Any]) -> None:
@@ -617,6 +621,9 @@ class SEMStorage:
         # (#556) solar hardware-counter baselines
         if "solar_counter_baselines" in state:
             self._daily_data["solar_counter_baselines"] = state["solar_counter_baselines"]
+        # (#658) EV wallbox-counter baselines
+        if "ev_counter_baselines" in state:
+            self._daily_data["ev_counter_baselines"] = state["ev_counter_baselines"]
 
     def export_forecast_tracker_state(self) -> Dict[str, Any]:
         """Export state for ForecastTracker."""
