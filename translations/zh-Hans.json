@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "车充太阳能占比 %"
       },
-      "utility_signal_source": {
-        "name": "电网调度信号源"
-      },
-      "utility_signal_count_today": {
-        "name": "今日电网调度信号次数"
-      },
       "predictor_training_status": {
         "name": "模型训练状态"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "热泵已注册"
-      },
-      "utility_signal_active": {
-        "name": "电网调度信号激活"
       },
       "layer_mismatch": {
         "name": "控制层级不一致"

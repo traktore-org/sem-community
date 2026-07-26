@@ -99,18 +99,9 @@ async def test_deactivation_path_normal_plus_climate(mock_hass):
     assert h.to_dict()["deactivation_path"] == "normal+climate"
 
 
-@pytest.mark.asyncio
-async def test_deactivation_path_blocked(mock_hass):
-    h = _make(mock_hass, climate_entity_id=None)
-    await h.block()
-    assert h.to_dict()["deactivation_path"] == "blocked"
-
-
-@pytest.mark.asyncio
-async def test_deactivation_path_unblocked(mock_hass):
-    h = _make(mock_hass, climate_entity_id=None)
-    await h.unblock()
-    assert h.to_dict()["deactivation_path"] == "unblocked"
+# (#664) ``deactivation_path`` no longer has "blocked"/"unblocked" arms —
+# HeatPumpController.block/unblock were the ripple-control actuator and were
+# deleted with it. The remaining paths are the ones SEM actually walks.
 
 
 # ──────────────────────────────────────────────

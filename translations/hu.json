@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "EV napenergiás töltés %"
       },
-      "utility_signal_source": {
-        "name": "Szolgáltatói jel forrása"
-      },
-      "utility_signal_count_today": {
-        "name": "Mai szolgáltatói jelek"
-      },
       "predictor_training_status": {
         "name": "Predictor tanítási állapota"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Hőszivattyú regisztrálva"
-      },
-      "utility_signal_active": {
-        "name": "Szolgáltatói jel aktív"
       },
       "layer_mismatch": {
         "name": "Rétegeltérés"

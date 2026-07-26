@@ -76,11 +76,6 @@ BINARY_SENSOR_TYPES = [
         key="heat_pump_registered",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
     ),
-    # Phase 7: Utility signal active
-    BinarySensorEntityDescription(
-        key="utility_signal_active",
-        device_class=BinarySensorDeviceClass.PROBLEM,
-    ),
     # #590 — layered-trace health: ON when a control OR perception layer-boundary
     # fault has persisted (a subsystem decided to act but reality disagreed, or a
     # sign reading contradicts its energy counters). The single surface for the
@@ -125,12 +120,12 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
     # Disabled by default
     DISABLED_BY_DEFAULT = {
         "forecast_available", "tariff_is_dynamic",
-        "heat_pump_solar_boost", "utility_signal_active",
+        "heat_pump_solar_boost",
     }
 
     # Diagnostic sensors
     DIAGNOSTIC_SENSORS = {
-        "forecast_available", "tariff_is_dynamic", "utility_signal_active",
+        "forecast_available", "tariff_is_dynamic",
     }
 
     def __init__(

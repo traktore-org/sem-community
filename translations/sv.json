@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "EV solladdning %"
       },
-      "utility_signal_source": {
-        "name": "Elbolagssignalkälla"
-      },
-      "utility_signal_count_today": {
-        "name": "Elbolagssignaler idag"
-      },
       "predictor_training_status": {
         "name": "Prediktorns träningsstatus"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Värmepump registrerad"
-      },
-      "utility_signal_active": {
-        "name": "Elbolagssignal aktiv"
       },
       "layer_mismatch": {
         "name": "Lageravvikelse"

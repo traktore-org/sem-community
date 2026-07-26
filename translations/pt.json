@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "% de carregamento solar do VE"
       },
-      "utility_signal_source": {
-        "name": "Fonte do sinal do operador"
-      },
-      "utility_signal_count_today": {
-        "name": "Sinais do operador hoje"
-      },
       "predictor_training_status": {
         "name": "Estado do treino do preditor"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Bomba de calor registrada"
-      },
-      "utility_signal_active": {
-        "name": "Sinal do operador ativo"
       },
       "layer_mismatch": {
         "name": "Divergência entre camadas"

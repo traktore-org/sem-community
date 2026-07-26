@@ -747,13 +747,15 @@ restore no-op), **#644** (duplicated-mechanism, dual anti-cycle clocks). Filed o
 - **#654** — spec-vs-reality: ripple-control shedding is observe-only; the WARNING log
   claims shedding that never happens. **Closed by amputation**: the log, both docstrings,
   `get_devices_to_block`, and the `block_path` / `loads_blocked` telemetry are gone; the
-  monitor now says only what it does, which is observe. Wiring is #664, where the open
-  question is whether a load running on own PV is covered by the block — contract- and
-  operator-dependent, not inferable. `HeatPumpController.block()`/`unblock()` were
-  **kept** despite being orphans: they implement SG-Ready state 1, which `config_flow.py`
-  advertises to the user as part of the "standard 4-state protocol", so deleting them
-  would make an advertised promise permanently unfulfillable. They sit in the orphan
-  baseline pointing at #664.
+  monitor said only what it did, which is observe. **#664 then closed the whole surface by
+  decision, not by building it** (Guido, 2026-07-26: SEM does not support Sperrzeiten): the
+  module, its three always-dead entities, `HeatPumpController.block()`/`unblock()` and the
+  orphan-baseline entry are gone, and `config_flow` no longer advertises a 4th SG-Ready
+  state SEM cannot drive. **The lesson is the sequencing.** #654 kept the orphans because
+  the config flow advertised them — an advertisement is a real constraint, so the honest
+  options were *build it* or *retract the advertisement*, never *delete quietly*. Asking
+  the owner whether the feature is wanted at all cost one sentence and settled a design
+  question (solar-exempt semantics) that no amount of code reading could have.
 - **#655** — spec-vs-reality (docs): SETUP_GUIDE's SG-Ready relay table still documents
   the pre-#523 mapping the code explicitly calls a bug. **FIXED.** Worth keeping in the
   ledger as the sharpest example of a sub-class the other entries don't cover: *the docs

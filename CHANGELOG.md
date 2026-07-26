@@ -313,6 +313,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so neither limitation ever surfaced. Prevention at the write path replaces detection
   nobody read.
 
+### 🧹 Feature removed by decision (#664 — ripple control / Sperrzeiten)
+
+- 🗑️ **SEM does not support utility ripple control, and now says so** (#664, decided by
+  @traktore-org) — the utility-signal surface was never reachable: `utility_signal_entity`
+  had no config-flow step, no card picker, no `strings.json` entry and no docs, so on
+  **every** install the monitor read nothing while three diagnostic entities
+  (`utility_signal_active` / `_source` / `_count_today`) reported `false` / `"none"` / `0`
+  forever. #654 had already amputated the half that *lied* (a WARNING claiming loads were
+  being shed); #664 asked whether to build the shedding for real and the answer was no.
+  Removed: the module, the three entities and their names/icons in all 16 languages, the
+  coordinator wiring, and `HeatPumpController.block()`/`unblock()` — SG-Ready state 1, an
+  actuator that had no caller for its entire life. `config_flow` no longer advertises a
+  "4-state protocol" SEM cannot drive; it documents NORMAL / BOOST / FORCE_ON and says
+  state 1 belongs to the grid operator's own lock. The **relay truth table keeps its
+  BLOCKED row** — it is the SG-Ready standard, and installers verify their wiring against
+  the full table (#523/#655). A guard test pins each way the surface could creep back.
+  *Upgrade note:* the three entities were diagnostic and **disabled by default**, so on a
+  normal install nothing changes — verified on the test rig, where the live entity count was
+  identical before and after. Their disabled entity-registry rows survive the upgrade
+  (Home Assistant does not reap registry entries for entities it never re-adds); they are
+  invisible unless you browse disabled entities, and can be deleted there. If you had
+  enabled one, it will read unavailable until you remove it.
+
 ### 🧹 Dead code removed (#659 — four features that could never run)
 
 - 🗑️ **Dynamic 1p/3p charger phase switching was unreachable on two independent axes**

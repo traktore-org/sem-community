@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "Ładowanie EV ze słońca %"
       },
-      "utility_signal_source": {
-        "name": "Źródło sygnału operatora"
-      },
-      "utility_signal_count_today": {
-        "name": "Sygnały operatora dziś"
-      },
       "predictor_training_status": {
         "name": "Status uczenia predyktora"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Pompa ciepła zarejestrowana"
-      },
-      "utility_signal_active": {
-        "name": "Sygnał operatora aktywny"
       },
       "layer_mismatch": {
         "name": "Niezgodność warstw"

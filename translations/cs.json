@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "Solární nabíjení EV %"
       },
-      "utility_signal_source": {
-        "name": "Zdroj signálu distributora"
-      },
-      "utility_signal_count_today": {
-        "name": "Signály distributora dnes"
-      },
       "predictor_training_status": {
         "name": "Stav trénování prediktoru"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Tepelné čerpadlo registrováno"
-      },
-      "utility_signal_active": {
-        "name": "Signál distributora aktivní"
       },
       "layer_mismatch": {
         "name": "Nesoulad vrstev"

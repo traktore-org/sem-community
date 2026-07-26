@@ -717,16 +717,16 @@ async def test_heat_pump_deactivate(heat_pump):
 
 
 @pytest.mark.asyncio
-async def test_heat_pump_block_unblock(heat_pump):
-    """Test BLOCKED state via utility signal."""
-    await heat_pump.block()
-    assert heat_pump.sg_ready_state == SGReadyState.BLOCKED
-    assert heat_pump._status.state == DeviceState.BLOCKED
+async def test_heat_pump_has_no_block_actuator(heat_pump):
+    """(#664) SEM does not implement ripple control / Sperrzeiten.
 
-    heat_pump.hass.services.async_call.reset_mock()
-    await heat_pump.unblock()
-    assert heat_pump.sg_ready_state == SGReadyState.NORMAL
-    assert heat_pump._status.state == DeviceState.IDLE
+    ``block``/``unblock`` were SG-Ready state 1 with no caller — the
+    ripple-control surface that would have called them was amputated in
+    #654 and #664 closed by deciding not to build it. The methods are gone;
+    this pins that they do not quietly come back without a caller.
+    """
+    assert not hasattr(heat_pump, "block")
+    assert not hasattr(heat_pump, "unblock")
 
 
 @pytest.mark.asyncio

@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "Încărcare solară VE %"
       },
-      "utility_signal_source": {
-        "name": "Sursa semnalului furnizorului"
-      },
-      "utility_signal_count_today": {
-        "name": "Semnale de la furnizor azi"
-      },
       "predictor_training_status": {
         "name": "Stare antrenare predictor"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Pompă de căldură înregistrată"
-      },
-      "utility_signal_active": {
-        "name": "Semnal furnizor activ"
       },
       "layer_mismatch": {
         "name": "Nepotrivire între straturi"

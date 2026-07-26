@@ -830,12 +830,6 @@
       "energy_ev_solar_percentage": {
         "name": "EV Solar Charging %"
       },
-      "utility_signal_source": {
-        "name": "Utility Signal Source"
-      },
-      "utility_signal_count_today": {
-        "name": "Utility Signals Today"
-      },
       "session_energy": {
         "name": "Session Energy"
       },
@@ -984,9 +978,6 @@
       },
       "heat_pump_registered": {
         "name": "Heat Pump Registered"
-      },
-      "utility_signal_active": {
-        "name": "Utility Signal Active"
       },
       "surplus_available": {
         "name": "Surplus Available"

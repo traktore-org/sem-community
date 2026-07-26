@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "EV Zonneladen %"
       },
-      "utility_signal_source": {
-        "name": "Netbeheerder Signaalbron"
-      },
-      "utility_signal_count_today": {
-        "name": "Netbeheerder Signalen Vandaag"
-      },
       "predictor_training_status": {
         "name": "Voorspeller Trainingsstatus"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Warmtepomp geregistreerd"
-      },
-      "utility_signal_active": {
-        "name": "Netbeheerder Signaal Actief"
       },
       "layer_mismatch": {
         "name": "Laag-mismatch"
