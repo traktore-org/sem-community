@@ -98,9 +98,17 @@ class EnergyCalculator:
         self._accumulated_self_consumed_kwh: float = 0.0
         self._accumulated_export_kwh: float = 0.0
 
-        # Hardware EV energy reconciliation
+        # Hardware EV energy reconciliation (#658) — same baseline/anchor/delta
+        # model as the solar counters below, for the same reason: the wallbox
+        # counter and SEM's EV day bucket do NOT reset on the same boundary
+        # (KEBA resets at midnight, ``ev_day`` rolls at the charge deadline), so
+        # comparing absolute values compares different windows. A DELTA is
+        # boundary-agnostic — a counter reset is just a reset.
         self._hass: Optional[HomeAssistant] = None
-        self._ev_daily_energy_sensor: Optional[str] = None
+        self._ev_counter_entities: List[str] = []
+        self._ev_counter_enabled: bool = False
+        self._ev_counter_logged: bool = False
+        self._ev_counter_baselines: Dict[str, Any] = {}
         # (#556) Daily-solar reconciliation against hardware production
         # counters — closes the cloud-poll undercount (integrating a power
         # sensor that reports 0/unavailable between polls). Baselines are
@@ -254,6 +262,10 @@ class EnergyCalculator:
         if power.ev_power >= MIN_POWER_THRESHOLD:
             ev_increment = (power.ev_power * interval_hours) / 1000  # FLEET-READ: same fleet integration as the gate above.
             self._accumulate(EV_CATEGORY, ev_day, month_key, year_key, ev_increment)
+        # (#658) wallbox-counter reconciliation — recovers charging SEM was not
+        # running to integrate; must run before the reads below, exactly like
+        # its solar sibling.
+        self._reconcile_ev_energy(ev_day, month_key, year_key)
 
         energy.daily_ev = self._get_daily(EV_CATEGORY, ev_day)
         energy.monthly_ev = self._get_monthly(EV_CATEGORY, month_key)
@@ -389,12 +401,44 @@ class EnergyCalculator:
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
         return energy
 
-    def set_ev_daily_energy_sensor(self, hass: HomeAssistant, entity_id: Optional[str]) -> None:
-        """Set hardware EV daily energy sensor for reconciliation."""
+    def configure_ev_counters(
+        self, hass: HomeAssistant, entity_ids: List[str], enabled: bool
+    ) -> None:
+        """Enable daily-EV reconciliation against wallbox counters (#658).
+
+        ``entity_ids`` are the charger energy counters — lifetime (KEBA
+        ``total_energy``, go-e ``energy_total``) or daily-resetting; both work,
+        because only their DELTA is used.
+
+        On a multi-charger install pass EVERY charger's counter: the bucket
+        being reconciled is the FLEET daily total, so one charger's counter
+        alone would credit its energy to the fleet and then be adopted as if it
+        were all of it (bug class 3 — the read must match the scope). A PARTIAL
+        set is still safe rather than wrong: adoption is upward-only against a
+        fleet integration that already includes every charger, so a missing
+        counter simply means that charger's downtime energy can't be recovered.
+
+        Gated by the same ``prefer_hardware_energy`` option as the solar
+        counters — it is the same promise ("trust the hardware over my
+        integration"), and splitting it into two knobs would give users a way
+        to half-answer one question.
+        """
         self._hass = hass
-        self._ev_daily_energy_sensor = entity_id
-        if entity_id:
-            _LOGGER.info("EV energy reconciliation enabled: %s", entity_id)
+        new_entities = [e for e in dict.fromkeys(entity_ids or []) if e]
+        if new_entities != self._ev_counter_entities and self._ev_counter_entities:
+            # Entity set changed mid-run (charger added/removed): the anchor was
+            # calibrated to the old set. Drop the baselines so the next cycle
+            # re-anchors on the current daily value instead of attributing a new
+            # charger's whole lifetime counter to today.
+            self._ev_counter_baselines = {}
+        self._ev_counter_entities = new_entities
+        self._ev_counter_enabled = bool(enabled) and bool(self._ev_counter_entities)
+        if self._ev_counter_enabled and not self._ev_counter_logged:
+            self._ev_counter_logged = True
+            _LOGGER.info(
+                "Daily EV reconciliation against wallbox counters enabled: %s",
+                ", ".join(self._ev_counter_entities),
+            )
 
     def configure_solar_counters(
         self, hass: HomeAssistant, entity_ids: List[str], enabled: bool
@@ -922,54 +966,141 @@ class EnergyCalculator:
         ):
             accumulators[key] = accumulators.get(key, 0.0) + delta
 
-    def _reconcile_ev_energy(self, ev_day: date, month_key: str) -> None:
-        """Cross-check integrated EV energy against hardware counter.
+    def _reconcile_ev_energy(
+        self, ev_day: date, month_key: str, year_key: str
+    ) -> None:
+        """Daily EV energy follows the wallbox counters (#658).
 
-        If the hardware counter (e.g. KEBA daily energy) reports more energy
-        than our power integration, adopt the hardware value. This catches
-        energy missed due to restarts, missed cycles, or external charging.
+        SEM integrates the charger power sensor every cycle. When SEM is down
+        (HA restart, update, power blip) or the charger is started from its own
+        app while HA is asleep, that energy is never integrated — the KEBA app
+        says 8 kWh and SEM says 5.5, and the user files a numbers-don't-match
+        report. The wallbox's own counter saw all of it.
 
-        STILL NOT WIRED — see #658. This method has no callers, and its setter
-        ``set_ev_daily_energy_sensor`` is called only from tests, so the guard
-        above would early-return anyway. Two defects block it, both tracked
-        there: the absolute adopt-the-larger comparison is only valid when the
-        counter resets on the SAME boundary as ``ev_day`` (a midnight-resetting
-        KEBA counter against a deadline-based bucket is comparing different
-        windows), and it credits ONE charger's counter to the FLEET total. The
-        fix is to follow ``_reconcile_solar_energy``'s baseline/anchor/delta
-        model, which is boundary-agnostic because a counter reset is just a
-        reset. Do NOT wire this up as-is.
+        Same baseline/anchor/delta model as ``_reconcile_solar_energy``, and
+        for a sharper reason: the counter and the bucket do NOT share a day
+        boundary. A KEBA daily counter resets at midnight; ``ev_day`` rolls at
+        the charge deadline (#279). Between the two — the prime overnight
+        charging window — an absolute "hardware > integrated, adopt it"
+        comparison compares two different windows, adopts a phantom value and
+        double-adds the delta to the month. That is why the original was parked
+        with its tests skipped since the day it was written. A DELTA has no such
+        problem: a counter reset is just a reset, handled below.
 
-        The day-key half of #658 is already corrected here: the parameter is
-        ``ev_day``, not the midnight ``today`` it used to take — reconciling
-        and accumulating must key on the same day (#666, #645).
+        - Counters may be lifetime or daily-resetting; only deltas are used.
+        - Counter going backwards (charger reboot, midnight reset of a daily
+          counter) → re-baseline; the accumulated value keeps.
+        - ADOPTION IS UPWARD-ONLY: integration remains the floor, so an
+          unavailable/stale/partial counter set can never shrink the day. The
+          delta propagates to monthly, yearly and lifetime so all periods stay
+          consistent (#666: they are written by one call, so they are corrected
+          by one call too).
+        - The bucket is the FLEET daily total, so ``_ev_counter_entities`` must
+          be every charger's counter — see ``configure_ev_counters``.
+
+        Known limitation: EV cost and solar-share are computed from live power
+        flows, so those figures for counter-recovered energy stay approximate —
+        SEM knows the energy arrived but not what it was made of.
         """
-        if not self._hass or not self._ev_daily_energy_sensor:
+        if not self._ev_counter_enabled or not self._hass:
             return
 
-        state = self._hass.states.get(self._ev_daily_energy_sensor)
-        if not state or state.state in ("unknown", "unavailable", None):
+        day_str = str(ev_day)
+        bl = self._ev_counter_baselines
+        if bl.get("date") != day_str or "base" not in bl or "last" not in bl:
+            # EV-day rollover (or first run / legacy or damaged shape):
+            # fresh baselines for the new EV day.
+            bl = self._ev_counter_baselines = {
+                "date": day_str, "base": {}, "last": {},
+            }
+
+        daily_key = f"{EV_CATEGORY}_{ev_day}"
+        integrated = self._daily_accumulators.get(daily_key, 0.0)
+
+        readings: Dict[str, float] = {}
+        for entity_id in self._ev_counter_entities:
+            state = self._hass.states.get(entity_id)
+            if not state or state.state in ("unknown", "unavailable", None):
+                continue
+            value = self._energy_state_kwh(state)  # #551 unit-aware
+            if value >= 0:
+                readings[entity_id] = value
+
+        if not readings:
             return
 
-        hardware_kwh = self._energy_state_kwh(state)  # #551 unit-aware
-        if hardware_kwh <= 0:
-            return
+        # A counter that went BACKWARDS since its last reading invalidates the
+        # whole baseline set: its past contribution is already inside the
+        # adopted daily value, so deltas must restart from here. This is the
+        # midnight reset of a daily-type counter, and it is why the boundary
+        # mismatch that parked this method is a non-issue under the delta model.
+        reset = any(
+            entity_id in bl["last"]
+            and value < bl["last"][entity_id] - 0.001
+            for entity_id, value in readings.items()
+        )
+        if reset:
+            bl["base"] = {}
+            bl.pop("anchor", None)
+        for entity_id, value in readings.items():
+            bl["base"].setdefault(entity_id, value)
+            bl["last"][entity_id] = value
+        # The counters track charging SINCE their baselines; charging before
+        # that (SEM down over the EV-day boundary, charger added late) is only
+        # known to the integrator — anchor on the daily value at baseline time:
+        # target = anchor + counter deltas.
+        bl.setdefault("anchor", integrated)
 
-        calculated_kwh = self._get_daily(EV_CATEGORY, ev_day)
+        counter_daily = sum(
+            value - bl["base"][entity_id]
+            for entity_id, value in readings.items()
+        )
+        target = bl["anchor"] + counter_daily
 
-        if hardware_kwh > calculated_kwh + RECONCILIATION_THRESHOLD:
-            _LOGGER.info(
-                "EV energy reconciliation: hardware=%.2f kWh > calculated=%.2f kWh, adopting hardware value",
-                hardware_kwh, calculated_kwh,
+        # Sanity cap — the fleet's own physical ceiling, from the configured
+        # charger limits. Catches a counter in the wrong magnitude that
+        # ``_energy_state_kwh`` could not classify from its unit string.
+        max_daily = self._max_daily_ev_kwh()
+        if target > max_daily:
+            _LOGGER.warning(
+                "EV counter reconciliation target %.1f kWh exceeds the fleet's "
+                "%.0f kWh/day ceiling — ignoring this cycle (unit mismatch?)",
+                target, max_daily,
             )
-            self._daily_accumulators[f"{EV_CATEGORY}_{ev_day}"] = hardware_kwh
+            return
 
-            # Also adjust monthly accumulator by the same delta
-            delta = hardware_kwh - calculated_kwh
-            monthly_key_full = f"{EV_CATEGORY}_{month_key}"
-            self._monthly_accumulators[monthly_key_full] = (
-                self._monthly_accumulators.get(monthly_key_full, 0.0) + delta
-            )
+        delta = target - integrated
+        if delta <= RECONCILIATION_THRESHOLD:
+            return  # Upward-only; small drift stays with the integrator.
+
+        _LOGGER.info(
+            "EV energy reconciliation: counter=%.2f kWh > integrated=%.2f kWh "
+            "— adopting counter value (+%.2f kWh)",
+            target, integrated, delta,
+        )
+        self._daily_accumulators[daily_key] = target
+        for accumulators, key in (
+            (self._monthly_accumulators, f"{EV_CATEGORY}_{month_key}"),
+            (self._yearly_accumulators, f"{EV_CATEGORY}_{year_key}"),
+            (self._lifetime_accumulators, f"lifetime_{EV_CATEGORY}"),
+        ):
+            accumulators[key] = accumulators.get(key, 0.0) + delta
+
+    def _max_daily_ev_kwh(self) -> float:
+        """Physical ceiling for one day of fleet EV charging.
+
+        ``n_chargers × max_current × phases × voltage × 24 h``. Generous by
+        design — this is a unit-error trap (a Wh counter read as kWh is 1000×
+        out), not a policy limit, and a charger that legitimately runs flat out
+        all day must not trip it.
+        """
+        cfg = self.config
+        chargers = cfg.get("ev_chargers") or []
+        n = max(1, len(chargers))
+        amps = float(cfg.get("ev_max_current", 32) or 32)
+        phases = float(cfg.get("ev_phases", 3) or 3)
+        volts = float(cfg.get("ev_voltage", 230) or 230)
+        return n * amps * phases * volts * 24 / 1000
 
     def calculate_costs(self, energy: EnergyTotals) -> CostData:
         """Calculate costs and savings from energy totals.
@@ -1478,6 +1609,12 @@ class EnergyCalculator:
             # delta span SEM downtime — production while SEM was off is
             # credited on the first cycle after restart.
             "solar_counter_baselines": dict(self._solar_counter_baselines),
+            # (#658) same reason, and the whole point of the EV case: the
+            # energy this reconciliation exists to recover is exactly the
+            # energy charged while SEM was NOT running. Drop the baselines on
+            # restart and the first cycle re-baselines at the current counter
+            # value — the downtime delta is silently discarded.
+            "ev_counter_baselines": dict(self._ev_counter_baselines),
         }
 
     @staticmethod
@@ -1548,6 +1685,9 @@ class EnergyCalculator:
             baselines = state.get("solar_counter_baselines")
             if isinstance(baselines, dict):
                 self._solar_counter_baselines = baselines
+            ev_baselines = state.get("ev_counter_baselines")
+            if isinstance(ev_baselines, dict):
+                self._ev_counter_baselines = ev_baselines
             last_update = state.get("last_update")
             if last_update:
                 self._last_update = datetime.fromisoformat(last_update)

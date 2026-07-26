@@ -68,6 +68,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that were renamed, superseded or never built; they are now held in a shrink-only ratchet
   (`tests/test_667_label_registry.py`) so a newly-typo'd label fails immediately while the
   existing debt gets an individual verdict rather than a blanket delete.
+- 🔌 **EV charging that happened while SEM wasn't running is now recovered from the wallbox
+  counter** (#658, coherence-audit) — SEM builds daily EV energy by integrating the
+  charger's power sensor every cycle, so anything charged while it wasn't integrating —
+  an HA restart, a core update, a power blip, a session started from the charger's own app
+  while HA was asleep — was simply never counted. The wallbox counted all of it, which is
+  why the two numbers disagreed. A reconciliation for this was written years ago and then
+  parked, disabled, with six of its tests born skipped: it compared the counter's *absolute*
+  value against the daily bucket, and the two don't share a day boundary (a KEBA counter
+  resets at midnight, SEM's EV day rolls at your Charge-by time), so at the rollover it
+  would have credited a whole night's charging to a freshly-reset day and told the planner
+  the target was already met. It now works on counter *deltas* — the same model daily solar
+  has used since #556 — which makes the boundary question disappear: a counter reset is just
+  a reset. Multi-charger installs sum every charger's counter, because the bucket being
+  corrected is the fleet total. Adoption stays upward-only, so an unavailable, stale or
+  partial counter can never shrink your day, and a counter SEM is seeing for the first time
+  is only a baseline — it is never claimed as today's charging. The baselines persist with
+  the accumulators, which is the whole point: the gap being recovered is exactly the one
+  where SEM was off. On by default, on the same `prefer_hardware_energy` setting that governs
+  solar, and it needs a charger energy counter to be configured (SEM's hardware detection
+  fills one in for most brands). Guarded by `tests/test_658_ev_counter_reconcile.py`,
+  including the deadline-rollover and midnight-reset cases that parked the original.
 - 🔗 **A circular "Requires" link between two loads can no longer be created — from any
   path** (#662, coherence-audit) — the drag-and-drop UI already refused to close a loop,
   but `register_surplus_device` (SEM's *only* multi-dependency write path) had no guard at
