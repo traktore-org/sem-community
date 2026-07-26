@@ -1188,6 +1188,10 @@
       "title": "Le chargeur VE n'accepte pas les commandes : {name}",
       "description": "Les 3 dernières commandes de courant (ou plus) envoyées par SEM à **{name}** ont été rejetées : `{error}`. Le chargeur n'est PAS sous le contrôle de SEM actuellement — il continuera à faire ce qui lui a été demandé en dernier (y compris charger à pleine puissance en mode arrêt). Causes les plus fréquentes : l'entité de commande du chargeur a été renommée par une mise à jour de l'intégration en amont, ou `ev_charger_service` pointe vers un service dont le schéma de paramètres est différent. Vérifiez l'entité de commande / le service du chargeur dans la configuration SEM. Ce problème disparaît automatiquement à la prochaine commande réussie."
     },
+    "charger_stop_unenforceable": {
+      "title": "Impossible d'arrêter la borne de recharge : {name}",
+      "description": "SEM a demandé à **{name}** de s'arrêter, mais aucun mécanisme configuré ne peut réellement ouvrir le contacteur — la voiture consomme toujours {power} W. Le seul contrôle dont SEM dispose pour cette borne est `{entity}`, et son minimum est supérieur à 0 A : écrire 0 A n'a donc aucun effet (SEM n'écrit jamais une valeur que l'entité refuserait). Si vous avez une batterie domestique, cette puissance en sort — à n'importe quelle heure du jour ou de la nuit. Solution : configurez pour cette borne, dans les options SEM, une entité marche/arrêt (`ev_start_stop_entity`), une entité de mode de charge ou un service d'arrêt. Cet avertissement disparaît dès que la borne ne consomme plus."
+    },
     "no_forecast_integration": {
       "title": "Aucune intégration de prévision solaire détectée",
       "description": "SEM a cherché une intégration de prévision solaire (Forecast.Solar, Solcast PV Solar, ou un capteur de prévision personnalisé) pendant une heure après le démarrage, sans en trouver. Les fonctions liées aux prévisions (conseils sur le meilleur créneau de surplus, charge nocturne intelligente, atténuation des prévisions) restent inactives tant que vous n'en installez pas une. Ce problème disparaît automatiquement dès que SEM détecte une intégration de prévision."

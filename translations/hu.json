@@ -1188,6 +1188,10 @@
       "title": "Az EV-töltő nem fogadja a parancsokat: {name}",
       "description": "A SEM legutóbbi 3 vagy több áramerősség-parancsát a következő elutasította: **{name}** — `{error}`. A töltő jelenleg NEM áll a SEM vezérlése alatt — továbbra is azt teszi, amit utoljára utasításba kapott (akár teljes teljesítménnyel tölt kikapcsolt módban is). A leggyakoribb okok: a töltő vezérlőentitását átnevezte egy integrációfrissítés, vagy az `ev_charger_service` olyan szolgáltatásra mutat, amelynek eltérő a paraméterséma. Ellenőrizze a töltő vezérlőentitását / szolgáltatását a SEM konfigurációjában. Ez a bejegyzés automatikusan eltűnik a következő sikeres parancs után."
     },
+    "charger_stop_unenforceable": {
+      "title": "A töltő nem állítható le: {name}",
+      "description": "A SEM leállítást parancsolt a(z) **{name}** töltőnek, de egyetlen beállított mechanizmus sem tudja ténylegesen bontani a kontaktort — az autó továbbra is {power} W-ot vesz fel. A SEM egyetlen vezérlője ehhez a töltőhöz a(z) `{entity}`, amelynek minimuma 0 A fölött van, így a 0 A kiírása nem csinál semmit (a SEM soha nem ír ki olyan értéket, amelyet az entitás elutasítana). Ha van házi akkumulátorod, ez a teljesítmény onnan jön — a nappal vagy az éjszaka bármely szakában. Megoldás: állíts be ehhez a töltőhöz a SEM beállításaiban egy start/stop entitást (`ev_start_stop_entity`), egy töltési mód entitást vagy egy leállító szolgáltatást. A figyelmeztetés eltűnik, amint a töltő már nem vesz fel teljesítményt."
+    },
     "no_forecast_integration": {
       "title": "Nem található napelemes előrejelzés-integráció",
       "description": "A SEM az indulás után egy órán át keresett napelemes előrejelzés-integrációt (Forecast.Solar, Solcast PV Solar vagy egyéni előrejelzés-érzékelő), de nem talált. Az előrejelzésre épülő funkciók (legjobb többletidőszak tippjei, intelligens éjszakai töltés, előrejelzés-csillapítás) inaktívak, amíg nem telepít egyet. A bejegyzés automatikusan eltűnik, amint a SEM észlel egy előrejelzés-integrációt."

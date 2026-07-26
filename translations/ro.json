@@ -1188,6 +1188,10 @@
       "title": "Încărcătorul EV nu acceptă comenzi: {name}",
       "description": "Ultimele 3+ comenzi de curent trimise de SEM către **{name}** au fost respinse: `{error}`. Încărcătorul NU este sub controlul SEM în acest moment — va continua să facă ce i s-a comandat ultima dată (inclusiv să încarce la putere maximă în modul oprit). Cele mai frecvente cauze: entitatea de control a încărcătorului a fost redenumită de o actualizare a integrării din amonte sau `ev_charger_service` indică un serviciu cu o altă schemă de parametri. Verificați entitatea/serviciul de control al încărcătorului în configurația SEM. Această problemă se șterge automat la următoarea comandă reușită."
     },
+    "charger_stop_unenforceable": {
+      "title": "Încărcătorul nu poate fi oprit: {name}",
+      "description": "SEM i-a comandat lui **{name}** să se oprească, dar niciun mecanism configurat nu poate deschide efectiv contactorul — mașina consumă în continuare {power} W. Singurul control pe care SEM îl are pentru acest încărcător este `{entity}`, iar minimul acestuia este peste 0 A, deci scrierea valorii 0 A nu face nimic (SEM nu scrie niciodată o valoare pe care entitatea ar respinge-o). Dacă ai o baterie de casă, această putere iese din ea — la orice oră din zi sau din noapte. Soluție: configurează pentru acest încărcător, în opțiunile SEM, o entitate pornire/oprire (`ev_start_stop_entity`), o entitate de mod de încărcare sau un serviciu de oprire. Avertismentul dispare de îndată ce încărcătorul nu mai consumă."
+    },
     "no_forecast_integration": {
       "title": "Nu a fost detectată nicio integrare de prognoză solară",
       "description": "SEM a căutat o integrare de prognoză solară (Forecast.Solar, Solcast PV Solar sau un senzor de prognoză personalizat) timp de o oră după pornire și nu a găsit niciuna. Funcțiile bazate pe prognoză (sfaturi privind cea mai bună fereastră de surplus, încărcare inteligentă pe timp de noapte, atenuarea prognozei) sunt inactive până când instalați una. Problema se șterge automat când SEM detectează o integrare de prognoză."

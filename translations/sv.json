@@ -1188,6 +1188,10 @@
       "title": "EV-laddaren tar inte emot kommandon: {name}",
       "description": "SEM:s senaste 3+ strömkommandon till **{name}** avvisades: `{error}`. Laddaren står INTE under SEM:s kontroll just nu — den fortsätter göra det den senast blev tillsagd (inklusive att ladda för full effekt i läget av). Vanligaste orsakerna: laddarens styrentitet har bytt namn efter en uppdatering av den underliggande integrationen, eller så pekar `ev_charger_service` på en tjänst med ett annat parameterschema. Kontrollera laddarens styrentitet/tjänst i SEM-konfigurationen. Detta problem försvinner automatiskt vid nästa lyckade kommando."
     },
+    "charger_stop_unenforceable": {
+      "title": "Laddaren kan inte stoppas: {name}",
+      "description": "SEM har beordrat **{name}** att stoppa, men ingen konfigurerad mekanism kan faktiskt öppna kontaktorn — bilen drar fortfarande {power} W. Den enda styrning SEM har för den här laddaren är `{entity}`, och dess minimum ligger över 0 A, så att skriva 0 A gör ingenting (SEM skriver aldrig ett värde som entiteten skulle avvisa). Har du ett hembatteri kommer den här effekten ur det — när som helst på dygnet. Lösning: konfigurera en start/stopp-entitet (`ev_start_stop_entity`), en laddlägesentitet eller en stopptjänst för den här laddaren i SEM:s inställningar. Meddelandet försvinner så snart laddaren slutar dra effekt."
+    },
     "no_forecast_integration": {
       "title": "Ingen integration för solprognos upptäckt",
       "description": "SEM letade efter en integration för solprognos (Forecast.Solar, Solcast PV Solar eller en egen prognossensor) under en timme efter uppstart och hittade ingen. Prognosbaserade funktioner (tips om bästa överskottsfönster, smart nattladdning, prognosdämpning) är inaktiva tills du installerar en. Problemet försvinner automatiskt när SEM upptäcker en prognosintegration."

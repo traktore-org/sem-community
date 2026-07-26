@@ -1188,6 +1188,10 @@
       "title": "Nabíječka EV nepřijímá příkazy: {name}",
       "description": "Poslední 3 a více příkazů proudu, které SEM poslal na **{name}**, bylo odmítnuto: `{error}`. Nabíječka právě NENÍ pod kontrolou SEM — bude dál dělat to, co jí bylo řečeno naposledy (včetně nabíjení plným výkonem v režimu vypnuto). Nejčastější příčiny: ovládací entitu nabíječky přejmenovala aktualizace nadřazené integrace, nebo `ev_charger_service` ukazuje na službu s jiným schématem parametrů. Zkontrolujte ovládací entitu / službu nabíječky v konfiguraci SEM. Tato oprava zmizí automaticky po prvním úspěšném příkazu."
     },
+    "charger_stop_unenforceable": {
+      "title": "Nabíječku nelze zastavit: {name}",
+      "description": "SEM dal **{name}** pokyn k zastavení, ale žádný nakonfigurovaný mechanismus nedokáže skutečně rozepnout stykač — auto stále odebírá {power} W. Jediné ovládání, které SEM pro tuto nabíječku má, je `{entity}`, a jeho minimum je vyšší než 0 A, takže zápis 0 A nic neudělá (SEM nikdy nezapíše hodnotu, kterou by entita odmítla). Pokud máte domácí baterii, tento výkon jde z ní — v kteroukoli denní i noční dobu. Řešení: nastavte pro tuto nabíječku v možnostech SEM entitu start/stop (`ev_start_stop_entity`), entitu režimu nabíjení nebo službu zastavení. Toto upozornění zmizí, jakmile nabíječka přestane odebírat."
+    },
     "no_forecast_integration": {
       "title": "Nebyla zjištěna žádná integrace solární předpovědi",
       "description": "SEM po dobu jedné hodiny od spuštění hledal integraci solární předpovědi (Forecast.Solar, Solcast PV Solar nebo vlastní senzor předpovědi) a žádnou nenašel. Funkce využívající předpověď (tipy na nejlepší okno přebytku, chytré noční nabíjení, tlumení předpovědi) jsou neaktivní, dokud nějakou nenainstalujete. Problém zmizí automaticky, jakmile SEM integraci předpovědi zjistí."

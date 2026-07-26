@@ -15,6 +15,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- 🔌 **A charger set to *off* kept charging out of the house batteries, and SEM's stop
+  could never have worked** (#627, reported by @onkelfu) — the diagnostics showed the mode
+  was right (`charge_mode: "off"`), the intent was right (`last_desired: "OFF"`) and the
+  command was issued 130 consecutive times (`last_actions: ["DISABLE"]`) while the car
+  pulled 4.1 kW, 3.5 kW of it out of the house batteries, at night. The stop was correct
+  and unenforceable: on a charger configured with only a current `number.*` entity, two
+  layers each delegated the stop to the other. `_set_current(0)` skips the write when that
+  entity's minimum is above 0 A — HA core rejects out-of-range writes (#487) — on the
+  understanding that "the actual stop is the adapter's job"; and the adapter's
+  `stop_session()`, finding no stop service, no charge-mode select, no start/stop switch
+  and no `<domain>.disable`, logged that it was "relying on `_set_current(0)` alone" — the
+  write that had just been skipped. Composed, nothing stopped the car at all. SEM now
+  *computes* whether it holds any mechanism that can open the contactor, from the same
+  fields the stop actually dispatches on, and surfaces it as a repair naming the charger,
+  the power still flowing and the missing entity — instead of counting failed stops into a
+  warning that fired three times and then went quiet. A capability that is asserted rather
+  than checked is the same shape as the bug. The DISABLE is still issued (it costs nothing
+  and starts working the moment you configure a start/stop entity), and — deliberately —
+  the charging path is untouched: a charger SEM can start but not stop keeps charging
+  normally while the un-stoppability is reported, because conflating the two signals would
+  have cost every such install its surplus charging. Guarded by
+  `tests/test_627_stop_unenforceable.py`.
 - 🌙 **A restart just after midnight no longer swallows the day's EV virtual-SOC decay**
   (#645, coherence-audit) — while a car is away SEM can't watch it being driven, so each
   day rollover advances the estimated-SOC by the predicted daily consumption. That decay

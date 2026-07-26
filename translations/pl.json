@@ -1188,6 +1188,10 @@
       "title": "Ładowarka EV nie przyjmuje poleceń: {name}",
       "description": "Ostatnie co najmniej 3 polecenia prądu wysłane przez SEM do **{name}** zostały odrzucone: `{error}`. Ładowarka NIE jest w tej chwili pod kontrolą SEM — będzie robić to, co zostało jej ostatnio nakazane (łącznie z ładowaniem pełną mocą w trybie wyłączonym). Najczęstsze przyczyny: encja sterująca ładowarki została zmieniona przez aktualizację integracji nadrzędnej albo `ev_charger_service` wskazuje usługę o innym schemacie parametrów. Sprawdź encję sterującą / usługę ładowarki w konfiguracji SEM. To zgłoszenie znika automatycznie po następnym udanym poleceniu."
     },
+    "charger_stop_unenforceable": {
+      "title": "Nie można zatrzymać ładowarki EV: {name}",
+      "description": "SEM wydał **{name}** polecenie zatrzymania, ale żaden skonfigurowany mechanizm nie potrafi faktycznie rozłączyć stycznika — samochód nadal pobiera {power} W. Jedyne sterowanie, jakie SEM ma dla tej ładowarki, to `{entity}`, a jej minimum jest większe od 0 A, więc zapis 0 A nic nie daje (SEM nigdy nie zapisuje wartości, którą encja by odrzuciła). Jeśli masz magazyn energii, ta moc pochodzi z niego — o każdej porze dnia i nocy. Rozwiązanie: skonfiguruj dla tej ładowarki w opcjach SEM encję start/stop (`ev_start_stop_entity`), encję trybu ładowania albo usługę zatrzymania. To ostrzeżenie zniknie, gdy tylko ładowarka przestanie pobierać moc."
+    },
     "no_forecast_integration": {
       "title": "Nie wykryto integracji prognozy słonecznej",
       "description": "SEM przez godzinę po uruchomieniu szukał integracji prognozy słonecznej (Forecast.Solar, Solcast PV Solar lub własnego czujnika prognozy) i żadnej nie znalazł. Funkcje oparte na prognozie (porady o najlepszym oknie nadwyżki, inteligentne ładowanie nocne, tłumienie prognozy) pozostają nieaktywne, dopóki nie zainstalujesz takiej integracji. Zgłoszenie znika automatycznie, gdy SEM wykryje integrację prognozy."

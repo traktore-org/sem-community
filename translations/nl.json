@@ -1188,6 +1188,10 @@
       "title": "EV-lader accepteert geen commando's: {name}",
       "description": "De laatste 3+ stroomcommando's van SEM naar **{name}** zijn geweigerd: `{error}`. De lader staat op dit moment NIET onder controle van SEM — hij blijft doen wat hem het laatst is opgedragen (inclusief op vol vermogen laden in de uit-stand). Meest voorkomende oorzaken: de besturingsentiteit van de lader is hernoemd door een update van de bovenliggende integratie, of `ev_charger_service` verwijst naar een service met een ander parameterschema. Controleer de besturingsentiteit/service van de lader in de SEM-configuratie. Deze melding verdwijnt automatisch na het eerstvolgende geslaagde commando."
     },
+    "charger_stop_unenforceable": {
+      "title": "Laadpaal kan niet gestopt worden: {name}",
+      "description": "SEM heeft **{name}** opdracht gegeven te stoppen, maar geen enkel geconfigureerd mechanisme kan het relais daadwerkelijk openen — de auto trekt nog steeds {power} W. De enige besturing die SEM voor deze laadpaal heeft is `{entity}`, en het minimum daarvan ligt boven 0 A, dus 0 A schrijven doet niets (SEM schrijft nooit een waarde die de entiteit zou weigeren). Heb je een thuisbatterij, dan komt dit vermogen daaruit — op elk moment van de dag of nacht. Oplossing: configureer voor deze laadpaal in de SEM-opties een start/stop-entiteit (`ev_start_stop_entity`), een laadmodus-entiteit of een stopservice. Deze melding verdwijnt zodra de laadpaal geen vermogen meer trekt."
+    },
     "no_forecast_integration": {
       "title": "Geen zonneprognose-integratie gevonden",
       "description": "SEM heeft na het opstarten een uur lang gezocht naar een zonneprognose-integratie (Forecast.Solar, Solcast PV Solar of een aangepaste prognose-sensor), maar niets gevonden. Prognose-afhankelijke functies (tips voor het beste overschotvenster, slim nachtladen, prognose-demping) zijn inactief totdat u er een installeert. De melding verdwijnt automatisch zodra SEM een prognose-integratie detecteert."

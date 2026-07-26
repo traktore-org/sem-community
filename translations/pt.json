@@ -1188,6 +1188,10 @@
       "title": "Carregador VE não aceita comandos: {name}",
       "description": "Os últimos 3 ou mais comandos de corrente do SEM para **{name}** foram rejeitados: `{error}`. O carregador NÃO está sob controlo do SEM neste momento — vai continuar a fazer aquilo que lhe foi indicado da última vez (incluindo carregar à potência máxima no modo desligado). Causas mais comuns: a entidade de controlo do carregador foi renomeada por uma atualização da integração de origem, ou `ev_charger_service` aponta para um serviço com um esquema de parâmetros diferente. Verifique a entidade de controlo / o serviço do carregador na configuração do SEM. Este problema é resolvido automaticamente no próximo comando bem-sucedido."
     },
+    "charger_stop_unenforceable": {
+      "title": "Não é possível parar o carregador do VE: {name}",
+      "description": "O SEM mandou **{name}** parar, mas nenhum mecanismo configurado consegue abrir o contactor — o carro continua a consumir {power} W. O único controlo que o SEM tem para este carregador é `{entity}`, e o seu mínimo é superior a 0 A, pelo que escrever 0 A não faz nada (o SEM nunca escreve um valor que a entidade recusaria). Se tiver uma bateria doméstica, esta potência sai de lá, a qualquer hora do dia ou da noite. Solução: configure para este carregador, nas opções do SEM, uma entidade de arranque/paragem (`ev_start_stop_entity`), uma entidade de modo de carregamento ou um serviço de paragem. Este aviso desaparece assim que o carregador deixar de consumir."
+    },
     "no_forecast_integration": {
       "title": "Nenhuma integração de previsão solar detetada",
       "description": "O SEM procurou uma integração de previsão solar (Forecast.Solar, Solcast PV Solar ou um sensor de previsão personalizado) durante uma hora após o arranque e não encontrou nenhuma. As funcionalidades baseadas na previsão (dicas de melhor janela de excedente, carregamento noturno inteligente, atenuação da previsão) ficam inativas até instalar uma. O problema é resolvido automaticamente quando o SEM detetar uma integração de previsão."

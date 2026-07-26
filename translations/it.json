@@ -1188,6 +1188,10 @@
       "title": "Il caricatore VE non accetta comandi: {name}",
       "description": "Gli ultimi 3+ comandi di corrente inviati da SEM a **{name}** sono stati rifiutati: `{error}`. Il caricatore NON è sotto il controllo di SEM in questo momento — continuerà a fare quanto gli è stato ordinato l'ultima volta (compresa la carica a piena potenza in modalità spento). Cause più comuni: l'entità di controllo del caricatore è stata rinominata da un aggiornamento dell'integrazione a monte, oppure `ev_charger_service` punta a un servizio con uno schema di parametri diverso. Verifica l'entità di controllo / il servizio del caricatore nella configurazione SEM. Questo problema si risolve automaticamente al primo comando riuscito."
     },
+    "charger_stop_unenforceable": {
+      "title": "Impossibile fermare la stazione di ricarica: {name}",
+      "description": "SEM ha ordinato a **{name}** di fermarsi, ma nessun meccanismo configurato può realmente aprire il contattore: l'auto sta ancora assorbendo {power} W. L'unico controllo che SEM ha per questa stazione è `{entity}`, e il suo minimo è superiore a 0 A, quindi scrivere 0 A non ha alcun effetto (SEM non scrive mai un valore che l'entità rifiuterebbe). Se hai una batteria domestica, questa potenza esce da lì, a qualsiasi ora del giorno o della notte. Soluzione: configura per questa stazione, nelle opzioni SEM, un'entità di avvio/arresto (`ev_start_stop_entity`), un'entità di modalità di ricarica o un servizio di arresto. Questo avviso scompare non appena la stazione smette di assorbire."
+    },
     "no_forecast_integration": {
       "title": "Nessuna integrazione di previsione solare rilevata",
       "description": "SEM ha cercato un'integrazione di previsione solare (Forecast.Solar, Solcast PV Solar o un sensore di previsione personalizzato) per un'ora dopo l'avvio e non ne ha trovata nessuna. Le funzioni basate sulle previsioni (suggerimenti sulla miglior finestra di eccedenza, carica notturna intelligente, attenuazione della previsione) restano inattive finché non ne installi una. Il problema si risolve automaticamente quando SEM rileva un'integrazione di previsione."

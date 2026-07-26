@@ -1188,6 +1188,10 @@
       "title": "Sähköauton laturi ei hyväksy komentoja: {name}",
       "description": "SEM:n 3 viimeisintä (tai useampi) virtakomentoa laturille **{name}** hylättiin: `{error}`. Laturi EI ole tällä hetkellä SEM:n ohjauksessa — se jatkaa viimeksi saamansa käskyn mukaan (myös täydellä teholla lataamista off-tilassa). Yleisimmät syyt: laturin ohjausentiteetti nimettiin uudelleen taustaintegraation päivityksessä, tai `ev_charger_service` osoittaa palveluun, jolla on eri parametriskeema. Tarkista laturin ohjausentiteetti tai palvelu SEM:n asetuksista. Tämä ongelma poistuu automaattisesti seuraavan onnistuneen komennon jälkeen."
     },
+    "charger_stop_unenforceable": {
+      "title": "Latauslaitetta ei voi pysäyttää: {name}",
+      "description": "SEM on käskenyt latauslaitteen **{name}** pysähtyä, mutta mikään määritetty mekanismi ei pysty todella avaamaan kontaktoria — auto ottaa yhä {power} W. Ainoa ohjaus, joka SEM:llä on tälle latauslaitteelle, on `{entity}`, ja sen minimi on yli 0 A, joten 0 A:n kirjoittaminen ei tee mitään (SEM ei koskaan kirjoita arvoa, jonka entiteetti hylkäisi). Jos sinulla on kotiakku, tämä teho tulee siitä — mihin tahansa vuorokaudenaikaan. Ratkaisu: määritä tälle latauslaitteelle SEM:n asetuksissa käynnistys/pysäytys-entiteetti (`ev_start_stop_entity`), lataustila-entiteetti tai pysäytyspalvelu. Ilmoitus poistuu heti, kun latauslaite lakkaa ottamasta tehoa."
+    },
     "no_forecast_integration": {
       "title": "Aurinkoennusteen integraatiota ei havaittu",
       "description": "SEM etsi aurinkoennusteen integraatiota (Forecast.Solar, Solcast PV Solar tai mukautettu ennusteanturi) tunnin ajan käynnistyksen jälkeen eikä löytänyt sellaista. Ennusteeseen perustuvat ominaisuudet (parhaan ylijäämäjakson vinkit, älykäs yölataus, ennusteen vaimennus) ovat pois käytöstä, kunnes asennat sellaisen. Ongelma poistuu automaattisesti, kun SEM havaitsee ennusteintegraation."

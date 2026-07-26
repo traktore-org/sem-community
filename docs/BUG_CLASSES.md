@@ -564,6 +564,47 @@ level up. If you find yourself adding a third entry to one, ask whether the thin
 can be read out of the source instead. **Guard:** `tests/test_677_per_charger_names.py`
 (`per_charger_translation_keys()` is the shared derivation).
 
+### 25. Mutual delegation — two layers each defer the action to the other — GUARDED
+**Symptom:** the intent is right, the command is issued, the logs say it was issued, and the
+thing never happens. Nothing raises, because from each layer's own point of view it behaved
+correctly: it declined to act *because the other layer handles it*.
+**Root shape:** two code paths that are each other's fallback. Layer A skips its own attempt
+and documents that B is responsible; layer B, finding nothing of its own to do, falls back to
+A. Neither is wrong in isolation — the defect only exists in the *composition*, which is why
+reviewing either file alone reads as correct. The tell is a pair of comments that point at
+each other; both were present here, in different files, and both were accurate.
+**Live catch (#627, reported by @onkelfu):** `_set_current(0)` skips the write when the control
+number's `min` is above 0 A ("the actual stop is the adapter's job", #487), and
+`stop_session()` — finding no stop service, charge-mode select, start/stop entity or
+`<domain>.disable` — warns that it is "relying on `_set_current(0)` alone". On a charger
+configured with only a current `number.*` entity, nothing stopped the car at all: 130
+consecutive commanded stops, 4.1 kW drawn against them, 3.5 kW of it out of the house
+batteries, at night, with the charger set to *off*.
+**Why the observability missed it:** #548 had already added `_stop_commanded_while_drawing`,
+which counted the failures correctly and warned at 3, 12 and 60 — then went quiet by design,
+while the condition ran for hours. A counter of a *symptom* answers "is it working?" with
+"I have seen it fail N times", which decays into background noise. The capability question
+("*can* this ever work?") is answerable up front and doesn't decay.
+**Closure:** don't assert the capability — compute it, from the same fields the action
+dispatches on, and let the consumer surface it. `CurrentControlDevice.can_stop_charging()`
+mirrors `stop_session()`'s dispatch chain and ends at `_bound_to_entity_range(entity, 0)` —
+the exact predicate that made the write unreachable — so the two cannot drift without the
+guard noticing. The reconciler carries it as `ObservedState.stop_controllable` and files a
+repair naming the charger, the power still flowing and the missing entity.
+**The trap that was avoided, and why it's part of the class:** the obvious home for the signal
+was the existing `enable_controllable`. It gates the CHARGE rows — reusing it would have
+short-circuited every number-entity-only charger to REPORT and cost it surplus charging
+entirely, trading a reporting gap for a functional loss. When a new capability signal *looks*
+like an existing one, check what the existing one gates before reusing it.
+**Sweep (done):** the other capability-shaped claims on this path were checked — `ensure_enabled`
+/ `command_enable` (no mutual-fallback pair: a missing switch is a no-op with no second layer
+claiming it), and the phase-switch path (deleted dead in #659).
+**Guard:** `tests/test_627_stop_unenforceable.py` — pins the probe per mechanism, its
+propagation through `observe()`, the reconciler row, the repair raise/clear, **and** that the
+CHARGE rows stay untouched when `stop_controllable=False`. Refs #487 #548 #627.
+**Watch:** any new "SEM couldn't actually do X" should be a *computed capability on the device*,
+not a counter of failed attempts in the caller.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

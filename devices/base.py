@@ -1188,6 +1188,52 @@ class CurrentControlDevice(ControllableDevice):
     def device_type(self) -> DeviceType:
         return DeviceType.CURRENT_CONTROL
 
+    def can_stop_charging(self) -> bool:
+        """Whether SEM has ANY mechanism that can actually open the contactor.
+
+        #627. ``stop_session`` walks four brand mechanisms and, if none is
+        configured, falls through to ``_set_current(0)`` — and its warning
+        says so ("relying on _set_current(0) alone"). But #487 taught
+        ``_set_current`` to SKIP the write when the control number's own
+        ``min`` is above 0, because HA core rejects out-of-range writes:
+        "the actual stop is the adapter's job". Each layer defers to the
+        other, so on a charger configured with *only* a ``number.*`` current
+        entity whose min is 6 A, **nothing stops it at all**. onkelfu's
+        install commanded STOP 130 consecutive times while the car pulled
+        4.1 kW — 3.5 kW of it out of the house batteries — and SEM logged a
+        warning at counts 3, 12 and 60, then went quiet.
+
+        A capability that is asserted rather than checked is the same shape
+        as the bug: the reconciler believed the stop was taking because
+        nothing told it otherwise. So the capability is computed here, from
+        the same fields ``stop_session`` actually dispatches on, and the
+        reconciler surfaces it instead of counting.
+        """
+        if self.stop_service:
+            return True
+        if self.charge_mode_entity and self.charge_mode_stop:
+            return True
+        if self.start_stop_entity:
+            return True
+        if self.charger_service:
+            domain = str(self.charger_service).split(".", 1)[0]
+            try:
+                if self.hass.services.has_service(domain, "disable"):
+                    return True
+            except Exception:  # noqa: BLE001 — capability probe, never raise
+                pass
+        # Last resort: a 0 A write, which only stops the car if the control
+        # entity can express 0. ``_bound_to_entity_range`` returns the
+        # skip-flag for exactly that question.
+        entity = self.current_entity_id or self.charger_service_entity_id
+        if not entity:
+            return False
+        try:
+            _bounded, skip = self._bound_to_entity_range(entity, 0)
+        except Exception:  # noqa: BLE001
+            return True  # unknown → don't cry wolf
+        return not skip
+
     # Dynamic 1p/3p phase switching lived here until #659:
     # ``check_phase_switch`` + ``_set_phases``, plus the ``min_phases`` /
     # ``max_phases`` / ``phase_switch_entity`` / hysteresis fields. The

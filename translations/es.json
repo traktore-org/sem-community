@@ -1188,6 +1188,10 @@
       "title": "El cargador VE no acepta órdenes: {name}",
       "description": "Las últimas 3 o más órdenes de corriente enviadas por SEM a **{name}** han sido rechazadas: `{error}`. El cargador NO está bajo el control de SEM en este momento — seguirá haciendo lo último que se le indicó (incluida la carga a plena potencia en modo apagado). Causas más habituales: la entidad de control del cargador fue renombrada por una actualización de la integración origen, o `ev_charger_service` apunta a un servicio con otro esquema de parámetros. Compruebe la entidad de control / el servicio del cargador en la configuración de SEM. Esta incidencia se resuelve automáticamente con la siguiente orden correcta."
     },
+    "charger_stop_unenforceable": {
+      "title": "No se puede detener el cargador del vehículo: {name}",
+      "description": "SEM ha ordenado a **{name}** que se detenga, pero ningún mecanismo configurado puede abrir realmente el contactor: el coche sigue consumiendo {power} W. El único control que SEM tiene para este cargador es `{entity}`, y su mínimo es superior a 0 A, por lo que escribir 0 A no hace nada (SEM nunca escribe un valor que la entidad rechazaría). Si tienes una batería doméstica, esta potencia sale de ella, a cualquier hora del día o de la noche. Solución: configura para este cargador, en las opciones de SEM, una entidad de arranque/parada (`ev_start_stop_entity`), una entidad de modo de carga o un servicio de parada. Este aviso desaparece en cuanto el cargador deja de consumir."
+    },
     "no_forecast_integration": {
       "title": "No se ha detectado ninguna integración de previsión solar",
       "description": "SEM ha buscado una integración de previsión solar (Forecast.Solar, Solcast PV Solar o un sensor de previsión personalizado) durante una hora tras el arranque y no ha encontrado ninguna. Las funciones basadas en previsión (consejos de mejor ventana de excedente, carga nocturna inteligente, atenuación de previsión) permanecen inactivas hasta que instale una. La incidencia se resuelve automáticamente cuando SEM detecte una integración de previsión."
