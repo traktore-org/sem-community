@@ -86,23 +86,14 @@
     },
     "error": {
       "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
-      "entity_not_found": "Entiteit {entity_id} is niet gevonden. Controleer of de entiteit bestaat en correct gespeld is.",
-      "incorrect_device_class": "Entiteit {entity_id} heeft een onjuiste device_class {actual}, verwacht werd {expected}. Selecteer een sensor met de juiste device class.",
-      "incorrect_state_class": "Entiteit {entity_id} heeft een onjuiste state_class {actual}, verwacht werd {expected}. Energiesensoren moeten state_class: total_increasing gebruiken.",
-      "entity_unavailable": "Entiteit {entity_id} is momenteel niet beschikbaar. Zorg ervoor dat het apparaat online is en gegevens levert.",
-      "invalid_value": "Entiteit {entity_id} heeft een ongeldige waarde {value}. Een numerieke waarde wordt verwacht.",
-      "service_not_found": "Notificatieservice {service} is niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_uw_telefoon).",
-      "validation_failed": "Validatie is mislukt voor één of meer sensoren. Controleer de foutmeldingen hieronder en los de problemen op.",
-      "solar_production_sensor": "Sensor voor zonne-energieproductie is verplicht en moet vermogensmetingen in Watt (W) leveren.",
-      "grid_power_sensor": "Netsensor (grid) is verplicht en moet vermogensmetingen in Watt (W) leveren. Negatief = afname, Positief = teruglevering.",
-      "battery_soc_sensor": "Batterij SOC-sensor is verplicht en moet procentuele waarden (0-100%) leveren.",
-      "battery_power_sensor": "Batterij vermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren. Positief = laden, Negatief = ontladen.",
-      "ev_connected_sensor": "EV verbonden sensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
-      "ev_charging_sensor": "EV laadsensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
-      "ev_charging_power_sensor": "EV laadvermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren."
+      "entity_not_found": "Entiteit niet gevonden. Controleer of de entiteit-ID bestaat.",
+      "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "SG-Ready heeft BEIDE relais-entiteiten nodig. Stel beide relais in — of laat beide leeg en configureer alleen de klimaat-entiteit voor een klimaat-only instelpunt-boost."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan."
+      "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan.",
+      "energy_dashboard_not_configured": "SEM leest uw zonne-, net- en batterijsensoren uit het Energiedashboard van Home Assistant, en dat is nog niet ingesteld.\n\nStel het eerst in via Instellingen → Dashboards → Energie ({url}) — voeg ten minste uw zonne-energieproductie en netstroomverbruik toe — en start deze installatie daarna opnieuw.",
+      "energy_dashboard_incomplete": "Uw Energiedashboard is ingesteld, maar het volgende ontbreekt: {missing}.\n\nSEM heeft deze bronnen nodig om uw systeem uit te lezen. Voeg ze toe via Instellingen → Dashboards → Energie ({url}) en start deze installatie daarna opnieuw."
     }
   },
   "options": {
@@ -366,6 +357,50 @@
           "pv_name_pv4": "Naam PV4",
           "pv_name_pv5": "Naam PV5",
           "pv_name_pv6": "Naam PV6"
+        }
+      },
+      "heat_pump": {
+        "title": "Warmtepomp",
+        "description": "Configureer je warmtepomp voor zonne-overschot-boost. Er worden twee aansturingspaden ondersteund:\n• **SG-Ready** — stel beide relais-entiteiten in (Viessmann, Stiebel Eltron, Vaillant).\n• **Klimaat-only** — stel alleen de klimaat-entiteit in (Nibe, Mitsubishi, Daikin en elke door HA aangestuurde warmtepomp zonder SG-Ready relais).\nBeide paden kunnen ook gecombineerd worden. Laat alles leeg om over te slaan.",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready relais 1 (optionele switch-entiteit)",
+          "heat_pump_relay2_entity": "SG-Ready relais 2 (optionele switch-entiteit)",
+          "heat_pump_invert_sg_ready": "SG-Ready contacten omkeren (voor NC-bedrading)",
+          "heat_pump_climate_entity": "Klimaat-entiteit voor instelpunt-boost (optioneel)",
+          "heat_pump_power_sensor": "Vermogenssensor (optioneel)",
+          "heat_pump_boost_offset": "Temperatuur-boost-offset (°C)",
+          "heat_pump_max_setpoint": "Maximaal temperatuur-instelpunt (°C)",
+          "heat_pump_priority": "Overschotprioriteit (1 = hoogste)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Switch-entiteit voor SG-Ready relais 1 (signaal voor normaal bedrijf). Stel samen met relais 2 in voor het SG-Ready protocol.",
+          "heat_pump_relay2_entity": "Switch-entiteit voor SG-Ready relais 2 (signaal voor overschot-boost). Stel samen met relais 1 in voor het SG-Ready protocol.",
+          "heat_pump_invert_sg_ready": "Schakel dit alleen in als de SG-Ready contacten van je warmtepomp als verbreekcontact (NC) zijn bedraad. SEM stuurt de standaard SG-Ready waarheidstabel aan; als de boost de pomp blokkeert (en omgekeerd), zet dit dan aan om beide relais om te keren.",
+          "heat_pump_climate_entity": "Klimaat-entiteit waarmee het instelpunt wordt verhoogd tijdens zonne-overschot. Op zichzelf voldoende voor de klimaat-only modus (geen relais nodig).",
+          "heat_pump_power_sensor": "Optionele sensor (W) die het huidige stroomverbruik van de warmtepomp rapporteert.",
+          "heat_pump_boost_offset": "Graden Celsius die tijdens een zonne-overschot-boost bij het normale instelpunt worden opgeteld.",
+          "heat_pump_max_setpoint": "Bovengrens voor de temperatuur (°C) die SEM tijdens een boostcyclus instelt.",
+          "heat_pump_priority": "Prioriteit bij de overschotverdeling ten opzichte van andere apparaten. Lagere getallen worden als eerste bediend."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "EV-laders",
+        "description": "Beheer de configuratie van je EV-laders.",
+        "data": {
+          "action": "Actie"
+        },
+        "data_description": {
+          "action": "Kies of je een nieuwe lader wilt toevoegen, een bestaande wilt bewerken of er een wilt verwijderen."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "EV-lader verwijderen",
+        "description": "Selecteer een lader om te verwijderen. De primaire lader kan niet verwijderd worden.",
+        "data": {
+          "charger_to_remove": "Te verwijderen lader"
+        },
+        "data_description": {
+          "charger_to_remove": "Selecteer de lader die je uit SEM wilt verwijderen. De primaire lader kan niet verwijderd worden."
         }
       }
     }
@@ -1125,6 +1160,18 @@
     },
     "invalid_deadline_format": {
       "message": "Ongeldig deadlineformaat: “{deadline}”. Gebruik de ISO 8601-notatie, bijvoorbeeld 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Configuratie van het Energiedashboard mislukt. Controleer of alle vereiste sensoren beschikbaar zijn."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option vereist een 'options'-dict die configuratiesleutels aan nieuwe waarden koppelt."
+    },
+    "set_option_no_entry": {
+      "message": "Geen SEM ConfigEntry gevonden — installeer SEM eerst via Instellingen → Apparaten en diensten."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Geen apparaatschema gevonden voor {device_id}. Controleer de apparaat-ID die je bij de service schedule_appliance hebt gebruikt."
     }
   },
   "issues": {
@@ -1171,6 +1218,10 @@
     "keba_failsafe_active": {
       "title": "KEBA failsafe is ingeschakeld — schakel deze uit voor stabiel laden",
       "description": "Je KEBA-lader \"{name}\" heeft de failsafe-watchdog ingeschakeld. SEM (zoals evcc) is hier niet meer van afhankelijk, maar zolang deze aanstaat, valt de aangeboden laadstroom tussen commando's steeds terug naar de fallback van 6 A. Hierdoor gaat het laden oscilleren (6↔9 A) en weigeren sommige auto's (bijv. Renault Zoe) om stabiel te laden.\n\nDe KEBA-service van Home Assistant kan de failsafe niet uitschakelen (een timeout van 0 wordt niet geaccepteerd), dus je moet dit op de lader zelf doen: zet de **failsafe-timeout op 0** (KEBA UDP `failsafe 0 0 1`, of via KEBA's KeContact-tooling). Zie de gekoppelde handleiding voor stapsgewijze instructies. Deze Reparatie verdwijnt automatisch zodra de failsafe is uitgeschakeld."
+    },
+    "soc_cap_unenforceable": {
+      "title": "Laadlimiet van {target}% kan niet worden afgedwongen: {name}",
+      "description": "**{name}** is ingesteld op een procentueel laaddoel, maar je voertuig rapporteert op dit moment geen laadniveau, waardoor SEM niet kan stoppen bij **{target}%** — er wordt doorgeladen tot de auto zelf terugregelt (bijna vol).\n\nAls je dashboard een batterijpercentage toont, is dat SEM's *geschatte* SOC, die bewust genegeerd wordt voor de harde limiet (deze kan afwijken). Koppel een **echte voertuig-SOC-sensor** aan deze lader om de limiet af te dwingen (Configuratie → EV → Voertuig-SOC-entiteit). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-waarde beschikbaar is."
     }
   }
 }

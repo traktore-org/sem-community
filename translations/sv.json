@@ -87,22 +87,13 @@
     "error": {
       "unknown": "Ett oväntat fel uppstod. Försök igen.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge."
     },
     "abort": {
-      "already_configured": "Solar Energy Management är redan konfigurerat. Bara en instans tillåts."
+      "already_configured": "Solar Energy Management är redan konfigurerat. Bara en instans tillåts.",
+      "energy_dashboard_not_configured": "SEM läser dina sol-, nät- och batterisensorer från Home Assistants Energi-instrumentpanel, och den är inte konfigurerad ännu.\n\nStäll in den först under Inställningar → Instrumentpaneler → Energi ({url}) — lägg till minst din solproduktion och din elförbrukning från nätet — och starta sedan den här installationen igen.",
+      "energy_dashboard_incomplete": "Din Energi-instrumentpanel är konfigurerad, men följande saknas: {missing}.\n\nSEM behöver dessa källor för att kunna läsa av ditt system. Lägg till dem under Inställningar → Instrumentpaneler → Energi ({url}) och starta sedan den här installationen igen."
     }
   },
   "options": {
@@ -168,7 +159,8 @@
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
           "legionella_interval_hours": "Max hours between disinfection cycles",
-          "diagram_style": "Systemdiagram stil"
+          "diagram_style": "Systemdiagram stil",
+          "battery_assist_min_surplus": "Batteristöd – min. solöverskott (W)"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -191,7 +183,8 @@
           "diagram_style": "Välj systemdiagram på fliken Hem. 'SEM' använder det inbyggda animerade diagrammet. 'K-Flow' använder K-Flow HACS-kortet (måste installeras separat).",
           "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
           "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "battery_assist_min_surplus": "Minsta verkliga solöverskott innan husbatteriet får hjälpa till att ladda EV:n — i alla laddningslägen. Under detta är batteriet reserverat för huset (bilen drar från nätet + sol). Standard 1200 W. Ställ in 0 för att låta batteriet stödja EV:n överallt, även nattetid."
         }
       },
       "settings_ev": {
@@ -364,6 +357,50 @@
           "pv_name_pv4": "PV4 name",
           "pv_name_pv5": "PV5 name",
           "pv_name_pv6": "PV6 name"
+        }
+      },
+      "heat_pump": {
+        "title": "Värmepump",
+        "description": "Konfigurera din värmepump för boost med solöverskott. Två styrvägar stöds:\n• **SG-Ready** — ange båda reläentiteterna (Viessmann, Stiebel Eltron, Vaillant).\n• **Endast klimat** — ange bara klimatentiteten (Nibe, Mitsubishi, Daikin och alla HA-styrda värmepumpar utan SG-Ready-reläer).\nBåda vägarna kan även kombineras. Lämna allt tomt för att hoppa över.",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready relä 1 (valfri switch-entitet)",
+          "heat_pump_relay2_entity": "SG-Ready relä 2 (valfri switch-entitet)",
+          "heat_pump_invert_sg_ready": "Invertera SG-Ready-kontakter (för NC-koppling)",
+          "heat_pump_climate_entity": "Klimatentitet för börvärdesboost (valfri)",
+          "heat_pump_power_sensor": "Effektsensor (valfri)",
+          "heat_pump_boost_offset": "Temperaturboost-offset (°C)",
+          "heat_pump_max_setpoint": "Maximalt temperaturbörvärde (°C)",
+          "heat_pump_priority": "Överskottsprioritet (1=högst)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Switch-entitet för SG-Ready-relä 1 (signal för normaldrift). Ange tillsammans med relä 2 för SG-Ready-protokollet.",
+          "heat_pump_relay2_entity": "Switch-entitet för SG-Ready-relä 2 (signal för överskottsboost). Ange tillsammans med relä 1 för SG-Ready-protokollet.",
+          "heat_pump_invert_sg_ready": "Aktivera endast om värmepumpens SG-Ready-kontakter är kopplade som normalt slutna (NC). SEM följer standardsanningstabellen för SG-Ready; om boost blockerar pumpen (och tvärtom) slår du på detta för att vända båda reläerna.",
+          "heat_pump_climate_entity": "Klimatentitet som används för att höja börvärdet vid solöverskott. Räcker på egen hand för läget endast klimat (inga reläer behövs).",
+          "heat_pump_power_sensor": "Valfri sensor (W) som rapporterar värmepumpens aktuella effektförbrukning.",
+          "heat_pump_boost_offset": "Antal grader Celsius som läggs till det normala börvärdet under en boost med solöverskott.",
+          "heat_pump_max_setpoint": "Övre temperaturgräns (°C) som SEM ställer in under en boost-cykel.",
+          "heat_pump_priority": "Prioritet vid fördelning av överskott i förhållande till andra enheter. Lägre nummer betjänas först."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "EV-laddare",
+        "description": "Hantera konfigurationen av dina EV-laddare.",
+        "data": {
+          "action": "Åtgärd"
+        },
+        "data_description": {
+          "action": "Välj om du vill lägga till en ny laddare, redigera en befintlig eller ta bort en."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "Ta bort EV-laddare",
+        "description": "Välj en laddare att ta bort. Den primära laddaren kan inte tas bort.",
+        "data": {
+          "charger_to_remove": "Laddare att ta bort"
+        },
+        "data_description": {
+          "charger_to_remove": "Välj den laddare du vill ta bort från SEM. Den primära laddaren kan inte raderas."
         }
       }
     }
@@ -1123,6 +1160,18 @@
     },
     "invalid_deadline_format": {
       "message": "Ogiltigt deadlineformat: ”{deadline}”. Använd ISO 8601-format, till exempel 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Konfigurationen av Energipanelen misslyckades. Kontrollera att alla nödvändiga sensorer är tillgängliga."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option kräver en 'options'-dict som mappar konfigurationsnycklar till nya värden."
+    },
+    "set_option_no_entry": {
+      "message": "Ingen SEM ConfigEntry hittades — installera SEM via Inställningar → Enheter och tjänster först."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Ingen apparatschemaläggning hittades för {device_id}. Kontrollera det enhets-ID du använde med tjänsten schedule_appliance."
     }
   },
   "issues": {
@@ -1169,6 +1218,10 @@
     "keba_failsafe_active": {
       "title": "KEBA failsafe is enabled — disable it for steady charging",
       "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+    },
+    "soc_cap_unenforceable": {
+      "title": "Kan inte upprätthålla laddgränsen på {target} %: {name}",
+      "description": "**{name}** är inställd på ett procentuellt laddmål, men ditt fordon rapporterar inte sin laddningsnivå just nu, så SEM kan inte stoppa vid **{target} %** — laddningen fortsätter tills bilen själv trappar ner (nästan full).\n\nOm din instrumentpanel visar en batteriprocent är det SEM:s *uppskattade* SOC, som medvetet ignoreras för den hårda gränsen (den kan driva). För att upprätthålla gränsen kopplar du in en **verklig SOC-sensor för fordonet** till denna laddare (Konfiguration → EV → Fordonets SOC-entitet). Denna reparation försvinner automatiskt så snart ett verkligt SOC-värde är tillgängligt igen."
     }
   }
 }

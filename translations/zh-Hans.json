@@ -87,22 +87,13 @@
     "error": {
       "unknown": "发生了未知错误。请重试。",
       "entity_not_found": "未找到实体。请确认该实体 ID 确实存在。",
-      "incorrect_device_class": "实体 {entity_id} 的设备类别 (device_class) 为错误的 {actual}，应为 {expected}。请选择具有正确设备类别的传感器。",
-      "incorrect_state_class": "实体 {entity_id} 的状态类别 (state_class) 为错误的 {actual}，应为 {expected}。能源传感器必须使用 state_class: total_increasing。",
-      "entity_unavailable": "实体 {entity_id} 当前不可用。请确保设备已上线并正在提供数据。",
-      "invalid_value": "实体 {entity_id} 具有无效的值 {value}。应为数值。",
-      "service_not_found": "未找到通知服务 {service}。请检查服务名称（例如 notify.mobile_app_your_phone）。",
-      "validation_failed": "一个或多个传感器验证失败。请检查下方的错误信息并修正问题。",
-      "solar_production_sensor": "太阳能发电量传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。",
-      "grid_power_sensor": "电网功率传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。负数 = 购电（输入），正数 = 供电（输出）。",
-      "battery_soc_sensor": "蓄电池电量 (SOC) 传感器是必填项，且必须提供百分比读数 (0-100%)。",
-      "battery_power_sensor": "蓄电池功率传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。正数 = 充电，负数 = 放电。",
-      "ev_connected_sensor": "充电桩连接状态传感器是必填项，且必须是二进制传感器 (binary_sensor，ON/OFF)。",
-      "ev_charging_sensor": "充电桩充电状态传感器是必填项，且必须是二进制传感器 (binary_sensor，ON/OFF)。",
-      "ev_charging_power_sensor": "充电桩充电功率传感器是必填项，且必须提供以瓦特 (W) 为单位的功率读数。"
+      "service_not_found": "未找到通知服务。请检查服务名称（例如 notify.mobile_app_your_phone）。",
+      "heat_pump_partial_relays": "SG-Ready 需要【两个】继电器实体。请同时设置两个继电器 —— 或者将两者都留空，仅配置 climate 实体以使用仅温控设定值增强模式。"
     },
     "abort": {
-      "already_configured": "太阳能消纳管理 (SEM) 已经配置过了。只允许存在一个实例。"
+      "already_configured": "太阳能消纳管理 (SEM) 已经配置过了。只允许存在一个实例。",
+      "energy_dashboard_not_configured": "SEM 从 Home Assistant 的能源看板读取您的太阳能、电网和电池传感器，而该看板尚未配置。\n\n请先在 设置 → 仪表板 → 能源 ({url}) 中完成配置 — 至少添加太阳能发电量和电网用电量 — 然后重新开始安装。",
+      "energy_dashboard_incomplete": "您的能源看板已配置，但缺少：{missing}。\n\nSEM 需要这些数据源才能读取您的系统。请在 设置 → 仪表板 → 能源 ({url}) 中添加它们，然后重新开始安装。"
     }
   },
   "options": {
@@ -366,6 +357,50 @@
           "pv_name_pv4": "PV4 名称",
           "pv_name_pv5": "PV5 名称",
           "pv_name_pv6": "PV6 名称"
+        }
+      },
+      "heat_pump": {
+        "title": "热泵",
+        "description": "配置您的热泵以使用太阳能富余绿电进行增强。支持两种控制路径：\n• **SG-Ready** —— 设置两个继电器实体（Viessmann、Stiebel Eltron、Vaillant）。\n• **仅 climate** —— 仅设置 climate 实体（Nibe、Mitsubishi、Daikin 以及任何无 SG-Ready 继电器但可由 HA 控制的热泵）。\n两种路径也可以组合使用。全部留空则跳过此步骤。",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready 继电器 1（switch 实体，可选）",
+          "heat_pump_relay2_entity": "SG-Ready 继电器 2（switch 实体，可选）",
+          "heat_pump_invert_sg_ready": "反转 SG-Ready 触点（适用于常闭 NC 接线）",
+          "heat_pump_climate_entity": "用于设定值增强的 climate 实体（可选）",
+          "heat_pump_power_sensor": "功率传感器（可选）",
+          "heat_pump_boost_offset": "温度增强偏置 (°C)",
+          "heat_pump_max_setpoint": "最高温度设定值 (°C)",
+          "heat_pump_priority": "富余绿电优先级 (1=最高)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "SG-Ready 继电器 1（正常运行信号）的 switch 实体。需与继电器 2 一同设置才能使用 SG-Ready 协议。",
+          "heat_pump_relay2_entity": "SG-Ready 继电器 2（富余绿电增强信号）的 switch 实体。需与继电器 1 一同设置才能使用 SG-Ready 协议。",
+          "heat_pump_invert_sg_ready": "仅当您的热泵 SG-Ready 触点采用常闭 (NC) 接线时才启用。SEM 使用标准的 SG-Ready 真值表；如果增强反而锁定了热泵（或反之），请开启此项以同时反转两个继电器。",
+          "heat_pump_climate_entity": "在太阳能富余期间用于提高设定值的 climate 实体。仅使用它即可满足仅 climate 模式（无需继电器）。",
+          "heat_pump_power_sensor": "可选。报告热泵当前功耗的传感器 (W)。",
+          "heat_pump_boost_offset": "太阳能富余绿电增强期间在正常设定值之上增加的摄氏度数。",
+          "heat_pump_max_setpoint": "SEM 在增强周期内可设置的温度上限 (°C)。",
+          "heat_pump_priority": "相对于其他设备的富余绿电分配优先级。数字越小越优先分配。"
+        }
+      },
+      "ev_charger_menu": {
+        "title": "电动汽车充电桩",
+        "description": "管理您的电动汽车充电桩配置。",
+        "data": {
+          "action": "操作"
+        },
+        "data_description": {
+          "action": "选择添加新充电桩、编辑现有充电桩，还是移除某个充电桩。"
+        }
+      },
+      "ev_charger_remove": {
+        "title": "移除电动汽车充电桩",
+        "description": "请选择要移除的充电桩。主充电桩无法被移除。",
+        "data": {
+          "charger_to_remove": "要移除的充电桩"
+        },
+        "data_description": {
+          "charger_to_remove": "选择您想从 SEM 中移除的充电桩。主充电桩无法被删除。"
         }
       }
     }
@@ -1125,6 +1160,18 @@
     },
     "invalid_deadline_format": {
       "message": "无效的时间截止格式：“{deadline}”。请使用 ISO 8601 格式，例如 2026-05-27T07:00:00。"
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "能源看板配置失败。请检查所有必需的传感器是否可用。"
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option 需要一个 options 字典，用于将配置键映射到新的值。"
+    },
+    "set_option_no_entry": {
+      "message": "未找到 SEM ConfigEntry —— 请先通过 设置 → 设备与服务 安装 SEM。"
+    },
+    "unknown_appliance_schedule": {
+      "message": "未找到 {device_id} 的设备计划。请检查您在 schedule_appliance 服务中使用的设备 ID。"
     }
   },
   "issues": {
@@ -1171,6 +1218,10 @@
     "sensor_stale": {
       "title": "传感器数据冻结",
       "description": "传感器 `{entity_id}`（{friendly_name}）仍显示为可用，但已超过 {minutes} 分钟未更新数据，疑似冻结。SEM 仍在能量平衡和符号检测中使用其过期数值，相关计算结果可能失真。请检查该传感器所属的集成/设备（重新加载集成或检查设备连接）。"
+    },
+    "soc_cap_unenforceable": {
+      "title": "无法执行 {target}% 的充电限制：{name}",
+      "description": "**{name}** 设置了按百分比的充电目标，但您的车辆目前并未上报其剩余电量 (SOC)，因此 SEM 无法在 **{target}%** 时停止充电 —— 充电将持续到车辆自身开始降流（接近充满）为止。\n\n如果看板上显示了电池百分比，那是 SEM *估算* 的 SOC，出于硬性限制的考虑 SEM 会刻意忽略它（该估值可能产生偏差）。要执行此上限，请为该充电桩配置一个 **真实的车辆 SOC 传感器**（配置 → 电动汽车 → 车辆 SOC 实体）。一旦重新获得真实的 SOC 读数，此修复项将自动清除。"
     }
   }
 }

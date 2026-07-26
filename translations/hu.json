@@ -87,22 +87,13 @@
     "error": {
       "unknown": "Váratlan hiba történt. Kérjük, próbálja újra.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "Az SG-Ready MINDKÉT relé entitást igényli. Állítsa be mindkét relét — vagy hagyja mindkettőt üresen, és csak a climate entitást konfigurálja a kizárólag climate alapú célhőmérséklet-emeléshez."
     },
     "abort": {
-      "already_configured": "A Solar Energy Management már konfigurálva van. Csak egy példány engedélyezett."
+      "already_configured": "A Solar Energy Management már konfigurálva van. Csak egy példány engedélyezett.",
+      "energy_dashboard_not_configured": "A SEM a napelemes, hálózati és akkumulátoros érzékelőket a Home Assistant Energia irányítópultjáról olvassa be, ez azonban még nincs beállítva.\n\nElőször állítsa be a Beállítások → Irányítópultok → Energia ({url}) menüpontban — adja hozzá legalább a napelemes termelést és a hálózati fogyasztást —, majd indítsa el újra ezt a telepítést.",
+      "energy_dashboard_incomplete": "Az Energia irányítópult be van állítva, de a következő hiányzik: {missing}.\n\nA SEM-nek szüksége van ezekre a forrásokra a rendszer beolvasásához. Adja hozzá őket a Beállítások → Irányítópultok → Energia ({url}) menüpontban, majd indítsa el újra ezt a telepítést."
     }
   },
   "options": {
@@ -168,7 +159,8 @@
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
           "legionella_interval_hours": "Max hours between disinfection cycles",
-          "diagram_style": "Rendszerdiagram stílusa"
+          "diagram_style": "Rendszerdiagram stílusa",
+          "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -191,7 +183,8 @@
           "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő).",
           "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
           "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "battery_assist_min_surplus": "A legkisebb tényleges napenergia-többlet, amely felett a házi akkumulátor segíthet az EV töltésében — bármely töltési módban. Ez alatt az akkumulátor a ház számára van fenntartva (az autó a hálózatból + napenergiából tölt). Alapértelmezés 1200 W. Állítsa 0-ra, hogy az akkumulátor mindenhol támogassa az EV-t, éjszaka is."
         }
       },
       "settings_ev": {
@@ -364,6 +357,50 @@
           "pv_name_pv4": "PV4 name",
           "pv_name_pv5": "PV5 name",
           "pv_name_pv6": "PV6 name"
+        }
+      },
+      "heat_pump": {
+        "title": "Hőszivattyú",
+        "description": "Állítsa be hőszivattyúját a napelemes többlettel történő emeléshez. Két vezérlési út támogatott:\n• **SG-Ready** — állítsa be mindkét relé entitást (Viessmann, Stiebel Eltron, Vaillant).\n• **Csak climate** — csak a climate entitást állítsa be (Nibe, Mitsubishi, Daikin és minden HA-val vezérelt hőszivattyú SG-Ready relék nélkül).\nA két út kombinálható is. Hagyja mindet üresen a kihagyáshoz.",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready relé 1 (opcionális switch entitás)",
+          "heat_pump_relay2_entity": "SG-Ready relé 2 (opcionális switch entitás)",
+          "heat_pump_invert_sg_ready": "SG-Ready érintkezők invertálása (NC bekötéshez)",
+          "heat_pump_climate_entity": "Climate entitás a célhőmérséklet emeléséhez (opcionális)",
+          "heat_pump_power_sensor": "Teljesítmény-érzékelő (opcionális)",
+          "heat_pump_boost_offset": "Hőmérséklet-emelés (°C)",
+          "heat_pump_max_setpoint": "Maximális célhőmérséklet (°C)",
+          "heat_pump_priority": "Többlet prioritás (1=legmagasabb)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Switch entitás az SG-Ready 1-es reléhez (normál üzem jelzése). Az SG-Ready protokollhoz a 2-es relével együtt állítsa be.",
+          "heat_pump_relay2_entity": "Switch entitás az SG-Ready 2-es reléhez (többlet-emelés jelzése). Az SG-Ready protokollhoz az 1-es relével együtt állítsa be.",
+          "heat_pump_invert_sg_ready": "Csak akkor engedélyezze, ha hőszivattyúja SG-Ready érintkezői alapesetben zárt (NC) bekötésűek. A SEM a szabványos SG-Ready igazságtáblát vezérli; ha az emelés blokkolja a szivattyút (és fordítva), kapcsolja be ezt mindkét relé megfordításához.",
+          "heat_pump_climate_entity": "A napelemes többlet idején a célhőmérséklet emelésére használt climate entitás. Önmagában elegendő a csak climate módhoz (relék nem szükségesek).",
+          "heat_pump_power_sensor": "Opcionális érzékelő (W), amely a hőszivattyú aktuális teljesítményfelvételét jelenti.",
+          "heat_pump_boost_offset": "A normál célhőmérséklethez hozzáadott Celsius-fok a napelemes többlettel történő emelés alatt.",
+          "heat_pump_max_setpoint": "Felső hőmérsékleti határ (°C), amelyet a SEM az emelési ciklus alatt beállít.",
+          "heat_pump_priority": "A többlet elosztásának prioritása a többi eszközhöz képest. Az alacsonyabb számok kerülnek sorra előbb."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "EV-töltők",
+        "description": "Kezelje az EV-töltők konfigurációját.",
+        "data": {
+          "action": "Művelet"
+        },
+        "data_description": {
+          "action": "Válassza ki, hogy új töltőt ad hozzá, meglévőt szerkeszt, vagy eltávolít egyet."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "EV-töltő eltávolítása",
+        "description": "Válasszon egy eltávolítandó töltőt. Az elsődleges töltő nem távolítható el.",
+        "data": {
+          "charger_to_remove": "Eltávolítandó töltő"
+        },
+        "data_description": {
+          "charger_to_remove": "Válassza ki azt a töltőt, amelyet el szeretne távolítani a SEM-ből. Az elsődleges töltő nem törölhető."
         }
       }
     }
@@ -1123,6 +1160,18 @@
     },
     "invalid_deadline_format": {
       "message": "Érvénytelen határidőformátum: „{deadline}”. Használjon ISO 8601 formátumot, például 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Az Energia irányítópult konfigurálása sikertelen. Ellenőrizze, hogy minden szükséges érzékelő elérhető-e."
+    },
+    "set_option_invalid_payload": {
+      "message": "A set_option egy 'options' szótárat igényel, amely a konfigurációs kulcsokat új értékekre képezi le."
+    },
+    "set_option_no_entry": {
+      "message": "Nem található SEM ConfigEntry — először telepítse a SEM-et a Beállítások → Eszközök és szolgáltatások menüpontban."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Nem található készülék-ütemezés ehhez: {device_id}. Ellenőrizze az eszközazonosítót, amelyet a schedule_appliance szolgáltatással használt."
     }
   },
   "issues": {
@@ -1169,6 +1218,10 @@
     "keba_failsafe_active": {
       "title": "KEBA failsafe is enabled — disable it for steady charging",
       "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+    },
+    "soc_cap_unenforceable": {
+      "title": "A(z) {target}%-os töltési limit nem érvényesíthető: {name}",
+      "description": "A(z) **{name}** százalékos töltési célra van állítva, de a járműve jelenleg nem jelenti a töltöttségi szintjét, így a SEM nem tud **{target}%**-nál megállni — addig tölt tovább, amíg maga az autó nem csökkenti a teljesítményt (közel teli állapotban).\n\nHa az irányítópulton látható egy akkumulátor-százalék, az a SEM *becsült* SOC-ja, amelyet a kemény limitnél szándékosan figyelmen kívül hagy (elcsúszhat). A limit érvényesítéséhez kössön be ehhez a töltőhöz egy **valós jármű SOC-érzékelőt** (Konfiguráció → EV → Jármű SOC entitás). Ez a javítási bejegyzés automatikusan eltűnik, amint ismét elérhető egy valós SOC-leolvasás."
     }
   }
 }

@@ -87,22 +87,13 @@
     "error": {
       "unknown": "Odottamaton virhe. Yritä uudelleen.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "SG-Ready vaatii MOLEMMAT releentiteetit. Aseta molemmat releet — tai jätä molemmat tyhjiksi ja määritä vain ilmastointientiteetti pelkän ilmastoinnin asetusarvon boostia varten."
     },
     "abort": {
-      "already_configured": "Solar Energy Management on jo määritetty. Vain yksi instanssi sallittu."
+      "already_configured": "Solar Energy Management on jo määritetty. Vain yksi instanssi sallittu.",
+      "energy_dashboard_not_configured": "SEM lukee aurinko-, verkko- ja akkuanturisi Home Assistantin Energia-paneelista, eikä sitä ole vielä määritetty.\n\nMääritä se ensin kohdassa Asetukset → Koontinäytöt → Energia ({url}) — lisää vähintään aurinkotuotanto ja verkosta otettu sähkö — ja käynnistä tämä asennus sitten uudelleen.",
+      "energy_dashboard_incomplete": "Energia-paneelisi on määritetty, mutta seuraavat puuttuvat: {missing}.\n\nSEM tarvitsee nämä lähteet järjestelmäsi lukemiseen. Lisää ne kohdassa Asetukset → Koontinäytöt → Energia ({url}) ja käynnistä tämä asennus sitten uudelleen."
     }
   },
   "options": {
@@ -168,7 +159,8 @@
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
           "legionella_interval_hours": "Max hours between disinfection cycles",
-          "diagram_style": "Järjestelmäkaavion tyyli"
+          "diagram_style": "Järjestelmäkaavion tyyli",
+          "battery_assist_min_surplus": "Akkutuki – vähimmäisaurinkoylijäämä (W)"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -191,7 +183,8 @@
           "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen).",
           "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
           "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "battery_assist_min_surplus": "Pienin todellinen aurinkoylijäämä, ennen kuin kotiakku saa auttaa EV:n lataamisessa — kaikissa lataustiloissa. Tämän alapuolella akku on varattu talolle (auto ottaa verkosta + auringosta). Oletus 1200 W. Aseta arvoon 0, jotta akku tukee EV:tä kaikkialla, myös yöllä."
         }
       },
       "settings_ev": {
@@ -364,6 +357,50 @@
           "pv_name_pv4": "PV4 name",
           "pv_name_pv5": "PV5 name",
           "pv_name_pv6": "PV6 name"
+        }
+      },
+      "heat_pump": {
+        "title": "Lämpöpumppu",
+        "description": "Määritä lämpöpumppusi aurinkoylijäämän boostia varten. Kahta ohjaustapaa tuetaan:\n• **SG-Ready** — aseta molemmat releentiteetit (Viessmann, Stiebel Eltron, Vaillant).\n• **Vain ilmastointi** — aseta pelkkä ilmastointientiteetti (Nibe, Mitsubishi, Daikin ja mikä tahansa HA:n ohjaama lämpöpumppu ilman SG-Ready-releitä).\nMolemmat tavat voi myös yhdistää. Jätä kaikki tyhjäksi ohittaaksesi.",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready-rele 1 (valinnainen switch-entiteetti)",
+          "heat_pump_relay2_entity": "SG-Ready-rele 2 (valinnainen switch-entiteetti)",
+          "heat_pump_invert_sg_ready": "Käännä SG-Ready-koskettimet (NC-kytkentä)",
+          "heat_pump_climate_entity": "Ilmastointientiteetti asetusarvon boostiin (valinnainen)",
+          "heat_pump_power_sensor": "Tehoanturi (valinnainen)",
+          "heat_pump_boost_offset": "Lämpötilan boost-poikkeama (°C)",
+          "heat_pump_max_setpoint": "Suurin lämpötilan asetusarvo (°C)",
+          "heat_pump_priority": "Ylijäämäprioriteetti (1=korkein)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Switch-entiteetti SG-Ready-releelle 1 (normaalikäytön signaali). Aseta yhdessä releen 2 kanssa SG-Ready-protokollaa varten.",
+          "heat_pump_relay2_entity": "Switch-entiteetti SG-Ready-releelle 2 (ylijäämäboostin signaali). Aseta yhdessä releen 1 kanssa SG-Ready-protokollaa varten.",
+          "heat_pump_invert_sg_ready": "Ota käyttöön vain, jos lämpöpumppusi SG-Ready-koskettimet on kytketty normaalisti suljettuina (NC). SEM noudattaa SG-Readyn vakiototuustaulukkoa; jos boost estää pumpun (ja päinvastoin), kytke tämä päälle kääntääksesi molemmat releet.",
+          "heat_pump_climate_entity": "Ilmastointientiteetti, jolla asetusarvoa nostetaan aurinkoylijäämän aikana. Riittää yksinään pelkän ilmastoinnin tilaan (releitä ei tarvita).",
+          "heat_pump_power_sensor": "Valinnainen anturi (W), joka raportoi lämpöpumpun nykyisen tehonkulutuksen.",
+          "heat_pump_boost_offset": "Celsiusasteet, jotka lisätään normaaliin asetusarvoon aurinkoylijäämän boostin aikana.",
+          "heat_pump_max_setpoint": "Ylempi lämpötilaraja (°C), jonka SEM asettaa boost-jakson aikana.",
+          "heat_pump_priority": "Ylijäämän jakoprioriteetti suhteessa muihin laitteisiin. Pienemmät numerot palvellaan ensin."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "EV-laturit",
+        "description": "Hallitse EV-laturiesi määrityksiä.",
+        "data": {
+          "action": "Toiminto"
+        },
+        "data_description": {
+          "action": "Valitse, haluatko lisätä uuden laturin, muokata olemassa olevaa vai poistaa jonkin."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "Poista EV-laturi",
+        "description": "Valitse poistettava laturi. Ensisijaista laturia ei voi poistaa.",
+        "data": {
+          "charger_to_remove": "Poistettava laturi"
+        },
+        "data_description": {
+          "charger_to_remove": "Valitse laturi, jonka haluat poistaa SEM:stä. Ensisijaista laturia ei voi poistaa."
         }
       }
     }
@@ -1123,6 +1160,18 @@
     },
     "invalid_deadline_format": {
       "message": "Virheellinen määräajan muoto: ”{deadline}”. Käytä ISO 8601 -muotoa, esimerkiksi 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Energia-koontinäytön määritys epäonnistui. Tarkista, että kaikki vaaditut anturit ovat käytettävissä."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option vaatii 'options'-sanakirjan, joka liittää määritysavaimet uusiin arvoihin."
+    },
+    "set_option_no_entry": {
+      "message": "SEM ConfigEntry -merkintää ei löytynyt — asenna SEM ensin kohdasta Asetukset → Laitteet ja palvelut."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Laitteelle {device_id} ei löytynyt laiteaikataulua. Tarkista laitetunnus, jota käytit palvelun schedule_appliance kanssa."
     }
   },
   "issues": {
@@ -1169,6 +1218,10 @@
     "keba_failsafe_active": {
       "title": "KEBA failsafe is enabled — disable it for steady charging",
       "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+    },
+    "soc_cap_unenforceable": {
+      "title": "Latausrajaa {target} % ei voi valvoa: {name}",
+      "description": "**{name}** on asetettu prosenttiperusteiseen lataustavoitteeseen, mutta ajoneuvosi ei raportoi varaustasoaan juuri nyt, joten SEM ei voi pysähtyä kohdassa **{target} %** — lataus jatkuu, kunnes auto itse hidastaa lataustaan (lähes täynnä).\n\nJos koontinäytölläsi näkyy akkuprosentti, se on SEM:n *arvioitu* SOC, jonka se jättää tarkoituksella huomiotta kovan rajan osalta (se voi ajautua). Jotta raja voidaan valvoa, liitä tälle laturille **todellinen ajoneuvon SOC-anturi** (Määritykset → EV → Ajoneuvon SOC-entiteetti). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on jälleen käytettävissä."
     }
   }
 }

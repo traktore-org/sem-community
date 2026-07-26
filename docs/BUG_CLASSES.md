@@ -491,6 +491,34 @@ values exist, which is the bug not quite fixed.
 whitelists, `services.yaml`, `strings.json`, `manifest.json` dependencies, platform lists — is it
 derived, or merely *asserted equal*? If it is neither, it is already drifting.
 
+**Third instance — #674, found by running that sweep question instead of writing it down and
+moving on.** `strings.json` ↔ `translations/*.json` had drifted **50 keys one way and 35 the
+other**, identically in all 16 languages. The trap is specific and worth naming: `strings.json` is
+where a developer naturally edits — it is HA's documented source file and the one hassfest
+validates — but **HA never reads it at runtime for a custom component.**
+`helpers/translation.py` loads `integration.file_path / "translations" / f"{language}.json"` and
+nothing else. HA *core* has a build step that copies one into the other; a custom component does
+not, so the "source" file is the one with no effect. Cost: the whole Heat Pump options step
+rendered with no title, no description and eight raw voluptuous keys as labels (the frontend falls
+back to the key name); the `soc_cap_unenforceable` repair issue had no title or description at all.
+
+Then the guard for it surfaced a second layer — **the two files agreeing with each other says
+nothing about either agreeing with the code**: two `async_abort` reasons had no message anywhere,
+so a new user installing SEM before configuring the Energy Dashboard read the literal string
+`energy_dashboard_not_configured` as their entire failure message; twelve `config.error` keys were
+never assigned by any code path (leftovers from validation the #397 slim-down replaced); and two
+live errors named placeholders (`{entity_id}`, `{service}`) that no `description_placeholders` ever
+supplies, so users read the raw token. **Fix pattern:** where the mirror *is* derivable, demand
+exact parity rather than one-way containment — plus check placeholders in both directions, since an
+*invented* placeholder is a `KeyError` at render time while a *dropped* one merely loses
+information. **Guard:** `tests/test_674_translation_parity.py`.
+
+**Meta-lesson:** three instances in, the class's real tell is not "a list" — it is **a file whose
+only consumer is a human**. `services.yaml`, `strings.json` and the persist whitelist all fail the
+same way because nothing *executes* them against their counterpart. Ask of any such file: if I
+delete a line, what breaks, and when? If the answer is "nothing, until a user opens the right
+screen in the right language", it needs a guard, not a review.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

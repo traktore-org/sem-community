@@ -87,22 +87,13 @@
     "error": {
       "unknown": "Došlo k neočekávané chybě. Zkuste to prosím znovu.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "service_not_found": "Služba oznámení nebyla nalezena. Zkontrolujte název služby (např. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "SG-Ready vyžaduje OBĚ entity relé. Nastavte obě relé — nebo ponechte obě prázdná a nakonfigurujte pouze entitu climate pro navýšení cílové teploty v režimu pouze climate."
     },
     "abort": {
-      "already_configured": "Solar Energy Management je již nakonfigurován. Povolena je pouze jedna instance."
+      "already_configured": "Solar Energy Management je již nakonfigurován. Povolena je pouze jedna instance.",
+      "energy_dashboard_not_configured": "SEM načítá senzory fotovoltaiky, sítě a baterie z panelu Energie v Home Assistant a ten zatím není nastavený.\n\nNejprve jej nastavte v Nastavení → Ovládací panely → Energie ({url}) — přidejte alespoň výrobu solární energie a odběr ze sítě — a poté tuto instalaci spusťte znovu.",
+      "energy_dashboard_incomplete": "Váš panel Energie je nastavený, ale chybí: {missing}.\n\nSEM tyto zdroje potřebuje, aby mohl číst vaši instalaci. Přidejte je v Nastavení → Ovládací panely → Energie ({url}) a poté tuto instalaci spusťte znovu."
     }
   },
   "options": {
@@ -168,7 +159,8 @@
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
           "legionella_interval_hours": "Max hours between disinfection cycles",
-          "diagram_style": "Styl systémového diagramu"
+          "diagram_style": "Styl systémového diagramu",
+          "battery_assist_min_surplus": "Podpora baterie – min. solární přebytek (W)"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -191,7 +183,8 @@
           "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť).",
           "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
           "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "battery_assist_min_surplus": "Minimální skutečný solární přebytek, než smí domácí baterie pomáhat s nabíjením EV — v jakémkoli režimu nabíjení. Pod touto hodnotou je baterie vyhrazena pro dům (auto odebírá ze sítě + slunce). Výchozí 1200 W. Nastavte na 0, aby baterie podporovala EV všude, včetně noci."
         }
       },
       "settings_ev": {
@@ -364,6 +357,50 @@
           "pv_name_pv4": "PV4 name",
           "pv_name_pv5": "PV5 name",
           "pv_name_pv6": "PV6 name"
+        }
+      },
+      "heat_pump": {
+        "title": "Tepelné čerpadlo",
+        "description": "Nakonfigurujte tepelné čerpadlo pro navýšení ze solárního přebytku. Podporovány jsou dvě cesty řízení:\n• **SG-Ready** — nastavte obě entity relé (Viessmann, Stiebel Eltron, Vaillant).\n• **Pouze climate** — nastavte jen entitu climate (Nibe, Mitsubishi, Daikin a jakékoli tepelné čerpadlo řízené HA bez relé SG-Ready).\nObě cesty lze také kombinovat. Ponechte vše prázdné pro přeskočení.",
+        "data": {
+          "heat_pump_relay1_entity": "Relé SG-Ready 1 (volitelná entita switch)",
+          "heat_pump_relay2_entity": "Relé SG-Ready 2 (volitelná entita switch)",
+          "heat_pump_invert_sg_ready": "Invertovat kontakty SG-Ready (pro zapojení NC)",
+          "heat_pump_climate_entity": "Entita climate pro navýšení teploty (volitelné)",
+          "heat_pump_power_sensor": "Senzor výkonu (volitelné)",
+          "heat_pump_boost_offset": "Navýšení teploty (°C)",
+          "heat_pump_max_setpoint": "Maximální cílová teplota (°C)",
+          "heat_pump_priority": "Priorita přebytku (1=nejvyšší)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Entita switch pro relé SG-Ready 1 (signál normálního provozu). Nastavte společně s relé 2 pro protokol SG-Ready.",
+          "heat_pump_relay2_entity": "Entita switch pro relé SG-Ready 2 (signál navýšení z přebytku). Nastavte společně s relé 1 pro protokol SG-Ready.",
+          "heat_pump_invert_sg_ready": "Zapněte pouze tehdy, pokud jsou kontakty SG-Ready vašeho tepelného čerpadla zapojeny jako rozpínací (NC). SEM řídí standardní pravdivostní tabulku SG-Ready; pokud navýšení čerpadlo blokuje (a naopak), zapnutím této volby obě relé prohodíte.",
+          "heat_pump_climate_entity": "Entita climate používaná ke zvýšení cílové teploty během solárního přebytku. Sama o sobě stačí pro režim pouze climate (relé nejsou potřeba).",
+          "heat_pump_power_sensor": "Volitelný senzor (W) hlásící aktuální spotřebu tepelného čerpadla.",
+          "heat_pump_boost_offset": "Stupně Celsia přičtené k normální cílové teplotě během navýšení ze solárního přebytku.",
+          "heat_pump_max_setpoint": "Horní teplotní limit (°C), který SEM nastaví během cyklu navýšení.",
+          "heat_pump_priority": "Priorita rozdělení přebytku vůči ostatním zařízením. Nižší čísla jsou obsloužena dříve."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "Nabíječky EV",
+        "description": "Spravujte konfiguraci svých nabíječek EV.",
+        "data": {
+          "action": "Akce"
+        },
+        "data_description": {
+          "action": "Zvolte, zda přidat novou nabíječku, upravit stávající, nebo některou odebrat."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "Odebrat nabíječku EV",
+        "description": "Vyberte nabíječku k odebrání. Primární nabíječku nelze odebrat.",
+        "data": {
+          "charger_to_remove": "Nabíječka k odebrání"
+        },
+        "data_description": {
+          "charger_to_remove": "Vyberte nabíječku, kterou chcete odebrat ze SEM. Primární nabíječku nelze smazat."
         }
       }
     }
@@ -1123,6 +1160,18 @@
     },
     "invalid_deadline_format": {
       "message": "Neplatný formát termínu: „{deadline}“. Použijte formát ISO 8601, například 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Konfigurace panelu Energie selhala. Zkontrolujte, zda jsou dostupné všechny požadované senzory."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option vyžaduje slovník 'options' mapující konfigurační klíče na nové hodnoty."
+    },
+    "set_option_no_entry": {
+      "message": "Nebyl nalezen žádný ConfigEntry SEM — nejprve nainstalujte SEM přes Nastavení → Zařízení a služby."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Pro {device_id} nebyl nalezen žádný plán spotřebiče. Zkontrolujte ID zařízení, které jste použili u služby schedule_appliance."
     }
   },
   "issues": {
@@ -1169,6 +1218,10 @@
     "keba_failsafe_active": {
       "title": "KEBA failsafe is enabled — disable it for steady charging",
       "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+    },
+    "soc_cap_unenforceable": {
+      "title": "Nelze vynutit limit nabíjení {target} %: {name}",
+      "description": "**{name}** má nastaven procentní cíl nabíjení, ale vaše vozidlo právě nehlásí svůj stav nabití, takže SEM nemůže zastavit na **{target} %** — bude nabíjet dál, dokud vůz sám nesníží výkon (téměř plný).\n\nPokud váš panel ukazuje procenta baterie, jde o SEM *odhadovaný* SOC, který je pro tvrdý limit záměrně ignorován (může se rozcházet). Chcete-li limit vynutit, připojte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → EV → Entita SOC vozidla). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečné čtení SOC."
     }
   }
 }

@@ -87,22 +87,13 @@
     "error": {
       "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
       "entity_not_found": "Entität nicht gefunden. Bitte überprüfen Sie die Entity-ID.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Benachrichtigungsdienst {service} nicht gefunden. Bitte überprüfen Sie den Dienstnamen.",
-      "validation_failed": "Validierung für einen oder mehrere Sensoren fehlgeschlagen. Bitte überprüfen Sie die Fehlermeldungen.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "service_not_found": "Benachrichtigungsdienst nicht gefunden. Bitte überprüfen Sie den Dienstnamen (z. B. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "SG-Ready benötigt BEIDE Relais-Entitäten. Setze beide Relais — oder lasse beide leer und konfiguriere nur die climate-Entität für den climate-only Setpoint-Boost."
     },
     "abort": {
-      "already_configured": "Solar Energy Management ist bereits konfiguriert. Nur eine Instanz erlaubt."
+      "already_configured": "Solar Energy Management ist bereits konfiguriert. Nur eine Instanz erlaubt.",
+      "energy_dashboard_not_configured": "SEM liest Ihre Solar-, Netz- und Batteriesensoren aus dem Energie-Dashboard von Home Assistant, und dieses ist noch nicht eingerichtet.\n\nRichten Sie es zuerst unter Einstellungen → Dashboards → Energie ({url}) ein — fügen Sie mindestens Ihre Solarproduktion und Ihren Netzbezug hinzu — und starten Sie diese Installation dann erneut.",
+      "energy_dashboard_incomplete": "Ihr Energie-Dashboard ist eingerichtet, aber es fehlt: {missing}.\n\nSEM benötigt diese Quellen, um Ihre Anlage auszulesen. Fügen Sie sie unter Einstellungen → Dashboards → Energie ({url}) hinzu und starten Sie diese Installation dann erneut."
     }
   },
   "options": {
@@ -366,6 +357,50 @@
           "pv_name_pv4": "Name PV4",
           "pv_name_pv5": "Name PV5",
           "pv_name_pv6": "Name PV6"
+        }
+      },
+      "heat_pump": {
+        "title": "Wärmepumpe",
+        "description": "Konfiguriere deine Wärmepumpe für den Solarüberschuss-Boost. Zwei Steuerungspfade werden unterstützt:\n• **SG-Ready** — beide Relais-Entitäten setzen (Viessmann, Stiebel Eltron, Vaillant).\n• **Climate-only** — nur die climate-Entität setzen (Nibe, Mitsubishi, Daikin und jede von HA gesteuerte Wärmepumpe ohne SG-Ready-Relais).\nBeide Pfade lassen sich auch kombinieren. Alles leer lassen zum Überspringen.",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready Relais 1 (optionale Switch-Entität)",
+          "heat_pump_relay2_entity": "SG-Ready Relais 2 (optionale Switch-Entität)",
+          "heat_pump_invert_sg_ready": "SG-Ready-Kontakte invertieren (für NC-Verdrahtung)",
+          "heat_pump_climate_entity": "Climate-Entität für Setpoint-Boost (optional)",
+          "heat_pump_power_sensor": "Leistungssensor (optional)",
+          "heat_pump_boost_offset": "Temperatur-Boost-Offset (°C)",
+          "heat_pump_max_setpoint": "Maximaler Temperatur-Setpoint (°C)",
+          "heat_pump_priority": "Überschuss-Priorität (1=höchste)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Switch-Entität für SG-Ready-Relais 1 (Signal für Normalbetrieb). Zusammen mit Relais 2 setzen, um das SG-Ready-Protokoll zu nutzen.",
+          "heat_pump_relay2_entity": "Switch-Entität für SG-Ready-Relais 2 (Signal für Überschuss-Boost). Zusammen mit Relais 1 setzen, um das SG-Ready-Protokoll zu nutzen.",
+          "heat_pump_invert_sg_ready": "Nur aktivieren, wenn die SG-Ready-Kontakte deiner Wärmepumpe als Öffner (NC) verdrahtet sind. SEM verwendet die Standard-SG-Ready-Wahrheitstabelle; wenn der Boost die Pumpe blockiert (und umgekehrt), aktiviere dies, um beide Relais umzudrehen.",
+          "heat_pump_climate_entity": "Climate-Entität, über die der Setpoint bei Solarüberschuss angehoben wird. Für den climate-only Modus allein ausreichend (keine Relais nötig).",
+          "heat_pump_power_sensor": "Optionaler Sensor (W), der den aktuellen Stromverbrauch der Wärmepumpe meldet.",
+          "heat_pump_boost_offset": "Grad Celsius, die während eines Solarüberschuss-Boosts auf den normalen Setpoint addiert werden.",
+          "heat_pump_max_setpoint": "Obere Temperaturgrenze (°C), die SEM während eines Boost-Zyklus setzt.",
+          "heat_pump_priority": "Priorität bei der Überschussverteilung gegenüber anderen Geräten. Niedrigere Zahlen werden zuerst bedient."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "EV-Ladegeräte",
+        "description": "Verwalte die Konfiguration deiner EV-Ladegeräte.",
+        "data": {
+          "action": "Aktion"
+        },
+        "data_description": {
+          "action": "Wähle, ob du ein neues Ladegerät hinzufügen, ein bestehendes bearbeiten oder eines entfernen möchtest."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "EV-Ladegerät entfernen",
+        "description": "Wähle ein Ladegerät zum Entfernen. Das primäre Ladegerät kann nicht entfernt werden.",
+        "data": {
+          "charger_to_remove": "Zu entfernendes Ladegerät"
+        },
+        "data_description": {
+          "charger_to_remove": "Wähle das Ladegerät, das du aus SEM entfernen möchtest. Das primäre Ladegerät kann nicht gelöscht werden."
         }
       }
     }
@@ -1125,6 +1160,18 @@
     },
     "invalid_deadline_format": {
       "message": "Ungültiges Fristformat: „{deadline}“. Verwenden Sie das ISO-8601-Format, zum Beispiel 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Konfiguration des Energie-Dashboards fehlgeschlagen. Prüfe, ob alle erforderlichen Sensoren verfügbar sind."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option benötigt ein 'options'-Dict, das Konfigurationsschlüssel auf neue Werte abbildet."
+    },
+    "set_option_no_entry": {
+      "message": "Kein SEM ConfigEntry gefunden — installiere SEM zuerst über Einstellungen → Geräte & Dienste."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Kein Geräteplan für {device_id} gefunden. Prüfen Sie die Geräte-ID, die Sie mit dem Dienst schedule_appliance verwendet haben."
     }
   },
   "issues": {
@@ -1171,6 +1218,10 @@
     "keba_failsafe_active": {
       "title": "KEBA-Failsafe ist aktiv – für stabiles Laden deaktivieren",
       "description": "Bei deinem KEBA-Ladegerät \"{name}\" ist der Failsafe-Watchdog aktiviert. SEM verlässt sich (wie evcc) nicht mehr darauf, aber solange er aktiv ist, fällt das Ladegerät zwischen den Befehlen immer wieder auf seinen 6-A-Failsafe-Wert zurück. Dadurch schwankt der Ladestrom (6↔9 A) und manche Fahrzeuge (z. B. Renault Zoe) laden nicht stabil.\n\nDer KEBA-Dienst in Home Assistant kann den Failsafe nicht ausschalten (ein Timeout von 0 wird abgelehnt), daher musst du ihn direkt am Ladegerät deaktivieren: setze das **Failsafe-Timeout auf 0** (KEBA-UDP-Befehl `failsafe 0 0 1` oder über das KeContact-Tool von KEBA). Eine Schritt-für-Schritt-Anleitung findest du im verlinkten Leitfaden. Diese Reparatur verschwindet automatisch, sobald der Failsafe aus ist."
+    },
+    "soc_cap_unenforceable": {
+      "title": "Ladelimit von {target}% kann nicht durchgesetzt werden: {name}",
+      "description": "**{name}** ist auf ein prozentuales Ladeziel eingestellt, aber dein Fahrzeug meldet derzeit keinen Ladezustand. Daher kann SEM nicht bei **{target}%** stoppen — es lädt weiter, bis das Auto selbst abregelt (nahe voll).\n\nWenn dein Dashboard eine Batterie-% anzeigt, ist das SEMs *geschätzter* SOC, den es für das harte Limit bewusst ignoriert (er kann abweichen). Um das Limit durchzusetzen, hinterlege einen **echten Fahrzeug-SOC-Sensor** für dieses Ladegerät (Konfiguration → EV → Fahrzeug-SOC-Entität). Diese Reparatur verschwindet automatisch, sobald wieder ein echter SOC-Wert verfügbar ist."
     }
   }
 }

@@ -132,6 +132,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time — only the prefix was wrong. The issue-template's playbook link was broken the
   same way. Now guarded: **every** relative markdown link in the repo must resolve, not
   just the 12 config-card help links #618 covered.
+- 🚦 **A new install with no Energy Dashboard failed with a bare error code instead of an
+  explanation** (#674, coherence-audit) — SEM reads your solar/grid/battery sensors from
+  Home Assistant's Energy Dashboard, so it aborts setup if that isn't configured yet. The
+  abort *reason* was raised correctly and the code even passed a link to `/config/energy`
+  — but the message it referred to had never been written, so HA rendered the raw key and
+  the very first thing SEM said to a new user was the literal string
+  `energy_dashboard_not_configured`. Both abort messages now exist, in all 16 languages,
+  and name exactly what to add and where.
+- 🌡️ **The whole Heat Pump settings screen showed raw field names instead of labels**
+  (#674, coherence-audit) — and so did the EV-charger add/remove menu. `strings.json` and
+  `translations/` are a hand-maintained mirror of each other, and they had drifted **50
+  keys one way and 35 the other, identically in all 16 languages**. The trap is worth
+  naming: `strings.json` is where a developer naturally edits — it is HA's documented
+  source file, and the one hassfest validates — but **HA never reads it at runtime for a
+  custom integration**; it loads `translations/<lang>.json` and nothing else. So the file
+  that looked authoritative was the one with no effect. Opening Configure → Heat Pump gave
+  you no title, no description, and eight rows reading `heat_pump_relay1_entity`,
+  `heat_pump_climate_entity` … because the frontend falls back to the key name when a
+  label is missing. The `soc_cap_unenforceable` repair (the one that explains SEM won't
+  trust an *estimated* SOC for a hard charge limit) had no title or description at all.
+  Everything is now translated in all 16 languages and the two files are held at exact
+  parity by CI.
+- 🔤 **Two error messages printed `{entity_id}` and `{service}` literally, and twelve more
+  could never appear** (#674, coherence-audit) — swept while fixing the above.
+  "Entity {entity_id} was not found" was shown verbatim, braces and all, because no call
+  site ever supplies that placeholder; five of the 16 language files carried the broken
+  wording and two carried a correct one, with nothing able to tell them apart. Twelve
+  further `config.error` entries — per-sensor validation messages left over from the
+  design the #397 setup slim-down replaced — were translated into every language for code
+  paths that no longer set them. Removed, and CI now checks three things it never did:
+  every error key is both declared and reachable, every abort reason has a message, and no
+  string names a placeholder the flow never passes.
 - 🎛️ **Four services SEM registers had no UI at all, including the one the docs tell you
   to call** (#673, coherence-audit) — `services.yaml` declared 14 of the 18 services
   `__init__.py` registers. An undeclared service is still fully callable, so nothing ever
