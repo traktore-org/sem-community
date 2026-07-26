@@ -95,6 +95,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sem_exclude` is retired in the same pass (attached to nothing, read by nothing) — now
   that these become real labels in your registry, a dead one would show up promising to
   hide entities and do nothing.
+- 🧹 **A 180-line map of entity IDs that mostly didn't exist is gone** (#669,
+  coherence-audit) — `consts/sensors.py` held a 64-entry `key → entity_id` map that **no
+  production code ever read**, and 29 of those 64 (45%) named no entity: `home_consumption`
+  (the real one is `home_consumption_power`), all ten `solar_to_*` / `grid_to_*` flow keys
+  renamed to `flow_*_energy` long ago, and the same `_energy`-suffix drift #667 just fixed
+  in the *other* registry — uncaught here because this one is never looked up. Its only
+  test asserted a dict literal against itself, so it read as covered while being dead. The
+  danger was never the dead weight, it was that anyone reaching for it got a plausible
+  `sensor.sem_home_consumption` that has never existed. Deleted, and the one real guarantee
+  its test was reaching for (primary charger sensors keep unsuffixed names) is now checked
+  against the platform file that actually creates the entity, so it can fail. Also removed:
+  four values the coordinator emitted every cycle for no reader — two of them,
+  `solar_efficiency` and `battery_efficiency`, were **hardcoded constants wearing the name
+  of a measurement** (`85.0 if solar_power > 0`), which would have shown a made-up number
+  as a real one had anything ever surfaced them. A new guard checks that *every*
+  `sensor.sem_*` reference under `consts/` names an entity some platform actually declares.
 - 💰 **Nine energy-accounting values were being thrown away on every restart** (#668,
   coherence-audit) — the calculator hands 20 values to the store on shutdown, but the
   store's hand-written whitelist carried only 11 through. The nine it dropped were read

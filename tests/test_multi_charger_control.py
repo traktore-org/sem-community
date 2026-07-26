@@ -8,6 +8,8 @@ Tests the multi-EV charger architecture:
 - Session tracking: per-charger isolation
 - Backward compatibility: single-charger works identically
 """
+import re
+
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
@@ -19,7 +21,6 @@ from custom_components.solar_energy_management.coordinator.types import (
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
 )
-from custom_components.solar_energy_management.consts.sensors import SEM_SENSORS
 from custom_components.solar_energy_management.hardware_detection import (
     _discover_wallbox,
     _discover_keba,
@@ -344,11 +345,30 @@ class TestSingleChargerBackwardCompat:
         assert primary.device_id == "ev_charger"
 
     def test_sensor_names_unchanged(self):
-        """Primary charger sensors should keep existing names (no _0 suffix)."""
-        # SEM_SENSORS imported at module level
-        assert SEM_SENSORS["ev_power"] == "sensor.sem_ev_power"
-        # New aggregate sensor exists
-        assert SEM_SENSORS["ev_charger_count"] == "sensor.sem_ev_charger_count"
+        """Primary charger sensors keep their existing names (no _0 suffix).
+
+        (#669) This used to assert ``SEM_SENSORS["ev_power"] ==
+        "sensor.sem_ev_power"`` — a dict literal against itself, in a registry
+        no production code read. It could not fail, and it made a 180-line dead
+        file read as covered. The guarantee is real, so it is now checked
+        against the platform that actually creates the entity: ``sensor.py``
+        declares the key and ``SEMSensor`` builds
+        ``sensor.sem_{description.key}`` from it (sensor.py:1942). Rename the
+        key to ``ev_power_0`` and this fails, which is the whole point.
+        """
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parent.parent / "sensor.py").read_text()
+        keys = set(re.findall(r'key="([a-z0-9_]+)"', src))
+
+        # Guard the guard: a broken regex would pass every assert below.
+        assert len(keys) > 150, f"only found {len(keys)} keys — the scan broke"
+
+        assert "ev_power" in keys, "primary EV power sensor lost its unsuffixed key"
+        assert "ev_charger_count" in keys, "aggregate charger-count sensor missing"
+        assert not [k for k in keys if re.match(r"^ev_power_\d+$", k)], (
+            "primary charger sensors must not gain a numeric suffix"
+        )
 
 
 # ============================================================

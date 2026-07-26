@@ -552,8 +552,12 @@ class PerformanceMetrics:
     """System performance metrics."""
     self_consumption_rate: float = 0.0  # % of solar used locally
     autarky_rate: float = 0.0  # % of consumption from own generation
-    solar_efficiency: float = 0.0
-    battery_efficiency: float = 0.0
+    # Removed (#669): solar_efficiency / battery_efficiency. Both were
+    # hardcoded constants wearing the name of a measurement
+    # (``85.0 if solar_power > 0 else 0.0``), emitted every cycle and read by
+    # nothing. Had anything ever surfaced them they would have presented a
+    # made-up number as a real one — the dangerous half of the dead-surface
+    # class. Re-add only with an actual calculation behind them.
 
 
 @dataclass
@@ -1063,8 +1067,6 @@ class SEMData:
             # Performance
             "self_consumption_rate": self.performance.self_consumption_rate,
             "autarky_rate": self.performance.autarky_rate,
-            "solar_efficiency": self.performance.solar_efficiency,
-            "battery_efficiency": self.performance.battery_efficiency,
 
             # Status
             "grid_status": self.status.grid_status,
@@ -1096,8 +1098,10 @@ class SEMData:
             "solar_charging_status": self._get_solar_charging_status(),
             "night_charging_status": self._get_night_charging_status(),
             "battery_priority_status": self._get_battery_priority_status(),
-            "solar_optimization_status": "active" if self.power.solar_power > 50 else "idle",
-            "grid_management_status": self.status.grid_status,
+            # Removed (#669): solar_optimization_status / grid_management_status.
+            # Their sensors were deleted long ago (sensor.py:233-234 — "just
+            # checks solar_power > 50, no real logic" and "duplicate of
+            # grid_status"); only the emit survived, read by nothing.
 
             # Legacy aliases for compatibility
             "solar_production_total": self.power.solar_power,

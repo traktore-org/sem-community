@@ -620,6 +620,28 @@ node at the far end is safe to connect.
 
 It would have caught #651/#653/#654.
 
+**Structural guard — EXTENDED to data (#669, 2026-07-26).** The orphan-method guard sees a
+missing *edge between functions*. It is blind to a **dangling data reference**: a string
+literal naming an entity that no platform declares. `consts/sensors.py` carried a 64-entry
+`SEM_SENSORS` map to `sensor.sem_*` ids, **45% of them dead**, with zero production readers
+— and it was still accreting rot right up to deletion (`ev_max_current_available` was added
+*after* the 45% was measured). It was deleted, not repaired: a map nothing reads is not an
+API, and a plausible map to ids that mostly do not exist is worse than no map, because
+anyone reaching for it gets `sensor.sem_home_consumption`, which never existed.
+
+The new rule (`tests/test_667_label_registry.py::TestConstsRegistriesDoNotRot669`) is scoped
+to the **reference**, not the container: every `<platform>.sem_<key>` literal under
+`consts/` must resolve to a key a platform file actually declares (`SEMSensor` builds
+`sensor.sem_{description.key}`, sensor.py:1942). Banning the map *shape* would have flagged
+three healthy named constants (`ENTITY_SOLAR_POWER` and siblings, live and used) and taught
+the next person to route around the rule.
+
+Two lessons worth carrying: (1) the registry kept rotting while it was already known-rotten,
+so a one-time repair could not have closed it — only a rule that fires on the next entry;
+(2) dead code that nothing asserts is merely waste, but **dead code with a green test that
+cannot fail is *claimed coverage*, and that is what keeps it alive for years.** The
+`SEM_SENSORS` test asserted a dict literal against itself.
+
 ### Second pass — the 8 findings the session-limit interrupted (verified 2026-07-25)
 
 The sweep was resumed (cached prefix, live tail) and confirmed 8 more. **#642 + #643**
