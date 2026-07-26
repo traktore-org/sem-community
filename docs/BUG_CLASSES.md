@@ -605,6 +605,41 @@ CHARGE rows stay untouched when `stop_controllable=False`. Refs #487 #548 #627.
 **Watch:** any new "SEM couldn't actually do X" should be a *computed capability on the device*,
 not a counter of failed attempts in the caller.
 
+### 26. Config key every test injects and production never writes — GUARDED
+**Symptom:** none, for years. The code reads `cfg.get("some_key", <literal>)`, every test
+constructs a config dict containing `some_key`, and the tests pass. On a real install the key
+is absent from every entry, so the literal is what actually runs — a value nobody chose, in a
+branch everybody believes is covered.
+**Root shape:** a default argument turns "missing" into "plausible". A missing key that raised
+would be found in the first minute; a missing key that falls back reads as configuration. The
+test fixture is written from the *reader's* expectations rather than from a real stored entry,
+so the fixture documents the schema the reader wishes existed. Nothing in CI compares that to
+the schema the config flow actually writes.
+**Live catch (#678, found by #665's new coverage):** `decide()` reads `ev_max_current`,
+`ev_min_current`, `ev_phases` and `ev_voltage` off the per-charger entry. There is no
+config-flow field for max-current or voltage at all, and `_SEED_KEYS` covers only min-current
+and phases, only for entries migrated from schema v3 — so on a normally-installed entry all
+four read `None` (verified live against real `.storage`, top-level config included) and decide
+used 32 A / 6 A / 3 / 230 V. Hardware was never at risk: the adapters clamp every command to
+the charger's real ceiling, which is *why* it survived — the only visible effect was in the
+multi-charger priority cascade, where a 16 A charger commanded at 32 claims 22 kW of solar it
+cannot draw and that phantom claim is subtracted from what the next charger may see.
+**Why the type system didn't help:** the key is read from a `Mapping[str, Any]`, so there is no
+declaration anywhere that says "these four keys exist". The dict is the schema, and the schema
+is whatever the last writer happened to put in it.
+**Closure:** fill the keys at the one place that composes the view (`build_charger_view`), from
+the fleet config, and then clamp to the value the *hardware* enforces — `adapter.max_current_a`,
+the same number the adapter clamps every command to. Config may ask for less than the hardware
+allows, never more, so the computation ends at the ceiling the action is dispatched against.
+Same principle as class 25's `can_stop_charging`.
+**Sweep question:** for each `cfg.get("k", <literal>)` on a per-unit dict — *who writes `k` into
+that dict on a fresh install?* If the answer is "the tests", the literal is the live behaviour.
+**Guard:** `tests/test_665_allocator_coverage.py::TestHardwareMaxReachesDecide` — pins the
+absent-key case (the live shape) explicitly, plus fleet fallback, per-charger override,
+config-below-hardware, config-above-hardware, and no-information-at-all. Refs #678 #665 #536.
+**Watch:** a fixture that is hand-built rather than captured from a real entry. When adding a
+per-unit config read, add the absent-key test *first* — it is the case production runs.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

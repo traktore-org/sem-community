@@ -37,6 +37,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   normally while the un-stoppability is reported, because conflating the two signals would
   have cost every such install its surplus charging. Guarded by
   `tests/test_627_stop_unenforceable.py`.
+- 🔢 **On a multi-charger install, every charger decided against 32 A / 230 V regardless of
+  what it actually is** (#678, found by #665's new coverage) — `decide()` reads
+  `ev_max_current`, `ev_min_current`, `ev_phases` and `ev_voltage` off the per-charger
+  config entry, and **nothing ever writes the first or the last of them into it**: there is
+  no config-flow field for either, and the seed keys cover only min-current and phases, only
+  for entries migrated from schema v3. Verified live on a normally-installed entry: all four
+  read `None`, top-level config included, so decide silently used its own literals. No
+  over-current ever reached hardware — the adapters clamp every command to the charger's
+  real ceiling, which is exactly why this stayed invisible for so long. What it *did* break
+  is the priority cascade: a 16 A charger commanded at 32 A claims 22 kW of solar it cannot
+  physically draw, and that phantom claim is subtracted from what the next charger in the
+  priority list is allowed to see — the second car quietly gets nothing, or gets started on
+  watts the sun never produced. The view now fills those keys from the fleet config and
+  clamps them to the adapter's own `max_current_a` (which already folds in the control
+  entity's maximum, #536). A configured value may ask for *less* than the hardware allows,
+  never for more: the computation ends at the same ceiling the command is clamped to, so
+  probe and production cannot drift — the same principle as #627 above.
 - 🌙 **A restart just after midnight no longer swallows the day's EV virtual-SOC decay**
   (#645, coherence-audit) — while a car is away SEM can't watch it being driven, so each
   day rollover advances the estimated-SOC by the predicted daily consumption. That decay
@@ -352,6 +369,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it stayed green through the branch being wrong *and* through it being deleted. New
   sweep question: **does this test call production code, or a local restatement of it?
   If you deleted the production function, would this test go red?**
+
+### 🧪 Coverage restored (#665 — the allocator that does run)
+
+- ✅ **The multi-charger scenarios now assert the cascade they are named after** (#665,
+  coherence-audit) — #651 above removed assertions over a dead allocator and left two
+  scenario files describing a priority cascade they had never verified. The harness now
+  drives the live one for real: `build_charger_view` → `decide` → the running
+  `solar_committed_w` total, per charger, in priority order. Three new expectations are
+  available to any scenario — `per_charger_intents` (what each charger decided),
+  `solar_commitment_cascade` (each charger saw exactly the sum of its seniors' claims, no
+  more and no less) and `solar_committed_total_max` (a solar-funded ceiling, opt-in per
+  scenario because `always_max` claims its nameplate on purpose, grid-funded if need be).
+- 🔒 **The arithmetic moved into `charger_types.solar_commitment_w`** — one function, one
+  caller in production, one in the harness. A test-side *re-implementation* of a formula
+  is free to drift from the original and assert nothing while staying green; sharing the
+  function makes any regression break both sides at once. This is the fix for the test-side
+  twin of bug class 8 that #651 named.
+- 🛡️ **AST guards for the half no harness can cover** (`tests/test_665_allocator_coverage.py`)
+  — a harness driving its own copy of the loop stays green while the coordinator drops the
+  per-cycle reset, drops the accumulation, or stops threading the total into each view.
+  Deleting any of the three now fails CI with a message saying what breaks in the field.
+- 🔍 **It found a live bug on its first run** — see #678 above. The scenario charger
+  configured at 16 A came back commanded at 22 A.
 
 ### 🏗️ Code quality (#629 — EV orchestration decomposition, complete)
 
