@@ -372,6 +372,10 @@ class EnergyTotals:
     monthly_grid_export: float = 0.0
     monthly_battery_charge: float = 0.0
     monthly_battery_discharge: float = 0.0
+    # #666 — the accumulator has always been written; the label registry has
+    # always declared ``monthly_ev_consumption``; only the field and the sensor
+    # were missing, so the data had nowhere to surface.
+    monthly_ev: float = 0.0
 
     # Yearly totals (kWh)
     yearly_solar: float = 0.0
@@ -955,6 +959,7 @@ class SEMData:
             "monthly_grid_export_energy": self.energy.monthly_grid_export,
             "monthly_battery_charge_energy": self.energy.monthly_battery_charge,
             "monthly_battery_discharge_energy": self.energy.monthly_battery_discharge,
+            "monthly_ev_consumption_energy": self.energy.monthly_ev,  # #666
 
             # Yearly energy
             "yearly_solar_yield_energy": self.energy.yearly_solar,

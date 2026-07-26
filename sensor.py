@@ -336,6 +336,15 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
+    # #666 — the last of its label-registry siblings to get an entity. The
+    # monthly EV accumulator was always written and ``consts/labels.py``
+    # always declared ``monthly_ev_consumption``; only this was missing.
+    SensorEntityDescription(
+        key="monthly_ev_consumption_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
     # Removed: Redundant (use monthly_home_consumption_energy instead)
     # monthly_home_consumption_actual_energy
 

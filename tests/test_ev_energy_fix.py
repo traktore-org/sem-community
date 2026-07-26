@@ -273,9 +273,9 @@ class TestLayer3HardwareReconciliation:
         # key matches by construction regardless of which path
         # ``_ev_reset_day`` takes (sunrise vs offset).
         today = calc._ev_reset_day(None)
-        calc._daily_accumulators[f"ev_daily_sun_{today}"] = 14.8
+        calc._daily_accumulators[f"ev_{today}"] = 14.8
         calc._monthly_accumulators[
-            f"ev_daily_sun_{today.year}_{today.month}"
+            f"ev_{today.year}_{today.month}"
         ] = 14.8
 
         power = PowerReadings(ev_power=0.0)
@@ -321,8 +321,8 @@ class TestLayer3HardwareReconciliation:
         # Seed daily at 2.0, monthly at 50.0
         today = calc._time_manager.get_current_meter_day_sunrise_based()
         month_key = f"{today.year}_{today.month}"
-        calc._daily_accumulators[f"ev_daily_sun_{today}"] = 2.0
-        calc._monthly_accumulators[f"ev_daily_sun_{month_key}"] = 50.0
+        calc._daily_accumulators[f"ev_{today}"] = 2.0
+        calc._monthly_accumulators[f"ev_{month_key}"] = 50.0
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
@@ -504,8 +504,8 @@ class TestEndToEndOriginalBug:
         # SEM only integrated 7 kWh before restart
         today = tm.get_current_meter_day_sunrise_based()
         month_key = f"{today.year}_{today.month}"
-        calc._daily_accumulators[f"ev_daily_sun_{today}"] = 7.0
-        calc._monthly_accumulators[f"ev_daily_sun_{month_key}"] = 7.0
+        calc._daily_accumulators[f"ev_{today}"] = 7.0
+        calc._monthly_accumulators[f"ev_{month_key}"] = 7.0
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()

@@ -505,6 +505,9 @@
       "monthly_home_consumption_energy": {
         "name": "Mensuel Maison"
       },
+      "monthly_ev_consumption_energy": {
+        "name": "Mensuel VE"
+      },
       "flow_solar_to_home_power": {
         "name": "Solaire vers Maison"
       },
