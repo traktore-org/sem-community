@@ -31,7 +31,7 @@ migrating old automations):
 
 | Mode | Grid use | What it does |
 |---|---|---|
-| **Solar only** | Never | Pure surplus charging; the home battery may assist above the Buffer SoC (Solar Gate permitting). Idles at night. |
+| **Solar only** | Never, unless *you* set a floor | Pure surplus charging; the home battery may assist above the Buffer SoC (Solar Gate permitting). Idles at night. |
 | **Solar + cheapest hours** | Only in cheap tariff windows | Surplus by day; grid only when the dynamic price is cheap. Hidden without a price source. |
 | **Min + Solar** *(default)* | Up to the Min guarantee | Guarantees *At least X kWh* by the *Charge by* deadline (night top-up when needed); solar adds up to Max on top. |
 | **Always (max)** | Whatever it takes | Charge at maximum immediately. Explicit override — ignores solar, tariff and night logic. |
@@ -39,6 +39,16 @@ migrating old automations):
 
 The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 **Charge by** deadline, **Min / Max current**, and **Set as default**.
+
+> **Solar only and the overnight floor (#679).** The mode is the *daytime* axis; the
+> *At least X* floor is a separate guarantee that can apply in any mode. Under **Solar
+> only** that guarantee is strictly opt-in: it counts only when you set it **on that
+> charger**, in the unit that charger targets (kWh target → *At least X kWh*; % target →
+> *Minimum SoC*). Leave it alone and Solar only idles at night, which is the documented
+> promise. A global default value in Setup does **not** opt a Solar-only charger in — it
+> can't, because setup fills that box in for you, so it carries no intent. The other
+> night-capable modes do follow the global, since for them the overnight top-up is the
+> mode's whole purpose.
 
 ## The control surface (per charger)
 

@@ -640,6 +640,42 @@ config-below-hardware, config-above-hardware, and no-information-at-all. Refs #6
 **Watch:** a fixture that is hand-built rather than captured from a real entry. When adding a
 per-unit config read, add the absent-key test *first* — it is the case production runs.
 
+### 27. Seeded default makes the safe state unreachable (opt-out that is opt-in) — GUARDED
+**Symptom:** a documented default never happens. The code has a correct gate — "no floor set →
+never do the risky thing" — and a green contract test proving it. On every real install the
+risky thing happens anyway, because the config flow *seeds* the key the gate reads, so the
+"unset" branch the safety depends on is a state no install is ever in.
+**Root shape:** the exact inverse of class 26. There, production never writes the key and the
+literal default is the live behaviour. Here, production *always* writes it, so the value can no
+longer distinguish **"the user asked for this"** from **"the installer filled the box in"**. A
+value used as a *signal of intent* must have a state that means "no intent expressed", and a
+seeded default destroys that state. The test passes because it hand-builds `{"key": 0}` — the
+#256 zero-config-defaults shape: the fixture is the config the reader wishes existed, not the
+one the flow writes.
+**Live catch (#679, from @onkelfu's #627 install):** #634 settled the EV axis — the *mode* is the
+daytime axis, the "At least X" floor is the overnight guarantee, and `floor 0 = never grids at
+night` is how the #346 "solar_only never charges from the grid" contract survives as the default.
+But `config_flow._install_defaults()` persists `daily_ev_target: 10` on every install, and an
+absent `ev_target_soc` resolves to `80` at read time — so the gate's global fallback returned
+"night charging allowed" for *every* `solar_only` charger ever installed. That made `solar_only`
+behaviourally identical to `min_plus_solar`: not a distinct mode at all. Compounded by a basis
+bug — the gate read `daily_ev_target` regardless of `ev_target_type`, so an SOC-targeted charger
+was opted in by a kWh key it does not use.
+**Closure:** for the mode whose whole point is *not* doing the thing, the opt-in must carry
+intent: set **on this charger**, in **the basis this charger targets**. A global default is not
+an opt-in. The other night modes keep the global fallback — there the overnight top-up *is* the
+mode, so reading a defaulted floor is correct. One shared gate
+(`consts/ev_charge_modes.mode_allows_night_charging`) replaces two hand-copied twins whose
+docstrings each said "keep in sync".
+**Sweep question:** for each safety gate of the form `if not cfg.get(k): <safe path>` — *does
+`_install_defaults()` (or any migration) write `k`?* If yes, the safe path is dead code.
+**Guard:** `tests/test_679_solar_only_night_default.py` — every case is built from
+`_install_defaults()`, never hand-constructed, plus a premise pin that fails loudly if the
+installer ever stops seeding the global, and a parametrized twin-agreement test. Refs #679 #634
+#346 #627 #256.
+**Watch:** any new "leave it blank and SEM won't" contract. Write the test against the *installed*
+entry first — a hand-built fixture cannot see this class.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

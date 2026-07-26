@@ -361,10 +361,7 @@ class ChargingStateMachine:
         logic in the latter can call this without recursion, and so unit
         tests can drive each path independently.
         """
-        from ..consts.ev_charge_modes import (
-            MODE_NIGHT_ALLOWED,
-            effective_charge_mode_for,
-        )
+        from ..consts.ev_charge_modes import mode_allows_night_charging
 
         chargers = self.config.get("ev_chargers") or []
         if not chargers:
@@ -372,25 +369,16 @@ class ChargingStateMachine:
             # legacy global ``switch.sem_night_charging`` was removed
             # in #277 Phase C, so there is no fallback to consult.
             return False
-        def _night_capable(c):
-            mode = effective_charge_mode_for(self.hass, self.config, c)
-            if mode in MODE_NIGHT_ALLOWED:
-                return True
-            # (#634) solar_only joins the night lane ONLY when its "At least"
-            # floor is set — the floor is the mode-independent guarantee
-            # (overnight source auto-derives to GRID; floor 0 = classic
-            # never-grids-at-night). Mirrors the #620 axis, no GUI surface.
-            if mode == "solar_only":
-                target = c.get("daily_ev_target")
-                if target is None:
-                    target = self.config.get("daily_ev_target", 0)
-                try:
-                    return float(target or 0) > 0.1
-                except (TypeError, ValueError):
-                    return False
-            return False
 
-        return any(_night_capable(c) for c in chargers if isinstance(c, dict))
+        # (#634) solar_only joins the night lane ONLY when its "At least" floor
+        # is set — the floor is the mode-independent guarantee (overnight source
+        # auto-derives to GRID; floor 0 = classic never-grids-at-night).
+        # (#679) This used to be a hand-copy of the coordinator's gate, with a
+        # "keep in sync" note on both. Shared now, so they cannot disagree.
+        return any(
+            mode_allows_night_charging(self.config, c)
+            for c in chargers if isinstance(c, dict)
+        )
 
     def _night_state_machine(self, ctx: ChargingContext) -> str:
         """Night charging state machine.
