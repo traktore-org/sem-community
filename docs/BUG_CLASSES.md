@@ -106,10 +106,29 @@ assertion with no teeth, referenced by 1 scenario. **Sweep question (test side):
 call production code, or a local restatement of it? If you deleted the production function, would
 this test go red? **Guard:** `tests/scenario_harness.py` now rejects unknown `expect.multi_charger`
 keys, so a silently-ignored expectation fails instead of passing.
+**Fourth instance (#676, 2026-07-26) — the budgeted variant:**
+`test_no_orphaned_translations` failed only above ten orphans ("Allow some orphans (keys used by
+other systems) but warn if there are many"). There were **exactly ten**, and nothing was using any
+of them — the allowance had been sized to the debt, so a full load passed indefinitely. This is the
+subtlest form in the class: the check *can* fire in principle, which is why it survives review, but
+its threshold was set by measuring the current state rather than by stating a rule. Note that the
+comment did the concealing work — it supplied a plausible reason ("keys used by other systems")
+that nobody verified, and once written it read as a decision rather than a guess. **Closure:**
+threshold to zero, and every genuine exception named individually with its reason
+(`_DYNAMIC_TRANSLATION_KEYS`, two entries, each checked against the code — both turned out to be
+live keys a static scan cannot see, so the naive delete-them-all fix would have broken real
+entities), plus an assertion that the exception list stays small so it cannot regrow into the
+tolerance that was just removed. **Sweep question (thresholds):** for every `> N`, `at least N%` or
+"allow some" in a correctness check — where did N come from? If it came from running the check and
+picking a number just above the result, it is not a threshold, it is a snapshot of the debt.
+*Swept 2026-07-26 across every lint/meta test:* the only other count comparisons are **vacuity
+floors** (`len(scan) > 30` / `>= 16` / `> 50_000`, "the scan broke") — the inverse shape, requiring
+at least N rather than tolerating up to N, which is this class's own closure pattern. #676 was the
+sole instance.
 **Open:** any other self-referential check; audit for them in
 `/coherence-audit`. **Sweep question:** for every check, can you name an input that makes it fire —
 and can that input survive the transforms between where it is produced and where it is checked?
-Refs #589, #651, #661.
+Refs #589, #651, #661, #676.
 
 ### 9. Engine-specific SVG/SMIL form (renders on Blink/Gecko, silent on WebKit) — GUARDED
 **Symptom:** a dashboard-card visual works on desktop Chrome/Firefox and Android but is dead on
