@@ -28,7 +28,7 @@
           "ev_connected_sensor": "Binaire sensor die aangeeft we je electrische auto is aangesloten op de lader. Automatische detectie voor de volgende merken: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binaire sensor die aangeeft of je lader actief aan opladen is. Automatische detectie vanuit je lader intergratie.",
           "ev_charging_power_sensor": "Numerieke sensor (W) die rapporteert met hoeveel vermogen je electrische auto oplaadt. Automatische detectie vanuit je lader intergratie.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
+          "ev_charger_service": "Home Assistant service die wordt aangeroepen om de laadstroom in te stellen (bv. keba.set_current, easee.set_charger_max_limit). Wordt automatisch ingevuld voor KEBA. Leeg laten als je hierboven het Number-entiteit-pad invult.",
           "ev_charger_service_entity_id": "Entiteits ID die gebruikt wordt in de service call.",
           "ev_current_sensor": "Optioneell. Numerieke sensor (A) die het werkelijke stroomverbruik rapporteert. Wordt gebruikt voor diagnostiek.",
           "ev_total_energy_sensor": "Optioneel. Cumulatieve kWh sensor voor de totale energie die je electrische auto heeft ontvangen.",
@@ -302,7 +302,7 @@
           "ev_charger_service": "Lader stroom-instel service (optioneel)",
           "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
@@ -330,7 +330,7 @@
           "ev_charger_service": "Lader stroom-instel service (optioneel)",
           "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
@@ -417,7 +417,7 @@
         "name": "Netvermogen"
       },
       "grid_active_power": {
-        "name": "Grid Active Power"
+        "name": "Actief Netvermogen"
       },
       "grid_import_power": {
         "name": "Netimport"
@@ -657,7 +657,7 @@
         "name": "Totale Netkosten"
       },
       "roi_percentage": {
-        "name": "ROI Percentage"
+        "name": "ROI-percentage"
       },
       "roi_payback_years": {
         "name": "ROI Terugverdientijd"
@@ -873,7 +873,7 @@
         "name": "Voorspeld Overschot"
       },
       "forecast_dampening_factor": {
-        "name": "Forecast Dampening Factor"
+        "name": "Voorspelling Dempingsfactor"
       },
       "battery_scheduler_state": {
         "name": "Batterijplanner Status"
@@ -891,7 +891,7 @@
         "name": "Aantal EV-laders"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "EV Afregeltrend"
       },
       "diag_version": {
         "name": "SEM-versie"
@@ -912,7 +912,7 @@
         "name": "Batterij Capaciteit (configuratie)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Update-interval"
       },
       "diag_observer_mode": {
         "name": "Observer Modus"

@@ -5,82 +5,82 @@
         "title": "Solar Energy Management Setup",
         "description": "SEM a détecté les capteurs suivants depuis votre tableau de bord Énergie Home Assistant :\n\n{summary}\n\nCliquez sur **Soumettre** pour continuer. Plus qu'une étape. Les chargeurs VE, la pompe à chaleur, le tarif et tous les autres paramètres sont configurés plus tard dans le nouvel onglet **Configuration** du tableau de bord SEM — pas besoin de les renseigner maintenant.",
         "data": {
-          "observer_mode": "Test mode (read-only — do not control hardware)"
+          "observer_mode": "Mode test (lecture seule — ne pilote pas le matériel)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Laissez DÉSACTIVÉ pour une installation normale. N'activez cette option que sur une instance Home Assistant de test/préproduction qui reproduit une instance de production, afin que SEM n'envoie jamais de commandes au KEBA, à l'onduleur ou à des interrupteurs."
         }
       },
       "ev_charger": {
-        "title": "EV Charger",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
+        "title": "Chargeur VE",
+        "description": "SEM a détecté automatiquement votre chargeur VE depuis le registre d'entités de Home Assistant. Vérifiez les entrées ci-dessous et cliquez sur **Soumettre** — il n'y a généralement rien à modifier. Les champs optionnels peuvent rester vides.\n\nChoisissez UNE seule méthode de pilotage : soit une entité Number (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) SOIT un appel de service (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
-          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
+          "ev_connected_sensor": "🔌 État de connexion VE — branchement du véhicule",
+          "ev_charging_sensor": "⚡ Charge VE active — état de charge actuel",
+          "ev_charging_power_sensor": "🚗 Puissance de charge VE — puissance délivrée au véhicule (W)",
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_charger_service_entity_id": "Entité cible du service du chargeur VE (optionnel)",
+          "ev_current_sensor": "⚡ Courant de charge VE — ampérage de charge (A)",
+          "ev_total_energy_sensor": "🔋 Énergie totale VE — énergie cumulée délivrée (kWh)",
           "ev_current_control_entity": "Entité Number pour le contrôle du courant (chargeurs type Wallbox)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
-          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_connected_sensor": "Capteur binaire indiquant si le véhicule est actuellement branché. Détecté automatiquement depuis KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
+          "ev_charging_sensor": "Capteur binaire indiquant si SEM doit considérer la charge comme active. Détecté automatiquement depuis l'intégration de votre chargeur.",
+          "ev_charging_power_sensor": "Capteur numérique (W) indiquant la puissance actuellement délivrée au véhicule. Détecté automatiquement depuis l'intégration de votre chargeur.",
+          "ev_charger_service": "Service Home Assistant appelé pour définir le courant de charge (par ex. keba.set_current, easee.set_charger_max_limit). Pré-rempli automatiquement pour KEBA. Laissez vide si vous renseignez l'entité Number ci-dessus.",
+          "ev_charger_service_entity_id": "ID d'entité transmis comme cible de l'appel de service. Pré-rempli automatiquement si nécessaire ; laissez vide si le service est global.",
+          "ev_current_sensor": "Optionnel. Capteur numérique (A) indiquant le courant de charge réel. Utilisé à des fins de diagnostic.",
+          "ev_total_energy_sensor": "Optionnel. Compteur cumulé en kWh de l'énergie délivrée au véhicule. Utilisé pour un suivi précis des sessions.",
           "ev_current_control_entity": "Entité Number que SEM utilise pour modifier le courant de charge (par exemple number.wallbox_charging_current). À utiliser pour les chargeurs qui exposent une entité Number plutôt qu'un appel de service. Laissez vide si vous remplissez le champ Service ci-dessous."
         }
       },
       "hardware": {
-        "title": "Hardware",
+        "title": "Matériel",
         "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
-          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-          "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
+          "battery_capacity_kwh": "Capacité de la batterie domestique (kWh)",
+          "target_peak_limit": "Limite de puissance de pointe (kW)",
+          "generate_dashboard_on_install": "Générer le tableau de bord SEM maintenant (redémarre HA)",
           "diagram_style": "Style du diagramme système"
         },
         "data_description": {
-          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
+          "battery_capacity_kwh": "Capacité utile totale de votre batterie domestique (PAS celle du VE) en kWh. Utilisée par la stratégie de charge pilotée par les prévisions pour estimer dans quelle mesure la batterie peut compenser un déficit solaire. Consultez la fiche technique de votre onduleur.",
+          "target_peak_limit": "Puissance maximale en kW autorisée par votre contrat réseau avant que SEM ne commence à délester. Pour les tarifs basés sur la puissance souscrite, généralement 3–5 kW ; sinon, réglez sur le calibre de votre disjoncteur divisé par 4 pour garder une marge.",
+          "generate_dashboard_on_install": "Lorsque cette option est activée, SEM crée le tableau de bord Lovelace immédiatement après cette étape, puis redémarre Home Assistant environ 5 s plus tard afin que le nouveau tableau de bord devienne visible. Vous pouvez toujours le régénérer manuellement plus tard via le service solar_energy_management.generate_dashboard.",
           "diagram_style": "Choisissez le diagramme système à utiliser sur l'onglet Accueil. 'SEM' utilise le diagramme animé intégré. 'K-Flow' utilise la carte K-Flow HACS (à installer séparément)."
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "Reconfigurer Solar Energy Management",
+        "description": "Mettez à jour les paramètres de votre chargeur VE et de vos notifications",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "EV Charger Service",
-          "ev_charger_service_entity_id": "EV Charger Service Entity",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
+          "ev_connected_sensor": "État de connexion VE",
+          "ev_charging_sensor": "État de charge VE",
+          "ev_charging_power_sensor": "Puissance de charge VE",
+          "ev_charger_service": "Service du chargeur VE",
+          "ev_charger_service_entity_id": "Entité du service du chargeur VE",
+          "ev_total_energy_sensor": "Compteur d'énergie totale VE",
           "enable_charger_notifications": "Activer les notifications écran chargeur",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "enable_mobile_notifications": "Activer les notifications mobiles",
+          "mobile_notification_service": "Service de notification mobile",
+          "vehicle_soc_entity": "SOC batterie véhicule",
+          "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
+          "ev_target_soc": "SOC cible VE (%)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current (e.g. keba.set_current). Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "enable_charger_notifications": "Enable/disable persistent notification banners shown on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor that reports the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_connected_sensor": "Capteur binaire indiquant si le véhicule est actuellement branché.",
+          "ev_charging_sensor": "Capteur binaire indiquant si le VE est en cours de charge.",
+          "ev_charging_power_sensor": "Capteur numérique (W) indiquant la puissance actuellement délivrée au véhicule.",
+          "ev_charger_service": "Service HA appelé pour définir le courant de charge (par ex. keba.set_current). Laissez vide pour les chargeurs pilotés par entité Number.",
+          "ev_charger_service_entity_id": "ID d'entité transmis comme cible de l'appel de service. Laissez vide si ce n'est pas nécessaire.",
+          "ev_total_energy_sensor": "Compteur cumulé optionnel en kWh de l'énergie délivrée au véhicule.",
+          "enable_charger_notifications": "Activer/désactiver les bannières de notification persistantes affichées sur la carte d'état du chargeur.",
+          "enable_mobile_notifications": "Activer/désactiver les notifications push envoyées sur votre appareil mobile.",
+          "mobile_notification_service": "Service notify de HA pour les notifications push mobiles (par ex. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
+          "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
+          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé."
         }
       }
     },
@@ -117,15 +117,15 @@
           "ev_kwh_per_100km": "Consommation du véhicule (kWh/100km)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current. Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the service call target. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_connected_sensor": "Capteur binaire indiquant si le véhicule est branché.",
+          "ev_charging_sensor": "Capteur binaire indiquant si le VE est en cours de charge.",
+          "ev_charging_power_sensor": "Capteur numérique (W) indiquant la puissance actuellement délivrée au véhicule.",
+          "ev_charger_service": "Service HA appelé pour définir le courant de charge. Laissez vide pour les chargeurs pilotés par entité Number.",
+          "ev_charger_service_entity_id": "ID d'entité transmis comme cible de l'appel de service. Laissez vide si ce n'est pas nécessaire.",
+          "ev_total_energy_sensor": "Compteur cumulé optionnel en kWh de l'énergie délivrée au véhicule.",
+          "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
+          "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
+          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé.",
           "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
           "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil.",
           "ev_kwh_per_100km": "Utilisé pour estimer l’autonomie lorsqu’aucun capteur d’autonomie n’est configuré.",
@@ -146,16 +146,16 @@
           "battery_max_discharge_power": "Puissance de Décharge Maximale (W)",
           "electricity_import_rate": "Tarif d'Import d'Électricité (par kWh)",
           "electricity_export_rate": "Tarif d'Export d'Électricité (par kWh)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
+          "battery_buffer_soc": "Limite Zone 2/3 — SOC tampon batterie (%)",
+          "battery_auto_start_soc": "Limite Zone 3/4 — SOC de démarrage auto batterie (%)",
           "electricity_off_peak_rate": "Electricity NT rate (per kWh)",
           "demand_charge_rate": "Demand charge rate (CHF/kW/month)",
           "observer_mode": "Observer mode (read-only — no hardware control)",
           "smart_night_charging": "Forecast-driven night charging reduction",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
-          "hot_water_solar_target": "Hot water solar heating target (°C)",
-          "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles",
+          "battery_discharge_control_entity": "Entité de contrôle de décharge batterie (optionnel)",
+          "hot_water_solar_target": "Cible de chauffage solaire de l'eau chaude (°C)",
+          "legionella_target_temp": "Cible de désinfection légionelle (°C)",
+          "legionella_interval_hours": "Heures max. entre deux cycles de désinfection",
           "ev_battery_capacity_kwh": "Capacité batterie EV (kWh)",
           "ev_target_soc": "SOC cible EV (%)",
           "vehicle_soc_entity": "Capteur SOC véhicule",
@@ -163,27 +163,27 @@
           "battery_assist_min_surplus": "Assistance batterie – surplus solaire min. (W)"
         },
         "data_description": {
-          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
-          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
-          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "update_interval": "Fréquence à laquelle le coordinateur lit les capteurs et ajuste le matériel. 10 s donne l'intégration d'énergie la plus précise ; au-delà de 30 s, l'énergie sera sous-comptée. Plage 10–60 s.",
+          "battery_priority_soc": "Limite Zone 1 → Zone 2. En dessous de ce SOC, tout le solaire va à la batterie et le VE est bloqué. Par défaut 30 %. La stratégie à quatre zones (documentation Architecture) nécessite une valeur BASSE (5–60 %) — à ne PAS confondre avec l'ancienne logique à 3 zones où il s'agissait d'une cible élevée.",
+          "battery_buffer_soc": "Limite Zone 2 → Zone 3. Au-dessus de ce SOC, la batterie peut se décharger pour compenser les déficits solaires pendant la charge du VE. Par défaut 70 %.",
+          "battery_auto_start_soc": "Limite Zone 3 → Zone 4. Au-dessus de ce SOC, le VE peut démarrer la charge même sans surplus solaire, en puisant dans la batterie. Par défaut 90 %.",
           "min_solar_power": "Plancher de production PV brute — la puissance des panneaux en dessous de laquelle « le solaire est actif » est faux : solar_only ne démarre pas et la protection contre le déficit profond traite cela comme l'obscurité (la charge s'arrête donc rapidement au lieu de compenser sur le réseau). Il s'agit de la production BRUTE, PAS du surplus — à distinguer de « Assistance batterie – surplus solaire min. » (solaire − maison), qui détermine quand la batterie domestique peut aider. Par défaut 1000 W ; gardez-le sous le minimum matériel du chargeur VE (~4140 W en triphasé, ~1380 W en monophasé).",
-          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
-          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
-          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
-          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
-          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
-          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
+          "daily_ev_target": "Objectif en kWh par jour pour la charge nocturne sur le réseau. Réglez sur 0 pour désactiver entièrement la charge nocturne.",
+          "battery_assist_max_power": "Puissance maximale que la batterie domestique peut décharger pour assister le VE en Zone 3/4. Par défaut 4500 W.",
+          "battery_capacity_kwh": "Capacité utile totale de la batterie domestique (PAS la batterie du VE — c'est un champ distinct à l'étape VE). Utilisée par la stratégie de charge pilotée par les prévisions.",
+          "battery_discharge_protection_enabled": "Lorsque cette option est ACTIVÉE, SEM plafonne la limite de décharge de l'onduleur pendant la charge nocturne du VE, afin que la batterie domestique n'alimente que la maison (et non le VE).",
+          "battery_max_discharge_power": "Limite haute stricte de décharge de la batterie appliquée par la fonction de protection.",
+          "electricity_import_rate": "Tarif jour / forfaitaire (CHF/kWh, TVA incluse). Utilisé pour le suivi des coûts.",
           "electricity_off_peak_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
-          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
-          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
-          "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
-          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed.",
+          "electricity_export_rate": "Tarif de rachat payé par le fournisseur (CHF/kWh).",
+          "demand_charge_rate": "Tarif mensuel de puissance souscrite par kW de pointe (CHF/kW/mois). Réglez sur 0 si votre contrat ne comporte pas de tarif de puissance souscrite.",
+          "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille et calcule tout mais n'envoie jamais d'appel de service au matériel. À utiliser sur une instance HA de test/préproduction reproduisant une installation de production.",
+          "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM saute ou réduit intelligemment la charge nocturne en fonction du SOC estimé du VE, de la prévision solaire, d'une prédiction de consommation ajustée à la température et des habitudes de conduite apprises.",
+          "battery_discharge_control_entity": "Entité Number qui contrôle la limite de puissance de décharge de l'onduleur (par ex. number.batteries_maximale_entladeleistung sur Huawei). Détectée automatiquement à l'installation ; remplacez-la ici si nécessaire.",
           "diagram_style": "Choisissez le diagramme système à utiliser sur l'onglet Accueil. 'SEM' utilise le diagramme animé intégré. 'K-Flow' utilise la carte K-Flow HACS (à installer séparément).",
-          "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
-          "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "hot_water_solar_target": "Température cible (°C) pour le chauffage de l'eau chaude assisté par le solaire. SEM booste le ballon lorsqu'un surplus est disponible.",
+          "legionella_target_temp": "Température (°C) que le système d'eau chaude doit atteindre pendant un cycle de désinfection anti-légionelle.",
+          "legionella_interval_hours": "Nombre maximal d'heures entre deux cycles de désinfection anti-légionelle avant que SEM ne force une montée en température.",
           "battery_assist_min_surplus": "Surplus solaire réel minimum avant que la batterie domestique puisse aider à charger le VE — dans tous les modes de charge. En dessous, la batterie est réservée à la maison (la voiture se recharge sur le réseau + solaire). Par défaut 1200 W. Réglez sur 0 pour que la batterie soutienne le VE en toutes circonstances, y compris la nuit."
         }
       },
@@ -197,10 +197,10 @@
           "smart_night_charging": "Réduire l'objectif nocturne selon la prévision de demain"
         },
         "data_description": {
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
-          "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
-          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
+          "daily_ev_target": "Objectif en kWh à charger depuis le réseau chaque nuit. Réglez sur 0 pour désactiver la charge nocturne sur le réseau.",
+          "min_solar_power": "Surplus solaire minimal (W) requis avant que SEM ne démarre la charge solaire du VE.",
+          "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille tout mais n'envoie jamais de commandes au matériel.",
+          "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM réduit l'objectif de charge nocturne lorsque la prévision solaire de demain est suffisante."
         }
       },
       "settings_tariff": {
@@ -212,25 +212,25 @@
           "electricity_export_rate": "Tarif d'export",
           "demand_charge_rate": "Tarif de puissance souscrite",
           "update_interval": "Intervalle de mise à jour (s)",
-          "tariff_mode": "Tariff mode",
-          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
-          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
+          "tariff_mode": "Mode tarifaire",
+          "dynamic_tariff_entity": "Entité de prix dynamique (détectée automatiquement si vide)",
+          "dynamic_forecast_entity": "Entité de prévision (optionnel, détectée automatiquement si vide)",
+          "dynamic_feedin_entity": "Entité de prix de rachat (optionnel, pour un tarif d'export dynamique)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
         },
         "data_description": {
-          "electricity_import_rate": "Day/flat import rate (currency/kWh incl. VAT). Used as fallback when dynamic pricing is unavailable.",
-          "electricity_off_peak_rate": "Night/off-peak import rate (currency/kWh). Set equal to import rate if you have a flat tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
-          "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
-          "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
-          "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
-          "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
-          "dynamic_feedin_entity": "Optional sensor providing the current feed-in / export price for dynamic export rate.",
-          "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed."
+          "electricity_import_rate": "Tarif d'import jour/forfaitaire (devise/kWh, TVA incluse). Utilisé en secours lorsque la tarification dynamique est indisponible.",
+          "electricity_off_peak_rate": "Tarif d'import nuit/heures creuses (devise/kWh). Réglez-le sur la même valeur que le tarif d'import si vous avez un tarif unique.",
+          "electricity_export_rate": "Tarif de rachat payé par le fournisseur (devise/kWh).",
+          "demand_charge_rate": "Tarif mensuel de puissance souscrite (devise/kW/mois). Réglez sur 0 si votre contrat n'en comporte pas.",
+          "update_interval": "Fréquence à laquelle SEM lit les capteurs et ajuste le matériel (secondes). Plage 10–60 s.",
+          "tariff_mode": "Choisissez « Static » pour des tarifs fixes, « Dynamic » pour une tarification en temps réel, ou « Calendar » pour des plages horaires.",
+          "dynamic_tariff_entity": "Capteur fournissant le prix d'import actuel de l'électricité. Détecté automatiquement depuis Tibber, Nordpool, etc.",
+          "dynamic_forecast_entity": "Capteur optionnel contenant les prévisions de prix horaires utilisées pour la planification intelligente.",
+          "dynamic_feedin_entity": "Capteur optionnel fournissant le prix de rachat / d'export actuel pour un tarif d'export dynamique.",
+          "grid_import_power_entity": "Capteur optionnel (W) pour la puissance d'import réseau. Détecté automatiquement depuis le tableau de bord Énergie ; remplacez-le ici si nécessaire.",
+          "grid_export_power_entity": "Capteur optionnel (W) pour la puissance d'export réseau. Détecté automatiquement depuis le tableau de bord Énergie ; remplacez-le ici si nécessaire."
         }
       },
       "load_management": {
@@ -241,18 +241,18 @@
           "target_peak_limit": "Limite de Pointe Cible (kW)",
           "warning_peak_level": "Niveau d'Alerte de Pointe (kW)",
           "emergency_peak_level": "Niveau d'Urgence de Pointe (kW)",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "SOC batterie véhicule",
+          "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
+          "ev_target_soc": "SOC cible VE (%)"
         },
         "data_description": {
-          "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
-          "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
-          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
-          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "load_management_enabled": "Activer/désactiver le délestage automatique de SEM pour rester sous votre limite de pointe réseau.",
+          "target_peak_limit": "Puissance réseau maximale (kW) avant que SEM ne commence à délester les charges pilotables.",
+          "warning_peak_level": "Niveau de puissance (kW) auquel SEM émet une alerte avant d'agir.",
+          "emergency_peak_level": "Niveau de puissance (kW) auquel SEM déleste agressivement les charges pour éviter les pénalités de puissance souscrite.",
+          "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
+          "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh.",
+          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé."
         }
       },
       "notifications": {
@@ -262,58 +262,58 @@
           "enable_charger_notifications": "Activer les notifications écran chargeur",
           "enable_mobile_notifications": "Activer les Notifications Mobiles",
           "mobile_notification_service": "Service de Notification Mobile",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "SOC batterie véhicule",
+          "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
+          "ev_target_soc": "SOC cible VE (%)"
         },
         "data_description": {
-          "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "enable_charger_notifications": "Activer/désactiver les bannières de notification persistantes sur la carte d'état du chargeur.",
+          "enable_mobile_notifications": "Activer/désactiver les notifications push envoyées sur votre appareil mobile.",
+          "mobile_notification_service": "Service notify de HA pour les notifications push mobiles (par ex. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
+          "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh.",
+          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé."
         }
       },
       "battery_scheduler": {
-        "title": "Battery Charge Scheduler",
-        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "title": "Planificateur de charge batterie",
+        "description": "Configurer la charge du réseau vers la batterie pendant les heures creuses, en tenant compte des prévisions",
         "data": {
-          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
-          "battery_capacity_kwh": "Battery Capacity",
-          "battery_max_charge_power_w": "Max Charge Power",
-          "battery_roundtrip_efficiency": "Round-trip Efficiency",
-          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
-          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
-          "battery_max_target_soc": "Maximum Target SOC",
-          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
-          "battery_pessimism_weight": "Forecast Pessimism",
-          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+          "battery_charge_scheduler_enabled": "Activer le planificateur de charge batterie",
+          "battery_capacity_kwh": "Capacité batterie",
+          "battery_max_charge_power_w": "Puissance de charge max.",
+          "battery_roundtrip_efficiency": "Rendement aller-retour",
+          "battery_cycle_cost": "Coût de cycle batterie (dégradation)",
+          "battery_precharge_trigger_hour": "Heure d'évaluation quotidienne",
+          "battery_max_target_soc": "SOC cible maximal",
+          "battery_min_deficit_kwh": "Seuil de déficit minimal",
+          "battery_pessimism_weight": "Pessimisme des prévisions",
+          "battery_force_charge_negative_price": "Forcer la charge en cas de prix négatif"
         }
       },
       "ev_charger_edit": {
         "title": "Modifier le chargeur VE",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "description": "Mettez à jour les mappages de capteurs et la priorité de ce chargeur.",
         "data": {
           "charger_name": "Nom du chargeur",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_connected_sensor": "État de connexion VE",
+          "ev_charging_sensor": "État de charge VE",
+          "ev_charging_power_sensor": "Puissance de charge VE",
+          "ev_charger_service": "Service de réglage du courant du chargeur (optionnel)",
+          "ev_charger_service_entity_id": "Entité cible du service du chargeur (optionnel)",
           "ev_surplus_priority": "Priorité surplus (1=plus haute)",
           "ev_current_control_entity": "Entité de contrôle du courant (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limite de charge solaire (kWh)",
           "ev_target_soc_max": "Limite de charge solaire (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
+          "ev_connected_sensor": "Capteur binaire indiquant si un véhicule est branché à ce chargeur.",
+          "ev_charging_sensor": "Capteur binaire indiquant si ce chargeur délivre actuellement de la puissance.",
+          "ev_charging_power_sensor": "Capteur numérique (W) indiquant la puissance délivrée par ce chargeur.",
+          "ev_charger_service": "Service HA utilisé pour définir le courant de charge. À utiliser pour KEBA ou Easee.",
+          "ev_charger_service_entity_id": "ID d'entité transmis comme cible de l'appel de service. Laissez vide si ce n'est pas nécessaire.",
+          "ev_surplus_priority": "Ordre de répartition du surplus entre plusieurs chargeurs. Nombre plus bas = priorité plus haute.",
           "ev_current_control_entity": "Entité Number utilisée pour définir le courant de charge (A). Pour Wallbox, go-eCharger et chargeurs similaires.",
           "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
           "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil."
@@ -324,39 +324,39 @@
         "description": "Configurez un nouveau chargeur EV. SEM répartira le surplus solaire entre les chargeurs selon leur priorité.\n\nPour le contrôle du courant, utilisez SOIT l'entité number (Wallbox, go-eCharger) SOIT le service (KEBA). Laissez l'autre vide.",
         "data": {
           "charger_name": "Nom du chargeur",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_connected_sensor": "État de connexion VE",
+          "ev_charging_sensor": "État de charge VE",
+          "ev_charging_power_sensor": "Puissance de charge VE",
+          "ev_charger_service": "Service de réglage du courant du chargeur (optionnel)",
+          "ev_charger_service_entity_id": "Entité cible du service du chargeur (optionnel)",
           "ev_surplus_priority": "Priorité surplus (1=plus haute)",
           "ev_current_control_entity": "Entité de contrôle du courant (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limite de charge solaire (kWh)",
           "ev_target_soc_max": "Limite de charge solaire (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
+          "ev_connected_sensor": "Capteur binaire indiquant si un véhicule est branché à ce chargeur.",
+          "ev_charging_sensor": "Capteur binaire indiquant si ce chargeur délivre actuellement de la puissance.",
+          "ev_charging_power_sensor": "Capteur numérique (W) indiquant la puissance délivrée par ce chargeur.",
+          "ev_charger_service": "Service HA utilisé pour définir le courant de charge. À utiliser pour KEBA ou Easee.",
+          "ev_charger_service_entity_id": "ID d'entité transmis comme cible de l'appel de service. Laissez vide si ce n'est pas nécessaire.",
+          "ev_surplus_priority": "Ordre de répartition du surplus entre plusieurs chargeurs. Nombre plus bas = priorité plus haute.",
           "ev_current_control_entity": "Entité Number utilisée pour définir le courant de charge (A). Pour Wallbox, go-eCharger et chargeurs similaires.",
           "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
           "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil."
         }
       },
       "pv_naming": {
-        "title": "Name your PV strings",
-        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "title": "Nommez vos strings PV",
+        "description": "Donnez un nom à chaque string photovoltaïque (par ex. Est / Sud / Ouest). Quel emplacement correspond à quel panneau — la numérotation suit la liste solaire de votre tableau de bord Énergie, et non l'orientation :\n\n{mapping}\n\nLaissez un champ vide pour conserver la valeur par défaut (PV1/PV2/…).",
         "data": {
-          "pv_name_pv1": "PV1 name",
-          "pv_name_pv2": "PV2 name",
-          "pv_name_pv3": "PV3 name",
-          "pv_name_pv4": "PV4 name",
-          "pv_name_pv5": "PV5 name",
-          "pv_name_pv6": "PV6 name"
+          "pv_name_pv1": "Nom PV1",
+          "pv_name_pv2": "Nom PV2",
+          "pv_name_pv3": "Nom PV3",
+          "pv_name_pv4": "Nom PV4",
+          "pv_name_pv5": "Nom PV5",
+          "pv_name_pv6": "Nom PV6"
         }
       },
       "heat_pump": {
@@ -417,7 +417,7 @@
         "name": "Puissance réseau"
       },
       "grid_active_power": {
-        "name": "Grid Active Power"
+        "name": "Puissance active réseau"
       },
       "grid_import_power": {
         "name": "Import réseau"
@@ -873,7 +873,7 @@
         "name": "Surplus Prévu"
       },
       "forecast_dampening_factor": {
-        "name": "Forecast Dampening Factor"
+        "name": "Facteur d'Atténuation Prévision"
       },
       "battery_scheduler_state": {
         "name": "État du planificateur batterie"
@@ -891,7 +891,7 @@
         "name": "Nombre de chargeurs"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "Tendance Palier VE"
       },
       "diag_version": {
         "name": "Version SEM"
@@ -900,46 +900,46 @@
         "name": "Mode capteur réseau"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Convention de signe réseau"
       },
       "diag_battery_sign": {
-        "name": "Battery Sign Convention"
+        "name": "Convention de signe batterie"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Méthode de pilotage du chargeur"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Capacité batterie (config)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Intervalle de mise à jour"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Mode observation"
       },
       "diag_sensors_unavailable": {
         "name": "Capteurs indisponibles"
       },
       "battery_session_type": {
-        "name": "Battery Session Type"
+        "name": "Type Session Batterie"
       },
       "battery_session_energy": {
-        "name": "Battery Session Energy"
+        "name": "Énergie Session Batterie"
       },
       "battery_session_solar_share": {
-        "name": "Battery Session Solar Share"
+        "name": "Part Solaire Session Batterie"
       },
       "battery_session_cost": {
-        "name": "Battery Session Cost"
+        "name": "Coût Session Batterie"
       },
       "battery_session_savings": {
-        "name": "Battery Session Savings"
+        "name": "Économies Session Batterie"
       },
       "battery_session_duration": {
-        "name": "Battery Session Duration"
+        "name": "Durée Session Batterie"
       },
       "battery_session_avg_power": {
-        "name": "Battery Session Avg Power"
+        "name": "Puissance Moyenne Session Batterie"
       },
       "diag_charger_count": {
         "name": "Chargeurs configurés"
@@ -948,7 +948,7 @@
         "name": "Configuration du tableau de bord énergie"
       },
       "heat_pump_registration_status": {
-        "name": "Heat Pump Registration Status"
+        "name": "État d'enregistrement pompe à chaleur"
       },
       "vpp_event": {
         "name": "Événement VPP"
@@ -992,7 +992,7 @@
         "name": "Signal Réseau Actif"
       },
       "layer_mismatch": {
-        "name": "Layer Mismatch"
+        "name": "Incohérence de couches"
       }
     },
     "switch": {
@@ -1074,13 +1074,13 @@
         "name": "Capacité Batterie"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Cible solaire eau chaude"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Température cible légionelle"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Intervalle légionelle (heures)"
       },
       "surplus_event_threshold": {
         "name": "Seuil d'événement de surplus"
@@ -1150,44 +1150,44 @@
       "description": "Aucun capteur de chargeur VE n’est configuré, les fonctions de charge VE sont donc indisponibles. Ajoutez un capteur « connecté » ou un capteur de puissance de charge dans les options de l’intégration pour activer la charge VE."
     },
     "sensor_unavailable": {
-      "title": "Sensor unavailable",
-      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+      "title": "Capteur indisponible",
+      "description": "Le capteur `{entity_id}` ({friendly_name}) est indisponible depuis plus de {minutes} minutes. SEM ne peut pas l'inclure dans ses calculs tant qu'il n'est pas rétabli. Vérifiez l'intégration en amont (Huawei modbus / Solcast / Forecast.Solar / le réseau de votre onduleur). Ce problème disparaît automatiquement dès que le capteur remonte à nouveau une valeur valide."
     },
     "sensor_stale": {
-      "title": "Sensor frozen",
-      "description": "The sensor `{entity_id}` ({friendly_name}) still reports as available but has not updated in {minutes}+ minutes — it appears frozen. SEM is using its stale value in the energy balance and sign detection, which can distort your figures. Check the upstream integration (Huawei modbus / Growatt cloud / your inverter network). This issue clears automatically when the sensor next updates."
+      "title": "Capteur figé",
+      "description": "Le capteur `{entity_id}` ({friendly_name}) se déclare toujours disponible mais n'a pas été mis à jour depuis plus de {minutes} minutes — il semble figé. SEM utilise sa valeur périmée dans le bilan énergétique et la détection de signe, ce qui peut fausser vos chiffres. Vérifiez l'intégration en amont (Huawei modbus / cloud Growatt / le réseau de votre onduleur). Ce problème disparaît automatiquement dès que le capteur se met à jour."
     },
     "charger_actuation_failed": {
-      "title": "EV charger not accepting commands: {name}",
-      "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+      "title": "Le chargeur VE n'accepte pas les commandes : {name}",
+      "description": "Les 3 dernières commandes de courant (ou plus) envoyées par SEM à **{name}** ont été rejetées : `{error}`. Le chargeur n'est PAS sous le contrôle de SEM actuellement — il continuera à faire ce qui lui a été demandé en dernier (y compris charger à pleine puissance en mode arrêt). Causes les plus fréquentes : l'entité de commande du chargeur a été renommée par une mise à jour de l'intégration en amont, ou `ev_charger_service` pointe vers un service dont le schéma de paramètres est différent. Vérifiez l'entité de commande / le service du chargeur dans la configuration SEM. Ce problème disparaît automatiquement à la prochaine commande réussie."
     },
     "no_forecast_integration": {
-      "title": "No solar forecast integration detected",
-      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+      "title": "Aucune intégration de prévision solaire détectée",
+      "description": "SEM a cherché une intégration de prévision solaire (Forecast.Solar, Solcast PV Solar, ou un capteur de prévision personnalisé) pendant une heure après le démarrage, sans en trouver. Les fonctions liées aux prévisions (conseils sur le meilleur créneau de surplus, charge nocturne intelligente, atténuation des prévisions) restent inactives tant que vous n'en installez pas une. Ce problème disparaît automatiquement dès que SEM détecte une intégration de prévision."
     },
     "no_recorder": {
-      "title": "Recorder integration unavailable",
-      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+      "title": "Intégration Recorder indisponible",
+      "description": "SEM a tenté d'initialiser l'historique VE / de charge depuis le recorder de HA, mais la lecture a échoué. L'intelligence VE (SOC estimé, décroissance quotidienne) ne peut pas démarrer à chaud sans cela ; les valeurs se remplissent alors lentement à partir des cycles réels. Il s'agit généralement d'un incident ponctuel — le problème disparaît automatiquement à la prochaine lecture réussie du recorder."
     },
     "heat_pump_relay_unavailable": {
-      "title": "Heat pump SG-Ready {slot} unavailable",
-      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+      "title": "Pompe à chaleur SG-Ready {slot} indisponible",
+      "description": "L'entité relais SG-Ready configurée `{entity_id}` ({slot}) est indisponible/inconnue depuis plus de {minutes} minutes. SEM peut enregistrer le contrôleur de pompe à chaleur sans problème, mais chaque commande SG-Ready restera silencieusement sans effet tant que cette entité ne remontera pas un état réel. Vérifiez l'appareil en amont — carte relais ESP, Shelly, interrupteur template via Modbus, ou toute autre intégration propriétaire de cette entité. Ce problème disparaît automatiquement dès que le relais remonte à nouveau un état on/off."
     },
     "heat_pump_partial_sg_ready": {
-      "title": "Heat pump SG-Ready half-configured",
-      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
+      "title": "Pompe à chaleur SG-Ready à moitié configurée",
+      "description": "Un seul des deux relais SG-Ready (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) est renseigné dans SEM, sans entité climate en secours. Le protocole SG-Ready encode les quatre états (BLOCKED / NORMAL / BOOST / FORCE_ON) sous forme binaire sur 2 bits répartis sur les DEUX relais : un seul relais ne peut donc pas piloter le protocole. Configurez également le second relais, ou renseignez une `heat_pump_climate_entity` pour utiliser à la place le boost de consigne climate seul. Ce problème disparaît automatiquement dès que la configuration est valide."
     },
     "hot_water_entity_unavailable": {
-      "title": "Hot water boiler control unavailable",
-      "description": "The configured hot-water control entity `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM can register the controller fine, but every surplus-dispatch command will silently no-op until the entity reports a real state. Check the upstream device — the boiler relay, water_heater integration, climate device, or whichever integration owns this entity. The issue clears automatically when the entity recovers."
+      "title": "Commande du ballon d'eau chaude indisponible",
+      "description": "L'entité de commande d'eau chaude configurée `{entity_id}` est indisponible/inconnue depuis plus de {minutes} minutes. SEM peut enregistrer le contrôleur sans problème, mais chaque commande de répartition du surplus restera silencieusement sans effet tant que l'entité ne remontera pas un état réel. Vérifiez l'appareil en amont — le relais du ballon, l'intégration water_heater, l'appareil climate, ou toute autre intégration propriétaire de cette entité. Ce problème disparaît automatiquement dès que l'entité se rétablit."
     },
     "hot_water_temperature_sensor_unavailable": {
-      "title": "Hot water temperature sensor unavailable",
-      "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+      "title": "Capteur de température d'eau chaude indisponible",
+      "description": "Le capteur de température d'eau chaude configuré `{entity_id}` est indisponible/inconnu depuis plus de {minutes} minutes. SEM se met en sécurité lorsque ce capteur est défaillant — le ballon n'est PAS activé sur surplus tant qu'une température réelle n'est pas de nouveau disponible, afin d'éviter de chauffer au-delà de la consigne sans retour d'information. Vérifiez l'intégration en amont de ce capteur. Ce problème disparaît automatiquement dès que le capteur se rétablit."
     },
     "keba_failsafe_active": {
-      "title": "KEBA failsafe is enabled — disable it for steady charging",
-      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+      "title": "Le failsafe KEBA est activé — désactivez-le pour une charge stable",
+      "description": "Le watchdog failsafe de votre chargeur KEBA « {name} » est activé. SEM (comme evcc) ne s'y appuie plus, mais tant qu'il est actif, le chargeur ramène le courant proposé à sa valeur de repli de 6 A entre deux commandes, ce qui fait osciller la charge (6↔9 A) et empêche certaines voitures (par ex. la Renault Zoe) de charger de façon stable.\n\nLe service KEBA de Home Assistant ne permet pas de le désactiver (il n'accepte pas un délai de 0) : vous devez donc le désactiver sur le chargeur lui-même en réglant le **délai failsafe sur 0** (UDP KEBA `failsafe 0 0 1`, ou via l'outil KeContact de KEBA). Consultez le guide lié pour la marche à suivre détaillée. Cette réparation disparaît automatiquement dès que le failsafe est désactivé."
     },
     "soc_cap_unenforceable": {
       "title": "Impossible d'appliquer la limite de charge de {target}% : {name}",

@@ -8,30 +8,30 @@
           "observer_mode": "Testitila (vain luku — ei ohjaa laitteistoa)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Jätä POIS PÄÄLTÄ tavallisessa asennuksessa. Kytke PÄÄLLE vain testi- tai staging-ympäristön Home Assistantissa, joka jäljittelee tuotantoinstanssia, jolloin SEM ei koskaan lähetä komentoja KEBA-laturille, invertterille tai millekään kytkimille."
         }
       },
       "ev_charger": {
         "title": "Sähköauton laturi",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
+        "description": "SEM tunnisti sähköauton laturisi automaattisesti Home Assistantin entiteettirekisteristä. Tarkista alla olevat tiedot ja napsauta **Lähetä** — yleensä mitään ei tarvitse muuttaa. Valinnaiset kentät voi jättää tyhjiksi.\n\nValitse YKSI ohjaustapa: joko Number-entiteetti (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) TAI palvelukutsu (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
-          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
+          "ev_connected_sensor": "🔌 Sähköauto yhdistetty — ajoneuvon pistokkeen kytkentä",
+          "ev_charging_sensor": "⚡ Sähköauton lataus aktiivinen — nykyinen lataustila",
+          "ev_charging_power_sensor": "🚗 Sähköauton latausteho — ajoneuvolle syötetty teho (W)",
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_charger_service_entity_id": "Laturin palvelun kohde-entiteetti (valinnainen)",
+          "ev_current_sensor": "⚡ Sähköauton latausvirta — latausvirta (A)",
+          "ev_total_energy_sensor": "🔋 Sähköauton kokonaisenergia — kertynyt syötetty energia (kWh)",
           "ev_current_control_entity": "Number-entiteetti virranhallintaan (Wallbox-tyyppiset laturit)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
-          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_connected_sensor": "Binäärianturi, joka kertoo, onko ajoneuvon pistoke kytkettynä juuri nyt. Tunnistetaan automaattisesti: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
+          "ev_charging_sensor": "Binäärianturi, joka kertoo, pitääkö SEM:n katsoa latauksen olevan käynnissä. Tunnistetaan automaattisesti laturi-integraatiostasi.",
+          "ev_charging_power_sensor": "Numeerinen anturi (W), joka kertoo, kuinka paljon tehoa ajoneuvoon virtaa juuri nyt. Tunnistetaan automaattisesti laturi-integraatiostasi.",
+          "ev_charger_service": "Home Assistant -palvelu, jolla latausvirta asetetaan (esim. keba.set_current, easee.set_charger_max_limit). Täytetään automaattisesti KEBA-latureille. Jätä tyhjäksi, jos täytät yllä olevan Number-entiteetin polun.",
+          "ev_charger_service_entity_id": "Entiteettitunnus, joka välitetään palvelukutsun kohteena. Täytetään automaattisesti tarvittaessa; jätä tyhjäksi, jos palvelu on yleinen.",
+          "ev_current_sensor": "Valinnainen. Numeerinen anturi (A), joka kertoo todellisen latausvirran. Käytetään diagnostiikkaan.",
+          "ev_total_energy_sensor": "Valinnainen. Kumulatiivinen kWh-laskuri ajoneuvolle syötetystä energiasta. Käytetään latausjaksojen tarkkaan seurantaan.",
           "ev_current_control_entity": "Number-entiteetti, johon SEM kirjoittaa muuttaakseen latausvirtaa (esim. number.wallbox_charging_current). Käytä laturien kanssa, jotka tarjoavat Number-entiteetin palvelukutsun sijaan. Jätä tyhjäksi, jos täytät alla olevan Palvelu-polun."
         }
       },
@@ -39,54 +39,54 @@
         "title": "Laitteisto",
         "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
-          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-          "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
+          "battery_capacity_kwh": "Kotiakun kapasiteetti (kWh)",
+          "target_peak_limit": "Huipputehon raja (kW)",
+          "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)",
           "diagram_style": "Järjestelmäkaavion tyyli"
         },
         "data_description": {
-          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
+          "battery_capacity_kwh": "Kotiakkusi (EI sähköauton) käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Ennusteohjattu latausstrategia käyttää tätä arvioidakseen, kuinka paljon akku voi paikata aurinkovajetta. Tarkista invertterin tekniset tiedot.",
+          "target_peak_limit": "Suurin kW-teho, jonka verkkosopimuksesi sallii ennen kuin SEM alkaa pudottaa kuormia. Tehoperusteisissa tariffeissa tyypillisesti 3–5 kW; muussa tapauksessa aseta sulakekokosi jaettuna neljällä, jotta jää pelivaraa.",
+          "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard.",
           "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen)."
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "Määritä Solar Energy Management uudelleen",
+        "description": "Päivitä sähköauton laturin ja ilmoitusten asetukset",
         "data": {
           "ev_connected_sensor": "Sähköauto yhdistetty",
           "ev_charging_sensor": "Sähköauton lataustila",
           "ev_charging_power_sensor": "Sähköauton latausteho",
-          "ev_charger_service": "EV Charger Service",
-          "ev_charger_service_entity_id": "EV Charger Service Entity",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "ev_charger_service": "Laturin palvelu",
+          "ev_charger_service_entity_id": "Laturin palvelun entiteetti",
+          "ev_total_energy_sensor": "Sähköauton kokonaisenergian laskuri",
+          "enable_charger_notifications": "Ota käyttöön laturinäytön ilmoitukset",
           "enable_mobile_notifications": "Ota käyttöön mobiili-ilmoitukset",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Mobiili-ilmoituspalvelu",
+          "vehicle_soc_entity": "Ajoneuvon akun SOC",
+          "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
+          "ev_target_soc": "Sähköauton tavoite-SOC (%)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current (e.g. keba.set_current). Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "enable_charger_notifications": "Enable/disable persistent notification banners shown on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor that reports the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_connected_sensor": "Binäärianturi, joka kertoo, onko ajoneuvon pistoke kytkettynä juuri nyt.",
+          "ev_charging_sensor": "Binäärianturi, joka kertoo, latautuuko sähköauto parhaillaan.",
+          "ev_charging_power_sensor": "Numeerinen anturi (W), joka kertoo ajoneuvoon juuri nyt virtaavan tehon.",
+          "ev_charger_service": "HA-palvelu, jolla latausvirta asetetaan (esim. keba.set_current). Jätä tyhjäksi number-entiteettiä käyttävillä latureilla.",
+          "ev_charger_service_entity_id": "Entiteettitunnus, joka välitetään palvelukutsun kohteena. Jätä tyhjäksi, jos sitä ei tarvita.",
+          "ev_total_energy_sensor": "Valinnainen kumulatiivinen kWh-laskuri ajoneuvolle syötetystä energiasta.",
+          "enable_charger_notifications": "Ota käyttöön tai poista käytöstä laturin tilakortilla näytettävät pysyvät ilmoitusbannerit.",
+          "enable_mobile_notifications": "Ota käyttöön tai poista käytöstä mobiililaitteellesi lähetettävät push-ilmoitukset.",
+          "mobile_notification_service": "HA:n notify-palvelu mobiili-ilmoituksille (esim. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
+          "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
+          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
         }
       }
     },
     "error": {
       "unknown": "Odottamaton virhe. Yritä uudelleen.",
-      "entity_not_found": "Entity not found. Please verify the entity ID exists.",
+      "entity_not_found": "Entiteettiä ei löytynyt. Tarkista, että entiteettitunnus on olemassa.",
       "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone).",
       "heat_pump_partial_relays": "SG-Ready vaatii MOLEMMAT releentiteetit. Aseta molemmat releet — tai jätä molemmat tyhjiksi ja määritä vain ilmastointientiteetti pelkän ilmastoinnin asetusarvon boostia varten."
     },
@@ -105,27 +105,27 @@
           "ev_connected_sensor": "Sähköauto yhdistetty",
           "ev_charging_sensor": "Sähköauton lataustila",
           "ev_charging_power_sensor": "Sähköauton latausteho",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
-          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
-          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)",
+          "ev_charger_service": "Laturin virranasetuspalvelu (valinnainen)",
+          "ev_charger_service_entity_id": "Laturin palvelun kohde-entiteetti (valinnainen)",
+          "ev_total_energy_sensor": "Sähköauton kokonaisenergian laskuri (valinnainen)",
+          "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
+          "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
+          "ev_target_soc": "Sähköauton tavoite-SOC (%)",
           "daily_ev_target_max": "Aurinkolatauksen raja (kWh)",
           "ev_target_soc_max": "Aurinkolatauksen raja (SOC %)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
           "ev_kwh_per_100km": "Ajoneuvon kulutus (kWh/100km)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current. Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the service call target. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_connected_sensor": "Binäärianturi, joka kertoo, onko ajoneuvon pistoke kytkettynä.",
+          "ev_charging_sensor": "Binäärianturi, joka kertoo, latautuuko sähköauto parhaillaan.",
+          "ev_charging_power_sensor": "Numeerinen anturi (W), joka kertoo ajoneuvoon juuri nyt virtaavan tehon.",
+          "ev_charger_service": "HA-palvelu, jolla latausvirta asetetaan. Jätä tyhjäksi number-entiteettiä käyttävillä latureilla.",
+          "ev_charger_service_entity_id": "Entiteettitunnus, joka välitetään palvelukutsun kohteena. Jätä tyhjäksi, jos sitä ei tarvita.",
+          "ev_total_energy_sensor": "Valinnainen kumulatiivinen kWh-laskuri ajoneuvolle syötetystä energiasta.",
+          "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
+          "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
+          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä.",
           "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
           "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta.",
           "ev_kwh_per_100km": "Käytetään toimintamatkan arviointiin, kun matka-anturia ei ole määritetty.",
@@ -133,187 +133,187 @@
         }
       },
       "settings": {
-        "title": "SEM Optimization Settings",
-        "description": "Update your SEM optimization parameters",
+        "title": "SEM:n optimointiasetukset",
+        "description": "Päivitä SEM:n optimointiparametrit",
         "data": {
-          "update_interval": "Update Interval (seconds)",
-          "battery_priority_soc": "Battery Priority SOC (%)",
+          "update_interval": "Päivitysväli (sekuntia)",
+          "battery_priority_soc": "Akun etusijan SOC (%)",
           "min_solar_power": "Vähimmäisaurinkoteho — raaka PV-tuotanto (W)",
-          "daily_ev_target": "Daily EV Target (kWh)",
-          "battery_assist_max_power": "Battery Assist Max Power (W)",
-          "battery_capacity_kwh": "Battery Capacity (kWh)",
-          "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
-          "battery_max_discharge_power": "Maximum Discharge Power (W)",
-          "electricity_import_rate": "Electricity Import Rate (per kWh)",
+          "daily_ev_target": "Sähköauton päivätavoite (kWh)",
+          "battery_assist_max_power": "Akkutuen enimmäisteho (W)",
+          "battery_capacity_kwh": "Akun kapasiteetti (kWh)",
+          "battery_discharge_protection_enabled": "Ota akun purkaussuojaus käyttöön",
+          "battery_max_discharge_power": "Suurin purkuteho (W)",
+          "electricity_import_rate": "Sähkön ostohinta (per kWh)",
           "electricity_off_peak_rate": "Electricity NT Rate (per kWh)",
-          "electricity_export_rate": "Electricity Export Rate (per kWh)",
-          "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
-          "observer_mode": "Observer Mode (Read-Only)",
-          "smart_night_charging": "Smart Night Charging",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
-          "hot_water_solar_target": "Hot water solar heating target (°C)",
-          "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles",
+          "electricity_export_rate": "Sähkön vientihinta (per kWh)",
+          "demand_charge_rate": "Tehomaksun hinta (CHF/kW/kk)",
+          "observer_mode": "Tarkkailutila (vain luku)",
+          "smart_night_charging": "Älykäs yölataus",
+          "vehicle_soc_entity": "Ajoneuvon akun SOC",
+          "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
+          "ev_target_soc": "Sähköauton tavoite-SOC (%)",
+          "battery_buffer_soc": "Vyöhykkeiden 2/3 raja — akun puskurin SOC (%)",
+          "battery_auto_start_soc": "Vyöhykkeiden 3/4 raja — akun automaattikäynnistyksen SOC (%)",
+          "battery_discharge_control_entity": "Akun purkauksen ohjausentiteetti (valinnainen)",
+          "hot_water_solar_target": "Käyttöveden aurinkolämmityksen tavoite (°C)",
+          "legionella_target_temp": "Legionelladesinfioinnin tavoite (°C)",
+          "legionella_interval_hours": "Enimmäisaika desinfiointijaksojen välillä (tuntia)",
           "diagram_style": "Järjestelmäkaavion tyyli",
           "battery_assist_min_surplus": "Akkutuki – vähimmäisaurinkoylijäämä (W)"
         },
         "data_description": {
-          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
-          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
-          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "update_interval": "Kuinka usein koordinaattori lukee anturit ja säätää laitteistoa. 10 s antaa tarkimman energiaintegroinnin; yli 30 s:n arvot aliarvioivat energian. Alue 10–60 s.",
+          "battery_priority_soc": "Vyöhykkeen 1 → vyöhykkeen 2 raja. Tämän varaustason alapuolella kaikki aurinkoenergia menee akkuun ja sähköauton lataus on estetty. Oletus 30 %. Neljän vyöhykkeen strategia (Architecture-dokumentaatio) vaatii tämän MATALAKSI (5–60 %) — älä sekoita vanhaan 3-vyöhykkeiseen merkitykseen, jossa tämä oli korkea tavoite.",
+          "battery_buffer_soc": "Vyöhykkeen 2 → vyöhykkeen 3 raja. Tämän varaustason yläpuolella akku saa purkautua paikatakseen aurinkovajetta sähköauton latauksen aikana. Oletus 70 %.",
+          "battery_auto_start_soc": "Vyöhykkeen 3 → vyöhykkeen 4 raja. Tämän varaustason yläpuolella sähköauto voi aloittaa latauksen ilman aurinkoylijäämääkin ottamalla energiaa akusta. Oletus 90 %.",
           "min_solar_power": "Raa'an PV-tuotannon alaraja — paneeliteho, jonka alapuolella ”aurinko on aktiivinen” on epätosi: solar_only ei käynnisty ja syvän vajeen suojaus käsittelee sen pimeytenä (lataus pysähtyy siis nopeasti sen sijaan, että se siltautuisi verkosta). Tämä on RAAKA tuotanto, EI ylijäämä — toisin kuin ”Akkutuki – vähimmäisaurinkoylijäämä” (aurinko − koti), joka päättää, milloin kotiakku saa auttaa. Oletus 1000 W; pidä se EV-laturin laitteistominimin alapuolella (~4140 W 3-vaiheisena, ~1380 W 1-vaiheisena).",
-          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
-          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
-          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
-          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
-          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
-          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
+          "daily_ev_target": "Tavoite kWh vuorokaudessa verkosta tapahtuvalle yölataukselle. Aseta arvoon 0 poistaaksesi yölatauksen kokonaan käytöstä.",
+          "battery_assist_max_power": "Suurin teho, jolla kotiakku saa purkautua avustaakseen sähköautoa vyöhykkeellä 3/4. Oletus 4500 W.",
+          "battery_capacity_kwh": "Kotiakun käytettävissä oleva kokonaiskapasiteetti (EI sähköauton akku — sille on oma kenttänsä EV-vaiheessa). Ennusteohjattu latausstrategia käyttää tätä.",
+          "battery_discharge_protection_enabled": "Kun tämä on PÄÄLLÄ, SEM rajoittaa invertterin purkutehoa sähköauton yölatauksen aikana, jotta kotiakku syöttää vain taloa (ei autoa).",
+          "battery_max_discharge_power": "Ehdoton yläraja akun purkuteholle, jota suojaustoiminto valvoo.",
+          "electricity_import_rate": "Päivä- tai kiinteä tariffi (CHF/kWh, sis. alv). Käytetään kustannusseurantaan.",
           "electricity_off_peak_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
-          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
-          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
-          "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
-          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed.",
+          "electricity_export_rate": "Verkkoyhtiön maksama syöttötariffi (CHF/kWh).",
+          "demand_charge_rate": "Kuukausittainen tehomaksu huipputehon kilowattia kohti (CHF/kW/kk). Aseta arvoon 0, jos sopimuksessasi ei ole tehomaksua.",
+          "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa ja laskee kaiken, mutta ei koskaan lähetä palvelukutsua laitteistolle. Käytä testi- tai staging-HA:ssa, joka jäljittelee tuotantoasennusta.",
+          "smart_night_charging": "Kun tämä on PÄÄLLÄ, SEM ohittaa tai pienentää yölatausta älykkäästi arvioidun sähköauton SOC:n, aurinkoennusteen, lämpötilakorjatun kulutusennusteen ja opittujen ajotottumusten perusteella.",
+          "battery_discharge_control_entity": "Number-entiteetti, joka ohjaa invertterin purkutehon rajaa (esim. number.batteries_maximale_entladeleistung Huaweilla). Tunnistetaan automaattisesti asennuksessa; ohita tässä tarvittaessa.",
           "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen).",
-          "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
-          "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "hot_water_solar_target": "Tavoitelämpötila (°C) auringolla avustetulle käyttöveden lämmitykselle. SEM boostaa varaajaa, kun ylijäämää on saatavilla.",
+          "legionella_target_temp": "Lämpötila (°C), johon käyttövesijärjestelmän on yllettävä legionelladesinfiointijakson aikana.",
+          "legionella_interval_hours": "Enimmäistuntimäärä legionelladesinfiointijaksojen välillä, ennen kuin SEM pakottaa lämmityksen.",
           "battery_assist_min_surplus": "Pienin todellinen aurinkoylijäämä, ennen kuin kotiakku saa auttaa EV:n lataamisessa — kaikissa lataustiloissa. Tämän alapuolella akku on varattu talolle (auto ottaa verkosta + auringosta). Oletus 1200 W. Aseta arvoon 0, jotta akku tukee EV:tä kaikkialla, myös yöllä."
         }
       },
       "settings_ev": {
         "title": "Sähköauton lataus ja aurinko",
-        "description": "Configure EV charging targets and solar thresholds.",
+        "description": "Määritä sähköauton lataustavoitteet ja aurinkokynnykset.",
         "data": {
-          "daily_ev_target": "Night charge target (kWh)",
-          "min_solar_power": "Minimum solar power to start EV charging (W)",
-          "observer_mode": "Observer mode (read-only, no hardware control)",
-          "smart_night_charging": "Reduce night target based on tomorrow's forecast"
+          "daily_ev_target": "Yölatauksen tavoite (kWh)",
+          "min_solar_power": "Vähimmäisaurinkoteho sähköauton latauksen käynnistämiseen (W)",
+          "observer_mode": "Tarkkailutila (vain luku, ei laitteiston ohjausta)",
+          "smart_night_charging": "Pienennä yötavoitetta huomisen ennusteen perusteella"
         },
         "data_description": {
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
-          "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
-          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
+          "daily_ev_target": "Tavoite kWh, joka ladataan verkosta joka yö. Aseta arvoon 0 poistaaksesi verkosta tapahtuvan yölatauksen käytöstä.",
+          "min_solar_power": "Vähimmäisaurinkoylijäämä (W), joka vaaditaan ennen kuin SEM aloittaa sähköauton aurinkolatauksen.",
+          "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa kaikkea, mutta ei koskaan lähetä komentoja laitteistolle.",
+          "smart_night_charging": "Kun tämä on PÄÄLLÄ, SEM pienentää yölatauksen tavoitetta, kun huomisen aurinkoennuste on riittävä."
         }
       },
       "settings_tariff": {
         "title": "Tariffi ja lisäasetukset",
-        "description": "Electricity rates and advanced tuning parameters.",
+        "description": "Sähkön hinnat ja edistyneet säätöparametrit.",
         "data": {
-          "electricity_import_rate": "Import rate",
+          "electricity_import_rate": "Ostohinta",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Vientihinta",
-          "demand_charge_rate": "Demand charge rate",
-          "update_interval": "Update interval (s)",
-          "tariff_mode": "Tariff mode",
-          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
-          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
+          "demand_charge_rate": "Tehomaksun hinta",
+          "update_interval": "Päivitysväli (s)",
+          "tariff_mode": "Tariffitila",
+          "dynamic_tariff_entity": "Dynaamisen hinnan entiteetti (tunnistetaan automaattisesti jos tyhjä)",
+          "dynamic_forecast_entity": "Ennuste-entiteetti (valinnainen, tunnistetaan automaattisesti jos tyhjä)",
+          "dynamic_feedin_entity": "Syöttöhinnan entiteetti (valinnainen, dynaamiselle vientihinnalle)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
         },
         "data_description": {
-          "electricity_import_rate": "Day/flat import rate (currency/kWh incl. VAT). Used as fallback when dynamic pricing is unavailable.",
-          "electricity_off_peak_rate": "Night/off-peak import rate (currency/kWh). Set equal to import rate if you have a flat tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
-          "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
-          "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
-          "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
-          "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
-          "dynamic_feedin_entity": "Optional sensor providing the current feed-in / export price for dynamic export rate.",
-          "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed."
+          "electricity_import_rate": "Päivä- tai kiinteä ostohinta (valuutta/kWh sis. alv). Käytetään varalla, kun dynaaminen hinnoittelu ei ole käytettävissä.",
+          "electricity_off_peak_rate": "Yö- tai halvan ajan ostohinta (valuutta/kWh). Aseta samaksi kuin ostohinta, jos sinulla on kiinteä tariffi.",
+          "electricity_export_rate": "Verkkoyhtiön maksama syöttötariffi (valuutta/kWh).",
+          "demand_charge_rate": "Kuukausittainen huipputehomaksu (valuutta/kW/kk). Aseta arvoon 0, jos sopimuksessasi ei ole sellaista.",
+          "update_interval": "Kuinka usein SEM lukee anturit ja säätää laitteistoa (sekunteina). Alue 10–60 s.",
+          "tariff_mode": "Valitse 'Staattinen' kiinteille hinnoille, 'Dynaaminen' reaaliaikaiselle hinnoittelulle tai 'Kalenteri' aikaperusteisille tariffiaikatauluille.",
+          "dynamic_tariff_entity": "Anturi, joka antaa sähkön nykyisen ostohinnan. Tunnistetaan automaattisesti mm. Tibberistä ja Nord Poolista.",
+          "dynamic_forecast_entity": "Valinnainen anturi, jossa on tuntikohtaiset hintaennusteet älykästä ajoitusta varten.",
+          "dynamic_feedin_entity": "Valinnainen anturi, joka antaa nykyisen syöttö- tai vientihinnan dynaamista vientihintaa varten.",
+          "grid_import_power_entity": "Valinnainen anturi (W) verkosta ostetulle teholle. Tunnistetaan automaattisesti Energia-paneelista; ohita tässä tarvittaessa.",
+          "grid_export_power_entity": "Valinnainen anturi (W) verkkoon myydylle teholle. Tunnistetaan automaattisesti Energia-paneelista; ohita tässä tarvittaessa."
         }
       },
       "load_management": {
         "title": "Kuormanhallinta",
-        "description": "Update load management configuration",
+        "description": "Päivitä kuormanhallinnan määritykset",
         "data": {
-          "load_management_enabled": "Enable Load Management",
-          "target_peak_limit": "Target Peak Limit (kW)",
-          "warning_peak_level": "Warning Peak Level (kW)",
-          "emergency_peak_level": "Emergency Peak Level (kW)",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "load_management_enabled": "Ota kuormanhallinta käyttöön",
+          "target_peak_limit": "Huipputehon tavoiteraja (kW)",
+          "warning_peak_level": "Varoitustason huipputeho (kW)",
+          "emergency_peak_level": "Hätätason huipputeho (kW)",
+          "vehicle_soc_entity": "Ajoneuvon akun SOC",
+          "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
+          "ev_target_soc": "Sähköauton tavoite-SOC (%)"
         },
         "data_description": {
-          "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
-          "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
-          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
-          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "load_management_enabled": "Ota käyttöön tai poista käytöstä SEM:n automaattinen kuormien pudotus, jolla pysytään verkon huipputehorajan alapuolella.",
+          "target_peak_limit": "Suurin verkkoteho (kW), jonka jälkeen SEM alkaa pudottaa ohjattavia kuormia.",
+          "warning_peak_level": "Tehotaso (kW), jolla SEM antaa varoituksen ennen toimenpiteitä.",
+          "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja.",
+          "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
+          "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina.",
+          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
         }
       },
       "notifications": {
         "title": "Ilmoitusasetukset",
-        "description": "Update notification configuration",
+        "description": "Päivitä ilmoitusten määritykset",
         "data": {
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "enable_charger_notifications": "Ota käyttöön laturinäytön ilmoitukset",
           "enable_mobile_notifications": "Ota käyttöön mobiili-ilmoitukset",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Mobiili-ilmoituspalvelu",
+          "vehicle_soc_entity": "Ajoneuvon akun SOC",
+          "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
+          "ev_target_soc": "Sähköauton tavoite-SOC (%)"
         },
         "data_description": {
-          "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "enable_charger_notifications": "Ota käyttöön tai poista käytöstä laturin tilakortin pysyvät ilmoitusbannerit.",
+          "enable_mobile_notifications": "Ota käyttöön tai poista käytöstä mobiililaitteellesi lähetettävät push-ilmoitukset.",
+          "mobile_notification_service": "HA:n notify-palvelu mobiili-ilmoituksille (esim. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
+          "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina.",
+          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
         }
       },
       "battery_scheduler": {
         "title": "Akun latausajastin",
-        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "description": "Määritä ennusteen huomioiva verkosta akkuun -lataus halpojen tuntien aikana",
         "data": {
-          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
-          "battery_capacity_kwh": "Battery Capacity",
-          "battery_max_charge_power_w": "Max Charge Power",
-          "battery_roundtrip_efficiency": "Round-trip Efficiency",
-          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
-          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
-          "battery_max_target_soc": "Maximum Target SOC",
-          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
-          "battery_pessimism_weight": "Forecast Pessimism",
-          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+          "battery_charge_scheduler_enabled": "Ota akun latausajastin käyttöön",
+          "battery_capacity_kwh": "Akun kapasiteetti",
+          "battery_max_charge_power_w": "Latauksen enimmäisteho",
+          "battery_roundtrip_efficiency": "Kokonaishyötysuhde",
+          "battery_cycle_cost": "Akun syklikustannus (kuluminen)",
+          "battery_precharge_trigger_hour": "Päivittäinen arviointihetki",
+          "battery_max_target_soc": "Suurin tavoite-SOC",
+          "battery_min_deficit_kwh": "Vajeen vähimmäiskynnys",
+          "battery_pessimism_weight": "Ennusteen pessimismi",
+          "battery_force_charge_negative_price": "Pakota lataus negatiivisella hinnalla"
         }
       },
       "ev_charger_edit": {
         "title": "Muokkaa laturia",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "description": "Päivitä tämän laturin anturimääritykset ja prioriteetti.",
         "data": {
           "charger_name": "Laturin nimi",
           "ev_connected_sensor": "Sähköauto yhdistetty",
           "ev_charging_sensor": "Sähköauton lataustila",
           "ev_charging_power_sensor": "Sähköauton latausteho",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Laturin virranasetuspalvelu (valinnainen)",
+          "ev_charger_service_entity_id": "Laturin palvelun kohde-entiteetti (valinnainen)",
+          "ev_surplus_priority": "Ylijäämäprioriteetti (1=korkein)",
           "ev_current_control_entity": "Virranhallintaentiteetti (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Aurinkolatauksen raja (kWh)",
           "ev_target_soc_max": "Aurinkolatauksen raja (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Laturin selkokielinen nimi, joka näkyy koontinäytöllä.",
+          "ev_connected_sensor": "Binäärianturi, joka kertoo, onko tähän laturiin kytketty ajoneuvo.",
+          "ev_charging_sensor": "Binäärianturi, joka kertoo, syöttääkö tämä laturi parhaillaan tehoa.",
+          "ev_charging_power_sensor": "Numeerinen anturi (W), joka kertoo tämän laturin syöttämän tehon.",
+          "ev_charger_service": "HA-palvelu, jolla latausvirta asetetaan. Käytä KEBA- tai Easee-latureilla.",
+          "ev_charger_service_entity_id": "Entiteettitunnus, joka välitetään palvelukutsun kohteena. Jätä tyhjäksi, jos sitä ei tarvita.",
+          "ev_surplus_priority": "Ylijäämän jakojärjestys useiden latureiden kesken. Pienempi numero = korkeampi prioriteetti.",
           "ev_current_control_entity": "Number-entiteetti, jolla asetetaan latausvirta (A). Wallboxille, go-eChargerille ja vastaaville latureille.",
           "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
           "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta."
@@ -327,36 +327,36 @@
           "ev_connected_sensor": "Sähköauto yhdistetty",
           "ev_charging_sensor": "Sähköauton lataustila",
           "ev_charging_power_sensor": "Sähköauton latausteho",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Laturin virranasetuspalvelu (valinnainen)",
+          "ev_charger_service_entity_id": "Laturin palvelun kohde-entiteetti (valinnainen)",
+          "ev_surplus_priority": "Ylijäämäprioriteetti (1=korkein)",
           "ev_current_control_entity": "Virranhallintaentiteetti (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Aurinkolatauksen raja (kWh)",
           "ev_target_soc_max": "Aurinkolatauksen raja (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Laturin selkokielinen nimi, joka näkyy koontinäytöllä.",
+          "ev_connected_sensor": "Binäärianturi, joka kertoo, onko tähän laturiin kytketty ajoneuvo.",
+          "ev_charging_sensor": "Binäärianturi, joka kertoo, syöttääkö tämä laturi parhaillaan tehoa.",
+          "ev_charging_power_sensor": "Numeerinen anturi (W), joka kertoo tämän laturin syöttämän tehon.",
+          "ev_charger_service": "HA-palvelu, jolla latausvirta asetetaan. Käytä KEBA- tai Easee-latureilla.",
+          "ev_charger_service_entity_id": "Entiteettitunnus, joka välitetään palvelukutsun kohteena. Jätä tyhjäksi, jos sitä ei tarvita.",
+          "ev_surplus_priority": "Ylijäämän jakojärjestys useiden latureiden kesken. Pienempi numero = korkeampi prioriteetti.",
           "ev_current_control_entity": "Number-entiteetti, jolla asetetaan latausvirta (A). Wallboxille, go-eChargerille ja vastaaville latureille.",
           "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
           "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta."
         }
       },
       "pv_naming": {
-        "title": "Name your PV strings",
-        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "title": "Nimeä aurinkopaneeliketjusi",
+        "description": "Anna jokaiselle aurinkopaneeliketjulle nimi (esim. Itä / Etelä / Länsi). Mikä paikka vastaa mitäkin paneelia — numerointi seuraa Energia-paneelin aurinkolistaustasi, ei ilmansuuntia:\n\n{mapping}\n\nJätä kenttä tyhjäksi säilyttääksesi oletuksen (PV1/PV2/…).",
         "data": {
-          "pv_name_pv1": "PV1 name",
-          "pv_name_pv2": "PV2 name",
-          "pv_name_pv3": "PV3 name",
-          "pv_name_pv4": "PV4 name",
-          "pv_name_pv5": "PV5 name",
-          "pv_name_pv6": "PV6 name"
+          "pv_name_pv1": "PV1:n nimi",
+          "pv_name_pv2": "PV2:n nimi",
+          "pv_name_pv3": "PV3:n nimi",
+          "pv_name_pv4": "PV4:n nimi",
+          "pv_name_pv5": "PV5:n nimi",
+          "pv_name_pv6": "PV6:n nimi"
         }
       },
       "heat_pump": {
@@ -408,538 +408,538 @@
   "entity": {
     "sensor": {
       "solar_power": {
-        "name": "Solar Power"
+        "name": "Aurinkoteho"
       },
       "home_consumption_power": {
-        "name": "Home Power"
+        "name": "Kodin teho"
       },
       "grid_power": {
-        "name": "Grid Power"
+        "name": "Verkkoteho"
       },
       "grid_active_power": {
-        "name": "Grid Active Power"
+        "name": "Verkon pätöteho"
       },
       "grid_import_power": {
-        "name": "Grid Import"
+        "name": "Verkosta osto"
       },
       "grid_export_power": {
-        "name": "Grid Export"
+        "name": "Verkkoon myynti"
       },
       "battery_power": {
-        "name": "Battery Power"
+        "name": "Akkuteho"
       },
       "battery_charge_power": {
-        "name": "Battery Charge Power"
+        "name": "Akun latausteho"
       },
       "battery_discharge_power": {
-        "name": "Battery Discharge Power"
+        "name": "Akun purkuteho"
       },
       "ev_power": {
-        "name": "EV Power"
+        "name": "Sähköauton teho"
       },
       "available_power": {
-        "name": "Available Power"
+        "name": "Käytettävissä oleva teho"
       },
       "battery_soc": {
-        "name": "Battery SOC"
+        "name": "Akun SOC"
       },
       "battery_status": {
-        "name": "Battery Status"
+        "name": "Akun tila"
       },
       "battery_temperature": {
-        "name": "Battery Temperature"
+        "name": "Akun lämpötila"
       },
       "inverter_temperature": {
         "name": "Invertterin lämpötila"
       },
       "battery_cycles_estimated": {
-        "name": "Battery Cycles (Estimated)"
+        "name": "Akun syklit (arvio)"
       },
       "battery_health_score": {
-        "name": "Battery Health Score"
+        "name": "Akun kuntopisteet"
       },
       "calculated_current": {
-        "name": "Calculated Current"
+        "name": "Laskettu virta"
       },
       "charging_state": {
-        "name": "Charging State"
+        "name": "Lataustila"
       },
       "grid_status": {
-        "name": "Grid Status"
+        "name": "Verkon tila"
       },
       "solar_charging_status": {
-        "name": "Solar Charging"
+        "name": "Aurinkolataus"
       },
       "night_charging_status": {
-        "name": "Night Charging"
+        "name": "Yölataus"
       },
       "battery_priority_status": {
-        "name": "Battery Priority"
+        "name": "Akun etusija"
       },
       "charging_strategy": {
-        "name": "Charging Strategy"
+        "name": "Latausstrategia"
       },
       "daily_solar_energy": {
-        "name": "Today Solar"
+        "name": "Tänään aurinko"
       },
       "daily_home_energy": {
-        "name": "Today Home"
+        "name": "Tänään koti"
       },
       "daily_grid_import_energy": {
-        "name": "Today Import"
+        "name": "Tänään osto"
       },
       "daily_grid_export_energy": {
-        "name": "Today Export"
+        "name": "Tänään myynti"
       },
       "daily_battery_charge_energy": {
-        "name": "Today Charge"
+        "name": "Tänään lataus"
       },
       "daily_battery_discharge_energy": {
-        "name": "Today Discharge"
+        "name": "Tänään purku"
       },
       "daily_ev_energy": {
-        "name": "Today EV"
+        "name": "Tänään sähköauto"
       },
       "monthly_solar_yield_energy": {
-        "name": "Monthly Solar"
+        "name": "Kuukausi aurinko"
       },
       "monthly_grid_import_energy": {
-        "name": "Monthly Import"
+        "name": "Kuukausi osto"
       },
       "monthly_grid_export_energy": {
-        "name": "Monthly Export"
+        "name": "Kuukausi myynti"
       },
       "monthly_battery_charge_energy": {
-        "name": "Monthly Charge"
+        "name": "Kuukausi lataus"
       },
       "monthly_battery_discharge_energy": {
-        "name": "Monthly Discharge"
+        "name": "Kuukausi purku"
       },
       "monthly_home_consumption_energy": {
-        "name": "Monthly Home"
+        "name": "Kuukausi koti"
       },
       "monthly_ev_consumption_energy": {
-        "name": "Monthly EV"
+        "name": "Kuukausi sähköauto"
       },
       "flow_solar_to_home_power": {
-        "name": "Solar to Home"
+        "name": "Auringosta kotiin"
       },
       "flow_solar_to_battery_power": {
-        "name": "Solar to Battery"
+        "name": "Auringosta akkuun"
       },
       "flow_solar_to_grid_power": {
-        "name": "Solar to Grid"
+        "name": "Auringosta verkkoon"
       },
       "flow_solar_to_ev_power": {
-        "name": "Solar to EV"
+        "name": "Auringosta sähköautoon"
       },
       "flow_battery_to_home_power": {
-        "name": "Battery to Home"
+        "name": "Akusta kotiin"
       },
       "flow_battery_to_ev_power": {
-        "name": "Battery to EV"
+        "name": "Akusta sähköautoon"
       },
       "flow_grid_to_home_power": {
-        "name": "Grid to Home"
+        "name": "Verkosta kotiin"
       },
       "flow_grid_to_ev_power": {
-        "name": "Grid to EV"
+        "name": "Verkosta sähköautoon"
       },
       "flow_grid_to_battery_power": {
-        "name": "Grid to Battery"
+        "name": "Verkosta akkuun"
       },
       "flow_solar_to_home_energy": {
-        "name": "Solar to Home Energy"
+        "name": "Auringosta kotiin (energia)"
       },
       "flow_solar_to_ev_energy": {
-        "name": "Solar to EV Energy"
+        "name": "Auringosta sähköautoon (energia)"
       },
       "flow_solar_to_battery_energy": {
-        "name": "Solar to Battery Energy"
+        "name": "Auringosta akkuun (energia)"
       },
       "flow_solar_to_grid_energy": {
-        "name": "Solar to Grid Energy"
+        "name": "Auringosta verkkoon (energia)"
       },
       "flow_grid_to_home_energy": {
-        "name": "Grid to Home Energy"
+        "name": "Verkosta kotiin (energia)"
       },
       "flow_grid_to_ev_energy": {
-        "name": "Grid to EV Energy"
+        "name": "Verkosta sähköautoon (energia)"
       },
       "flow_grid_to_battery_energy": {
-        "name": "Grid to Battery Energy"
+        "name": "Verkosta akkuun (energia)"
       },
       "flow_battery_to_home_energy": {
-        "name": "Battery to Home Energy"
+        "name": "Akusta kotiin (energia)"
       },
       "flow_battery_to_ev_energy": {
-        "name": "Battery to EV Energy"
+        "name": "Akusta sähköautoon (energia)"
       },
       "self_consumption_rate": {
-        "name": "Self Consumption"
+        "name": "Omakäyttöaste"
       },
       "autarky_rate": {
-        "name": "Autarky Rate"
+        "name": "Omavaraisuusaste"
       },
       "daily_savings": {
-        "name": "Today Savings"
+        "name": "Tänään säästö"
       },
       "daily_battery_savings": {
-        "name": "Battery Savings Daily"
+        "name": "Akkusäästö päivässä"
       },
       "daily_costs": {
-        "name": "Costs Daily"
+        "name": "Kustannukset päivässä"
       },
       "daily_export_revenue": {
-        "name": "Export Revenue Daily"
+        "name": "Myyntitulot päivässä"
       },
       "daily_net_cost": {
-        "name": "Net Cost Daily"
+        "name": "Nettokustannus päivässä"
       },
       "monthly_savings": {
-        "name": "Monthly Savings"
+        "name": "Säästö kuukaudessa"
       },
       "monthly_battery_savings": {
-        "name": "Battery Savings Monthly"
+        "name": "Akkusäästö kuukaudessa"
       },
       "monthly_costs": {
-        "name": "Costs Monthly"
+        "name": "Kustannukset kuukaudessa"
       },
       "monthly_export_revenue": {
-        "name": "Export Revenue Monthly"
+        "name": "Myyntitulot kuukaudessa"
       },
       "monthly_net_cost": {
-        "name": "Net Cost Monthly"
+        "name": "Nettokustannus kuukaudessa"
       },
       "yearly_solar_yield_energy": {
-        "name": "Yearly Solar"
+        "name": "Vuosi aurinko"
       },
       "lifetime_solar_yield_energy": {
         "name": "Aurinkotuotanto yhteensä"
       },
       "yearly_grid_import_energy": {
-        "name": "Yearly Grid Import"
+        "name": "Vuosi verkosta osto"
       },
       "yearly_grid_export_energy": {
-        "name": "Yearly Grid Export"
+        "name": "Vuosi verkkoon myynti"
       },
       "yearly_battery_charge_energy": {
-        "name": "Yearly Battery Charge"
+        "name": "Vuosi akun lataus"
       },
       "yearly_battery_discharge_energy": {
-        "name": "Yearly Battery Discharge"
+        "name": "Vuosi akun purku"
       },
       "yearly_home_consumption_energy": {
-        "name": "Yearly Home Consumption"
+        "name": "Vuosi kodin kulutus"
       },
       "yearly_ev_energy": {
-        "name": "Yearly EV Energy"
+        "name": "Vuosi sähköauton energia"
       },
       "yearly_costs": {
-        "name": "Yearly Costs"
+        "name": "Kustannukset vuodessa"
       },
       "yearly_savings": {
-        "name": "Yearly Savings"
+        "name": "Säästö vuodessa"
       },
       "yearly_battery_savings": {
-        "name": "Yearly Battery Savings"
+        "name": "Akkusäästö vuodessa"
       },
       "yearly_export_revenue": {
-        "name": "Yearly Export Revenue"
+        "name": "Myyntitulot vuodessa"
       },
       "yearly_net_cost": {
-        "name": "Yearly Net Cost"
+        "name": "Nettokustannus vuodessa"
       },
       "lifetime_total_savings": {
-        "name": "Lifetime Total Savings"
+        "name": "Kokonaissäästö yhteensä"
       },
       "lifetime_grid_cost": {
-        "name": "Lifetime Grid Cost"
+        "name": "Verkkosähkön kustannus yhteensä"
       },
       "roi_percentage": {
-        "name": "ROI Percentage"
+        "name": "ROI-prosentti"
       },
       "roi_payback_years": {
-        "name": "ROI Payback Years"
+        "name": "ROI-takaisinmaksuaika (vuotta)"
       },
       "roi_annual_savings": {
-        "name": "ROI Annual Savings"
+        "name": "ROI-vuosisäästö"
       },
       "forecast_correction_factor": {
-        "name": "Forecast Correction Factor"
+        "name": "Ennusteen korjauskerroin"
       },
       "forecast_corrected_today": {
-        "name": "Corrected Forecast Today"
+        "name": "Korjattu ennuste tänään"
       },
       "forecast_history_days": {
-        "name": "Forecast History Days"
+        "name": "Ennustehistorian päivät"
       },
       "daily_co2_avoided": {
-        "name": "CO2 Avoided Today"
+        "name": "Vältetty CO2 tänään"
       },
       "yearly_co2_avoided": {
-        "name": "CO2 Avoided This Year"
+        "name": "Vältetty CO2 tänä vuonna"
       },
       "yearly_trees_equivalent": {
-        "name": "Trees Equivalent This Year"
+        "name": "Puuvastaavuus tänä vuonna"
       },
       "lifetime_co2_avoided": {
-        "name": "Lifetime CO2 Avoided"
+        "name": "Vältetty CO2 yhteensä"
       },
       "lifetime_trees_equivalent": {
-        "name": "Lifetime Trees Equivalent"
+        "name": "Puuvastaavuus yhteensä"
       },
       "power_charge_cost": {
-        "name": "Power Charge Cost"
+        "name": "Tehomaksun kustannus"
       },
       "consecutive_peak_15min": {
-        "name": "15min Peak"
+        "name": "15 min huippu"
       },
       "monthly_consecutive_peak": {
-        "name": "Monthly Peak"
+        "name": "Kuukauden huippu"
       },
       "current_vs_peak_percentage": {
-        "name": "Peak Percentage"
+        "name": "Huipun osuus"
       },
       "target_peak_limit": {
-        "name": "Peak Limit"
+        "name": "Huipputehon raja"
       },
       "peak_margin": {
-        "name": "Peak Margin"
+        "name": "Huipun pelivara"
       },
       "load_management_status": {
-        "name": "Load Management"
+        "name": "Kuormanhallinta"
       },
       "load_management_recommendation": {
-        "name": "Load Recommendation"
+        "name": "Kuormasuositus"
       },
       "loads_currently_shed": {
-        "name": "Loads Shed"
+        "name": "Pudotetut kuormat"
       },
       "available_load_reduction": {
-        "name": "Available Reduction"
+        "name": "Käytettävissä oleva vähennys"
       },
       "controllable_devices_count": {
-        "name": "Devices Count"
+        "name": "Laitteiden määrä"
       },
       "surplus_total_w": {
-        "name": "Surplus Total"
+        "name": "Ylijäämä yhteensä"
       },
       "surplus_distributable_w": {
-        "name": "Surplus Distributable"
+        "name": "Ylijäämä jaettavissa"
       },
       "surplus_allocated_w": {
-        "name": "Surplus Allocated"
+        "name": "Ylijäämä jaettu"
       },
       "surplus_unallocated_w": {
-        "name": "Surplus Unallocated"
+        "name": "Ylijäämä jakamatta"
       },
       "surplus_active_devices": {
-        "name": "Surplus Active Devices"
+        "name": "Ylijäämän aktiiviset laitteet"
       },
       "surplus_total_devices": {
-        "name": "Surplus Total Devices"
+        "name": "Ylijäämälaitteita yhteensä"
       },
       "forecast_today_kwh": {
-        "name": "Forecast Today"
+        "name": "Ennuste tänään"
       },
       "forecast_tomorrow_kwh": {
-        "name": "Forecast Tomorrow"
+        "name": "Ennuste huomenna"
       },
       "forecast_remaining_today_kwh": {
-        "name": "Forecast Remaining Today"
+        "name": "Ennuste jäljellä tänään"
       },
       "forecast_power_now_w": {
-        "name": "Forecast Power Now"
+        "name": "Ennustettu teho nyt"
       },
       "forecast_source": {
-        "name": "Forecast Source"
+        "name": "Ennusteen lähde"
       },
       "charging_recommendation": {
-        "name": "Charging Recommendation"
+        "name": "Lataussuositus"
       },
       "tariff_current_import_rate": {
-        "name": "Electricity Price"
+        "name": "Sähkön hinta"
       },
       "tariff_current_export_rate": {
-        "name": "Export Rate"
+        "name": "Vientihinta"
       },
       "tariff_price_level": {
-        "name": "Price Level"
+        "name": "Hintataso"
       },
       "tariff_provider": {
-        "name": "Tariff Provider"
+        "name": "Tariffin tarjoaja"
       },
       "tariff_next_cheap_start": {
-        "name": "Next Cheap Window"
+        "name": "Seuraava halpa jakso"
       },
       "heat_pump_mode": {
-        "name": "Heat Pump Mode"
+        "name": "Lämpöpumpun tila"
       },
       "heat_pump_sg_ready_state": {
-        "name": "Heat Pump SG-Ready State"
+        "name": "Lämpöpumpun SG-Ready-tila"
       },
       "pv_daily_specific_yield": {
-        "name": "PV Specific Yield"
+        "name": "PV:n ominaistuotto"
       },
       "pv_performance_vs_forecast": {
-        "name": "PV vs Forecast"
+        "name": "PV vs. ennuste"
       },
       "pv_estimated_annual_degradation": {
-        "name": "PV Annual Degradation"
+        "name": "PV:n vuosittainen heikkeneminen"
       },
       "pv_degradation_trend": {
-        "name": "PV Degradation Trend"
+        "name": "PV:n heikkenemistrendi"
       },
       "energy_optimization_score": {
-        "name": "Optimization Score"
+        "name": "Optimointipisteet"
       },
       "energy_tip": {
-        "name": "Energy Tip"
+        "name": "Energiavinkki"
       },
       "energy_tip_category": {
-        "name": "Energy Tip Category"
+        "name": "Energiavinkin luokka"
       },
       "energy_ev_solar_percentage": {
-        "name": "EV Solar Charging %"
+        "name": "Sähköauton aurinkolataus-%"
       },
       "utility_signal_source": {
-        "name": "Utility Signal Source"
+        "name": "Verkkoyhtiön signaalin lähde"
       },
       "utility_signal_count_today": {
-        "name": "Utility Signals Today"
+        "name": "Verkkoyhtiön signaalit tänään"
       },
       "predictor_training_status": {
-        "name": "Predictor Training Status"
+        "name": "Ennustemallin opetustila"
       },
       "predictor_model_accuracy": {
         "name": "Predictor Accuracy"
       },
       "predicted_surplus_window": {
-        "name": "Predicted Surplus Window"
+        "name": "Ennustettu ylijäämäjakso"
       },
       "session_energy": {
-        "name": "Session Energy"
+        "name": "Latausjakson energia"
       },
       "session_solar_share": {
-        "name": "Session Solar Share"
+        "name": "Latausjakson aurinko-osuus"
       },
       "session_cost": {
-        "name": "Session Cost"
+        "name": "Latausjakson kustannus"
       },
       "session_duration": {
-        "name": "Session Duration"
+        "name": "Latausjakson kesto"
       },
       "lifetime_ev_energy": {
-        "name": "Lifetime EV Energy"
+        "name": "Sähköauton energia yhteensä"
       },
       "lifetime_ev_solar": {
-        "name": "Lifetime EV Solar Energy"
+        "name": "Sähköauton aurinkoenergia yhteensä"
       },
       "lifetime_ev_cost": {
-        "name": "Lifetime EV Cost"
+        "name": "Sähköauton kustannus yhteensä"
       },
       "lifetime_ev_sessions": {
-        "name": "Lifetime EV Sessions"
+        "name": "Sähköauton latausjaksot yhteensä"
       },
       "lifetime_ev_solar_share": {
-        "name": "Lifetime EV Solar Share"
+        "name": "Sähköauton aurinko-osuus yhteensä"
       },
       "vehicle_soc": {
-        "name": "Vehicle SOC"
+        "name": "Ajoneuvon SOC"
       },
       "ev_remaining_range": {
         "name": "Sähköauton toimintamatka"
       },
       "best_surplus_window": {
-        "name": "Best Surplus Window"
+        "name": "Paras ylijäämäjakso"
       },
       "night_start_time": {
-        "name": "Night Start Time"
+        "name": "Yöjakson alkamisaika"
       },
       "night_end_time": {
-        "name": "Night End Time"
+        "name": "Yöjakson päättymisaika"
       },
       "night_window_hours": {
-        "name": "Night Window Hours"
+        "name": "Yöjakson tunnit"
       },
       "forecast_peak_power_today_w": {
-        "name": "Forecast Peak Power Today"
+        "name": "Ennustettu huipputeho tänään"
       },
       "forecast_peak_time_today": {
-        "name": "Forecast Peak Time Today"
+        "name": "Ennustettu huipun aika tänään"
       },
       "forecast_surplus_kwh": {
-        "name": "Forecast Surplus"
+        "name": "Ennustettu ylijäämä"
       },
       "forecast_dampening_factor": {
-        "name": "Forecast Dampening Factor"
+        "name": "Ennusteen vaimennuskerroin"
       },
       "battery_scheduler_state": {
         "name": "Akun ajastimen tila"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "Akun ajastimen tavoite-SOC"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Akun ajastimen vaje"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Akun ajastimen syy"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Sähköauton latureiden määrä"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "Sähköauton latauksen hiipuminen"
       },
       "diag_version": {
         "name": "SEM Versio"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Verkkoanturin tila"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Verkon etumerkkikäytäntö"
       },
       "diag_battery_sign": {
-        "name": "Battery Sign Convention"
+        "name": "Akun etumerkkikäytäntö"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Laturin ohjaustapa"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Akun kapasiteetti (määritys)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Päivitysväli"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Tarkkailutila"
       },
       "diag_sensors_unavailable": {
         "name": "Anturit ei saatavilla"
       },
       "battery_session_type": {
-        "name": "Battery Session Type"
+        "name": "Akkujakson tyyppi"
       },
       "battery_session_energy": {
-        "name": "Battery Session Energy"
+        "name": "Akkujakson energia"
       },
       "battery_session_solar_share": {
-        "name": "Battery Session Solar Share"
+        "name": "Akkujakson aurinko-osuus"
       },
       "battery_session_cost": {
-        "name": "Battery Session Cost"
+        "name": "Akkujakson kustannus"
       },
       "battery_session_savings": {
-        "name": "Battery Session Savings"
+        "name": "Akkujakson säästö"
       },
       "battery_session_duration": {
-        "name": "Battery Session Duration"
+        "name": "Akkujakson kesto"
       },
       "battery_session_avg_power": {
-        "name": "Battery Session Avg Power"
+        "name": "Akkujakson keskiteho"
       },
       "diag_charger_count": {
         "name": "Määritetyt laturit"
@@ -948,7 +948,7 @@
         "name": "Energianäkymän määritykset"
       },
       "heat_pump_registration_status": {
-        "name": "Heat Pump Registration Status"
+        "name": "Lämpöpumpun rekisteröinnin tila"
       },
       "vpp_event": {
         "name": "VPP-tapahtuma"
@@ -956,48 +956,48 @@
     },
     "binary_sensor": {
       "ev_connected": {
-        "name": "EV Connected"
+        "name": "Sähköauto yhdistetty"
       },
       "ev_charging": {
-        "name": "EV Charging"
+        "name": "Sähköauto latautuu"
       },
       "battery_charging": {
-        "name": "Battery Charging"
+        "name": "Akku latautuu"
       },
       "battery_discharging": {
-        "name": "Battery Discharging"
+        "name": "Akku purkautuu"
       },
       "grid_export_active": {
-        "name": "Grid Export Active"
+        "name": "Verkkoon syöttö aktiivinen"
       },
       "solar_active": {
-        "name": "Solar Active"
+        "name": "Aurinko aktiivinen"
       },
       "surplus_available": {
         "name": "Ylijäämä saatavilla"
       },
       "forecast_available": {
-        "name": "Forecast Available"
+        "name": "Ennuste saatavilla"
       },
       "tariff_is_dynamic": {
-        "name": "Dynamic Tariff"
+        "name": "Dynaaminen tariffi"
       },
       "heat_pump_solar_boost": {
-        "name": "Heat Pump Solar Boost"
+        "name": "Lämpöpumpun aurinkoboosti"
       },
       "heat_pump_registered": {
         "name": "Lämpöpumppu rekisteröity"
       },
       "utility_signal_active": {
-        "name": "Utility Signal Active"
+        "name": "Verkkoyhtiön signaali aktiivinen"
       },
       "layer_mismatch": {
-        "name": "Layer Mismatch"
+        "name": "Kerrosten ristiriita"
       }
     },
     "switch": {
       "observer_mode": {
-        "name": "Observer Mode"
+        "name": "Tarkkailutila"
       },
       "vacation_mode": {
         "name": "Lomatila"
@@ -1005,40 +1005,40 @@
     },
     "number": {
       "update_interval": {
-        "name": "Update Interval"
+        "name": "Päivitysväli"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC"
+        "name": "Akun etusijan SOC"
       },
       "minimum_solar_power": {
-        "name": "Minimum Solar Power"
+        "name": "Vähimmäisaurinkoteho"
       },
       "battery_assist_max_power": {
-        "name": "Battery Assist Max Power"
+        "name": "Akkutuen enimmäisteho"
       },
       "battery_assist_min_surplus": {
         "name": "Akkutuki – vähimmäisaurinkoylijäämä"
       },
       "regulation_offset": {
-        "name": "Regulation Offset"
+        "name": "Säätöpoikkeama"
       },
       "demand_charge_rate": {
-        "name": "Demand Charge Rate"
+        "name": "Tehomaksun hinta"
       },
       "cheap_price_threshold": {
-        "name": "Cheap Price Threshold"
+        "name": "Halvan hinnan kynnys"
       },
       "expensive_price_threshold": {
-        "name": "Expensive Price Threshold"
+        "name": "Kalliin hinnan kynnys"
       },
       "heat_pump_boost_offset": {
-        "name": "Heat Pump Boost Offset"
+        "name": "Lämpöpumpun boost-poikkeama"
       },
       "hot_water_max_temperature": {
-        "name": "Hot Water Max Temperature"
+        "name": "Käyttöveden enimmäislämpötila"
       },
       "system_size_kwp": {
-        "name": "PV System Size"
+        "name": "PV-järjestelmän koko"
       },
       "ev_enable_delay_seconds": {
         "name": "EV-käynnistysviive (ylijäämä)"
@@ -1047,40 +1047,40 @@
         "name": "EV-pysäytysviive (alijäämä)"
       },
       "battery_buffer_soc": {
-        "name": "Battery Buffer SOC"
+        "name": "Akun puskurin SOC"
       },
       "battery_auto_start_soc": {
-        "name": "Battery Auto Start SOC"
+        "name": "Akun automaattikäynnistyksen SOC"
       },
       "battery_max_discharge_power": {
-        "name": "Battery Max Discharge Power"
+        "name": "Akun purkutehon maksimi"
       },
       "system_investment_cost": {
-        "name": "System Investment Cost"
+        "name": "Järjestelmän investointikustannus"
       },
       "electricity_import_rate": {
-        "name": "Electricity Import Rate"
+        "name": "Sähkön ostohinta"
       },
       "electricity_export_rate": {
-        "name": "Electricity Export Rate"
+        "name": "Sähkön vientihinta"
       },
       "night_earliest_start": {
-        "name": "Night Earliest Start"
+        "name": "Yöjakson aikaisin alku"
       },
       "night_latest_end": {
-        "name": "Night Latest End"
+        "name": "Yöjakson myöhäisin loppu"
       },
       "battery_capacity": {
-        "name": "Battery Capacity"
+        "name": "Akun kapasiteetti"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Käyttöveden aurinkotavoite"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Legionellan tavoitelämpötila"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Legionellajakson väli (tuntia)"
       },
       "surplus_event_threshold": {
         "name": "Ylijäämätapahtuman kynnys"
@@ -1150,44 +1150,44 @@
       "description": "Sähköauton latauslaitteen antureita ei ole määritetty, joten latausominaisuudet eivät ole käytettävissä. Ota lataus käyttöön lisäämällä integraation asetuksiin ”yhdistetty”-anturi tai lataustehon anturi."
     },
     "sensor_unavailable": {
-      "title": "Sensor unavailable",
-      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+      "title": "Anturi ei ole saatavilla",
+      "description": "Anturi `{entity_id}` ({friendly_name}) on ollut poissa käytöstä yli {minutes} minuutin ajan. SEM ei voi sisällyttää sitä laskelmiin ennen kuin se palautuu. Tarkista taustaintegraatio (Huawei modbus / Solcast / Forecast.Solar / invertterisi verkkoyhteys). Tämä ongelma poistuu automaattisesti, kun anturi seuraavan kerran raportoi kelvollisen arvon."
     },
     "sensor_stale": {
-      "title": "Sensor frozen",
-      "description": "The sensor `{entity_id}` ({friendly_name}) still reports as available but has not updated in {minutes}+ minutes — it appears frozen. SEM is using its stale value in the energy balance and sign detection, which can distort your figures. Check the upstream integration (Huawei modbus / Growatt cloud / your inverter network). This issue clears automatically when the sensor next updates."
+      "title": "Anturi jumissa",
+      "description": "Anturi `{entity_id}` ({friendly_name}) raportoi edelleen olevansa saatavilla, mutta se ei ole päivittynyt yli {minutes} minuuttiin — se vaikuttaa jumiutuneelta. SEM käyttää sen vanhentunutta arvoa energiataseessa ja etumerkin tunnistuksessa, mikä voi vääristää lukujasi. Tarkista taustaintegraatio (Huawei modbus / Growatt cloud / invertterisi verkkoyhteys). Tämä ongelma poistuu automaattisesti, kun anturi seuraavan kerran päivittyy."
     },
     "charger_actuation_failed": {
-      "title": "EV charger not accepting commands: {name}",
-      "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+      "title": "Sähköauton laturi ei hyväksy komentoja: {name}",
+      "description": "SEM:n 3 viimeisintä (tai useampi) virtakomentoa laturille **{name}** hylättiin: `{error}`. Laturi EI ole tällä hetkellä SEM:n ohjauksessa — se jatkaa viimeksi saamansa käskyn mukaan (myös täydellä teholla lataamista off-tilassa). Yleisimmät syyt: laturin ohjausentiteetti nimettiin uudelleen taustaintegraation päivityksessä, tai `ev_charger_service` osoittaa palveluun, jolla on eri parametriskeema. Tarkista laturin ohjausentiteetti tai palvelu SEM:n asetuksista. Tämä ongelma poistuu automaattisesti seuraavan onnistuneen komennon jälkeen."
     },
     "no_forecast_integration": {
-      "title": "No solar forecast integration detected",
-      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+      "title": "Aurinkoennusteen integraatiota ei havaittu",
+      "description": "SEM etsi aurinkoennusteen integraatiota (Forecast.Solar, Solcast PV Solar tai mukautettu ennusteanturi) tunnin ajan käynnistyksen jälkeen eikä löytänyt sellaista. Ennusteeseen perustuvat ominaisuudet (parhaan ylijäämäjakson vinkit, älykäs yölataus, ennusteen vaimennus) ovat pois käytöstä, kunnes asennat sellaisen. Ongelma poistuu automaattisesti, kun SEM havaitsee ennusteintegraation."
     },
     "no_recorder": {
-      "title": "Recorder integration unavailable",
-      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+      "title": "Recorder-integraatio ei ole saatavilla",
+      "description": "SEM yritti alustaa sähköauton ja latauksen historian HA:n recorderista, mutta luku epäonnistui. Sähköauton älytoiminnot (arvioitu SOC, päivittäinen kuluminen) eivät voi käynnistyä lämpimänä ilman sitä; arvot kertyvät sen sijaan hitaasti todellisista latausjaksoista. Yleensä kertaluonteinen häiriö — poistuu automaattisesti seuraavan onnistuneen recorder-luvun jälkeen."
     },
     "heat_pump_relay_unavailable": {
-      "title": "Heat pump SG-Ready {slot} unavailable",
-      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+      "title": "Lämpöpumpun SG-Ready {slot} ei ole saatavilla",
+      "description": "Määritetty SG-Ready-releen entiteetti `{entity_id}` ({slot}) on ollut tilassa ei saatavilla / tuntematon yli {minutes} minuutin ajan. SEM pystyy rekisteröimään lämpöpumpun ohjaimen normaalisti, mutta jokainen SG-Ready-komento jää hiljaisesti vaikutuksettomaksi, kunnes tämä entiteetti raportoi todellisen tilan. Tarkista taustalla oleva laite — ESP-relekortti, Shelly, Modbus-siltaan perustuva template-kytkin tai mikä tahansa integraatio, joka omistaa tämän entiteetin. Ongelma poistuu automaattisesti, kun rele seuraavan kerran raportoi päällä/pois-tilan."
     },
     "heat_pump_partial_sg_ready": {
-      "title": "Heat pump SG-Ready half-configured",
-      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
+      "title": "Lämpöpumpun SG-Ready vain osittain määritetty",
+      "description": "SEM:ssä on asetettu täsmälleen toinen kahdesta SG-Ready-releestä (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) eikä ilmastointientiteettiä ole varalla. SG-Ready-protokolla koodaa neljä tilaa (BLOCKED / NORMAL / BOOST / FORCE_ON) 2-bittisenä binäärinä MOLEMPIEN releiden yli, joten yksi rele ei riitä protokollan ohjaamiseen. Määritä joko myös toinen rele tai aseta `heat_pump_climate_entity`, jolloin käytetään pelkkää ilmastoinnin asetusarvon boostia. Ongelma poistuu automaattisesti, kun määritys on kunnossa."
     },
     "hot_water_entity_unavailable": {
-      "title": "Hot water boiler control unavailable",
-      "description": "The configured hot-water control entity `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM can register the controller fine, but every surplus-dispatch command will silently no-op until the entity reports a real state. Check the upstream device — the boiler relay, water_heater integration, climate device, or whichever integration owns this entity. The issue clears automatically when the entity recovers."
+      "title": "Käyttöveden lämminvesivaraajan ohjaus ei ole saatavilla",
+      "description": "Määritetty käyttöveden ohjausentiteetti `{entity_id}` on ollut tilassa ei saatavilla / tuntematon yli {minutes} minuutin ajan. SEM pystyy rekisteröimään ohjaimen normaalisti, mutta jokainen ylijäämän jakokomento jää hiljaisesti vaikutuksettomaksi, kunnes entiteetti raportoi todellisen tilan. Tarkista taustalla oleva laite — varaajan rele, water_heater-integraatio, ilmastointilaite tai mikä tahansa integraatio, joka omistaa tämän entiteetin. Ongelma poistuu automaattisesti, kun entiteetti palautuu."
     },
     "hot_water_temperature_sensor_unavailable": {
-      "title": "Hot water temperature sensor unavailable",
-      "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+      "title": "Käyttöveden lämpötila-anturi ei ole saatavilla",
+      "description": "Määritetty käyttöveden lämpötila-anturi `{entity_id}` on ollut tilassa ei saatavilla / tuntematon yli {minutes} minuutin ajan. SEM toimii turvallisesti, kun tämä anturi on rikki — varaajaa EI käynnistetä ylijäämällä ennen kuin todellinen lämpötilalukema palaa, jotta lämmitin ei käy tavoitteensa yli ilman takaisinkytkentää. Tarkista anturin taustaintegraatio. Ongelma poistuu automaattisesti, kun anturi palautuu."
     },
     "keba_failsafe_active": {
-      "title": "KEBA failsafe is enabled — disable it for steady charging",
-      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+      "title": "KEBA:n failsafe on käytössä — poista se käytöstä vakaata latausta varten",
+      "description": "KEBA-laturissasi ”{name}” on failsafe-vahtiajastin käytössä. SEM (kuten evcc) ei enää tukeudu siihen, mutta sen ollessa päällä laturi pudottaa tarjotun virran 6 A:n varatasolle komentojen välillä, mikä saa latauksen heilahtelemaan (6↔9 A) ja jotkin autot (esim. Renault Zoe) kieltäytyvät lataamasta vakaasti.\n\nHome Assistantin KEBA-palvelu ei pysty kytkemään sitä pois (se ei hyväksy aikakatkaisua 0), joten se on poistettava käytöstä itse laturista: aseta **failsafe-aikakatkaisuksi 0** (KEBA UDP `failsafe 0 0 1` tai KEBA:n KeContact-työkaluilla). Katso vaiheittaiset ohjeet linkitetystä oppaasta. Tämä korjaus poistuu automaattisesti, kun failsafe on pois päältä."
     },
     "soc_cap_unenforceable": {
       "title": "Latausrajaa {target} % ei voi valvoa: {name}",
