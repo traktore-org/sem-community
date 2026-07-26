@@ -507,6 +507,9 @@
       "monthly_home_consumption_energy": {
         "name": "Monthly Home"
       },
+      "monthly_ev_consumption_energy": {
+        "name": "Monthly EV"
+      },
       "flow_solar_to_home_power": {
         "name": "Solar to Home"
       },

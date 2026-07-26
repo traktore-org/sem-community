@@ -507,6 +507,9 @@
       "monthly_home_consumption_energy": {
         "name": "本月家庭用电量"
       },
+      "monthly_ev_consumption_energy": {
+        "name": "本月电动汽车充电量"
+      },
       "flow_solar_to_home_power": {
         "name": "太阳能至家庭功率"
       },

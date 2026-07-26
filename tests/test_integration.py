@@ -287,7 +287,7 @@ class TestEnergyResetBehavior:
     """Verify daily_ev resets at sunrise, others at midnight."""
 
     def test_ev_accumulator_key_prefix(self):
-        """EV accumulator should use ev_daily_sun prefix."""
+        """EV accumulator should use the ``ev_`` prefix (renamed in #666)."""
         from custom_components.solar_energy_management.coordinator.energy_calculator import EnergyCalculator
         from custom_components.solar_energy_management.utils.time_manager import TimeManager
 
@@ -296,13 +296,13 @@ class TestEnergyResetBehavior:
         tm = TimeManager(hass)
         calc = EnergyCalculator({"update_interval": 10}, tm)
 
-        # Verify the rollover preserves ev_daily_sun keys
+        # Verify the rollover preserves EV keys across midnight
         today = date(2026, 4, 3)
         calc._daily_accumulators = {
             "solar_2026-04-02": 10.0,  # old — should be deleted
             "solar_2026-04-03": 5.0,   # today — keep
-            "ev_daily_sun_2026-04-02": 8.0,  # yesterday EV — keep (sunrise-based)
-            "ev_daily_sun_2026-04-03": 2.0,  # today EV — keep
+            "ev_2026-04-02": 8.0,  # yesterday EV — keep (sunrise-based)
+            "ev_2026-04-03": 2.0,  # today EV — keep
         }
 
         month_key = "2026_4"
@@ -310,8 +310,8 @@ class TestEnergyResetBehavior:
 
         assert "solar_2026-04-02" not in calc._daily_accumulators
         assert "solar_2026-04-03" in calc._daily_accumulators
-        assert "ev_daily_sun_2026-04-02" in calc._daily_accumulators  # Survived midnight!
-        assert "ev_daily_sun_2026-04-03" in calc._daily_accumulators
+        assert "ev_2026-04-02" in calc._daily_accumulators  # Survived midnight!
+        assert "ev_2026-04-03" in calc._daily_accumulators
 
     def test_old_ev_keys_cleaned_after_two_days(self):
         """EV keys older than yesterday should be cleaned."""
@@ -325,16 +325,16 @@ class TestEnergyResetBehavior:
 
         today = date(2026, 4, 5)
         calc._daily_accumulators = {
-            "ev_daily_sun_2026-04-03": 8.0,  # 2 days old — should be deleted
-            "ev_daily_sun_2026-04-04": 5.0,  # yesterday — keep
-            "ev_daily_sun_2026-04-05": 2.0,  # today — keep
+            "ev_2026-04-03": 8.0,  # 2 days old — should be deleted
+            "ev_2026-04-04": 5.0,  # yesterday — keep
+            "ev_2026-04-05": 2.0,  # today — keep
         }
 
         calc._check_rollover(today, "2026_4")
 
-        assert "ev_daily_sun_2026-04-03" not in calc._daily_accumulators
-        assert "ev_daily_sun_2026-04-04" in calc._daily_accumulators
-        assert "ev_daily_sun_2026-04-05" in calc._daily_accumulators
+        assert "ev_2026-04-03" not in calc._daily_accumulators
+        assert "ev_2026-04-04" in calc._daily_accumulators
+        assert "ev_2026-04-05" in calc._daily_accumulators
 
 
 # ============================================================

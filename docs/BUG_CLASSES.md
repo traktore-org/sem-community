@@ -393,6 +393,32 @@ site can't drift from a conversion site. **Guard:** AST lint in `tests/test_641_
 fails CI, making a sixth copy unrepresentable. **Sweep question:** for any value read off a HA
 state, is there exactly ONE place that decides its magnitude?
 
+### 22. String-keyed store where the write site and a read site disagree — GUARDED
+**Symptom:** a value is written into a dict under a key built from a category string, and read
+back somewhere else with the category spelled out *again* at the call site. Nothing joins the
+two. A disagreement raises nothing, logs nothing and leaves no missing entity — the reader just
+gets the default (`0.0`, or `set()`) forever. Distinct from class 19 (that one is a *write path*
+that never reaches the runtime reader; here both paths work perfectly, on different keys).
+**Instances:** **#666** — EV energy accumulated under `ev_daily_sun` while four independent sites
+(both yearly reads, the recorder year-seeding, the reconcile's monthly write) had each
+independently guessed the obvious `ev`; yearly and lifetime EV were frozen at zero for the life
+of the feature, self-healing for one cycle after every restart (the recorder re-seed) and then
+freezing again, which is why nobody reported it. **#667** — `SENSOR_LABEL_MAPPING.get(key, set())`:
+44 of 116 label keys (38%) named no entity, including *every* `sem_monthly` one, so filtering HA's
+entity list by that label returned nothing while all six sensors existed and held data.
+**Tell:** a category/name string that is a *literal* at more than one site. Also: any period or
+sibling of a group sitting at exactly `0` while its siblings move — one `_accumulate` writes
+daily, monthly, yearly and lifetime in the *same call*, so a lone zero is arithmetically
+impossible without a key mismatch. **Fix pattern:** promote the string to ONE constant
+(`EV_CATEGORY`), migrate stored keys in place (sum on collision — both halves are real data),
+and prefer putting qualifiers (a day boundary, a scope) in the *key* rather than the *namespace*:
+`ev_daily_sun` claimed "daily" while writing four periods. **Guards:**
+`tests/test_666_ev_accumulator_keys.py` runs one real integration cycle and asserts
+daily/monthly/yearly move together for every category *derived from the dataclass* (not a list to
+keep in sync — that is this same class one level up); `tests/test_667_label_registry.py` is a
+shrink-only ratchet over label keys with no entity. **Sweep question:** for every string-keyed
+store, is the key built in exactly one place — and if a lookup misses, does anything at all say so?
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

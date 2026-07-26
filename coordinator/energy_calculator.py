@@ -28,6 +28,19 @@ MAX_INTEGRATION_GAP_SECONDS = 120  # 2 minutes
 # Threshold for hardware reconciliation (kWh)
 RECONCILIATION_THRESHOLD = 0.5
 
+# Accumulator category for EV charging energy (#666). A named constant, not a
+# literal, because this string is the join between four otherwise-independent
+# places (live accumulation, the yearly recorder seeding, the hardware-counter
+# reconcile, and every read) and a silent disagreement between any two of them
+# is invisible — that is exactly how yearly EV energy came to be permanently
+# frozen. The EV day boundary is NOT encoded here: it lives in the day key
+# (``_ev_reset_day``), which is where a boundary belongs.
+EV_CATEGORY = "ev"
+_EV_KEY_PREFIX = f"{EV_CATEGORY}_"
+# The pre-#666 name, still found in stored accumulators on upgrade.
+_LEGACY_EV_CATEGORY = "ev_daily_sun"
+_LEGACY_EV_KEY_PREFIX = f"{_LEGACY_EV_CATEGORY}_"
+
 # Environmental impact constants
 GRID_CO2_KG_PER_KWH = 0.128  # Swiss grid average
 CO2_KG_PER_TREE_PER_YEAR = 22  # EPA estimate
@@ -223,17 +236,28 @@ class EnergyCalculator:
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
 
-        # EV charging (sunrise-based reset — night charging must stay in one bucket)
-        # Category "ev_daily_sun" survives midnight rollover (excluded from cleanup)
-        # FLEET-READ: ``ev_daily_sun`` is the fleet daily total — matches
+        # EV charging. The sunrise/deadline reset lives entirely in the DAY KEY
+        # (``ev_day``) — the category is plain ``ev`` like every other category.
+        # It used to be ``ev_daily_sun``, which smuggled the boundary into the
+        # namespace and then lied about its own scope: ``_accumulate`` writes
+        # daily, monthly, yearly AND lifetime under the category, so a name
+        # containing "daily" was wrong for three of the four. Four independent
+        # sites (both yearly reads, the recorder seeding, the reconcile monthly
+        # write) had already guessed ``ev``; the accumulator was the outlier,
+        # and yearly EV energy was consequently frozen at its startup seed
+        # (#666, live-confirmed on PROD: daily 10.77 kWh, yearly 0.0).
+        # EV daily keys still survive the midnight rollover — that exclusion now
+        # matches on the ``ev_`` prefix (see ``_cleanup_old_accumulators``).
+        # FLEET-READ: ``ev`` is the fleet daily total — matches
         # ``sensor.sem_daily_ev_energy``. Per-charger daily energy lives
         # on ``charger_<id>_daily_energy`` populated separately.
         if power.ev_power >= MIN_POWER_THRESHOLD:
             ev_increment = (power.ev_power * interval_hours) / 1000  # FLEET-READ: same fleet integration as the gate above.
-            self._accumulate("ev_daily_sun", ev_day, month_key, year_key, ev_increment)
+            self._accumulate(EV_CATEGORY, ev_day, month_key, year_key, ev_increment)
 
-        energy.daily_ev = self._get_daily("ev_daily_sun", ev_day)
-        energy.yearly_ev = self._get_yearly("ev", year_key)
+        energy.daily_ev = self._get_daily(EV_CATEGORY, ev_day)
+        energy.monthly_ev = self._get_monthly(EV_CATEGORY, month_key)
+        energy.yearly_ev = self._get_yearly(EV_CATEGORY, year_key)
 
         # Grid import
         if power.grid_import_power >= MIN_POWER_THRESHOLD:
@@ -348,8 +372,9 @@ class EnergyCalculator:
         energy.daily_home = self._get_daily("home", today)
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
-        energy.daily_ev = self._get_daily("ev_daily_sun", ev_day)
-        energy.yearly_ev = self._get_yearly("ev", year_key)
+        energy.daily_ev = self._get_daily(EV_CATEGORY, ev_day)
+        energy.monthly_ev = self._get_monthly(EV_CATEGORY, month_key)
+        energy.yearly_ev = self._get_yearly(EV_CATEGORY, year_key)
         energy.daily_grid_import = self._get_daily("grid_import", today)
         energy.monthly_grid_import = self._get_monthly("grid_import", month_key)
         energy.yearly_grid_import = self._get_yearly("grid_import", year_key)
@@ -721,8 +746,12 @@ class EnergyCalculator:
                         ev_total = max(0, last_ev - first_ev)
                     break
         if ev_total > 0:
-            self._yearly_accumulators[f"ev_{year_key}"] = ev_total
-            seeded["ev"] = ev_total
+            # #666: through the constant, like every other EV key. This site
+            # already spelled it "ev" — it was the *accumulate* call that
+            # disagreed, so the seed landed where the reads looked and the
+            # sensor was briefly right after each restart before freezing again.
+            self._yearly_accumulators[f"{EV_CATEGORY}_{year_key}"] = ev_total
+            seeded[EV_CATEGORY] = ev_total
 
         # Now that the yearly ENERGY is seeded, derive the yearly COST too.
         self._maybe_seed_yearly_cost(year_key)
@@ -893,12 +922,27 @@ class EnergyCalculator:
         ):
             accumulators[key] = accumulators.get(key, 0.0) + delta
 
-    def _reconcile_ev_energy(self, today: date, month_key: str) -> None:
+    def _reconcile_ev_energy(self, ev_day: date, month_key: str) -> None:
         """Cross-check integrated EV energy against hardware counter.
 
         If the hardware counter (e.g. KEBA daily energy) reports more energy
         than our power integration, adopt the hardware value. This catches
         energy missed due to restarts, missed cycles, or external charging.
+
+        STILL NOT WIRED — see #658. This method has no callers, and its setter
+        ``set_ev_daily_energy_sensor`` is called only from tests, so the guard
+        above would early-return anyway. Two defects block it, both tracked
+        there: the absolute adopt-the-larger comparison is only valid when the
+        counter resets on the SAME boundary as ``ev_day`` (a midnight-resetting
+        KEBA counter against a deadline-based bucket is comparing different
+        windows), and it credits ONE charger's counter to the FLEET total. The
+        fix is to follow ``_reconcile_solar_energy``'s baseline/anchor/delta
+        model, which is boundary-agnostic because a counter reset is just a
+        reset. Do NOT wire this up as-is.
+
+        The day-key half of #658 is already corrected here: the parameter is
+        ``ev_day``, not the midnight ``today`` it used to take — reconciling
+        and accumulating must key on the same day (#666, #645).
         """
         if not self._hass or not self._ev_daily_energy_sensor:
             return
@@ -911,19 +955,18 @@ class EnergyCalculator:
         if hardware_kwh <= 0:
             return
 
-        calculated_kwh = self._get_daily("ev_daily_sun", today)
+        calculated_kwh = self._get_daily(EV_CATEGORY, ev_day)
 
         if hardware_kwh > calculated_kwh + RECONCILIATION_THRESHOLD:
             _LOGGER.info(
                 "EV energy reconciliation: hardware=%.2f kWh > calculated=%.2f kWh, adopting hardware value",
                 hardware_kwh, calculated_kwh,
             )
-            daily_key = f"ev_daily_sun_{today}"
-            self._daily_accumulators[daily_key] = hardware_kwh
+            self._daily_accumulators[f"{EV_CATEGORY}_{ev_day}"] = hardware_kwh
 
             # Also adjust monthly accumulator by the same delta
             delta = hardware_kwh - calculated_kwh
-            monthly_key_full = f"ev_{month_key}"
+            monthly_key_full = f"{EV_CATEGORY}_{month_key}"
             self._monthly_accumulators[monthly_key_full] = (
                 self._monthly_accumulators.get(monthly_key_full, 0.0) + delta
             )
@@ -1328,15 +1371,18 @@ class EnergyCalculator:
     def _check_rollover(self, today: date, month_key: str, year_key: str = None) -> None:
         """Check for day/month rollover and cleanup old accumulators.
 
-        EV keys (ev_daily_sun_*) are excluded — they use sunrise-based dates
-        and get cleaned up separately (older than yesterday).
+        EV keys (``ev_*``) are excluded — they use the sunrise/deadline-based
+        day and get cleaned up separately (older than yesterday). No other
+        accumulator category starts with "ev", so the prefix is unambiguous;
+        the categories are solar, home, ev, grid_import, grid_export,
+        battery_charge, battery_discharge.
         """
         yesterday = today - timedelta(days=1)
         yesterday_str = str(yesterday)
 
         # Snapshot yesterday's costs before cleaning up (for accumulated ROI)
         has_yesterday_data = any(
-            k.endswith(yesterday_str) and not k.startswith("ev_daily_sun")
+            k.endswith(yesterday_str) and not k.startswith(_EV_KEY_PREFIX)
             for k in self._daily_accumulators
         )
         # A prior snapshot is only considered valid if it captured non-zero energy.
@@ -1350,15 +1396,15 @@ class EnergyCalculator:
             self._snapshot_daily_costs(yesterday)
 
         # Remove daily accumulators from previous days
-        # Skip ev_daily_sun keys (sunrise-based, cleaned separately below)
+        # Skip EV keys (sunrise/deadline-based, cleaned separately below)
         keys_to_remove = [
             k for k in self._daily_accumulators.keys()
-            if not k.endswith(str(today)) and not k.startswith("ev_daily_sun")
+            if not k.endswith(str(today)) and not k.startswith(_EV_KEY_PREFIX)
         ]
         # Clean old EV keys (older than yesterday — keeps today + yesterday)
         keys_to_remove += [
             k for k in self._daily_accumulators.keys()
-            if k.startswith("ev_daily_sun")
+            if k.startswith(_EV_KEY_PREFIX)
             and not k.endswith(str(today))
             and not k.endswith(yesterday_str)
         ]
@@ -1434,13 +1480,58 @@ class EnergyCalculator:
             "solar_counter_baselines": dict(self._solar_counter_baselines),
         }
 
+    @staticmethod
+    def _migrate_ev_keys(accumulators: Dict[str, float]) -> Dict[str, float]:
+        """Rename stored ``ev_daily_sun_*`` accumulator keys to ``ev_*`` (#666).
+
+        Runs on every restore rather than behind a version flag: it is a pure
+        prefix rewrite, idempotent, and a no-op once the store is clean — which
+        is cheaper and harder to get wrong than a migration counter that has to
+        be right exactly once.
+
+        Handles the lifetime shape too, where the category is embedded rather
+        than prefixed (``lifetime_ev_daily_sun`` → ``lifetime_ev``).
+
+        On the (impossible-by-construction, but free to be right about)
+        collision where both names hold a value for the same period, the two are
+        SUMMED rather than one silently winning: both were produced by real
+        integration, so dropping either would lose energy the user actually used.
+        """
+        if not isinstance(accumulators, dict):
+            return {}
+        if not any(_LEGACY_EV_CATEGORY in k for k in accumulators):
+            return accumulators
+
+        migrated: Dict[str, float] = {}
+        for key, value in accumulators.items():
+            if key.startswith(_LEGACY_EV_KEY_PREFIX):
+                new_key = _EV_KEY_PREFIX + key[len(_LEGACY_EV_KEY_PREFIX):]
+            elif key == f"lifetime_{_LEGACY_EV_CATEGORY}":
+                new_key = f"lifetime_{EV_CATEGORY}"
+            else:
+                new_key = key
+            if new_key in migrated:
+                migrated[new_key] += value
+            else:
+                migrated[new_key] = value
+        _LOGGER.info(
+            "Migrated %d EV accumulator key(s) from '%s' to '%s' (#666)",
+            sum(1 for k in accumulators if _LEGACY_EV_CATEGORY in k),
+            _LEGACY_EV_CATEGORY, EV_CATEGORY,
+        )
+        return migrated
+
     def restore_state(self, state: Dict[str, Any]) -> None:
         """Restore calculator state from persistence."""
         if state:
-            self._daily_accumulators = state.get("daily_accumulators", {})
-            self._monthly_accumulators = state.get("monthly_accumulators", {})
-            self._yearly_accumulators = state.get("yearly_accumulators", {})
-            self._lifetime_accumulators = state.get("lifetime_accumulators", {})
+            self._daily_accumulators = self._migrate_ev_keys(
+                state.get("daily_accumulators", {}))
+            self._monthly_accumulators = self._migrate_ev_keys(
+                state.get("monthly_accumulators", {}))
+            self._yearly_accumulators = self._migrate_ev_keys(
+                state.get("yearly_accumulators", {}))
+            self._lifetime_accumulators = self._migrate_ev_keys(
+                state.get("lifetime_accumulators", {}))
             self._daily_cost_accumulators = state.get("daily_cost_accumulators", {})
             self._monthly_cost_accumulators = state.get("monthly_cost_accumulators", {})
             self._yearly_cost_accumulators = state.get("yearly_cost_accumulators", {})

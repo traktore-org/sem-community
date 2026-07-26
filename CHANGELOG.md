@@ -41,6 +41,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the next contributor adding a daily counter has to answer "what happens if HA restarts
   across your boundary?" — the question this whole issue turned out to be.
 
+- ⚡ **Yearly EV charging energy was frozen at zero while daily EV energy counted normally**
+  (#666, coherence-audit) — `sensor.sem_yearly_ev_energy` never moved, and neither did
+  lifetime EV. The cause is a one-word disagreement: EV energy was *written* under the
+  accumulator category `ev_daily_sun`, but four independent places — both yearly reads, the
+  year-start seeding from the recorder, and the hardware-counter reconcile — each read
+  plain `ev`. Since one call increments daily, monthly and yearly together, PROD showing
+  daily 10.77 kWh next to yearly 0.0 is only possible if the read and write keys differ.
+  It hid for so long because a restart re-seeds the year from HA's recorder, so the sensor
+  looks right for one cycle and then freezes again until the next restart. The category is
+  now plain `ev` — the sunrise/deadline reset lives in the day *key*, which is where a
+  boundary belongs; a name containing "daily" was wrong for three of the four periods it
+  actually wrote. Existing stores are migrated in place on first load (values summed, never
+  dropped), so your EV history carries over. **New:** `sensor.sem_monthly_ev_consumption_energy`
+  — the monthly EV accumulator has been written since day one and was the only period with
+  no sensor to surface it. Guarded by `tests/test_666_ev_accumulator_keys.py`, which runs
+  one real integration cycle and asserts daily/monthly/yearly move together for *every*
+  category, so the next read/write drift fails without anyone remembering to add a case.
+- 🏷️ **38% of SEM's entity labels named entities that don't exist — including every
+  `sem_monthly` one** (#667, found while fixing #666) — labels are applied with an
+  exact-match lookup on the entity key, and a miss applies nothing and reports nothing, so
+  the registry could not tell you it had rotted. Filtering the HA entity list by
+  `sem_monthly` returned *nothing* while all six monthly sensors existed and held data.
+  Eleven keys were pure suffix drift (the label key was the entity key minus its `_energy`
+  suffix) and are fixed — the monthly group works again. The remaining 33 name entities
+  that were renamed, superseded or never built; they are now held in a shrink-only ratchet
+  (`tests/test_667_label_registry.py`) so a newly-typo'd label fails immediately while the
+  existing debt gets an individual verdict rather than a blanket delete.
 - 🔗 **A circular "Requires" link between two loads can no longer be created — from any
   path** (#662, coherence-audit) — the drag-and-drop UI already refused to close a loop,
   but `register_surplus_device` (SEM's *only* multi-dependency write path) had no guard at
