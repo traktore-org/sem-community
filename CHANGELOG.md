@@ -95,6 +95,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sem_exclude` is retired in the same pass (attached to nothing, read by nothing) — now
   that these become real labels in your registry, a dead one would show up promising to
   hide entities and do nothing.
+- 💰 **Nine energy-accounting values were being thrown away on every restart** (#668,
+  coherence-audit) — the calculator hands 20 values to the store on shutdown, but the
+  store's hand-written whitelist carried only 11 through. The nine it dropped were read
+  back with a default, so they reset silently: the seven `accumulated_*` running totals
+  (savings, battery savings, cost, export revenue, grid import, self-consumed, export),
+  the 30-day rate history, and the "yearly cost already seeded" flag. Two visible effects.
+  With the accumulators at zero, `pre_sem_*` swallowed your whole lifetime and **Lifetime
+  Total Savings became 100% a 7-day-average-rate estimate** instead of the rate-weighted
+  figure SEM had actually accumulated — it moved every restart. And with the seeded flag
+  reset, the yearly-cost seeding re-ran on every start and **overwrote** the live yearly
+  accumulators with an estimate, discarding exact numbers in favour of approximate ones.
+  Both directions now read ONE shared key list, so they cannot drift apart again — they had
+  already done so twice (#351 M1 found the cost accumulators missing from both; this found
+  nine more still missing after it), and a test asserts both functions use that same list.
+  Restored scalars are also coerced now: a corrupt value used to be wiped by the drop, and
+  once these actually persist it would otherwise survive every restart forever.
 - 🔌 **EV charging that happened while SEM wasn't running is now recovered from the wallbox
   counter** (#658, coherence-audit) — SEM builds daily EV energy by integrating the
   charger's power sensor every cycle, so anything charged while it wasn't integrating —
