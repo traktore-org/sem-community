@@ -538,6 +538,108 @@ same way because nothing *executes* them against their counterpart. Ask of any s
 delete a line, what breaks, and when? If the answer is "nothing, until a user opens the right
 screen in the right language", it needs a guard, not a review.
 
+**Fourth instance — #677, the same drift read from the other end.** #674 was *a key with no entity*.
+#677 is *an entity with no key*, and it is worth keeping both in the class because the search that
+finds one will not find the other. When nine EV settings became per-charger in #255, their entity
+description key started carrying the charger id — `charger_keba_target_soc` — and
+`SEMPerChargerNumber` kept using `description.key` as the translation key. No `strings.json` can
+declare a key containing a runtime id, so HA looked it up, missed, and fell through to
+`entity_description.name`, a hardcoded English f-string. Nine sliders read English on every install
+in every language, for over a year. The two per-charger *selects* had the complementary half of the
+same split: they keyed on the bare config key, so they translated fine — but the name carried no
+charger, so a two-charger install rendered two identically-labelled dropdowns. **One split, two
+opposite losses: numbers kept the discriminator and lost the translation, selects kept the
+translation and lost the discriminator.** Fix pattern for both: bare config key as the translation
+key, discriminator as a `{charger}` placeholder — which HA validates, since
+`Entity._substitute_name_placeholders` *raises* outside the stable channel when the name names a
+placeholder the entity does not supply.
+
+**The part worth stealing:** the guard does not list the eleven keys. It **derives** them from the
+construction call sites in `number.py`/`select.py` — and that same derivation then *replaced* the
+two-entry `_DYNAMIC_TRANSLATION_KEYS` exemption set #676 had added to `test_translations.py` days
+earlier. That set was correct, small, and documented, and it was already the first two rows of a
+hand-maintained mirror of a growing structure — this very class, in its egg. #677 would have taken
+it to eleven. **Tell:** an exemption list *inside a guard for this class* is the class recurring one
+level up. If you find yourself adding a third entry to one, ask whether the thing you keep listing
+can be read out of the source instead. **Guard:** `tests/test_677_per_charger_names.py`
+(`per_charger_translation_keys()` is the shared derivation).
+
+### 25. Mutual delegation — two layers each defer the action to the other — GUARDED
+**Symptom:** the intent is right, the command is issued, the logs say it was issued, and the
+thing never happens. Nothing raises, because from each layer's own point of view it behaved
+correctly: it declined to act *because the other layer handles it*.
+**Root shape:** two code paths that are each other's fallback. Layer A skips its own attempt
+and documents that B is responsible; layer B, finding nothing of its own to do, falls back to
+A. Neither is wrong in isolation — the defect only exists in the *composition*, which is why
+reviewing either file alone reads as correct. The tell is a pair of comments that point at
+each other; both were present here, in different files, and both were accurate.
+**Live catch (#627, reported by @onkelfu):** `_set_current(0)` skips the write when the control
+number's `min` is above 0 A ("the actual stop is the adapter's job", #487), and
+`stop_session()` — finding no stop service, charge-mode select, start/stop entity or
+`<domain>.disable` — warns that it is "relying on `_set_current(0)` alone". On a charger
+configured with only a current `number.*` entity, nothing stopped the car at all: 130
+consecutive commanded stops, 4.1 kW drawn against them, 3.5 kW of it out of the house
+batteries, at night, with the charger set to *off*.
+**Why the observability missed it:** #548 had already added `_stop_commanded_while_drawing`,
+which counted the failures correctly and warned at 3, 12 and 60 — then went quiet by design,
+while the condition ran for hours. A counter of a *symptom* answers "is it working?" with
+"I have seen it fail N times", which decays into background noise. The capability question
+("*can* this ever work?") is answerable up front and doesn't decay.
+**Closure:** don't assert the capability — compute it, from the same fields the action
+dispatches on, and let the consumer surface it. `CurrentControlDevice.can_stop_charging()`
+mirrors `stop_session()`'s dispatch chain and ends at `_bound_to_entity_range(entity, 0)` —
+the exact predicate that made the write unreachable — so the two cannot drift without the
+guard noticing. The reconciler carries it as `ObservedState.stop_controllable` and files a
+repair naming the charger, the power still flowing and the missing entity.
+**The trap that was avoided, and why it's part of the class:** the obvious home for the signal
+was the existing `enable_controllable`. It gates the CHARGE rows — reusing it would have
+short-circuited every number-entity-only charger to REPORT and cost it surplus charging
+entirely, trading a reporting gap for a functional loss. When a new capability signal *looks*
+like an existing one, check what the existing one gates before reusing it.
+**Sweep (done):** the other capability-shaped claims on this path were checked — `ensure_enabled`
+/ `command_enable` (no mutual-fallback pair: a missing switch is a no-op with no second layer
+claiming it), and the phase-switch path (deleted dead in #659).
+**Guard:** `tests/test_627_stop_unenforceable.py` — pins the probe per mechanism, its
+propagation through `observe()`, the reconciler row, the repair raise/clear, **and** that the
+CHARGE rows stay untouched when `stop_controllable=False`. Refs #487 #548 #627.
+**Watch:** any new "SEM couldn't actually do X" should be a *computed capability on the device*,
+not a counter of failed attempts in the caller.
+
+### 26. Config key every test injects and production never writes — GUARDED
+**Symptom:** none, for years. The code reads `cfg.get("some_key", <literal>)`, every test
+constructs a config dict containing `some_key`, and the tests pass. On a real install the key
+is absent from every entry, so the literal is what actually runs — a value nobody chose, in a
+branch everybody believes is covered.
+**Root shape:** a default argument turns "missing" into "plausible". A missing key that raised
+would be found in the first minute; a missing key that falls back reads as configuration. The
+test fixture is written from the *reader's* expectations rather than from a real stored entry,
+so the fixture documents the schema the reader wishes existed. Nothing in CI compares that to
+the schema the config flow actually writes.
+**Live catch (#678, found by #665's new coverage):** `decide()` reads `ev_max_current`,
+`ev_min_current`, `ev_phases` and `ev_voltage` off the per-charger entry. There is no
+config-flow field for max-current or voltage at all, and `_SEED_KEYS` covers only min-current
+and phases, only for entries migrated from schema v3 — so on a normally-installed entry all
+four read `None` (verified live against real `.storage`, top-level config included) and decide
+used 32 A / 6 A / 3 / 230 V. Hardware was never at risk: the adapters clamp every command to
+the charger's real ceiling, which is *why* it survived — the only visible effect was in the
+multi-charger priority cascade, where a 16 A charger commanded at 32 claims 22 kW of solar it
+cannot draw and that phantom claim is subtracted from what the next charger may see.
+**Why the type system didn't help:** the key is read from a `Mapping[str, Any]`, so there is no
+declaration anywhere that says "these four keys exist". The dict is the schema, and the schema
+is whatever the last writer happened to put in it.
+**Closure:** fill the keys at the one place that composes the view (`build_charger_view`), from
+the fleet config, and then clamp to the value the *hardware* enforces — `adapter.max_current_a`,
+the same number the adapter clamps every command to. Config may ask for less than the hardware
+allows, never more, so the computation ends at the ceiling the action is dispatched against.
+Same principle as class 25's `can_stop_charging`.
+**Sweep question:** for each `cfg.get("k", <literal>)` on a per-unit dict — *who writes `k` into
+that dict on a fresh install?* If the answer is "the tests", the literal is the live behaviour.
+**Guard:** `tests/test_665_allocator_coverage.py::TestHardwareMaxReachesDecide` — pins the
+absent-key case (the live shape) explicitly, plus fleet fallback, per-charger override,
+config-below-hardware, config-above-hardware, and no-information-at-all. Refs #678 #665 #536.
+**Watch:** a fixture that is hand-built rather than captured from a real entry. When adding a
+per-unit config read, add the absent-key test *first* — it is the case production runs.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

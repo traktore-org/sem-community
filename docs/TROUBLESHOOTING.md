@@ -83,6 +83,42 @@ commands") — it clears automatically on the next successful write, and
 since beta.9 a stale Repair left over from before a config fix is also
 cleared on the first good write after the reload.
 
+**Cause (no stop mechanism configured at all, v1.7.5+ surfaces it):** the
+most common shape of this on non-KEBA hardware, and the hardest to spot,
+because *everything looks right*: the mode is Off, SEM's intent is OFF, and
+SEM issues the stop every single cycle. It just can't land. If the only
+control you gave SEM is a current `number.*` entity whose **minimum is 6 A**
+(most Wallbox/Heidelberg/generic setups), then:
+
+- writing 0 A is impossible — Home Assistant rejects an out-of-range write
+  before it reaches the charger, so SEM skips it (#487); and
+- there is no other mechanism — no stop service, no charge-mode select, no
+  start/stop switch, no `<brand>.disable` — to fall back to.
+
+Net: nothing opens the contactor. On a house-battery install that is not a
+cosmetic problem — the car will happily pull several kW out of your battery,
+overnight, in "Solar only" or "Off" (#627).
+
+Since **v1.7.5** SEM detects this up front rather than counting failed stops,
+and raises a Repair — *"EV charger cannot be stopped"* — naming the charger,
+the power still flowing and the entity it is stuck with.
+
+**Fix:** give the charger a real stop mechanism in the SEM options — in
+order of preference:
+
+1. `ev_start_stop_entity` — a `switch.*` (or `input_boolean.*`) that opens
+   the contactor. Best option; most integrations expose one
+   (`switch.<charger>_charging`, `…_enable`, `…_pause`).
+2. A charge-mode `select.*` plus its "stop"/"off" option
+   (go-eCharger, OpenWB).
+3. A brand stop service (`ev_stop_service`).
+
+If your charger's current `number.*` entity can actually express **0 A**,
+that alone is also enough — SEM will use it. Check the entity's `min`
+attribute in **Developer Tools → States**.
+
+The Repair clears by itself as soon as the charger stops drawing.
+
 ---
 
 ## Car charged overnight when I only wanted solar surplus

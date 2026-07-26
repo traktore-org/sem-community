@@ -4,6 +4,9 @@ coverage:
   - mode: multi_charger
     regime: fleet_cycle_with_multiple_chargers
     issue: "Mixed-mode multi-charger"   # was priority_cascade_with_mixed_modes until #651
+  - mode: multi_charger
+    regime: mixed_mode_cascade_ordering
+    issue: "#665"   # ordering asserted, not just described
 
 description: |
   Three chargers, three different modes, three priorities. The
@@ -96,23 +99,34 @@ expect:
   # canonical strategy → NOW intent → EVBudgetStrategy.NOW.
   strategy_substring: "now"
 
-  # The multi_charger block (total_equals_canonical +
-  # at_least_one_charger_gets_positive) was removed in #651. Read the
-  # description above and note what it promised: "the cascade must
-  # service priority 1 first, pass the remainder to priority 2...". The
-  # cascade it described — SurplusController.distribute_ev_budget — was
-  # never reached in a shipped install; its output went to
-  # pcc.budget_w, which nothing read. So this scenario has never
-  # verified the priority ordering it is named after.
-  #
-  # The live ordering mechanism is different in kind: the per-charger
-  # loop accumulates _solar_committed_w_per_cycle from each charger's
+  # #651 removed total_equals_canonical + at_least_one_charger_gets_positive
+  # from here — they asserted over SurplusController.distribute_ev_budget,
+  # whose output went to pcc.budget_w and was read by nothing, so this
+  # scenario had never verified the ordering it is named after. #665
+  # points it at the mechanism that DOES order the fleet: the per-charger
+  # loop accumulating _solar_committed_w_per_cycle from each charger's
   # ACTUAL decision, so charger N+1 sees a smaller surplus rather than a
-  # pre-divided slice. The harness does not drive that loop, so it
-  # cannot assert it here. Unit coverage:
-  # tests/test_step6_multi_charger_surplus_sharing.py (two- and
-  # three-charger ordering, including a mixed case where the first
-  # charger takes everything).
-  #
-  # What still runs: three chargers in three modes through a full cycle,
-  # landing on the right canonical strategy.
+  # pre-divided slice.
+  multi_charger:
+    # The outcome is blunter than the description above hoped for, and
+    # it is the correct one: always_max means "my nameplate, grid-funded
+    # if the sun is short". Priority 1 claims all 11040 W it can draw;
+    # with ~9000 W of true house surplus (20 kW solar − 11 kW implied
+    # home) there is nothing behind it, so both juniors idle. A cascade
+    # that let priority 2 charge here would be funding it from grid or
+    # battery — the "I never want EV from battery" rule, per-charger.
+    #
+    # This is also the case that says the ordering is real rather than
+    # coincidental: swap the priorities and the answer changes.
+    per_charger_intents:
+      charger_priority1: charge_max
+      charger_priority2: idle
+      charger_priority3: idle
+
+    solar_commitment_cascade: true
+
+    # Deliberately NO solar_committed_total_max: always_max legitimately
+    # claims more than the sun is offering. The ceiling belongs in
+    # solar-funded scenarios (see 2026-05-29_multi_charger_split), not
+    # here — asserting it would encode a bound this mode is defined to
+    # break.

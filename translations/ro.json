@@ -8,30 +8,30 @@
           "observer_mode": "Mod test (doar citire — fără control hardware)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Lăsați OPRIT pentru o instalare normală. Activați-l doar pe un Home Assistant de test/staging care oglindește o instanță de producție, astfel încât SEM să nu trimită niciodată comenzi către KEBA, invertor sau vreun comutator."
         }
       },
       "ev_charger": {
         "title": "Încărcător EV",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
+        "description": "SEM a detectat automat încărcătorul EV din registrul de entități Home Assistant. Verificați intrările de mai jos și apăsați **Trimite** — de obicei nu este nimic de modificat. Câmpurile opționale pot rămâne goale.\n\nAlegeți O SINGURĂ cale de control: fie o entitate Number (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …), FIE un apel de serviciu (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
-          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
+          "ev_connected_sensor": "🔌 Stare conectare EV — conectarea ștecherului vehiculului",
+          "ev_charging_sensor": "⚡ Încărcare EV activă — starea curentă de încărcare",
+          "ev_charging_power_sensor": "🚗 Putere încărcare EV — putere livrată vehiculului (W)",
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_charger_service_entity_id": "Entitate țintă pentru serviciul încărcătorului EV (opțional)",
+          "ev_current_sensor": "⚡ Curent de încărcare EV — amperajul de încărcare (A)",
+          "ev_total_energy_sensor": "🔋 Energie totală EV — energie cumulată livrată (kWh)",
           "ev_current_control_entity": "Entitate Number pentru controlul curentului (încărcătoare tip Wallbox)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
-          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_connected_sensor": "Senzor binar care raportează dacă ștecherul vehiculului este conectat în acest moment. Detectat automat din KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
+          "ev_charging_sensor": "Senzor binar care raportează dacă SEM trebuie să considere încărcarea activă. Detectat automat din integrarea încărcătorului dumneavoastră.",
+          "ev_charging_power_sensor": "Senzor numeric (W) care raportează câtă putere curge în acest moment către vehicul. Detectat automat din integrarea încărcătorului dumneavoastră.",
+          "ev_charger_service": "Serviciul Home Assistant apelat pentru a seta curentul de încărcare (de ex. keba.set_current, easee.set_charger_max_limit). Completat automat pentru KEBA. Lăsați gol dacă ați completat calea cu entitate Number de mai sus.",
+          "ev_charger_service_entity_id": "ID-ul entității transmis ca țintă a apelului de serviciu. Completat automat când este necesar; lăsați gol dacă serviciul este global.",
+          "ev_current_sensor": "Opțional. Senzor numeric (A) care raportează curentul real de încărcare. Folosit pentru diagnosticare.",
+          "ev_total_energy_sensor": "Opțional. Contor cumulat în kWh al energiei livrate vehiculului. Folosit pentru urmărirea precisă a sesiunilor.",
           "ev_current_control_entity": "Entitatea Number în care SEM scrie pentru a modifica curentul de încărcare (de ex. number.wallbox_charging_current). Folosiți pentru încărcătoare care expun o entitate Number în loc de un apel de serviciu. Lăsați gol dacă completați calea Serviciu mai jos."
         }
       },
@@ -39,54 +39,54 @@
         "title": "Hardware",
         "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
-          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-          "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
+          "battery_capacity_kwh": "Capacitatea bateriei casnice (kWh)",
+          "target_peak_limit": "Limită de putere de vârf (kW)",
+          "generate_dashboard_on_install": "Generează acum tabloul de bord SEM (repornește HA)",
           "diagram_style": "Stilul diagramei de sistem"
         },
         "data_description": {
-          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
+          "battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei casnice (NU a celei din EV), în kWh. Folosită de strategia de încărcare bazată pe prognoză pentru a estima cât poate acoperi bateria dintr-un deficit solar. Consultați specificațiile invertorului.",
+          "target_peak_limit": "Numărul maxim de kW permis de contractul dumneavoastră de rețea înainte ca SEM să înceapă delestarea sarcinilor. Pentru tarifele bazate pe putere, de obicei 3–5 kW; altfel setați valoarea siguranței principale împărțită la 4, pentru a păstra o rezervă.",
+          "generate_dashboard_on_install": "Când este activat, SEM creează tabloul de bord Lovelace imediat după încheierea acestui pas și apoi repornește Home Assistant după circa 5 s, pentru ca noul tablou de bord să devină vizibil. Îl puteți regenera oricând manual mai târziu prin serviciul solar_energy_management.generate_dashboard.",
           "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat)."
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "Reconfigurare Solar Energy Management",
+        "description": "Actualizați setările încărcătorului VE și ale notificărilor",
         "data": {
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
           "ev_charging_power_sensor": "Putere încărcare VE",
-          "ev_charger_service": "EV Charger Service",
-          "ev_charger_service_entity_id": "EV Charger Service Entity",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "ev_charger_service": "Serviciu încărcător VE",
+          "ev_charger_service_entity_id": "Entitate serviciu încărcător VE",
+          "ev_total_energy_sensor": "Contor energie totală VE",
+          "enable_charger_notifications": "Activează notificările pe cardul încărcătorului",
           "enable_mobile_notifications": "Activează notificări mobile",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Serviciu notificări mobile",
+          "vehicle_soc_entity": "SOC baterie vehicul",
+          "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "ev_target_soc": "SOC țintă VE (%)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current (e.g. keba.set_current). Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "enable_charger_notifications": "Enable/disable persistent notification banners shown on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor that reports the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_connected_sensor": "Senzor binar care raportează dacă ștecherul vehiculului este conectat în acest moment.",
+          "ev_charging_sensor": "Senzor binar care raportează dacă VE se încarcă efectiv.",
+          "ev_charging_power_sensor": "Senzor numeric (W) care raportează puterea ce curge în acest moment către vehicul.",
+          "ev_charger_service": "Serviciul HA apelat pentru a seta curentul de încărcare (de ex. keba.set_current). Lăsați gol pentru încărcătoarele cu entitate number.",
+          "ev_charger_service_entity_id": "ID-ul entității transmis ca țintă a apelului de serviciu. Lăsați gol dacă nu este necesar.",
+          "ev_total_energy_sensor": "Contor cumulat opțional în kWh pentru energia livrată vehiculului.",
+          "enable_charger_notifications": "Activează/dezactivează bannerele de notificare permanente afișate pe cardul de stare al încărcătorului.",
+          "enable_mobile_notifications": "Activează/dezactivează notificările push trimise pe dispozitivul dumneavoastră mobil.",
+          "mobile_notification_service": "Serviciul HA notify pentru notificări push mobile (de ex. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
+          "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
+          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat."
         }
       }
     },
     "error": {
       "unknown": "A apărut o eroare neașteptată. Vă rugăm să încercați din nou.",
-      "entity_not_found": "Entity not found. Please verify the entity ID exists.",
+      "entity_not_found": "Entitatea nu a fost găsită. Verificați dacă ID-ul entității există.",
       "service_not_found": "Serviciul de notificare nu a fost găsit. Verificați numele serviciului (de ex. notify.mobile_app_your_phone).",
       "heat_pump_partial_relays": "SG-Ready necesită AMBELE entități de releu. Setați ambele relee — sau lăsați-le pe ambele goale și configurați doar entitatea climate pentru stimularea punctului de referință doar prin climate."
     },
@@ -105,27 +105,27 @@
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
           "ev_charging_power_sensor": "Putere încărcare VE",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
-          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
-          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)",
+          "ev_charger_service": "Serviciu de setare a curentului pentru încărcătorul EV (opțional)",
+          "ev_charger_service_entity_id": "Entitate țintă pentru serviciul încărcătorului EV (opțional)",
+          "ev_total_energy_sensor": "Contor energie totală VE (opțional)",
+          "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
+          "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "ev_target_soc": "SOC țintă VE (%)",
           "daily_ev_target_max": "Limită încărcare solară (kWh)",
           "ev_target_soc_max": "Limită încărcare solară (SOC %)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
           "ev_kwh_per_100km": "Consum vehicul (kWh/100km)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current. Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the service call target. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_connected_sensor": "Senzor binar care raportează dacă ștecherul vehiculului este conectat.",
+          "ev_charging_sensor": "Senzor binar care raportează dacă VE se încarcă efectiv.",
+          "ev_charging_power_sensor": "Senzor numeric (W) care raportează puterea ce curge în acest moment către vehicul.",
+          "ev_charger_service": "Serviciul HA apelat pentru a seta curentul de încărcare. Lăsați gol pentru încărcătoarele cu entitate number.",
+          "ev_charger_service_entity_id": "ID-ul entității transmis ca țintă a apelului de serviciu. Lăsați gol dacă nu este necesar.",
+          "ev_total_energy_sensor": "Contor cumulat opțional în kWh pentru energia livrată vehiculului.",
+          "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
+          "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
+          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat.",
           "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
           "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare.",
           "ev_kwh_per_100km": "Folosit pentru a estima autonomia când nu este configurat un senzor de autonomie.",
@@ -133,187 +133,187 @@
         }
       },
       "settings": {
-        "title": "SEM Optimization Settings",
-        "description": "Update your SEM optimization parameters",
+        "title": "Setări de optimizare SEM",
+        "description": "Actualizați parametrii de optimizare SEM",
         "data": {
-          "update_interval": "Update Interval (seconds)",
-          "battery_priority_soc": "Battery Priority SOC (%)",
+          "update_interval": "Interval de actualizare (secunde)",
+          "battery_priority_soc": "SOC de prioritate a bateriei (%)",
           "min_solar_power": "Putere solară minimă — producție FV brută (W)",
-          "daily_ev_target": "Daily EV Target (kWh)",
-          "battery_assist_max_power": "Battery Assist Max Power (W)",
-          "battery_capacity_kwh": "Battery Capacity (kWh)",
-          "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
-          "battery_max_discharge_power": "Maximum Discharge Power (W)",
-          "electricity_import_rate": "Electricity Import Rate (per kWh)",
+          "daily_ev_target": "Țintă zilnică VE (kWh)",
+          "battery_assist_max_power": "Asistență baterie – putere max. (W)",
+          "battery_capacity_kwh": "Capacitatea bateriei (kWh)",
+          "battery_discharge_protection_enabled": "Activează protecția la descărcarea bateriei",
+          "battery_max_discharge_power": "Putere maximă de descărcare (W)",
+          "electricity_import_rate": "Tarif import energie (per kWh)",
           "electricity_off_peak_rate": "Electricity NT Rate (per kWh)",
-          "electricity_export_rate": "Electricity Export Rate (per kWh)",
-          "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
-          "observer_mode": "Observer Mode (Read-Only)",
-          "smart_night_charging": "Smart Night Charging",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
-          "hot_water_solar_target": "Hot water solar heating target (°C)",
-          "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles",
+          "electricity_export_rate": "Tarif export energie (per kWh)",
+          "demand_charge_rate": "Tarif pentru putere contractată (CHF/kW/lună)",
+          "observer_mode": "Mod observator (doar citire)",
+          "smart_night_charging": "Încărcare inteligentă pe timp de noapte",
+          "vehicle_soc_entity": "SOC baterie vehicul",
+          "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "ev_target_soc": "SOC țintă VE (%)",
+          "battery_buffer_soc": "Limita zonelor 2/3 — SOC tampon baterie (%)",
+          "battery_auto_start_soc": "Limita zonelor 3/4 — SOC pornire automată baterie (%)",
+          "battery_discharge_control_entity": "Entitate de control al descărcării bateriei (opțional)",
+          "hot_water_solar_target": "Țintă de încălzire solară a apei calde (°C)",
+          "legionella_target_temp": "Țintă dezinfecție anti-legionella (°C)",
+          "legionella_interval_hours": "Ore maxime între ciclurile de dezinfecție",
           "diagram_style": "Stilul diagramei de sistem",
           "battery_assist_min_surplus": "Asistență baterie – surplus solar min. (W)"
         },
         "data_description": {
-          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
-          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
-          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "update_interval": "Cât de des citește coordonatorul senzorii și reglează hardware-ul. 10 s oferă cea mai precisă integrare a energiei; valorile peste 30 s vor subestima energia. Interval 10–60 s.",
+          "battery_priority_soc": "Limita dintre zona 1 și zona 2. Sub acest SOC, tot solarul merge către baterie, iar VE este blocat. Implicit 30 %. Strategia cu patru zone (documentația Architecture) are nevoie ca această valoare să fie MICĂ (5–60 %) — nu o confundați cu vechea semnificație din strategia cu 3 zone, unde era o țintă ridicată.",
+          "battery_buffer_soc": "Limita dintre zona 2 și zona 3. Peste acest SOC, bateria poate să se descarce pentru a acoperi deficitele solare în timpul încărcării VE. Implicit 70 %.",
+          "battery_auto_start_soc": "Limita dintre zona 3 și zona 4. Peste acest SOC, VE poate începe încărcarea chiar și fără surplus solar, consumând din baterie. Implicit 90 %.",
           "min_solar_power": "Prag minim al producției FV brute — puterea panourilor sub care „solarul este activ” este fals: solar_only nu pornește, iar protecția împotriva deficitului profund o tratează ca pe întuneric (încărcarea se oprește astfel rapid în loc să fie suplinită din rețea). Aceasta este producția BRUTĂ, NU surplusul — spre deosebire de „Asistență baterie – surplus solar min.” (solar − casă), care decide când poate ajuta bateria casnică. Implicit 1000 W; păstrați-l sub minimul hardware al încărcătorului EV (~4140 W la 3 faze, ~1380 W la 1 fază).",
-          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
-          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
-          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
-          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
-          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
-          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
+          "daily_ev_target": "Ținta în kWh pe zi pentru încărcarea de noapte din rețea. Setați 0 pentru a dezactiva complet încărcarea pe timp de noapte.",
+          "battery_assist_max_power": "Puterea maximă pe care bateria casei o poate descărca pentru a ajuta VE în zonele 3/4. Implicit 4500 W.",
+          "battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei casnice (NU bateria VE — aceasta are un câmp separat la pasul EV). Folosită de strategia de încărcare bazată pe prognoză.",
+          "battery_discharge_protection_enabled": "Când este ACTIVĂ, SEM limitează pragul de descărcare al invertorului în timpul încărcării VE pe timp de noapte, astfel încât bateria casei să alimenteze doar locuința (nu și VE).",
+          "battery_max_discharge_power": "Limita superioară strictă a descărcării bateriei, impusă de funcția de protecție.",
+          "electricity_import_rate": "Tarif de zi / unic (CHF/kWh, cu TVA inclus). Folosit pentru urmărirea costurilor.",
           "electricity_off_peak_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
-          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
-          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
-          "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
-          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed.",
+          "electricity_export_rate": "Tariful de injecție plătit de furnizor (CHF/kWh).",
+          "demand_charge_rate": "Taxa lunară de putere per kW de vârf (CHF/kW/lună). Setați 0 dacă în contractul dumneavoastră nu există o taxă de putere.",
+          "observer_mode": "Când este ACTIV, SEM monitorizează și calculează totul, dar nu trimite niciodată un apel de serviciu către hardware. Folosiți-l pe un HA de test/staging care oglindește o instalare de producție.",
+          "smart_night_charging": "Când este ACTIVĂ, SEM omite sau reduce inteligent încărcarea de noapte pe baza SOC-ului estimat al VE, a prognozei solare, a predicției de consum ajustate cu temperatura și a tiparelor de condus învățate.",
+          "battery_discharge_control_entity": "Entitatea Number care controlează limita de putere de descărcare a invertorului (de ex. number.batteries_maximale_entladeleistung la Huawei). Detectată automat la instalare; suprascrieți-o aici dacă este nevoie.",
           "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat).",
-          "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
-          "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "hot_water_solar_target": "Temperatura țintă (°C) pentru încălzirea apei calde asistată solar. SEM stimulează boilerul atunci când există surplus.",
+          "legionella_target_temp": "Temperatura (°C) pe care sistemul de apă caldă trebuie să o atingă în timpul unui ciclu de dezinfecție anti-legionella.",
+          "legionella_interval_hours": "Numărul maxim de ore între ciclurile de dezinfecție anti-legionella înainte ca SEM să forțeze o încălzire.",
           "battery_assist_min_surplus": "Surplusul solar real minim înainte ca bateria casei să poată ajuta la încărcarea EV — în orice mod de încărcare. Sub această valoare bateria este rezervată casei (mașina consumă din rețea + solar). Implicit 1200 W. Setați 0 pentru ca bateria să susțină EV oriunde, inclusiv pe timp de noapte."
         }
       },
       "settings_ev": {
         "title": "Încărcare EV și solar",
-        "description": "Configure EV charging targets and solar thresholds.",
+        "description": "Configurați țintele de încărcare EV și pragurile solare.",
         "data": {
-          "daily_ev_target": "Night charge target (kWh)",
-          "min_solar_power": "Minimum solar power to start EV charging (W)",
-          "observer_mode": "Observer mode (read-only, no hardware control)",
-          "smart_night_charging": "Reduce night target based on tomorrow's forecast"
+          "daily_ev_target": "Țintă încărcare de noapte (kWh)",
+          "min_solar_power": "Putere solară minimă pentru a începe încărcarea EV (W)",
+          "observer_mode": "Mod observator (doar citire, fără control hardware)",
+          "smart_night_charging": "Reduce ținta de noapte în funcție de prognoza de mâine"
         },
         "data_description": {
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
-          "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
-          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
+          "daily_ev_target": "Ținta în kWh de încărcat din rețea în fiecare noapte. Setați 0 pentru a dezactiva încărcarea de noapte din rețea.",
+          "min_solar_power": "Puterea solară minimă de surplus (W) necesară înainte ca SEM să înceapă încărcarea solară a VE.",
+          "observer_mode": "Când este ACTIV, SEM monitorizează totul, dar nu trimite niciodată comenzi către hardware.",
+          "smart_night_charging": "Când este ACTIVĂ, SEM reduce ținta de încărcare de noapte atunci când prognoza solară de mâine este suficientă."
         }
       },
       "settings_tariff": {
         "title": "Tarif și avansat",
-        "description": "Electricity rates and advanced tuning parameters.",
+        "description": "Tarifele de energie electrică și parametrii avansați de reglare.",
         "data": {
-          "electricity_import_rate": "Import rate",
+          "electricity_import_rate": "Tarif import",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Tarif export",
-          "demand_charge_rate": "Demand charge rate",
-          "update_interval": "Update interval (s)",
-          "tariff_mode": "Tariff mode",
-          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
-          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
+          "demand_charge_rate": "Tarif pentru putere contractată",
+          "update_interval": "Interval de actualizare (s)",
+          "tariff_mode": "Mod tarifar",
+          "dynamic_tariff_entity": "Entitate preț dinamic (detectată automat dacă e goală)",
+          "dynamic_forecast_entity": "Entitate de prognoză (opțional, detectată automat dacă e goală)",
+          "dynamic_feedin_entity": "Entitate preț de injecție (opțional, pentru tarif de export dinamic)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
         },
         "data_description": {
-          "electricity_import_rate": "Day/flat import rate (currency/kWh incl. VAT). Used as fallback when dynamic pricing is unavailable.",
-          "electricity_off_peak_rate": "Night/off-peak import rate (currency/kWh). Set equal to import rate if you have a flat tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
-          "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
-          "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
-          "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
-          "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
-          "dynamic_feedin_entity": "Optional sensor providing the current feed-in / export price for dynamic export rate.",
-          "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed."
+          "electricity_import_rate": "Tarif de import de zi/unic (monedă/kWh, cu TVA inclus). Folosit ca rezervă atunci când prețul dinamic este indisponibil.",
+          "electricity_off_peak_rate": "Tarif de import de noapte/în afara vârfului (monedă/kWh). Setați-l egal cu tariful de import dacă aveți un tarif unic.",
+          "electricity_export_rate": "Tariful de injecție plătit de furnizor (monedă/kWh).",
+          "demand_charge_rate": "Taxa lunară pentru puterea de vârf (monedă/kW/lună). Setați 0 dacă în contractul dumneavoastră nu există.",
+          "update_interval": "Cât de des citește SEM senzorii și reglează hardware-ul (secunde). Interval 10–60 s.",
+          "tariff_mode": "Alegeți „Static” pentru tarife fixe, „Dinamic” pentru prețuri în timp real sau „Calendar” pentru programe orare.",
+          "dynamic_tariff_entity": "Senzor care furnizează prețul curent de import al energiei electrice. Detectat automat de la Tibber, Nordpool etc.",
+          "dynamic_forecast_entity": "Senzor opțional cu prognoze orare de preț, folosite pentru planificarea inteligentă.",
+          "dynamic_feedin_entity": "Senzor opțional care furnizează prețul curent de injecție / export pentru tariful de export dinamic.",
+          "grid_import_power_entity": "Senzor opțional (W) pentru puterea importată din rețea. Detectat automat din tabloul de bord Energie; suprascrieți-l aici dacă este nevoie.",
+          "grid_export_power_entity": "Senzor opțional (W) pentru puterea exportată în rețea. Detectat automat din tabloul de bord Energie; suprascrieți-l aici dacă este nevoie."
         }
       },
       "load_management": {
         "title": "Gestionare sarcină",
-        "description": "Update load management configuration",
+        "description": "Actualizați configurația gestionării sarcinii",
         "data": {
-          "load_management_enabled": "Enable Load Management",
-          "target_peak_limit": "Target Peak Limit (kW)",
-          "warning_peak_level": "Warning Peak Level (kW)",
-          "emergency_peak_level": "Emergency Peak Level (kW)",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "load_management_enabled": "Activează gestionarea sarcinii",
+          "target_peak_limit": "Limită țintă de vârf (kW)",
+          "warning_peak_level": "Nivel de vârf de avertizare (kW)",
+          "emergency_peak_level": "Nivel de vârf de urgență (kW)",
+          "vehicle_soc_entity": "SOC baterie vehicul",
+          "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "ev_target_soc": "SOC țintă VE (%)"
         },
         "data_description": {
-          "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
-          "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
-          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
-          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "load_management_enabled": "Activează/dezactivează delestarea automată a sarcinilor de către SEM pentru a rămâne sub limita de vârf a rețelei.",
+          "target_peak_limit": "Puterea maximă din rețea (kW) înainte ca SEM să înceapă delestarea sarcinilor controlabile.",
+          "warning_peak_level": "Nivelul de putere (kW) la care SEM emite o avertizare înainte de a lua măsuri.",
+          "emergency_peak_level": "Nivelul de putere (kW) la care SEM delestează agresiv sarcinile pentru a evita taxele de putere.",
+          "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
+          "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh.",
+          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat."
         }
       },
       "notifications": {
         "title": "Setări notificări",
-        "description": "Update notification configuration",
+        "description": "Actualizați configurația notificărilor",
         "data": {
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "enable_charger_notifications": "Activează notificările pe cardul încărcătorului",
           "enable_mobile_notifications": "Activează notificări mobile",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Serviciu notificări mobile",
+          "vehicle_soc_entity": "SOC baterie vehicul",
+          "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "ev_target_soc": "SOC țintă VE (%)"
         },
         "data_description": {
-          "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "enable_charger_notifications": "Activează/dezactivează bannerele de notificare permanente de pe cardul de stare al încărcătorului.",
+          "enable_mobile_notifications": "Activează/dezactivează notificările push trimise pe dispozitivul dumneavoastră mobil.",
+          "mobile_notification_service": "Serviciul HA notify pentru notificări push mobile (de ex. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
+          "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh.",
+          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat."
         }
       },
       "battery_scheduler": {
         "title": "Planificator încărcare baterie",
-        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "description": "Configurați încărcarea bateriei din rețea în orele ieftine, ținând cont de prognoză",
         "data": {
-          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
-          "battery_capacity_kwh": "Battery Capacity",
-          "battery_max_charge_power_w": "Max Charge Power",
-          "battery_roundtrip_efficiency": "Round-trip Efficiency",
-          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
-          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
-          "battery_max_target_soc": "Maximum Target SOC",
-          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
-          "battery_pessimism_weight": "Forecast Pessimism",
-          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+          "battery_charge_scheduler_enabled": "Activează planificatorul de încărcare a bateriei",
+          "battery_capacity_kwh": "Capacitatea bateriei",
+          "battery_max_charge_power_w": "Putere maximă de încărcare",
+          "battery_roundtrip_efficiency": "Randament dus-întors",
+          "battery_cycle_cost": "Costul unui ciclu al bateriei (degradare)",
+          "battery_precharge_trigger_hour": "Ora evaluării zilnice",
+          "battery_max_target_soc": "SOC țintă maxim",
+          "battery_min_deficit_kwh": "Prag minim de deficit",
+          "battery_pessimism_weight": "Pesimismul prognozei",
+          "battery_force_charge_negative_price": "Forțează încărcarea la preț negativ"
         }
       },
       "ev_charger_edit": {
         "title": "Editează încărcător VE",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "description": "Actualizați asocierile de senzori și prioritatea pentru acest încărcător.",
         "data": {
           "charger_name": "Nume încărcător",
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
           "ev_charging_power_sensor": "Putere încărcare VE",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Serviciu de setare a curentului încărcătorului (opțional)",
+          "ev_charger_service_entity_id": "Entitate țintă pentru serviciul încărcătorului (opțional)",
+          "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limită încărcare solară (kWh)",
           "ev_target_soc_max": "Limită încărcare solară (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Numele prietenos al acestui încărcător, afișat în tabloul de bord.",
+          "ev_connected_sensor": "Senzor binar care raportează dacă un vehicul este conectat la acest încărcător.",
+          "ev_charging_sensor": "Senzor binar care raportează dacă acest încărcător livrează efectiv putere.",
+          "ev_charging_power_sensor": "Senzor numeric (W) care raportează puterea livrată de acest încărcător.",
+          "ev_charger_service": "Serviciul HA folosit pentru a seta curentul de încărcare. Folosiți-l pentru KEBA sau Easee.",
+          "ev_charger_service_entity_id": "ID-ul entității transmis ca țintă a apelului de serviciu. Lăsați gol dacă nu este necesar.",
+          "ev_surplus_priority": "Ordinea de alocare a surplusului între mai multe încărcătoare. Număr mai mic = prioritate mai mare.",
           "ev_current_control_entity": "Entitate Number folosită pentru a seta curentul de încărcare (A). Pentru Wallbox, go-eCharger și încărcătoare similare.",
           "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
           "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare."
@@ -327,36 +327,36 @@
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
           "ev_charging_power_sensor": "Putere încărcare VE",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Serviciu de setare a curentului încărcătorului (opțional)",
+          "ev_charger_service_entity_id": "Entitate țintă pentru serviciul încărcătorului (opțional)",
+          "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limită încărcare solară (kWh)",
           "ev_target_soc_max": "Limită încărcare solară (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Numele prietenos al acestui încărcător, afișat în tabloul de bord.",
+          "ev_connected_sensor": "Senzor binar care raportează dacă un vehicul este conectat la acest încărcător.",
+          "ev_charging_sensor": "Senzor binar care raportează dacă acest încărcător livrează efectiv putere.",
+          "ev_charging_power_sensor": "Senzor numeric (W) care raportează puterea livrată de acest încărcător.",
+          "ev_charger_service": "Serviciul HA folosit pentru a seta curentul de încărcare. Folosiți-l pentru KEBA sau Easee.",
+          "ev_charger_service_entity_id": "ID-ul entității transmis ca țintă a apelului de serviciu. Lăsați gol dacă nu este necesar.",
+          "ev_surplus_priority": "Ordinea de alocare a surplusului între mai multe încărcătoare. Număr mai mic = prioritate mai mare.",
           "ev_current_control_entity": "Entitate Number folosită pentru a seta curentul de încărcare (A). Pentru Wallbox, go-eCharger și încărcătoare similare.",
           "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
           "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare."
         }
       },
       "pv_naming": {
-        "title": "Name your PV strings",
-        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "title": "Denumiți șirurile PV",
+        "description": "Dați un nume fiecărui șir de panouri solare (de ex. Est / Sud / Vest). Care poziție corespunde cărui panou — numerotarea urmează lista solară din tabloul de bord Energie, nu punctele cardinale:\n\n{mapping}\n\nLăsați un câmp gol pentru a păstra valoarea implicită (PV1/PV2/…).",
         "data": {
-          "pv_name_pv1": "PV1 name",
-          "pv_name_pv2": "PV2 name",
-          "pv_name_pv3": "PV3 name",
-          "pv_name_pv4": "PV4 name",
-          "pv_name_pv5": "PV5 name",
-          "pv_name_pv6": "PV6 name"
+          "pv_name_pv1": "Nume PV1",
+          "pv_name_pv2": "Nume PV2",
+          "pv_name_pv3": "Nume PV3",
+          "pv_name_pv4": "Nume PV4",
+          "pv_name_pv5": "Nume PV5",
+          "pv_name_pv6": "Nume PV6"
         }
       },
       "heat_pump": {
@@ -408,538 +408,538 @@
   "entity": {
     "sensor": {
       "solar_power": {
-        "name": "Solar Power"
+        "name": "Putere solară"
       },
       "home_consumption_power": {
-        "name": "Home Power"
+        "name": "Putere casă"
       },
       "grid_power": {
-        "name": "Grid Power"
+        "name": "Putere rețea"
       },
       "grid_active_power": {
-        "name": "Grid Active Power"
+        "name": "Putere activă rețea"
       },
       "grid_import_power": {
-        "name": "Grid Import"
+        "name": "Import din rețea"
       },
       "grid_export_power": {
-        "name": "Grid Export"
+        "name": "Export în rețea"
       },
       "battery_power": {
-        "name": "Battery Power"
+        "name": "Putere baterie"
       },
       "battery_charge_power": {
-        "name": "Battery Charge Power"
+        "name": "Putere de încărcare baterie"
       },
       "battery_discharge_power": {
-        "name": "Battery Discharge Power"
+        "name": "Putere de descărcare baterie"
       },
       "ev_power": {
-        "name": "EV Power"
+        "name": "Putere VE"
       },
       "available_power": {
-        "name": "Available Power"
+        "name": "Putere disponibilă"
       },
       "battery_soc": {
-        "name": "Battery SOC"
+        "name": "SOC baterie"
       },
       "battery_status": {
-        "name": "Battery Status"
+        "name": "Stare baterie"
       },
       "battery_temperature": {
-        "name": "Battery Temperature"
+        "name": "Temperatura bateriei"
       },
       "inverter_temperature": {
         "name": "Temperatura invertorului"
       },
       "battery_cycles_estimated": {
-        "name": "Battery Cycles (Estimated)"
+        "name": "Cicluri baterie (estimate)"
       },
       "battery_health_score": {
-        "name": "Battery Health Score"
+        "name": "Scor de sănătate a bateriei"
       },
       "calculated_current": {
-        "name": "Calculated Current"
+        "name": "Curent calculat"
       },
       "charging_state": {
-        "name": "Charging State"
+        "name": "Stare de încărcare"
       },
       "grid_status": {
-        "name": "Grid Status"
+        "name": "Stare rețea"
       },
       "solar_charging_status": {
-        "name": "Solar Charging"
+        "name": "Încărcare solară"
       },
       "night_charging_status": {
-        "name": "Night Charging"
+        "name": "Încărcare de noapte"
       },
       "battery_priority_status": {
-        "name": "Battery Priority"
+        "name": "Prioritate baterie"
       },
       "charging_strategy": {
-        "name": "Charging Strategy"
+        "name": "Strategie de încărcare"
       },
       "daily_solar_energy": {
-        "name": "Today Solar"
+        "name": "Solar azi"
       },
       "daily_home_energy": {
-        "name": "Today Home"
+        "name": "Casă azi"
       },
       "daily_grid_import_energy": {
-        "name": "Today Import"
+        "name": "Import azi"
       },
       "daily_grid_export_energy": {
-        "name": "Today Export"
+        "name": "Export azi"
       },
       "daily_battery_charge_energy": {
-        "name": "Today Charge"
+        "name": "Încărcare azi"
       },
       "daily_battery_discharge_energy": {
-        "name": "Today Discharge"
+        "name": "Descărcare azi"
       },
       "daily_ev_energy": {
-        "name": "Today EV"
+        "name": "VE azi"
       },
       "monthly_solar_yield_energy": {
-        "name": "Monthly Solar"
+        "name": "Solar lunar"
       },
       "monthly_grid_import_energy": {
-        "name": "Monthly Import"
+        "name": "Import lunar"
       },
       "monthly_grid_export_energy": {
-        "name": "Monthly Export"
+        "name": "Export lunar"
       },
       "monthly_battery_charge_energy": {
-        "name": "Monthly Charge"
+        "name": "Încărcare lunară"
       },
       "monthly_battery_discharge_energy": {
-        "name": "Monthly Discharge"
+        "name": "Descărcare lunară"
       },
       "monthly_home_consumption_energy": {
-        "name": "Monthly Home"
+        "name": "Casă lunar"
       },
       "monthly_ev_consumption_energy": {
-        "name": "Monthly EV"
+        "name": "VE lunar"
       },
       "flow_solar_to_home_power": {
-        "name": "Solar to Home"
+        "name": "Solar către casă"
       },
       "flow_solar_to_battery_power": {
-        "name": "Solar to Battery"
+        "name": "Solar către baterie"
       },
       "flow_solar_to_grid_power": {
-        "name": "Solar to Grid"
+        "name": "Solar către rețea"
       },
       "flow_solar_to_ev_power": {
-        "name": "Solar to EV"
+        "name": "Solar către VE"
       },
       "flow_battery_to_home_power": {
-        "name": "Battery to Home"
+        "name": "Baterie către casă"
       },
       "flow_battery_to_ev_power": {
-        "name": "Battery to EV"
+        "name": "Baterie către VE"
       },
       "flow_grid_to_home_power": {
-        "name": "Grid to Home"
+        "name": "Rețea către casă"
       },
       "flow_grid_to_ev_power": {
-        "name": "Grid to EV"
+        "name": "Rețea către VE"
       },
       "flow_grid_to_battery_power": {
-        "name": "Grid to Battery"
+        "name": "Rețea către baterie"
       },
       "flow_solar_to_home_energy": {
-        "name": "Solar to Home Energy"
+        "name": "Energie solar către casă"
       },
       "flow_solar_to_ev_energy": {
-        "name": "Solar to EV Energy"
+        "name": "Energie solar către VE"
       },
       "flow_solar_to_battery_energy": {
-        "name": "Solar to Battery Energy"
+        "name": "Energie solar către baterie"
       },
       "flow_solar_to_grid_energy": {
-        "name": "Solar to Grid Energy"
+        "name": "Energie solar către rețea"
       },
       "flow_grid_to_home_energy": {
-        "name": "Grid to Home Energy"
+        "name": "Energie rețea către casă"
       },
       "flow_grid_to_ev_energy": {
-        "name": "Grid to EV Energy"
+        "name": "Energie rețea către VE"
       },
       "flow_grid_to_battery_energy": {
-        "name": "Grid to Battery Energy"
+        "name": "Energie rețea către baterie"
       },
       "flow_battery_to_home_energy": {
-        "name": "Battery to Home Energy"
+        "name": "Energie baterie către casă"
       },
       "flow_battery_to_ev_energy": {
-        "name": "Battery to EV Energy"
+        "name": "Energie baterie către VE"
       },
       "self_consumption_rate": {
-        "name": "Self Consumption"
+        "name": "Autoconsum"
       },
       "autarky_rate": {
-        "name": "Autarky Rate"
+        "name": "Grad de autonomie"
       },
       "daily_savings": {
-        "name": "Today Savings"
+        "name": "Economii azi"
       },
       "daily_battery_savings": {
-        "name": "Battery Savings Daily"
+        "name": "Economii baterie zilnice"
       },
       "daily_costs": {
-        "name": "Costs Daily"
+        "name": "Costuri zilnice"
       },
       "daily_export_revenue": {
-        "name": "Export Revenue Daily"
+        "name": "Venit din export zilnic"
       },
       "daily_net_cost": {
-        "name": "Net Cost Daily"
+        "name": "Cost net zilnic"
       },
       "monthly_savings": {
-        "name": "Monthly Savings"
+        "name": "Economii lunare"
       },
       "monthly_battery_savings": {
-        "name": "Battery Savings Monthly"
+        "name": "Economii baterie lunare"
       },
       "monthly_costs": {
-        "name": "Costs Monthly"
+        "name": "Costuri lunare"
       },
       "monthly_export_revenue": {
-        "name": "Export Revenue Monthly"
+        "name": "Venit din export lunar"
       },
       "monthly_net_cost": {
-        "name": "Net Cost Monthly"
+        "name": "Cost net lunar"
       },
       "yearly_solar_yield_energy": {
-        "name": "Yearly Solar"
+        "name": "Solar anual"
       },
       "lifetime_solar_yield_energy": {
         "name": "Producție solară totală"
       },
       "yearly_grid_import_energy": {
-        "name": "Yearly Grid Import"
+        "name": "Import din rețea anual"
       },
       "yearly_grid_export_energy": {
-        "name": "Yearly Grid Export"
+        "name": "Export în rețea anual"
       },
       "yearly_battery_charge_energy": {
-        "name": "Yearly Battery Charge"
+        "name": "Încărcare baterie anuală"
       },
       "yearly_battery_discharge_energy": {
-        "name": "Yearly Battery Discharge"
+        "name": "Descărcare baterie anuală"
       },
       "yearly_home_consumption_energy": {
-        "name": "Yearly Home Consumption"
+        "name": "Consum casnic anual"
       },
       "yearly_ev_energy": {
-        "name": "Yearly EV Energy"
+        "name": "Energie VE anuală"
       },
       "yearly_costs": {
-        "name": "Yearly Costs"
+        "name": "Costuri anuale"
       },
       "yearly_savings": {
-        "name": "Yearly Savings"
+        "name": "Economii anuale"
       },
       "yearly_battery_savings": {
-        "name": "Yearly Battery Savings"
+        "name": "Economii baterie anuale"
       },
       "yearly_export_revenue": {
-        "name": "Yearly Export Revenue"
+        "name": "Venit din export anual"
       },
       "yearly_net_cost": {
-        "name": "Yearly Net Cost"
+        "name": "Cost net anual"
       },
       "lifetime_total_savings": {
-        "name": "Lifetime Total Savings"
+        "name": "Economii totale"
       },
       "lifetime_grid_cost": {
-        "name": "Lifetime Grid Cost"
+        "name": "Cost rețea total"
       },
       "roi_percentage": {
-        "name": "ROI Percentage"
+        "name": "Procent ROI"
       },
       "roi_payback_years": {
-        "name": "ROI Payback Years"
+        "name": "Ani până la amortizare ROI"
       },
       "roi_annual_savings": {
-        "name": "ROI Annual Savings"
+        "name": "Economii anuale ROI"
       },
       "forecast_correction_factor": {
-        "name": "Forecast Correction Factor"
+        "name": "Factor de corecție a prognozei"
       },
       "forecast_corrected_today": {
-        "name": "Corrected Forecast Today"
+        "name": "Prognoză corectată azi"
       },
       "forecast_history_days": {
-        "name": "Forecast History Days"
+        "name": "Zile de istoric al prognozei"
       },
       "daily_co2_avoided": {
-        "name": "CO2 Avoided Today"
+        "name": "CO2 evitat azi"
       },
       "yearly_co2_avoided": {
-        "name": "CO2 Avoided This Year"
+        "name": "CO2 evitat anul acesta"
       },
       "yearly_trees_equivalent": {
-        "name": "Trees Equivalent This Year"
+        "name": "Echivalent copaci anul acesta"
       },
       "lifetime_co2_avoided": {
-        "name": "Lifetime CO2 Avoided"
+        "name": "CO2 evitat total"
       },
       "lifetime_trees_equivalent": {
-        "name": "Lifetime Trees Equivalent"
+        "name": "Echivalent copaci total"
       },
       "power_charge_cost": {
-        "name": "Power Charge Cost"
+        "name": "Cost taxă de putere"
       },
       "consecutive_peak_15min": {
-        "name": "15min Peak"
+        "name": "Vârf 15 min"
       },
       "monthly_consecutive_peak": {
-        "name": "Monthly Peak"
+        "name": "Vârf lunar"
       },
       "current_vs_peak_percentage": {
-        "name": "Peak Percentage"
+        "name": "Procent din vârf"
       },
       "target_peak_limit": {
-        "name": "Peak Limit"
+        "name": "Limită de vârf"
       },
       "peak_margin": {
-        "name": "Peak Margin"
+        "name": "Marjă până la vârf"
       },
       "load_management_status": {
-        "name": "Load Management"
+        "name": "Gestionare sarcină"
       },
       "load_management_recommendation": {
-        "name": "Load Recommendation"
+        "name": "Recomandare sarcină"
       },
       "loads_currently_shed": {
-        "name": "Loads Shed"
+        "name": "Sarcini delestate"
       },
       "available_load_reduction": {
-        "name": "Available Reduction"
+        "name": "Reducere disponibilă"
       },
       "controllable_devices_count": {
-        "name": "Devices Count"
+        "name": "Număr de dispozitive"
       },
       "surplus_total_w": {
-        "name": "Surplus Total"
+        "name": "Surplus total"
       },
       "surplus_distributable_w": {
-        "name": "Surplus Distributable"
+        "name": "Surplus distribuibil"
       },
       "surplus_allocated_w": {
-        "name": "Surplus Allocated"
+        "name": "Surplus alocat"
       },
       "surplus_unallocated_w": {
-        "name": "Surplus Unallocated"
+        "name": "Surplus nealocat"
       },
       "surplus_active_devices": {
-        "name": "Surplus Active Devices"
+        "name": "Dispozitive active pe surplus"
       },
       "surplus_total_devices": {
-        "name": "Surplus Total Devices"
+        "name": "Total dispozitive pe surplus"
       },
       "forecast_today_kwh": {
-        "name": "Forecast Today"
+        "name": "Prognoză azi"
       },
       "forecast_tomorrow_kwh": {
-        "name": "Forecast Tomorrow"
+        "name": "Prognoză mâine"
       },
       "forecast_remaining_today_kwh": {
-        "name": "Forecast Remaining Today"
+        "name": "Prognoză rămasă azi"
       },
       "forecast_power_now_w": {
-        "name": "Forecast Power Now"
+        "name": "Putere prognozată acum"
       },
       "forecast_source": {
-        "name": "Forecast Source"
+        "name": "Sursa prognozei"
       },
       "charging_recommendation": {
-        "name": "Charging Recommendation"
+        "name": "Recomandare de încărcare"
       },
       "tariff_current_import_rate": {
-        "name": "Electricity Price"
+        "name": "Prețul energiei electrice"
       },
       "tariff_current_export_rate": {
-        "name": "Export Rate"
+        "name": "Tarif export"
       },
       "tariff_price_level": {
-        "name": "Price Level"
+        "name": "Nivel de preț"
       },
       "tariff_provider": {
-        "name": "Tariff Provider"
+        "name": "Furnizor de tarif"
       },
       "tariff_next_cheap_start": {
-        "name": "Next Cheap Window"
+        "name": "Următoarea fereastră ieftină"
       },
       "heat_pump_mode": {
-        "name": "Heat Pump Mode"
+        "name": "Mod pompă de căldură"
       },
       "heat_pump_sg_ready_state": {
-        "name": "Heat Pump SG-Ready State"
+        "name": "Stare SG-Ready pompă de căldură"
       },
       "pv_daily_specific_yield": {
-        "name": "PV Specific Yield"
+        "name": "Producție specifică PV"
       },
       "pv_performance_vs_forecast": {
-        "name": "PV vs Forecast"
+        "name": "PV față de prognoză"
       },
       "pv_estimated_annual_degradation": {
-        "name": "PV Annual Degradation"
+        "name": "Degradare anuală PV"
       },
       "pv_degradation_trend": {
-        "name": "PV Degradation Trend"
+        "name": "Tendință de degradare PV"
       },
       "energy_optimization_score": {
-        "name": "Optimization Score"
+        "name": "Scor de optimizare"
       },
       "energy_tip": {
-        "name": "Energy Tip"
+        "name": "Sfat energetic"
       },
       "energy_tip_category": {
-        "name": "Energy Tip Category"
+        "name": "Categorie sfat energetic"
       },
       "energy_ev_solar_percentage": {
-        "name": "EV Solar Charging %"
+        "name": "Încărcare solară VE %"
       },
       "utility_signal_source": {
-        "name": "Utility Signal Source"
+        "name": "Sursa semnalului furnizorului"
       },
       "utility_signal_count_today": {
-        "name": "Utility Signals Today"
+        "name": "Semnale de la furnizor azi"
       },
       "predictor_training_status": {
-        "name": "Predictor Training Status"
+        "name": "Stare antrenare predictor"
       },
       "predictor_model_accuracy": {
         "name": "Predictor Accuracy"
       },
       "predicted_surplus_window": {
-        "name": "Predicted Surplus Window"
+        "name": "Fereastră de surplus estimată"
       },
       "session_energy": {
-        "name": "Session Energy"
+        "name": "Energie sesiune"
       },
       "session_solar_share": {
-        "name": "Session Solar Share"
+        "name": "Cotă solară sesiune"
       },
       "session_cost": {
-        "name": "Session Cost"
+        "name": "Cost sesiune"
       },
       "session_duration": {
-        "name": "Session Duration"
+        "name": "Durată sesiune"
       },
       "lifetime_ev_energy": {
-        "name": "Lifetime EV Energy"
+        "name": "Energie VE totală"
       },
       "lifetime_ev_solar": {
-        "name": "Lifetime EV Solar Energy"
+        "name": "Energie solară VE totală"
       },
       "lifetime_ev_cost": {
-        "name": "Lifetime EV Cost"
+        "name": "Cost VE total"
       },
       "lifetime_ev_sessions": {
-        "name": "Lifetime EV Sessions"
+        "name": "Sesiuni VE totale"
       },
       "lifetime_ev_solar_share": {
-        "name": "Lifetime EV Solar Share"
+        "name": "Cotă solară VE totală"
       },
       "vehicle_soc": {
-        "name": "Vehicle SOC"
+        "name": "SOC vehicul"
       },
       "ev_remaining_range": {
         "name": "Autonomie VE"
       },
       "best_surplus_window": {
-        "name": "Best Surplus Window"
+        "name": "Cea mai bună fereastră de surplus"
       },
       "night_start_time": {
-        "name": "Night Start Time"
+        "name": "Ora de început a nopții"
       },
       "night_end_time": {
-        "name": "Night End Time"
+        "name": "Ora de încheiere a nopții"
       },
       "night_window_hours": {
-        "name": "Night Window Hours"
+        "name": "Ore fereastră de noapte"
       },
       "forecast_peak_power_today_w": {
-        "name": "Forecast Peak Power Today"
+        "name": "Putere de vârf prognozată azi"
       },
       "forecast_peak_time_today": {
-        "name": "Forecast Peak Time Today"
+        "name": "Ora vârfului prognozat azi"
       },
       "forecast_surplus_kwh": {
-        "name": "Forecast Surplus"
+        "name": "Surplus prognozat"
       },
       "forecast_dampening_factor": {
-        "name": "Forecast Dampening Factor"
+        "name": "Factor de atenuare a prognozei"
       },
       "battery_scheduler_state": {
         "name": "Stare planificator"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "SOC țintă planificator baterie"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Deficit planificator baterie"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Motiv planificator baterie"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Număr de încărcătoare EV"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "Tendință de reducere VE"
       },
       "diag_version": {
         "name": "Versiune SEM"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Mod senzor rețea"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Convenția de semn a rețelei"
       },
       "diag_battery_sign": {
-        "name": "Battery Sign Convention"
+        "name": "Convenția de semn a bateriei"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Metoda de control a încărcătorului"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Capacitatea bateriei (configurată)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Interval de actualizare"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Mod observator"
       },
       "diag_sensors_unavailable": {
         "name": "Senzori indisponibili"
       },
       "battery_session_type": {
-        "name": "Battery Session Type"
+        "name": "Tip sesiune baterie"
       },
       "battery_session_energy": {
-        "name": "Battery Session Energy"
+        "name": "Energie sesiune baterie"
       },
       "battery_session_solar_share": {
-        "name": "Battery Session Solar Share"
+        "name": "Cotă solară sesiune baterie"
       },
       "battery_session_cost": {
-        "name": "Battery Session Cost"
+        "name": "Cost sesiune baterie"
       },
       "battery_session_savings": {
-        "name": "Battery Session Savings"
+        "name": "Economii sesiune baterie"
       },
       "battery_session_duration": {
-        "name": "Battery Session Duration"
+        "name": "Durată sesiune baterie"
       },
       "battery_session_avg_power": {
-        "name": "Battery Session Avg Power"
+        "name": "Putere medie sesiune baterie"
       },
       "diag_charger_count": {
         "name": "Încărcătoare configurate"
@@ -948,7 +948,7 @@
         "name": "Configurare panou energie"
       },
       "heat_pump_registration_status": {
-        "name": "Heat Pump Registration Status"
+        "name": "Stare înregistrare pompă de căldură"
       },
       "vpp_event": {
         "name": "Eveniment VPP"
@@ -956,48 +956,48 @@
     },
     "binary_sensor": {
       "ev_connected": {
-        "name": "EV Connected"
+        "name": "VE conectat"
       },
       "ev_charging": {
-        "name": "EV Charging"
+        "name": "Încărcare VE"
       },
       "battery_charging": {
-        "name": "Battery Charging"
+        "name": "Baterie în încărcare"
       },
       "battery_discharging": {
-        "name": "Battery Discharging"
+        "name": "Baterie în descărcare"
       },
       "grid_export_active": {
-        "name": "Grid Export Active"
+        "name": "Export în rețea activ"
       },
       "solar_active": {
-        "name": "Solar Active"
+        "name": "Solar activ"
       },
       "surplus_available": {
         "name": "Surplus disponibil"
       },
       "forecast_available": {
-        "name": "Forecast Available"
+        "name": "Prognoză disponibilă"
       },
       "tariff_is_dynamic": {
-        "name": "Dynamic Tariff"
+        "name": "Tarif dinamic"
       },
       "heat_pump_solar_boost": {
-        "name": "Heat Pump Solar Boost"
+        "name": "Stimulare solară pompă de căldură"
       },
       "heat_pump_registered": {
         "name": "Pompă de căldură înregistrată"
       },
       "utility_signal_active": {
-        "name": "Utility Signal Active"
+        "name": "Semnal furnizor activ"
       },
       "layer_mismatch": {
-        "name": "Layer Mismatch"
+        "name": "Nepotrivire între straturi"
       }
     },
     "switch": {
       "observer_mode": {
-        "name": "Observer Mode"
+        "name": "Mod observator"
       },
       "vacation_mode": {
         "name": "Mod vacanță"
@@ -1005,40 +1005,40 @@
     },
     "number": {
       "update_interval": {
-        "name": "Update Interval"
+        "name": "Interval de actualizare"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC"
+        "name": "SOC de prioritate a bateriei"
       },
       "minimum_solar_power": {
-        "name": "Minimum Solar Power"
+        "name": "Putere solară minimă"
       },
       "battery_assist_max_power": {
-        "name": "Battery Assist Max Power"
+        "name": "Asistență baterie – putere max."
       },
       "battery_assist_min_surplus": {
         "name": "Asistență baterie – surplus solar min."
       },
       "regulation_offset": {
-        "name": "Regulation Offset"
+        "name": "Decalaj de reglare"
       },
       "demand_charge_rate": {
-        "name": "Demand Charge Rate"
+        "name": "Tarif pentru putere contractată"
       },
       "cheap_price_threshold": {
-        "name": "Cheap Price Threshold"
+        "name": "Prag preț ieftin"
       },
       "expensive_price_threshold": {
-        "name": "Expensive Price Threshold"
+        "name": "Prag preț scump"
       },
       "heat_pump_boost_offset": {
-        "name": "Heat Pump Boost Offset"
+        "name": "Decalaj de stimulare pompă de căldură"
       },
       "hot_water_max_temperature": {
-        "name": "Hot Water Max Temperature"
+        "name": "Temperatură maximă apă caldă"
       },
       "system_size_kwp": {
-        "name": "PV System Size"
+        "name": "Puterea instalată PV"
       },
       "ev_enable_delay_seconds": {
         "name": "Întârziere pornire EV (surplus)"
@@ -1047,59 +1047,86 @@
         "name": "Întârziere oprire EV (deficit)"
       },
       "battery_buffer_soc": {
-        "name": "Battery Buffer SOC"
+        "name": "SOC tampon baterie"
       },
       "battery_auto_start_soc": {
-        "name": "Battery Auto Start SOC"
+        "name": "SOC pornire automată baterie"
       },
       "battery_max_discharge_power": {
-        "name": "Battery Max Discharge Power"
+        "name": "Putere maximă de descărcare a bateriei"
       },
       "system_investment_cost": {
-        "name": "System Investment Cost"
+        "name": "Costul investiției în sistem"
       },
       "electricity_import_rate": {
-        "name": "Electricity Import Rate"
+        "name": "Tarif import energie"
       },
       "electricity_export_rate": {
-        "name": "Electricity Export Rate"
+        "name": "Tarif export energie"
       },
       "night_earliest_start": {
-        "name": "Night Earliest Start"
+        "name": "Cea mai devreme pornire de noapte"
       },
       "night_latest_end": {
-        "name": "Night Latest End"
+        "name": "Cea mai târzie încheiere de noapte"
       },
       "battery_capacity": {
-        "name": "Battery Capacity"
+        "name": "Capacitatea bateriei"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Țintă solară apă caldă"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Temperatură țintă anti-legionella"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Interval anti-legionella (ore)"
       },
       "surplus_event_threshold": {
         "name": "Prag eveniment surplus"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Țintă de noapte"
+      },
+      "ev_min_current": {
+        "name": "{charger} Amperaj minim"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Amperaj minim vehicul"
+      },
+      "ev_target_soc": {
+        "name": "{charger} SOC țintă"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Maxim solar"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} SOC maxim solar"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Capacitatea bateriei"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Consum"
+      },
+      "ev_phases": {
+        "name": "{charger} Faze"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "Tip țintă EV",
+        "name": "{charger} Tip țintă EV",
         "state": {
           "kwh": "Țintă kWh",
           "soc": "Țintă SoC %"
         }
       },
       "charge_mode": {
-        "name": "Mod de încărcare",
+        "name": "{charger} Mod de încărcare",
         "state": {
           "solar_only": "Doar solar",
           "solar_plus_cheap": "Solar + cele mai ieftine ore",
-          "min_plus_solar": "Min + Solar",
+          "min_plus_solar": "Min + solar",
           "always_max": "Întotdeauna (max)",
           "off": "Oprit"
         }
@@ -1150,44 +1177,48 @@
       "description": "Nu este configurat niciun senzor pentru încărcătorul EV, deci funcțiile de încărcare EV nu sunt disponibile. Adăugați un senzor „conectat” sau un senzor de putere de încărcare în opțiunile integrării pentru a activa încărcarea EV."
     },
     "sensor_unavailable": {
-      "title": "Sensor unavailable",
-      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+      "title": "Senzor indisponibil",
+      "description": "Senzorul `{entity_id}` ({friendly_name}) este indisponibil de peste {minutes} minute. SEM nu îl poate include în calcule până când își revine. Verificați integrarea din amonte (Huawei modbus / Solcast / Forecast.Solar / rețeaua invertorului dumneavoastră). Această problemă se șterge automat când senzorul raportează din nou o valoare validă."
     },
     "sensor_stale": {
-      "title": "Sensor frozen",
-      "description": "The sensor `{entity_id}` ({friendly_name}) still reports as available but has not updated in {minutes}+ minutes — it appears frozen. SEM is using its stale value in the energy balance and sign detection, which can distort your figures. Check the upstream integration (Huawei modbus / Growatt cloud / your inverter network). This issue clears automatically when the sensor next updates."
+      "title": "Senzor blocat",
+      "description": "Senzorul `{entity_id}` ({friendly_name}) încă se raportează ca disponibil, dar nu s-a mai actualizat de peste {minutes} minute — pare blocat. SEM îi folosește valoarea învechită în bilanțul energetic și în detectarea semnului, ceea ce vă poate distorsiona cifrele. Verificați integrarea din amonte (Huawei modbus / Growatt cloud / rețeaua invertorului dumneavoastră). Această problemă se șterge automat la următoarea actualizare a senzorului."
     },
     "charger_actuation_failed": {
-      "title": "EV charger not accepting commands: {name}",
-      "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+      "title": "Încărcătorul EV nu acceptă comenzi: {name}",
+      "description": "Ultimele 3+ comenzi de curent trimise de SEM către **{name}** au fost respinse: `{error}`. Încărcătorul NU este sub controlul SEM în acest moment — va continua să facă ce i s-a comandat ultima dată (inclusiv să încarce la putere maximă în modul oprit). Cele mai frecvente cauze: entitatea de control a încărcătorului a fost redenumită de o actualizare a integrării din amonte sau `ev_charger_service` indică un serviciu cu o altă schemă de parametri. Verificați entitatea/serviciul de control al încărcătorului în configurația SEM. Această problemă se șterge automat la următoarea comandă reușită."
+    },
+    "charger_stop_unenforceable": {
+      "title": "Încărcătorul nu poate fi oprit: {name}",
+      "description": "SEM i-a comandat lui **{name}** să se oprească, dar niciun mecanism configurat nu poate deschide efectiv contactorul — mașina consumă în continuare {power} W. Singurul control pe care SEM îl are pentru acest încărcător este `{entity}`, iar minimul acestuia este peste 0 A, deci scrierea valorii 0 A nu face nimic (SEM nu scrie niciodată o valoare pe care entitatea ar respinge-o). Dacă ai o baterie de casă, această putere iese din ea — la orice oră din zi sau din noapte. Soluție: configurează pentru acest încărcător, în opțiunile SEM, o entitate pornire/oprire (`ev_start_stop_entity`), o entitate de mod de încărcare sau un serviciu de oprire. Avertismentul dispare de îndată ce încărcătorul nu mai consumă."
     },
     "no_forecast_integration": {
-      "title": "No solar forecast integration detected",
-      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+      "title": "Nu a fost detectată nicio integrare de prognoză solară",
+      "description": "SEM a căutat o integrare de prognoză solară (Forecast.Solar, Solcast PV Solar sau un senzor de prognoză personalizat) timp de o oră după pornire și nu a găsit niciuna. Funcțiile bazate pe prognoză (sfaturi privind cea mai bună fereastră de surplus, încărcare inteligentă pe timp de noapte, atenuarea prognozei) sunt inactive până când instalați una. Problema se șterge automat când SEM detectează o integrare de prognoză."
     },
     "no_recorder": {
-      "title": "Recorder integration unavailable",
-      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+      "title": "Integrarea Recorder este indisponibilă",
+      "description": "SEM a încercat să inițializeze istoricul EV / de încărcare din recorder-ul HA, dar citirea a eșuat. Inteligența EV (SOC estimat, degradare zilnică) nu poate porni cu date preexistente fără el; în schimb, valorile se completează lent din ciclurile live. De obicei este o problemă tranzitorie, izolată — se șterge automat la următoarea citire reușită din recorder."
     },
     "heat_pump_relay_unavailable": {
-      "title": "Heat pump SG-Ready {slot} unavailable",
-      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+      "title": "Pompa de căldură SG-Ready {slot} indisponibilă",
+      "description": "Entitatea de releu SG-Ready configurată `{entity_id}` ({slot}) este indisponibilă/necunoscută de peste {minutes} minute. SEM poate înregistra fără probleme controlerul pompei de căldură, dar fiecare comandă SG-Ready nu va avea niciun efect, în tăcere, până când această entitate raportează o stare reală. Verificați dispozitivul din amonte — placă de relee ESP, Shelly, comutator template prin Modbus sau orice integrare deține această entitate. Problema se șterge automat când releul raportează din nou o stare pornit/oprit."
     },
     "heat_pump_partial_sg_ready": {
-      "title": "Heat pump SG-Ready half-configured",
-      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
+      "title": "Pompa de căldură SG-Ready este configurată doar parțial",
+      "description": "În SEM este setat exact unul dintre cele două relee SG-Ready (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`), fără o entitate climate ca alternativă. Protocolul SG-Ready codifică cele patru stări (BLOCKED / NORMAL / BOOST / FORCE_ON) ca valoare binară pe 2 biți, folosind AMBELE relee, așa că un singur releu nu poate comanda protocolul. Fie configurați și al doilea releu, fie setați un `heat_pump_climate_entity` pentru a folosi în schimb calea de stimulare a setpoint-ului doar prin climate. Problema se șterge automat imediat ce configurația este validă."
     },
     "hot_water_entity_unavailable": {
-      "title": "Hot water boiler control unavailable",
-      "description": "The configured hot-water control entity `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM can register the controller fine, but every surplus-dispatch command will silently no-op until the entity reports a real state. Check the upstream device — the boiler relay, water_heater integration, climate device, or whichever integration owns this entity. The issue clears automatically when the entity recovers."
+      "title": "Controlul boilerului de apă caldă este indisponibil",
+      "description": "Entitatea de control a apei calde configurată `{entity_id}` este indisponibilă/necunoscută de peste {minutes} minute. SEM poate înregistra fără probleme controlerul, dar fiecare comandă de distribuire a surplusului nu va avea niciun efect, în tăcere, până când entitatea raportează o stare reală. Verificați dispozitivul din amonte — releul boilerului, integrarea water_heater, dispozitivul climate sau orice integrare deține această entitate. Problema se șterge automat când entitatea își revine."
     },
     "hot_water_temperature_sensor_unavailable": {
-      "title": "Hot water temperature sensor unavailable",
-      "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+      "title": "Senzorul de temperatură a apei calde este indisponibil",
+      "description": "Senzorul de temperatură a apei calde configurat `{entity_id}` este indisponibil/necunoscut de peste {minutes} minute. SEM adoptă o comportare sigură când acest senzor este defect — boilerul NU este activat pe surplus până când revine o citire reală de temperatură, pentru a evita încălzirea peste țintă fără feedback. Verificați integrarea din amonte a senzorului. Problema se șterge automat când senzorul își revine."
     },
     "keba_failsafe_active": {
-      "title": "KEBA failsafe is enabled — disable it for steady charging",
-      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+      "title": "Failsafe-ul KEBA este activat — dezactivați-l pentru o încărcare constantă",
+      "description": "Încărcătorul dumneavoastră KEBA „{name}” are activat watchdog-ul failsafe. SEM (la fel ca evcc) nu se mai bazează pe el, dar cât timp este activ încărcătorul scade mereu curentul oferit la valoarea sa de rezervă de 6 A între comenzi, ceea ce face ca încărcarea să oscileze (6↔9 A), iar unele mașini (de ex. Renault Zoe) refuză să se încarce constant.\n\nServiciul KEBA din Home Assistant nu îl poate dezactiva (nu acceptă un timeout de 0), așa că trebuie să îl dezactivați chiar de la încărcător: setați **timeout-ul failsafe la 0** (prin KEBA UDP `failsafe 0 0 1` sau cu utilitarul KeContact de la KEBA). Consultați ghidul asociat pentru instrucțiuni pas cu pas. Această reparație se șterge automat imediat ce failsafe este dezactivat."
     },
     "soc_cap_unenforceable": {
       "title": "Limita de încărcare de {target}% nu poate fi aplicată: {name}",

@@ -8,30 +8,30 @@
           "observer_mode": "Testmodus (skrivebeskyttet — styrer ikke maskinvare)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "La stå AV ved en vanlig installasjon. Slå den PÅ bare på en test-/staging-instans av Home Assistant som speiler en produksjonsinstans, slik at SEM aldri sender kommandoer til KEBA, inverteren eller noen brytere."
         }
       },
       "ev_charger": {
         "title": "EV Lader",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
+        "description": "SEM oppdaget EV-laderen din automatisk fra entitetsregisteret i Home Assistant. Se over oppføringene nedenfor og klikk **Send** — vanligvis er det ingenting å endre. Valgfrie felt kan stå tomme.\n\nVelg ÉN styringsvei: enten en Number-entitet (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) ELLER et tjenestekall (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
-          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
+          "ev_connected_sensor": "🔌 EV tilkoblingsstatus — kjøretøyets pluggtilkobling",
+          "ev_charging_sensor": "⚡ EV lading aktiv — nåværende ladestatus",
+          "ev_charging_power_sensor": "🚗 EV ladeeffekt — effekt levert til kjøretøyet (W)",
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_charger_service_entity_id": "Målentitet for laderens tjenestekall (valgfri)",
+          "ev_current_sensor": "⚡ EV ladestrøm — ladestrøm (A)",
+          "ev_total_energy_sensor": "🔋 EV totalenergi — akkumulert levert energi (kWh)",
           "ev_current_control_entity": "Number-entitet for strømkontroll (Wallbox-lignende ladere)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
-          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_connected_sensor": "Binærsensor som rapporterer om kjøretøyets plugg er tilkoblet akkurat nå. Oppdages automatisk fra KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
+          "ev_charging_sensor": "Binærsensor som rapporterer om SEM skal anse ladingen som aktiv. Oppdages automatisk fra laderintegrasjonen din.",
+          "ev_charging_power_sensor": "Numerisk sensor (W) som rapporterer hvor mye effekt som nå går inn i kjøretøyet. Oppdages automatisk fra laderintegrasjonen din.",
+          "ev_charger_service": "Home Assistant-tjeneste som kalles for å sette ladestrømmen (f.eks. keba.set_current, easee.set_charger_max_limit). Fylles ut automatisk for KEBA. La stå tom hvis du fyller ut Number-entiteten ovenfor.",
+          "ev_charger_service_entity_id": "Entitets-ID som sendes som mål for tjenestekallet. Fylles ut automatisk ved behov; la stå tom hvis tjenesten er global.",
+          "ev_current_sensor": "Valgfri. Numerisk sensor (A) som rapporterer den faktiske ladestrømmen. Brukes til diagnostikk.",
+          "ev_total_energy_sensor": "Valgfri. Akkumulert kWh-teller for energi levert til kjøretøyet. Brukes for nøyaktig sesjonssporing.",
           "ev_current_control_entity": "Number-entitet som SEM skriver til for å endre ladestrømmen (f.eks. number.wallbox_charging_current). Bruk for ladere som eksponerer en Number-entitet i stedet for et tjenestekall. La være tom hvis du fyller ut Tjeneste-banen nedenfor."
         }
       },
@@ -39,54 +39,54 @@
         "title": "Maskinvare",
         "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
-          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-          "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
+          "battery_capacity_kwh": "Husbatteriets kapasitet (kWh)",
+          "target_peak_limit": "Effektgrense for topplast (kW)",
+          "generate_dashboard_on_install": "Generer SEM-dashbordet nå (starter HA på nytt)",
           "diagram_style": "Systemdiagram stil"
         },
         "data_description": {
-          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
+          "battery_capacity_kwh": "Total brukbar kapasitet på husbatteriet ditt (IKKE elbilen) i kWh. Brukes av den prognosestyrte ladestrategien til å anslå hvor mye batteriet kan dekke et solunderskudd. Se spesifikasjonen for inverteren din.",
+          "target_peak_limit": "Maksimalt antall kW nettavtalen din tillater før SEM begynner å koble ut laster. For effekttariffer typisk 3–5 kW; ellers setter du sikringsstørrelsen delt på 4 for å ha margin.",
+          "generate_dashboard_on_install": "Når dette er aktivert, oppretter SEM Lovelace-dashbordet umiddelbart etter at dette steget er fullført, og starter deretter Home Assistant på nytt etter ca. 5 s slik at det nye dashbordet blir synlig. Du kan alltid kjøre det manuelt senere via tjenesten solar_energy_management.generate_dashboard.",
           "diagram_style": "Velg systemdiagram på Hjem-fanen. 'SEM' bruker det innebygde animerte diagrammet. 'K-Flow' bruker K-Flow HACS-kortet (må installeres separat)."
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "Konfigurer Solar Energy Management på nytt",
+        "description": "Oppdater innstillingene for EV-lader og varslinger",
         "data": {
           "ev_connected_sensor": "EV Tilkoblingsstatus",
           "ev_charging_sensor": "EV Ladestatus",
           "ev_charging_power_sensor": "EV Ladeeffekt",
-          "ev_charger_service": "EV Charger Service",
-          "ev_charger_service_entity_id": "EV Charger Service Entity",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "ev_charger_service": "Tjeneste for EV-lader",
+          "ev_charger_service_entity_id": "Tjenesteentitet for EV-lader",
+          "ev_total_energy_sensor": "EV totalenergiteller",
+          "enable_charger_notifications": "Aktiver varsler på laderkortet",
           "enable_mobile_notifications": "Aktiver mobilvarslinger",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Tjeneste for mobilvarsling",
+          "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
+          "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
+          "ev_target_soc": "EV mål-SOC (%)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current (e.g. keba.set_current). Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "enable_charger_notifications": "Enable/disable persistent notification banners shown on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor that reports the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_connected_sensor": "Binærsensor som rapporterer om kjøretøyets plugg er tilkoblet akkurat nå.",
+          "ev_charging_sensor": "Binærsensor som rapporterer om elbilen lader aktivt.",
+          "ev_charging_power_sensor": "Numerisk sensor (W) som rapporterer effekten som nå går inn i kjøretøyet.",
+          "ev_charger_service": "HA-tjeneste som kalles for å sette ladestrømmen (f.eks. keba.set_current). La stå tom for ladere med Number-entitet.",
+          "ev_charger_service_entity_id": "Entitets-ID som sendes som mål for tjenestekallet. La stå tom hvis den ikke trengs.",
+          "ev_total_energy_sensor": "Valgfri akkumulert kWh-teller for energi levert til kjøretøyet.",
+          "enable_charger_notifications": "Slå av/på de faste varselbannerne som vises på laderens statuskort.",
+          "enable_mobile_notifications": "Slå av/på push-varsler som sendes til mobilen din.",
+          "mobile_notification_service": "HA notify-tjeneste for push til mobil (f.eks. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
+          "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh. Brukes til å anslå SOC og ladetid.",
+          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet."
         }
       }
     },
     "error": {
       "unknown": "En uventet feil oppstod. Vennligst prøv igjen.",
-      "entity_not_found": "Entity not found. Please verify the entity ID exists.",
+      "entity_not_found": "Entiteten ble ikke funnet. Kontroller at entitets-ID-en finnes.",
       "service_not_found": "Varslingstjenesten ble ikke funnet. Kontroller tjenestenavnet (f.eks. notify.mobile_app_your_phone).",
       "heat_pump_partial_relays": "SG-Ready krever BEGGE reléentitetene. Angi begge reléene — eller la begge stå tomme og konfigurer kun klimaentiteten for settpunkt-boost i kun-klima-modus."
     },
@@ -105,27 +105,27 @@
           "ev_connected_sensor": "EV Tilkoblingsstatus",
           "ev_charging_sensor": "EV Ladestatus",
           "ev_charging_power_sensor": "EV Ladeeffekt",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
-          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
-          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)",
+          "ev_charger_service": "Tjeneste for å sette ladestrøm (valgfri)",
+          "ev_charger_service_entity_id": "Målentitet for laderens tjenestekall (valgfri)",
+          "ev_total_energy_sensor": "EV totalenergiteller (valgfri)",
+          "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
+          "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
+          "ev_target_soc": "EV mål-SOC (%)",
           "daily_ev_target_max": "Solladegrense (kWh)",
           "ev_target_soc_max": "Solladegrense (SOC %)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
           "ev_kwh_per_100km": "Kjøretøyets forbruk (kWh/100km)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current. Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the service call target. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_connected_sensor": "Binærsensor som rapporterer om kjøretøyets plugg er tilkoblet.",
+          "ev_charging_sensor": "Binærsensor som rapporterer om elbilen lader aktivt.",
+          "ev_charging_power_sensor": "Numerisk sensor (W) som rapporterer effekten som nå går inn i kjøretøyet.",
+          "ev_charger_service": "HA-tjeneste som kalles for å sette ladestrømmen. La stå tom for ladere med Number-entitet.",
+          "ev_charger_service_entity_id": "Entitets-ID som sendes som mål for tjenestekallet. La stå tom hvis den ikke trengs.",
+          "ev_total_energy_sensor": "Valgfri akkumulert kWh-teller for energi levert til kjøretøyet.",
+          "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
+          "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh. Brukes til å anslå SOC og ladetid.",
+          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet.",
           "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
           "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol.",
           "ev_kwh_per_100km": "Brukes til å anslå rekkevidden når ingen rekkeviddesensor er konfigurert.",
@@ -133,187 +133,187 @@
         }
       },
       "settings": {
-        "title": "SEM Optimization Settings",
-        "description": "Update your SEM optimization parameters",
+        "title": "SEM optimaliseringsinnstillinger",
+        "description": "Oppdater SEMs optimaliseringsparametere",
         "data": {
-          "update_interval": "Update Interval (seconds)",
-          "battery_priority_soc": "Battery Priority SOC (%)",
+          "update_interval": "Oppdateringsintervall (sekunder)",
+          "battery_priority_soc": "Batteriets prioritets-SOC (%)",
           "min_solar_power": "Minimum soleffekt — rå PV-produksjon (W)",
-          "daily_ev_target": "Daily EV Target (kWh)",
-          "battery_assist_max_power": "Battery Assist Max Power (W)",
-          "battery_capacity_kwh": "Battery Capacity (kWh)",
-          "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
-          "battery_max_discharge_power": "Maximum Discharge Power (W)",
-          "electricity_import_rate": "Electricity Import Rate (per kWh)",
+          "daily_ev_target": "Daglig EV-mål (kWh)",
+          "battery_assist_max_power": "Batteristøtte – maks. effekt (W)",
+          "battery_capacity_kwh": "Batterikapasitet (kWh)",
+          "battery_discharge_protection_enabled": "Aktiver vern mot batteriutlading",
+          "battery_max_discharge_power": "Maksimal utladeeffekt (W)",
+          "electricity_import_rate": "Importpris strøm (per kWh)",
           "electricity_off_peak_rate": "Electricity NT Rate (per kWh)",
-          "electricity_export_rate": "Electricity Export Rate (per kWh)",
-          "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
-          "observer_mode": "Observer Mode (Read-Only)",
-          "smart_night_charging": "Smart Night Charging",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
-          "hot_water_solar_target": "Hot water solar heating target (°C)",
-          "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles",
+          "electricity_export_rate": "Eksportpris strøm (per kWh)",
+          "demand_charge_rate": "Effekttariffsats (CHF/kW/måned)",
+          "observer_mode": "Observatørmodus (skrivebeskyttet)",
+          "smart_night_charging": "Smart nattlading",
+          "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
+          "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
+          "ev_target_soc": "EV mål-SOC (%)",
+          "battery_buffer_soc": "Grense sone 2/3 — Batteriets buffer-SOC (%)",
+          "battery_auto_start_soc": "Grense sone 3/4 — Batteriets autostart-SOC (%)",
+          "battery_discharge_control_entity": "Styringsentitet for batteriutlading (valgfri)",
+          "hot_water_solar_target": "Mål for solvarmet varmtvann (°C)",
+          "legionella_target_temp": "Mål for legionelladesinfeksjon (°C)",
+          "legionella_interval_hours": "Maks. timer mellom desinfeksjonssykluser",
           "diagram_style": "Systemdiagram stil",
           "battery_assist_min_surplus": "Batteristøtte – min. soloverskudd (W)"
         },
         "data_description": {
-          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
-          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
-          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "update_interval": "Hvor ofte koordinatoren leser sensorer og justerer maskinvaren. 10 s gir den mest nøyaktige energiintegrasjonen; verdier over 30 s vil telle for lite energi. Område 10–60 s.",
+          "battery_priority_soc": "Grensen sone 1 → sone 2. Under denne SOC-en går all sol til batteriet, og elbilen blokkeres. Standard 30 %. Firesone-strategien (Architecture-dokumentasjonen) krever at denne er LAV (5–60 %) — må IKKE forveksles med den gamle 3-sonebetydningen der dette var et høyt mål.",
+          "battery_buffer_soc": "Grensen sone 2 → sone 3. Over denne SOC-en kan batteriet lade ut for å dekke solunderskudd mens elbilen lader. Standard 70 %.",
+          "battery_auto_start_soc": "Grensen sone 3 → sone 4. Over denne SOC-en kan elbilen begynne å lade selv uten soloverskudd, ved å trekke fra batteriet. Standard 90 %.",
           "min_solar_power": "Nedre grense for rå PV-produksjon — paneleffekten der „solen er aktiv“ er usann: solar_only starter ikke, og vernet mot dypt underskudd behandler det som mørke (ladingen stopper altså raskt i stedet for å bygge bro via strømnettet). Dette er RÅ produksjon, IKKE overskudd — i motsetning til „Batteristøtte – min. soloverskudd“ (sol − hjem), som avgjør når hjemmebatteriet kan hjelpe. Standard 1000 W; hold den under EV-laderens maskinvareminimum (~4140 W ved 3-fase, ~1380 W ved 1-fase).",
-          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
-          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
-          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
-          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
-          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
-          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
+          "daily_ev_target": "Mål i kWh per dag for nattlading fra nettet. Sett til 0 for å deaktivere nattlading helt.",
+          "battery_assist_max_power": "Maksimal effekt husbatteriet kan lade ut for å støtte elbilen i sone 3/4. Standard 4500 W.",
+          "battery_capacity_kwh": "Total brukbar kapasitet på husbatteriet (IKKE elbilbatteriet — det er et eget felt i EV-steget). Brukes av den prognosestyrte ladestrategien.",
+          "battery_discharge_protection_enabled": "Når denne er PÅ, begrenser SEM inverterens utladegrense under nattlading av elbilen, slik at husbatteriet bare forsyner huset (ikke elbilen).",
+          "battery_max_discharge_power": "Absolutt øvre grense for batteriutlading som håndheves av vernefunksjonen.",
+          "electricity_import_rate": "Dag-/fastpristariff (CHF/kWh, inkl. mva.). Brukes til kostnadssporing.",
           "electricity_off_peak_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
-          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
-          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
-          "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
-          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed.",
+          "electricity_export_rate": "Innmatingspris betalt av nettselskapet (CHF/kWh).",
+          "demand_charge_rate": "Månedlig effektledd per kW topplast (CHF/kW/måned). Sett til 0 hvis avtalen din ikke har effektledd.",
+          "observer_mode": "Når denne er PÅ, overvåker og beregner SEM alt, men sender aldri et tjenestekall til maskinvaren. Brukes på en test-/staging-HA som speiler en produksjonsinstallasjon.",
+          "smart_night_charging": "Når denne er PÅ, hopper SEM intelligent over eller reduserer nattladingen basert på estimert SOC på elbilen, solprognose, temperaturjustert forbruksprognose og innlærte kjøremønstre.",
+          "battery_discharge_control_entity": "Number-entitet som styrer inverterens grense for utladeeffekt (f.eks. number.batteries_maximale_entladeleistung på Huawei). Oppdages automatisk ved installasjon; overstyr her ved behov.",
           "diagram_style": "Velg systemdiagram på Hjem-fanen. 'SEM' bruker det innebygde animerte diagrammet. 'K-Flow' bruker K-Flow HACS-kortet (må installeres separat).",
-          "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
-          "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "hot_water_solar_target": "Måltemperatur (°C) for solstøttet varmtvannsoppvarming. SEM booster berederen når det er overskudd tilgjengelig.",
+          "legionella_target_temp": "Temperaturen (°C) varmtvannssystemet må nå under en legionelladesinfeksjonssyklus.",
+          "legionella_interval_hours": "Maksimalt antall timer mellom legionelladesinfeksjonssykluser før SEM tvinger fram en oppvarming.",
           "battery_assist_min_surplus": "Minste reelle soloverskudd før husbatteriet kan bidra til å lade EV-en — i alle lademoduser. Under dette er batteriet reservert for huset (bilen henter fra nettet + sol). Standard 1200 W. Sett til 0 for å la batteriet støtte EV-en overalt, også om natten."
         }
       },
       "settings_ev": {
         "title": "EV Lading og sol",
-        "description": "Configure EV charging targets and solar thresholds.",
+        "description": "Konfigurer ladermål for elbil og solterskler.",
         "data": {
-          "daily_ev_target": "Night charge target (kWh)",
-          "min_solar_power": "Minimum solar power to start EV charging (W)",
-          "observer_mode": "Observer mode (read-only, no hardware control)",
-          "smart_night_charging": "Reduce night target based on tomorrow's forecast"
+          "daily_ev_target": "Mål for nattlading (kWh)",
+          "min_solar_power": "Minimum soleffekt for å starte EV-lading (W)",
+          "observer_mode": "Observatørmodus (skrivebeskyttet, ingen maskinvarestyring)",
+          "smart_night_charging": "Reduser nattmålet basert på morgendagens prognose"
         },
         "data_description": {
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
-          "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
-          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
+          "daily_ev_target": "Mål i kWh som skal lades fra nettet hver natt. Sett til 0 for å deaktivere nattlading fra nettet.",
+          "min_solar_power": "Minste soloverskudd (W) som kreves før SEM starter sollading av elbilen.",
+          "observer_mode": "Når denne er PÅ, overvåker SEM alt, men sender aldri kommandoer til maskinvaren.",
+          "smart_night_charging": "Når denne er PÅ, reduserer SEM målet for nattlading når morgendagens solprognose er tilstrekkelig."
         }
       },
       "settings_tariff": {
         "title": "Tariff og avansert",
-        "description": "Electricity rates and advanced tuning parameters.",
+        "description": "Strømpriser og avanserte innstillinger.",
         "data": {
-          "electricity_import_rate": "Import rate",
+          "electricity_import_rate": "Importpris",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Eksportpris",
-          "demand_charge_rate": "Demand charge rate",
-          "update_interval": "Update interval (s)",
-          "tariff_mode": "Tariff mode",
-          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
-          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
+          "demand_charge_rate": "Effekttariffsats",
+          "update_interval": "Oppdateringsintervall (s)",
+          "tariff_mode": "Tariffmodus",
+          "dynamic_tariff_entity": "Entitet for dynamisk pris (oppdages automatisk hvis tom)",
+          "dynamic_forecast_entity": "Prognoseentitet (valgfri, oppdages automatisk hvis tom)",
+          "dynamic_feedin_entity": "Entitet for innmatingspris (valgfri, for dynamisk eksportpris)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
         },
         "data_description": {
-          "electricity_import_rate": "Day/flat import rate (currency/kWh incl. VAT). Used as fallback when dynamic pricing is unavailable.",
-          "electricity_off_peak_rate": "Night/off-peak import rate (currency/kWh). Set equal to import rate if you have a flat tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
-          "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
-          "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
-          "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
-          "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
-          "dynamic_feedin_entity": "Optional sensor providing the current feed-in / export price for dynamic export rate.",
-          "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed."
+          "electricity_import_rate": "Dag-/fastpris for import (valuta/kWh inkl. mva.). Brukes som reserve når dynamisk prising ikke er tilgjengelig.",
+          "electricity_off_peak_rate": "Importpris natt/lavlast (valuta/kWh). Sett den lik importprisen hvis du har fastpristariff.",
+          "electricity_export_rate": "Innmatingspris betalt av nettselskapet (valuta/kWh).",
+          "demand_charge_rate": "Månedlig effektledd for topplast (valuta/kW/måned). Sett til 0 hvis avtalen din ikke har det.",
+          "update_interval": "Hvor ofte SEM leser sensorer og justerer maskinvaren (sekunder). Område 10–60 s.",
+          "tariff_mode": "Velg «Statisk» for faste priser, «Dynamisk» for sanntidspriser eller «Kalender» for tidsstyrte tariffer.",
+          "dynamic_tariff_entity": "Sensor som oppgir gjeldende importpris på strøm. Oppdages automatisk fra Tibber, Nordpool osv.",
+          "dynamic_forecast_entity": "Valgfri sensor med timesprisprognoser som brukes til smart planlegging.",
+          "dynamic_feedin_entity": "Valgfri sensor som oppgir gjeldende innmatings-/eksportpris for dynamisk eksportpris.",
+          "grid_import_power_entity": "Valgfri sensor (W) for effekt importert fra nettet. Oppdages automatisk fra Energi-dashbordet; overstyr her ved behov.",
+          "grid_export_power_entity": "Valgfri sensor (W) for effekt eksportert til nettet. Oppdages automatisk fra Energi-dashbordet; overstyr her ved behov."
         }
       },
       "load_management": {
         "title": "Lastbehandling",
-        "description": "Update load management configuration",
+        "description": "Oppdater konfigurasjonen for laststyring",
         "data": {
-          "load_management_enabled": "Enable Load Management",
-          "target_peak_limit": "Target Peak Limit (kW)",
-          "warning_peak_level": "Warning Peak Level (kW)",
-          "emergency_peak_level": "Emergency Peak Level (kW)",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "load_management_enabled": "Aktiver laststyring",
+          "target_peak_limit": "Måltopplastgrense (kW)",
+          "warning_peak_level": "Varselnivå for topplast (kW)",
+          "emergency_peak_level": "Nødnivå for topplast (kW)",
+          "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
+          "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
+          "ev_target_soc": "EV mål-SOC (%)"
         },
         "data_description": {
-          "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
-          "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
-          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
-          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "load_management_enabled": "Slå av/på SEMs automatiske utkobling av laster for å holde seg under nettets topplastgrense.",
+          "target_peak_limit": "Maksimal nettoeffekt (kW) før SEM begynner å koble ut styrbare laster.",
+          "warning_peak_level": "Effektnivået (kW) der SEM gir en advarsel før den griper inn.",
+          "emergency_peak_level": "Effektnivået (kW) der SEM aggressivt kobler ut laster for å unngå effekttariffkostnader.",
+          "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
+          "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh.",
+          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet."
         }
       },
       "notifications": {
         "title": "Varslingsinnstillinger",
-        "description": "Update notification configuration",
+        "description": "Oppdater varslingskonfigurasjonen",
         "data": {
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "enable_charger_notifications": "Aktiver varsler på laderkortet",
           "enable_mobile_notifications": "Aktiver mobilvarslinger",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Tjeneste for mobilvarsling",
+          "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
+          "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
+          "ev_target_soc": "EV mål-SOC (%)"
         },
         "data_description": {
-          "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "enable_charger_notifications": "Slå av/på de faste varselbannerne på laderens statuskort.",
+          "enable_mobile_notifications": "Slå av/på push-varsler som sendes til mobilen din.",
+          "mobile_notification_service": "HA notify-tjeneste for push til mobil (f.eks. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
+          "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh.",
+          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet."
         }
       },
       "battery_scheduler": {
         "title": "Batterilade planlegger",
-        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "description": "Konfigurer prognosebasert lading fra nett til batteri i billige timer",
         "data": {
-          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
-          "battery_capacity_kwh": "Battery Capacity",
-          "battery_max_charge_power_w": "Max Charge Power",
-          "battery_roundtrip_efficiency": "Round-trip Efficiency",
-          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
-          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
-          "battery_max_target_soc": "Maximum Target SOC",
-          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
-          "battery_pessimism_weight": "Forecast Pessimism",
-          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+          "battery_charge_scheduler_enabled": "Aktiver batteriladeplanlegger",
+          "battery_capacity_kwh": "Batterikapasitet",
+          "battery_max_charge_power_w": "Maks. ladeeffekt",
+          "battery_roundtrip_efficiency": "Virkningsgrad tur-retur",
+          "battery_cycle_cost": "Sykluskostnad for batteri (degradering)",
+          "battery_precharge_trigger_hour": "Daglig evalueringstime",
+          "battery_max_target_soc": "Maksimalt mål-SOC",
+          "battery_min_deficit_kwh": "Terskel for minste underskudd",
+          "battery_pessimism_weight": "Prognosepessimisme",
+          "battery_force_charge_negative_price": "Tvangslad ved negativ pris"
         }
       },
       "ev_charger_edit": {
         "title": "Rediger EV Lader",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "description": "Oppdater sensortilordningene og prioriteten for denne laderen.",
         "data": {
           "charger_name": "Ladernavn",
           "ev_connected_sensor": "EV Tilkoblingsstatus",
           "ev_charging_sensor": "EV Ladestatus",
           "ev_charging_power_sensor": "EV Ladeeffekt",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Tjeneste for å sette ladestrøm (valgfri)",
+          "ev_charger_service_entity_id": "Målentitet for laderens tjenestekall (valgfri)",
+          "ev_surplus_priority": "Overskuddsprioritet (1=høyeste)",
           "ev_current_control_entity": "Strømkontroll-entitet (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Solladegrense (kWh)",
           "ev_target_soc_max": "Solladegrense (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Visningsnavn for denne laderen på dashbordet.",
+          "ev_connected_sensor": "Binærsensor som rapporterer om et kjøretøy er koblet til denne laderen.",
+          "ev_charging_sensor": "Binærsensor som rapporterer om denne laderen aktivt leverer effekt.",
+          "ev_charging_power_sensor": "Numerisk sensor (W) som rapporterer effekten denne laderen leverer.",
+          "ev_charger_service": "HA-tjeneste som brukes til å sette ladestrømmen. Brukes for KEBA eller Easee.",
+          "ev_charger_service_entity_id": "Entitets-ID som sendes som mål for tjenestekallet. La stå tom hvis den ikke trengs.",
+          "ev_surplus_priority": "Rekkefølgen overskuddet fordeles i når du har flere ladere. Lavere tall = høyere prioritet.",
           "ev_current_control_entity": "Number-entitet brukt for å sette ladestrømmen (A). For Wallbox, go-eCharger og lignende ladere.",
           "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
           "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol."
@@ -327,36 +327,36 @@
           "ev_connected_sensor": "EV Tilkoblingsstatus",
           "ev_charging_sensor": "EV Ladestatus",
           "ev_charging_power_sensor": "EV Ladeeffekt",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Tjeneste for å sette ladestrøm (valgfri)",
+          "ev_charger_service_entity_id": "Målentitet for laderens tjenestekall (valgfri)",
+          "ev_surplus_priority": "Overskuddsprioritet (1=høyeste)",
           "ev_current_control_entity": "Strømkontroll-entitet (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Solladegrense (kWh)",
           "ev_target_soc_max": "Solladegrense (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "Visningsnavn for denne laderen på dashbordet.",
+          "ev_connected_sensor": "Binærsensor som rapporterer om et kjøretøy er koblet til denne laderen.",
+          "ev_charging_sensor": "Binærsensor som rapporterer om denne laderen aktivt leverer effekt.",
+          "ev_charging_power_sensor": "Numerisk sensor (W) som rapporterer effekten denne laderen leverer.",
+          "ev_charger_service": "HA-tjeneste som brukes til å sette ladestrømmen. Brukes for KEBA eller Easee.",
+          "ev_charger_service_entity_id": "Entitets-ID som sendes som mål for tjenestekallet. La stå tom hvis den ikke trengs.",
+          "ev_surplus_priority": "Rekkefølgen overskuddet fordeles i når du har flere ladere. Lavere tall = høyere prioritet.",
           "ev_current_control_entity": "Number-entitet brukt for å sette ladestrømmen (A). For Wallbox, go-eCharger og lignende ladere.",
           "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
           "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol."
         }
       },
       "pv_naming": {
-        "title": "Name your PV strings",
-        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "title": "Gi solcellestrengene dine navn",
+        "description": "Gi hver solcellestreng et navn (f.eks. Øst / Sør / Vest). Hvilken plass som hører til hvilket panel — nummereringen følger sollisten i Energi-dashbordet ditt, ikke himmelretningen:\n\n{mapping}\n\nLa et felt stå tomt for å beholde standarden (PV1/PV2/…).",
         "data": {
-          "pv_name_pv1": "PV1 name",
-          "pv_name_pv2": "PV2 name",
-          "pv_name_pv3": "PV3 name",
-          "pv_name_pv4": "PV4 name",
-          "pv_name_pv5": "PV5 name",
-          "pv_name_pv6": "PV6 name"
+          "pv_name_pv1": "Navn på PV1",
+          "pv_name_pv2": "Navn på PV2",
+          "pv_name_pv3": "Navn på PV3",
+          "pv_name_pv4": "Navn på PV4",
+          "pv_name_pv5": "Navn på PV5",
+          "pv_name_pv6": "Navn på PV6"
         }
       },
       "heat_pump": {
@@ -408,538 +408,538 @@
   "entity": {
     "sensor": {
       "solar_power": {
-        "name": "Solar Power"
+        "name": "Soleffekt"
       },
       "home_consumption_power": {
-        "name": "Home Power"
+        "name": "Hjemmets effekt"
       },
       "grid_power": {
-        "name": "Grid Power"
+        "name": "Netteffekt"
       },
       "grid_active_power": {
-        "name": "Grid Active Power"
+        "name": "Nett aktiv effekt"
       },
       "grid_import_power": {
-        "name": "Grid Import"
+        "name": "Nettimport"
       },
       "grid_export_power": {
-        "name": "Grid Export"
+        "name": "Netteksport"
       },
       "battery_power": {
-        "name": "Battery Power"
+        "name": "Batterieffekt"
       },
       "battery_charge_power": {
-        "name": "Battery Charge Power"
+        "name": "Batteri ladeeffekt"
       },
       "battery_discharge_power": {
-        "name": "Battery Discharge Power"
+        "name": "Batteri utladeeffekt"
       },
       "ev_power": {
-        "name": "EV Power"
+        "name": "EV-effekt"
       },
       "available_power": {
-        "name": "Available Power"
+        "name": "Tilgjengelig effekt"
       },
       "battery_soc": {
-        "name": "Battery SOC"
+        "name": "Batteri-SOC"
       },
       "battery_status": {
-        "name": "Battery Status"
+        "name": "Batteristatus"
       },
       "battery_temperature": {
-        "name": "Battery Temperature"
+        "name": "Batteritemperatur"
       },
       "inverter_temperature": {
         "name": "Invertertemperatur"
       },
       "battery_cycles_estimated": {
-        "name": "Battery Cycles (Estimated)"
+        "name": "Batterisykluser (estimert)"
       },
       "battery_health_score": {
-        "name": "Battery Health Score"
+        "name": "Batteri helsescore"
       },
       "calculated_current": {
-        "name": "Calculated Current"
+        "name": "Beregnet strøm"
       },
       "charging_state": {
-        "name": "Charging State"
+        "name": "Ladetilstand"
       },
       "grid_status": {
-        "name": "Grid Status"
+        "name": "Nettstatus"
       },
       "solar_charging_status": {
-        "name": "Solar Charging"
+        "name": "Sollading"
       },
       "night_charging_status": {
-        "name": "Night Charging"
+        "name": "Nattlading"
       },
       "battery_priority_status": {
-        "name": "Battery Priority"
+        "name": "Batteriprioritet"
       },
       "charging_strategy": {
-        "name": "Charging Strategy"
+        "name": "Ladestrategi"
       },
       "daily_solar_energy": {
-        "name": "Today Solar"
+        "name": "Sol i dag"
       },
       "daily_home_energy": {
-        "name": "Today Home"
+        "name": "Hjem i dag"
       },
       "daily_grid_import_energy": {
-        "name": "Today Import"
+        "name": "Import i dag"
       },
       "daily_grid_export_energy": {
-        "name": "Today Export"
+        "name": "Eksport i dag"
       },
       "daily_battery_charge_energy": {
-        "name": "Today Charge"
+        "name": "Ladet i dag"
       },
       "daily_battery_discharge_energy": {
-        "name": "Today Discharge"
+        "name": "Utladet i dag"
       },
       "daily_ev_energy": {
-        "name": "Today EV"
+        "name": "EV i dag"
       },
       "monthly_solar_yield_energy": {
-        "name": "Monthly Solar"
+        "name": "Sol denne måneden"
       },
       "monthly_grid_import_energy": {
-        "name": "Monthly Import"
+        "name": "Import denne måneden"
       },
       "monthly_grid_export_energy": {
-        "name": "Monthly Export"
+        "name": "Eksport denne måneden"
       },
       "monthly_battery_charge_energy": {
-        "name": "Monthly Charge"
+        "name": "Ladet denne måneden"
       },
       "monthly_battery_discharge_energy": {
-        "name": "Monthly Discharge"
+        "name": "Utladet denne måneden"
       },
       "monthly_home_consumption_energy": {
-        "name": "Monthly Home"
+        "name": "Hjem denne måneden"
       },
       "monthly_ev_consumption_energy": {
-        "name": "Monthly EV"
+        "name": "EV denne måneden"
       },
       "flow_solar_to_home_power": {
-        "name": "Solar to Home"
+        "name": "Sol til hjem"
       },
       "flow_solar_to_battery_power": {
-        "name": "Solar to Battery"
+        "name": "Sol til batteri"
       },
       "flow_solar_to_grid_power": {
-        "name": "Solar to Grid"
+        "name": "Sol til nett"
       },
       "flow_solar_to_ev_power": {
-        "name": "Solar to EV"
+        "name": "Sol til EV"
       },
       "flow_battery_to_home_power": {
-        "name": "Battery to Home"
+        "name": "Batteri til hjem"
       },
       "flow_battery_to_ev_power": {
-        "name": "Battery to EV"
+        "name": "Batteri til EV"
       },
       "flow_grid_to_home_power": {
-        "name": "Grid to Home"
+        "name": "Nett til hjem"
       },
       "flow_grid_to_ev_power": {
-        "name": "Grid to EV"
+        "name": "Nett til EV"
       },
       "flow_grid_to_battery_power": {
-        "name": "Grid to Battery"
+        "name": "Nett til batteri"
       },
       "flow_solar_to_home_energy": {
-        "name": "Solar to Home Energy"
+        "name": "Sol til hjem energi"
       },
       "flow_solar_to_ev_energy": {
-        "name": "Solar to EV Energy"
+        "name": "Sol til EV energi"
       },
       "flow_solar_to_battery_energy": {
-        "name": "Solar to Battery Energy"
+        "name": "Sol til batteri energi"
       },
       "flow_solar_to_grid_energy": {
-        "name": "Solar to Grid Energy"
+        "name": "Sol til nett energi"
       },
       "flow_grid_to_home_energy": {
-        "name": "Grid to Home Energy"
+        "name": "Nett til hjem energi"
       },
       "flow_grid_to_ev_energy": {
-        "name": "Grid to EV Energy"
+        "name": "Nett til EV energi"
       },
       "flow_grid_to_battery_energy": {
-        "name": "Grid to Battery Energy"
+        "name": "Nett til batteri energi"
       },
       "flow_battery_to_home_energy": {
-        "name": "Battery to Home Energy"
+        "name": "Batteri til hjem energi"
       },
       "flow_battery_to_ev_energy": {
-        "name": "Battery to EV Energy"
+        "name": "Batteri til EV energi"
       },
       "self_consumption_rate": {
-        "name": "Self Consumption"
+        "name": "Egenforbruk"
       },
       "autarky_rate": {
-        "name": "Autarky Rate"
+        "name": "Selvforsyningsgrad"
       },
       "daily_savings": {
-        "name": "Today Savings"
+        "name": "Besparelse i dag"
       },
       "daily_battery_savings": {
-        "name": "Battery Savings Daily"
+        "name": "Batteribesparelse daglig"
       },
       "daily_costs": {
-        "name": "Costs Daily"
+        "name": "Kostnader daglig"
       },
       "daily_export_revenue": {
-        "name": "Export Revenue Daily"
+        "name": "Eksportinntekt daglig"
       },
       "daily_net_cost": {
-        "name": "Net Cost Daily"
+        "name": "Nettokostnad daglig"
       },
       "monthly_savings": {
-        "name": "Monthly Savings"
+        "name": "Besparelse denne måneden"
       },
       "monthly_battery_savings": {
-        "name": "Battery Savings Monthly"
+        "name": "Batteribesparelse månedlig"
       },
       "monthly_costs": {
-        "name": "Costs Monthly"
+        "name": "Kostnader månedlig"
       },
       "monthly_export_revenue": {
-        "name": "Export Revenue Monthly"
+        "name": "Eksportinntekt månedlig"
       },
       "monthly_net_cost": {
-        "name": "Net Cost Monthly"
+        "name": "Nettokostnad månedlig"
       },
       "yearly_solar_yield_energy": {
-        "name": "Yearly Solar"
+        "name": "Sol i år"
       },
       "lifetime_solar_yield_energy": {
         "name": "Total solproduksjon"
       },
       "yearly_grid_import_energy": {
-        "name": "Yearly Grid Import"
+        "name": "Nettimport i år"
       },
       "yearly_grid_export_energy": {
-        "name": "Yearly Grid Export"
+        "name": "Netteksport i år"
       },
       "yearly_battery_charge_energy": {
-        "name": "Yearly Battery Charge"
+        "name": "Batterilading i år"
       },
       "yearly_battery_discharge_energy": {
-        "name": "Yearly Battery Discharge"
+        "name": "Batteriutlading i år"
       },
       "yearly_home_consumption_energy": {
-        "name": "Yearly Home Consumption"
+        "name": "Hjemmeforbruk i år"
       },
       "yearly_ev_energy": {
-        "name": "Yearly EV Energy"
+        "name": "EV-energi i år"
       },
       "yearly_costs": {
-        "name": "Yearly Costs"
+        "name": "Kostnader i år"
       },
       "yearly_savings": {
-        "name": "Yearly Savings"
+        "name": "Besparelse i år"
       },
       "yearly_battery_savings": {
-        "name": "Yearly Battery Savings"
+        "name": "Batteribesparelse i år"
       },
       "yearly_export_revenue": {
-        "name": "Yearly Export Revenue"
+        "name": "Eksportinntekt i år"
       },
       "yearly_net_cost": {
-        "name": "Yearly Net Cost"
+        "name": "Nettokostnad i år"
       },
       "lifetime_total_savings": {
-        "name": "Lifetime Total Savings"
+        "name": "Samlet besparelse totalt"
       },
       "lifetime_grid_cost": {
-        "name": "Lifetime Grid Cost"
+        "name": "Nettkostnad totalt"
       },
       "roi_percentage": {
-        "name": "ROI Percentage"
+        "name": "ROI prosent"
       },
       "roi_payback_years": {
-        "name": "ROI Payback Years"
+        "name": "ROI nedbetalingstid (år)"
       },
       "roi_annual_savings": {
-        "name": "ROI Annual Savings"
+        "name": "ROI årlig besparelse"
       },
       "forecast_correction_factor": {
-        "name": "Forecast Correction Factor"
+        "name": "Prognose korreksjonsfaktor"
       },
       "forecast_corrected_today": {
-        "name": "Corrected Forecast Today"
+        "name": "Korrigert prognose i dag"
       },
       "forecast_history_days": {
-        "name": "Forecast History Days"
+        "name": "Prognosehistorikk dager"
       },
       "daily_co2_avoided": {
-        "name": "CO2 Avoided Today"
+        "name": "CO2 spart i dag"
       },
       "yearly_co2_avoided": {
-        "name": "CO2 Avoided This Year"
+        "name": "CO2 spart i år"
       },
       "yearly_trees_equivalent": {
-        "name": "Trees Equivalent This Year"
+        "name": "Trær tilsvarende i år"
       },
       "lifetime_co2_avoided": {
-        "name": "Lifetime CO2 Avoided"
+        "name": "CO2 spart totalt"
       },
       "lifetime_trees_equivalent": {
-        "name": "Lifetime Trees Equivalent"
+        "name": "Trær tilsvarende totalt"
       },
       "power_charge_cost": {
-        "name": "Power Charge Cost"
+        "name": "Effektleddkostnad"
       },
       "consecutive_peak_15min": {
-        "name": "15min Peak"
+        "name": "15 min topplast"
       },
       "monthly_consecutive_peak": {
-        "name": "Monthly Peak"
+        "name": "Månedens topplast"
       },
       "current_vs_peak_percentage": {
-        "name": "Peak Percentage"
+        "name": "Topplastprosent"
       },
       "target_peak_limit": {
-        "name": "Peak Limit"
+        "name": "Topplastgrense"
       },
       "peak_margin": {
-        "name": "Peak Margin"
+        "name": "Topplastmargin"
       },
       "load_management_status": {
-        "name": "Load Management"
+        "name": "Laststyring"
       },
       "load_management_recommendation": {
-        "name": "Load Recommendation"
+        "name": "Lastanbefaling"
       },
       "loads_currently_shed": {
-        "name": "Loads Shed"
+        "name": "Utkoblede laster"
       },
       "available_load_reduction": {
-        "name": "Available Reduction"
+        "name": "Tilgjengelig reduksjon"
       },
       "controllable_devices_count": {
-        "name": "Devices Count"
+        "name": "Antall enheter"
       },
       "surplus_total_w": {
-        "name": "Surplus Total"
+        "name": "Overskudd totalt"
       },
       "surplus_distributable_w": {
-        "name": "Surplus Distributable"
+        "name": "Overskudd til fordeling"
       },
       "surplus_allocated_w": {
-        "name": "Surplus Allocated"
+        "name": "Overskudd tildelt"
       },
       "surplus_unallocated_w": {
-        "name": "Surplus Unallocated"
+        "name": "Overskudd ikke tildelt"
       },
       "surplus_active_devices": {
-        "name": "Surplus Active Devices"
+        "name": "Aktive overskuddsenheter"
       },
       "surplus_total_devices": {
-        "name": "Surplus Total Devices"
+        "name": "Totalt antall overskuddsenheter"
       },
       "forecast_today_kwh": {
-        "name": "Forecast Today"
+        "name": "Prognose i dag"
       },
       "forecast_tomorrow_kwh": {
-        "name": "Forecast Tomorrow"
+        "name": "Prognose i morgen"
       },
       "forecast_remaining_today_kwh": {
-        "name": "Forecast Remaining Today"
+        "name": "Prognose gjenstår i dag"
       },
       "forecast_power_now_w": {
-        "name": "Forecast Power Now"
+        "name": "Prognose effekt nå"
       },
       "forecast_source": {
-        "name": "Forecast Source"
+        "name": "Prognosekilde"
       },
       "charging_recommendation": {
-        "name": "Charging Recommendation"
+        "name": "Ladeanbefaling"
       },
       "tariff_current_import_rate": {
-        "name": "Electricity Price"
+        "name": "Strømpris"
       },
       "tariff_current_export_rate": {
-        "name": "Export Rate"
+        "name": "Eksportpris"
       },
       "tariff_price_level": {
-        "name": "Price Level"
+        "name": "Prisnivå"
       },
       "tariff_provider": {
-        "name": "Tariff Provider"
+        "name": "Tariffleverandør"
       },
       "tariff_next_cheap_start": {
-        "name": "Next Cheap Window"
+        "name": "Neste billige vindu"
       },
       "heat_pump_mode": {
-        "name": "Heat Pump Mode"
+        "name": "Varmepumpemodus"
       },
       "heat_pump_sg_ready_state": {
-        "name": "Heat Pump SG-Ready State"
+        "name": "Varmepumpe SG-Ready-tilstand"
       },
       "pv_daily_specific_yield": {
-        "name": "PV Specific Yield"
+        "name": "Spesifikk solproduksjon"
       },
       "pv_performance_vs_forecast": {
-        "name": "PV vs Forecast"
+        "name": "Solceller mot prognose"
       },
       "pv_estimated_annual_degradation": {
-        "name": "PV Annual Degradation"
+        "name": "Solcelledegradering per år"
       },
       "pv_degradation_trend": {
-        "name": "PV Degradation Trend"
+        "name": "Solcelledegradering trend"
       },
       "energy_optimization_score": {
-        "name": "Optimization Score"
+        "name": "Optimaliseringsscore"
       },
       "energy_tip": {
-        "name": "Energy Tip"
+        "name": "Energitips"
       },
       "energy_tip_category": {
-        "name": "Energy Tip Category"
+        "name": "Energitips-kategori"
       },
       "energy_ev_solar_percentage": {
-        "name": "EV Solar Charging %"
+        "name": "EV sollading %"
       },
       "utility_signal_source": {
-        "name": "Utility Signal Source"
+        "name": "Kilde for nettselskapssignal"
       },
       "utility_signal_count_today": {
-        "name": "Utility Signals Today"
+        "name": "Nettselskapssignaler i dag"
       },
       "predictor_training_status": {
-        "name": "Predictor Training Status"
+        "name": "Prediktor treningsstatus"
       },
       "predictor_model_accuracy": {
         "name": "Predictor Accuracy"
       },
       "predicted_surplus_window": {
-        "name": "Predicted Surplus Window"
+        "name": "Forventet overskuddsvindu"
       },
       "session_energy": {
-        "name": "Session Energy"
+        "name": "Sesjonsenergi"
       },
       "session_solar_share": {
-        "name": "Session Solar Share"
+        "name": "Sesjonens solandel"
       },
       "session_cost": {
-        "name": "Session Cost"
+        "name": "Sesjonskostnad"
       },
       "session_duration": {
-        "name": "Session Duration"
+        "name": "Sesjonsvarighet"
       },
       "lifetime_ev_energy": {
-        "name": "Lifetime EV Energy"
+        "name": "EV-energi totalt"
       },
       "lifetime_ev_solar": {
-        "name": "Lifetime EV Solar Energy"
+        "name": "EV solenergi totalt"
       },
       "lifetime_ev_cost": {
-        "name": "Lifetime EV Cost"
+        "name": "EV-kostnad totalt"
       },
       "lifetime_ev_sessions": {
-        "name": "Lifetime EV Sessions"
+        "name": "EV-sesjoner totalt"
       },
       "lifetime_ev_solar_share": {
-        "name": "Lifetime EV Solar Share"
+        "name": "EV solandel totalt"
       },
       "vehicle_soc": {
-        "name": "Vehicle SOC"
+        "name": "Kjøretøyets SOC"
       },
       "ev_remaining_range": {
         "name": "Elbil rekkevidde"
       },
       "best_surplus_window": {
-        "name": "Best Surplus Window"
+        "name": "Beste overskuddsvindu"
       },
       "night_start_time": {
-        "name": "Night Start Time"
+        "name": "Nattens starttidspunkt"
       },
       "night_end_time": {
-        "name": "Night End Time"
+        "name": "Nattens sluttidspunkt"
       },
       "night_window_hours": {
-        "name": "Night Window Hours"
+        "name": "Nattvindu timer"
       },
       "forecast_peak_power_today_w": {
-        "name": "Forecast Peak Power Today"
+        "name": "Prognose toppeffekt i dag"
       },
       "forecast_peak_time_today": {
-        "name": "Forecast Peak Time Today"
+        "name": "Prognose topptidspunkt i dag"
       },
       "forecast_surplus_kwh": {
-        "name": "Forecast Surplus"
+        "name": "Prognose overskudd"
       },
       "forecast_dampening_factor": {
-        "name": "Forecast Dampening Factor"
+        "name": "Prognose dempingsfaktor"
       },
       "battery_scheduler_state": {
         "name": "Batteriplanlegger status"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "Batteriplanlegger mål-SOC"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Batteriplanlegger underskudd"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Batteriplanlegger årsak"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Antall EV-ladere"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "EV nedtrappingstrend"
       },
       "diag_version": {
         "name": "SEM Versjon"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Nettsensormodus"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Nettets fortegnskonvensjon"
       },
       "diag_battery_sign": {
-        "name": "Battery Sign Convention"
+        "name": "Batteriets fortegnskonvensjon"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Laderens styringsmetode"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Batterikapasitet (konfig)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Oppdateringsintervall"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Observatørmodus"
       },
       "diag_sensors_unavailable": {
         "name": "Sensorer utilgjengelige"
       },
       "battery_session_type": {
-        "name": "Battery Session Type"
+        "name": "Batterisesjon type"
       },
       "battery_session_energy": {
-        "name": "Battery Session Energy"
+        "name": "Batterisesjon energi"
       },
       "battery_session_solar_share": {
-        "name": "Battery Session Solar Share"
+        "name": "Batterisesjon solandel"
       },
       "battery_session_cost": {
-        "name": "Battery Session Cost"
+        "name": "Batterisesjon kostnad"
       },
       "battery_session_savings": {
-        "name": "Battery Session Savings"
+        "name": "Batterisesjon besparelse"
       },
       "battery_session_duration": {
-        "name": "Battery Session Duration"
+        "name": "Batterisesjon varighet"
       },
       "battery_session_avg_power": {
-        "name": "Battery Session Avg Power"
+        "name": "Batterisesjon snitteffekt"
       },
       "diag_charger_count": {
         "name": "Konfigurerte ladere"
@@ -948,7 +948,7 @@
         "name": "Energipanel-konfigurasjon"
       },
       "heat_pump_registration_status": {
-        "name": "Heat Pump Registration Status"
+        "name": "Varmepumpe registreringsstatus"
       },
       "vpp_event": {
         "name": "VPP-hendelse"
@@ -956,48 +956,48 @@
     },
     "binary_sensor": {
       "ev_connected": {
-        "name": "EV Connected"
+        "name": "EV tilkoblet"
       },
       "ev_charging": {
-        "name": "EV Charging"
+        "name": "EV lader"
       },
       "battery_charging": {
-        "name": "Battery Charging"
+        "name": "Batteri lader"
       },
       "battery_discharging": {
-        "name": "Battery Discharging"
+        "name": "Batteri utlader"
       },
       "grid_export_active": {
-        "name": "Grid Export Active"
+        "name": "Netteksport aktiv"
       },
       "solar_active": {
-        "name": "Solar Active"
+        "name": "Sol aktiv"
       },
       "surplus_available": {
         "name": "Overskudd tilgjengelig"
       },
       "forecast_available": {
-        "name": "Forecast Available"
+        "name": "Prognose tilgjengelig"
       },
       "tariff_is_dynamic": {
-        "name": "Dynamic Tariff"
+        "name": "Dynamisk tariff"
       },
       "heat_pump_solar_boost": {
-        "name": "Heat Pump Solar Boost"
+        "name": "Varmepumpe solboost"
       },
       "heat_pump_registered": {
         "name": "Varmepumpe registrert"
       },
       "utility_signal_active": {
-        "name": "Utility Signal Active"
+        "name": "Nettselskapssignal aktivt"
       },
       "layer_mismatch": {
-        "name": "Layer Mismatch"
+        "name": "Lag-avvik"
       }
     },
     "switch": {
       "observer_mode": {
-        "name": "Observer Mode"
+        "name": "Observatørmodus"
       },
       "vacation_mode": {
         "name": "Feriemodus"
@@ -1005,40 +1005,40 @@
     },
     "number": {
       "update_interval": {
-        "name": "Update Interval"
+        "name": "Oppdateringsintervall"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC"
+        "name": "Batteri prioritets-SOC"
       },
       "minimum_solar_power": {
-        "name": "Minimum Solar Power"
+        "name": "Minimum soleffekt"
       },
       "battery_assist_max_power": {
-        "name": "Battery Assist Max Power"
+        "name": "Batteristøtte – maks. effekt"
       },
       "battery_assist_min_surplus": {
         "name": "Batteristøtte – min. soloverskudd"
       },
       "regulation_offset": {
-        "name": "Regulation Offset"
+        "name": "Reguleringsoffset"
       },
       "demand_charge_rate": {
-        "name": "Demand Charge Rate"
+        "name": "Effekttariffsats"
       },
       "cheap_price_threshold": {
-        "name": "Cheap Price Threshold"
+        "name": "Terskel for billig pris"
       },
       "expensive_price_threshold": {
-        "name": "Expensive Price Threshold"
+        "name": "Terskel for dyr pris"
       },
       "heat_pump_boost_offset": {
-        "name": "Heat Pump Boost Offset"
+        "name": "Varmepumpe boost-offset"
       },
       "hot_water_max_temperature": {
-        "name": "Hot Water Max Temperature"
+        "name": "Varmtvann maks. temperatur"
       },
       "system_size_kwp": {
-        "name": "PV System Size"
+        "name": "Størrelse på solcelleanlegg"
       },
       "ev_enable_delay_seconds": {
         "name": "EV-startforsinkelse (overskudd)"
@@ -1047,55 +1047,82 @@
         "name": "EV-stoppforsinkelse (underskudd)"
       },
       "battery_buffer_soc": {
-        "name": "Battery Buffer SOC"
+        "name": "Batteri buffer-SOC"
       },
       "battery_auto_start_soc": {
-        "name": "Battery Auto Start SOC"
+        "name": "Batteri autostart-SOC"
       },
       "battery_max_discharge_power": {
-        "name": "Battery Max Discharge Power"
+        "name": "Batteri maks. utladeeffekt"
       },
       "system_investment_cost": {
-        "name": "System Investment Cost"
+        "name": "Anleggets investeringskostnad"
       },
       "electricity_import_rate": {
-        "name": "Electricity Import Rate"
+        "name": "Importpris strøm"
       },
       "electricity_export_rate": {
-        "name": "Electricity Export Rate"
+        "name": "Eksportpris strøm"
       },
       "night_earliest_start": {
-        "name": "Night Earliest Start"
+        "name": "Natt tidligste start"
       },
       "night_latest_end": {
-        "name": "Night Latest End"
+        "name": "Natt seneste slutt"
       },
       "battery_capacity": {
-        "name": "Battery Capacity"
+        "name": "Batterikapasitet"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Varmtvann solmål"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Legionella måltemperatur"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Legionella intervalltimer"
       },
       "surplus_event_threshold": {
         "name": "Overskuddshendelse terskel"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Nattmål"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. ampere"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Kjøretøyets min. ampere"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Mål-SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Solmaksimum"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Maks. sol-SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Batterikapasitet"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Forbruk"
+      },
+      "ev_phases": {
+        "name": "{charger} Faser"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV-måltype",
+        "name": "{charger} EV-måltype",
         "state": {
           "kwh": "kWh-mål",
           "soc": "SoC-%-mål"
         }
       },
       "charge_mode": {
-        "name": "Lademodus",
+        "name": "{charger} Lademodus",
         "state": {
           "solar_only": "Kun sol",
           "solar_plus_cheap": "Sol + billigste timer",
@@ -1150,44 +1177,48 @@
       "description": "Ingen sensorer for EV-laderen er konfigurert, så EV-ladefunksjonene er utilgjengelige. Legg til en «tilkoblet»-sensor eller en ladeeffektsensor i integrasjonsalternativene for å aktivere EV-lading."
     },
     "sensor_unavailable": {
-      "title": "Sensor unavailable",
-      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+      "title": "Sensoren er utilgjengelig",
+      "description": "Sensoren `{entity_id}` ({friendly_name}) har vært utilgjengelig i {minutes}+ minutter. SEM kan ikke ta den med i beregningene før den er tilbake. Kontroller den underliggende integrasjonen (Huawei modbus / Solcast / Forecast.Solar / nettverket til inverteren din). Saken lukkes automatisk når sensoren neste gang rapporterer en gyldig verdi."
     },
     "sensor_stale": {
-      "title": "Sensor frozen",
-      "description": "The sensor `{entity_id}` ({friendly_name}) still reports as available but has not updated in {minutes}+ minutes — it appears frozen. SEM is using its stale value in the energy balance and sign detection, which can distort your figures. Check the upstream integration (Huawei modbus / Growatt cloud / your inverter network). This issue clears automatically when the sensor next updates."
+      "title": "Sensoren er fastfryst",
+      "description": "Sensoren `{entity_id}` ({friendly_name}) rapporterer fortsatt som tilgjengelig, men har ikke oppdatert seg på {minutes}+ minutter — den ser ut til å ha frosset. SEM bruker den gamle verdien i energibalansen og fortegnsdeteksjonen, noe som kan forvrenge tallene dine. Kontroller den underliggende integrasjonen (Huawei modbus / Growatt cloud / nettverket til inverteren din). Saken lukkes automatisk når sensoren neste gang oppdaterer seg."
     },
     "charger_actuation_failed": {
-      "title": "EV charger not accepting commands: {name}",
-      "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+      "title": "EV-laderen godtar ikke kommandoer: {name}",
+      "description": "SEMs siste 3+ strømkommandoer til **{name}** ble avvist: `{error}`. Laderen er IKKE under SEMs kontroll akkurat nå — den fortsetter med det den sist fikk beskjed om (inkludert lading på full effekt i av-modus). Vanligste årsaker: laderens styringsentitet ble omdøpt av en oppdatering i den underliggende integrasjonen, eller `ev_charger_service` peker på en tjeneste med et annet parameteroppsett. Kontroller laderens styringsentitet / tjeneste i SEM-konfigurasjonen. Denne saken lukkes automatisk ved neste vellykkede kommando."
+    },
+    "charger_stop_unenforceable": {
+      "title": "Laderen kan ikke stoppes: {name}",
+      "description": "SEM har bedt **{name}** om å stoppe, men ingen konfigurert mekanisme kan faktisk åpne kontaktoren — bilen trekker fortsatt {power} W. Den eneste styringen SEM har for denne laderen er `{entity}`, og minimumsverdien ligger over 0 A, så det å skrive 0 A gjør ingenting (SEM skriver aldri en verdi som entiteten ville avvise). Har du et husbatteri, kommer denne effekten derfra — når som helst på døgnet. Løsning: konfigurer en start/stopp-entitet (`ev_start_stop_entity`), en lademodus-entitet eller en stopptjeneste for denne laderen i SEM-innstillingene. Varselet forsvinner så snart laderen slutter å trekke effekt."
     },
     "no_forecast_integration": {
-      "title": "No solar forecast integration detected",
-      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+      "title": "Ingen solprognoseintegrasjon oppdaget",
+      "description": "SEM lette etter en solprognoseintegrasjon (Forecast.Solar, Solcast PV Solar eller en egendefinert prognosesensor) i én time etter oppstart og fant ingen. Prognosebaserte funksjoner (tips om beste overskuddsvindu, smart nattlading, prognosedemping) er inaktive til du installerer en. Saken lukkes automatisk når SEM oppdager en prognoseintegrasjon."
     },
     "no_recorder": {
-      "title": "Recorder integration unavailable",
-      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+      "title": "Recorder-integrasjonen er utilgjengelig",
+      "description": "SEM forsøkte å hente EV-/ladehistorikk fra HAs recorder, men lesingen mislyktes. EV-intelligens (estimert SOC, daglig henfall) kan ikke varmstartes uten den; verdiene bygges i stedet opp langsomt fra live sykluser. Vanligvis en engangshendelse — lukkes automatisk ved neste vellykkede lesing fra recorder."
     },
     "heat_pump_relay_unavailable": {
-      "title": "Heat pump SG-Ready {slot} unavailable",
-      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+      "title": "Varmepumpens SG-Ready {slot} er utilgjengelig",
+      "description": "Den konfigurerte SG-Ready-reléentiteten `{entity_id}` ({slot}) har vært utilgjengelig/ukjent i {minutes}+ minutter. SEM kan registrere varmepumpestyringen uten problemer, men alle SG-Ready-kommandoer vil stille gjøre ingenting inntil denne entiteten rapporterer en reell tilstand. Kontroller den underliggende enheten — ESP-relékort, Shelly, Modbus-bro med template-switch, eller den integrasjonen som eier entiteten. Saken lukkes automatisk når reléet neste gang rapporterer på/av."
     },
     "heat_pump_partial_sg_ready": {
-      "title": "Heat pump SG-Ready half-configured",
-      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
+      "title": "Varmepumpens SG-Ready er halvveis konfigurert",
+      "description": "Nøyaktig ett av de to SG-Ready-reléene (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) er angitt i SEM, uten en klimaentitet som reserveløsning. SG-Ready-protokollen koder de fire tilstandene (BLOCKED / NORMAL / BOOST / FORCE_ON) som to binære bit fordelt på BEGGE reléene, så ett enkelt relé kan ikke drive protokollen. Enten konfigurerer du relé nummer to også, eller så angir du en `heat_pump_climate_entity` for å bruke kun-klima-veien med settpunkt-boost i stedet. Saken lukkes automatisk så snart konfigurasjonen er gyldig."
     },
     "hot_water_entity_unavailable": {
-      "title": "Hot water boiler control unavailable",
-      "description": "The configured hot-water control entity `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM can register the controller fine, but every surplus-dispatch command will silently no-op until the entity reports a real state. Check the upstream device — the boiler relay, water_heater integration, climate device, or whichever integration owns this entity. The issue clears automatically when the entity recovers."
+      "title": "Styring av varmtvannsbereder er utilgjengelig",
+      "description": "Den konfigurerte styringsentiteten for varmtvann `{entity_id}` har vært utilgjengelig/ukjent i {minutes}+ minutter. SEM kan registrere styringen uten problemer, men alle kommandoer om overskuddsfordeling vil stille gjøre ingenting inntil entiteten rapporterer en reell tilstand. Kontroller den underliggende enheten — berederreléet, water_heater-integrasjonen, klimaenheten, eller den integrasjonen som eier entiteten. Saken lukkes automatisk når entiteten er tilbake."
     },
     "hot_water_temperature_sensor_unavailable": {
-      "title": "Hot water temperature sensor unavailable",
-      "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+      "title": "Temperatursensor for varmtvann er utilgjengelig",
+      "description": "Den konfigurerte temperatursensoren for varmtvann `{entity_id}` har vært utilgjengelig/ukjent i {minutes}+ minutter. SEM feiler til sikker side når denne sensoren er ute av drift — berederen aktiveres IKKE på overskudd før en reell temperaturavlesning er tilbake, for å unngå at elementet varmer forbi målet uten tilbakemelding. Kontroller den underliggende integrasjonen til sensoren. Saken lukkes automatisk når sensoren er tilbake."
     },
     "keba_failsafe_active": {
-      "title": "KEBA failsafe is enabled — disable it for steady charging",
-      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+      "title": "KEBA failsafe er aktivert — slå den av for jevn lading",
+      "description": "KEBA-laderen din «{name}» har failsafe-vaktbikkja aktivert. SEM (som evcc) baserer seg ikke lenger på den, men mens den er på, faller laderen tilbake til 6 A mellom kommandoene, noe som gjør at ladingen svinger (6↔9 A) og enkelte biler (f.eks. Renault Zoe) nekter å lade jevnt.\n\nHome Assistants KEBA-tjeneste kan ikke slå den av (den godtar ikke tidsavbrudd på 0), så du må deaktivere den på selve laderen: sett **failsafe-tidsavbruddet til 0** (KEBA UDP `failsafe 0 0 1`, eller via KEBAs KeContact-verktøy). Se den lenkede veiledningen for steg-for-steg-instruksjoner. Denne reparasjonen lukkes automatisk når failsafe er av."
     },
     "soc_cap_unenforceable": {
       "title": "Kan ikke håndheve ladegrensen på {target} %: {name}",

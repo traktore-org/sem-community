@@ -148,6 +148,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         first = chargers[0]
         return first if isinstance(first, dict) else {}
 
+    def _primary_hardware_max_a(self, cfg: Dict[str, Any]) -> Optional[float]:
+        """The primary charger's real current ceiling, or None (#678).
+
+        ``effective_max_current`` is the device's configured max clamped to
+        its control number entity's own max — the same value the adapter
+        clamps every command to (#536). Feeding it into the primary view
+        keeps the strategy string and the actuator from disagreeing about
+        what the hardware will accept.
+
+        None when there is no device yet (early boot, observer mode): the
+        view then falls back to the config chain, which is the pre-#678
+        behaviour and never worse than it.
+        """
+        cid = cfg.get("id") or "ev_charger"
+        dev = (getattr(self, "_ev_devices", None) or {}).get(cid)
+        if dev is None:
+            dev = getattr(self, "_ev_device", None)
+        if dev is None:
+            return None
+        val = getattr(dev, "effective_max_current", None)
+        if val is None:
+            val = getattr(dev, "max_current", None)
+        try:
+            return float(val) if val is not None else None
+        except (TypeError, ValueError):
+            return None
+
     def _charge_stability_kwargs(self) -> Dict[str, Any]:
         """Stability-layer tunables for ``ChargeStability.filter``.
 
@@ -2703,6 +2730,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
                             top_up_amps=int(getattr(charging_context, "night_top_up_amps", 0) or 0),
                             tariff_wait=bool(charging_context.night_tariff_wait),
+                            # #678 — the ceiling the adapter will clamp to.
+                            # Without it decide reads ``ev_max_current`` off a
+                            # per-charger dict that never carries the key and
+                            # falls back to 32 A, over-crediting the cascade.
+                            hardware_max_a=getattr(adapter, "max_current_a", None),
                             solar_committed_w=self._solar_committed_w_per_cycle,
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
                             # #548 — max-SOC ceiling (bound="max"); stops surplus
@@ -2825,17 +2857,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # Step 6: thread solar commitment through to the next
                             # per-charger view so lower-priority chargers see only
                             # the surplus this one didn't take.
-                            from .charger_types import ChargerIntent as _CI2
-                            if decision.intent is _CI2.CHARGE_AT_AMPS:
-                                committed_solar_w = min(
-                                    decision.budget_w,
-                                    decision.commanded_amps * adapter.phases * adapter.voltage,
-                                )
-                                self._solar_committed_w_per_cycle += committed_solar_w
-                            elif decision.intent is _CI2.CHARGE_MAX:
-                                self._solar_committed_w_per_cycle += (
-                                    adapter.max_current_a * adapter.phases * adapter.voltage
-                                )
+                            #
+                            # The arithmetic lives in ``solar_commitment_w``
+                            # (#665) so the scenario harness runs the SAME
+                            # function rather than a test-side copy that can
+                            # drift. Keep this a call, not an inline formula —
+                            # tests/test_665_allocator_coverage.py fails CI if
+                            # the reset or this call disappears.
+                            from .charger_types import solar_commitment_w
+                            self._solar_committed_w_per_cycle += solar_commitment_w(
+                                decision,
+                                phases=adapter.phases,
+                                voltage=adapter.voltage,
+                                max_current_a=adapter.max_current_a,
+                            )
                         except (HomeAssistantError, ServiceValidationError) as e:
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
@@ -5835,6 +5870,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             night_deliverable_kwh=self._night_deliverable_kwh(_primary_cfg),
             # #548 — max-SOC ceiling; stop surplus charging at the car's max.
             soc_ceiling_reached=soc_limit_active,
+            # #678 — same ceiling the actuator clamps to. ``effective_max_current``
+            # already folds in the control number's own max (#536), so the
+            # strategy string can't advertise amps the hardware refuses.
+            hardware_max_a=self._primary_hardware_max_a(_primary_cfg),
         )
         _primary_decision = _decide(_primary_view)
         strategy = _primary_decision.intent.value

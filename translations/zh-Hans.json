@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "富余功率事件触发阈值"
+      },
+      "daily_ev_target": {
+        "name": "{charger}夜间充电目标"
+      },
+      "ev_min_current": {
+        "name": "{charger}最小电流"
+      },
+      "vehicle_min_current": {
+        "name": "{charger}车辆最小电流"
+      },
+      "ev_target_soc": {
+        "name": "{charger}目标电量"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger}绿电充电上限"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger}绿电充电目标电量上限"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger}车辆电池容量"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger}百公里电耗"
+      },
+      "ev_phases": {
+        "name": "{charger}相数"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "电动汽车充电目标类型",
+        "name": "{charger}电动汽车充电目标类型",
         "state": {
           "kwh": "按目标电量 (kWh)",
           "soc": "按目标电量百分比 (SOC %)"
         }
       },
       "charge_mode": {
-        "name": "充电模式",
+        "name": "{charger}充电模式",
         "state": {
           "solar_only": "纯太阳能绿电",
           "solar_plus_cheap": "太阳能 + 低谷电价时段",
@@ -1156,6 +1183,10 @@
     "charger_actuation_failed": {
       "title": "电动汽车充电桩不接受控制指令: {name}",
       "description": "SEM 最近向 **{name}** 发送的连续 3 次以上的电流指令均被拒绝，错误信息为：`{error}`。该充电桩目前【未受 SEM 控制】— 它将保持上一次的运行指令状态（包括在关闭模式下以全功率充电）。最常见的原因有：上游集成更新导致充电桩控制实体被重命名，或者 `ev_charger_service` 指向了参数架构发生变化的另一个服务。请在 SEM 配置中检查充电桩的控制实体或服务。一旦下一次成功下发指令，此问题将自动清除。"
+    },
+    "charger_stop_unenforceable": {
+      "title": "无法停止充电桩：{name}",
+      "description": "SEM 已命令 **{name}** 停止充电，但没有任何已配置的机制能够真正断开接触器——车辆仍在消耗 {power} W。SEM 对该充电桩唯一的控制是 `{entity}`，而它的最小值大于 0 A，因此写入 0 A 不起任何作用（SEM 从不写入实体会拒绝的值）。如果你有家用电池，这部分电力就是从电池里出来的——无论白天还是夜里。解决方法：在 SEM 选项中为该充电桩配置启停实体（`ev_start_stop_entity`）、充电模式实体或停止服务。充电桩停止取电后，此提示会自动消失。"
     },
     "no_forecast_integration": {
       "title": "未检测到太阳能发电预测集成",

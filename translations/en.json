@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Surplus Event Threshold"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Night Target"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min Amps"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Vehicle Min Amps"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Target SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Solar Max"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Solar Max SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Battery Capacity"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Consumption"
+      },
+      "ev_phases": {
+        "name": "{charger} Phases"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "{charger} EV Target Type",
         "state": {
           "kwh": "kWh target",
           "soc": "SOC % target"
         }
       },
       "charge_mode": {
-        "name": "Charge mode",
+        "name": "{charger} Charge Mode",
         "state": {
           "solar_only": "Solar only",
           "solar_plus_cheap": "Solar + cheapest hours",
@@ -1160,6 +1187,10 @@
     "charger_actuation_failed": {
       "title": "EV charger not accepting commands: {name}",
       "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+    },
+    "charger_stop_unenforceable": {
+      "title": "EV charger cannot be stopped: {name}",
+      "description": "SEM has told **{name}** to stop, but no configured mechanism can actually open its contactor — so the car is still drawing {power} W. The only control SEM has for this charger is `{entity}`, whose minimum is above 0 A, so writing 0 A does nothing (SEM never writes a value the entity would reject). If you have a house battery this power is coming out of it, at any hour of the day or night. Fix: configure a start/stop switch entity (`ev_start_stop_entity`), a charge-mode entity, or a stop service for this charger in the SEM options. This issue clears as soon as the charger stops drawing."
     },
     "no_forecast_integration": {
       "title": "No solar forecast integration detected",

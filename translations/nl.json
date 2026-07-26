@@ -28,7 +28,7 @@
           "ev_connected_sensor": "Binaire sensor die aangeeft we je electrische auto is aangesloten op de lader. Automatische detectie voor de volgende merken: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binaire sensor die aangeeft of je lader actief aan opladen is. Automatische detectie vanuit je lader intergratie.",
           "ev_charging_power_sensor": "Numerieke sensor (W) die rapporteert met hoeveel vermogen je electrische auto oplaadt. Automatische detectie vanuit je lader intergratie.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
+          "ev_charger_service": "Home Assistant service die wordt aangeroepen om de laadstroom in te stellen (bv. keba.set_current, easee.set_charger_max_limit). Wordt automatisch ingevuld voor KEBA. Leeg laten als je hierboven het Number-entiteit-pad invult.",
           "ev_charger_service_entity_id": "Entiteits ID die gebruikt wordt in de service call.",
           "ev_current_sensor": "Optioneell. Numerieke sensor (A) die het werkelijke stroomverbruik rapporteert. Wordt gebruikt voor diagnostiek.",
           "ev_total_energy_sensor": "Optioneel. Cumulatieve kWh sensor voor de totale energie die je electrische auto heeft ontvangen.",
@@ -302,7 +302,7 @@
           "ev_charger_service": "Lader stroom-instel service (optioneel)",
           "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
@@ -330,7 +330,7 @@
           "ev_charger_service": "Lader stroom-instel service (optioneel)",
           "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
@@ -417,7 +417,7 @@
         "name": "Netvermogen"
       },
       "grid_active_power": {
-        "name": "Grid Active Power"
+        "name": "Actief Netvermogen"
       },
       "grid_import_power": {
         "name": "Netimport"
@@ -657,7 +657,7 @@
         "name": "Totale Netkosten"
       },
       "roi_percentage": {
-        "name": "ROI Percentage"
+        "name": "ROI-percentage"
       },
       "roi_payback_years": {
         "name": "ROI Terugverdientijd"
@@ -873,7 +873,7 @@
         "name": "Voorspeld Overschot"
       },
       "forecast_dampening_factor": {
-        "name": "Forecast Dampening Factor"
+        "name": "Voorspelling Dempingsfactor"
       },
       "battery_scheduler_state": {
         "name": "Batterijplanner Status"
@@ -891,7 +891,7 @@
         "name": "Aantal EV-laders"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "EV Afregeltrend"
       },
       "diag_version": {
         "name": "SEM-versie"
@@ -912,7 +912,7 @@
         "name": "Batterij Capaciteit (configuratie)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Update-interval"
       },
       "diag_observer_mode": {
         "name": "Observer Modus"
@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Overschot-event drempel"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Nachtdoel"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. ampère"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Voertuig min. ampère"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Doel-SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Zonne-maximum"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Zonne-max SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Accucapaciteit"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Verbruik"
+      },
+      "ev_phases": {
+        "name": "{charger} Fasen"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV-doeltype",
+        "name": "{charger} EV-doeltype",
         "state": {
           "kwh": "kWh-doel",
           "soc": "SoC-%-doel"
         }
       },
       "charge_mode": {
-        "name": "Laadmodus",
+        "name": "{charger} Laadmodus",
         "state": {
           "solar_only": "Alleen zon",
           "solar_plus_cheap": "Zon + goedkoopste uren",
@@ -1160,6 +1187,10 @@
     "charger_actuation_failed": {
       "title": "EV-lader accepteert geen commando's: {name}",
       "description": "De laatste 3+ stroomcommando's van SEM naar **{name}** zijn geweigerd: `{error}`. De lader staat op dit moment NIET onder controle van SEM — hij blijft doen wat hem het laatst is opgedragen (inclusief op vol vermogen laden in de uit-stand). Meest voorkomende oorzaken: de besturingsentiteit van de lader is hernoemd door een update van de bovenliggende integratie, of `ev_charger_service` verwijst naar een service met een ander parameterschema. Controleer de besturingsentiteit/service van de lader in de SEM-configuratie. Deze melding verdwijnt automatisch na het eerstvolgende geslaagde commando."
+    },
+    "charger_stop_unenforceable": {
+      "title": "Laadpaal kan niet gestopt worden: {name}",
+      "description": "SEM heeft **{name}** opdracht gegeven te stoppen, maar geen enkel geconfigureerd mechanisme kan het relais daadwerkelijk openen — de auto trekt nog steeds {power} W. De enige besturing die SEM voor deze laadpaal heeft is `{entity}`, en het minimum daarvan ligt boven 0 A, dus 0 A schrijven doet niets (SEM schrijft nooit een waarde die de entiteit zou weigeren). Heb je een thuisbatterij, dan komt dit vermogen daaruit — op elk moment van de dag of nacht. Oplossing: configureer voor deze laadpaal in de SEM-opties een start/stop-entiteit (`ev_start_stop_entity`), een laadmodus-entiteit of een stopservice. Deze melding verdwijnt zodra de laadpaal geen vermogen meer trekt."
     },
     "no_forecast_integration": {
       "title": "Geen zonneprognose-integratie gevonden",
