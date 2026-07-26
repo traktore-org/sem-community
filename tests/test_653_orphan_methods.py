@@ -90,14 +90,11 @@ _BASELINE = {
     # because it grew a caller. It was the setter for a reconciliation that was
     # written, parked, and never wired — the orphan scan is what found it. Do
     # not re-add.
-    # HeatPumpController.unblock (and its block sibling, which this scan
-    # can't see because "block" matches unrelated string literals). Kept
-    # deliberately though orphaned: they implement SG-Ready state 1, which
-    # config_flow.py advertises to the user as part of the "standard
-    # 4-state protocol". Deleting them would make an advertised promise
-    # permanently unfulfillable. Their caller is #664 (#654 amputated the
-    # ripple-control surface that lied about calling them).
-    "unblock",
+    # HeatPumpController.block/unblock were baselined here waiting on #664 to
+    # grow them a caller. #664 closed the other way — SEM does not support
+    # ripple control / Sperrzeiten, so the actuator was deleted rather than
+    # wired, and config_flow no longer advertises a 4th state SEM can't drive.
+    # Nothing to allow: there is no orphan left.
     # ``validate_dependencies`` left this allowlist in #662 because the
     # method is deleted, not because it grew a caller. Cycles are now
     # rejected at the write path (DeviceRegistry._dependency_would_cycle)

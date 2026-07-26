@@ -1120,22 +1120,6 @@ SENSOR_TYPES = [
     ),
 
     # ============================================================================
-    # UTILITY SIGNALS (Phase 7)
-    # ============================================================================
-
-    SensorEntityDescription(
-        key="utility_signal_source",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-    SensorEntityDescription(
-        key="utility_signal_count_today",
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-
-    # ============================================================================
     # CONSUMPTION/SOLAR PREDICTOR (Phase 8, #3)
     # ============================================================================
 
@@ -1920,7 +1904,6 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "tariff_price_level", "tariff_provider", "tariff_next_cheap_start",
         "heat_pump_mode", "heat_pump_sg_ready_state", "heat_pump_registration_status",
         "pv_degradation_trend", "energy_tip", "energy_tip_category",
-        "utility_signal_source",
         "ev_taper_trend",
     }
 

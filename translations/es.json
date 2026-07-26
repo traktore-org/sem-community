@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "VE Carga Solar %"
       },
-      "utility_signal_source": {
-        "name": "Fuente Señal Red"
-      },
-      "utility_signal_count_today": {
-        "name": "Señales Red Hoy"
-      },
       "predictor_training_status": {
         "name": "Estado Entrenamiento Predictor"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Bomba de calor registrada"
-      },
-      "utility_signal_active": {
-        "name": "Señal Red Activa"
       },
       "layer_mismatch": {
         "name": "Discrepancia entre capas"

@@ -752,14 +752,6 @@ class EnergyAssistantSensorData:
 
 
 @dataclass
-class UtilitySignalSensorData:
-    """Utility signal data for coordinator sensors."""
-    utility_signal_active: bool = False
-    utility_signal_source: str = "none"
-    utility_signal_count_today: int = 0
-
-
-@dataclass
 class EVTaperData:
     """EV taper detection state.
 
@@ -889,7 +881,6 @@ class SEMData:
     hot_water: HotWaterSensorData = field(default_factory=HotWaterSensorData)
     pv_analytics: PVAnalyticsData = field(default_factory=PVAnalyticsData)
     energy_assistant: EnergyAssistantSensorData = field(default_factory=EnergyAssistantSensorData)
-    utility_signal: UtilitySignalSensorData = field(default_factory=UtilitySignalSensorData)
 
     # Session tracking (primary charger — backward compat)
     session: SessionData = field(default_factory=SessionData)
@@ -1225,11 +1216,6 @@ class SEMData:
             # enrichment overwrites it each cycle from trace_health() once the
             # trace has committed (it can't be computed at SEMData build time).
             "layer_mismatch": False,
-
-            # Utility signals (Phase 7)
-            "utility_signal_active": self.utility_signal.utility_signal_active,
-            "utility_signal_source": self.utility_signal.utility_signal_source,
-            "utility_signal_count_today": self.utility_signal.utility_signal_count_today,
 
             # Session tracking (primary charger)
             "session_active": self.session.active,

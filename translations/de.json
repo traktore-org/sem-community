@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "EV Solarladen %"
       },
-      "utility_signal_source": {
-        "name": "EVU-Signalquelle"
-      },
-      "utility_signal_count_today": {
-        "name": "EVU-Signale Heute"
-      },
       "predictor_training_status": {
         "name": "Prädiktor Trainingsstatus"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Wärmepumpe registriert"
-      },
-      "utility_signal_active": {
-        "name": "EVU-Signal Aktiv"
       },
       "layer_mismatch": {
         "name": "Schicht-Abweichung"

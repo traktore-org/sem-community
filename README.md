@@ -457,7 +457,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ### v1.7.0 — Audit telemetry + architecture cleanup (04.06.2026)
 - **Per-PV-string visibility** (#312) — auto-discovered per-string power + daily-energy sensors plus a chip strip on the system diagram and flow cards. Works on Huawei, GoodWe, Growatt, Kostal, Sungrow, Fronius, SolarEdge, SolaX, with V·I synthesis fallback for inverters that expose voltage + current separately.
-- **Audit telemetry across 10 modules** — decision-path enums published as sensor attributes (forecast_tracker, hot_water_controller, heat_pump_controller, pv_performance, time_manager, consumption_predictor, appliance_scheduler, utility_signals, load_management, forecast_reader) so you can self-diagnose without us reading a debug log.
+- **Audit telemetry across 10 modules** — decision-path enums published as sensor attributes (forecast_tracker, hot_water_controller, heat_pump_controller, pv_performance, time_manager, consumption_predictor, appliance_scheduler, load_management, forecast_reader) so you can self-diagnose without us reading a debug log.
 - **FleetCycleState refactor** — single source of truth for fleet-level coordinator inputs; eliminates the class of fleet-vs-per-charger read bugs that produced four hotfixes between v1.6.0 and v1.6.6.
 - **9 Architecture Decision Records** committed under `docs/adr/` (PerChargerContext, EVBudget, sign-convention boundary, home_consumption clamp, per-brand pipeline test, FleetCycleState, real-hass test framework, FleetEvPower newtype, multi-charger priority cascade).
 - **v7 → v8 config schema migration** (#359) — auto-flips legacy `tariff_classification_mode=static` to `percentile` for dynamic-tariff users on first restart.

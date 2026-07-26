@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "EV sollading %"
       },
-      "utility_signal_source": {
-        "name": "Kilde for nettselskapssignal"
-      },
-      "utility_signal_count_today": {
-        "name": "Nettselskapssignaler i dag"
-      },
       "predictor_training_status": {
         "name": "Prediktor treningsstatus"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Varmepumpe registrert"
-      },
-      "utility_signal_active": {
-        "name": "Nettselskapssignal aktivt"
       },
       "layer_mismatch": {
         "name": "Lag-avvik"

@@ -1694,8 +1694,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         Two control paths are supported (#437):
 
         - **SG-Ready** — configure both relay entities. Drives the heat
-          pump via the standard SG-Ready 4-state protocol (BLOCKED /
-          NORMAL / BOOST / FORCE_ON). For Viessmann / Stiebel Eltron /
+          pump via the standard SG-Ready relay table: NORMAL / BOOST /
+          FORCE_ON. State 1 (BLOCKED) is the grid operator's own
+          ripple-control lock — SEM does not drive it and has no
+          Sperrzeiten surface (#664). For Viessmann / Stiebel Eltron /
           Vaillant and similar hardware-relay setups.
         - **Climate-only** — configure only ``heat_pump_climate_entity``.
           Drives ``climate.set_temperature`` with ``boost_offset``

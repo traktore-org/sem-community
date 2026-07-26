@@ -43,7 +43,7 @@ from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
     SurplusControlData, ForecastSensorData, TariffSensorData,
     HeatPumpSensorData, HotWaterSensorData, PVAnalyticsData, EnergyAssistantSensorData,
-    UtilitySignalSensorData, SessionData, BatterySessionData,
+    SessionData, BatterySessionData,
 )
 from .health_check import HealthCheck
 from .units import energy_state_to_kwh, power_state_to_watts
@@ -75,7 +75,6 @@ from ..analytics.pv_performance import PVPerformanceAnalyzer
 from ..analytics.consumption_predictor import ConsumptionPredictor
 from .ev_taper_detector import EVTaperDetector
 from ..analytics.energy_assistant import EnergyAssistant
-from ..utility_signals import UtilitySignalMonitor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -447,12 +446,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Phase 6: Energy assistant
         self._energy_assistant = EnergyAssistant(hass)
 
-        # Phase 7: Utility signal monitor
-        self._utility_monitor = UtilitySignalMonitor(
-            hass,
-            signal_entity_id=config.get("utility_signal_entity"),
-            solar_loads_exempt=config.get("utility_solar_exempt", True),
-        )
 
         # Phase 8: Consumption/solar predictor (#3)
         self._predictor = ConsumptionPredictor()
@@ -3066,7 +3059,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Steps 10–10.5: Analytics phases (extracted for readability, #29)
             forecast_data, tracker_data, tariff_data, surplus_data, \
-                pv_data, assistant_data, utility_data, heat_pump_data, \
+                pv_data, assistant_data, heat_pump_data, \
                 hot_water_data = \
                 await self._update_analytics_phases(
                     power, energy, energy_flows, performance,
@@ -3122,7 +3115,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 hot_water=hot_water_data,
                 pv_analytics=pv_data,
                 energy_assistant=assistant_data,
-                utility_signal=utility_data,
                 session=self._session_data,
                 sessions=self._session_data_per_charger,
                 battery_session=self._battery_session,
@@ -3777,7 +3769,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         performance: Any,
         available_power: float,
     ) -> tuple:
-        """Run analytics phases: forecast, tariff, surplus, PV, assistant, utility (#29).
+        """Run analytics phases: forecast, tariff, surplus, PV, assistant (#29).
 
         Extracted from _async_update_data to reduce cyclomatic complexity.
         Each phase is independent and fails gracefully.
@@ -4093,16 +4085,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             assistant_data.energy_ev_solar_percentage = assistant.ev_solar_percentage
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Energy assistant update failed: %s", e)
-
-        # Utility signal (Phase 7)
-        utility_data = UtilitySignalSensorData()
-        try:
-            signal = self._utility_monitor.update(solar_power_w=power.solar_power)
-            utility_data.utility_signal_active = signal.signal_active
-            utility_data.utility_signal_source = signal.signal_source
-            utility_data.utility_signal_count_today = signal.signal_count_today
-        except (ValueError, TypeError, AttributeError) as e:
-            _LOGGER.debug("Utility signal update failed: %s", e)
 
         # Heat pump data (#437): populate ``registered`` from the
         # surplus controller's device list so the dashboard auto-hide
@@ -4478,7 +4460,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         return (
             forecast_data, tracker_data, tariff_data, surplus_data,
-            pv_data, assistant_data, utility_data, heat_pump_data,
+            pv_data, assistant_data, heat_pump_data,
             hot_water_data,
         )
 

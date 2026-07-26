@@ -803,12 +803,6 @@
       "energy_ev_solar_percentage": {
         "name": "Sähköauton aurinkolataus-%"
       },
-      "utility_signal_source": {
-        "name": "Verkkoyhtiön signaalin lähde"
-      },
-      "utility_signal_count_today": {
-        "name": "Verkkoyhtiön signaalit tänään"
-      },
       "predictor_training_status": {
         "name": "Ennustemallin opetustila"
       },
@@ -987,9 +981,6 @@
       },
       "heat_pump_registered": {
         "name": "Lämpöpumppu rekisteröity"
-      },
-      "utility_signal_active": {
-        "name": "Verkkoyhtiön signaali aktiivinen"
       },
       "layer_mismatch": {
         "name": "Kerrosten ristiriita"

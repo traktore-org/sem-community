@@ -199,6 +199,4 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "energy_ev_solar_percentage": {"sem_status", "sem_ev", "sem_secondary"},
 
     # Utility signals (Phase 7)
-    "utility_signal_active": {"sem_status", "sem_grid", "sem_secondary"},
-    "utility_signal_count_today": {"sem_status", "sem_grid", "sem_advanced"},
 }

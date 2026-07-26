@@ -49,6 +49,10 @@ class SGReadyState(IntEnum):
 # are wired normally-closed (NC) instead of normally-open use the per-pump
 # ``invert_sg_ready`` toggle, which flips both contacts.
 SG_READY_RELAY_MAP = {
+    # SEM never COMMANDS state 1 — it has no ripple-control/Sperrzeiten
+    # surface (#664, decided rather than built). The row stays because the
+    # table is the SG-Ready standard's truth table, which the SETUP_GUIDE
+    # wiring check is verified against (#655/#523).
     SGReadyState.BLOCKED:  (True,  False),  # 1:0
     SGReadyState.NORMAL:   (False, False),  # 0:0
     SGReadyState.BOOST:    (False, True),   # 0:1
@@ -266,26 +270,6 @@ class HeatPumpController(SetpointDevice):
         self._hp_status.is_solar_boosted = False
 
         _LOGGER.info("Heat pump returned to normal operation")
-
-    async def block(self) -> None:
-        """Block heat pump (utility signal / load shedding).
-
-        Sets ``self._last_deactivation_path = "blocked"`` (#421).
-        """
-        await self._set_sg_ready_state(SGReadyState.BLOCKED)
-        self._status.state = DeviceState.BLOCKED
-        self._last_deactivation_path = "blocked"
-        _LOGGER.info("Heat pump blocked by utility signal")
-
-    async def unblock(self) -> None:
-        """Unblock heat pump (return to normal).
-
-        Sets ``self._last_deactivation_path = "unblocked"`` (#421).
-        """
-        await self._set_sg_ready_state(SGReadyState.NORMAL)
-        self._status.state = DeviceState.IDLE
-        self._last_deactivation_path = "unblocked"
-        _LOGGER.info("Heat pump unblocked")
 
     def _relays_for(self, state: SGReadyState) -> tuple[bool, bool]:
         """(relay1_on, relay2_on) for an SG-Ready state, applying the

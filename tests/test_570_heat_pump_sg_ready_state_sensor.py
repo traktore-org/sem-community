@@ -86,8 +86,14 @@ async def test_force_on_state_is_reflected(mock_hass):
 
 @pytest.mark.asyncio
 async def test_blocked_state_is_reflected(mock_hass):
+    """State 1 still renders, even though SEM never commands it (#664).
+
+    ``block()`` was deleted with the ripple-control surface, so the state is
+    set directly here. The sensor mapping is total over the enum on purpose:
+    dropping the arm would leave the sensor blank if state 1 ever arrives.
+    """
     hp = _controller(mock_hass)
-    await hp.block()
+    await hp._set_sg_ready_state(SGReadyState.BLOCKED)
     assert hp.sg_ready_state == SGReadyState.BLOCKED
 
     mode, sg_value, _ = SEMCoordinator._heat_pump_sensor_state(hp)
