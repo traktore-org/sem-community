@@ -429,6 +429,45 @@ The full-repo sweep (34 agents, refute-first verification) confirmed 16 findings
 Fixed same-day: **#639** (class 3, taper double-feed), **#640** (class 14, legionella
 restore no-op), **#644** (duplicated-mechanism, dual anti-cycle clocks). Filed open:
 
+- **#645** — duplicated-mechanism, day-boundary variant: nine independent day-rollover
+  checks, each re-deriving "is it a new day?" from its own stored date. **CLOSED — but
+  the filed closure was wrong.** The audit's proposed fix ("compute the day key ONCE and
+  pass it to every consumer") would have *broken* the system: SEM has **four genuinely
+  distinct and intentional day boundaries** — calendar midnight (energy/flows, to match
+  the HA Energy Dashboard), EV deadline-based (#279), sunrise for the EV bucket
+  (`ev_daily_sun`), and sunrise-gated for the load day (#620). They are not accidental
+  duplication. What the sweep *did* find, underneath the false premise, is one real bug:
+  the EV virtual-SOC decay rode on `_tracker_date`, which `__init__` re-initialises to
+  today on purpose ("so restarts don't re-apply daily decay") — a deliberate trade-off
+  that conflated *never decay twice* with *never decay after a restart*, so a restart
+  spanning midnight skipped the day's decay entirely and the night-charge planner could
+  read a stale "still nearly full" virtual SOC. Fixed by persisting the date the decay
+  **last ran**, separately from the hour-bucket tracker.
+  **Lesson: repetition is not duplication.** Nine sites computing the same-looking thing
+  can be nine correct answers to nine different questions. The tell that separates them
+  is not the shape of the code — it's whether the *stored dates diverge on purpose*.
+  A comment explaining a trade-off ("initialize to today so…") is the highest-value
+  artifact in a sweep like this: it names the property that must survive the fix.
+  Sibling assessed and rejected: `surplus_controller`'s `_offpeak_forced_date` /
+  `_batt_overnight_forced_date` are per-device runtime flags that default False on
+  restart, so no stale force survives — not an instance.
+  **A second, cleaner class fell out of the sweep: *the OS clock is not the HA clock*.**
+  Four production sites named a calendar day with `date.today()` / `datetime.now().date()`,
+  which read the container's timezone — routinely UTC while `hass.config.time_zone` is the
+  user's, so near midnight they name different days (energy-assistant daily trend key and
+  its wall-clock "run appliances at HH:00" tips, the PV month-to-date divisor, the
+  appliance completed/missed-today counters). Unlike the day-boundary question this one
+  has a mechanical rule with no allowlist, so it is enforced absolutely.
+  Guard: `tests/test_645_day_boundary_registry.py` — **rule 1** bans naming a day off the
+  OS clock outright (duration arithmetic on `datetime.now()` stays allowed: both ends use
+  the same clock, so it was never wrong); **rule 2** is a ratchet over the remaining
+  `dt_util.now().date()` sites, each declared with which of the four boundaries it serves
+  and whether its memo survives a restart *across* that boundary. The registry is the
+  deliverable — you cannot dedupe boundaries that are deliberately different, but you can
+  make them declared, and the declaration forces the question that made this expensive.
+  Guard-design note: rule 1 ships with a test that the regex can actually fire (and does
+  not fire on the legitimate duration uses) — the #660 no-vacuous-check discipline applied
+  to a new guard at birth rather than years later.
 - **#647** — class 1: the battery perception audit gates on the `__fleet__` lock that
   per-battery mode never sets → the ledger's battery guard is DEAD on multi-battery
   installs (and fleet-summed comparison is cancellation-blind).

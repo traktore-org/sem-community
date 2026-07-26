@@ -440,6 +440,21 @@ class SEMStorage:
         if iso_ts:
             self._energy_data["legionella_last_time"] = iso_ts
 
+    # Day-rollover decay bookkeeping (#645) — the date the virtual-SOC daily
+    # decay LAST RAN, as an ISO date string. Distinct from the coordinator's
+    # in-memory ``_tracker_date`` (which only owns the hour-bucket arrays):
+    # without a persisted date, a restart that spans midnight initialises
+    # "today" and the decay for the day just ended is skipped entirely.
+    def get_last_decay_date(self) -> Optional[str]:
+        """Get the ISO date the daily virtual-SOC decay last ran, or None."""
+        value = self._energy_data.get("last_decay_date")
+        return value if isinstance(value, str) else None
+
+    def set_last_decay_date(self, iso_date: Optional[str]) -> None:
+        """Persist the ISO date the daily virtual-SOC decay last ran."""
+        if iso_date:
+            self._energy_data["last_decay_date"] = iso_date
+
     def add_session_to_history(self, session: Dict[str, Any]) -> None:
         """Append a completed session to bounded history (max 90 entries)."""
         state = self.get_ev_intelligence_state()
@@ -472,6 +487,28 @@ class SEMStorage:
             _LOGGER.debug("Scheduled delayed save of energy data")
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to schedule energy data save: %s", e)
+
+    async def async_save_energy_now(self) -> None:
+        """Write the energy store to disk immediately (#645).
+
+        Deliberately NOT ``async_save_energy_delayed``: ``async_delay_save``
+        re-arms its timer on every call, so under the continuous coordinator
+        update loop it never fires until updates pause — i.e. only at shutdown
+        (same trap ``async_save_daily_throttled`` documents). A value that only
+        exists to survive a restart cannot be written by a mechanism that only
+        runs at a clean one; an unclean reboot would lose it every time.
+
+        Only for rare, restart-critical writes — the decay date changes at most
+        once a day. Do NOT reach for this in the per-cycle path.
+        """
+        try:
+            await self._energy_store.async_save({
+                **self._energy_data,
+                "last_update": dt_util.now().isoformat(),
+            })
+            _LOGGER.debug("Saved energy data immediately")
+        except (OSError, TypeError) as e:
+            _LOGGER.warning("Failed to save energy data: %s", e)
 
     async def async_save_daily(self) -> None:
         """Save daily data immediately."""

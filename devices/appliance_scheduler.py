@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .base import ScheduleDevice, DeviceState
 
@@ -251,11 +252,14 @@ class ApplianceScheduler:
             ],
             "next_appliance": next_sched.appliance_name if next_sched else None,
             "next_deadline": next_sched.deadline.isoformat() if next_sched else None,
+            # (#645) HA-local, not the OS clock: "today" here is shown to the
+            # user next to the rest of SEM's daily figures, which all roll over
+            # at HA-local midnight. A UTC container disagreed for hours.
             "completed_today": sum(
                 1 for h in self._history
                 if h.status == "completed"
                 and h.completed_at
-                and h.completed_at.date() == datetime.now().date()
+                and h.completed_at.date() == dt_util.now().date()
             ),
             # #426 — per-device transition paths from the last
             # ``update_schedules`` call. Surfaces silent state changes.
@@ -263,6 +267,6 @@ class ApplianceScheduler:
             "appliance_missed_today": sum(
                 1 for h in self._history
                 if h.status == "missed"
-                and h.deadline.date() == datetime.now().date()
+                and h.deadline.date() == dt_util.now().date()
             ),
         }

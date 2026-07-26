@@ -15,6 +15,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- 🌙 **A restart just after midnight no longer swallows the day's EV virtual-SOC decay**
+  (#645, coherence-audit) — while a car is away SEM can't watch it being driven, so each
+  day rollover advances the estimated-SOC by the predicted daily consumption. That decay
+  rode on an in-memory date that is re-initialised to *today* on every start, so a restart
+  spanning midnight (nightly backup, HA update, power blip) made SEM believe the rollover
+  had already been handled and skip it. Not cosmetic: when the real SOC entity is offline
+  the night-charge planner falls back to the virtual SOC, reads "still nearly full", and
+  silently skips a charge the car needed. The date the decay *last ran* is now persisted
+  separately from the hour-bucket tracker, so "already decayed today" and "never decayed
+  today" stop being the same state — restart later the same day still decays exactly once,
+  and a multi-day outage catches up one decay per missed day (bounded).
+- 🕐 **Four places asked the container what day it is instead of asking Home Assistant**
+  (#645, coherence-audit) — swept while fixing the above. `date.today()` and
+  `datetime.now().date()` read the *operating system's* timezone, which on a supervised or
+  Docker install is routinely UTC while `hass.config.time_zone` is the user's. Near
+  midnight the two name different days. Affected: the energy-assistant daily trend key
+  (a day's stats could land on the wrong key or overwrite the previous day's), its
+  "best time to run appliances" tips (which quote a wall-clock hour to the user and were
+  off by the whole UTC offset), the PV month-to-date divisor, and the appliance
+  "completed/missed today" counters. All now use HA-local time. Duration arithmetic on
+  `datetime.now()` is untouched — both ends use the same clock, so it was never wrong.
+  Guarded by `tests/test_645_day_boundary_registry.py`, which also **declares** SEM's four
+  intentional day boundaries (calendar midnight, EV deadline, sunrise-EV, sunrise-load) so
+  the next contributor adding a daily counter has to answer "what happens if HA restarts
+  across your boundary?" — the question this whole issue turned out to be.
+
 - 🔗 **A circular "Requires" link between two loads can no longer be created — from any
   path** (#662, coherence-audit) — the drag-and-drop UI already refused to close a loop,
   but `register_surplus_device` (SEM's *only* multi-dependency write path) had no guard at

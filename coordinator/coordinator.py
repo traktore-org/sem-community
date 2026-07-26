@@ -453,8 +453,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Hourly activity tracker for schedule card (#63)
         self._today_surplus_hours: list = [False] * 24
         self._today_ev_hours: list = [False] * 24
-        # Initialize to today so restarts don't re-apply daily decay
+        # Initialize to today: the arrays above start empty, so there is
+        # nothing for a rollover to clear on the day of a restart.
         self._tracker_date = dt_util.now().date()
+        # (#645) The virtual-SOC daily decay has its OWN date, restored from
+        # storage in the first refresh. It used to ride on ``_tracker_date``,
+        # which is re-initialised to today on every restart — so a restart
+        # that spanned midnight silently skipped the decay for the day that
+        # just ended. None until restore; see ``_run_due_daily_decay``.
+        self._last_decay_date = None
 
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
@@ -1929,6 +1936,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Restore EV intelligence state (#106)
             ev_intel_state = self._storage.get_ev_intelligence_state()
             self._ev_taper_detector.restore_state(ev_intel_state)
+
+            # (#645) Restore the date the virtual-SOC daily decay last ran.
+            # Must happen before the first rollover check, otherwise the
+            # coordinator adopts today and the missed day is lost — exactly
+            # the restart-spanning-midnight skip this fixes.
+            self._restore_last_decay_date()
 
             # Restore sign-detection locks (#476 item 5) — without this
             # every restart re-learned grid/battery signs from possibly
@@ -3582,9 +3595,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if self._tracker_date != today_date:
                 self._today_surplus_hours = [False] * 24
                 self._today_ev_hours = [False] * 24
-                # Day rollover: decay virtual SOC when car is unplugged (#106)
-                self._apply_daily_taper_decay(now_time, power)
                 self._tracker_date = today_date
+            # (#645) Decay is checked against its OWN persisted date, NOT the
+            # in-memory tracker above — a restart re-initialises the tracker to
+            # today and would swallow the rollover.
+            self._run_due_daily_decay(now_time, today_date, power)
             hour = now_time.hour
             if surplus_data.surplus_total_w > 100:
                 self._today_surplus_hours[hour] = True
@@ -6579,6 +6594,99 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             }
 
         return result
+
+    # Guard against an absurd catch-up after a long outage. The decay itself
+    # is already clamped at battery capacity (``apply_daily_decay`` caps
+    # ``energy_since_full``), so this only bounds the loop and the log noise.
+    MAX_DECAY_CATCHUP_DAYS = 7
+
+    def _run_due_daily_decay(self, now_time, today_date, power) -> None:
+        """Run the virtual-SOC daily decay if it hasn't run yet today (#645).
+
+        The decay used to be a side effect of the hour-bucket rollover, gated
+        on ``_tracker_date``. That date is re-initialised to *today* in
+        ``__init__`` on purpose — "so restarts don't re-apply daily decay" —
+        and the trade-off was deliberate: never decay twice, at the cost of
+        not decaying at all when a restart spans midnight. Only one of those
+        two is actually required. Persisting the date the decay LAST RAN
+        separates them:
+
+        * restart later the same day → last-decay is today → no decay (the
+          no-double-decay property the original comment was protecting);
+        * restart spanning midnight → last-decay is yesterday → the decay
+          fires once, where it used to be skipped;
+        * fresh install / no persisted date → adopt today and don't decay
+          (a brand-new detector has no ``last_full_timestamp`` anyway).
+
+        A multi-day outage catches up one decay per missed day, bounded by
+        ``MAX_DECAY_CATCHUP_DAYS``. Erring toward *more* decay is the safe
+        direction: an under-decayed virtual SOC reads "still nearly full" and
+        silently skips a night charge the car needed, while an over-decayed
+        one at worst schedules a charge that tapers out early. Every catch-up
+        day is charged the SAME predicted consumption (the predictor is asked
+        about today, not about each missed weekday) — deliberately, since the
+        alternative is inventing per-day history SEM never observed, and the
+        result is clamped at battery capacity anyway.
+        """
+        if self._last_decay_date is None:
+            # Nothing persisted (fresh install, or storage restore hasn't run
+            # yet on the very first cycle). Adopt today without decaying.
+            self._last_decay_date = today_date
+            self._persist_last_decay_date()
+            return
+
+        if self._last_decay_date >= today_date:
+            return
+
+        missed = (today_date - self._last_decay_date).days
+        runs = min(missed, self.MAX_DECAY_CATCHUP_DAYS)
+        if missed > runs:
+            _LOGGER.info(
+                "Day rollover: %d days since the last virtual-SOC decay, "
+                "applying %d (capped)", missed, runs,
+            )
+        for _ in range(runs):
+            self._apply_daily_taper_decay(now_time, power)
+        self._last_decay_date = today_date
+        self._persist_last_decay_date()
+
+    def _restore_last_decay_date(self) -> None:
+        """Load ``_last_decay_date`` from storage at first refresh (#645).
+
+        A method rather than three inline lines so the restore is testable
+        on its own — the ordering pin (restore before the rollover check) is
+        a source assertion, but "a stored date actually lands as a ``date``"
+        has to be exercised, not read.
+        """
+        stored = self._storage.get_last_decay_date()
+        if not stored:
+            return
+        try:
+            self._last_decay_date = date.fromisoformat(stored)
+        except ValueError:
+            _LOGGER.debug("Ignoring malformed last_decay_date %r", stored)
+
+    def _persist_last_decay_date(self) -> None:
+        """Write ``_last_decay_date`` through to storage (#645).
+
+        Writes through IMMEDIATELY rather than riding the batched save. The
+        batched one uses ``async_delay_save``, which re-arms its timer on every
+        call — under the continuous update loop that means it only ever fires
+        at a clean shutdown (see ``async_save_daily_throttled``'s note). A
+        value whose entire purpose is to survive a restart cannot be persisted
+        by a mechanism that only runs at a graceful one. Cheap: at most one
+        write per day. Live-caught on HA-TEST — the key was absent from the
+        store ten minutes after deploy.
+        """
+        try:
+            self._storage.set_last_decay_date(self._last_decay_date.isoformat())
+            self.hass.async_create_task(self._storage.async_save_energy_now())
+        except Exception as e:
+            # Bookkeeping only — never take down the update cycle for it. The
+            # cost of losing this write is one repeated decay after the next
+            # restart, so WARNING (not DEBUG): it is rare, once-a-day, and
+            # explains a virtual SOC that dropped twice.
+            _LOGGER.warning("Could not persist last decay date: %s", e)
 
     def _apply_daily_taper_decay(self, now_time, power) -> None:
         """Day-rollover virtual-SOC decay, PER charger (#106, #648).
