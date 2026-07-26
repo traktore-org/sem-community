@@ -341,10 +341,27 @@ and is now the path **observer mode always runs** (HA-TEST). In it, OFF *is* the
 gate stops a running load by construction; markers derive from `intent.source` (closes #18).
 Full closure = flip `_use_desired_state` for PROD actuation and delete the 7 imperative passes
 (gated on the 2 LIFO parity xfails in `test_desired_state.py`).
+**Instance 5 — a *second* way to be un-stoppable: the gate was threaded into both spots, but
+the load didn't look like SEM's.** Both release paths (`compute_load_intent` clause 1 and the
+imperative force-expiry pass) are gated on `_sem_owned`, the flag that separates "SEM turned
+this on" from "the user turned this on". Ownership was recorded **at the call site**, and only
+2 of the 5 activation passes did it (main surplus, `reconcile_load`); the Tier-2 overnight
+battery, cheap-hours grid and deadline passes did not, and no `activate()` implementation sets
+it either. So Mode → Off computed the right decision and then declined to act on it. Confirmed
+on real hardware (HA-PROD 2026-07-26): a towel heater started by the Tier-2 pass was still
+drawing 648 W five minutes after Mode → Off, `sem_owned == false` throughout, and would have
+run until the user's own 2-hour safety automation. **Fixed** by moving ownership off the call
+sites into a choke point — `_activate_owned` / `_deactivate_owned` in `surplus_controller.py`,
+all 12 actuation sites converted. **Guard:** `tests/test_load_ownership_choke_point.py` — an
+AST guard fails CI on any raw `<device>.activate(...)`/`.deactivate()` outside the two helpers
+(same shape as `# FLEET-READ` from #589), plus a reflection test asserting no `activate()`
+implementation records ownership, so it can't drift back into the device layer and double-claim.
+**Lesson:** "is the gate wired into both spots?" is necessary but not sufficient — also ask
+"can the stop path *see* this load as ours?".
 **Watch:** until the flag flips for actuation, any new "reason a load should stop" must be added
 to BOTH `compute`-side (block activation) AND a force-expiry/goal-gate section (stop running) in
 the imperative `update()` — AND to `compute_load_intent`'s precedence — AND to the family
-guard's parametrize list.
+guard's parametrize list. Any new *activation* path must go through `_activate_owned`.
 
 ### 18. Forced-marker set in one pass, leaks because another pass didn't clear it — PARTIAL
 **Symptom:** a transient control marker (`_offpeak_forced`, `_batt_overnight_forced`) set when

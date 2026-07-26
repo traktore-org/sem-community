@@ -36,6 +36,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- 🔥 **Switching a device to "Off" did not stop it if SEM had started it overnight** (caught on our
+  own production hardware) — a load started by the overnight-battery pass, the cheap-hours grid
+  pass or a deadline top-up kept running after you set its mode to Off. SEM stopped managing it and
+  never stopped it: on PROD a towel heater was still drawing 648 W five minutes after the switch to
+  Off, and would have gone on heating until the household's own 2-hour safety automation cut it.
+  The release only ever fires for a load SEM *owns* — the flag that separates "SEM turned this on"
+  from "you turned this on", so that Off leaves your own manual switch-ons alone. That flag was set
+  by the code that turned the device on, and only two of the five places that turn a device on
+  remembered to set it; the three overnight/top-up paths did not, so Off reached the right decision
+  and then declined to act on it. Ownership now lives with the actuation itself instead of being a
+  thing each path has to remember, and a CI guard fails the build if a new path is ever added that
+  bypasses it. This is the fifth time this class of bug has shipped (a gate that blocks a device
+  from starting but does not stop one already running) — the new variant is written up in
+  `docs/BUG_CLASSES.md`. (by @traktore-org)
+- 🔌 **Re-registering an auto-detected device by service dropped its energy counter** — the
+  `register_surplus_device` service accepts an `energy_entity_id` (#600) but discarded it when
+  building the device row, so a device that had been auto-discovered *with* an energy sensor lost
+  it the moment it was re-registered through the service. (by @traktore-org)
 - 🚗 **A full car could still be woken mid-backoff, once every couple of minutes** (#682, follow-up
   to #610) — #610 stops SEM re-offering current to a car that has already refused three start
   ladders, and the 20-minute backoff was verified live. It leaked anyway: the gate sat inside the
