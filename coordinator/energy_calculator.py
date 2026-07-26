@@ -1365,10 +1365,9 @@ class EnergyCalculator:
                     eps=0.1,
                 )
 
-        # Simple efficiency estimates
-        metrics.solar_efficiency = 85.0 if power.solar_power > 0 else 0.0
-        metrics.battery_efficiency = 95.0 if abs(power.battery_power) > 50 else 100.0
-
+        # (#669) The two "simple efficiency estimates" assigned here were
+        # constants, not estimates, and no reader ever existed. Removed with
+        # their fields rather than left computing for nobody.
         return metrics
 
     def _accumulate(
