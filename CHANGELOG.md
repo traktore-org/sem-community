@@ -64,7 +64,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the registry could not tell you it had rotted. Filtering the HA entity list by
   `sem_monthly` returned *nothing* while all six monthly sensors existed and held data.
   Eleven keys were pure suffix drift (the label key was the entity key minus its `_energy`
-  suffix) and are fixed — the monthly group works again. The remaining 33 were then triaged
+  suffix) and are fixed — every monthly sensor now actually carries its label (live-checked
+  on HA-TEST). On its own that does **not** yet restore the filtering: live verification
+  turned up a second, independent cause — SEM never registers its labels with HA at all, so
+  every reverse lookup returns nothing even for correctly-attached labels. Filed as #670.
+  The remaining 33 orphans were then triaged
   individually and came back as one class rather than 33 judgement calls: **the sensor was
   deleted and the label was left behind.** `sensor.py` names 26 of them outright in its own
   `# Removed:` comments, so the file that dropped the entities is the file that says which
