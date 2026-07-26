@@ -41,6 +41,18 @@ _EV_KEY_PREFIX = f"{EV_CATEGORY}_"
 _LEGACY_EV_CATEGORY = "ev_daily_sun"
 _LEGACY_EV_KEY_PREFIX = f"{_LEGACY_EV_CATEGORY}_"
 
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    """Coerce a restored scalar, falling back rather than raising (#668)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if value is not None:
+            _LOGGER.warning(
+                "Discarding non-numeric restored value %r — using %s", value, default
+            )
+        return default
+    return float(value)
+
+
 # Environmental impact constants
 GRID_CO2_KG_PER_KWH = 0.128  # Swiss grid average
 CO2_KG_PER_TREE_PER_YEAR = 22  # EPA estimate
@@ -1674,14 +1686,25 @@ class EnergyCalculator:
             self._yearly_cost_accumulators = state.get("yearly_cost_accumulators", {})
             self._yearly_seeded = state.get("yearly_seeded", False)
             self._yearly_cost_seeded = state.get("yearly_cost_seeded", False)
-            self._rate_history = deque(state.get("rate_history", []), maxlen=30)
-            self._accumulated_savings = state.get("accumulated_savings", 0.0)
-            self._accumulated_battery_savings = state.get("accumulated_battery_savings", 0.0)
-            self._accumulated_cost = state.get("accumulated_cost", 0.0)
-            self._accumulated_export_revenue = state.get("accumulated_export_revenue", 0.0)
-            self._accumulated_grid_import_kwh = state.get("accumulated_grid_import_kwh", 0.0)
-            self._accumulated_self_consumed_kwh = state.get("accumulated_self_consumed_kwh", 0.0)
-            self._accumulated_export_kwh = state.get("accumulated_export_kwh", 0.0)
+            rate_history = state.get("rate_history", [])
+            self._rate_history = deque(
+                rate_history if isinstance(rate_history, list) else [], maxlen=30
+            )
+            # (#668) These are now actually persisted, so a corrupt entry would
+            # survive every restart instead of being reset by the drop. The
+            # numeric repair in the store only covers the accumulator *dicts*;
+            # these are bare scalars, so they are coerced here.
+            self._accumulated_savings = _as_float(state.get("accumulated_savings"))
+            self._accumulated_battery_savings = _as_float(
+                state.get("accumulated_battery_savings"))
+            self._accumulated_cost = _as_float(state.get("accumulated_cost"))
+            self._accumulated_export_revenue = _as_float(
+                state.get("accumulated_export_revenue"))
+            self._accumulated_grid_import_kwh = _as_float(
+                state.get("accumulated_grid_import_kwh"))
+            self._accumulated_self_consumed_kwh = _as_float(
+                state.get("accumulated_self_consumed_kwh"))
+            self._accumulated_export_kwh = _as_float(state.get("accumulated_export_kwh"))
             baselines = state.get("solar_counter_baselines")
             if isinstance(baselines, dict):
                 self._solar_counter_baselines = baselines

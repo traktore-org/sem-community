@@ -442,6 +442,33 @@ restarts and non-clobbering of user renames. **Sweep question:** for every id we
 (labels, areas, floors, categories, devices), who *creates* it — and has anyone ever tested the
 lookup in the direction the user actually uses?
 
+### 24. Hand-maintained key whitelist mirroring a structure that grows — GUARDED
+**Symptom:** a serialization boundary carries values through a *literal list of key names*
+written by hand. The structure on either side of it gains a field; the list does not. The new
+field is written on the way out, silently dropped in the middle, and read back on the way in
+with `.get(key, default)` — so it does not raise, does not warn, and does not go missing. It
+resets to the default on every restart, forever. Distinct from class 22 (there the two sides
+disagree on *one* key's spelling; here they agree on spelling and one side simply doesn't list
+the key at all). **Instance:** **#668** — `SEMStorage.export_energy_calculator_state()` and
+`import_energy_calculator_state()` were two *separate* hand-written lists across the calculator's
+save/restore boundary. `get_state()` emits 20 keys; export whitelisted 11. Nine were dropped: the
+seven `accumulated_*` lifetime running totals, `rate_history`, and `yearly_cost_seeded`. Effects:
+`pre_sem_*` absorbed the entire lifetime, so **Lifetime Total Savings degraded from a
+rate-weighted real figure to a 7-day-average estimate** that moved on every restart; and the reset
+`yearly_cost_seeded` re-ran seeding each start, **overwriting** exact live yearly accumulators
+with an estimate. The pair had already drifted twice — #351 M1 added the cost accumulators to
+both, and nine more were still missing after it. **Tell:** two functions on opposite sides of a
+persist boundary that each contain a literal tuple/list of the *same* field names; or any
+`for key in ("a", "b", ...)` copy loop. Ask what happens when someone adds field `c`. **Fix
+pattern:** ONE module-level constant both directions iterate (`CALCULATOR_STATE_KEYS`), with the
+deliberate exclusions named and justified *in* it (`last_update` is the save stamp, not the
+integration stamp). Coerce on restore too — a value that used to be reset by the drop now
+survives every restart once it actually persists. **Guards:**
+`tests/test_658_ev_counter_reconcile.py::TestStorageRoundTrip658` round-trips real values rather
+than comparing key *sets*, and `test_the_two_directions_cannot_drift_apart` uses `inspect
+.getsource` to assert both functions reference the shared constant. **Sweep question:** for every
+persist boundary, is the field list derived from the structure — or retyped beside it?
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

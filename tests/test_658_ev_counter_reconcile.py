@@ -274,75 +274,99 @@ class TestStorageRoundTrip658:
     """``EnergyCalculator.get_state()`` emits; ``SEMStorage`` re-lists.
 
     The storage layer does not persist what the calculator returns — it copies
-    a hand-maintained set of keys in ``import_energy_calculator_state`` and
-    hands back a hand-maintained set in ``export_energy_calculator_state``. A
-    key the calculator emits but storage forgets is dropped in silence: the
-    calculator's ``state.get(key, default)`` on the way back in is
-    indistinguishable from a fresh install. #351 M1 already paid for this once
-    (the cost accumulators reset ``daily_savings`` to 0 mid-day after every
-    restart), and #658's baselines would have been the next: they round-trip
-    perfectly through the calculator and vanish through the store, taking the
-    downtime recovery with them.
+    a named set of keys across. A key the calculator emits but storage forgets
+    is dropped in silence: the calculator's ``state.get(key, default)`` on the
+    way back in is indistinguishable from a fresh install. #351 M1 paid for
+    this once (the cost accumulators reset ``daily_savings`` to 0 mid-day after
+    every restart), #658's baselines would have been the next, and #668 found
+    nine more still missing after both.
 
-    So this is a ratchet, not a list: every key ``get_state()`` emits must
-    survive the store, unless it is named below as knowingly dropped.
+    Since #668 the two directions are driven by ONE list
+    (``storage.CALCULATOR_STATE_KEYS``) rather than two hand-written ones, and
+    the allowlist below is **empty**. So this is a plain ban: every key
+    ``get_state()`` emits must survive the store.
     """
 
-    # Knowingly dropped — see #668. These are LIFETIME running totals summed
-    # at each day rollover, and the store persists none of them, so they
-    # restart at 0.0 on every HA restart. It does not show as a zero: the
-    # lifetime-savings maths substitutes an average-rate ESTIMATE for the
-    # missing rate-weighted real figure, which is why nobody has reported it.
-    # Shrink-only: fixing one means deleting it from here, never adding.
-    KNOWN_DROPPED = {
-        "accumulated_savings",
-        "accumulated_battery_savings",
-        "accumulated_cost",
-        "accumulated_export_revenue",
-        "accumulated_grid_import_kwh",
-        "accumulated_self_consumed_kwh",
-        "accumulated_export_kwh",
-        "rate_history",
-        "yearly_cost_seeded",
-    }
+    # EMPTY — and it must stay that way. The nine keys that used to sit here
+    # (the seven lifetime ``accumulated_*`` running totals, ``rate_history``
+    # and ``yearly_cost_seeded``) are persisted since #668. They never showed
+    # as a zero: with them at 0.0 the lifetime-savings maths substituted a
+    # 7-day-average-rate ESTIMATE of the whole history for the rate-weighted
+    # real figure, which is a plausible number — which is why nobody reported
+    # it for the life of the feature.
+    KNOWN_DROPPED: set = set()
 
     @staticmethod
-    def _storage_keys():
+    def _round_trip(state):
+        """Save then load, exactly as the coordinator does: ``import_*`` on
+        every cycle (step 13) and ``export_*`` once on startup."""
         from custom_components.solar_energy_management.coordinator import storage
-        source = SimpleNamespace(
-            _daily_data={}, _energy_data={},
-        )
-        exported = storage.SEMStorage.export_energy_calculator_state(source)
-        return set(exported)
+        store = SimpleNamespace(_daily_data={}, _energy_data={})
+        storage.SEMStorage.import_energy_calculator_state(store, state)
+        return storage.SEMStorage.export_energy_calculator_state(store)
 
     def test_every_emitted_key_survives_the_store(self):
+        from custom_components.solar_energy_management.coordinator import storage
         emitted = set(_calc(_hass({})).get_state())
-        dropped = emitted - self._storage_keys() - self.KNOWN_DROPPED
+        carried = set(storage.CALCULATOR_STATE_KEYS) | {"last_update"}
+        dropped = emitted - carried - self.KNOWN_DROPPED
         assert not dropped, (
             f"{sorted(dropped)} are written by EnergyCalculator.get_state() but "
-            "not carried by SEMStorage.export_energy_calculator_state() — they "
-            "will read back as their default after every restart, with no error "
-            "and no log line. Add them to the store (both directions), or to "
-            "KNOWN_DROPPED with an issue number if the loss is deliberate."
+            "not in storage.CALCULATOR_STATE_KEYS — they will read back as their "
+            "default after every restart, with no error and no log line (#668)."
         )
 
-    def test_the_ev_baselines_specifically_survive(self):
-        assert "ev_counter_baselines" in self._storage_keys()
+    def test_the_values_actually_come_back(self):
+        """Key coverage is not the same as a working round-trip: #668's nine
+        keys were emitted by the calculator and simply never stored. Drive the
+        real save→load path with real values."""
+        calc = _calc(_hass({}))
+        calc._accumulated_savings = 123.45
+        calc._accumulated_grid_import_kwh = 678.9
+        calc._yearly_cost_seeded = True
+        calc._rate_history.append({"date": "2026-07-25", "import_rate": 0.31})
+        calc._ev_counter_baselines = {"2026-07-25": {"base": 9062.16}}
 
-    def test_the_import_side_carries_them_too(self):
-        """Export and import are separate hand-maintained lists — a key can be
-        exported and never imported, which reads as a permanently empty value."""
+        restored = _calc(_hass({}))
+        restored.restore_state(self._round_trip(calc.get_state()))
+
+        assert restored._accumulated_savings == 123.45
+        assert restored._accumulated_grid_import_kwh == 678.9
+        assert restored._yearly_cost_seeded is True
+        assert list(restored._rate_history) == [
+            {"date": "2026-07-25", "import_rate": 0.31}
+        ]
+        assert restored._ev_counter_baselines == {"2026-07-25": {"base": 9062.16}}
+
+    def test_the_two_directions_cannot_drift_apart(self):
+        """THE #668 class: export and import used to be two hand-written key
+        lists, and they had already diverged twice. One list means a key added
+        to the save side is on the load side by construction."""
         from custom_components.solar_energy_management.coordinator import storage
-        sink = SimpleNamespace(_daily_data={}, _energy_data={})
-        storage.SEMStorage.import_energy_calculator_state(
-            sink, {"ev_counter_baselines": {"date": "2026-07-15"}},
-        )
-        assert sink._daily_data["ev_counter_baselines"] == {"date": "2026-07-15"}
+        import inspect
+
+        for fn in (
+            storage.SEMStorage.export_energy_calculator_state,
+            storage.SEMStorage.import_energy_calculator_state,
+        ):
+            src = inspect.getsource(fn)
+            assert "CALCULATOR_STATE_KEYS" in src, (
+                f"{fn.__name__} no longer iterates the shared key list — that "
+                "is the two-lists shape #668 removed."
+            )
+
+    def test_a_corrupt_scalar_does_not_become_permanent(self):
+        """These are persisted now, so a bad value survives restarts instead of
+        being wiped by the drop that used to hide the whole problem."""
+        calc = _calc(_hass({}))
+        calc.restore_state({"accumulated_savings": "not-a-number"})
+        assert calc._accumulated_savings == 0.0
 
     def test_the_drop_list_only_shrinks(self):
         """Anti-rot: if a listed key starts round-tripping, delete it from
         KNOWN_DROPPED rather than leaving a stale exemption behind."""
-        still_dropped = self.KNOWN_DROPPED & self._storage_keys()
+        from custom_components.solar_energy_management.coordinator import storage
+        still_dropped = self.KNOWN_DROPPED & set(storage.CALCULATOR_STATE_KEYS)
         assert not still_dropped, (
             f"{sorted(still_dropped)} now survive the store — remove them from "
             "KNOWN_DROPPED."
