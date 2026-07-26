@@ -161,13 +161,18 @@ class TestSingleDetectorInstallUnchanged648:
 @pytest.mark.unit
 class TestDecayIsWiredIntoTheRollover648:
     def test_the_rollover_calls_the_per_charger_helper(self):
-        """Pins the call site: the day-rollover branch must go through the
-        helper, not back to the primary-only property."""
+        """Pins the call chain: the day-rollover must reach the per-charger
+        helper, not go back to the primary-only property. Since #645 the
+        rollover calls ``_run_due_daily_decay``, which is the only caller of
+        ``_apply_daily_taper_decay`` — pin both links."""
         import inspect
         from custom_components.solar_energy_management.coordinator import coordinator as mod
 
-        src = inspect.getsource(mod.SEMCoordinator._async_update_data)
-        assert "self._apply_daily_taper_decay(now_time, power)" in src
-        assert "self._ev_taper_detector.apply_daily_decay" not in src, (
-            "the primary-only decay call is back (#648)"
-        )
+        update_src = inspect.getsource(mod.SEMCoordinator._async_update_data)
+        assert "self._run_due_daily_decay(now_time, today_date, power)" in update_src
+        due_src = inspect.getsource(mod.SEMCoordinator._run_due_daily_decay)
+        assert "self._apply_daily_taper_decay(now_time, power)" in due_src
+        for src in (update_src, due_src):
+            assert "self._ev_taper_detector.apply_daily_decay" not in src, (
+                "the primary-only decay call is back (#648)"
+            )

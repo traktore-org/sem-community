@@ -1,7 +1,7 @@
 """Tests for EnergyAssistant smart recommendations."""
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from custom_components.solar_energy_management.analytics.energy_assistant import (
     EnergyAssistant,
@@ -239,9 +239,12 @@ class TestDailyStatsTrend:
         # Simulate multiple days with rising self_consumption
         for i in range(7):
             day = date.today() - timedelta(days=6 - i)
-            with patch("custom_components.solar_energy_management.analytics.energy_assistant.date") as mock_date:
-                mock_date.today.return_value = day
-                mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            with patch(
+                "custom_components.solar_energy_management.analytics"
+                ".energy_assistant.dt_util"
+            ) as mock_dt:
+                # (#645) the day key comes from HA's clock now, not date.today()
+                mock_dt.now.return_value = datetime.combine(day, time(12, 0))
                 ea._record_daily_stats(
                     solar=10, home=5, ev=2,
                     grid_import=i * 3 + 1,  # Rising
@@ -256,9 +259,12 @@ class TestDailyStatsTrend:
         ea = EnergyAssistant(mock_hass)
         for i in range(7):
             day = date.today() - timedelta(days=6 - i)
-            with patch("custom_components.solar_energy_management.analytics.energy_assistant.date") as mock_date:
-                mock_date.today.return_value = day
-                mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            with patch(
+                "custom_components.solar_energy_management.analytics"
+                ".energy_assistant.dt_util"
+            ) as mock_dt:
+                # (#645) the day key comes from HA's clock now, not date.today()
+                mock_dt.now.return_value = datetime.combine(day, time(12, 0))
                 ea._record_daily_stats(
                     solar=10, home=5, ev=2,
                     grid_import=20 - i * 3,  # Falling
@@ -273,9 +279,12 @@ class TestDailyStatsTrend:
         ea = EnergyAssistant(mock_hass)
         for i in range(7):
             day = date.today() - timedelta(days=6 - i)
-            with patch("custom_components.solar_energy_management.analytics.energy_assistant.date") as mock_date:
-                mock_date.today.return_value = day
-                mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            with patch(
+                "custom_components.solar_energy_management.analytics"
+                ".energy_assistant.dt_util"
+            ) as mock_dt:
+                # (#645) the day key comes from HA's clock now, not date.today()
+                mock_dt.now.return_value = datetime.combine(day, time(12, 0))
                 ea._record_daily_stats(
                     solar=10, home=5, ev=2,
                     grid_import=10,  # Constant
@@ -290,9 +299,12 @@ class TestDailyStatsTrend:
         ea = EnergyAssistant(mock_hass)
         for i in range(35):
             day = date.today() - timedelta(days=34 - i)
-            with patch("custom_components.solar_energy_management.analytics.energy_assistant.date") as mock_date:
-                mock_date.today.return_value = day
-                mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            with patch(
+                "custom_components.solar_energy_management.analytics"
+                ".energy_assistant.dt_util"
+            ) as mock_dt:
+                # (#645) the day key comes from HA's clock now, not date.today()
+                mock_dt.now.return_value = datetime.combine(day, time(12, 0))
                 ea._record_daily_stats(
                     solar=10, home=5, ev=2,
                     grid_import=10, grid_export=1,

@@ -13,6 +13,7 @@ from datetime import datetime, date
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -133,7 +134,10 @@ class PVPerformanceAnalyzer:
             data.daily_specific_yield = daily_solar_kwh / self.system_size_kwp
             data.monthly_specific_yield = monthly_solar_kwh / self.system_size_kwp
             # Annualize from monthly (rough estimate)
-            today = date.today()
+            # (#645) HA-local — the OS clock is often UTC in the container.
+            # ``today.day`` is the divisor for the month-to-date average, so a
+            # naive clock divides by the wrong day count at a month boundary.
+            today = dt_util.now().date()
             if data.monthly_specific_yield > 0 and today.day > 0:
                 daily_avg = data.monthly_specific_yield / today.day
                 data.annual_specific_yield = daily_avg * 365
