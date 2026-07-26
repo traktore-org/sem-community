@@ -447,44 +447,61 @@ class ChargeStability:
             getattr(adapter, "last_intent", None) in _CHARGE_INTENTS
             or adapter.actual_charging(view.power)
         )
+        drawing = adapter.actual_charging(view.power)
+        if drawing:
+            # #610 — the car accepted current again (e.g. after
+            # preconditioning freed BMS headroom): end the backoff.
+            self._giveup_streak.pop(cid, None)
+            self._giveup_backoff_until.pop(cid, None)
+
+        # #610 — full-car backoff gate. MUST sit ABOVE the ``charge_wanted``
+        # split, not inside it. It has now moved twice, for two different
+        # bypasses of the same shape (a guard on one branch, an unguarded
+        # passthrough on the other):
+        #   1. fresh-start-only → the ladder block bypassed it, because
+        #      ``adapter.last_intent`` stays CHARGE_AT_AMPS across a give-up
+        #      (the IDLE actuation is debounced), so the next cycle re-entered
+        #      the ladder with freshly-reset state and climbed again.
+        #      PROD 2026-07-19: armed 11:10:12, ladder restarted 11:10:42.
+        #   2. inside ``charge_wanted`` → the NOT-wanted branch bypassed it.
+        #      ``charge_wanted`` is the MEDIAN, which lags the raw decision by
+        #      up to ``smooth_window - 1`` cycles: after two low-budget cycles
+        #      the median reads below the floor while THIS cycle's decision is
+        #      a real CHARGE, so control fell through to one of the three
+        #      ``return decision`` passthroughs below (night / post-stop /
+        #      #552 ownership) and the raw offer reached the charger unfiltered.
+        #      PROD 2026-07-26, window armed 17:35:15-17:55:15: five decisions
+        #      escaped (17:41:54 12A, 17:49:36 12A, 17:50:37 12A, 17:52:37 11A,
+        #      17:52:47 11A) — recognisable in the log because their reason has
+        #      NO ``stability:`` prefix. Trigger was the Huawei grid meter's
+        #      single-sample dropouts oscillating the budget.
+        # Gating on the RAW state (armed + not drawing) rather than on a
+        # smoothed or branch-local one is what closes the class: there is no
+        # longer a path from here to an actuation that skips it.
+        backoff_until = self._giveup_backoff_until.get(cid)
+        if backoff_until is not None and not drawing:
+            if now < backoff_until:
+                return replace(
+                    decision,
+                    intent=ChargerIntent.IDLE,
+                    commanded_amps=0,
+                    reason=(
+                        f"stability: full-car backoff — car declined "
+                        f"{self._giveup_streak.get(cid, 0)} start "
+                        f"ladders; next offer in "
+                        f"{max(0.0, backoff_until - now) / 60.0:.0f} min "
+                        f"— {decision.reason}"
+                    ),
+                )
+            self._giveup_backoff_until.pop(cid, None)
 
         if charge_wanted:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
             self._stopped_at.pop(cid, None)  # a real charge ends the stop-settle
             target = max(min_amps, min(max_amps, med_amps))
-            drawing = adapter.actual_charging(view.power)
             if drawing:
                 self._latched[cid] = now
-                # #610 — the car accepted current again (e.g. after
-                # preconditioning freed BMS headroom): end the backoff.
-                self._giveup_streak.pop(cid, None)
-                self._giveup_backoff_until.pop(cid, None)
-            # #610 — full-car backoff gate. MUST sit HERE, covering BOTH the
-            # fresh-start path and the "commanded but not drawing" ladder
-            # block below: in the live loop ``adapter.last_intent`` stays
-            # CHARGE_AT_AMPS across a give-up (the IDLE actuation is
-            # debounced), so the next cycle re-enters the ladder block with
-            # freshly-reset state and climbs again — the exact re-offer
-            # chatter the backoff exists to stop. Proven live on PROD
-            # 2026-07-19: backoff armed 11:10:12, ladder restarted 11:10:42;
-            # the original fresh-start-only gate never fired.
-            backoff_until = self._giveup_backoff_until.get(cid)
-            if backoff_until is not None and not drawing:
-                if now < backoff_until:
-                    return replace(
-                        decision,
-                        intent=ChargerIntent.IDLE,
-                        commanded_amps=0,
-                        reason=(
-                            f"stability: full-car backoff — car declined "
-                            f"{self._giveup_streak.get(cid, 0)} start "
-                            f"ladders; next offer in "
-                            f"{max(0.0, backoff_until - now) / 60.0:.0f} min "
-                            f"— {decision.reason}"
-                        ),
-                    )
-                self._giveup_backoff_until.pop(cid, None)
             # Latch hysteresis: once a car has drawn, a single low/zero power
             # reading is almost always a transient (the car blips, a sensor
             # hiccup) — NOT a reason to re-start at a different current. Any
@@ -515,9 +532,8 @@ class ChargeStability:
                     ramp_amps=ramp_amps,
                 )
             if not charging:
-                # (#610 backoff is gated ABOVE, before the charging split —
-                # the fresh-start-only placement never fired in the live
-                # loop because last_intent keeps ``charging`` True.)
+                # (#610 backoff is gated ABOVE, outside the charge_wanted
+                # split — see the two-bypass note there.)
                 # Fresh start (no prior charge command). Day waits for the
                 # surplus to persist enable_delay_s (anti-flap); night starts
                 # at once (the planner already decided). Begin gently at min;

@@ -711,6 +711,45 @@ take the ratio. ≈1.0 is trustworthy; the PROD solar counter scored **0.48** ov
 
 ---
 
+### 29. A guard sits inside one branch of a split; the other branch passes the input through unguarded — GUARDED
+**Symptom:** a suppression that provably works — you can watch it fire, cycle after cycle, in the
+log — and yet the suppressed action still reaches the hardware, occasionally, with no trace of the
+guard in its reason string. The guard is not broken; control simply arrives at the actuator by a
+route that never passes it.
+**Root shape:** a function branches (`if wanted: … else: …`), the guard is written into the branch
+where the interesting work happens, and one or more `return input` passthroughs on the other side
+hand the *caller's un-rewritten decision* onward. Every passthrough is individually justified — "out
+of scope", "not our session", "the planner owns this" — which is exactly why they don't look like
+actuation paths. Worse when the branch predicate is **derived** (a median, a debounce, a cached
+flag) and so can disagree with the raw input on the very cycle the raw input is dangerous.
+**Live catch (#610, twice, same guard):** the full-car backoff has now moved twice for this shape.
+(1) First placed on the fresh-start path only — but `adapter.last_intent` stays `CHARGE_AT_AMPS`
+across a give-up (the IDLE actuation is debounced), so the *ladder* block re-entered with reset
+state and climbed again; PROD 2026-07-19, armed 11:10:12, ladder restarted 11:10:42. (2) Then
+placed inside `if charge_wanted:` — where `charge_wanted` is the **median** of the last
+`smooth_window` decided amps and therefore lags the raw decision. After a few collapsed-budget
+cycles the median reads below the floor while *this* cycle's decision is a real CHARGE, so control
+took the NOT-wanted branch and fell to one of three `return decision` passthroughs (night /
+post-stop / #552 ownership). PROD 2026-07-26, one 20-minute armed window: **five raw offers
+escaped** (17:41:54 12 A, 17:49:36 12 A, 17:50:37 12 A, 17:52:37 11 A, 17:52:47 11 A), with a
+confirmed `keba_p30_max_current` write. Trigger was the Huawei grid meter's single-sample dropouts
+oscillating the budget.
+**Closure:** evaluate the guard on the **raw** state (armed + not drawing), above the split, so no
+route from entry to actuation can skip it. Placement, not logic, is the fix both times.
+**Sweep question:** for each guard — *list every `return` between it and the actuator. Which of
+them returns the caller's object rather than a rewritten one?* And: *is the branch predicate the
+same value the guard is protecting against, or a smoothed/derived proxy of it?*
+**Cheap detector:** the escaping decisions are visible in the log by **absence** — their reason has
+no `stability:` prefix, because nothing in the filter rewrote them. Any layer that annotates what
+it touched makes this class greppable: `grep 'intent=charge' | grep -v '<layer-prefix>'`.
+**Guard:** `tests/test_610_full_car_backoff.py::test_median_lag_cannot_smuggle_a_charge_past_the_backoff`
+— drags the median under the floor with low cycles, then feeds one raw CHARGE. Both new cases fail
+against the pre-fix source with the live signature. Refs #610 #552 #461.
+**Watch:** any new early `return decision` / `return state` added to a filter or reconciler, and
+any guard written *inside* a branch whose predicate is smoothed, debounced or cached.
+
+---
+
 ## Meta-classes (the coherence audit hunts these too)
 
 - **Duplicated mechanism** — the same debounce/retry/reconcile/swap built in 2+ places (e.g. the
