@@ -69,3 +69,74 @@ class TestGuiDocsAnchors:
         section links to its dedicated docs section."""
         generic = [u for u in _card_doc_links() if u.endswith("#5-options-flow")]
         assert not generic, generic
+
+
+@pytest.mark.unit
+class TestEveryRelativeMarkdownLinkResolves672:
+    """#672 — the general case of the guard above.
+
+    The class above checks 12 links from one JS file. #672 was the same rot one
+    level out: ``docs/USER_GUIDE.md`` was moved from the repo root into ``docs/``
+    by #618, but its **relative** links were not rebased, so every one of them
+    pointed a directory too deep. Four screenshots rendered as broken-image icons
+    on GitHub and the ⭐ cross-reference the guide itself calls "the canonical
+    reference" 404'd — in the most-read document in the repo, for weeks.
+
+    Nothing caught it because a broken markdown link fails silently by
+    construction: no build step reads it, CI does not resolve it, and a reader
+    skims past a broken-image icon. Same family as #667 / #669 / #671 — a
+    reference nobody resolves.
+
+    Scope is deliberately every ``.md`` in the repo, not just ``docs/``: the
+    other instance was in ``.github/ISSUE_TEMPLATE/``, which a docs-only scan
+    would have missed.
+    """
+
+    # Historical, deliberately frozen. Dated design plans and superseded guides
+    # record what was true when written; rebasing their links would falsify the
+    # record. Everything else is live and must resolve.
+    _SKIP_PARTS = {".git", "node_modules", "archive"}
+
+    # Gitignored, local-only, and deliberately links out of the repo into the
+    # developer's own notes. It is not in a CI checkout at all, so excluding it
+    # keeps a local run honest rather than green-by-absence.
+    _SKIP_FILES = {"CLAUDE.md"}
+
+    def _markdown_files(self):
+        return [
+            p for p in _ROOT.rglob("*.md")
+            if not self._SKIP_PARTS & set(p.relative_to(_ROOT).parts)
+            and p.name not in self._SKIP_FILES
+        ]
+
+    def test_the_scan_sees_the_docs(self):
+        """Bug class 8: an empty file list would make the check below pass
+        vacuously, which is exactly the failure mode being guarded against."""
+        files = self._markdown_files()
+        assert len(files) > 30, f"only {len(files)} markdown files — scan broke"
+
+    def test_every_relative_link_resolves(self):
+        broken = {}
+        for md in self._markdown_files():
+            for target in re.findall(r"\]\(([^)#\s]+)\)", md.read_text(errors="ignore")):
+                if target.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                if not (md.parent / target).resolve().exists():
+                    broken.setdefault(str(md.relative_to(_ROOT)), []).append(target)
+        assert not broken, (
+            "markdown links that resolve to nothing:\n  "
+            + "\n  ".join(f"{k}: {sorted(set(v))}" for k, v in sorted(broken.items()))
+            + "\nA moved file needs its relative links rebased — #618 moved the "
+            "guides into docs/ and #672 found four broken screenshots still "
+            "linked as if from the repo root."
+        )
+
+    def test_the_rule_can_actually_fire(self):
+        """Both directions: it must reject the real #672 shape and accept a
+        real link, or it is a green light with nothing behind it."""
+        guide = _ROOT / "docs" / "USER_GUIDE.md"
+        assert guide.is_file(), "USER_GUIDE.md moved again — retarget this test"
+        # The exact broken form: docs/-prefixed, from a file already in docs/.
+        assert not (guide.parent / "docs/images/sem_home_tab.png").resolve().exists()
+        # The corrected form.
+        assert (guide.parent / "images/sem_home_tab.png").resolve().exists()
