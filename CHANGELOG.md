@@ -64,10 +64,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the registry could not tell you it had rotted. Filtering the HA entity list by
   `sem_monthly` returned *nothing* while all six monthly sensors existed and held data.
   Eleven keys were pure suffix drift (the label key was the entity key minus its `_energy`
-  suffix) and are fixed — the monthly group works again. The remaining 33 name entities
-  that were renamed, superseded or never built; they are now held in a shrink-only ratchet
-  (`tests/test_667_label_registry.py`) so a newly-typo'd label fails immediately while the
-  existing debt gets an individual verdict rather than a blanket delete.
+  suffix) and are fixed — the monthly group works again. The remaining 33 were then triaged
+  individually and came back as one class rather than 33 judgement calls: **the sensor was
+  deleted and the label was left behind.** `sensor.py` names 26 of them outright in its own
+  `# Removed:` comments, so the file that dropped the entities is the file that says which
+  labels went stale — nobody had re-read it. Two were live entities under a drifted name
+  (`battery_cycles` → `battery_cycles_estimated`, `battery_health` →
+  `battery_health_score`) and are repointed; the other 31 are deleted, including the
+  near-misses of a *working* label (`daily_solar_yield` vs `daily_solar_energy`), which
+  would have double-labelled one entity if repointed. The registry is 116 → 85 keys with
+  **zero** orphans, and `tests/test_667_label_registry.py` now bans them outright instead of
+  ratcheting — plus a guard that the scan covers every platform SEM forwards to, since a
+  missed platform makes real entities look like orphans and invites allowlisting them.
 - 🔌 **EV charging that happened while SEM wasn't running is now recovered from the wallbox
   counter** (#658, coherence-audit) — SEM builds daily EV energy by integrating the
   charger's power sensor every cycle, so anything charged while it wasn't integrating —
