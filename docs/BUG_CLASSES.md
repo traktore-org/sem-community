@@ -676,6 +676,39 @@ installer ever stops seeding the global, and a parametrized twin-agreement test.
 **Watch:** any new "leave it blank and SEM won't" contract. Write the test against the *installed*
 entry first — a hand-built fixture cannot see this class.
 
+### 28. A sensor is trusted for the slot it is wired into, not for what it measures — GUARDED
+**Symptom:** an external counter is configured in a slot named for a quantity ("solar production
+energy"), and every consumer reads it as that quantity. On some hardware it measures something
+adjacent, so the numbers are wrong in a way no unit check, no range check and no balance check can
+see — the value is plausible, monotonic, correctly-united, and simply about a different thing.
+**Root shape:** a config slot expresses *where a number comes from*, never *what it is*. The
+integration's own semantics get attached to it silently at the read site. Compounding factor: when
+the reconciliation that consumes it is **one-directional** (adopt only if higher, only if lower),
+a source whose errors would otherwise cancel over a full cycle gets ratcheted — the pass keeps the
+excursion in the favoured direction and discards the one that would have paid it back.
+**Live catch (#681, our own PROD hardware):** on a DC-coupled hybrid, the inverter's "total yield"
+counter measures **AC output**, so it climbs all night while the battery serves the house, and
+lags all day because PV routed DC→battery never leaves as AC. Wired into
+`solar_energy_sensor`, `_reconcile_solar_energy` credited the night climb as production: a live
+Huawei SUN2000 + LUNA2000 counted **3.06 kWh of solar before sunrise** (+0.01 kWh every ~70 s,
+356 consecutive points, PV power 0 W throughout). Upward-only adoption banked the night inflation
+while integration was ~0 and discarded the compensating daytime shortfall, so it never washed out
+— daily solar ~15% high, propagated to monthly/yearly/lifetime, self-consumption, autarky, savings
+and ROI.
+**Closure:** cross-check the source against a **physical invariant that does not come from the same
+sensor**. Here: no PV production exists while the sun is below the horizon, so counter movement in
+darkness is absorbed into the baseline rather than credited. The invariant must fail *open* — a
+missing `sun.sun` keeps the pre-fix behaviour rather than silently disabling reconciliation.
+**Sweep question:** for each externally-configured counter — *what would it read on hardware where
+the slot's quantity and the sensor's quantity diverge (hybrid vs string inverter, AC- vs
+DC-coupled, gross vs net metering)?* And: *is the pass that consumes it one-directional?* If yes,
+errors ratchet instead of cancelling.
+**Cheap detector:** integrate the counter's own `stat_rate` power sensor over the same window and
+take the ratio. ≈1.0 is trustworthy; the PROD solar counter scored **0.48** over 4 h of midday.
+**Guard:** `tests/test_681_night_solar_counter.py` — the PROD night trace replayed, plus a
+#556-still-works pin and fail-open cases. Refs #681 #556 #628.
+**Watch:** any new `*_energy_sensor` / counter slot, and any `if new > old: adopt` reconciliation.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

@@ -470,6 +470,26 @@ logger:
 
 ---
 
+## Daily solar is higher than my PV strings / my inverter says (hybrid inverters)
+
+**Cause:** SEM cross-checks daily solar against the production counter configured in your Energy
+Dashboard, so a cloud-polled power sensor that drops to 0 between polls doesn't undercount the day.
+On a **DC-coupled hybrid** that counter is often the inverter's *total yield*, which measures the
+inverter's **AC output** — not PV. At night that output is your **battery** discharging to serve the
+house, so the counter keeps climbing in the dark and SEM used to book it as solar production. On our
+own Huawei SUN2000 + LUNA2000 that added **3.06 kWh of "solar" before sunrise** (#681).
+
+**Fixed in v1.7.5-beta.25:** counter movement is ignored while the sun is below the horizon. Nothing
+changes for daytime recovery — the case this feature exists for still works.
+
+**How to check whether you were affected:** on a completed day, compare `sensor.sem_daily_solar_energy`
+against the sum of your `sensor.sem_pv_string_*_daily_energy` sensors. They should agree within a few
+percent. If solar reads high, home consumption reads high too — it's computed from the energy balance,
+so inflated solar inflates it 1:1.
+
+**Note:** the day the fix lands, the affected day's figures are already banked. Daily values are
+correct from the following midnight; monthly/yearly/lifetime keep the historic inflation.
+
 ## Energy values spiked after integration update or restart
 
 **Cause:** When a hardware integration (e.g. Huawei Solar) restarts or updates, its sensors go `unavailable` briefly. When they come back, SEM's energy integrator could multiply the returned power value by the entire gap duration, producing unrealistic energy spikes (e.g. 40+ kWh battery discharge on a 15 kWh battery).
