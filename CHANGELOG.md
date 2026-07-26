@@ -615,6 +615,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   next to priority / control-mode / dependencies, are re-applied at device build, and flow
   back into the load manager. Toggles set before this release are adopted once on upgrade,
   so nobody has to re-click them.
+- 🎚️ **Five more config-card options now apply live, no reload** (#637) — hot-water
+  min/legionella temperatures, heat-pump max setpoint, VPP reserve SoC and the mobile
+  notification service route through the in-place config path (their consumers re-read
+  every cycle; the notifier's service-detection cache resets on change). Options backed
+  by differently-named number entities (the #542 map) now entity-route too — ending the
+  legionella dual-path confusion. Construction-only keys (tariff mode, battery scheduler
+  params) deliberately keep the reload. A classification guard test makes every card
+  option declare its routing — nothing can silently join the reload-per-tweak set again.
 - 🎚️ **The config card's peak sliders now apply live** (#636) — `target_peak_limit` /
   `warning_peak_level` / `emergency_peak_level` had no number entities, so `set_option`
   dropped them to the entry-write + reload path: a slider change during a charge session
