@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- 🌙 **Daily solar counted the battery discharging overnight as production** (#681, caught on our
+  own production hardware) — on a DC-coupled hybrid the inverter's total-yield counter measures AC
+  *output*, and at night that output is the battery serving the house. SEM's hardware-counter
+  reconciliation credited every tick of it as solar: on a live Huawei SUN2000 + LUNA2000 the
+  counter climbed +3.55 kWh between 22:00 and 05:30 with PV power flat at 0 W, and SEM duly
+  reported **3.06 kWh of solar produced before sunrise**. Because adoption is upward-only the
+  phantom was banked while integration was still ~0 and the real day accumulated on top of it, so
+  it never washed out — daily solar ran ~15% high, and monthly, yearly, lifetime, self-consumption,
+  autarky, savings and ROI all inherited it. The mirror error (the counter *under*-reports by day,
+  since PV routed DC→battery never leaves as AC yield) would have cancelled it, but keeping only
+  the maximum made the two ratchet instead. Counter movement is now ignored while the sun is below
+  the horizon — no production exists to recover in the dark. The case #556 was built for is
+  untouched: a cloud-polled inverter whose *power* sensor sits at 0 **during the day** still gets
+  its counter delta credited. (by @traktore-org)
 - ☀️ **"Solar only" grid-charged at night on every install — the never-grids default was
   unreachable** (#679, found while diagnosing @onkelfu's #627) — #634 settled the axis: the mode
   is the *daytime* axis, the "At least X" floor is the overnight guarantee, and leaving that

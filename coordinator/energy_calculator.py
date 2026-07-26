@@ -867,6 +867,24 @@ class EnergyCalculator:
             solar_direct * imp_rate, batt_discharge * imp_rate,
         )
 
+    def _sun_is_down(self) -> bool:
+        """Is the sun below the horizon right now? (#681)
+
+        A solar *production* counter cannot legitimately advance in the dark,
+        so movement while the sun is down is never PV. On a DC-coupled hybrid
+        the inverter's total-yield counter measures AC OUTPUT — at night that
+        is the battery discharging — and crediting it as solar booked 3.06 kWh
+        of "production" before sunrise on a live Huawei SUN2000 + LUNA2000
+        (26.07.2026: counter +0.01 kWh every ~70 s all night with PV power at
+        0 W; 0.51 kWh/h ≈ the 510 W house load the battery was serving).
+
+        A missing or unknown ``sun.sun`` means "do not gate": reconciliation
+        keeps its pre-#681 behaviour rather than silently switching itself off
+        on an install whose sun entity is absent.
+        """
+        state = self._hass.states.get("sun.sun") if self._hass else None
+        return bool(state) and getattr(state, "state", None) == "below_horizon"
+
     def _reconcile_solar_energy(
         self, today: date, month_key: str, year_key: str
     ) -> None:
@@ -889,6 +907,12 @@ class EnergyCalculator:
           remains the floor, so an unavailable/stale/partial counter can
           never shrink the day. The delta propagates to monthly, yearly and
           lifetime so all periods stay consistent.
+        - IN DARKNESS THE COUNTER IS NOT CREDITED (#681) — see
+          ``_sun_is_down``. Upward-only adoption is what makes this
+          mandatory: a hybrid's yield counter over-reports at night (battery
+          discharge) and under-reports by day (PV going DC→battery never
+          appears as AC yield), and keeping only the maximum ratchets the
+          night inflation in instead of letting the two cancel.
 
         Known limitation: cost savings are computed from live power flows,
         so cost figures for counter-recovered energy remain approximate.
@@ -918,6 +942,18 @@ class EnergyCalculator:
                 readings[entity_id] = value
 
         if not readings:
+            return
+
+        if self._sun_is_down():
+            # Darkness: absorb the counter's movement into the baseline
+            # instead of crediting it as production (#681). Rolling the
+            # baseline forward also swallows a daily counter's midnight reset
+            # for free — there is nothing to re-anchor because nothing was
+            # adopted, and ``anchor`` stays unset until the first daylight
+            # cycle, where it lands on the integrated value at sunrise.
+            for entity_id, value in readings.items():
+                bl["base"][entity_id] = value
+                bl["last"][entity_id] = value
             return
 
         # A counter that went BACKWARDS since its last reading (inverter
