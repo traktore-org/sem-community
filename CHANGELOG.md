@@ -111,6 +111,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a measurement** (`85.0 if solar_power > 0`), which would have shown a made-up number
   as a real one had anything ever surfaced them. A new guard checks that *every*
   `sensor.sem_*` reference under `consts/` names an entity some platform actually declares.
+- 🤖 **The file every AI agent reads first had been wrong since v1.0.0** (#671,
+  coherence-audit) — `.github/copilot-instructions.md` sat untouched from April through
+  ~25 releases. Six file paths, five constants and one service it named no longer existed,
+  and it documented the registry deleted in #669. The dangerous part wasn't the dead
+  references though: it stated `DEFAULT_UPDATE_INTERVAL = 300  # 5 minutes` when the real
+  value is `10` **seconds** (30× off, with the wrong unit spelled out), and gave
+  `DEFAULT_BATTERY_PRIORITY_SOC` a wrong number *and* an inverted meaning. An agent has no
+  reason to re-derive a number a doc states, so those produce broken code rather than
+  confusion. Rewritten to point at the modules constants live in instead of quoting them —
+  a quoted number drifts, a file reference can't — and guarded: every path it names must
+  exist, every symbol it names must appear in the tree, and restating a numeric constant
+  now fails CI outright. No user-facing change; it protects everything downstream of it.
+- 🖼️ **Every screenshot in the user guide was a broken-image icon on GitHub** (#672,
+  coherence-audit) — when #618 moved the guides into `docs/`, the files moved but their
+  *relative* links didn't, so `docs/USER_GUIDE.md` still linked as if it sat at the repo
+  root and every target resolved one directory too deep. Four tab screenshots rendered
+  broken, and the ⭐ cross-reference the guide calls "the canonical reference"
+  (EV Charging Logic, linked from three places) 404'd. Every target existed the whole
+  time — only the prefix was wrong. The issue-template's playbook link was broken the
+  same way. Now guarded: **every** relative markdown link in the repo must resolve, not
+  just the 12 config-card help links #618 covered.
+- 🚦 **A new install with no Energy Dashboard failed with a bare error code instead of an
+  explanation** (#674, coherence-audit) — SEM reads your solar/grid/battery sensors from
+  Home Assistant's Energy Dashboard, so it aborts setup if that isn't configured yet. The
+  abort *reason* was raised correctly and the code even passed a link to `/config/energy`
+  — but the message it referred to had never been written, so HA rendered the raw key and
+  the very first thing SEM said to a new user was the literal string
+  `energy_dashboard_not_configured`. Both abort messages now exist, in all 16 languages,
+  and name exactly what to add and where.
+- 🌡️ **The whole Heat Pump settings screen showed raw field names instead of labels**
+  (#674, coherence-audit) — and so did the EV-charger add/remove menu. `strings.json` and
+  `translations/` are a hand-maintained mirror of each other, and they had drifted **50
+  keys one way and 35 the other, identically in all 16 languages**. The trap is worth
+  naming: `strings.json` is where a developer naturally edits — it is HA's documented
+  source file, and the one hassfest validates — but **HA never reads it at runtime for a
+  custom integration**; it loads `translations/<lang>.json` and nothing else. So the file
+  that looked authoritative was the one with no effect. Opening Configure → Heat Pump gave
+  you no title, no description, and eight rows reading `heat_pump_relay1_entity`,
+  `heat_pump_climate_entity` … because the frontend falls back to the key name when a
+  label is missing. The `soc_cap_unenforceable` repair (the one that explains SEM won't
+  trust an *estimated* SOC for a hard charge limit) had no title or description at all.
+  Everything is now translated in all 16 languages and the two files are held at exact
+  parity by CI.
+- 🔤 **Two error messages printed `{entity_id}` and `{service}` literally, and twelve more
+  could never appear** (#674, coherence-audit) — swept while fixing the above.
+  "Entity {entity_id} was not found" was shown verbatim, braces and all, because no call
+  site ever supplies that placeholder; five of the 16 language files carried the broken
+  wording and two carried a correct one, with nothing able to tell them apart. Twelve
+  further `config.error` entries — per-sensor validation messages left over from the
+  design the #397 setup slim-down replaced — were translated into every language for code
+  paths that no longer set them. Removed, and CI now checks three things it never did:
+  every error key is both declared and reachable, every abort reason has a message, and no
+  string names a placeholder the flow never passes.
+- 🧽 **A test that allowed "up to 10" dead translation keys was carrying exactly 10**
+  (#676, coherence-audit) — 170 strings across 17 files for number entities that stopped
+  existing in #255, when they became per-charger. The comment said "keys used by other
+  systems"; nothing was using any of them. The allowance had been sized to the debt, so a
+  full load passed. Deleted, and the threshold is now zero — a tolerance on a correctness
+  check is the same shape as the bug it hides. Two keys that *looked* dead turned out to be
+  live (the per-charger selects assign their translation key at runtime, which no static
+  scan can see), so each was checked against the code rather than trusted to the grep.
+- 🎛️ **Four services SEM registers had no UI at all, including the one the docs tell you
+  to call** (#673, coherence-audit) — `services.yaml` declared 14 of the 18 services
+  `__init__.py` registers. An undeclared service is still fully callable, so nothing ever
+  raised and no test failed; what it loses is its entire affordance in
+  **Developer Tools → Actions** — no description, no field pickers, no validation, so you
+  had to already know the parameter names and hand-write the YAML. That landed hardest on
+  `diagnose`: `docs/SEM_TRACE.md` tells users to call it with `section: trace`, and anyone
+  following that instruction met an action with no `section` field and no hint that `trace`
+  was one of *twelve* valid values. `remove_charger`, `get_config` and `set_option` were
+  undeclared too. All four now ship full descriptions, fields and selectors — `diagnose`
+  gets a proper dropdown of all twelve sections — and a guard asserts the two lists agree
+  in **both** directions, so a service registered without a declaration (or advertised in
+  the UI without an implementation) fails CI.
+- 🌍 **288 translated strings in 16 languages described a settings step that has never
+  existed** (#673, coherence-audit) — found by running the sweep question this issue added
+  to the bug-class ledger rather than leaving it rhetorical. Every language file carried a
+  complete `options.step.dashboard_options` block — title, description, eight field labels
+  and eight field descriptions — for a config-flow step no `async_step_dashboard_options`
+  has ever existed to show. Harmless at runtime (HA only looks up steps it is asked for),
+  which is exactly why it survived: it read as a fully-localised feature. The cost was
+  translator effort spent on a screen nobody can open. Removed from all 16 files, and a
+  guard now rejects any translated step with no matching flow method.
 - 💰 **Nine energy-accounting values were being thrown away on every restart** (#668,
   coherence-audit) — the calculator hands 20 values to the store on shutdown, but the
   store's hand-written whitelist carried only 11 through. The nine it dropped were read

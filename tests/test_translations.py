@@ -100,10 +100,35 @@ def test_all_languages_have_all_keys():
         )
 
 
+# Translation keys set at runtime rather than taken from an entity
+# description's ``key``, which the static scan above cannot see.
+#
+# ``select.SEMPerChargerSelect`` does ``_attr_translation_key = config_key``
+# and the call sites pass the bare config key while the *description* key is
+# ``charger_<id>_…`` — so these two are live for every per-charger install and
+# must not read as orphaned.
+_DYNAMIC_TRANSLATION_KEYS = {
+    ("select", "ev_target_type"),
+    ("select", "charge_mode"),
+}
+
+
 def test_no_orphaned_translations():
-    """Translation keys should correspond to actual entity keys (no stale translations)."""
+    """Every entity translation key must belong to an entity that exists.
+
+    The old form of this test allowed up to ten orphans ("keys used by other
+    systems") and failed only above that. Nothing was using them: the allowance
+    was carrying ten dead ``entity.number.*`` keys — ``ev_target_soc``,
+    ``daily_ev_target``, ``ev_phases`` and friends, global entities until #255
+    made them per-charger — in all 17 files, 170 strings every translator paid
+    for and no user could ever see (#676).
+
+    A tolerance on a correctness check is the same shape as the bug it hides:
+    it reads as covered. So the threshold is zero, and the two genuinely
+    dynamic keys are named above rather than absorbed into a budget.
+    """
     keys = _extract_entity_keys()
-    valid_keys = {(domain, key) for domain, key in keys}
+    valid_keys = {(domain, key) for domain, key in keys} | _DYNAMIC_TRANSLATION_KEYS
 
     with open(_path("strings.json")) as f:
         strings = json.load(f)
@@ -115,11 +140,26 @@ def test_no_orphaned_translations():
             if (domain, key) not in valid_keys:
                 orphaned.append(f"{domain}.{key}")
 
-    # Allow some orphans (keys used by other systems)
-    # but warn if there are many
-    if len(orphaned) > 10:
-        pytest.fail(
-            f"{len(orphaned)} orphaned translations in strings.json "
-            f"(keys without matching entity descriptions):\n"
-            + "\n".join(f"  {o}" for o in sorted(orphaned)[:20])
-        )
+    assert not orphaned, (
+        f"{len(orphaned)} orphaned entity translations in strings.json — no "
+        f"entity description carries these keys, so HA never looks them up:\n"
+        + "\n".join(f"  {o}" for o in sorted(orphaned))
+        + "\n\nDelete them, or — if the entity sets its translation_key at "
+        "runtime — add it to _DYNAMIC_TRANSLATION_KEYS with the reason (#676)."
+    )
+
+
+def test_the_orphan_rule_can_actually_fire():
+    """Bug class 8: the scan must find real entity keys, and the exemption
+    list must be a short named set rather than a silent catch-all."""
+    keys = _extract_entity_keys()
+    assert len(keys) > 100, f"only {len(keys)} entity keys found — the scan broke"
+    assert ("number", "battery_capacity") in keys, "known-live key went missing"
+    assert ("number", "ev_target_soc") not in keys, (
+        "ev_target_soc is a real entity key again — remove it from the #676 "
+        "deletion instead of keeping this assertion"
+    )
+    assert len(_DYNAMIC_TRANSLATION_KEYS) < 5, (
+        "the runtime-key exemption list is growing into the tolerance this "
+        "test just removed — verify each entry against the code"
+    )

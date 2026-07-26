@@ -106,10 +106,29 @@ assertion with no teeth, referenced by 1 scenario. **Sweep question (test side):
 call production code, or a local restatement of it? If you deleted the production function, would
 this test go red? **Guard:** `tests/scenario_harness.py` now rejects unknown `expect.multi_charger`
 keys, so a silently-ignored expectation fails instead of passing.
+**Fourth instance (#676, 2026-07-26) — the budgeted variant:**
+`test_no_orphaned_translations` failed only above ten orphans ("Allow some orphans (keys used by
+other systems) but warn if there are many"). There were **exactly ten**, and nothing was using any
+of them — the allowance had been sized to the debt, so a full load passed indefinitely. This is the
+subtlest form in the class: the check *can* fire in principle, which is why it survives review, but
+its threshold was set by measuring the current state rather than by stating a rule. Note that the
+comment did the concealing work — it supplied a plausible reason ("keys used by other systems")
+that nobody verified, and once written it read as a decision rather than a guess. **Closure:**
+threshold to zero, and every genuine exception named individually with its reason
+(`_DYNAMIC_TRANSLATION_KEYS`, two entries, each checked against the code — both turned out to be
+live keys a static scan cannot see, so the naive delete-them-all fix would have broken real
+entities), plus an assertion that the exception list stays small so it cannot regrow into the
+tolerance that was just removed. **Sweep question (thresholds):** for every `> N`, `at least N%` or
+"allow some" in a correctness check — where did N come from? If it came from running the check and
+picking a number just above the result, it is not a threshold, it is a snapshot of the debt.
+*Swept 2026-07-26 across every lint/meta test:* the only other count comparisons are **vacuity
+floors** (`len(scan) > 30` / `>= 16` / `> 50_000`, "the scan broke") — the inverse shape, requiring
+at least N rather than tolerating up to N, which is this class's own closure pattern. #676 was the
+sole instance.
 **Open:** any other self-referential check; audit for them in
 `/coherence-audit`. **Sweep question:** for every check, can you name an input that makes it fire —
 and can that input survive the transforms between where it is produced and where it is checked?
-Refs #589, #651, #661.
+Refs #589, #651, #661, #676.
 
 ### 9. Engine-specific SVG/SMIL form (renders on Blink/Gecko, silent on WebKit) — GUARDED
 **Symptom:** a dashboard-card visual works on desktop Chrome/Firefox and Android but is dead on
@@ -468,6 +487,56 @@ survives every restart once it actually persists. **Guards:**
 than comparing key *sets*, and `test_the_two_directions_cannot_drift_apart` uses `inspect
 .getsource` to assert both functions reference the shared constant. **Sweep question:** for every
 persist boundary, is the field list derived from the structure — or retyped beside it?
+
+**Second instance — #673, and the variant that cannot be de-duplicated.** `services.yaml` is a
+hand-maintained mirror of what `__init__.py` registers, and it had drifted to **14 of 18**:
+`diagnose`, `remove_charger`, `get_config`, `set_option` were registered and undeclared. Same
+silent shape — an undeclared service is still fully callable, so nothing raises. What it loses is
+its UI: no description, no field pickers, no validation in Developer Tools → Actions. Worst on
+`diagnose`, which `docs/SEM_TRACE.md` explicitly tells users to call with `section: trace` — they
+met an action with no `section` dropdown and no hint that `trace` was one of twelve valid values.
+
+The important difference from #668: **the #668 fix pattern does not apply here.** You cannot
+derive `services.yaml` from the code, because it holds descriptions and selectors only a human can
+write. When one list genuinely cannot be generated from the other, the closure is not "collapse
+them into one source of truth" — it is **assert the two agree, and name every deliberate
+divergence.** `tests/test_673_services_declared.py` checks both directions (a declared-but-
+unregistered service is the rarer and more user-hostile half: HA offers it in the picker and it
+fails on call) and additionally pins that the `section` dropdown offers every section the code
+actually handles — a field with the wrong option list leaves the docs as the only place the valid
+values exist, which is the bug not quite fixed.
+
+**Sweep question, widened:** for every hand-written list mirroring a code structure — persist
+whitelists, `services.yaml`, `strings.json`, `manifest.json` dependencies, platform lists — is it
+derived, or merely *asserted equal*? If it is neither, it is already drifting.
+
+**Third instance — #674, found by running that sweep question instead of writing it down and
+moving on.** `strings.json` ↔ `translations/*.json` had drifted **50 keys one way and 35 the
+other**, identically in all 16 languages. The trap is specific and worth naming: `strings.json` is
+where a developer naturally edits — it is HA's documented source file and the one hassfest
+validates — but **HA never reads it at runtime for a custom component.**
+`helpers/translation.py` loads `integration.file_path / "translations" / f"{language}.json"` and
+nothing else. HA *core* has a build step that copies one into the other; a custom component does
+not, so the "source" file is the one with no effect. Cost: the whole Heat Pump options step
+rendered with no title, no description and eight raw voluptuous keys as labels (the frontend falls
+back to the key name); the `soc_cap_unenforceable` repair issue had no title or description at all.
+
+Then the guard for it surfaced a second layer — **the two files agreeing with each other says
+nothing about either agreeing with the code**: two `async_abort` reasons had no message anywhere,
+so a new user installing SEM before configuring the Energy Dashboard read the literal string
+`energy_dashboard_not_configured` as their entire failure message; twelve `config.error` keys were
+never assigned by any code path (leftovers from validation the #397 slim-down replaced); and two
+live errors named placeholders (`{entity_id}`, `{service}`) that no `description_placeholders` ever
+supplies, so users read the raw token. **Fix pattern:** where the mirror *is* derivable, demand
+exact parity rather than one-way containment — plus check placeholders in both directions, since an
+*invented* placeholder is a `KeyError` at render time while a *dropped* one merely loses
+information. **Guard:** `tests/test_674_translation_parity.py`.
+
+**Meta-lesson:** three instances in, the class's real tell is not "a list" — it is **a file whose
+only consumer is a human**. `services.yaml`, `strings.json` and the persist whitelist all fail the
+same way because nothing *executes* them against their counterpart. Ask of any such file: if I
+delete a line, what breaks, and when? If the answer is "nothing, until a user opens the right
+screen in the right language", it needs a guard, not a review.
 
 ---
 

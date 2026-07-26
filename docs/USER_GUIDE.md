@@ -6,7 +6,7 @@
 
 Complete reference for Solar Energy Management (SEM).
 
-![SEM Dashboard](docs/images/sem_home_tab.png)
+![SEM Dashboard](images/sem_home_tab.png)
 
 ---
 
@@ -14,7 +14,7 @@ Complete reference for Solar Energy Management (SEM).
 
 - [Configuration Options](#configuration-options)
 - [Charging Modes](#charging-modes)
-- **[EV Charging Logic — full decision reference](docs/EV_CHARGING_LOGIC.md)** ⭐
+- **[EV Charging Logic — full decision reference](EV_CHARGING_LOGIC.md)** ⭐
 - [SOC Zone Strategy](#soc-zone-strategy)
 - [Night Charging](#night-charging)
 - [EV Intelligence](#ev-intelligence)
@@ -123,7 +123,7 @@ Dependencies work for both surplus and peak modes:
 - **Surplus**: child only activates when parent is running and surplus available
 - **Peak shedding**: shutting down parent cascades to all children
 
-See [Multi-Device Guide](docs/MULTI_DEVICE_GUIDE.md) for examples.
+See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 
 ### Load Management Settings
 
@@ -185,7 +185,7 @@ The Legionella prevention cycle is a safety requirement mandated by building cod
 
 SEM supports five EV charging modes (v1.7.3), selectable per charger via **`select.sem_charger_<id>_charge_mode`** on the Control tab or the EV card:
 
-> **Need the full picture?** [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md) is the canonical reference covering all 6 user controls (mode + Overnight grid + Cheapest hours + Smart night + Charge by + Min/Max), their priority cascade, and every interaction scenario including worked examples.
+> **Need the full picture?** [docs/EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md) is the canonical reference covering all 6 user controls (mode + Overnight grid + Cheapest hours + Smart night + Charge by + Min/Max), their priority cascade, and every interaction scenario including worked examples.
 
 ### Solar Only (`solar_only`)
 
@@ -235,7 +235,7 @@ EV charging is disabled. SEM continues monitoring but does not send any commands
 
 ## SOC Zone Strategy
 
-![Battery Tab](docs/images/sem_battery_tab.png)
+![Battery Tab](images/sem_battery_tab.png)
 
 SEM uses a four-zone model to decide how the battery and EV share solar energy. The battery's state of charge (SOC) determines which zone is active:
 
@@ -351,7 +351,7 @@ Do not confuse Solar Gate with **Min solar power** (the config floor below which
 
 ## Night Charging
 
-> **See also:** [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md) — full decision matrix covering night charging, the optional **Charge by HH:MM** deadline, and the optional **Cheapest hours (tariff)** mode, with worked examples for the edge cases (e.g. cheap window shorter than time-to-Min).
+> **See also:** [docs/EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md) — full decision matrix covering night charging, the optional **Charge by HH:MM** deadline, and the optional **Cheapest hours (tariff)** mode, with worked examples for the edge cases (e.g. cheap window shorter than time-to-Min).
 
 > **Night charging is opt-in (off by default).** SEM is a *solar* energy manager, so out of the box it charges your car on solar surplus only and never pulls from the grid overnight unasked. To enable grid-assisted night charging, turn on **`switch.sem_night_charging`** (and, for a multi-charger setup, the per-charger `…_night_charging` switch for each charger you want to top up). Upgrading users keep whatever state they already had — only fresh installs and newly-added chargers start off. *(#256)*
 
@@ -631,7 +631,7 @@ When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution bec
 
 ## Peak Load Management
 
-![Control Tab](docs/images/sem_control_tab.png)
+![Control Tab](images/sem_control_tab.png)
 
 SEM monitors rolling 15-minute average power and progressively sheds loads to stay under your target peak limit. Only devices in `peak_only` or `surplus` mode can be shed. Devices in `off` mode are never touched.
 
@@ -650,7 +650,7 @@ Enable via integration options. Requires controllable devices with switch entiti
 
 ## Tariff Integration
 
-![Costs Tab](docs/images/sem_costs_tab.png)
+![Costs Tab](images/sem_costs_tab.png)
 
 SEM supports three tariff modes, selectable in **Settings > Devices > Solar Energy Management > Configure > Tariff & Advanced**:
 

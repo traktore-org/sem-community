@@ -6,7 +6,7 @@ labels: ['audit']
 assignees: []
 ---
 
-> Follow [`docs/AUDIT_PLAYBOOK.md`](../docs/AUDIT_PLAYBOOK.md) for the full
+> Follow [`docs/AUDIT_PLAYBOOK.md`](../../docs/AUDIT_PLAYBOOK.md) for the full
 > workflow. The umbrella tracking issue is the parent of this audit — please
 > link it here once known.
 
@@ -91,5 +91,5 @@ Schema-version bump? **<yes/no>** (only if config-entry shape changes)
 ## Related
 
 - Umbrella: #
-- Playbook: [`docs/AUDIT_PLAYBOOK.md`](../docs/AUDIT_PLAYBOOK.md)
+- Playbook: [`docs/AUDIT_PLAYBOOK.md`](../../docs/AUDIT_PLAYBOOK.md)
 - Precedents: #359 (classifier_path), #416 (dampening_path)

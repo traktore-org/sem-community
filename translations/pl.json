@@ -87,22 +87,13 @@
     "error": {
       "unknown": "Wystąpił nieoczekiwany błąd. Spróbuj ponownie.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "service_not_found": "Nie znaleziono usługi powiadomień. Sprawdź nazwę usługi (np. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "SG-Ready wymaga OBU encji przekaźników. Ustaw oba przekaźniki — albo pozostaw oba puste i skonfiguruj tylko encję climate, aby korzystać z podbicia nastawy w trybie climate-only."
     },
     "abort": {
-      "already_configured": "Solar Energy Management jest już skonfigurowany. Dozwolona jest tylko jedna instancja."
+      "already_configured": "Solar Energy Management jest już skonfigurowany. Dozwolona jest tylko jedna instancja.",
+      "energy_dashboard_not_configured": "SEM odczytuje czujniki fotowoltaiki, sieci i magazynu energii z pulpitu Energia w Home Assistant, a nie został on jeszcze skonfigurowany.\n\nSkonfiguruj go najpierw w Ustawienia → Pulpity → Energia ({url}) — dodaj co najmniej produkcję słoneczną i pobór z sieci — a następnie uruchom tę instalację ponownie.",
+      "energy_dashboard_incomplete": "Twój pulpit Energia jest skonfigurowany, ale brakuje: {missing}.\n\nSEM potrzebuje tych źródeł, aby odczytać Twoją instalację. Dodaj je w Ustawienia → Pulpity → Energia ({url}), a następnie uruchom tę instalację ponownie."
     }
   },
   "options": {
@@ -168,7 +159,8 @@
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
           "legionella_interval_hours": "Max hours between disinfection cycles",
-          "diagram_style": "Styl diagramu systemowego"
+          "diagram_style": "Styl diagramu systemowego",
+          "battery_assist_min_surplus": "Wsparcie baterii – min. nadwyżka solarna (W)"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -191,7 +183,8 @@
           "diagram_style": "Wybierz styl diagramu systemowego na karcie Strona główna. 'SEM' używa wbudowanego animowanego diagramu. 'K-Flow' używa karty K-Flow HACS (wymaga osobnej instalacji).",
           "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
           "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
+          "battery_assist_min_surplus": "Minimalna rzeczywista nadwyżka solarna, zanim bateria domowa będzie mogła pomóc w ładowaniu EV — w każdym trybie ładowania. Poniżej tej wartości bateria jest zarezerwowana dla domu (samochód pobiera z sieci + słońca). Domyślnie 1200 W. Ustaw 0, aby bateria wspierała EV zawsze, także nocą."
         }
       },
       "settings_ev": {
@@ -282,30 +275,6 @@
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
         }
       },
-      "dashboard_options": {
-        "title": "Dashboard Installation",
-        "description": "Install or reinstall the SEM dashboard",
-        "data": {
-          "generate_dashboard": "Generuj dashboard",
-          "dashboard_title": "Dashboard Title",
-          "dashboard_path": "Dashboard Path (URL)",
-          "include_financial": "Include Financial Tracking",
-          "include_flows": "Include Power Flow Visualization",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
-        },
-        "data_description": {
-          "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
-          "dashboard_title": "Display name for the dashboard in the sidebar. Example: 'Solar Energy Management'",
-          "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
-          "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
-          "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
-        }
-      },
       "battery_scheduler": {
         "title": "Harmonogram ładowania baterii",
         "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
@@ -388,6 +357,50 @@
           "pv_name_pv4": "PV4 name",
           "pv_name_pv5": "PV5 name",
           "pv_name_pv6": "PV6 name"
+        }
+      },
+      "heat_pump": {
+        "title": "Pompa ciepła",
+        "description": "Skonfiguruj pompę ciepła do podbicia nadwyżką słoneczną. Obsługiwane są dwie ścieżki sterowania:\n• **SG-Ready** — ustaw obie encje przekaźników (Viessmann, Stiebel Eltron, Vaillant).\n• **Tylko climate** — ustaw wyłącznie encję climate (Nibe, Mitsubishi, Daikin i każda pompa ciepła sterowana przez HA bez przekaźników SG-Ready).\nObie ścieżki można też łączyć. Pozostaw wszystko puste, aby pominąć.",
+        "data": {
+          "heat_pump_relay1_entity": "Przekaźnik SG-Ready 1 (opcjonalna encja switch)",
+          "heat_pump_relay2_entity": "Przekaźnik SG-Ready 2 (opcjonalna encja switch)",
+          "heat_pump_invert_sg_ready": "Odwróć styki SG-Ready (dla okablowania NC)",
+          "heat_pump_climate_entity": "Encja climate do podbicia nastawy (opcjonalna)",
+          "heat_pump_power_sensor": "Czujnik mocy (opcjonalny)",
+          "heat_pump_boost_offset": "Podbicie temperatury (°C)",
+          "heat_pump_max_setpoint": "Maksymalna nastawa temperatury (°C)",
+          "heat_pump_priority": "Priorytet nadwyżki (1=najwyższy)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Encja switch przekaźnika SG-Ready 1 (sygnał normalnej pracy). Ustaw razem z przekaźnikiem 2, aby używać protokołu SG-Ready.",
+          "heat_pump_relay2_entity": "Encja switch przekaźnika SG-Ready 2 (sygnał podbicia nadwyżką). Ustaw razem z przekaźnikiem 1, aby używać protokołu SG-Ready.",
+          "heat_pump_invert_sg_ready": "Włącz tylko wtedy, gdy styki SG-Ready Twojej pompy ciepła są okablowane jako normalnie zwarte (NC). SEM steruje standardową tabelą prawdy SG-Ready; jeśli podbicie blokuje pompę (i odwrotnie), włącz tę opcję, aby odwrócić oba przekaźniki.",
+          "heat_pump_climate_entity": "Encja climate używana do podniesienia nastawy podczas nadwyżki słonecznej. Wystarcza samodzielnie w trybie tylko climate (przekaźniki nie są potrzebne).",
+          "heat_pump_power_sensor": "Opcjonalny czujnik (W) raportujący bieżące zużycie mocy pompy ciepła.",
+          "heat_pump_boost_offset": "Stopnie Celsjusza dodawane do normalnej nastawy podczas podbicia nadwyżką słoneczną.",
+          "heat_pump_max_setpoint": "Górny limit temperatury (°C), jaki SEM ustawi podczas cyklu podbicia.",
+          "heat_pump_priority": "Priorytet podziału nadwyżki względem innych urządzeń. Niższe numery są obsługiwane jako pierwsze."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "Ładowarki EV",
+        "description": "Zarządzaj konfiguracją ładowarek EV.",
+        "data": {
+          "action": "Akcja"
+        },
+        "data_description": {
+          "action": "Wybierz, czy dodać nową ładowarkę, edytować istniejącą, czy usunąć jedną z nich."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "Usuń ładowarkę EV",
+        "description": "Wybierz ładowarkę do usunięcia. Ładowarki głównej nie można usunąć.",
+        "data": {
+          "charger_to_remove": "Ładowarka do usunięcia"
+        },
+        "data_description": {
+          "charger_to_remove": "Wybierz ładowarkę, którą chcesz usunąć z SEM. Ładowarki głównej nie można usunąć."
         }
       }
     }
@@ -1000,9 +1013,6 @@
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
       },
-      "daily_ev_target": {
-        "name": "Daily EV Target"
-      },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"
       },
@@ -1030,9 +1040,6 @@
       "system_size_kwp": {
         "name": "PV System Size"
       },
-      "ev_min_current": {
-        "name": "EV Minimum Current"
-      },
       "ev_enable_delay_seconds": {
         "name": "Opóźnienie startu EV (nadwyżka)"
       },
@@ -1045,20 +1052,11 @@
       "battery_auto_start_soc": {
         "name": "Battery Auto Start SOC"
       },
-      "battery_capacity_kwh": {
-        "name": "Battery Capacity"
-      },
       "battery_max_discharge_power": {
         "name": "Battery Max Discharge Power"
       },
       "system_investment_cost": {
         "name": "System Investment Cost"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimum Current"
-      },
-      "ev_phases": {
-        "name": "EV Phases"
       },
       "electricity_import_rate": {
         "name": "Electricity Import Rate"
@@ -1083,21 +1081,6 @@
       },
       "legionella_interval_hours": {
         "name": "Legionella Interval Hours"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "Maks. ładowanie solarne EV (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "Maks. ładowanie solarne EV SOC (%)"
-      },
-      "ev_kwh_per_100km": {
-        "name": "Zużycie pojazdu (kWh/100km)"
-      },
-      "initial_current": {
-        "name": "Prąd startowy pojazdu"
       },
       "surplus_event_threshold": {
         "name": "Próg zdarzenia nadwyżki"
@@ -1147,6 +1130,18 @@
     },
     "invalid_deadline_format": {
       "message": "Nieprawidłowy format terminu: „{deadline}”. Użyj formatu ISO 8601, na przykład 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Konfiguracja pulpitu Energia nie powiodła się. Sprawdź, czy wszystkie wymagane czujniki są dostępne."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option wymaga słownika 'options' mapującego klucze konfiguracji na nowe wartości."
+    },
+    "set_option_no_entry": {
+      "message": "Nie znaleziono wpisu ConfigEntry SEM — najpierw zainstaluj SEM przez Ustawienia → Urządzenia i usługi."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Nie znaleziono harmonogramu urządzenia dla {device_id}. Sprawdź identyfikator urządzenia użyty w usłudze schedule_appliance."
     }
   },
   "issues": {
@@ -1193,6 +1188,10 @@
     "keba_failsafe_active": {
       "title": "KEBA failsafe is enabled — disable it for steady charging",
       "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+    },
+    "soc_cap_unenforceable": {
+      "title": "Nie można wymusić limitu ładowania {target}%: {name}",
+      "description": "**{name}** ma ustawiony procentowy cel ładowania, ale Twój pojazd nie raportuje w tej chwili swojego stanu naładowania, więc SEM nie może zatrzymać ładowania przy **{target}%** — będzie ładował dalej, aż samochód sam ograniczy moc (blisko pełnego naładowania).\n\nJeśli na pulpicie widzisz procent baterii, to *szacowany* SOC obliczany przez SEM, który jest celowo pomijany przy twardym limicie (może się rozjeżdżać). Aby wymusić limit, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → EV → Encja SOC pojazdu). Ta naprawa znika automatycznie, gdy tylko rzeczywisty odczyt SOC będzie ponownie dostępny."
     }
   }
 }
