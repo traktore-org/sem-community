@@ -1013,9 +1013,6 @@
       "minimum_solar_power": {
         "name": "Minimale Solarleistung"
       },
-      "daily_ev_target": {
-        "name": "Tägliches EV-Ziel"
-      },
       "battery_assist_max_power": {
         "name": "Batterie-Unterstützung Max"
       },
@@ -1043,9 +1040,6 @@
       "system_size_kwp": {
         "name": "PV-Anlagengröße"
       },
-      "ev_min_current": {
-        "name": "EV Minimalstrom"
-      },
       "ev_enable_delay_seconds": {
         "name": "EV-Startverzögerung (Überschuss)"
       },
@@ -1058,20 +1052,11 @@
       "battery_auto_start_soc": {
         "name": "Batterie Auto-Start-SOC"
       },
-      "battery_capacity_kwh": {
-        "name": "Batteriekapazität"
-      },
       "battery_max_discharge_power": {
         "name": "Batterie Max Entladeleistung"
       },
       "system_investment_cost": {
         "name": "Anlageninvestitionskosten"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimalstrom"
-      },
-      "ev_phases": {
-        "name": "EV Phasen"
       },
       "electricity_import_rate": {
         "name": "Stromimporttarif"
@@ -1096,21 +1081,6 @@
       },
       "legionella_interval_hours": {
         "name": "Legionellen-Intervall (Stunden)"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "EV Solar-Lademaximum (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "EV Solar-Lademaximum SOC (%)"
-      },
-      "ev_kwh_per_100km": {
-        "name": "Fahrzeugverbrauch (kWh/100km)"
-      },
-      "initial_current": {
-        "name": "Fahrzeug Startstrom"
       },
       "surplus_event_threshold": {
         "name": "Überschuss-Ereignis Schwelle"

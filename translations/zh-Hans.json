@@ -1013,9 +1013,6 @@
       "minimum_solar_power": {
         "name": "启动充电最低太阳能功率"
       },
-      "daily_ev_target": {
-        "name": "每日电动汽车充电目标量"
-      },
       "battery_assist_max_power": {
         "name": "蓄电池辅助最大功率"
       },
@@ -1043,9 +1040,6 @@
       "system_size_kwp": {
         "name": "光伏系统装机容量 (kWp)"
       },
-      "ev_min_current": {
-        "name": "电动汽车最低电流"
-      },
       "ev_enable_delay_seconds": {
         "name": "电动汽车启动延迟（绿电富余时）"
       },
@@ -1058,20 +1052,11 @@
       "battery_auto_start_soc": {
         "name": "蓄电池自动启动电量 (SOC)"
       },
-      "battery_capacity_kwh": {
-        "name": "蓄电池容量"
-      },
       "battery_max_discharge_power": {
         "name": "蓄电池最大放电功率"
       },
       "system_investment_cost": {
         "name": "系统初始投资成本"
-      },
-      "ev_minimum_current": {
-        "name": "电动汽车最低电流"
-      },
-      "ev_phases": {
-        "name": "电动汽车充电相数"
       },
       "electricity_import_rate": {
         "name": "购电电价费率"
@@ -1096,21 +1081,6 @@
       },
       "legionella_interval_hours": {
         "name": "军团菌消杀间隔小时数"
-      },
-      "ev_target_soc": {
-        "name": "电动汽车目标电量 (SOC %)"
-      },
-      "daily_ev_target_max": {
-        "name": "电动汽车太阳能充电上限量 (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "电动汽车太阳能充电上限电量 (SOC %)"
-      },
-      "ev_kwh_per_100km": {
-        "name": "百公里电耗 (kWh/100km)"
-      },
-      "initial_current": {
-        "name": "车辆启动电流 (A)"
       },
       "surplus_event_threshold": {
         "name": "富余功率事件触发阈值"

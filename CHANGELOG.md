@@ -164,6 +164,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths that no longer set them. Removed, and CI now checks three things it never did:
   every error key is both declared and reachable, every abort reason has a message, and no
   string names a placeholder the flow never passes.
+- 🧽 **A test that allowed "up to 10" dead translation keys was carrying exactly 10**
+  (#676, coherence-audit) — 170 strings across 17 files for number entities that stopped
+  existing in #255, when they became per-charger. The comment said "keys used by other
+  systems"; nothing was using any of them. The allowance had been sized to the debt, so a
+  full load passed. Deleted, and the threshold is now zero — a tolerance on a correctness
+  check is the same shape as the bug it hides. Two keys that *looked* dead turned out to be
+  live (the per-charger selects assign their translation key at runtime, which no static
+  scan can see), so each was checked against the code rather than trusted to the grep.
 - 🎛️ **Four services SEM registers had no UI at all, including the one the docs tell you
   to call** (#673, coherence-audit) — `services.yaml` declared 14 of the 18 services
   `__init__.py` registers. An undeclared service is still fully callable, so nothing ever

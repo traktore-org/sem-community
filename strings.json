@@ -1013,18 +1013,6 @@
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
       },
-      "daily_ev_target": {
-        "name": "Daily EV Target"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "EV Solar Charge Max (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "EV Solar Charge Max SOC (%)"
-      },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"
       },
@@ -1061,20 +1049,11 @@
       "night_latest_end": {
         "name": "Night Latest End"
       },
-      "initial_current": {
-        "name": "Vehicle Start Amps"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimum Current"
-      },
       "ev_enable_delay_seconds": {
         "name": "EV Start Delay (surplus)"
       },
       "ev_disable_delay_seconds": {
         "name": "EV Stop Delay (deficit)"
-      },
-      "ev_phases": {
-        "name": "EV Charger Phases"
       },
       "electricity_import_rate": {
         "name": "Electricity Import Rate"
@@ -1103,17 +1082,8 @@
       "legionella_interval_hours": {
         "name": "Legionella Interval Hours"
       },
-      "ev_kwh_per_100km": {
-        "name": "Vehicle consumption (kWh/100km)"
-      },
       "surplus_event_threshold": {
         "name": "Surplus Event Threshold"
-      },
-      "battery_capacity_kwh": {
-        "name": "Battery Capacity"
-      },
-      "ev_min_current": {
-        "name": "EV Minimum Current"
       }
     },
     "select": {

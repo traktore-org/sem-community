@@ -1013,9 +1013,6 @@
       "minimum_solar_power": {
         "name": "Puissance Solaire Minimale"
       },
-      "daily_ev_target": {
-        "name": "Objectif VE Quotidien"
-      },
       "battery_assist_max_power": {
         "name": "Puissance Max Assistance Batterie"
       },
@@ -1043,9 +1040,6 @@
       "system_size_kwp": {
         "name": "Taille Installation PV"
       },
-      "ev_min_current": {
-        "name": "Courant Minimum VE"
-      },
       "ev_enable_delay_seconds": {
         "name": "Délai de démarrage VE (surplus)"
       },
@@ -1058,20 +1052,11 @@
       "battery_auto_start_soc": {
         "name": "SOC Auto-Démarrage Batterie"
       },
-      "battery_capacity_kwh": {
-        "name": "Capacité Batterie"
-      },
       "battery_max_discharge_power": {
         "name": "Puissance Max Décharge Batterie"
       },
       "system_investment_cost": {
         "name": "Coût Investissement Installation"
-      },
-      "ev_minimum_current": {
-        "name": "Courant Minimum VE"
-      },
-      "ev_phases": {
-        "name": "Phases VE"
       },
       "electricity_import_rate": {
         "name": "Tarif Import Électricité"
@@ -1096,21 +1081,6 @@
       },
       "legionella_interval_hours": {
         "name": "Legionella Interval Hours"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "Charge solaire max VE (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "Charge solaire max VE SOC (%)"
-      },
-      "ev_kwh_per_100km": {
-        "name": "Consommation du véhicule (kWh/100km)"
-      },
-      "initial_current": {
-        "name": "Courant de démarrage VE"
       },
       "surplus_event_threshold": {
         "name": "Seuil d'événement de surplus"

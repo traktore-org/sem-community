@@ -1013,9 +1013,6 @@
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
       },
-      "daily_ev_target": {
-        "name": "Daily EV Target"
-      },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"
       },
@@ -1043,9 +1040,6 @@
       "system_size_kwp": {
         "name": "PV System Size"
       },
-      "ev_min_current": {
-        "name": "EV Minimum Current"
-      },
       "ev_enable_delay_seconds": {
         "name": "EV indítási késleltetés (többlet)"
       },
@@ -1058,20 +1052,11 @@
       "battery_auto_start_soc": {
         "name": "Battery Auto Start SOC"
       },
-      "battery_capacity_kwh": {
-        "name": "Battery Capacity"
-      },
       "battery_max_discharge_power": {
         "name": "Battery Max Discharge Power"
       },
       "system_investment_cost": {
         "name": "System Investment Cost"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimum Current"
-      },
-      "ev_phases": {
-        "name": "EV Phases"
       },
       "electricity_import_rate": {
         "name": "Electricity Import Rate"
@@ -1096,21 +1081,6 @@
       },
       "legionella_interval_hours": {
         "name": "Legionella Interval Hours"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "Max. napelemes EV töltés (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "Max. napelemes EV töltés SOC (%)"
-      },
-      "ev_kwh_per_100km": {
-        "name": "Jármű fogyasztás (kWh/100km)"
-      },
-      "initial_current": {
-        "name": "Jármű indítóáram"
       },
       "surplus_event_threshold": {
         "name": "Többlet esemény küszöb"

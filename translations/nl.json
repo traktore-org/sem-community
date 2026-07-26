@@ -1013,9 +1013,6 @@
       "minimum_solar_power": {
         "name": "Minimum Zonne-vermogen"
       },
-      "daily_ev_target": {
-        "name": "Dagelijks EV-doel"
-      },
       "battery_assist_max_power": {
         "name": "Batterij Ondersteuning Max"
       },
@@ -1043,9 +1040,6 @@
       "system_size_kwp": {
         "name": "PV-systeemgrootte"
       },
-      "ev_min_current": {
-        "name": "EV Minimale Stroom"
-      },
       "ev_enable_delay_seconds": {
         "name": "EV-startvertraging (overschot)"
       },
@@ -1058,20 +1052,11 @@
       "battery_auto_start_soc": {
         "name": "Batterij Auto-start-SOC"
       },
-      "battery_capacity_kwh": {
-        "name": "Batterij capaciteit"
-      },
       "battery_max_discharge_power": {
         "name": "Batterij Max Ontlaadvermogen"
       },
       "system_investment_cost": {
         "name": "Systeem Investeringskosten"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimale Stroom"
-      },
-      "ev_phases": {
-        "name": "EV Fases"
       },
       "electricity_import_rate": {
         "name": "Stroomimporttarief"
@@ -1096,21 +1081,6 @@
       },
       "legionella_interval_hours": {
         "name": "Legionella Interval uren"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "EV zonne-laadmaximum (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "EV zonne-laadmaximum SOC (%)"
-      },
-      "ev_kwh_per_100km": {
-        "name": "Voertuigverbruik (kWh/100km)"
-      },
-      "initial_current": {
-        "name": "Voertuig Startstroom"
       },
       "surplus_event_threshold": {
         "name": "Overschot-event drempel"
