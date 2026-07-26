@@ -419,6 +419,29 @@ keep in sync — that is this same class one level up); `tests/test_667_label_re
 shrink-only ratchet over label keys with no entity. **Sweep question:** for every string-keyed
 store, is the key built in exactly one place — and if a lookup misses, does anything at all say so?
 
+### 23. Reference written to a host registry that never validates it — GUARDED
+**Symptom:** we write an *identifier* into a Home Assistant registry and the API stores it
+verbatim — it neither validates the reference nor creates the thing it points at. Every
+inspection from our side passes, because we are reading back our own write. The direction that
+was actually the point — the host resolving the reference — is dead, and reports nothing.
+**Instance:** **#670** — `entity_registry.async_update_entity(labels={...})` takes label *IDs*.
+SEM never called `label_registry` at all, so its 19 labels were strings on entity rows and
+nothing else. `labels('sensor.sem_monthly_solar_yield_energy')` returned all four labels ✅ while
+`label_entities('sem_monthly')` returned `0` and `label_id('sem_monthly')` returned `None` — and
+the reverse lookup is what the entity-list filter, label-scoped automations and auto-entities all
+use. It compounded with class 22 (#667): with the registry side missing, a *correct* label and a
+typo'd one behaved identically, which is how 38% drift survived for years.
+**Tell:** any `async_update_*(... = <id or list of ids>)` against a host registry where we never
+call that registry's own `async_create` / `async_get`. Also: a feature whose verification only
+ever reads back the field we wrote. **Fix pattern:** create-if-missing against the owning
+registry *before* the reference is written, matched on **id** (never name), and never delete,
+rename or recolour — the user owns those objects. **Guards:**
+`tests/test_670_label_registration.py` asserts through `template.label_entities` — the real
+consumer path — rather than through the entity registry's own index, plus idempotency across
+restarts and non-clobbering of user renames. **Sweep question:** for every id we hand to HA
+(labels, areas, floors, categories, devices), who *creates* it — and has anyone ever tested the
+lookup in the direction the user actually uses?
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
