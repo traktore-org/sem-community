@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Többlet esemény küszöb"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Éjszakai cél"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. áramerősség"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Jármű min. áramerőssége"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Cél-SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Napelemes maximum"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Max. napelemes SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Akkumulátor kapacitása"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Fogyasztás"
+      },
+      "ev_phases": {
+        "name": "{charger} Fázisok"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV céltípus",
+        "name": "{charger} EV céltípus",
         "state": {
           "kwh": "kWh cél",
           "soc": "SoC % cél"
         }
       },
       "charge_mode": {
-        "name": "Töltési mód",
+        "name": "{charger} Töltési mód",
         "state": {
           "solar_only": "Csak nap",
           "solar_plus_cheap": "Nap + legolcsóbb órák",

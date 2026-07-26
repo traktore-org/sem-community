@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "富余功率事件触发阈值"
+      },
+      "daily_ev_target": {
+        "name": "{charger}夜间充电目标"
+      },
+      "ev_min_current": {
+        "name": "{charger}最小电流"
+      },
+      "vehicle_min_current": {
+        "name": "{charger}车辆最小电流"
+      },
+      "ev_target_soc": {
+        "name": "{charger}目标电量"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger}绿电充电上限"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger}绿电充电目标电量上限"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger}车辆电池容量"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger}百公里电耗"
+      },
+      "ev_phases": {
+        "name": "{charger}相数"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "电动汽车充电目标类型",
+        "name": "{charger}电动汽车充电目标类型",
         "state": {
           "kwh": "按目标电量 (kWh)",
           "soc": "按目标电量百分比 (SOC %)"
         }
       },
       "charge_mode": {
-        "name": "充电模式",
+        "name": "{charger}充电模式",
         "state": {
           "solar_only": "纯太阳能绿电",
           "solar_plus_cheap": "太阳能 + 低谷电价时段",

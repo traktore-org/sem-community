@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Ylijäämätapahtuman kynnys"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Yötavoite"
+      },
+      "ev_min_current": {
+        "name": "{charger} Vähimmäisvirta"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Ajoneuvon vähimmäisvirta"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Tavoite-SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Aurinkomaksimi"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Aurinko-SOC enintään"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Akun kapasiteetti"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Kulutus"
+      },
+      "ev_phases": {
+        "name": "{charger} Vaiheet"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "Sähköauton tavoitetyyppi",
+        "name": "{charger} Sähköauton tavoitetyyppi",
         "state": {
           "kwh": "kWh-tavoite",
           "soc": "SoC-%-tavoite"
         }
       },
       "charge_mode": {
-        "name": "Lataustila",
+        "name": "{charger} Lataustila",
         "state": {
           "solar_only": "Vain aurinko",
           "solar_plus_cheap": "Aurinko + halvimmat tunnit",

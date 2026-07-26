@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Limiar de evento de excedente"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Meta noturna"
+      },
+      "ev_min_current": {
+        "name": "{charger} Amperes mín."
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Amperes mín. do veículo"
+      },
+      "ev_target_soc": {
+        "name": "{charger} SOC alvo"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Máximo solar"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} SOC máx. solar"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Capacidade da bateria"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Consumo"
+      },
+      "ev_phases": {
+        "name": "{charger} Fases"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "Tipo de meta do VE",
+        "name": "{charger} Tipo de meta do VE",
         "state": {
           "kwh": "Meta kWh",
           "soc": "Meta SoC %"
         }
       },
       "charge_mode": {
-        "name": "Modo de carga",
+        "name": "{charger} Modo de carga",
         "state": {
           "solar_only": "Apenas solar",
           "solar_plus_cheap": "Solar + horas mais baratas",

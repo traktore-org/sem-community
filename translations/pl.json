@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Próg zdarzenia nadwyżki"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Cel nocny"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. amperaż"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Min. amperaż pojazdu"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Docelowy SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Maksimum słoneczne"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Maks. SOC słoneczny"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Pojemność akumulatora"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Zużycie"
+      },
+      "ev_phases": {
+        "name": "{charger} Fazy"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "Typ celu EV",
+        "name": "{charger} Typ celu EV",
         "state": {
           "kwh": "Cel kWh",
           "soc": "Cel SoC %"
         }
       },
       "charge_mode": {
-        "name": "Tryb ładowania",
+        "name": "{charger} Tryb ładowania",
         "state": {
           "solar_only": "Tylko słońce",
           "solar_plus_cheap": "Słońce + najtańsze godziny",

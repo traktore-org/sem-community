@@ -157,6 +157,7 @@ async def async_setup_entry(
     if len(ev_chargers) >= 1:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
+            cname = charger_cfg.get("name", "EV Charger")
             target_key = f"charger_{cid}_ev_target_type"
             mode_key = f"charger_{cid}_charge_mode"
             per_charger_keys.update({target_key, mode_key})
@@ -169,6 +170,7 @@ async def async_setup_entry(
                 ),
                 entry, cid, "ev_target_type",
                 charger_cfg.get("ev_target_type") or charger_cfg.get("ev_target_mode") or "kwh",
+                cname,
             ))
             # The legacy ``ev_charging_mode`` per-charger select was
             # retired in #277 Phase C — the new ``charge_mode``
@@ -184,6 +186,7 @@ async def async_setup_entry(
                 ),
                 entry, cid, "charge_mode",
                 charger_cfg.get("charge_mode") or DEFAULT_EV_CHARGE_MODE,
+                cname,
             ))
 
     # Per-battery mode selects (#523). Multi-battery installs (Energy
@@ -373,6 +376,7 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         charger_id: str,
         config_key: str,
         initial_value: str,
+        charger_name: str = "EV Charger",
     ) -> None:
         """Initialize per-charger select."""
         super().__init__(coordinator)
@@ -381,7 +385,12 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         self._charger_id = charger_id
         self._config_key = config_key
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        # Bare config key, so the translation resolves (the description key
+        # carries the charger id and is undeclarable). The charger name rides
+        # in as a placeholder — without it, both chargers on a two-charger
+        # install rendered the identical friendly name (#677).
         self._attr_translation_key = config_key
+        self._attr_translation_placeholders = {"charger": charger_name}
         self._attr_suggested_object_id = f"sem_{description.key}"
         self.entity_id = f"select.sem_{description.key}"
         valid_set = self._valid_value_set()

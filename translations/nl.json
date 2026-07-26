@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Overschot-event drempel"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Nachtdoel"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. ampère"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Voertuig min. ampère"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Doel-SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Zonne-maximum"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Zonne-max SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Accucapaciteit"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Verbruik"
+      },
+      "ev_phases": {
+        "name": "{charger} Fasen"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV-doeltype",
+        "name": "{charger} EV-doeltype",
         "state": {
           "kwh": "kWh-doel",
           "soc": "SoC-%-doel"
         }
       },
       "charge_mode": {
-        "name": "Laadmodus",
+        "name": "{charger} Laadmodus",
         "state": {
           "solar_only": "Alleen zon",
           "solar_plus_cheap": "Zon + goedkoopste uren",

@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Práh události přebytku"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Noční cíl"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. proud"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Min. proud vozidla"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Cílový SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Solární maximum"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Max. solární SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Kapacita baterie"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Spotřeba"
+      },
+      "ev_phases": {
+        "name": "{charger} Fáze"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "Typ cíle EV",
+        "name": "{charger} Typ cíle EV",
         "state": {
           "kwh": "Cíl kWh",
           "soc": "Cíl SoC %"
         }
       },
       "charge_mode": {
-        "name": "Režim nabíjení",
+        "name": "{charger} Režim nabíjení",
         "state": {
           "solar_only": "Pouze solární",
           "solar_plus_cheap": "Solární + nejlevnější hodiny",

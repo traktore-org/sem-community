@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Överskottshändelse tröskel"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Nattmål"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. ampere"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Fordonets min. ampere"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Mål-SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Solmaximum"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Max sol-SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Batterikapacitet"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Förbrukning"
+      },
+      "ev_phases": {
+        "name": "{charger} Faser"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV-måltyp",
+        "name": "{charger} EV-måltyp",
         "state": {
           "kwh": "kWh-mål",
           "soc": "SoC-%-mål"
         }
       },
       "charge_mode": {
-        "name": "Laddningsläge",
+        "name": "{charger} Laddningsläge",
         "state": {
           "solar_only": "Endast sol",
           "solar_plus_cheap": "Sol + billigaste timmar",

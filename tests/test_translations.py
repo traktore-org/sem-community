@@ -100,17 +100,26 @@ def test_all_languages_have_all_keys():
         )
 
 
-# Translation keys set at runtime rather than taken from an entity
-# description's ``key``, which the static scan above cannot see.
-#
-# ``select.SEMPerChargerSelect`` does ``_attr_translation_key = config_key``
-# and the call sites pass the bare config key while the *description* key is
-# ``charger_<id>_…`` — so these two are live for every per-charger install and
-# must not read as orphaned.
-_DYNAMIC_TRANSLATION_KEYS = {
-    ("select", "ev_target_type"),
-    ("select", "charge_mode"),
-}
+def _runtime_translation_keys():
+    """Keys assigned at runtime rather than read off a description's ``key``.
+
+    The per-charger entities set ``_attr_translation_key = config_key`` while
+    their description key carries the charger id, so the ``key="…"`` scan above
+    cannot see them. #676 handled that with a two-entry exemption set; #677
+    added nine more, at which point the exemption set *was* the hand-maintained
+    mirror of a growing structure that bug class 24 is about. So it derives
+    them from the source instead — one derivation, shared with the #677 guard.
+    """
+    # Relative, not ``from tests.…``: CI copies the tree to
+    # custom_components/solar_energy_management/, so the absolute form
+    # resolves locally and ModuleNotFoundErrors in CI (the #671 lesson).
+    from .test_677_per_charger_names import per_charger_translation_keys
+
+    return {
+        (domain, key)
+        for domain, names in per_charger_translation_keys().items()
+        for key in names
+    }
 
 
 def test_no_orphaned_translations():
@@ -124,11 +133,11 @@ def test_no_orphaned_translations():
     for and no user could ever see (#676).
 
     A tolerance on a correctness check is the same shape as the bug it hides:
-    it reads as covered. So the threshold is zero, and the two genuinely
-    dynamic keys are named above rather than absorbed into a budget.
+    it reads as covered. So the threshold is zero, and the genuinely dynamic
+    keys are *derived* from the source rather than absorbed into a budget.
     """
     keys = _extract_entity_keys()
-    valid_keys = {(domain, key) for domain, key in keys} | _DYNAMIC_TRANSLATION_KEYS
+    valid_keys = {(domain, key) for domain, key in keys} | _runtime_translation_keys()
 
     with open(_path("strings.json")) as f:
         strings = json.load(f)
@@ -145,21 +154,28 @@ def test_no_orphaned_translations():
         f"entity description carries these keys, so HA never looks them up:\n"
         + "\n".join(f"  {o}" for o in sorted(orphaned))
         + "\n\nDelete them, or — if the entity sets its translation_key at "
-        "runtime — add it to _DYNAMIC_TRANSLATION_KEYS with the reason (#676)."
+        "runtime — make _runtime_translation_keys() derive it (#676, #677)."
     )
 
 
 def test_the_orphan_rule_can_actually_fire():
-    """Bug class 8: the scan must find real entity keys, and the exemption
-    list must be a short named set rather than a silent catch-all."""
+    """Bug class 8: both scans must find real keys, and the runtime set must
+    be derived from the source rather than hand-listed."""
     keys = _extract_entity_keys()
     assert len(keys) > 100, f"only {len(keys)} entity keys found — the scan broke"
     assert ("number", "battery_capacity") in keys, "known-live key went missing"
-    assert ("number", "ev_target_soc") not in keys, (
-        "ev_target_soc is a real entity key again — remove it from the #676 "
-        "deletion instead of keeping this assertion"
+
+    runtime = _runtime_translation_keys()
+    assert len(runtime) >= 11, (
+        f"only {len(runtime)} runtime keys derived — the per-charger "
+        "derivation broke, which would silently re-open #676"
     )
-    assert len(_DYNAMIC_TRANSLATION_KEYS) < 5, (
-        "the runtime-key exemption list is growing into the tolerance this "
-        "test just removed — verify each entry against the code"
+    assert ("select", "charge_mode") in runtime
+    assert ("number", "ev_target_soc") in runtime, (
+        "ev_target_soc is a per-charger runtime key (#677); if it went global "
+        "again, the {charger} placeholder in its name will raise"
+    )
+    assert not (keys.keys() & runtime), (
+        "a key is claimed both by a global entity description and by the "
+        "per-charger derivation — see TestNoStaleGlobalKeys677"
     )

@@ -538,6 +538,32 @@ same way because nothing *executes* them against their counterpart. Ask of any s
 delete a line, what breaks, and when? If the answer is "nothing, until a user opens the right
 screen in the right language", it needs a guard, not a review.
 
+**Fourth instance — #677, the same drift read from the other end.** #674 was *a key with no entity*.
+#677 is *an entity with no key*, and it is worth keeping both in the class because the search that
+finds one will not find the other. When nine EV settings became per-charger in #255, their entity
+description key started carrying the charger id — `charger_keba_target_soc` — and
+`SEMPerChargerNumber` kept using `description.key` as the translation key. No `strings.json` can
+declare a key containing a runtime id, so HA looked it up, missed, and fell through to
+`entity_description.name`, a hardcoded English f-string. Nine sliders read English on every install
+in every language, for over a year. The two per-charger *selects* had the complementary half of the
+same split: they keyed on the bare config key, so they translated fine — but the name carried no
+charger, so a two-charger install rendered two identically-labelled dropdowns. **One split, two
+opposite losses: numbers kept the discriminator and lost the translation, selects kept the
+translation and lost the discriminator.** Fix pattern for both: bare config key as the translation
+key, discriminator as a `{charger}` placeholder — which HA validates, since
+`Entity._substitute_name_placeholders` *raises* outside the stable channel when the name names a
+placeholder the entity does not supply.
+
+**The part worth stealing:** the guard does not list the eleven keys. It **derives** them from the
+construction call sites in `number.py`/`select.py` — and that same derivation then *replaced* the
+two-entry `_DYNAMIC_TRANSLATION_KEYS` exemption set #676 had added to `test_translations.py` days
+earlier. That set was correct, small, and documented, and it was already the first two rows of a
+hand-maintained mirror of a growing structure — this very class, in its egg. #677 would have taken
+it to eleven. **Tell:** an exemption list *inside a guard for this class* is the class recurring one
+level up. If you find yourself adding a third entry to one, ask whether the thing you keep listing
+can be read out of the source instead. **Guard:** `tests/test_677_per_charger_names.py`
+(`per_charger_translation_keys()` is the shared derivation).
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

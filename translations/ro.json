@@ -1084,18 +1084,45 @@
       },
       "surplus_event_threshold": {
         "name": "Prag eveniment surplus"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Țintă de noapte"
+      },
+      "ev_min_current": {
+        "name": "{charger} Amperaj minim"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Amperaj minim vehicul"
+      },
+      "ev_target_soc": {
+        "name": "{charger} SOC țintă"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Maxim solar"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} SOC maxim solar"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Capacitatea bateriei"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Consum"
+      },
+      "ev_phases": {
+        "name": "{charger} Faze"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "Tip țintă EV",
+        "name": "{charger} Tip țintă EV",
         "state": {
           "kwh": "Țintă kWh",
           "soc": "Țintă SoC %"
         }
       },
       "charge_mode": {
-        "name": "Mod de încărcare",
+        "name": "{charger} Mod de încărcare",
         "state": {
           "solar_only": "Doar solar",
           "solar_plus_cheap": "Solar + cele mai ieftine ore",
