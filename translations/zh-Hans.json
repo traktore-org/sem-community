@@ -300,30 +300,6 @@
           "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
         }
       },
-      "dashboard_options": {
-        "title": "看板安装",
-        "description": "安装或重新安装 SEM 看板",
-        "data": {
-          "generate_dashboard": "生成看板",
-          "dashboard_title": "看板标题",
-          "dashboard_path": "看板路径 (URL)",
-          "include_financial": "包含财务追踪",
-          "include_flows": "包含功率流可视化",
-          "vehicle_soc_entity": "车辆电池电量 (SOC)",
-          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)"
-        },
-        "data_description": {
-          "generate_dashboard": "为 SEM 创建一个新的 Lovelace 看板。如果已存在相同路径的看板，它将被替换。",
-          "dashboard_title": "侧边栏中显示的看板名称。例如：'太阳能消纳管理'",
-          "dashboard_path": "看板的 URL 路径（小写，使用连字符）。例如：'sem-dashboard'",
-          "include_financial": "添加财务追踪标签页，显示成本、收益和投资回报率 (ROI) 指标。",
-          "include_flows": "添加功率流可视化标签页，通过桑基图 (Sankey diagram) 展示能量流动。",
-          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
-          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
-        }
-      },
       "ev_charger_edit": {
         "title": "编辑电动汽车充电桩",
         "description": "更新此充电桩的传感器映射和优先级。",

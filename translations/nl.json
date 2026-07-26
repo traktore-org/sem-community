@@ -284,30 +284,6 @@
           "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
         }
       },
-      "dashboard_options": {
-        "title": "Dashboard Installatie",
-        "description": "Installeer of herinstalleer het SEM dashboard",
-        "data": {
-          "generate_dashboard": "Dashboard genereren",
-          "dashboard_title": "Dashboardtitel",
-          "dashboard_path": "Dashboardpad (URL)",
-          "include_financial": "Financiële gegevens opnemen",
-          "include_flows": "Powerflow-visualisatie opnemen",
-          "vehicle_soc_entity": "Voertuig batterij SOC",
-          "ev_battery_capacity_kwh": "EV batterij capaciteit (kWh)",
-          "ev_target_soc": "EV doel SOC (%)"
-        },
-        "data_description": {
-          "generate_dashboard": "Maak een nieuw Lovelace-dashboard voor SEM. Als er al een dashboard met hetzelfde pad bestaat, wordt dit vervangen.",
-          "dashboard_title": "Weergavenaam voor het dashboard in de zijbalk. Voorbeeld: 'Solar Energy Management'",
-          "dashboard_path": "URL-pad voor het dashboard (kleine letters, gebruik streepjes). Voorbeeld: 'sem-dashboard'",
-          "include_financial": "Voeg een tabblad toe voor financiële tracking met kosten, besparingen en ROI-metrieken.",
-          "include_flows": "Voeg een tabblad toe voor een visualisatie van energiestromen met een Sankey-diagram dat de energiestromen weergeeft.",
-          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
-          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
-        }
-      },
       "battery_scheduler": {
         "title": "Batterij laadschema",
         "description": "Configureer voorspellingsgestuurd laden van het net naar de batterij tijdens goedkope uren",

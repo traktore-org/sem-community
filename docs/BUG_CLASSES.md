@@ -469,6 +469,28 @@ than comparing key *sets*, and `test_the_two_directions_cannot_drift_apart` uses
 .getsource` to assert both functions reference the shared constant. **Sweep question:** for every
 persist boundary, is the field list derived from the structure — or retyped beside it?
 
+**Second instance — #673, and the variant that cannot be de-duplicated.** `services.yaml` is a
+hand-maintained mirror of what `__init__.py` registers, and it had drifted to **14 of 18**:
+`diagnose`, `remove_charger`, `get_config`, `set_option` were registered and undeclared. Same
+silent shape — an undeclared service is still fully callable, so nothing raises. What it loses is
+its UI: no description, no field pickers, no validation in Developer Tools → Actions. Worst on
+`diagnose`, which `docs/SEM_TRACE.md` explicitly tells users to call with `section: trace` — they
+met an action with no `section` dropdown and no hint that `trace` was one of twelve valid values.
+
+The important difference from #668: **the #668 fix pattern does not apply here.** You cannot
+derive `services.yaml` from the code, because it holds descriptions and selectors only a human can
+write. When one list genuinely cannot be generated from the other, the closure is not "collapse
+them into one source of truth" — it is **assert the two agree, and name every deliberate
+divergence.** `tests/test_673_services_declared.py` checks both directions (a declared-but-
+unregistered service is the rarer and more user-hostile half: HA offers it in the picker and it
+fails on call) and additionally pins that the `section` dropdown offers every section the code
+actually handles — a field with the wrong option list leaves the docs as the only place the valid
+values exist, which is the bug not quite fixed.
+
+**Sweep question, widened:** for every hand-written list mirroring a code structure — persist
+whitelists, `services.yaml`, `strings.json`, `manifest.json` dependencies, platform lists — is it
+derived, or merely *asserted equal*? If it is neither, it is already drifting.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

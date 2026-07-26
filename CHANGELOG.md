@@ -132,6 +132,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time — only the prefix was wrong. The issue-template's playbook link was broken the
   same way. Now guarded: **every** relative markdown link in the repo must resolve, not
   just the 12 config-card help links #618 covered.
+- 🎛️ **Four services SEM registers had no UI at all, including the one the docs tell you
+  to call** (#673, coherence-audit) — `services.yaml` declared 14 of the 18 services
+  `__init__.py` registers. An undeclared service is still fully callable, so nothing ever
+  raised and no test failed; what it loses is its entire affordance in
+  **Developer Tools → Actions** — no description, no field pickers, no validation, so you
+  had to already know the parameter names and hand-write the YAML. That landed hardest on
+  `diagnose`: `docs/SEM_TRACE.md` tells users to call it with `section: trace`, and anyone
+  following that instruction met an action with no `section` field and no hint that `trace`
+  was one of *twelve* valid values. `remove_charger`, `get_config` and `set_option` were
+  undeclared too. All four now ship full descriptions, fields and selectors — `diagnose`
+  gets a proper dropdown of all twelve sections — and a guard asserts the two lists agree
+  in **both** directions, so a service registered without a declaration (or advertised in
+  the UI without an implementation) fails CI.
+- 🌍 **288 translated strings in 16 languages described a settings step that has never
+  existed** (#673, coherence-audit) — found by running the sweep question this issue added
+  to the bug-class ledger rather than leaving it rhetorical. Every language file carried a
+  complete `options.step.dashboard_options` block — title, description, eight field labels
+  and eight field descriptions — for a config-flow step no `async_step_dashboard_options`
+  has ever existed to show. Harmless at runtime (HA only looks up steps it is asked for),
+  which is exactly why it survived: it read as a fully-localised feature. The cost was
+  translator effort spent on a screen nobody can open. Removed from all 16 files, and a
+  guard now rejects any translated step with no matching flow method.
 - 💰 **Nine energy-accounting values were being thrown away on every restart** (#668,
   coherence-audit) — the calculator hands 20 values to the store on shutdown, but the
   store's hand-written whitelist carried only 11 through. The nine it dropped were read

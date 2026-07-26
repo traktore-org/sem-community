@@ -282,30 +282,6 @@
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
         }
       },
-      "dashboard_options": {
-        "title": "Installation du Tableau de Bord",
-        "description": "Installer ou réinstaller le tableau de bord SEM",
-        "data": {
-          "generate_dashboard": "Générer le Tableau de Bord",
-          "dashboard_title": "Titre du Tableau de Bord",
-          "dashboard_path": "Chemin du Tableau de Bord (URL)",
-          "include_financial": "Inclure le Suivi Financier",
-          "include_flows": "Inclure la Visualisation des Flux d'Énergie",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
-        },
-        "data_description": {
-          "generate_dashboard": "Créez un nouveau tableau de bord Lovelace pour SEM. Si un tableau de bord avec le même chemin existe déjà, il sera remplacé.",
-          "dashboard_title": "Nom d'affichage du tableau de bord dans la barre latérale. Exemple: 'Solar Energy Management'",
-          "dashboard_path": "Chemin URL du tableau de bord (minuscules, utilisez des tirets). Exemple: 'sem-dashboard'",
-          "include_financial": "Ajoutez un onglet de suivi financier montrant les coûts, économies et métriques ROI.",
-          "include_flows": "Ajoutez un onglet de visualisation des flux d'énergie avec diagramme Sankey montrant les flux d'énergie.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
-        }
-      },
       "battery_scheduler": {
         "title": "Battery Charge Scheduler",
         "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
