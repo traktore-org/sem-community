@@ -50,12 +50,26 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 > night-capable modes do follow the global, since for them the overnight top-up is the
 > mode's whole purpose.
 
+> **Turning overnight charging off — set the floor to 0 (#680).** The *At least* floor is
+> the single control for night charging: SEM tops up the gap between surplus and that
+> target, so **a floor of 0 means no overnight charge** (in any mode). There is **no
+> separate toggle** — the target you already set is the switch. This now works in both
+> units: the kWh target always reached 0, and the **% target (*Minimum SoC*) now spans
+> 0–100 %** on both the *At least* and *At most* handles (it was previously pinned at a
+> 50 % minimum, so a %-targeted Solar-only charger couldn't be told "never grid
+> overnight" and topped up to ≥ 50 % from the grid every night). To make a charger charge
+> from **solar only, never grid/battery at night**, set **At least = 0 %** and **At most =
+> 100 %** — daytime surplus charges up to the ceiling, and nothing tops up overnight. The
+> runtime clamps the effective ceiling ≥ the floor, so a Max below the Min is harmless.
+
 ## The control surface (per charger)
 
 | Entity | Role |
 |---|---|
 | `select.sem_charger_<id>_charge_mode` | The mode — the single intent input |
-| `number.sem_charger_<id>_daily_ev_target` / `_max` | *At least X kWh* floor / *Up to* ceiling |
+| `number.sem_charger_<id>_daily_ev_target` / `_max` | *At least X kWh* floor / *Up to* ceiling (kWh target); both **0–200** — floor 0 = no overnight charge |
+| `number.sem_charger_<id>_target_soc` / `_max` | *Minimum SoC* floor / *Up to* ceiling (% target); both **0–100 %** (#680) — floor 0 = no overnight charge |
+| *(picker)* `ev_start_stop_entity` | The `switch`/`button` SEM uses to open the contactor — set on the config card or the Add/Edit-charger dialog (#627). Without it, a `number.*`-only charger may be un-stoppable |
 | `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing) |
 | `number.sem_charger_<id>_minimum_current` / max | Current bounds (most cars need ≥ 6 A) |
 | `sensor.sem_charging_strategy` | The live reason string — every decision explains itself here |
@@ -205,7 +219,8 @@ Each charger has its own daily energy bucket (`daily_ev` for that charger). The 
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
-| EV idle overnight despite plugged in | Overnight grid charging OFF, or Min already reached | EV card → `Overnight grid charging` toggle; check `sensor.sem_charger_*_session_energy` |
+| EV idle overnight despite plugged in | *At least* floor is 0, or Min already reached | Raise the *At least* target above 0 — a floor of 0 means "never grid/battery-charge overnight" by design (#680). Check `sensor.sem_charger_*_session_energy` |
+| Solar-only charger still grids/battery-charges at night | % target floor was ≥ 50 % (pre-beta.26 it couldn't be set lower) | Update to v1.7.5-beta.26+, then set *At least* = 0 % (and *At most* = your solar cap). #627/#680 |
 | Tariff "waiting" all night, never charges | Cheap window past midnight didn't open, OR price provider went stale | EV card → `Cheapest hours` hint shows "Next: HH:MM"; check `sensor.sem_tariff_current_import_rate` attributes |
 | Charging at high current even when no solar | Forcing deadline set earlier than window end | EV card → `Charge by` time. Set it to window end (e.g. 07:00) to disable forcing. |
 | "Can't reach target in time" notification | Min too high for the time left at max current | Lower Min, set an earlier deadline, raise Max current, or accept the notification (charges to whatever is possible at max) |
