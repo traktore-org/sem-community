@@ -1051,6 +1051,39 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
+                # #627 (bug class 30): ``__init__.py`` reads all four keys
+                # below off the per-charger dict and ``hardware_detection``
+                # auto-fills them for several brands — but none had an
+                # editable surface, so a wrong or missing auto-detect could
+                # not be corrected, and a charger ADDED after install never
+                # got them at all. The reported symptom: a box that keeps
+                # its contactor closed at 0 A had no way to be told to open.
+                vol.Optional(
+                    "ev_start_stop_entity",
+                    description={"suggested_value": suggestions.get("ev_start_stop_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "button"])
+                ),
+                vol.Optional(
+                    "ev_current_sensor",
+                    description={"suggested_value": suggestions.get("ev_current_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="current")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_entity",
+                    description={"suggested_value": suggestions.get("ev_charge_mode_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="select")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_start",
+                    description={"suggested_value": suggestions.get("ev_charge_mode_start")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_charge_mode_stop",
+                    description={"suggested_value": suggestions.get("ev_charge_mode_stop")},
+                ): selector.TextSelector(),
                 # #604: ONE priority axis — the unified device-priority list
                 # (#576). Shed order under peak is the reverse list walk
                 # (#470: higher list number sheds first), so there is no
@@ -1218,6 +1251,33 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
+                # #627 — see async_step_ev_charger_add for the why.
+                vol.Optional(
+                    "ev_start_stop_entity",
+                    description={"suggested_value": charger.get("ev_start_stop_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "button"])
+                ),
+                vol.Optional(
+                    "ev_current_sensor",
+                    description={"suggested_value": charger.get("ev_current_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="current")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_entity",
+                    description={"suggested_value": charger.get("ev_charge_mode_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="select")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_start",
+                    description={"suggested_value": charger.get("ev_charge_mode_start")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_charge_mode_stop",
+                    description={"suggested_value": charger.get("ev_charge_mode_stop")},
+                ): selector.TextSelector(),
                 # #604: ONE priority axis — the unified device-priority list
                 # (#576). Lower number = charges first on surplus; shed
                 # order under peak is the reverse list walk (#470: higher

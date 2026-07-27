@@ -704,6 +704,19 @@ class SEMConfigCard extends SEMLitBase {
                         'sensor', 'power', opts, 'config_help_ev_charging_power')}
                     ${this._renderPickerNested(idx, cid, 'ev_current_control_entity', 'config_ev_current_control',
                         'number', null, opts, 'config_help_ev_current_control')}
+                    ${/* #627: the backend has always honoured a per-charger
+                          ``ev_start_stop_entity`` (``__init__.py`` hands it to
+                          ``CurrentControlDevice.start_stop_entity``, which
+                          dispatches switch.turn_on/off or button.press), and
+                          hardware_detection auto-fills it for several brands —
+                          but nothing in the UI could WRITE it. A charger whose
+                          current entity keeps a live contactor (Smart-EVSE-style)
+                          therefore had no way to be told "and open the relay
+                          too", so SEM dropped to 0 A and the box kept clicking.
+                          Same shape as #684: a key the reader honours with no
+                          surface to set it. */ ''}
+                    ${this._renderPickerNested(idx, cid, 'ev_start_stop_entity', 'config_ev_start_stop',
+                        ['switch', 'button'], null, opts, 'config_help_ev_start_stop')}
                     ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}

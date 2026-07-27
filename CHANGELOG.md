@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.26] — 27.07.2026
+
+### 🐛 Fixes
+
+- 🔌 **The "configure a start/stop entity" repair now has somewhere to go** (#627, reported by
+  @onkelfu) — beta.25 taught SEM to notice when it holds no mechanism that can open a charger's
+  contactor and to file a repair naming the missing `ev_start_stop_entity`. But that entity had no
+  editable surface anywhere in the UI: `__init__.py` has read it off the per-charger config since
+  v1.0 and `hardware_detection` auto-fills it for some brands, yet neither the config card nor the
+  options flow could ever *write* it — so the repair pointed a user straight at a dead end. The
+  per-charger section of the config card now offers a start/stop picker (`switch`/`button`), and
+  the add- and edit-charger options-flow steps gain `ev_start_stop_entity`, `ev_current_sensor`,
+  `ev_charge_mode_entity` and the charge-mode start/stop values — every per-charger entity key the
+  runtime honours is now settable *after* install, not only in the unreachable install-time step,
+  and correctable later on the exact same fields it was set with. This is bug class 30 (a
+  backend-honoured config key with no editable surface), the same shape as #684; `hardware_detection`
+  guesses are now suggestions the user can override rather than silent commitments. Guarded by
+  `tests/test_627_charger_config_surface.py`, which re-derives the key list from `__init__.py` on
+  every run so a *new* per-charger entity key that lands without a surface fails there rather than in
+  a user's log a release later. (by @traktore-org)
+
 # [1.7.5-beta.25] — 27.07.2026
 
 ### ✨ Enhancements

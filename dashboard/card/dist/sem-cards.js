@@ -6310,6 +6310,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this._renderPickerNested(r,a,"ev_connected_sensor","config_ev_connected_sensor",["binary_sensor","sensor"],null,t,"config_help_ev_connected_sensor")}
                     ${this._renderPickerNested(r,a,"ev_charging_power_sensor","config_ev_charging_power","sensor","power",t,"config_help_ev_charging_power")}
                     ${this._renderPickerNested(r,a,"ev_current_control_entity","config_ev_current_control","number",null,t,"config_help_ev_current_control")}
+                    ${""}
+                    ${this._renderPickerNested(r,a,"ev_start_stop_entity","config_ev_start_stop",["switch","button"],null,t,"config_help_ev_start_stop")}
                     ${this._renderPickerNested(r,a,"vehicle_soc_entity","config_ev_vehicle_soc","sensor",null,t,"config_help_ev_vehicle_soc")}
                     ${this._renderTargetTypeSelectNested(r,a,i,t)}
                     ${""}
