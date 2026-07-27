@@ -901,7 +901,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("ev_target_soc", 80),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
+                        min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
                 # Optional solar ceiling (Max): surplus charges up to this, then
@@ -919,7 +919,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("ev_target_soc_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
+                        min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
             }),
@@ -1163,7 +1163,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("ev_target_soc", 80),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),
@@ -1172,7 +1172,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("ev_target_soc_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),
@@ -1374,7 +1374,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("ev_target_soc", self._data.get("ev_target_soc", 80)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),
@@ -1383,7 +1383,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("ev_target_soc_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),

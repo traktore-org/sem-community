@@ -31,6 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/test_627_charger_config_surface.py`, which re-derives the key list from `__init__.py` on
   every run so a *new* per-charger entity key that lands without a surface fails there rather than in
   a user's log a release later. (by @traktore-org)
+- 🌙 **"No overnight charging" is now expressible in % — not just kWh** (#680, follow-up to
+  #679/#634, and the layer @onkelfu's #627 install actually sat on) — the overnight floor is the
+  *single* night-charge control: SEM tops up the gap between surplus and your "At least" target, and
+  a floor of **0 means no night charge**. That worked in kWh — the slider reached 0 — but not in %:
+  the SOC "At least" slider was pinned at `min=50` on the config-card knob and all three options-flow
+  steps, so a %-targeted *Solar-only* charger could not be told "never grid overnight" and topped up
+  to at least 50 % from the grid every night (onkelfu's charger sat at 100 %). Both the floor **and**
+  the Max solar ceiling now span **0–100 %** — the whole SOC range is settable, matching the kWh
+  target. The runtime clamps the effective ceiling `>= floor`, and daytime charging follows the
+  ceiling, so `At least = 0` removes only the overnight grid guarantee, not daytime solar charging. No
+  new toggle — the floor you already set is the control, it just needed to reach 0. Guarded by
+  `tests/test_680_soc_floor_reaches_zero.py`. (by @traktore-org)
 
 # [1.7.5-beta.25] — 27.07.2026
 

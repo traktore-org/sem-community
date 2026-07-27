@@ -384,7 +384,11 @@ async def async_setup_entry(
                     key=f"charger_{cid}_target_soc",
                     name=f"{cname} Target SOC",
                     native_unit_of_measurement=PERCENTAGE,
-                    native_min_value=50, native_max_value=100, native_step=5,
+                    # 0 = no overnight floor → never grid-charges at night (#680,
+                    # onkelfu #627). The "At least" floor is the single night-charge
+                    # intent signal; a slider that cannot reach 0 (was min=50) could
+                    # not express "no night charge". The Max ceiling matches (0–100).
+                    native_min_value=0, native_max_value=100, native_step=5,
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-80",
                 ), "ev_target_soc", full_config.get("ev_target_soc", 80)),
@@ -406,7 +410,10 @@ async def async_setup_entry(
                     key=f"charger_{cid}_target_soc_max",
                     name=f"{cname} Solar Max SOC",
                     native_unit_of_measurement=PERCENTAGE,
-                    native_min_value=50, native_max_value=100, native_step=5,
+                    # 0–100 on both handles, matching the kWh target (#680). The
+                    # runtime clamps the effective ceiling to >= floor
+                    # (_resolve_target), so a Max below the Min is harmless.
+                    native_min_value=0, native_max_value=100, native_step=5,
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-high",
                 ), "ev_target_soc_max",
