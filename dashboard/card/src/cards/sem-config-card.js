@@ -690,8 +690,16 @@ class SEMConfigCard extends SEMLitBase {
                             <button class="charger-remove-cancel" @click=${() => { this._pendingRemove = ''; this.requestUpdate(); }}>${this._t('config_discard')}</button>
                             <button class="charger-remove-go" @click=${() => this._removeCharger(cid)}>${this._t('config_ev_remove')}</button>
                         </div>` : nothing}
+                    ${/* #684: the config FLOW has always accepted a plain status
+                          sensor here (``domain=["binary_sensor","sensor"]``) and
+                          the reader decodes textual states — "plugged in",
+                          "connected", "charging", … — but this picker listed
+                          binary_sensor only, so a charger that reports plug
+                          state as a text sensor (JuiceBox via JuiceBoxProxy,
+                          Easee, OCPP) could not be configured from the card at
+                          all. Match the flow. */ ''}
                     ${this._renderPickerNested(idx, cid, 'ev_connected_sensor', 'config_ev_connected_sensor',
-                        'binary_sensor', null, opts, 'config_help_ev_connected_sensor')}
+                        ['binary_sensor', 'sensor'], null, opts, 'config_help_ev_connected_sensor')}
                     ${this._renderPickerNested(idx, cid, 'ev_charging_power_sensor', 'config_ev_charging_power',
                         'sensor', 'power', opts, 'config_help_ev_charging_power')}
                     ${this._renderPickerNested(idx, cid, 'ev_current_control_entity', 'config_ev_current_control',
