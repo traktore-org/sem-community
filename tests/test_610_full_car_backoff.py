@@ -65,8 +65,16 @@ def _charge(cid="wb", amps=6):
     )
 
 
-def _filter(st, view, adapter, now):
-    return st.filter(_charge(), view, adapter,
+def _idle(cid="wb"):
+    return ChargerDecision(
+        charger_id=cid, mode="min_plus_solar",
+        intent=ChargerIntent.IDLE, commanded_amps=0,
+        budget_w=0.0, reason="min_plus_solar: budget below min",
+    )
+
+
+def _filter(st, view, adapter, now, decision=None):
+    return st.filter(decision or _charge(), view, adapter,
                      enable_delay_s=60, disable_delay_s=300, now_ts=now)
 
 
@@ -265,6 +273,63 @@ class TestFullCarBackoff:
         d = _filter(st, _view(power_w=120.0, is_night=True), adapter, now=t + 60.0)
         assert d.intent is ChargerIntent.IDLE
         assert "full-car backoff" in d.reason
+
+    def test_median_lag_cannot_smuggle_a_charge_past_the_backoff(self):
+        """THE PROD 2026-07-26 signature: an armed backoff, and a raw CHARGE
+        still reaches the charger.
+
+        ``charge_wanted`` is the MEDIAN of the last ``smooth_window`` decided
+        amps, so it lags the raw decision. Feed low cycles until the median
+        drops below the floor, then one real CHARGE: pre-fix the filter took
+        the NOT-wanted branch, where the gate did not live, and fell to a
+        ``return decision`` passthrough (#552 ownership) that handed the raw
+        offer straight to the actuator. Five of these escaped in one 20-minute
+        window on PROD; they are recognisable in the log because the reason
+        carries NO ``stability:`` prefix.
+        """
+        st = ChargeStability()
+        adapter = FakeAdapter()
+        t = 0.0
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
+            t += 10.0
+        assert "wb" in st._giveup_backoff_until
+
+        view = _view(power_w=120.0)  # plugged, not drawing
+        # Drag the median under the floor — the budget collapsing for a few
+        # cycles (a grid-meter dropout, a cloud) is all it takes.
+        for i in range(4):
+            t += 10.0
+            _filter(st, view, adapter, now=t, decision=_idle())
+        # ...and now a real CHARGE on the recovery cycle.
+        t += 10.0
+        d = _filter(st, view, adapter, now=t, decision=_charge(amps=12))
+
+        assert d.intent is ChargerIntent.IDLE, (
+            f"raw CHARGE escaped an armed backoff: {d.intent} "
+            f"{d.commanded_amps}A — {d.reason}"
+        )
+        assert d.commanded_amps == 0
+        assert "full-car backoff" in d.reason
+
+    def test_a_real_draw_during_the_backoff_still_clears_it(self):
+        """The clear-on-draw moved out of the charge_wanted branch with the
+        gate — it must still fire on a cycle whose median is below the floor,
+        or a car that finally accepts current would stay suppressed."""
+        st = ChargeStability()
+        adapter = FakeAdapter()
+        t = 0.0
+        for n in range(FULL_CAR_GIVEUP_STREAK):
+            _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
+            t += 10.0
+        view = _view(power_w=120.0)
+        for i in range(4):                      # median under the floor
+            t += 10.0
+            _filter(st, view, adapter, now=t, decision=_idle())
+        t += 10.0
+        _filter(st, _view(power_w=4140.0), adapter, now=t, decision=_idle())
+        assert "wb" not in st._giveup_backoff_until
+        assert "wb" not in st._giveup_streak
 
     def test_restore_rejects_corrupt_backoff_blob(self):
         st = ChargeStability()

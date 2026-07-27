@@ -1237,6 +1237,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self.config.get("prefer_hardware_energy", True),
                 )
 
+                # (#628) grid + battery reconciliation against the SAME
+                # counters HA's Energy Dashboard reads. Until now those
+                # registers were read exactly once, at boot, to seed lifetime
+                # totals — so the daily rows the user compares against the
+                # Energy Dashboard were pure power integration, and every
+                # dropped or mis-signed sample stayed in them forever.
+                meter_counters: Dict[str, List[str]] = {}
+                for category, single, listed in (
+                    ("grid_import", dashboard_config.grid_import_energy,
+                     dashboard_config.grid_import_energy_list),
+                    ("grid_export", dashboard_config.grid_export_energy,
+                     dashboard_config.grid_export_energy_list),
+                    ("battery_charge", dashboard_config.battery_charge_energy,
+                     dashboard_config.battery_charge_energy_list),
+                    ("battery_discharge", dashboard_config.battery_discharge_energy,
+                     dashboard_config.battery_discharge_energy_list),
+                ):
+                    entities = list(listed) or ([single] if single else [])
+                    if entities:
+                        meter_counters[category] = entities
+                self._energy_calculator.configure_meter_counters(
+                    self.hass,
+                    meter_counters,
+                    self.config.get("prefer_hardware_energy", True),
+                )
+
                 # v1.7.0 / #312: auto-discover per-PV-string sensors and
                 # plumb them to the sensor reader so every cycle populates
                 # ``readings.solar_power_per_string``. Discovery is a

@@ -341,10 +341,27 @@ and is now the path **observer mode always runs** (HA-TEST). In it, OFF *is* the
 gate stops a running load by construction; markers derive from `intent.source` (closes #18).
 Full closure = flip `_use_desired_state` for PROD actuation and delete the 7 imperative passes
 (gated on the 2 LIFO parity xfails in `test_desired_state.py`).
+**Instance 5 — a *second* way to be un-stoppable: the gate was threaded into both spots, but
+the load didn't look like SEM's.** Both release paths (`compute_load_intent` clause 1 and the
+imperative force-expiry pass) are gated on `_sem_owned`, the flag that separates "SEM turned
+this on" from "the user turned this on". Ownership was recorded **at the call site**, and only
+2 of the 5 activation passes did it (main surplus, `reconcile_load`); the Tier-2 overnight
+battery, cheap-hours grid and deadline passes did not, and no `activate()` implementation sets
+it either. So Mode → Off computed the right decision and then declined to act on it. Confirmed
+on real hardware (HA-PROD 2026-07-26): a towel heater started by the Tier-2 pass was still
+drawing 648 W five minutes after Mode → Off, `sem_owned == false` throughout, and would have
+run until the user's own 2-hour safety automation. **Fixed** by moving ownership off the call
+sites into a choke point — `_activate_owned` / `_deactivate_owned` in `surplus_controller.py`,
+all 12 actuation sites converted. **Guard:** `tests/test_load_ownership_choke_point.py` — an
+AST guard fails CI on any raw `<device>.activate(...)`/`.deactivate()` outside the two helpers
+(same shape as `# FLEET-READ` from #589), plus a reflection test asserting no `activate()`
+implementation records ownership, so it can't drift back into the device layer and double-claim.
+**Lesson:** "is the gate wired into both spots?" is necessary but not sufficient — also ask
+"can the stop path *see* this load as ours?".
 **Watch:** until the flag flips for actuation, any new "reason a load should stop" must be added
 to BOTH `compute`-side (block activation) AND a force-expiry/goal-gate section (stop running) in
 the imperative `update()` — AND to `compute_load_intent`'s precedence — AND to the family
-guard's parametrize list.
+guard's parametrize list. Any new *activation* path must go through `_activate_owned`.
 
 ### 18. Forced-marker set in one pass, leaks because another pass didn't clear it — PARTIAL
 **Symptom:** a transient control marker (`_offpeak_forced`, `_batt_overnight_forced`) set when
@@ -708,6 +725,45 @@ take the ratio. ≈1.0 is trustworthy; the PROD solar counter scored **0.48** ov
 **Guard:** `tests/test_681_night_solar_counter.py` — the PROD night trace replayed, plus a
 #556-still-works pin and fail-open cases. Refs #681 #556 #628.
 **Watch:** any new `*_energy_sensor` / counter slot, and any `if new > old: adopt` reconciliation.
+
+---
+
+### 29. A guard sits inside one branch of a split; the other branch passes the input through unguarded — GUARDED
+**Symptom:** a suppression that provably works — you can watch it fire, cycle after cycle, in the
+log — and yet the suppressed action still reaches the hardware, occasionally, with no trace of the
+guard in its reason string. The guard is not broken; control simply arrives at the actuator by a
+route that never passes it.
+**Root shape:** a function branches (`if wanted: … else: …`), the guard is written into the branch
+where the interesting work happens, and one or more `return input` passthroughs on the other side
+hand the *caller's un-rewritten decision* onward. Every passthrough is individually justified — "out
+of scope", "not our session", "the planner owns this" — which is exactly why they don't look like
+actuation paths. Worse when the branch predicate is **derived** (a median, a debounce, a cached
+flag) and so can disagree with the raw input on the very cycle the raw input is dangerous.
+**Live catch (#610, twice, same guard):** the full-car backoff has now moved twice for this shape.
+(1) First placed on the fresh-start path only — but `adapter.last_intent` stays `CHARGE_AT_AMPS`
+across a give-up (the IDLE actuation is debounced), so the *ladder* block re-entered with reset
+state and climbed again; PROD 2026-07-19, armed 11:10:12, ladder restarted 11:10:42. (2) Then
+placed inside `if charge_wanted:` — where `charge_wanted` is the **median** of the last
+`smooth_window` decided amps and therefore lags the raw decision. After a few collapsed-budget
+cycles the median reads below the floor while *this* cycle's decision is a real CHARGE, so control
+took the NOT-wanted branch and fell to one of three `return decision` passthroughs (night /
+post-stop / #552 ownership). PROD 2026-07-26, one 20-minute armed window: **five raw offers
+escaped** (17:41:54 12 A, 17:49:36 12 A, 17:50:37 12 A, 17:52:37 11 A, 17:52:47 11 A), with a
+confirmed `keba_p30_max_current` write. Trigger was the Huawei grid meter's single-sample dropouts
+oscillating the budget.
+**Closure:** evaluate the guard on the **raw** state (armed + not drawing), above the split, so no
+route from entry to actuation can skip it. Placement, not logic, is the fix both times.
+**Sweep question:** for each guard — *list every `return` between it and the actuator. Which of
+them returns the caller's object rather than a rewritten one?* And: *is the branch predicate the
+same value the guard is protecting against, or a smoothed/derived proxy of it?*
+**Cheap detector:** the escaping decisions are visible in the log by **absence** — their reason has
+no `stability:` prefix, because nothing in the filter rewrote them. Any layer that annotates what
+it touched makes this class greppable: `grep 'intent=charge' | grep -v '<layer-prefix>'`.
+**Guard:** `tests/test_610_full_car_backoff.py::test_median_lag_cannot_smuggle_a_charge_past_the_backoff`
+— drags the median under the floor with low cycles, then feeds one raw CHARGE. Both new cases fail
+against the pre-fix source with the live signature. Refs #610 #552 #461.
+**Watch:** any new early `return decision` / `return state` added to a filter or reconciler, and
+any guard written *inside* a branch whose predicate is smoothed, debounced or cached.
 
 ---
 

@@ -13,8 +13,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.5-beta.25] — 24.07.2026
 
+### ✨ Enhancements
+
+- 🔌 **Daily grid and battery energy now follow your meter, not SEM's stopwatch** (#628, reported
+  by @jappish84) — you declare your P1/utility meter and BMS counters in HA's Energy Dashboard,
+  and until now SEM read those registers exactly **once**, at startup, to seed lifetime totals.
+  Every daily row you actually compare against the Energy Dashboard was pure power integration:
+  SEM sampling a power sensor every 10 seconds and adding up the rectangles. Any sample the
+  sensor drops or mis-signs is gone for the rest of the day. On our own Huawei install 17 of 520
+  grid samples in three hours were isolated dropouts and one read −229 W, which books real import
+  as export — and the reporter's numbers show the same signature, his import short by 3.2 kWh and
+  his export long by 2.9 kWh, the same energy filed on the wrong side. Grid import, grid export,
+  battery charge and battery discharge now reconcile against those counters every cycle, using the
+  same baseline/anchor/delta model as solar (#556) and EV (#658), under the same
+  `prefer_hardware_energy` option. Three deliberate differences: the correction is **bidirectional**
+  (solar can only ever have been under-counted; a meter can prove the integrator counted energy
+  that never flowed, which is the reporter's export row), a category reconciles only when **every**
+  one of its counters is reporting (a two-tariff meter with one register unavailable must not look
+  like the day shrank), and there is **no sun gate** — #681 keeps the solar *yield* counter out of
+  the night because it does not measure PV production, whereas a grid import register measures grid
+  import at 03:00 exactly as it does at noon. (by @traktore-org)
+
 ### 🐛 Fixes
 
+- 🔥 **Switching a device to "Off" did not stop it if SEM had started it overnight** (caught on our
+  own production hardware) — a load started by the overnight-battery pass, the cheap-hours grid
+  pass or a deadline top-up kept running after you set its mode to Off. SEM stopped managing it and
+  never stopped it: on PROD a towel heater was still drawing 648 W five minutes after the switch to
+  Off, and would have gone on heating until the household's own 2-hour safety automation cut it.
+  The release only ever fires for a load SEM *owns* — the flag that separates "SEM turned this on"
+  from "you turned this on", so that Off leaves your own manual switch-ons alone. That flag was set
+  by the code that turned the device on, and only two of the five places that turn a device on
+  remembered to set it; the three overnight/top-up paths did not, so Off reached the right decision
+  and then declined to act on it. Ownership now lives with the actuation itself instead of being a
+  thing each path has to remember, and a CI guard fails the build if a new path is ever added that
+  bypasses it. This is the fifth time this class of bug has shipped (a gate that blocks a device
+  from starting but does not stop one already running) — the new variant is written up in
+  `docs/BUG_CLASSES.md`. (by @traktore-org)
+- 🔌 **Re-registering an auto-detected device by service dropped its energy counter** — the
+  `register_surplus_device` service accepts an `energy_entity_id` (#600) but discarded it when
+  building the device row, so a device that had been auto-discovered *with* an energy sensor lost
+  it the moment it was re-registered through the service. (by @traktore-org)
+- 🚗 **A full car could still be woken mid-backoff, once every couple of minutes** (#682, follow-up
+  to #610) — #610 stops SEM re-offering current to a car that has already refused three start
+  ladders, and the 20-minute backoff was verified live. It leaked anyway: the gate sat inside the
+  "we want to charge" branch, and the amps that decision is built from are a 5-cycle median. Three
+  quiet cycles pull the median under the minimum, so a cycle whose *raw* decision is a real CHARGE
+  falls through the other branch, which hands the caller's decision straight back unfiltered. On
+  PROD five commands escaped a single armed window — recognisable in the log because their reason
+  carries no `stability:` prefix. The gate is now evaluated on the raw state above the split. This
+  is the **second** time this exact escape has been fixed on this exact gate (the first was the
+  ladder block bypassing a fresh-start-only check), so it is now written up as bug class 29 —
+  *a guard sits inside one branch of a split; the other branch passes the input through
+  unguarded* — with the sweep question and a cheap detector in `docs/BUG_CLASSES.md`.
+  (by @traktore-org)
 - 🌙 **Daily solar counted the battery discharging overnight as production** (#681, caught on our
   own production hardware) — on a DC-coupled hybrid the inverter's total-yield counter measures AC
   *output*, and at night that output is the battery serving the house. SEM's hardware-counter

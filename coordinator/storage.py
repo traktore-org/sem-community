@@ -59,6 +59,8 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     "solar_counter_baselines",
     # (#658) EV wallbox-counter baselines
     "ev_counter_baselines",
+    # (#628) grid/battery meter baselines, keyed by category
+    "meter_baselines",
     # (#668) lifetime running totals, summed at each day rollover. Dropped
     # since they were introduced, so ``lifetime_total_savings`` fell back to a
     # 7-day-average-rate ESTIMATE of the entire history after every restart

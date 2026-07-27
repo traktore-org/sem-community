@@ -924,7 +924,12 @@ class UnifiedDeviceRegistry:
                 "is_critical": False,
                 "power_rating": spec.get("rated_power", 1000),
                 "power_entity": spec.get("power_entity_id"),
-                "energy_sensor": None,
+                # the service accepts energy_entity_id (#600) — emit it
+                # instead of a hardcoded None, else registering a device that
+                # HAD an auto-discovered energy counter silently drops it from
+                # the row (caught live on PROD: an ED device re-registered by
+                # service lost sensor.<shelly>_energy).
+                "energy_sensor": spec.get("energy_entity_id"),
                 "switch_entity": spec.get("entity_id"),
                 "is_available": True,
                 "is_on": is_on,
