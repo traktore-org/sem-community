@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.5-beta.25] — 24.07.2026
+# [1.7.5-beta.25] — 27.07.2026
 
 ### ✨ Enhancements
 
@@ -36,6 +36,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- 🚗 **Two chargers, one instrumented car — and that car's SOC showed on both tiles** (#683, reported
+  by @Azlinon) — with a second EVSE added and only the first one wired to a vehicle battery sensor,
+  the second charger's card displayed the first car's state of charge. Two separate, individually
+  sensible behaviours composed into it: when no *global* vehicle SOC sensor is configured SEM
+  promotes the first per-charger reading it finds into the fleet-wide `sem_vehicle_soc` sensor, and
+  each charger tile fell back to that fleet sensor whenever its own reading was missing — which is
+  exactly the situation of a charger with no SOC sensor of its own. The fallback exists for older
+  single-charger installs and stays for them; it is now switched off the moment a second charger
+  exists, where the fleet value provably belongs to somebody else. Such a tile now falls back to its
+  own estimated SOC, or shows none at all. (by @traktore-org)
+- 🔌 **A charger that reports "Plugged In" as text could not be selected at all** (#684, reported by
+  @Azlinon) — the Connected Sensor picker on the Configuration card only offered `binary_sensor`
+  entities, while the setup wizard for the same field has always accepted a plain status `sensor`
+  and SEM already understands the words those chargers publish (`Plugged In`, `Connected`,
+  `Charging`, `Preparing`, …). A JuiceBox 48 talking to Home Assistant through the community
+  JuiceBoxProxy — states `Unplugged` / `Plugged In` / `Charging` — was therefore impossible to
+  configure from the dashboard even though it would have worked once configured. The picker now
+  matches the wizard. No new sensor contract: any `binary_sensor`, or any `sensor` whose state is
+  one of the known status words. (by @traktore-org)
 - 🔥 **Switching a device to "Off" did not stop it if SEM had started it overnight** (caught on our
   own production hardware) — a load started by the overnight-battery pass, the cheap-hours grid
   pass or a deadline top-up kept running after you set its mode to Off. SEM stopped managing it and
