@@ -12,6 +12,7 @@
 
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
+import { resolveChargerSoc } from '../util/charger-soc.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 const CHARGER_COLORS = ['#8DC892', '#64B5F6'];
@@ -520,21 +521,17 @@ class SEMEVStatusCard extends SEMLitBase {
         // sensor exists yet — on a multi-charger fleet this shows the fleet's
         // daily share on each tile; a per-charger daily sensor is a follow-up.)
         const solar = this._val('energy_ev_solar_percentage', 0);
-        // Prefer real vehicle SOC over estimated (#193). The per-
-        // charger ``sensor.sem_charger_<id>_vehicle_soc`` now exists
-        // (#383) — each card reads its own charger's SOC directly
-        // instead of falling back to the global ``sem_vehicle_soc``
-        // sensor, which used to get context-swap clobbered across the
-        // per-charger update loop and produced the "both chargers
-        // show car 1's SOC" report. Global fallback retained for
-        // legacy single-charger installs that haven't configured a
-        // per-charger ``vehicle_soc_entity``.
-        const vehicleSoc = this._val(`charger_${id}_vehicle_soc`, null)
-            ?? this._val('vehicle_soc', null);
-        const estimatedSoc = this._val(`charger_${id}_estimated_soc`, null);
-        const soc = vehicleSoc != null ? vehicleSoc : estimatedSoc;
-        // Real vehicle SOC shows plain; the fallback estimate is marked ~/est.
-        const socIsEstimate = vehicleSoc == null && estimatedSoc != null;
+        // Prefer real vehicle SOC over estimated (#193). The per-charger
+        // ``sensor.sem_charger_<id>_vehicle_soc`` (#383) is this charger's own
+        // car. The global ``sem_vehicle_soc`` is a fleet value and is only a
+        // safe fallback on a single-charger install — see resolveChargerSoc
+        // and #683. Real SOC shows plain; the estimate is marked ~/est.
+        const { soc, isEstimate: socIsEstimate } = resolveChargerSoc(
+            this._val(`charger_${id}_vehicle_soc`, null),
+            this._val('vehicle_soc', null),
+            this._val(`charger_${id}_estimated_soc`, null),
+            this._chargers.length,
+        );
         // (#440) nights / chargeNeeded / needsCharge / chargeIcon / chargeColor /
         // chargeText removed — the underlying skip decision is gone.
         const name = this._chargerName(id);

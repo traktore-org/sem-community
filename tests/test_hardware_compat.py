@@ -162,6 +162,56 @@ class TestEaseeDiscovery:
         assert reader._read_sensor("sensor.easee_home_power", "ev") == 3500.0
 
 
+class TestJuiceBoxStatusStrings:
+    """JuiceBox 48 via JuiceBoxProxy/MQTT (#684).
+
+    The vendor shut down its North-American cloud; the community
+    JuiceBoxRescue proxy speaks the reverse-engineered protocol and republishes
+    over MQTT as a plain ``sensor`` whose state is ``Unplugged`` /
+    ``Plugged In`` / ``Charging`` — Title Case, with a space.
+
+    SEM has no wire spec for a plug sensor: any ``binary_sensor`` (on/off) or
+    any ``sensor`` whose state is one of the documented status strings works.
+    These pin that contract for the JuiceBox strings so a future edit to the
+    status list can't silently drop them. The reporter could not SELECT the
+    entity, which was a picker-domain bug in the config card, not a decoding
+    gap — the decoding below already worked.
+    """
+
+    def test_plugged_in_is_connected_not_charging(self):
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state("Plugged In")
+        reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
+        assert reader._read_binary_sensor("sensor.juicebox_status", "ev_plug") is True
+        assert reader._read_binary_sensor("sensor.juicebox_status", "ev_charging") is False
+
+    def test_charging_is_both(self):
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state("Charging")
+        reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
+        assert reader._read_binary_sensor("sensor.juicebox_status", "ev_plug") is True
+        assert reader._read_binary_sensor("sensor.juicebox_status", "ev_charging") is True
+
+    def test_unplugged_is_neither(self):
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state("Unplugged")
+        reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
+        assert reader._read_binary_sensor("sensor.juicebox_status", "ev_plug") is False
+        assert reader._read_binary_sensor("sensor.juicebox_status", "ev_charging") is False
+
+    def test_an_unknown_status_word_is_not_connected(self):
+        """Fail closed: a word SEM doesn't know must not read as plugged in —
+        the numeric fallback must not turn a status string into True."""
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state("Fault")
+        reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
+        assert reader._read_binary_sensor("sensor.juicebox_status", "ev_plug") is False
+
+
 class TestWallboxDiscovery:
     """Wallbox Pulsar Plus — core HA integration."""
 
