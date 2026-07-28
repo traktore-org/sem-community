@@ -64,3 +64,30 @@ discipline, generalized).
 
 Existing assets kept: `overnight_planner.py` (the packer core + 17-scenario
 corpus) — the ledger replaces its flat `cap_w`/side-budget inputs.
+
+## Tariff robustness (Guido's stress test, 2026-07-29)
+
+The ledger must survive every tariff shape SEM supports — Guido's static
+HT/NT, Rien's day-ahead dynamic (hourly, and 15-min as NL/EU markets
+switch), the #686 fixed-hours tiered ToU, and flat. Three clauses:
+
+1. **Slots follow the market, not the clock.** Ledger slot length = the
+   provider's native granularity (the same 15/30/60-min inference
+   `find_cheapest_hours` already does). Hourly sampling on a 15-min market
+   would waste exactly the intra-hour cheap quarters that market exists for.
+2. **Never invent a price.** When `get_price_at(t)` has no data for part of
+   the window (day-ahead not yet published, series rolled off — the #612
+   raw_tomorrow case), those slots are UNPRICED: price-sensitive demands
+   pack only into priced slots, the 22:00 report says so, and the existing
+   price-fingerprint replan re-derives the ledger the moment tomorrow's
+   series lands. A flat fallback constant would silently mis-plan Rien's
+   nights.
+3. **Plan-packing must agree with execution-gating.** A cheap-hours load is
+   EXECUTED only when the provider's price LEVEL says cheap
+   (`price_is_cheap`); the ledger must therefore pack cheap-hours loads only
+   into level-cheap slots — not merely the cheapest slot of the night.
+   On a flat tariff nothing is level-cheap: the honest plan reports
+   "no cheap window tonight — yields", matching what the reactive layer
+   would do, instead of scheduling a run that execution would never fire.
+   (EV floors and battery pre-charge pack by PRICE and are unaffected —
+   their execution paths are price-driven, not level-driven.)
