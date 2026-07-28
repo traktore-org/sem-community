@@ -315,6 +315,9 @@ class UnifiedDeviceRegistry:
         # (#620) max cap + the two battery tiers.
         "daily_max_runtime_min", "battery_assist_enabled",
         "battery_eligible_overnight",
+        # (#688) per-load anti-cycling (minutes) — overrides the SwitchDevice
+        # default window. Absent keeps the constructor default (never 0).
+        "min_on_time_min", "min_off_time_min",
     )
 
     def _apply_goals(self, device) -> None:
@@ -350,6 +353,14 @@ class UnifiedDeviceRegistry:
         device.battery_eligible_overnight = _goal_bool(
             goals.get("battery_eligible_overnight")
         )
+        # (#688) per-load anti-cycling. Applied ONLY when the key is present, so a
+        # device that carries other goals but no anti-cycle override keeps its
+        # constructor default window (unconditional set with a 0 default would
+        # DISABLE anti-cycling — the very bug being fixed). Minutes → seconds.
+        if "min_on_time_min" in goals:
+            device.min_on_seconds = int(float(goals.get("min_on_time_min") or 0) * 60)
+        if "min_off_time_min" in goals:
+            device.min_off_seconds = int(float(goals.get("min_off_time_min") or 0) * 60)
 
     def seed_goals(self, device_id: str, goals: "Dict[str, Any]") -> None:
         """Stage goal fields before registration (register_surplus_device
@@ -1216,6 +1227,10 @@ class UnifiedDeviceRegistry:
                 "battery_eligible_overnight": _goal_bool(
                     goals.get("battery_eligible_overnight")
                 ),
+                # (#688) so the card shows the saved anti-cycle values after a
+                # reload (None ⇒ the card shows the default placeholder).
+                "min_on_time_min": goals.get("min_on_time_min"),
+                "min_off_time_min": goals.get("min_off_time_min"),
             },
             "progress": {
                 "runtime_today_min": round(runtime_min, 1),

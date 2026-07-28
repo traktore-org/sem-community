@@ -718,7 +718,12 @@ class SwitchDevice(ControllableDevice):
         entity_id: Optional[str] = None,
         power_entity_id: Optional[str] = None,
         min_on_time: int = 300,
-        min_off_time: int = 60,
+        # (#688) 300 s (was 60): a deferrable load like a pool pump should not be
+        # re-startable a minute after it stopped. With min_on also 300 s this caps
+        # cycling at a ~10-min period and lets min_on hold the load through a
+        # passing cloud instead of stopping. Overridden per-load via the
+        # min_off_time_min goal; subclasses (hot water) pass their own.
+        min_off_time: int = 300,
         daily_min_runtime_sec: int = 0,
         daily_max_runtime_sec: int = 0,        # (#620) 0 = uncapped
         battery_assist_enabled: bool = False,  # (#620) Tier 1 — Solar + battery

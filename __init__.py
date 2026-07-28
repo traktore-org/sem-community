@@ -3021,6 +3021,8 @@ async def _async_register_services(
             # (#620) max cap + battery tiers
             "daily_max_runtime_min", "battery_assist_enabled",
             "battery_eligible_overnight",
+            # (#688) per-load anti-cycling (minutes)
+            "min_on_time_min", "min_off_time_min",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -3041,6 +3043,17 @@ async def _async_register_services(
             # so the stored dict + live apply agree regardless of "true"/"1"/"on".
             if prop in ("battery_assist_enabled", "battery_eligible_overnight"):
                 value = str(str(value).strip().lower() in ("true", "1", "on", "yes"))
+            # (#688) anti-cycle windows are non-negative minutes.
+            if prop in ("min_on_time_min", "min_off_time_min"):
+                try:
+                    if float(value) < 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
             await registry.async_update_device_goal(device_id, prop, value)
         else:
             raise ServiceValidationError(
@@ -3066,6 +3079,8 @@ async def _async_register_services(
                     # (#620) max cap + battery tiers
                     "daily_max_runtime_min", "battery_assist_enabled",
                     "battery_eligible_overnight",
+                    # (#688) per-load anti-cycling
+                    "min_on_time_min", "min_off_time_min",
                 ]),
                 vol.Required("value"): cv.string,
             }),

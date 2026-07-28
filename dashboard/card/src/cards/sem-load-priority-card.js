@@ -821,6 +821,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 </div>
                 ${this._renderGoalSlider(device)}
                 ${this._renderOvernightPicker(device)}
+                ${this._renderAntiCycle(device)}
                 <div class="ge-row">
                     <span class="ge-label">${this._t('stop_condition')}</span>
                     <span class="ge-ctl">
@@ -845,6 +846,45 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 </div>
                 <div class="ge-hint">${this._t('stop_condition_hint')}</div>
             </div>`;
+    }
+
+    _renderAntiCycle(device) {
+        // (#688) per-load anti-cycling — minutes, next to Min/Max/Mode (the
+        // "well-placed" home the cycling report asked for). Blank ⇒ the solid
+        // backend default (5 min each); a value overrides the min run / pause
+        // window. min_on holds the load through a passing cloud; min_off blocks
+        // a too-soon restart — together they cap cycling at a ~10-min period.
+        const g = device.goals || {};
+        const onChange = (key) => (e) => {
+            const v = e.target.value;
+            // Clearing the field must not send '' (a service error) or 0 (the
+            // disabled sentinel) — leave the prior value / default untouched.
+            if (v === '' || v == null || Number(v) < 1) return;
+            device.goals = { ...(device.goals || {}), [key]: v };
+            this._sendDeviceUpdate(device.id, key, String(v));
+        };
+        const box = (key, ph) => html`
+            <input type="number" min="1" max="120" step="1" style="width:56px"
+                   .value="${g[key] != null && g[key] !== '' ? String(g[key]) : ''}"
+                   placeholder="${ph}"
+                   @change=${onChange(key)}
+                   @click=${(e) => e.stopPropagation()}>`;
+        return html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('anti_cycle_min_run')}</span>
+                <span class="ge-ctl">
+                    ${box('min_on_time_min', '5')}
+                    <span class="ge-unit">${this._t('minutes_short')}</span>
+                </span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('anti_cycle_min_pause')}</span>
+                <span class="ge-ctl">
+                    ${box('min_off_time_min', '5')}
+                    <span class="ge-unit">${this._t('minutes_short')}</span>
+                </span>
+            </div>
+            <div class="ge-hint">${this._t('anti_cycle_hint')}</div>`;
     }
 
     // ── Lit-native pointer-drag reorder (no SortableJS) ──
