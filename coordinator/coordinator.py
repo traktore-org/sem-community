@@ -5237,10 +5237,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # to the reactive planners it will eventually replace. Never actuates,
         # never breaks the cycle. Also logs the scheduler's phantom EV model
         # against the real per-charger map — the #652 evidence line.
-        self._shadow_overnight_plan(scheduler, energy, ev_kwh_needed, ev_max_power)
+        self._shadow_overnight_plan(scheduler, energy, ev_kwh_needed,
+                                    ev_max_power, power)
 
     def _shadow_overnight_plan(self, scheduler, energy, phantom_ev_kwh,
-                               phantom_ev_w) -> None:
+                               phantom_ev_w, power=None) -> None:
         """#638 G3 — compute the joint overnight plan in shadow mode.
 
         Demands are built from the REAL models — ``build_night_target_map``
@@ -5274,6 +5275,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 wpa = (float(cfg.get("ev_phases") or 3)
                        * float(cfg.get("ev_voltage") or 230))
                 deadline = resolve_deadline(now, cfg.get("ev_target_time"))
+                try:
+                    # The canonical one-list slot (#576): a drag override wins
+                    # immediately — the same accessor decide() uses.
+                    ev_prio = int(self._ev_priority_for(cid))
+                except Exception:  # noqa: BLE001
+                    ev_prio = int(cfg.get("priority") or 0)
                 demands.append(Demand(
                     id=f"ev:{cid}", kind="ev", energy_kwh=float(kwh),
                     max_power_w=float(cfg.get("ev_max_current") or 16) * wpa,
@@ -5281,7 +5288,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     deadline=min(deadline, night_end) if deadline else night_end,
                     # The one list packs highest-priority FIRST (#576);
                     # the packer packs LOWEST first — negate.
-                    priority=-int(cfg.get("priority") or 0),
+                    priority=-ev_prio,
+                    source="grid",   # never-EV-from-battery (standing rule)
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)
@@ -5295,6 +5303,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         continue
                     deficit_h = max(0.0, (dev.daily_min_runtime_sec
                                           - dev._daily_runtime_accumulated_sec) / 3600.0)
+                    # rated_power is the CALIBRATED draw (learned from the real
+                    # consumption, #576) — the plan is only as accurate as this.
                     rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
                     if deficit_h <= 0 or rated <= 0:
                         continue
@@ -5304,28 +5314,55 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         max_power_w=rated, min_power_w=rated,
                         deadline=night_end,
                         priority=-int(getattr(dev, "priority", 0) or 0),
+                        # Tier-2 runs off the home battery: no grid meter, no
+                        # peak cap, no price — it spends the battery budget.
+                        source=("battery"
+                                if getattr(dev, "battery_eligible_overnight", False)
+                                else "grid"),
                     ))
                 except Exception:  # noqa: BLE001 — one bad device won't kill the plan
                     continue
             # Battery pre-charge — the scheduler's own computed deficit.
+            # (Grid-sourced: charging the battery draws through the meter.)
             dec = getattr(scheduler, "decision", None)
             deficit = float(getattr(dec, "deficit_kwh", 0.0) or 0.0)
             if deficit > 0.1:
+                try:
+                    # The battery's drag-set slot in the ONE list (#576).
+                    batt_prio = int(self._device_registry.battery_surplus_priority())
+                except Exception:  # noqa: BLE001
+                    batt_prio = 0
                 demands.append(Demand(
                     id="battery", kind="battery", energy_kwh=deficit,
                     max_power_w=float(getattr(
                         getattr(scheduler, "_config", None),
                         "battery_max_charge_power_w", 5000.0)),
-                    priority=-int(self.config.get("battery_priority", 0) or 0),
+                    priority=-batt_prio,
+                    source="grid",
                 ))
 
             if not demands:
                 self._overnight_shadow_plan = None
                 return
 
+            # The battery ENERGY budget Tier-2 loads may spend: usable kWh
+            # above the reserve floor, from the live SOC.
+            battery_budget = 0.0
+            soc = getattr(power, "battery_soc", None) if power is not None else None
+            if soc is not None:
+                reserve = float(self.config.get("battery_priority_soc", 30) or 30)
+                cap_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
+                battery_budget = max(0.0, (float(soc) - reserve) / 100.0 * cap_kwh)
+
             # One hourly price curve + one peak cap for the whole night.
+            # The cap is GRID headroom: peak limit minus the expected overnight
+            # home draw — the same estimator the EV peak-managed rate uses.
             peak_w = float(self.config.get("peak_limit_w") or 0.0)
-            cap = (peak_w - 300.0) if peak_w > 0 else float("inf")
+            try:
+                home_w = float(self._expected_night_home_w(energy))
+            except Exception:  # noqa: BLE001
+                home_w = 300.0
+            cap = (peak_w - home_w) if peak_w > 0 else float("inf")
             slots = []
             t = now.replace(minute=0, second=0, microsecond=0)
             if t < now:
@@ -5348,7 +5385,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._overnight_shadow_plan = None
                 return
 
-            plan = plan_overnight(demands, slots)
+            plan = plan_overnight(demands, slots,
+                                  battery_budget_kwh=battery_budget)
             real_ev = round(sum(d.energy_kwh for d in demands
                                 if d.kind == "ev"), 2)
             _LOGGER.info(

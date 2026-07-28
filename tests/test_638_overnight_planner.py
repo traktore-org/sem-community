@@ -177,6 +177,61 @@ class TestPlanQuality:
         assert _by_id(plan, "ev").status == "fits"
 
 
+class TestBatterySourcedDemands:
+    """Guido's axis: WHERE the energy comes from changes what constrains it.
+    A Tier-2 load off the home battery touches no grid meter — no peak cap,
+    no price — it spends the shared battery budget instead."""
+
+    def test_battery_load_does_not_consume_the_grid_cap(self):
+        # Cap fits exactly ONE 4 kW draw. The EV (grid) and the Tier-2 heater
+        # (battery) both want the same hour — and both fit, because the heater
+        # never touches the meter.
+        slots = _slots([0.10], cap_w=4000)
+        ev = Demand(id="ev", kind="ev", energy_kwh=4, max_power_w=4000,
+                    min_power_w=1400, priority=0, source="grid")
+        heater = Demand(id="heater", kind="load", energy_kwh=4,
+                        max_power_w=4000, min_power_w=4000, priority=1,
+                        source="battery")
+        plan = plan_overnight([ev, heater], slots, battery_budget_kwh=10)
+        assert _by_id(plan, "ev").status == "fits"
+        assert _by_id(plan, "heater").status == "fits"
+
+    def test_battery_budget_exhausts_to_a_reported_yield(self):
+        slots = _slots([0.10, 0.12], cap_w=10000)
+        heater = Demand(id="heater", kind="load", energy_kwh=4,
+                        max_power_w=2000, min_power_w=2000, priority=0,
+                        source="battery")
+        plan = plan_overnight([heater], slots, battery_budget_kwh=1.0)
+        r = _by_id(plan, "heater")
+        assert r.status == "partial"
+        assert r.planned_kwh == pytest.approx(1.0, abs=0.01)
+
+    def test_battery_energy_is_free_in_the_plan_and_time_ordered(self):
+        # Price curve says hour 2 is cheapest — irrelevant to a battery load:
+        # it packs into the EARLIEST hour and costs 0 (the stored energy was
+        # paid for when it was charged).
+        slots = _slots([0.30, 0.10], cap_w=10000)
+        heater = Demand(id="heater", kind="load", energy_kwh=1,
+                        max_power_w=2000, min_power_w=2000, priority=0,
+                        source="battery")
+        plan = plan_overnight([heater], slots, battery_budget_kwh=5)
+        a = _allocs(plan, "heater")[0]
+        assert a.start == T0                    # earliest, not cheapest
+        assert a.price == 0.0
+        assert _by_id(plan, "heater").est_cost == 0.0
+        assert "from battery" in a.reason
+
+    def test_shared_budget_spends_by_priority(self):
+        slots = _slots([0.10, 0.12], cap_w=10000)
+        a = Demand(id="a", kind="load", energy_kwh=2, max_power_w=2000,
+                   min_power_w=2000, priority=0, source="battery")
+        b = Demand(id="b", kind="load", energy_kwh=2, max_power_w=2000,
+                   min_power_w=2000, priority=5, source="battery")
+        plan = plan_overnight([a, b], slots, battery_budget_kwh=2.0)
+        assert _by_id(plan, "a").status == "fits"
+        assert _by_id(plan, "b").status == "yields"     # budget went to a
+
+
 class TestEnsembleScenario:
     """G1's in-process shape: the #634 ensemble — EV floor + cheap-hours
     heater + battery pre-charge in ONE plan under ONE peak cap."""

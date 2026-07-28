@@ -46,15 +46,24 @@ def _fake_self(devices=()):
                              "ev_min_current": 6, "ev_target_time": "06:30",
                              "priority": 3}],
             "peak_limit_w": 6000.0,
-            "battery_priority": 2,
+            "battery_priority_soc": 30,
         },
         time_manager=_FakeTime(),
         _tariff_provider=_FakeTariff(),
         _surplus_controller=SimpleNamespace(
             get_devices_sorted=lambda: list(devices)),
         _overnight_shadow_plan=None,
+        # The canonical one-list accessors the shadow now uses (#576).
+        _ev_priority_for=lambda cid: 3,
+        _device_registry=SimpleNamespace(battery_surplus_priority=lambda: 2),
+        _expected_night_home_w=lambda energy: 400.0,
+        battery_capacity_kwh=10.0,
     )
     return fake
+
+
+def _power(soc=80.0):
+    return SimpleNamespace(battery_soc=soc)
 
 
 def _scheduler(deficit=3.0):
@@ -74,7 +83,7 @@ def test_shadow_plan_computes_and_stashes(freeze_targets):
     fake = _fake_self(devices=[_fake_load()])
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=10.0,
-        phantom_ev_w=11000.0)
+        phantom_ev_w=11000.0, power=_power())
     plan = fake._overnight_shadow_plan
     assert plan is not None
     assert plan["fits"] is True
@@ -85,6 +94,9 @@ def test_shadow_plan_computes_and_stashes(freeze_targets):
     assert "battery" in joined
     assert plan["allocations"], "expected per-slot allocation lines"
     assert plan["total_cost"] > 0
+    # The Tier-2 pump runs off the battery: no grid slot, no price.
+    pump_lines = [ln for ln in plan["allocations"] if "load:pump" in ln]
+    assert pump_lines and all("from battery" in ln for ln in pump_lines)
 
 
 def test_shadow_never_breaks_the_cycle():
@@ -92,7 +104,8 @@ def test_shadow_never_breaks_the_cycle():
     debug log — the battery pipeline continues."""
     fake = SimpleNamespace(config={}, _overnight_shadow_plan="untouched")
     SEMCoordinator._shadow_overnight_plan(
-        fake, object(), energy=None, phantom_ev_kwh=0, phantom_ev_w=0)
+        fake, object(), energy=None, phantom_ev_kwh=0, phantom_ev_w=0,
+        power=None)
     # No exception escaped; the stash was either cleared or left alone.
     assert fake._overnight_shadow_plan in (None, "untouched")
 
@@ -103,20 +116,20 @@ def test_no_demands_no_plan(freeze_targets, monkeypatch):
     fake = _fake_self(devices=[])
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0)
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
     assert fake._overnight_shadow_plan is None
 
 
 def test_shadow_respects_the_peak_cap(freeze_targets):
-    """6 kW peak − 300 W home = 5.7 kW cap: the 11 kW-capable EV must be
-    granted at most the cap in any slot."""
+    """6 kW peak − 400 W expected home = 5.6 kW cap: the 11 kW-capable EV
+    must be granted at most the cap in any slot."""
     fake = _fake_self(devices=[])
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0)
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
     plan = fake._overnight_shadow_plan
     assert plan is not None
     import re
     for line in plan["allocations"]:
         m = re.search(r"(\d+) W ", line)
-        assert m and float(m.group(1)) <= 5700.0, line
+        assert m and float(m.group(1)) <= 5600.0, line
