@@ -664,7 +664,13 @@ class TestCoordinatorRateDerivation:
         kwargs = scheduler.evaluate.call_args.kwargs
         assert kwargs["off_peak_rate"] == pytest.approx(0.11)
         assert kwargs["peak_rate"] == pytest.approx(0.33)
-        provider.get_price_at.assert_not_called()
+        # The break-even rates must come from the series, never get_price_at
+        # (the stale-morning-price bug this test pins). get_price_at IS now
+        # legitimately read by the #638 shadow planner for the night price
+        # CURVE — so pin the derivation, not the call count: had get_price_at
+        # fed the break-even, the kwargs would carry its 0.99 sentinel.
+        assert kwargs["off_peak_rate"] != pytest.approx(0.99)
+        assert kwargs["peak_rate"] != pytest.approx(0.99)
 
     async def test_dynamic_provider_without_data_falls_back_to_config(self):
         now = _local(21, 0)

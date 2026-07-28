@@ -4861,7 +4861,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         scheduler = self._battery_charge_scheduler
         if scheduler.enabled:
             try:
-                await self._maybe_run_scheduler_evaluation(power)
+                await self._maybe_run_scheduler_evaluation(power, energy)
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning(
                     "Battery scheduler evaluate failed: %s", e, exc_info=True,
@@ -5113,7 +5113,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 and scheduler.state.value not in ("idle", "not_needed", "not_profitable")):
             scheduler.reset()
 
-    async def _maybe_run_scheduler_evaluation(self, power) -> None:
+    async def _maybe_run_scheduler_evaluation(self, power, energy=None) -> None:
         """Trigger the scheduler's ``evaluate()`` at the daily time.
 
         Pure port of the daily-evaluation branch in the legacy
@@ -5232,6 +5232,145 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             forecast_age_hours=forecast_age,
             current_price=current_price,
         )
+
+        # (#638 G3) SHADOW: the joint overnight plan, computed + logged next
+        # to the reactive planners it will eventually replace. Never actuates,
+        # never breaks the cycle. Also logs the scheduler's phantom EV model
+        # against the real per-charger map — the #652 evidence line.
+        self._shadow_overnight_plan(scheduler, energy, ev_kwh_needed, ev_max_power)
+
+    def _shadow_overnight_plan(self, scheduler, energy, phantom_ev_kwh,
+                               phantom_ev_w) -> None:
+        """#638 G3 — compute the joint overnight plan in shadow mode.
+
+        Demands are built from the REAL models — ``build_night_target_map``
+        per charger (mode-gated), load runtime deficits, the scheduler's own
+        battery deficit — under one hourly price curve and one peak cap.
+        Output: INFO summary (the 22:00 answer), DEBUG per-allocation lines,
+        and ``self._overnight_shadow_plan`` for diagnostics. No actuation.
+        """
+        try:
+            from datetime import timedelta as _td
+            from .overnight_planner import Demand, PriceSlot, plan_overnight
+            from .ev_night_targets import build_night_target_map
+            from .ev_tariff_planner import resolve_deadline
+
+            now = dt_util.now()
+            try:
+                night_end_s = self.time_manager.get_night_end_time()
+            except Exception:  # noqa: BLE001 — window end is best-effort
+                night_end_s = None
+            night_end = resolve_deadline(now, night_end_s) or (now + _td(hours=8))
+
+            demands = []
+            # EV floors — the REAL per-charger, mode-gated map (#652 closure).
+            targets = build_night_target_map(self, energy) if energy is not None else {}
+            cfg_by_id = {c.get("id"): c for c in self.config.get("ev_chargers", [])
+                         if isinstance(c, dict)}
+            for cid, kwh in targets.items():
+                if kwh <= 0.05:
+                    continue
+                cfg = cfg_by_id.get(cid, {})
+                wpa = (float(cfg.get("ev_phases") or 3)
+                       * float(cfg.get("ev_voltage") or 230))
+                deadline = resolve_deadline(now, cfg.get("ev_target_time"))
+                demands.append(Demand(
+                    id=f"ev:{cid}", kind="ev", energy_kwh=float(kwh),
+                    max_power_w=float(cfg.get("ev_max_current") or 16) * wpa,
+                    min_power_w=float(cfg.get("ev_min_current") or 6) * wpa,
+                    deadline=min(deadline, night_end) if deadline else night_end,
+                    # The one list packs highest-priority FIRST (#576);
+                    # the packer packs LOWEST first — negate.
+                    priority=-int(cfg.get("priority") or 0),
+                ))
+            # Load min-runtime deficits eligible for a night source.
+            controller = getattr(self, "_surplus_controller", None)
+            for dev in (controller.get_devices_sorted() if controller else []):
+                try:
+                    if not getattr(dev, "has_runtime_deficit", False):
+                        continue
+                    night_ok = (getattr(dev, "battery_eligible_overnight", False)
+                                or getattr(dev, "top_up_policy", "") == "cheap_hours")
+                    if not night_ok:
+                        continue
+                    deficit_h = max(0.0, (dev.daily_min_runtime_sec
+                                          - dev._daily_runtime_accumulated_sec) / 3600.0)
+                    rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
+                    if deficit_h <= 0 or rated <= 0:
+                        continue
+                    demands.append(Demand(
+                        id=f"load:{dev.device_id}", kind="load",
+                        energy_kwh=rated * deficit_h / 1000.0,
+                        max_power_w=rated, min_power_w=rated,
+                        deadline=night_end,
+                        priority=-int(getattr(dev, "priority", 0) or 0),
+                    ))
+                except Exception:  # noqa: BLE001 — one bad device won't kill the plan
+                    continue
+            # Battery pre-charge — the scheduler's own computed deficit.
+            dec = getattr(scheduler, "decision", None)
+            deficit = float(getattr(dec, "deficit_kwh", 0.0) or 0.0)
+            if deficit > 0.1:
+                demands.append(Demand(
+                    id="battery", kind="battery", energy_kwh=deficit,
+                    max_power_w=float(getattr(
+                        getattr(scheduler, "_config", None),
+                        "battery_max_charge_power_w", 5000.0)),
+                    priority=-int(self.config.get("battery_priority", 0) or 0),
+                ))
+
+            if not demands:
+                self._overnight_shadow_plan = None
+                return
+
+            # One hourly price curve + one peak cap for the whole night.
+            peak_w = float(self.config.get("peak_limit_w") or 0.0)
+            cap = (peak_w - 300.0) if peak_w > 0 else float("inf")
+            slots = []
+            t = now.replace(minute=0, second=0, microsecond=0)
+            if t < now:
+                t += _td(hours=1)
+            while t < night_end:
+                end = min(t + _td(hours=1), night_end)
+                price = None
+                if hasattr(self._tariff_provider, "get_price_at"):
+                    try:
+                        price = self._tariff_provider.get_price_at(t)
+                    except Exception:  # noqa: BLE001
+                        price = None
+                slots.append(PriceSlot(
+                    start=t, end=end,
+                    price=float(price) if price is not None else 0.20,
+                    cap_w=max(0.0, cap) if cap != float("inf") else float("inf"),
+                ))
+                t = end
+            if not slots:
+                self._overnight_shadow_plan = None
+                return
+
+            plan = plan_overnight(demands, slots)
+            real_ev = round(sum(d.energy_kwh for d in demands
+                                if d.kind == "ev"), 2)
+            _LOGGER.info(
+                "OVERNIGHT-PLAN (shadow #638): %d demand(s), %d slot(s), "
+                "est cost %.2f, fits=%s | EV model — scheduler(phantom): "
+                "%.1f kWh @ %.0f W vs real per-charger map: %.1f kWh (#652)",
+                len(demands), len(slots), plan.total_cost, plan.fits,
+                phantom_ev_kwh, phantom_ev_w, real_ev,
+            )
+            for line in plan.summary_lines():
+                _LOGGER.info("OVERNIGHT-PLAN (shadow): %s", line)
+            for a in plan.allocations:
+                _LOGGER.debug("OVERNIGHT-PLAN (shadow) alloc: %s", a.reason)
+            self._overnight_shadow_plan = {
+                "computed_at": now.isoformat(),
+                "fits": plan.fits,
+                "total_cost": plan.total_cost,
+                "summary": plan.summary_lines(),
+                "allocations": [a.reason for a in plan.allocations],
+            }
+        except Exception:  # noqa: BLE001 — shadow must never break the cycle
+            _LOGGER.debug("overnight shadow plan skipped", exc_info=True)
 
     async def _send_notifications(
         self, charging_state, power, energy, costs, performance,
