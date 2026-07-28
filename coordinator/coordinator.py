@@ -5377,7 +5377,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ))
 
             if not demands:
-                self._overnight_shadow_plan = None
+                # "Nothing needs the night" IS a valid 22:00 answer — say it
+                # (a silent shadow is indistinguishable from a broken one;
+                # burned three placement bugs learning that).
+                _LOGGER.info(
+                    "OVERNIGHT-PLAN (shadow #638): no overnight demands — "
+                    "no EV floor, no load deficit, no battery pre-charge")
+                self._overnight_shadow_plan = {
+                    "computed_at": now.isoformat(),
+                    "fits": True,
+                    "summary": ["no overnight demands tonight"],
+                }
                 return
 
             # ── The Night Ledger (spec) ─────────────────────────────────
@@ -5453,6 +5463,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ))
                 t = end
             if not slots:
+                _LOGGER.info(
+                    "OVERNIGHT-PLAN (shadow #638): empty night window "
+                    "(now past %s?) — no plan", night_end)
                 self._overnight_shadow_plan = None
                 return
 
@@ -5502,7 +5515,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "allocations": [a.reason for a in plan.allocations],
             }
         except Exception:  # noqa: BLE001 — shadow must never break the cycle
-            _LOGGER.debug("overnight shadow plan skipped", exc_info=True)
+            # WARNING during the shadow soak: a swallowed failure here is
+            # invisible in a 100-line journal window and cost a night of
+            # verification. Never breaks the cycle either way.
+            _LOGGER.warning("overnight shadow plan failed (shadow-phase, "
+                            "no impact on control)", exc_info=True)
 
     async def _send_notifications(
         self, charging_state, power, energy, costs, performance,

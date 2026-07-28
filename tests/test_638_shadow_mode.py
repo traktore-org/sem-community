@@ -106,18 +106,27 @@ def test_shadow_never_breaks_the_cycle():
     SEMCoordinator._shadow_overnight_plan(
         fake, object(), energy=None, phantom_ev_kwh=0, phantom_ev_w=0,
         power=None)
-    # No exception escaped; the stash was either cleared or left alone.
-    assert fake._overnight_shadow_plan in (None, "untouched")
+    # No exception escaped. A hostile fake with no devices legitimately
+    # reaches the LOUD no-demands answer (a dict), dies earlier (stash
+    # untouched), or clears — never raises into the pipeline.
+    plan = fake._overnight_shadow_plan
+    assert plan in (None, "untouched") or isinstance(plan, dict)
 
 
-def test_no_demands_no_plan(freeze_targets, monkeypatch):
+def test_no_demands_is_a_loud_valid_answer(freeze_targets, monkeypatch):
+    """'Nothing needs the night' is a 22:00 answer, not silence — a silent
+    shadow is indistinguishable from a broken one (three placement bugs
+    were invisible for exactly this reason)."""
     monkeypatch.setattr(ev_night_targets, "build_night_target_map",
                         lambda coord, energy: {})
     fake = _fake_self(devices=[])
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
         phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
-    assert fake._overnight_shadow_plan is None
+    plan = fake._overnight_shadow_plan
+    assert plan is not None
+    assert plan["fits"] is True
+    assert "no overnight demands" in plan["summary"][0]
 
 
 def test_shadow_fires_without_the_battery_scheduler(monkeypatch):
