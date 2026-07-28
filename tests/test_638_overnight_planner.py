@@ -258,3 +258,151 @@ class TestEnsembleScenario:
         # The EV owns the two cheapest hours; the others pack around it.
         ev_prices = {a.price for a in _allocs(plan, "ev")}
         assert 0.10 in ev_prices and 0.11 in ev_prices
+
+
+# ---------------------------------------------------------------------------
+# The Night Ledger (spec: 2026-07-28-overnight-flow-plan-design.md)
+# ---------------------------------------------------------------------------
+
+from custom_components.solar_energy_management.coordinator.overnight_planner import (  # noqa: E402
+    LedgerSlot, build_night_ledger, pack_night,
+)
+
+
+def _ledger(prices, home_w=500.0, soc=8.0, floor=2.0, peak=6000.0,
+            hours=1, levels=None, max_discharge=5000.0):
+    slots = []
+    for n, p in enumerate(prices):
+        s = T0 + timedelta(hours=n * hours)
+        slots.append(LedgerSlot(
+            start=s, end=s + timedelta(hours=hours), price=p,
+            level_cheap=(levels[n] if levels else (p is not None and p < 0.15)),
+            home_w=home_w))
+    return build_night_ledger(slots, soc_kwh=soc, floor_kwh=floor,
+                              max_discharge_w=max_discharge, peak_limit_w=peak)
+
+
+class TestTrajectoryAndTakeover:
+    def test_home_draws_battery_then_grid_takes_over(self):
+        # 500 W home, 8→2 kWh usable = 6 kWh = 12 h... use soc 4.5, floor 2:
+        # 2.5 kWh above floor = 5 h of home. Hour 6 is the takeover.
+        led = _ledger([0.2] * 8, home_w=500, soc=4.5, floor=2.0)
+        plan = pack_night([], led, floor_kwh=2.0, peak_limit_w=6000)
+        assert led[4].home_grid_w == pytest.approx(0.0, abs=1)
+        assert led[5].home_grid_w == pytest.approx(500.0, abs=1)
+        assert plan.takeover == led[5].start
+        # headroom shrinks by home exactly at the takeover
+        assert led[4].headroom_w == pytest.approx(6000.0, abs=1)
+        assert led[5].headroom_w == pytest.approx(5500.0, abs=1)
+
+    def test_tier2_draw_moves_the_takeover_earlier(self):
+        # Same battery; a Tier-2 load eats 1 kWh in hour 0 → home loses 2 h
+        # of battery coverage → takeover moves from hour 5 to hour 3.
+        led = _ledger([0.2] * 8, home_w=500, soc=4.5, floor=2.0)
+        heater = Demand(id="t2", kind="load", energy_kwh=1.0,
+                        max_power_w=1000, min_power_w=1000, priority=0,
+                        source="battery")
+        plan = pack_night([heater], led, floor_kwh=2.0, peak_limit_w=6000)
+        assert _by_id(plan, "t2").status == "fits"
+        assert plan.takeover == led[3].start
+        assert led[3].home_grid_w > 400
+
+    def test_sunrise_floor_reserves_tomorrows_need(self):
+        # floor 4 kWh (the scheduler's sunrise target): only 0.5 kWh sits
+        # above it, and HOME's overnight draw eats that first — home's claim
+        # on the battery is absolute (spec decision), so Tier-2 gets NOTHING
+        # and says so. The 0.5 goes to home's first hour, then the grid
+        # takes over.
+        led = _ledger([0.2] * 4, home_w=500, soc=4.5, floor=4.0)
+        heater = Demand(id="t2", kind="load", energy_kwh=2.0,
+                        max_power_w=1000, min_power_w=1000, priority=0,
+                        source="battery")
+        plan = pack_night([heater], led, floor_kwh=4.0, peak_limit_w=6000)
+        r = _by_id(plan, "t2")
+        assert r.status == "yields"
+        assert r.planned_kwh == 0.0
+        assert led[0].home_grid_w == pytest.approx(0.0, abs=1)
+        assert led[1].home_grid_w == pytest.approx(500.0, abs=1)
+
+    def test_precharge_raises_the_trajectory(self):
+        led = _ledger([0.2] * 6, home_w=500, soc=2.5, floor=2.0)
+        led[1].batt_in_kwh = 3.0            # scheduler charges in hour 1
+        build_night_ledger(led, soc_kwh=2.5, floor_kwh=2.0,
+                           max_discharge_w=5000, peak_limit_w=6000)
+        # takeover would be hour 1 without the charge; with it home stays
+        # on battery through hour 6.
+        assert all(s.home_grid_w < 1 for s in led[1:6])
+
+
+class TestTariffRobustness:
+    def test_unpriced_tail_is_packed_around_and_noted(self):
+        # Day-ahead missing for the last 2 slots (price=None). The EV packs
+        # only priced slots; the report carries the replan note.
+        led = _ledger([0.2, 0.1, None, None], home_w=0, soc=2, floor=2)
+        ev = Demand(id="ev", kind="ev", energy_kwh=10, max_power_w=4000,
+                    min_power_w=1400, priority=0)
+        plan = pack_night([ev], led, floor_kwh=2, peak_limit_w=6000)
+        r = _by_id(plan, "ev")
+        assert r.status == "partial"
+        assert "unpriced" in r.note
+        assert all(a.price in (0.1, 0.2) for a in _allocs(plan, "ev"))
+
+    def test_cheap_hours_load_respects_the_level_gate(self):
+        # Static curve where NO slot is level-cheap: execution's
+        # price_is_cheap would never fire — the plan must yield honestly,
+        # not schedule the cheapest hour.
+        led = _ledger([0.30, 0.25, 0.28], home_w=0, soc=2, floor=2,
+                      levels=[False, False, False])
+        hw = Demand(id="hw", kind="load", energy_kwh=2, max_power_w=2000,
+                    min_power_w=2000, priority=0, needs_cheap_level=True)
+        plan = pack_night([hw], led, floor_kwh=2, peak_limit_w=6000)
+        r = _by_id(plan, "hw")
+        assert r.status == "yields"
+        assert "no cheap window" in r.note
+
+    def test_15min_market_slots_pack_native(self):
+        # Slots follow the market: 15-min granularity, cheap quarter wins.
+        slots = []
+        prices = [0.30, 0.05, 0.30, 0.30]
+        for n, p in enumerate(prices):
+            s = T0 + timedelta(minutes=15 * n)
+            slots.append(LedgerSlot(start=s, end=s + timedelta(minutes=15),
+                                    price=p, level_cheap=p < 0.15, home_w=0))
+        led = build_night_ledger(slots, soc_kwh=0, floor_kwh=0,
+                                 max_discharge_w=0, peak_limit_w=6000)
+        ev = Demand(id="ev", kind="ev", energy_kwh=1.0, max_power_w=4000,
+                    min_power_w=1400, priority=0)
+        plan = pack_night([ev], led, peak_limit_w=6000)
+        assert _allocs(plan, "ev")[0].price == 0.05
+
+
+class TestAntiCycleQuantization:
+    def test_short_need_plans_at_min_run(self):
+        # 10-min worth of energy, min_run 30 min: the plan says 30 min
+        # (that is what can_deactivate would physically do). Over-delivery
+        # is honest and reported as fits.
+        led = _ledger([0.1, 0.2], home_w=0, soc=2, floor=2)
+        pump = Demand(id="pump", kind="load", energy_kwh=2.0 * (10 / 60),
+                      max_power_w=2000, min_power_w=2000, priority=0,
+                      min_run_s=1800)
+        plan = pack_night([pump], led, peak_limit_w=6000)
+        a = _allocs(plan, "pump")[0]
+        assert (a.end - a.start).total_seconds() == pytest.approx(1800, abs=1)
+
+    def test_blocks_respect_min_gap(self):
+        # Contiguous slots are ONE continuous run (no off-period → no
+        # cycling → min_gap doesn't apply). A real gap arises when the next
+        # cheapest slot is NOT adjacent: hour 2 (0.11) starts only 1 h after
+        # block one ends — inside the 2 h min-pause — so the pump must skip
+        # it and land in hour 3 instead.
+        led = _ledger([0.10, 0.30, 0.11, 0.12], home_w=0, soc=2, floor=2)
+        pump = Demand(id="pump", kind="load", energy_kwh=4.0,
+                      max_power_w=2000, min_power_w=2000, priority=0,
+                      min_gap_s=7200)
+        plan = pack_night([pump], led, peak_limit_w=6000)
+        blocks = _allocs(plan, "pump")
+        assert len(blocks) == 2
+        assert blocks[0].price == 0.10                 # hour 0
+        assert blocks[1].price == 0.12                 # hour 3, NOT 0.11
+        gap = (blocks[1].start - blocks[0].end).total_seconds()
+        assert gap >= 7200 - 1
