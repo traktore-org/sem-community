@@ -4880,9 +4880,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _now_l = dt_util.now()
             _hour = int(getattr(getattr(scheduler, "_config", None),
                                 "trigger_hour", 21) or 21)
-            if (_now_l.hour >= _hour
-                    and getattr(self, "_shadow_plan_date", None) != _now_l.date()):
-                self._shadow_plan_date = _now_l.date()
+            # Inside the NIGHT WINDOW, not just the evening: a restart at
+            # 00:48 still owes the rest of the night a plan (hour >= 21 alone
+            # went blind after midnight — caught live on TEST 2026-07-29).
+            _in_window = _now_l.hour >= _hour or _now_l.hour < 7
+            # One plan per NIGHT: after midnight the night began yesterday.
+            _night_of = (_now_l - timedelta(hours=12)).date()
+            if (_in_window
+                    and getattr(self, "_shadow_plan_date", None) != _night_of):
+                self._shadow_plan_date = _night_of
                 self._shadow_overnight_plan(scheduler, energy, None, None, power)
         except Exception:  # noqa: BLE001 — shadow must never break the pipeline
             _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
