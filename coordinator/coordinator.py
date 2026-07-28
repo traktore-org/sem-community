@@ -5322,14 +5322,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)
+            loads_seen = 0
+            loads_eligible = 0
             for dev in (controller.get_devices_sorted() if controller else []):
                 try:
+                    loads_seen += 1
                     if not getattr(dev, "has_runtime_deficit", False):
                         continue
                     night_ok = (getattr(dev, "battery_eligible_overnight", False)
                                 or getattr(dev, "top_up_policy", "") == "cheap_hours")
                     if not night_ok:
                         continue
+                    loads_eligible += 1
                     deficit_h = max(0.0, (dev.daily_min_runtime_sec
                                           - dev._daily_runtime_accumulated_sec) / 3600.0)
                     # rated_power is the CALIBRATED draw (learned from the real
@@ -5377,16 +5381,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ))
 
             if not demands:
-                # "Nothing needs the night" IS a valid 22:00 answer — say it
-                # (a silent shadow is indistinguishable from a broken one;
-                # burned three placement bugs learning that).
+                # "Nothing needs the night" IS a valid 22:00 answer — say it,
+                # WITH the why (a silent shadow is indistinguishable from a
+                # broken one; burned three placement bugs learning that).
+                why = (f"ev_targets={ {k: round(v, 2) for k, v in targets.items()} }, "
+                       f"loads_seen={loads_seen}, loads_eligible={loads_eligible}, "
+                       f"battery_deficit={deficit:.2f} kWh")
                 _LOGGER.info(
-                    "OVERNIGHT-PLAN (shadow #638): no overnight demands — "
-                    "no EV floor, no load deficit, no battery pre-charge")
+                    "OVERNIGHT-PLAN (shadow #638): no overnight demands — %s", why)
                 self._overnight_shadow_plan = {
                     "computed_at": now.isoformat(),
                     "fits": True,
-                    "summary": ["no overnight demands tonight"],
+                    "summary": [f"no overnight demands tonight ({why})"],
                 }
                 return
 
