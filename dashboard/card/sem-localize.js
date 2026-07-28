@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-07-27T15:56:58.020881+00:00
+// Generated: 2026-07-28T08:01:08.448747+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1232,7 +1232,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Minimum run time",
+      "anti_cycle_min_pause": "Minimum pause time",
+      "anti_cycle_hint": "Stops rapid on/off cycling — protects pumps and relays. Blank keeps the default."
     },
     "de": {
       "charging": "Laden",
@@ -2461,7 +2465,11 @@
       "overnight_grid": "Netz",
       "overnight_off_hint": "Nur Solar — der Verbraucher wartet auf Sonne und verfehlt an trüben Tagen evtl. sein Ziel.",
       "overnight_battery_hint": "Entlädt die Hausbatterie (bis zur Reserve), um das Ziel ohne Sonne zu erreichen.",
-      "overnight_grid_hint": "Lädt im Niedertarif-Fenster aus dem Netz nach, um das Ziel zu erreichen. Erfordert ein Tarif-/Niedertarif-Fenster."
+      "overnight_grid_hint": "Lädt im Niedertarif-Fenster aus dem Netz nach, um das Ziel zu erreichen. Erfordert ein Tarif-/Niedertarif-Fenster.",
+      "minutes_short": "Min.",
+      "anti_cycle_min_run": "Mindestlaufzeit",
+      "anti_cycle_min_pause": "Mindestpausenzeit",
+      "anti_cycle_hint": "Verhindert schnelles Ein-/Ausschalten – schützt Pumpen und Relais. Leer = Standard."
     },
     "fr": {
       "charging": "En charge",
@@ -3690,7 +3698,11 @@
       "overnight_grid": "Réseau",
       "overnight_off_hint": "Solaire uniquement — la charge attend le soleil et peut manquer son objectif un jour sombre.",
       "overnight_battery_hint": "Puise dans la batterie domestique (jusqu’au seuil de réserve) pour atteindre l’objectif sans soleil.",
-      "overnight_grid_hint": "Complète depuis le réseau pendant la fenêtre tarif creux pour atteindre l’objectif. Nécessite une fenêtre tarifaire creuse."
+      "overnight_grid_hint": "Complète depuis le réseau pendant la fenêtre tarif creux pour atteindre l’objectif. Nécessite une fenêtre tarifaire creuse.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Durée min. de marche",
+      "anti_cycle_min_pause": "Durée min. de pause",
+      "anti_cycle_hint": "Évite les cycles marche/arrêt rapides — protège pompes et relais. Vide = défaut."
     },
     "es": {
       "charging": "Cargando",
@@ -4919,7 +4931,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Tiempo mín. de marcha",
+      "anti_cycle_min_pause": "Tiempo mín. de pausa",
+      "anti_cycle_hint": "Evita ciclos rápidos de encendido/apagado — protege bombas y relés. Vacío = predeterminado."
     },
     "it": {
       "charging": "In carica",
@@ -6148,7 +6164,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Tempo min. di marcia",
+      "anti_cycle_min_pause": "Tempo min. di pausa",
+      "anti_cycle_hint": "Evita cicli rapidi on/off — protegge pompe e relè. Vuoto = predefinito."
     },
     "nl": {
       "charging": "Laden",
@@ -7377,7 +7397,11 @@
       "overnight_grid": "Net",
       "overnight_off_hint": "Alleen zon — het apparaat wacht op zon en haalt zijn doel op een donkere dag mogelijk niet.",
       "overnight_battery_hint": "Ontlaadt de thuisaccu (tot de reservegrens) om het doel te halen als er geen zon is.",
-      "overnight_grid_hint": "Vult bij vanaf het net tijdens je goedkope-tariefvenster om het doel te halen. Vereist een tarief-/daltariefvenster."
+      "overnight_grid_hint": "Vult bij vanaf het net tijdens je goedkope-tariefvenster om het doel te halen. Vereist een tarief-/daltariefvenster.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Minimale looptijd",
+      "anti_cycle_min_pause": "Minimale pauzetijd",
+      "anti_cycle_hint": "Voorkomt snel in-/uitschakelen — beschermt pompen en relais. Leeg = standaard."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -8606,7 +8630,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Min. doba běhu",
+      "anti_cycle_min_pause": "Min. doba pauzy",
+      "anti_cycle_hint": "Zabraňuje rychlému zapínání/vypínání — chrání čerpadla a relé. Prázdné = výchozí."
     },
     "da": {
       "charging": "Oplader",
@@ -9835,7 +9863,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Min. køretid",
+      "anti_cycle_min_pause": "Min. pausetid",
+      "anti_cycle_hint": "Forhindrer hurtig tænd/sluk — beskytter pumper og relæer. Tom = standard."
     },
     "fi": {
       "charging": "Lataus",
@@ -11064,7 +11096,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Vähimmäiskäyntiaika",
+      "anti_cycle_min_pause": "Vähimmäistaukoaika",
+      "anti_cycle_hint": "Estää nopean päälle/pois-kytkennän — suojaa pumppuja ja releitä. Tyhjä = oletus."
     },
     "hu": {
       "charging": "Töltés",
@@ -12293,7 +12329,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "perc",
+      "anti_cycle_min_run": "Min. üzemidő",
+      "anti_cycle_min_pause": "Min. szünetidő",
+      "anti_cycle_hint": "Megakadályozza a gyors ki-/bekapcsolást — védi a szivattyúkat és reléket. Üres = alapérték."
     },
     "no": {
       "charging": "Lader",
@@ -13522,7 +13562,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Min. kjøretid",
+      "anti_cycle_min_pause": "Min. pausetid",
+      "anti_cycle_hint": "Hindrer rask av/på — beskytter pumper og reléer. Tom = standard."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -14751,7 +14795,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Min. czas pracy",
+      "anti_cycle_min_pause": "Min. czas przerwy",
+      "anti_cycle_hint": "Zapobiega szybkiemu włączaniu/wyłączaniu — chroni pompy i przekaźniki. Puste = domyślne."
     },
     "pt": {
       "charging": "A carregar",
@@ -15980,7 +16028,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Tempo mín. de funcionamento",
+      "anti_cycle_min_pause": "Tempo mín. de pausa",
+      "anti_cycle_hint": "Evita ciclos rápidos de liga/desliga — protege bombas e relés. Vazio = padrão."
     },
     "ro": {
       "charging": "Încărcare",
@@ -17209,7 +17261,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Timp min. de funcționare",
+      "anti_cycle_min_pause": "Timp min. de pauză",
+      "anti_cycle_hint": "Previne pornirea/oprirea rapidă — protejează pompele și releele. Gol = implicit."
     },
     "sv": {
       "charging": "Laddar",
@@ -18438,7 +18494,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "min",
+      "anti_cycle_min_run": "Min. körtid",
+      "anti_cycle_min_pause": "Min. paustid",
+      "anti_cycle_hint": "Förhindrar snabb på/av — skyddar pumpar och reläer. Tomt = standard."
     },
     "zh": {
       "charging": "充电中",
@@ -19667,7 +19727,11 @@
       "overnight_grid": "Grid",
       "overnight_off_hint": "Solar only — the load waits for sun and may miss its target on a dark day.",
       "overnight_battery_hint": "Drains the home battery (down to the reserve floor) to finish the target when there is no sun.",
-      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured."
+      "overnight_grid_hint": "Tops up from the grid during your cheap-tariff window to finish the target. Needs a tariff/cheap window configured.",
+      "minutes_short": "分钟",
+      "anti_cycle_min_run": "最短运行时间",
+      "anti_cycle_min_pause": "最短暂停时间",
+      "anti_cycle_hint": "防止频繁开关 — 保护水泵和继电器。留空为默认值。"
     }
   };
 

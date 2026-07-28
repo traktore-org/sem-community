@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.27] — 28.07.2026
+
+### 🐛 Fixes
+
+- 🔁 **Deferrable loads no longer short-cycle — and the window is now yours to tune** (#688,
+  reported by @onkelfu) — a pool pump (or any switch load) could flick on and off as the available
+  surplus wobbled with passing clouds, other appliances starting, or the home battery charging. The
+  root cause was **not** a missing feature: SEM already enforces a per-load minimum run and minimum
+  pause every cycle. But for a generic load that window defaulted to a twitchy **1-minute pause**,
+  and — being a backend value with no surface anywhere — you could neither see nor lengthen it (bug
+  class 30, the same shape as #627's start/stop entity). Two changes: the default pause is now **5
+  minutes** (matching the 5-minute minimum run), which caps cycling at a ~10-minute period and lets a
+  load ride *through* a passing cloud instead of stopping and restarting; and **Minimum run time /
+  Minimum pause time** are now editable per load on the Control-tab priority card, right next to the
+  Min/Max runtime and Mode controls, applied live and across restarts via the same goal engine
+  (#620). Full i18n ×16. Guarded by `tests/test_688_load_anti_cycling.py`. (by @traktore-org)
+
 # [1.7.5-beta.26] — 27.07.2026
 
 ### 🐛 Fixes
