@@ -4539,6 +4539,14 @@ async def _async_register_phase_services(
             "recent_logs": recent_logs,
         }
 
+        # (#638 G3) Tonight's shadow plan — the 22:00 answer, inspectable on
+        # demand (journals rotate; this doesn't). None until the first
+        # night-window trigger after startup.
+        shadow_plan = (getattr(coordinator, "_overnight_shadow_plan", None)
+                       if coordinator else None)
+        if shadow_plan is not None:
+            payload["overnight_plan_shadow"] = shadow_plan
+
         # Layered-trace health summary (1.7.5) — tiny, so EVERY Diagnose
         # button surfaces "is a control layer disagreeing right now?" at a
         # glance. The FULL per-cycle chain is added to the trace / ev_chargers
