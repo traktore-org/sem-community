@@ -76,10 +76,13 @@ class LedgerSlot:
     # computed by the walk:
     soc_kwh: float = 0.0            # battery energy at slot START
     home_grid_w: float = 0.0        # home's share on the METER this slot
+    home_batt_kwh: float = 0.0      # home energy the battery actually covered
     headroom_w: float = float("inf")
-    # packing events (battery deltas), applied on every walk:
+    # packing events, applied/preserved on every walk:
     batt_out_kwh: float = 0.0       # Tier-2 loads drawing the battery
-    batt_in_kwh: float = 0.0        # pre-charge raising the trajectory
+    batt_in_kwh: float = 0.0        # pre-charge raising the trajectory (G4 hook)
+    grid_committed_w: float = 0.0   # grid power already allocated here — a
+                                    # re-walk must NOT resurrect spent headroom
     # explicit per-slot cap override (compat path); None = derive from peak
     cap_override_w: Optional[float] = None
 
@@ -119,11 +122,18 @@ def _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w) -> None:
         # Tier-2 loads booked into this slot also draw the battery.
         batt_loads = min(s.batt_out_kwh, max(0.0, avail - batt_home))
         soc -= batt_home + batt_loads
+        s.home_batt_kwh = batt_home
         s.home_grid_w = (home_kwh - batt_home) / h * 1000.0 if h > 0 else 0.0
+        # Re-walks must PRESERVE grid allocations already packed here
+        # (grid_committed_w) — recomputing headroom from peak − home alone
+        # would resurrect spent headroom and let a later demand over-
+        # subscribe the cap (reviewer HIGH, 2026-07-29).
         if s.cap_override_w is not None:
-            s.headroom_w = float(s.cap_override_w)
+            s.headroom_w = max(0.0, float(s.cap_override_w)
+                               - s.grid_committed_w)
         elif peak_limit_w and peak_limit_w > 0:
-            s.headroom_w = max(0.0, peak_limit_w - s.home_grid_w)
+            s.headroom_w = max(0.0, peak_limit_w - s.home_grid_w
+                               - s.grid_committed_w)
         else:
             s.headroom_w = float("inf")
 
@@ -246,8 +256,11 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             if h <= 0 or not _eligible(d, i):
                 continue
             if d.source == "battery":
-                avail = max(0.0, s.soc_kwh - floor_kwh
-                            - s.home_w * h / 1000.0 - s.batt_out_kwh)
+                # From the WALKED state: what the trajectory leaves above the
+                # floor after home's ACTUAL battery share this slot (clamped
+                # by the walk, not the raw home ask) and draws already booked.
+                avail = max(0.0, s.soc_kwh + s.batt_in_kwh - floor_kwh
+                            - s.home_batt_kwh - s.batt_out_kwh)
                 if avail <= 1e-9:
                     continue
                 # The battery constrains ENERGY (run length), not power — a
@@ -282,6 +295,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                        f"from battery (trajectory leaves "
                        f"{max(0.0, s.soc_kwh - floor_kwh):.1f} kWh above floor)")
             else:
+                s.grid_committed_w += power   # survives trajectory re-walks
                 s.headroom_w -= power
                 why = (f"{d.id}: {power:.0f} W {s.start:%H:%M}–{end:%H:%M} "
                        f"@ {price:.3f} (slot #{rank[i]} cheapest, "

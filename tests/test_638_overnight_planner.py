@@ -406,3 +406,57 @@ class TestAntiCycleQuantization:
         assert blocks[1].price == 0.12                 # hour 3, NOT 0.11
         gap = (blocks[1].start - blocks[0].end).total_seconds()
         assert gap >= 7200 - 1
+
+
+class TestReviewFindings:
+    """Pins for the 2026-07-29 pre-deploy review (reviewer HIGH/MEDIUM)."""
+
+    def test_rewalk_preserves_grid_commitments(self):
+        # HIGH: EV (grid) fills slot 1's headroom; a Tier-2 draw in slot 0
+        # then re-walks the trajectory. The re-walk must NOT resurrect
+        # slot 1's spent headroom — the battery pre-charge (grid, lower
+        # priority) must not over-subscribe the peak there.
+        led = _ledger([0.20, 0.10], home_w=0, soc=10, floor=2, peak=4000)
+        ev = Demand(id="ev", kind="ev", energy_kwh=4, max_power_w=4000,
+                    min_power_w=1400, priority=0, source="grid")
+        t2 = Demand(id="t2", kind="load", energy_kwh=1, max_power_w=1000,
+                    min_power_w=1000, priority=1, source="battery")
+        pre = Demand(id="battery", kind="battery", energy_kwh=8,
+                     max_power_w=5000, priority=2, source="grid")
+        plan = pack_night([ev, t2, pre], led, floor_kwh=2,
+                          max_discharge_w=5000, peak_limit_w=4000)
+        # Per-slot grid power never exceeds the 4 kW peak.
+        grid_by_slot = {}
+        for a in plan.allocations:
+            if a.price > 0 or a.demand_id in ("ev", "battery"):
+                grid_by_slot[a.start] = grid_by_slot.get(a.start, 0) + a.power_w
+        assert all(w <= 4000 + 1e-6 for w in grid_by_slot.values()), grid_by_slot
+
+    def test_one_list_semantics_higher_number_packs_first(self):
+        # The drag list's semantics (surplus walk + reclaim gate): a HIGHER
+        # priority number outranks — the default battery slot (100) claims
+        # surplus before the default charger (3), day AND night. Callers
+        # negate, so the packer sees battery=-100 < ev=-3 and packs it
+        # first: the battery pre-charge takes the cheapest slot.
+        led = _ledger([0.10, 0.30], home_w=0, soc=2, floor=2, peak=3000)
+        ev = Demand(id="ev", kind="ev", energy_kwh=3, max_power_w=3000,
+                    min_power_w=1400, priority=-3, source="grid")
+        pre = Demand(id="battery", kind="battery", energy_kwh=3,
+                     max_power_w=3000, priority=-100, source="grid")
+        plan = pack_night([ev, pre], led, floor_kwh=2, peak_limit_w=3000)
+        assert _allocs(plan, "battery")[0].price == 0.10
+        assert all(a.price == 0.30 for a in _allocs(plan, "ev"))
+
+    def test_second_tier2_in_the_same_slot_is_not_undercounted(self):
+        # MEDIUM: avail must come from the WALKED state (home's actual
+        # battery share), not the raw home ask — else the second Tier-2
+        # demand in a slot is under-scheduled.
+        led = _ledger([0.20], home_w=500, soc=10, floor=2)
+        a = Demand(id="a", kind="load", energy_kwh=1, max_power_w=1000,
+                   min_power_w=1000, priority=0, source="battery")
+        b = Demand(id="b", kind="load", energy_kwh=1, max_power_w=1000,
+                   min_power_w=1000, priority=1, source="battery")
+        plan = pack_night([a, b], led, floor_kwh=2, max_discharge_w=5000,
+                          peak_limit_w=6000)
+        assert _by_id(plan, "a").status == "fits"
+        assert _by_id(plan, "b").status == "fits"

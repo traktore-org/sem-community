@@ -5401,8 +5401,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             def _home_at(t):
                 if hourly_home:
                     i = int((t - now).total_seconds() // 3600)
-                    if 0 <= i < len(hourly_home) and hourly_home[i] is not None:
-                        return max(0.0, float(hourly_home[i]))
+                    # The profile appends 0.0 for hours it could not predict
+                    # (trained_with_fallback) — a 0 W house is a data gap,
+                    # not a forecast; fall through to the flat estimate.
+                    if (0 <= i < len(hourly_home)
+                            and hourly_home[i] is not None
+                            and float(hourly_home[i]) > 0):
+                        return float(hourly_home[i])
                 return flat_home_w
 
             # Slots follow the market: honest None price when the day-ahead
