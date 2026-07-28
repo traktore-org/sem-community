@@ -166,6 +166,17 @@ class TariffProvider(ABC):
         """
         return raw_min
 
+    def get_price_level_at(self, when: datetime) -> Optional[PriceLevel]:
+        """The price LEVEL a given moment would classify as (#638).
+
+        The overnight plan packs cheap-hours loads only into slots whose
+        level execution's ``price_is_cheap`` gate would actually fire on —
+        this accessor is the shared source of that truth. ``None`` =
+        unknown (no data / provider cannot say): the planner treats it as
+        not-cheap, conservatively.
+        """
+        return None
+
 
 class StaticTariffProvider(TariffProvider):
     """Static HT/NT tariff rates.
@@ -211,6 +222,11 @@ class StaticTariffProvider(TariffProvider):
 
     def get_price_at(self, when: datetime) -> Optional[float]:
         return self.peak_rate if self._is_high_tariff(when) else self.off_peak_rate
+
+    def get_price_level_at(self, when: datetime) -> Optional[PriceLevel]:
+        # The same time rule get_price_level applies now: NT = CHEAP.
+        return (PriceLevel.NORMAL if self._is_high_tariff(when)
+                else PriceLevel.CHEAP)
 
     def get_tariff_data(self) -> TariffData:
         now = dt_util.now()
@@ -1281,6 +1297,18 @@ class DynamicTariffProvider(TariffProvider):
         for p in prices:
             if p.timestamp <= when < p.timestamp + interval:
                 return p.price
+        return None
+
+    def get_price_level_at(self, when: datetime) -> Optional[PriceLevel]:
+        # The classified level of the series point covering ``when`` —
+        # the same percentile classification price_is_cheap fires on.
+        prices = self._read_prices_list()
+        if not prices:
+            return None
+        interval = self._detect_interval(prices)
+        for p in prices:
+            if p.timestamp <= when < p.timestamp + interval:
+                return p.level
         return None
 
     def get_tariff_data(self) -> TariffData:

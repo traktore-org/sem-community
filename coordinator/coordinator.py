@@ -5268,7 +5268,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         try:
             from datetime import timedelta as _td
-            from .overnight_planner import Demand, PriceSlot, plan_overnight
+            from .overnight_planner import (
+                Demand, LedgerSlot, build_night_ledger, pack_night,
+            )
             from .ev_night_targets import build_night_target_map
             from .ev_tariff_planner import resolve_deadline
 
@@ -5324,6 +5326,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
                     if deficit_h <= 0 or rated <= 0:
                         continue
+                    tier2 = bool(getattr(dev, "battery_eligible_overnight", False))
                     demands.append(Demand(
                         id=f"load:{dev.device_id}", kind="load",
                         energy_kwh=rated * deficit_h / 1000.0,
@@ -5331,10 +5334,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         deadline=night_end,
                         priority=-int(getattr(dev, "priority", 0) or 0),
                         # Tier-2 runs off the home battery: no grid meter, no
-                        # peak cap, no price — it spends the battery budget.
-                        source=("battery"
-                                if getattr(dev, "battery_eligible_overnight", False)
-                                else "grid"),
+                        # peak cap, no price — it spends the trajectory.
+                        source="battery" if tier2 else "grid",
+                        # A cheap-hours load EXECUTES only when the provider's
+                        # level says cheap — the plan must pack the same way.
+                        needs_cheap_level=(not tier2 and getattr(
+                            dev, "top_up_policy", "") == "cheap_hours"),
+                        # (#688) the plan quantizes to the anti-cycle window.
+                        min_run_s=int(getattr(dev, "min_on_seconds", 0) or 0),
+                        min_gap_s=int(getattr(dev, "min_off_seconds", 0) or 0),
                     ))
                 except Exception:  # noqa: BLE001 — one bad device won't kill the plan
                     continue
@@ -5361,24 +5369,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._overnight_shadow_plan = None
                 return
 
-            # The battery ENERGY budget Tier-2 loads may spend: usable kWh
-            # above the reserve floor, from the live SOC.
-            battery_budget = 0.0
+            # ── The Night Ledger (spec) ─────────────────────────────────
+            # Battery state: live SOC → kWh; the sunrise floor reserves
+            # tomorrow's need = max(reserve, the scheduler's target SOC).
             soc = getattr(power, "battery_soc", None) if power is not None else None
-            if soc is not None:
-                reserve = float(self.config.get("battery_priority_soc", 30) or 30)
-                cap_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
-                battery_budget = max(0.0, (float(soc) - reserve) / 100.0 * cap_kwh)
-
-            # One hourly price curve + one peak cap for the whole night.
-            # The cap is GRID headroom: peak limit minus the expected overnight
-            # home draw — the same estimator the EV peak-managed rate uses.
+            cap_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
+            soc_kwh = max(0.0, float(soc or 0.0) / 100.0 * cap_kwh)
+            reserve_pct = float(self.config.get("battery_priority_soc", 30) or 30)
+            target_pct = float(getattr(getattr(scheduler, "decision", None),
+                                       "target_soc", 0.0) or 0.0)
+            floor_kwh = max(reserve_pct, target_pct) / 100.0 * cap_kwh
+            max_discharge_w = float(
+                self.config.get("battery_max_discharge_power", 5000.0) or 5000.0)
             peak_w = float(self.config.get("peak_limit_w") or 0.0)
+
+            # Home per slot: the weekday-aware hourly profile when trained,
+            # else the flat night estimate (same fallback chain as the EV
+            # peak-managed rate).
+            hourly_home = None
+            predictor = getattr(self, "_predictor", None)
+            if predictor is not None:
+                try:
+                    hourly_home = predictor.predict_consumption_24h(now) or None
+                except Exception:  # noqa: BLE001
+                    hourly_home = None
             try:
-                home_w = float(self._expected_night_home_w(energy))
+                flat_home_w = float(self._expected_night_home_w(energy))
             except Exception:  # noqa: BLE001
-                home_w = 300.0
-            cap = (peak_w - home_w) if peak_w > 0 else float("inf")
+                flat_home_w = 300.0
+
+            def _home_at(t):
+                if hourly_home:
+                    i = int((t - now).total_seconds() // 3600)
+                    if 0 <= i < len(hourly_home) and hourly_home[i] is not None:
+                        return max(0.0, float(hourly_home[i]))
+                return flat_home_w
+
+            # Slots follow the market: honest None price when the day-ahead
+            # has no data (the fingerprint replan re-derives later); the
+            # level comes from the shared get_price_level_at accessor so the
+            # plan packs exactly what execution's cheap-gate would fire on.
+            prov = self._tariff_provider
             slots = []
             t = now.replace(minute=0, second=0, microsecond=0)
             if t < now:
@@ -5386,23 +5417,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             while t < night_end:
                 end = min(t + _td(hours=1), night_end)
                 price = None
-                if hasattr(self._tariff_provider, "get_price_at"):
+                if hasattr(prov, "get_price_at"):
                     try:
-                        price = self._tariff_provider.get_price_at(t)
+                        price = prov.get_price_at(t)
                     except Exception:  # noqa: BLE001
                         price = None
-                slots.append(PriceSlot(
+                lvl = None
+                if hasattr(prov, "get_price_level_at"):
+                    try:
+                        lvl = prov.get_price_level_at(t)
+                    except Exception:  # noqa: BLE001
+                        lvl = None
+                lvl_name = str(getattr(lvl, "value", lvl) or "").lower()
+                slots.append(LedgerSlot(
                     start=t, end=end,
-                    price=float(price) if price is not None else 0.20,
-                    cap_w=max(0.0, cap) if cap != float("inf") else float("inf"),
+                    price=float(price) if price is not None else None,
+                    level_cheap=lvl_name in ("cheap", "very_cheap", "negative"),
+                    home_w=_home_at(t),
                 ))
                 t = end
             if not slots:
                 self._overnight_shadow_plan = None
                 return
 
-            plan = plan_overnight(demands, slots,
-                                  battery_budget_kwh=battery_budget)
+            ledger = build_night_ledger(
+                slots, soc_kwh=soc_kwh, floor_kwh=floor_kwh,
+                max_discharge_w=max_discharge_w, peak_limit_w=peak_w)
+            plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
+                              max_discharge_w=max_discharge_w,
+                              peak_limit_w=peak_w)
             real_ev = round(sum(d.energy_kwh for d in demands
                                 if d.kind == "ev"), 2)
             # The #652 phantom-vs-real comparison only exists when the battery
@@ -5418,6 +5461,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 len(demands), len(slots), plan.total_cost, plan.fits,
                 phantom_txt, real_ev,
             )
+            if plan.takeover is not None:
+                _LOGGER.info(
+                    "OVERNIGHT-PLAN (shadow): battery carries home until "
+                    "%s — the grid takes over from there "
+                    "(floor %.1f kWh of %.1f kWh)",
+                    f"{plan.takeover:%H:%M}", floor_kwh, soc_kwh)
+            else:
+                _LOGGER.info(
+                    "OVERNIGHT-PLAN (shadow): battery carries home through "
+                    "the whole night (floor %.1f kWh of %.1f kWh)",
+                    floor_kwh, soc_kwh)
             for line in plan.summary_lines():
                 _LOGGER.info("OVERNIGHT-PLAN (shadow): %s", line)
             for a in plan.allocations:
@@ -5426,6 +5480,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "computed_at": now.isoformat(),
                 "fits": plan.fits,
                 "total_cost": plan.total_cost,
+                "takeover": (plan.takeover.isoformat()
+                             if plan.takeover is not None else None),
                 "summary": plan.summary_lines(),
                 "allocations": [a.reason for a in plan.allocations],
             }

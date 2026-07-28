@@ -144,8 +144,10 @@ def test_shadow_fires_without_the_battery_scheduler(monkeypatch):
 
 
 def test_shadow_respects_the_peak_cap(freeze_targets):
-    """6 kW peak − 400 W expected home = 5.6 kW cap: the 11 kW-capable EV
-    must be granted at most the cap in any slot."""
+    """The ledger DERIVES the cap: while the battery carries home (8 kWh SOC,
+    3 kWh floor, 400 W home), home is NOT on the meter — the full 6 kW peak
+    is headroom, and no allocation may exceed it. (The old flat model
+    subtracted home from every slot; the trajectory is exact.)"""
     fake = _fake_self(devices=[])
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
@@ -155,4 +157,30 @@ def test_shadow_respects_the_peak_cap(freeze_targets):
     import re
     for line in plan["allocations"]:
         m = re.search(r"(\d+) W ", line)
-        assert m and float(m.group(1)) <= 5600.0, line
+        assert m and float(m.group(1)) <= 6000.0, line
+    # 5 kWh above the floor covers 400 W past the window — no takeover.
+    assert plan["takeover"] is None
+
+
+class TestPriceLevelAt:
+    """#638: the shared level-at-time accessor — the plan packs cheap-hours
+    loads exactly where execution's price_is_cheap gate would fire."""
+
+    def test_static_provider_nt_is_cheap_at_time(self):
+        from datetime import datetime as _dt
+        from custom_components.solar_energy_management.tariff.tariff_provider import (
+            PriceLevel, StaticTariffProvider,
+        )
+        p = StaticTariffProvider(peak_rate=0.30, off_peak_rate=0.20,
+                                 peak_start=7, peak_end=20)
+        night = _dt(2026, 7, 29, 2, 0)     # Wednesday 02:00 = NT
+        day = _dt(2026, 7, 29, 12, 0)      # Wednesday noon = HT
+        assert p.get_price_level_at(night) == PriceLevel.CHEAP
+        assert p.get_price_level_at(day) == PriceLevel.NORMAL
+
+    def test_base_default_is_unknown(self):
+        from custom_components.solar_energy_management.tariff.tariff_provider import (
+            TariffProvider,
+        )
+        assert TariffProvider.get_price_level_at(
+            MagicMock(spec=[]), None) is None
