@@ -2993,8 +2993,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _night_of = (_now_l - timedelta(hours=12)).date()
                 if (_in_window
                         and getattr(self, "_shadow_plan_date", None) != _night_of):
-                    self._shadow_plan_date = _night_of
-                    self._shadow_overnight_plan(_sched, energy, None, None, power)
+                    # Stamp only on a READY-world answer: the first refresh
+                    # after a restart sees zero registered devices (delayed
+                    # rediscovery) — that degenerate shape retries next cycle.
+                    if self._shadow_overnight_plan(_sched, energy, None, None,
+                                                   power):
+                        self._shadow_plan_date = _night_of
             except Exception:  # noqa: BLE001 — shadow must never break the cycle
                 _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
 
@@ -5268,7 +5272,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     ev_max_power, power)
 
     def _shadow_overnight_plan(self, scheduler, energy, phantom_ev_kwh,
-                               phantom_ev_w, power=None) -> None:
+                               phantom_ev_w, power=None) -> bool:
         """#638 G3 — compute the joint overnight plan in shadow mode.
 
         Demands are built from the REAL models — ``build_night_target_map``
@@ -5276,6 +5280,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         battery deficit — under one hourly price curve and one peak cap.
         Output: INFO summary (the 22:00 answer), DEBUG per-allocation lines,
         and ``self._overnight_shadow_plan`` for diagnostics. No actuation.
+
+        Returns True when the answer came from a READY world and the night
+        may be stamped; False on the degenerate warm-up shape (first refresh
+        after startup: zero devices registered, empty target map, zero
+        deficit — caught live on TEST) so the trigger retries next cycle.
         """
         try:
             from datetime import timedelta as _td
@@ -5381,6 +5390,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ))
 
             if not demands:
+                # Warm-up shape: nothing registered yet (first refresh after
+                # a restart) — not an answer, retry next cycle.
+                if loads_seen == 0 and not targets and deficit <= 0.0:
+                    _LOGGER.debug(
+                        "OVERNIGHT-PLAN (shadow #638): world not ready "
+                        "(0 devices, empty target map) — retrying next cycle")
+                    return False
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
                 # broken one; burned three placement bugs learning that).
@@ -5394,7 +5410,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "fits": True,
                     "summary": [f"no overnight demands tonight ({why})"],
                 }
-                return
+                return True
 
             # ── The Night Ledger (spec) ─────────────────────────────────
             # Battery state: live SOC → kWh; the sunrise floor reserves
@@ -5473,7 +5489,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "OVERNIGHT-PLAN (shadow #638): empty night window "
                     "(now past %s?) — no plan", night_end)
                 self._overnight_shadow_plan = None
-                return
+                return True
 
             ledger = build_night_ledger(
                 slots, soc_kwh=soc_kwh, floor_kwh=floor_kwh,
@@ -5520,12 +5536,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "summary": plan.summary_lines(),
                 "allocations": [a.reason for a in plan.allocations],
             }
+            return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle
             # WARNING during the shadow soak: a swallowed failure here is
             # invisible in a 100-line journal window and cost a night of
-            # verification. Never breaks the cycle either way.
+            # verification. Never breaks the cycle either way. True: stamp
+            # the night — one WARNING per night, not one per 10 s cycle.
             _LOGGER.warning("overnight shadow plan failed (shadow-phase, "
                             "no impact on control)", exc_info=True)
+            return True
 
     async def _send_notifications(
         self, charging_state, power, energy, costs, performance,

@@ -119,14 +119,38 @@ def test_no_demands_is_a_loud_valid_answer(freeze_targets, monkeypatch):
     were invisible for exactly this reason)."""
     monkeypatch.setattr(ev_night_targets, "build_night_target_map",
                         lambda coord, energy: {})
-    fake = _fake_self(devices=[])
-    SEMCoordinator._shadow_overnight_plan(
+    # A READY world (a registered device — just no deficit), not the
+    # zero-devices warm-up shape, which returns False and retries instead.
+    idle = SimpleNamespace(device_id="pump", has_runtime_deficit=False,
+                           battery_eligible_overnight=True,
+                           top_up_policy="solar_only",
+                           daily_min_runtime_sec=0,
+                           _daily_runtime_accumulated_sec=0,
+                           rated_power=800.0, priority=4)
+    fake = _fake_self(devices=[idle])
+    ok = SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
         phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    assert ok is True                       # a real answer — stampable
     plan = fake._overnight_shadow_plan
     assert plan is not None
     assert plan["fits"] is True
     assert "no overnight demands" in plan["summary"][0]
+
+
+def test_warmup_world_retries_not_stamps(freeze_targets, monkeypatch):
+    """Zero registered devices + empty target map + no deficit = the first
+    refresh after a restart (delayed rediscovery) — not an answer. The hook
+    returns False so the trigger retries next cycle (caught live on TEST:
+    the shadow stamped a whole night on the warm-up shape)."""
+    monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                        lambda coord, energy: {})
+    fake = _fake_self(devices=[])
+    ok = SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    assert ok is False
+    assert fake._overnight_shadow_plan is None
 
 
 def test_shadow_fires_without_the_battery_scheduler(monkeypatch):
