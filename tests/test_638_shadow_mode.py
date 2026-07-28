@@ -120,6 +120,29 @@ def test_no_demands_no_plan(freeze_targets, monkeypatch):
     assert fake._overnight_shadow_plan is None
 
 
+def test_shadow_fires_without_the_battery_scheduler(monkeypatch):
+    """Caught live on PROD (2026-07-28): the shadow was hosted inside
+    ``if scheduler.enabled:`` — and the battery scheduler defaults OFF, so
+    the shadow never ran on the machine it was soaking on. Pin the placement:
+    ``_run_battery_pipeline`` must carry its own trigger (the ``_shadow_plan_date``
+    stamp) OUTSIDE the enabled branch, and phantom=None must render as
+    'scheduler off', not crash the format string."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1]
+           / "coordinator" / "coordinator.py").read_text()
+    assert src.count("self._shadow_overnight_plan(") >= 2, \
+        "expected the evaluate-site call AND the scheduler-independent trigger"
+    assert "_shadow_plan_date" in src
+    # The None-phantom path must not raise (the %-format regression guard).
+    fake = _fake_self(devices=[])
+    monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                        lambda coord, energy: {"ev_charger": 2.0})
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=None, phantom_ev_w=None, power=_power())
+    assert fake._overnight_shadow_plan is not None
+
+
 def test_shadow_respects_the_peak_cap(freeze_targets):
     """6 kW peak − 400 W expected home = 5.6 kW cap: the 11 kW-capable EV
     must be granted at most the cap in any slot."""

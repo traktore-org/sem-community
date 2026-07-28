@@ -4871,6 +4871,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             scheduler._decision if scheduler.enabled else None
         )
 
+        # (#638 G3) The shadow overnight plan does NOT depend on the battery
+        # scheduler being enabled — an install without battery night charging
+        # (PROD: static tariff, summer) still has EV floors and Tier-2 loads
+        # to plan. Own once-per-evening trigger at the scheduler's hour; when
+        # the scheduler IS enabled, its evaluate/replans recompute on top.
+        try:
+            _now_l = dt_util.now()
+            _hour = int(getattr(getattr(scheduler, "_config", None),
+                                "trigger_hour", 21) or 21)
+            if (_now_l.hour >= _hour
+                    and getattr(self, "_shadow_plan_date", None) != _now_l.date()):
+                self._shadow_plan_date = _now_l.date()
+                self._shadow_overnight_plan(scheduler, energy, None, None, power)
+        except Exception:  # noqa: BLE001 — shadow must never break the pipeline
+            _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
+
         # #523 export arbitrage — the scheduler's discharge mirror. Runs
         # whenever arbitrage is enabled (independent of the night-charge
         # scheduler), but NEVER while a charge is planned/active — the
@@ -5389,12 +5405,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                   battery_budget_kwh=battery_budget)
             real_ev = round(sum(d.energy_kwh for d in demands
                                 if d.kind == "ev"), 2)
+            # The #652 phantom-vs-real comparison only exists when the battery
+            # scheduler actually ran its own EV model this evaluation.
+            phantom_txt = (
+                f"{phantom_ev_kwh:.1f} kWh @ {phantom_ev_w:.0f} W"
+                if phantom_ev_kwh is not None and phantom_ev_w is not None
+                else "n/a (scheduler off)")
             _LOGGER.info(
                 "OVERNIGHT-PLAN (shadow #638): %d demand(s), %d slot(s), "
                 "est cost %.2f, fits=%s | EV model — scheduler(phantom): "
-                "%.1f kWh @ %.0f W vs real per-charger map: %.1f kWh (#652)",
+                "%s vs real per-charger map: %.1f kWh (#652)",
                 len(demands), len(slots), plan.total_cost, plan.fits,
-                phantom_ev_kwh, phantom_ev_w, real_ev,
+                phantom_txt, real_ev,
             )
             for line in plan.summary_lines():
                 _LOGGER.info("OVERNIGHT-PLAN (shadow): %s", line)
