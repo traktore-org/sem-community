@@ -2972,6 +2972,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Replaces the legacy split (7.5c the deleted BatteryProtectionMixin, #624, +
             # 7.5d BatteryChargeScheduler.update) with one pure pipeline
             # mirroring the EV-side rebuild.
+            # (#638 G3) The shadow overnight plan runs in BOTH modes — it is
+            # itself an observer construct (log-only), and observer mode is
+            # exactly where shadow computation belongs. It also does not
+            # depend on the battery scheduler being enabled (PROD: static
+            # tariff, summer — EV floors + Tier-2 loads still need a plan).
+            # Two live placement lessons in one: the scheduler.enabled gate
+            # AND the observer gate each silenced it on the machine it was
+            # soaking on. Own once-per-NIGHT trigger; the scheduler's
+            # evaluate/replans recompute on top when it runs.
+            try:
+                _sched = self._battery_charge_scheduler
+                _now_l = dt_util.now()
+                _hour = int(getattr(getattr(_sched, "_config", None),
+                                    "trigger_hour", 21) or 21)
+                # Inside the NIGHT WINDOW, not just the evening: a restart
+                # at 00:48 still owes the rest of the night a plan.
+                _in_window = _now_l.hour >= _hour or _now_l.hour < 7
+                # One plan per NIGHT: after midnight the night began yesterday.
+                _night_of = (_now_l - timedelta(hours=12)).date()
+                if (_in_window
+                        and getattr(self, "_shadow_plan_date", None) != _night_of):
+                    self._shadow_plan_date = _night_of
+                    self._shadow_overnight_plan(_sched, energy, None, None, power)
+            except Exception:  # noqa: BLE001 — shadow must never break the cycle
+                _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
+
             discharge_limit = None
             if not self._observer_mode:
                 try:
@@ -4871,27 +4897,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             scheduler._decision if scheduler.enabled else None
         )
 
-        # (#638 G3) The shadow overnight plan does NOT depend on the battery
-        # scheduler being enabled — an install without battery night charging
-        # (PROD: static tariff, summer) still has EV floors and Tier-2 loads
-        # to plan. Own once-per-evening trigger at the scheduler's hour; when
-        # the scheduler IS enabled, its evaluate/replans recompute on top.
-        try:
-            _now_l = dt_util.now()
-            _hour = int(getattr(getattr(scheduler, "_config", None),
-                                "trigger_hour", 21) or 21)
-            # Inside the NIGHT WINDOW, not just the evening: a restart at
-            # 00:48 still owes the rest of the night a plan (hour >= 21 alone
-            # went blind after midnight — caught live on TEST 2026-07-29).
-            _in_window = _now_l.hour >= _hour or _now_l.hour < 7
-            # One plan per NIGHT: after midnight the night began yesterday.
-            _night_of = (_now_l - timedelta(hours=12)).date()
-            if (_in_window
-                    and getattr(self, "_shadow_plan_date", None) != _night_of):
-                self._shadow_plan_date = _night_of
-                self._shadow_overnight_plan(scheduler, energy, None, None, power)
-        except Exception:  # noqa: BLE001 — shadow must never break the pipeline
-            _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
 
         # #523 export arbitrage — the scheduler's discharge mirror. Runs
         # whenever arbitrage is enabled (independent of the night-charge
