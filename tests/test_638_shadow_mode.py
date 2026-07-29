@@ -6,7 +6,7 @@ a runtime deficit, the battery scheduler's deficit, and an hourly price curve.
 Asserts the plan is computed, stashed, and explainable — and that the hook can
 NEVER break the cycle (any internal error degrades to a debug log).
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -15,6 +15,9 @@ import pytest
 from custom_components.solar_energy_management.coordinator import coordinator as coord_mod
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
+)
+from custom_components.solar_energy_management.coordinator.sensor_reader import (
+    SensorReader,
 )
 from custom_components.solar_energy_management.coordinator import ev_night_targets
 
@@ -75,6 +78,8 @@ def _fake_self(devices=()):
         _device_registry=SimpleNamespace(battery_surplus_priority=lambda: 2),
         _expected_night_home_w=lambda energy: 400.0,
         battery_capacity_kwh=10.0,
+        # (#638 finding #3) when the fleet first came up short, or None.
+        _shadow_partial_since=None,
     )
     return fake
 
@@ -291,6 +296,120 @@ class TestPartialFleetIsNotReady:
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
             phantom_ev_kwh=0, phantom_ev_w=0, power=_power(soc=76.5))
         assert ok is True
+
+    def test_the_wait_is_bounded(self, freeze_targets):
+        """A unit that has been silent for ten minutes is offline, not
+        warming. Waiting forever would turn a skewed plan into NO plan —
+        the worse failure. Plan on what reports, and say the figures cover
+        a subset."""
+        fake = _fake_self(devices=[_fake_load()])
+        fake._shadow_partial_since = (
+            coord_mod.dt_util.now() - timedelta(seconds=601))
+        power = SimpleNamespace(battery_soc=65.0, battery_soc_partial=True,
+                                battery_soc_units_read=1,
+                                battery_soc_units_expected=2)
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert ok is True, "the night must still get a plan eventually"
+        plan = fake._overnight_shadow_plan
+        assert plan is not None
+        assert plan["battery_fleet_partial"] == "battery fleet partial: 1/2 units"
+
+    def test_first_partial_cycle_starts_the_clock(self, freeze_targets):
+        """The grace window is measured from the FIRST short cycle, not from
+        every one of them — otherwise it never elapses."""
+        fake = _fake_self(devices=[_fake_load()])
+        power = SimpleNamespace(battery_soc=65.0, battery_soc_partial=True,
+                                battery_soc_units_read=1,
+                                battery_soc_units_expected=2)
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert fake._shadow_partial_since == coord_mod.dt_util.now()
+
+    def test_a_whole_fleet_clears_the_clock_and_the_note(self, freeze_targets):
+        """Recovery must reset the wait, so a later gap gets its own full
+        grace window instead of inheriting an expired one."""
+        fake = _fake_self(devices=[_fake_load()])
+        fake._shadow_partial_since = (
+            coord_mod.dt_util.now() - timedelta(seconds=601))
+        power = SimpleNamespace(battery_soc=76.5, battery_soc_partial=False,
+                                battery_soc_units_read=2,
+                                battery_soc_units_expected=2)
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert ok is True
+        assert fake._shadow_partial_since is None
+        assert fake._overnight_shadow_plan["battery_fleet_partial"] is None
+
+
+class TestFleetSocCoverage:
+    """The reader half of finding #3 — what ``expected`` may mean.
+
+    ``expected`` counts units whose SOC sensor was DISCOVERED, not units
+    configured. Both look like "1 of 2" from the outside, but only one of
+    them ever resolves: a discovered sensor reading ``unavailable`` comes up
+    seconds later, while a unit with no findable SOC sensor never does.
+    Conflating them made the first cut of this fix block such an install's
+    night plan forever — a worse bug than the skewed average.
+    """
+
+    @staticmethod
+    def _reader(detect, read):
+        return SimpleNamespace(
+            _auto_detect_battery_soc=detect,
+            _read_sensor=read,
+            _soc_units_expected=0, _soc_units_read=0,
+            _soc_partial_logged=False, _soc_undetected_logged=False,
+        )
+
+    def test_undiscoverable_unit_is_not_counted_as_expected(self):
+        """Battery 2 has no findable SOC sensor: coverage is 1/1, not 1/2 —
+        there is nothing to wait for."""
+        rdr = self._reader(
+            detect=lambda p: "sensor.b1_soc" if p == "sensor.b1_power" else None,
+            read=lambda e, k: 88.0,
+        )
+        avg = SensorReader._read_battery_soc_average(
+            rdr, ["sensor.b1_power", "sensor.b2_power"])
+        assert avg == 88.0
+        assert (rdr._soc_units_expected, rdr._soc_units_read) == (1, 1)
+        assert rdr._soc_undetected_logged is True
+
+    def test_discovered_but_unavailable_unit_is_partial(self):
+        """The live shape: both SOC sensors exist, battery 1 is not reading
+        yet. Coverage 1/2 — this one IS worth waiting for."""
+        vals = {"sensor.b1_soc": None, "sensor.b2_soc": 65.0}
+        rdr = self._reader(
+            detect=lambda p: p.replace("_power", "_soc"),
+            read=lambda e, k: vals[e],
+        )
+        avg = SensorReader._read_battery_soc_average(
+            rdr, ["sensor.b1_power", "sensor.b2_power"])
+        assert avg == 65.0
+        assert (rdr._soc_units_expected, rdr._soc_units_read) == (2, 1)
+
+    def test_whole_fleet_is_full_coverage(self):
+        rdr = self._reader(detect=lambda p: p.replace("_power", "_soc"),
+                           read=lambda e, k: 88.0 if "b1" in e else 65.0)
+        avg = SensorReader._read_battery_soc_average(
+            rdr, ["sensor.b1_power", "sensor.b2_power"])
+        assert avg == 76.5
+        assert (rdr._soc_units_expected, rdr._soc_units_read) == (2, 2)
+
+    def test_nothing_readable_clears_the_one_shot_warning(self):
+        """Partial → all-offline → partial must be heard twice. The reset
+        used to live only on the full-coverage branch, so the second gap
+        was silent."""
+        rdr = self._reader(detect=lambda p: p.replace("_power", "_soc"),
+                           read=lambda e, k: None)
+        rdr._soc_partial_logged = True
+        avg = SensorReader._read_battery_soc_average(
+            rdr, ["sensor.b1_power", "sensor.b2_power"])
+        assert avg == 0.0
+        assert rdr._soc_partial_logged is False
 
 
 def test_off_mode_load_is_not_a_demand(freeze_targets):

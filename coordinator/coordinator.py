@@ -78,6 +78,12 @@ from ..analytics.energy_assistant import EnergyAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
+# (#638 finding #3) How long the overnight shadow waits for every battery
+# unit to report before planning on the ones that do. Long enough that a
+# boot warm-up (seconds) always wins the wait, short enough that a failed
+# unit costs one night's plan quality rather than the plan itself.
+_SHADOW_PARTIAL_GRACE_S = 600.0
+
 
 def _cfg_rate(config: dict, *keys: str, default: float) -> float:
     """First explicitly-configured numeric value among ``keys``.
@@ -585,6 +591,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Battery discharge protection state
         self._last_discharge_limit: Optional[float] = None
+
+        # (#638) overnight shadow plan state: the night it has been stamped
+        # for, the plan itself, and when the battery fleet first came up
+        # short (see _SHADOW_PARTIAL_GRACE_S).
+        self._shadow_plan_date = None
+        self._overnight_shadow_plan: Optional[Dict[str, Any]] = None
+        self._shadow_partial_since = None
 
         # Observer mode: read-only monitoring, no hardware control
         self._observer_mode = config.get("observer_mode", False)
@@ -5524,15 +5537,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # SOC was battery 2's 65% (real fleet: 76.5%) and the plan was
             # stamped for the night on a battery 1.7 kWh too small: takeover
             # 2 h early, a tier-2 load yielding 0.4 kWh it would in fact get.
-            # A subset is not the fleet — retry until every unit reports.
+            # A subset is not the fleet — wait for every unit to report.
+            #
+            # Bounded, though: waiting FOREVER turns a skewed plan into no
+            # plan at all, which is the worse failure. A unit still silent
+            # ten minutes in is offline, not warming — plan on the units
+            # that do report and carry the shortfall on the plan itself.
+            partial_note = None
             if (power is not None
                     and getattr(power, "battery_soc_partial", False)):
-                _LOGGER.debug(
-                    "OVERNIGHT-PLAN (shadow #638): battery fleet only %s/%s "
-                    "units resolved — retrying next cycle",
-                    getattr(power, "battery_soc_units_read", "?"),
-                    getattr(power, "battery_soc_units_expected", "?"))
-                return False
+                read = getattr(power, "battery_soc_units_read", "?")
+                exp = getattr(power, "battery_soc_units_expected", "?")
+                since = self._shadow_partial_since
+                if since is None:
+                    self._shadow_partial_since = since = now
+                if (now - since).total_seconds() < _SHADOW_PARTIAL_GRACE_S:
+                    _LOGGER.debug(
+                        "OVERNIGHT-PLAN (shadow #638): battery fleet only "
+                        "%s/%s units resolved — retrying next cycle",
+                        read, exp)
+                    return False
+                _LOGGER.warning(
+                    "OVERNIGHT-PLAN (shadow #638): battery fleet still only "
+                    "%s/%s units after %.0f min — planning on the units that "
+                    "report. A unit silent this long is offline, not warming; "
+                    "the plan's battery figures cover %s unit(s) only.",
+                    read, exp, _SHADOW_PARTIAL_GRACE_S / 60.0, read)
+                partial_note = f"battery fleet partial: {read}/{exp} units"
+            else:
+                self._shadow_partial_since = None
             soc_kwh = max(0.0, float(soc or 0.0) / 100.0 * cap_kwh)
             reserve_pct = float(self.config.get("battery_priority_soc", 30) or 30)
             target_pct = float(getattr(getattr(scheduler, "decision", None),
@@ -5651,6 +5684,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                              if plan.takeover is not None else None),
                 "summary": plan.summary_lines(),
                 "allocations": [a.reason for a in plan.allocations],
+                # None on a whole fleet. A string here means the battery
+                # figures above cover a SUBSET — the plan is still the best
+                # available answer, but it is not the fleet's answer (#638
+                # finding #3). Never silently absent: a degraded plan that
+                # reads like a healthy one is what made this bug invisible.
+                "battery_fleet_partial": partial_note,
             }
             return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle

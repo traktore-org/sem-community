@@ -140,6 +140,15 @@ class SensorReader:
         # (#564) same for the inverter temperature sibling
         self._inverter_temp_entity: Optional[str] = None
         self._inverter_temp_probe_mono: float = -1e9
+        # (#638 finding #3) fleet-SOC coverage: how many battery units the
+        # published average actually covers. ``expected`` counts the units
+        # whose SOC sensor is DISCOVERABLE — a unit with no findable SOC
+        # sensor is a configuration limit, not a warm-up gap, and is
+        # reported separately so it can never look like "still coming up".
+        self._soc_units_expected: int = 0
+        self._soc_units_read: int = 0
+        self._soc_partial_logged: bool = False
+        self._soc_undetected_logged: bool = False
         # v1.7.0 / #312: per-PV-string sensors discovered at config-
         # flow time. Empty dict in single-string setups (no discovery
         # hit), populated by ``set_pv_strings`` from
@@ -2787,32 +2796,62 @@ class SensorReader:
         ``_soc_units_expected`` / ``_soc_units_read`` (#638 finding #3): a
         subset average is NOT the fleet SOC, and a caller that must not act
         on a half-resolved fleet needs to be able to tell the difference.
+
+        ``_soc_units_expected`` counts the units whose SOC sensor could be
+        DISCOVERED, not the configured units. The two failure modes are not
+        the same and must not share a signal: a discovered sensor reading
+        ``unavailable`` is a warm-up gap that resolves in seconds, while a
+        unit with no findable SOC sensor never resolves. Counting the latter
+        as "expected" would leave the fleet permanently partial and would
+        starve any consumer that waits for a whole fleet — a worse failure
+        than the skewed average this coverage signal exists to catch.
         """
         soc_values = []
+        detected = 0
         for batt_power in battery_power_entities:
             soc_entity = self._auto_detect_battery_soc(batt_power)
-            if soc_entity:
-                val = self._read_sensor(soc_entity, "battery_soc")
-                if val is not None and val >= 0:
-                    soc_values.append(val)
-        self._soc_units_expected = len(battery_power_entities)
+            if not soc_entity:
+                continue
+            detected += 1
+            val = self._read_sensor(soc_entity, "battery_soc")
+            if val is not None and val >= 0:
+                soc_values.append(val)
+        self._soc_units_expected = detected
         self._soc_units_read = len(soc_values)
+        if detected < len(battery_power_entities):
+            # A configuration gap, reported in its own words: no amount of
+            # waiting fixes it, so it must not be phrased as "still warming".
+            if not self._soc_undetected_logged:
+                _LOGGER.warning(
+                    "No SOC sensor could be found for %d of %d configured "
+                    "battery units — the fleet SOC is the average of the "
+                    "other %d. Set the battery SOC sensor explicitly to "
+                    "include them.",
+                    len(battery_power_entities) - detected,
+                    len(battery_power_entities), detected,
+                )
+                self._soc_undetected_logged = True
+        else:
+            self._soc_undetected_logged = False
         if soc_values:
-            if len(soc_values) < len(battery_power_entities):
+            if len(soc_values) < detected:
                 # Loud once per gap, not once per cycle: this silently skews
                 # every SOC consumer (reserve gates, plans) while it lasts.
-                if not getattr(self, "_soc_partial_logged", False):
+                if not self._soc_partial_logged:
                     _LOGGER.warning(
                         "Fleet SOC covers only %d of %d battery units — "
                         "reporting %.1f%% from the units that could be read "
                         "(the rest are unavailable or still warming)",
-                        len(soc_values), len(battery_power_entities),
+                        len(soc_values), detected,
                         sum(soc_values) / len(soc_values),
                     )
                     self._soc_partial_logged = True
             else:
                 self._soc_partial_logged = False
             return sum(soc_values) / len(soc_values)
+        # Nothing readable at all is the SOC-None shape, not a partial one —
+        # clear the one-shot so a later re-entry into partial is heard again.
+        self._soc_partial_logged = False
         return 0.0
 
     def _read_from_legacy_config(self) -> PowerReadings:
