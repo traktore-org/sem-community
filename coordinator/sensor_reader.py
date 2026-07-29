@@ -31,6 +31,14 @@ _CYCLE_KEYWORDS = (
 )
 _CYCLES_UNSET = object()  # cache sentinel distinct from a None result
 
+# What a battery SOC sensor is called. Shared by detection
+# (``_auto_detect_battery_soc``) and by the existence probe
+# (``_soc_candidate_exists``) — the two must agree on what counts as a
+# candidate, or "no readable candidate" and "no candidate" stop being
+# comparable answers (#638 finding #3).
+_SOC_NAME_KEYWORDS = ("soc", "state_of_charge", "batterieladung",
+                      "battery_level", "charge_level")
+
 # Known patterns for split grid power sensors — single source of truth.
 # GRID_TRIGGER_HINTS is derived from these and used in __init__.py to
 # pre-filter new sensor events. Adding a new brand here automatically
@@ -2811,10 +2819,11 @@ class SensorReader:
         subset average is NOT the fleet SOC, and a caller that must not act
         on a half-resolved fleet needs to be able to tell the difference.
 
-        ``_soc_units_expected`` counts the units whose SOC sensor is KNOWN
-        (see ``_auto_detect_battery_soc``'s sticky map), not the configured
-        units. The two failure modes are not the same and must not share a
-        signal: a known sensor reading ``unavailable`` is a warm-up gap that
+        ``_soc_units_expected`` counts the units whose SOC sensor EXISTS (by
+        the sticky map, by detection, or by ``_soc_candidate_exists`` for one
+        that is present but not yet talking), not the configured units. The
+        two failure modes are not the same and must not share a signal: a
+        sensor that exists and reads ``unavailable`` is a warm-up gap that
         resolves in seconds, while a unit whose SOC sensor was never findable
         never resolves. Counting the latter as "expected" would leave the
         fleet permanently partial and starve any consumer that waits for a
@@ -2826,6 +2835,16 @@ class SensorReader:
         for batt_power in battery_power_entities:
             soc_entity = self._auto_detect_battery_soc(batt_power)
             if not soc_entity:
+                # Nothing READABLE for this unit. Gap or warm-up? Detection
+                # can't say — it needs a value before it will name a sensor,
+                # and at boot there isn't one yet. Existence can: a SOC sensor
+                # that is present but silent means this unit is known and
+                # unread (wait for it), while no sensor at all is a config gap
+                # (never wait). Without the split, a boot blip read as "this
+                # install has no SOC sensor for unit 2" and the night plan was
+                # stamped on one battery of two (live, TEST 2026-07-29).
+                if self._soc_candidate_exists(batt_power):
+                    known += 1
                 continue
             known += 1
             val = self._read_sensor(soc_entity, "battery_soc")
@@ -3410,7 +3429,7 @@ class SensorReader:
                 "Battery SOC sensor %s for %s disappeared — re-detecting",
                 cached, battery_power_entity)
 
-        soc_keywords = ["soc", "state_of_charge", "batterieladung", "battery_level", "charge_level"]
+        soc_keywords = list(_SOC_NAME_KEYWORDS)
 
         # Strategy 1: Prefix-based matching (fast path). Try progressively
         # SHORTER stems, longest first, so an indexed device like
@@ -3533,6 +3552,73 @@ class SensorReader:
             _LOGGER.debug("Battery SOC global scan failed: %s", e)
 
         return None
+
+    def _soc_candidate_exists(self, battery_power_entity: str) -> bool:
+        """Does a SOC sensor for this unit EXIST — readable or not?
+
+        Detection only commits to a candidate it can read a value from, and
+        it should stay that way: the value is how it picks between candidates.
+        But that makes two very different worlds give the same answer — a
+        sensor still coming up, and no sensor at all. Only one of them ever
+        resolves, so waiting is right for one and pointless for the other, and
+        the caller has to be able to tell which it is. The sticky map can't
+        answer that on the first pass (nothing has been read yet, which is
+        exactly the boot case that stamped a night plan on half a fleet on
+        TEST), so existence is asked here WITHOUT looking at any value.
+
+        Deliberately no counterpart to detection's strategy 3 (the global
+        last-resort scan): that one only commits when exactly one sensor in
+        the whole system is unambiguous, which is a guess, not the identity of
+        THIS unit's sensor. Nothing to wait for there.
+        """
+        if not battery_power_entity or "." not in battery_power_entity:
+            return False
+
+        try:
+            registry = er.async_get(self.hass)
+            # A registry we cannot query is no registry — settle that once,
+            # here, instead of at every candidate below.
+            registry.async_get(battery_power_entity)
+        except Exception:  # noqa: BLE001 — no usable registry (stub hass)
+            registry = None
+
+        def _present(eid: str) -> bool:
+            if self.hass.states.get(eid) is not None:
+                return True
+            if registry is None:
+                return False
+            entry = registry.async_get(eid)
+            return bool(entry and not entry.disabled_by)
+
+        # Same longest-stem-first walk as detection's strategy 1.
+        parts = battery_power_entity.split(".", 1)[1].split("_")
+        for k in range(len(parts), 1, -1):
+            prefix = "_".join(parts[:k])
+            for keyword in _SOC_NAME_KEYWORDS:
+                if _present(f"sensor.{prefix}_{keyword}"):
+                    return True
+
+        # Same-device scan, registry-only: an entity that has not published a
+        # first state yet still carries its device class and unit here.
+        try:
+            if registry is not None:
+                power_entry = registry.async_get(battery_power_entity)
+                if power_entry and power_entry.device_id:
+                    for entry in er.async_entries_for_device(
+                            registry, power_entry.device_id):
+                        if entry.domain != "sensor" or entry.disabled_by:
+                            continue
+                        eid_lower = entry.entity_id.lower()
+                        if any(kw in eid_lower
+                               for kw in _SOC_NAME_KEYWORDS):
+                            return True
+                        if (entry.original_device_class == "battery"
+                                and (entry.unit_of_measurement or "") == "%"):
+                            return True
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("Battery SOC existence probe failed: %s", e)
+
+        return False
 
     def _try_soc_candidates(self, prefix: str, soc_keywords: list) -> Optional[str]:
         """Try prefix + keyword combinations to find SOC entity."""

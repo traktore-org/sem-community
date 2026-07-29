@@ -377,13 +377,35 @@ class TestFleetSocCoverage:
     """
 
     @staticmethod
-    def _reader(detect, read):
+    def _reader(detect, read, exists=lambda p: False):
         return SimpleNamespace(
             _auto_detect_battery_soc=detect,
             _read_sensor=read,
+            _soc_candidate_exists=exists,
             _soc_units_expected=0, _soc_units_read=0,
             _soc_partial_logged=False, _soc_undetected_logged=False,
         )
+
+    def test_a_candidate_that_exists_but_is_silent_is_known_not_missing(self):
+        """The live boot shape (TEST, 2026-07-29 23:44): battery 1's SOC
+        sensor exists and reads ``unavailable``, so detection — which needs a
+        value before it will commit to a candidate — finds nothing. Counting
+        that as "no SOC sensor configured" told the night planner there was
+        nothing left to wait for, and it stamped the plan on battery 2 alone.
+        Existence is the discriminator: the unit is KNOWN and unread, so
+        coverage is 1/2 and the planner waits."""
+        rdr = self._reader(
+            detect=lambda p: "sensor.b2_soc" if p == "sensor.b2_power" else None,
+            read=lambda e, k: 65.0,
+            exists=lambda p: p == "sensor.b1_power",
+        )
+        avg = SensorReader._read_battery_soc_average(
+            rdr, ["sensor.b1_power", "sensor.b2_power"])
+        assert avg == 65.0
+        assert (rdr._soc_units_expected, rdr._soc_units_read) == (2, 1)
+        assert rdr._soc_undetected_logged is False, (
+            "a sensor that exists but is silent is a warm-up, not a "
+            "configuration gap — it must not be reported as one")
 
     def test_undiscoverable_unit_is_not_counted_as_expected(self):
         """Battery 2 has no findable SOC sensor: coverage is 1/1, not 1/2 —
@@ -488,6 +510,53 @@ class TestSocEntityIdentityIsSticky:
         states.pop(self.SOC)
         assert SensorReader._auto_detect_battery_soc(rdr, self.POWER) is None
         assert self.POWER not in rdr._soc_entity_by_power
+
+
+class TestSocCandidateExistence:
+    """Existence, asked without looking at the value.
+
+    The sticky map only helps once a sensor has been read at least once — and
+    the night plan is stamped ~10 s after boot, before the modbus units have
+    published anything. So the FIRST resolution has to be able to say "this
+    unit has a SOC sensor, it just isn't talking yet" without a value to go
+    on. That is what this probe is for.
+    """
+
+    @staticmethod
+    def _reader(states):
+        return SimpleNamespace(
+            hass=SimpleNamespace(states=SimpleNamespace(get=states.get)))
+
+    def test_an_unavailable_sensor_still_exists(self):
+        rdr = self._reader({
+            "sensor.battery_1_batterieladung":
+                SimpleNamespace(state="unavailable", attributes={}),
+        })
+        assert SensorReader._soc_candidate_exists(
+            rdr, "sensor.battery_1_lade_entladeleistung") is True
+
+    def test_no_candidate_at_all_is_a_configuration_gap(self):
+        rdr = self._reader({
+            "sensor.battery_1_temperatur":
+                SimpleNamespace(state="46.1", attributes={}),
+        })
+        assert SensorReader._soc_candidate_exists(
+            rdr, "sensor.battery_1_lade_entladeleistung") is False
+
+    def test_the_indexed_stem_is_tried_too(self):
+        """Same longest-stem-first walk as detection — the two must agree on
+        what a candidate is (#523's ``<name>_<index>_power`` shape)."""
+        rdr = self._reader({
+            "sensor.test_battery_2_soc":
+                SimpleNamespace(state="unknown", attributes={}),
+        })
+        assert SensorReader._soc_candidate_exists(
+            rdr, "sensor.test_battery_2_power") is True
+
+    def test_a_junk_entity_id_is_not_a_candidate(self):
+        rdr = self._reader({})
+        assert SensorReader._soc_candidate_exists(rdr, "") is False
+        assert SensorReader._soc_candidate_exists(rdr, "battery_1") is False
 
 
 def test_off_mode_load_is_not_a_demand(freeze_targets):
