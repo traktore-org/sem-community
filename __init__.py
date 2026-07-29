@@ -4028,6 +4028,12 @@ async def _async_register_phase_services(
         reader = getattr(coordinator, "_sensor_reader", None)
         if reader is not None:
             reader.reset_sign_state()
+        # (#690) A reverted auto-correction latches the balance self-heal off so
+        # it can't oscillate. This service IS the manual retry, so clear it.
+        coordinator._sign_flip_latched = False
+        coordinator._sign_flip_attempted = False
+        coordinator._negative_balance_count = 0
+        coordinator._positive_balance_count = 0
         storage = getattr(coordinator, "_storage", None)
         if storage is not None:
             storage.set_sign_state({})

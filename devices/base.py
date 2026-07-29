@@ -444,7 +444,16 @@ class ControllableDevice(ABC):
     @property
     def daily_targets_met(self) -> bool:
         """Runtime minimum target achieved. No target configured = False —
-        the stop condition is an independent gate, not a target."""
+        the stop condition is an independent gate, not a target.
+
+        (#688) This is a FLOOR, not a stop. True means the PAID sources
+        (battery assist, overnight battery drain, cheap-grid top-up) have
+        nothing left to guarantee and stand down — free solar surplus may
+        carry the load on up to ``daily_max_runtime_sec``, which is the only
+        hard stop. Mirrors the EV floor/ceiling contract (#245). Do not
+        re-wire this as a deactivation gate: that made any Max above the Min
+        unreachable by construction.
+        """
         if self.daily_min_runtime_sec <= 0:
             return False
         return self._daily_runtime_accumulated_sec >= self.daily_min_runtime_sec

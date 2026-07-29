@@ -715,12 +715,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if sc is None:
             return rows
         # Resolve the solar peak to a datetime today (reuse compose's formats).
+        # (#688) ``datetime`` was never imported in this module — only ``date``
+        # and ``timedelta`` are — so the ISO branch below raised NameError,
+        # which the ``except (ValueError, TypeError)`` does NOT catch, breaking
+        # the docstring's "never raises". Normally ``peak_time_today`` arrives
+        # as "HH:MM" (forecast_reader reformats it) and takes the other branch,
+        # which is why this stayed hidden; the raw-passthrough fallback there
+        # can still hand us an ISO string.
+        from datetime import datetime as _dt
         anchor = None
         if peak_t is not None:
             try:
                 s = str(peak_t)
                 if "T" in s:
-                    anchor = datetime.fromisoformat(s.replace("Z", "+00:00"))
+                    anchor = _dt.fromisoformat(s.replace("Z", "+00:00"))
                     if anchor.tzinfo and now.tzinfo:
                         anchor = anchor.astimezone(now.tzinfo)
                 elif ":" in s:
@@ -736,10 +744,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     continue  # EV has its own rows
                 if getattr(dev, "control_mode", None) != DeviceControlMode.SURPLUS:
                     continue  # only proactively-run devices
-                done = bool(getattr(dev, "daily_targets_met", False))
-                when = now if done else anchor
+                # (#688) The floor is NOT the end of the day — past it a load
+                # keeps riding free surplus up to the Max cap. "Done" must
+                # mean SEM won't run it again today, so it needs the cap /
+                # stop-condition, or a floor that's met with the load already
+                # off. A load still running shows as running (at ``now``),
+                # not as done — otherwise Today's Plan says "done" about a
+                # device the user can hear working.
+                active = bool(getattr(dev, "is_active", False))
+                done = (bool(getattr(dev, "daily_max_runtime_reached", False))
+                        or bool(getattr(dev, "stop_condition_met", False))
+                        or (bool(getattr(dev, "daily_targets_met", False))
+                            and not active))
+                when = now if (done or active) else anchor
                 if when is None or when < now:
-                    when = now if done else None
+                    when = now if (done or active) else None
                 if when is None:
                     continue
                 rows.append({"name": getattr(dev, "name", ""), "when": when,
@@ -971,6 +990,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Returns True if the sign was flipped (caller should re-read power).
         Low-confidence split-grid picks suppress the flip for up to 3 cycles
         (~9 min) to give late-loading integrations time to register (issue #166).
+
+        Two things it must NOT do (#690):
+
+        1. **Fight the user.** A negative balance proves the inputs disagree,
+           not WHICH one is wrong — this heal always blames the grid. With
+           ``grid_sign_invert`` set it is worse than useless: that path
+           short-circuits the autodetect, so the flag toggled here is never
+           read, the balance can't change, and 3 min later it toggles again —
+           ``sensor.sem_diag_grid_sign`` oscillating normal↔negated forever.
+        2. **Oscillate.** If the balance is negative for a NON-grid reason
+           (wrong battery sign, unmetered load, missing sensor) one attempt
+           won't fix it. Revert that attempt and latch off rather than flip
+           on every 3-min window for the rest of the day.
         """
         energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
         # FLEET-READ: energy balance — needs fleet total EV draw because
@@ -978,8 +1010,41 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
         raw_balance = energy_in - energy_out
         if raw_balance < -500:
+            # Guard 1 (#690): an explicit user decision is not a fault to heal.
+            if getattr(self._sensor_reader, "grid_sign_user_override", False):
+                return False
+            self._positive_balance_count = 0
             self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
             if self._negative_balance_count >= 18:  # ~3 min sustained negative
+                # Guard 2 (#690): one attempt only. The previous flip didn't
+                # fix the balance, so the grid sign wasn't the problem — put
+                # it back (including the persisted lock, #476) and stand down.
+                if getattr(self, "_sign_flip_latched", False):
+                    self._negative_balance_count = 0
+                    return False
+                if getattr(self, "_sign_flip_attempted", False):
+                    self._sensor_reader._grid_sign_inverted = (
+                        not self._sensor_reader._grid_sign_inverted
+                    )
+                    self._sensor_reader._grid_sign_detected = getattr(
+                        self, "_sign_flip_detected_before", False
+                    )
+                    self._sign_flip_latched = True
+                    self._sign_flip_attempted = False
+                    self._negative_balance_count = 0
+                    _LOGGER.warning(
+                        "Grid-sign auto-correction did not fix the energy balance "
+                        "(%.0fW still negative) — reverting it and standing down. "
+                        "The imbalance is NOT the grid sign; check the battery "
+                        "sign or an unmetered load. Use the Control-tab flip "
+                        "button or reset_sign_detection to retry manually.",
+                        raw_balance,
+                    )
+                    # True = "sign changed, re-read power". It changed BACK, so
+                    # the re-read reproduces the pre-flip reading — one wasted
+                    # read, but the contract stays honest and the caller's
+                    # cached readings can't keep the reverted sign.
+                    return True
                 disc = getattr(self._sensor_reader, "_split_grid_discovery", None)
                 self._sign_flip_suppression_count = getattr(self, '_sign_flip_suppression_count', 0)
                 if disc and disc.get("confidence") == "any-device" and self._sign_flip_suppression_count < 3:
@@ -993,6 +1058,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._negative_balance_count = 0
                     return False
                 # Auto-correct: flip the grid sign
+                # (#690) Remember the pre-flip lock so a failed attempt can be
+                # reverted cleanly — the flip below stamps `_grid_sign_detected`,
+                # which is PERSISTED (#476), so a wrong guess would otherwise
+                # outlive the restart that might have healed it.
+                self._sign_flip_detected_before = bool(
+                    self._sensor_reader._grid_sign_detected
+                )
+                self._sign_flip_attempted = True
                 self._sensor_reader._grid_sign_inverted = not self._sensor_reader._grid_sign_inverted
                 self._sensor_reader._grid_sign_detected = True
                 _LOGGER.warning(
@@ -1007,6 +1080,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return True
         else:
             self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
+            # (#690) The balance recovered, so the last flip was RIGHT — clear
+            # the attempt so a genuinely new fault later (swapped hardware, a
+            # re-configured meter) can still be healed once.
+            #
+            # Confirmation must be as sustained as the trip (~3 min), else an
+            # INTERMITTENT non-grid fault re-opens the oscillation on a longer
+            # period: negative ×18 → flip → one healthy cycle clears → negative
+            # ×18 → flip back → … Symmetric thresholds close that.
+            self._positive_balance_count = getattr(self, '_positive_balance_count', 0) + 1
+            if self._positive_balance_count >= 18:
+                self._sign_flip_attempted = False
         return False
 
     # Two-tier hold for transient home-consumption dips to 0 (#237, #444).

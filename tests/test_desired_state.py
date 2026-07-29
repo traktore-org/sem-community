@@ -73,9 +73,20 @@ def test_peak_shed_wins():
     assert i.on is False and "peak" in i.reason
 
 def test_done_gates_stop_even_with_surplus():
-    for gate in ("daily_max_runtime_reached", "daily_targets_met", "stop_condition_met"):
+    # (#688) ``daily_targets_met`` is deliberately NOT in this list: the daily
+    # minimum is a floor, not a stop — free surplus carries the load on to the
+    # Max cap (see test_688_runtime_floor_ceiling.py). Only the CEILING and the
+    # external stop condition are hard stops.
+    for gate in ("daily_max_runtime_reached", "stop_condition_met"):
         i = compute_load_intent(_dev(is_active=True, **{gate: True}), remaining_surplus_w=5000)
         assert i.on is False, gate
+
+def test_floor_is_not_a_stop_gate():
+    """(#688) The mirror of the above — pinned here too so the precedence walk
+    can't quietly reinstate the minimum as a stop."""
+    i = compute_load_intent(_dev(is_active=True, daily_targets_met=True),
+                            remaining_surplus_w=5000)
+    assert i.on is True
 
 def test_cap_beats_deficit_sources():
     # capped device with a deficit + battery eligible → still OFF (cap wins)
@@ -405,7 +416,9 @@ _SCENARIOS = {
               daily_max_runtime_reached=True)],
         dict(available_power_w=5000.0),
     ),
-    "running_load_target_met": (
+    # (#688) The floor is not a stop: past Min the load KEEPS running on free
+    # surplus, up to the Max cap (the scenario above). Name says so.
+    "running_load_past_floor_keeps_surplus": (
         [dict(device_id="a", priority=1, min_power=800, is_active=True,
               daily_targets_met=True)],
         dict(available_power_w=5000.0),
