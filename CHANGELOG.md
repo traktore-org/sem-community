@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.28] — pending
+
+### 🐛 Fixes
+
+- 🔋 **Battery power sliders now reach 25 kW** (#689, reported by @Azlinon) — the *Battery total
+  discharge limit* and *Battery → EV assist limit* sliders capped at 10 kW, so a system that
+  discharges 12 kW from battery (EG4 Flexboss 21; parallel stacks go higher) literally could not
+  enter its real capability — the same range-bug class as #680, in watts. Both the options-flow
+  sliders and the number entities (which the config-card knobs mirror) now share the charge-power
+  slider's 25 kW ceiling. Safe by construction: every command is still clamped to the hardware's
+  real limits by the adapters, so a generous slider can never over-drive a smaller system. Guarded
+  by `tests/test_689_battery_power_caps.py`. (by @traktore-org)
+
 # [1.7.5-beta.27] — 28.07.2026
 
 ### 🐛 Fixes
