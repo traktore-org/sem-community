@@ -104,7 +104,11 @@ NUMBER_TYPES = [
         key="battery_max_discharge_power",
         native_unit_of_measurement=UnitOfPower.WATT,
         native_min_value=500,
-        native_max_value=10000,
+        # (#689) 25 kW, matching the charge-power ceiling: an EG4 Flexboss 21
+        # discharges 12 kW from battery, parallel stacks more — a 10 kW cap
+        # made real hardware inexpressible (the #680 range-bug class). The
+        # adapters still clamp every command to the hardware's real limits.
+        native_max_value=25000,
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
@@ -126,7 +130,7 @@ NUMBER_TYPES = [
         key="battery_assist_max_power",
         native_unit_of_measurement=UnitOfPower.WATT,
         native_min_value=1000,
-        native_max_value=10000,
+        native_max_value=25000,   # (#689) match the discharge ceiling
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
