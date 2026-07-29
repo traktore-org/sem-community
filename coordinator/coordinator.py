@@ -28,6 +28,7 @@ from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_PEAK_HYSTERESIS,
     ED_RESOLVE_MAX_ATTEMPTS,
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
@@ -5622,6 +5623,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — no load manager yet
                 peak_w = float(
                     self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+            # …and the limit is a SHED THRESHOLD, not a target to sit on
+            # (finding #6, TEST night 2026-07-30). LoadManager goes SHEDDING at
+            # ``peak >= target`` on the 15-minute rolling average, then sheds
+            # down to ``target - hysteresis``. So an allocation booked AT the
+            # cap is exactly the one execution kills: live, the packer wrote
+            # "5000 W 02:00–03:00 (headroom left 0 W)" against a 5.0 kW limit,
+            # which sustained for an hour is the shed trigger. Plan the level
+            # execution actually holds.
+            if peak_w > 0.0:
+                hyst_w = float(self.config.get(
+                    "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS) or 0.0) * 1000.0
+                # Never collapse to 0: that is the packer's "no limit at all"
+                # sentinel (``headroom_w = inf``), so a cap smaller than the
+                # hysteresis would flip a TIGHT house into an unlimited one.
+                peak_w = max(1.0, peak_w - hyst_w)
 
             # Home per slot: the weekday-aware hourly profile when trained,
             # else the flat night estimate (same fallback chain as the EV

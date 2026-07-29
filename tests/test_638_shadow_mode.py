@@ -294,6 +294,60 @@ def test_the_peak_cap_falls_back_to_the_config_key_in_kw(freeze_targets):
         assert m and float(m.group(1)) <= 5000.0, line       # 5.0 kW → 5000 W
 
 
+def test_the_plan_stops_at_the_level_execution_holds(freeze_targets):
+    """Finding #6 (TEST night 2026-07-30): the limit is a SHED THRESHOLD, not a
+    target to sit on. LoadManager goes SHEDDING at ``peak >= target`` on the
+    15-minute rolling average and then sheds down to ``target - hysteresis``, so
+    an hour booked AT the cap is the one allocation execution is guaranteed to
+    kill. Live: "5000 W 02:00–03:00 (headroom left 0 W)" against a 5.0 kW
+    limit — a plan that reads ``fits`` and would be shed on the hour."""
+    fake = _fake_self(devices=[])
+    fake._get_peak_limit_w = lambda: 5000.0
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    import re
+    allocs = fake._overnight_shadow_plan["allocations"]
+    assert allocs, "4.8 kW still clears the charger's 4140 W floor — must fit"
+    for line in allocs:
+        m = re.search(r"(\d+) W ", line)
+        # 5000 − 200 (default hysteresis, kW) = 4800 W, the level the shedder
+        # settles at. 5000 here means the plan booked the trigger itself.
+        assert m and float(m.group(1)) <= 4800.0, line
+
+
+def test_a_configured_hysteresis_widens_the_margin(freeze_targets):
+    """The margin is whatever THIS install's shedder settles at — read
+    ``peak_hysteresis``, don't hardcode the default."""
+    fake = _fake_self(devices=[])
+    fake._get_peak_limit_w = lambda: 5000.0
+    fake.config["peak_hysteresis"] = 0.5
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    import re
+    allocs = fake._overnight_shadow_plan["allocations"]
+    assert allocs, "4.5 kW still clears the charger's 4140 W floor"
+    for line in allocs:
+        m = re.search(r"(\d+) W ", line)
+        assert m and float(m.group(1)) <= 4500.0, line
+
+
+def test_a_cap_below_the_hysteresis_is_still_a_cap(freeze_targets):
+    """Zero is the packer's "no limit at all" sentinel (``headroom_w = inf``).
+    Subtracting the hysteresis must never reach it — otherwise the TIGHTEST
+    houses on the fleet are the ones that plan as if unlimited."""
+    fake = _fake_self(devices=[])
+    fake._get_peak_limit_w = lambda: 150.0      # < the 200 W hysteresis
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    plan = fake._overnight_shadow_plan
+    joined = " | ".join(plan["allocations"] + plan["summary"])
+    assert "inf" not in joined, f"cap collapsed into no-cap: {joined}"
+    assert any("ev:ev_charger: YIELDS" in s for s in plan["summary"]), joined
+
+
 class TestPriceLevelAt:
     """#638: the shared level-at-time accessor — the plan packs cheap-hours
     loads exactly where execution's price_is_cheap gate would fire."""
