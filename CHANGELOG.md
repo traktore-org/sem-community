@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.5-beta.28] — pending
+# [1.7.5-beta.28] — 29.07.2026
 
 ### 🐛 Fixes
 
