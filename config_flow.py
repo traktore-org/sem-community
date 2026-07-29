@@ -1475,7 +1475,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_assist_max_power",
                     default=_c("battery_assist_max_power", _c("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1000, max=10000, step=500, unit_of_measurement="W", mode="slider")
+                    # #689: 25 kW ceiling (was 10 kW) — matches the charge-power
+                    # slider; a Flexboss 21 discharges 12 kW, parallel stacks more.
+                    selector.NumberSelectorConfig(min=1000, max=25000, step=500, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "battery_assist_min_surplus",
@@ -1491,7 +1493,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_max_discharge_power",
                     default=_c("battery_max_discharge_power", DEFAULT_BATTERY_MAX_DISCHARGE_POWER),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=500, max=10000, step=250, unit_of_measurement="W", mode="slider")
+                    # #689: 25 kW ceiling (was 10 kW) — see battery_assist_max_power.
+                    selector.NumberSelectorConfig(min=500, max=25000, step=250, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "battery_discharge_control_entity",
