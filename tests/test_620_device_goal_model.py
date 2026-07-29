@@ -204,8 +204,15 @@ class TestGateStopsRunningLoad:
     @pytest.mark.parametrize("gate,overrides,kw", [
         ("max_cap", {"daily_max_runtime_reached": True},
             {"available_power_w": 5000.0}),
-        ("target_met", {"daily_targets_met": True},
-            {"available_power_w": 5000.0}),
+        # (#688) The daily MINIMUM is a floor, not a stop — with surplus on the
+        # roof the load runs on to its Max cap. What the floor DOES stop is a
+        # run the battery/grid is PAYING for, and that stop still has to reach
+        # a running load (class 17) and clear its marker (class 18).
+        ("target_met_on_battery", {"daily_targets_met": True,
+                                   "_batt_overnight_forced": True,
+                                   "battery_eligible_overnight": True},
+            {"available_power_w": 0.0, "price_level": "normal",
+             "battery_soc": 90, "battery_reserve_soc": 20}),
         ("stop_condition", {"stop_condition_met": True},
             {"available_power_w": 5000.0}),
         ("overnight_disabled", {"_batt_overnight_forced": True,

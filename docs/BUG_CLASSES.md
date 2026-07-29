@@ -756,6 +756,58 @@ route from entry to actuation can skip it. Placement, not logic, is the fix both
 **Sweep question:** for each guard — *list every `return` between it and the actuator. Which of
 them returns the caller's object rather than a rewritten one?* And: *is the branch predicate the
 same value the guard is protecting against, or a smoothed/derived proxy of it?*
+
+### 30. Backend-honoured config key with no editable surface — GUARDED
+**Symptom:** a setting the runtime genuinely reads and acts on, which the user can never see or
+change. It works perfectly for whoever's install-time guess happened to be right, and is a dead
+end for everyone else — including, at its worst, a repair flow that names the key it wants you to
+set on a screen where no such field exists.
+**Root shape:** the key enters config by a path that is not the editing path — an install-time
+step that never runs again, a `hardware_detection` auto-fill, or a plain code default — while the
+config card and the options flow only ever write the subset someone remembered to add. Nothing is
+broken, so nothing fails; the surface simply was never built, and the asymmetry is invisible from
+either side. A silent default is the same bug with the guess baked into the source.
+**Live catches:** **#684** and **#627** (`ev_start_stop_entity` — read off per-charger config since
+v1.0, auto-filled for some brands, never writable, and beta.25's new repair pointed straight at
+it); **#688 part 1** (`min_off_time_sec` defaulted to a twitchy 1 min with no surface, so a pool
+pump short-cycled and the user could neither see the window nor lengthen it).
+**Closure:** every per-charger/per-load key the runtime honours is settable *after* install, on
+the same fields it was set with; detection results become suggestions the user can override, not
+silent commitments. Guarded by `tests/test_627_charger_config_surface.py` and
+`tests/test_688_load_anti_cycling.py`.
+**Sweep question:** for each key the runtime reads out of config — *name the screen that writes
+it.* If the answer is "the install-time step" or "hardware detection", it has no surface.
+
+### 31. `except` narrower than what its own body can raise — a "never raises" helper that does — PARTIAL
+**Symptom:** a best-effort helper whose docstring promises it can't break the caller, and which is
+green in every test, throws on a branch nobody exercises. The `try` around the fragile line looks
+diligent; it just doesn't name the exception that line can actually produce.
+**Root shape:** the handler is written for the *expected* failure of the operation (a parse →
+`ValueError`/`TypeError`) while the statement can also fail *structurally* — an unbound name, a
+missing attribute, a `KeyError` from a dict that moved. Unbound names are the sharpest version:
+they survive `python -c "import ast; ast.parse(...)"`, `node --check`-style syntax gates, import,
+and the whole suite, because **annotations and never-taken branches are never evaluated**. Same
+family as the lit-template backtick trap (gotcha 6): syntactically valid, CI-green, throws only
+at the moment it runs.
+**Live catch (#688):** `coordinator/coordinator.py::_device_run_rows` — "Best-effort: never raises
+(the caller's cycle must not break on a plan detail)" — called `datetime.fromisoformat` while the
+module imports only `date` and `timedelta`. `except (ValueError, TypeError)` does not catch
+`NameError`. Hidden because `forecast_reader` normally reformats `peak_time_today` to `"HH:MM"`,
+which takes the *other* branch; only its raw-passthrough fallback (unparseable-but-ISO state)
+reaches the dead line. Found by a test written for an unrelated display fix, not by the suite.
+**Closure so far:** instance fixed (function-local import). The class is only PARTIAL because the
+structural guard is missing: **CI runs no linter at all** (`.github/workflows/` has tests,
+hassfest and HACS validation — no ruff/flake8/pyflakes). A pyflakes `F821` gate would have caught
+this at authoring time for free.
+**Sweep done (2026-07-29):** pyflakes over all non-test production files → 25 undefined-name hits,
+**all of them annotations** (`List`, `Tuple`, `Optional`, and quoted forward refs), which Python
+never evaluates inside a function body. The `datetime` case was the **only instance in executable
+code**. So the instance sweep is clean and the remaining work is purely the guard.
+**Guard follow-up:** import the ~9 missing typing names so the file is F821-clean, then add
+pyflakes to `tests.yml`. Until then this class can silently return.
+**Sweep question:** for each `except` clause — *can the guarded body raise something outside this
+tuple?* Specifically: is every name it references bound on **every** path, and does a docstring
+anywhere promise "never raises" without a bare `except Exception` to back it?
 **Cheap detector:** the escaping decisions are visible in the log by **absence** — their reason has
 no `stability:` prefix, because nothing in the filter rewrote them. Any layer that annotates what
 it touched makes this class greppable: `grep 'intent=charge' | grep -v '<layer-prefix>'`.

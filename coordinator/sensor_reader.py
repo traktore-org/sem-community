@@ -691,6 +691,21 @@ class SensorReader:
     # ``grid_sign_invert`` config still short-circuits before the
     # autodetect, so restored state can never fight a manual override.
 
+    @property
+    def grid_sign_user_override(self) -> bool:
+        """True when the grid sign is an explicit USER decision (#690).
+
+        Either layer counts: ``grid_sign_invert`` (#352, short-circuits the
+        autodetect entirely) or the one-tap ``grid_sign_user_flip`` (#461,
+        applied on top). The coordinator's balance-based self-heal reads this
+        and stands down — the balance test can't tell WHICH sensor is wrong,
+        it always blames the grid, so left unguarded it silently undid the
+        user's setting every ~3 min (@hrdilshan: "it automatically changes
+        back").
+        """
+        return bool(self._raw_config.get("grid_sign_invert", False)
+                    or self._raw_config.get("grid_sign_user_flip", False))
+
     def grid_sign_diagnostics(self) -> dict:
         """Build a #461 grid-sign support payload.
 

@@ -163,10 +163,13 @@ def compute_load_intent(
         return LoadIntent(False, 0.0, None, "peak shed")
 
     # 3. Done for the day — the hard stops (cap overrides the deficit).
+    #    (#688) The daily MINIMUM is deliberately NOT one of them. It is a
+    #    floor, not a stop: reaching it ends the PAID sources (clause 4), but
+    #    free solar surplus may carry the load on up to the Maximum. Mirrors
+    #    the EV floor/ceiling contract (#245) that this slider was built to
+    #    mirror — treating Min as a stop made Max unreachable whenever Min > 0.
     if getattr(device, "daily_max_runtime_reached", False):
         return LoadIntent(False, 0.0, None, "daily max cap reached")
-    if getattr(device, "daily_targets_met", False):
-        return LoadIntent(False, 0.0, None, "daily target met")
     if getattr(device, "stop_condition_met", False):
         return LoadIntent(False, 0.0, None, "stop condition met")
 
@@ -184,6 +187,12 @@ def compute_load_intent(
     can_start = active or not peak_freeze
     deficit = bool(getattr(device, "has_runtime_deficit", False))
 
+    # (#688) Past the floor, only FREE surplus may extend the run — the
+    # battery has nothing left to guarantee, so the Tier-1 assist stands down.
+    # (Tier-2 and cheap-grid below are already deficit-gated, so they close
+    # themselves at the floor; pinned by tests either way.)
+    if getattr(device, "daily_targets_met", False):
+        tier1_headroom_w = 0.0
     effective = float(remaining_surplus_w) + float(tier1_headroom_w)
     if effective >= threshold and can_start:
         battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
@@ -990,10 +999,18 @@ class SurplusController:
                 continue
 
             # (#559) Goal gates — a device that is DONE for the day (its
-            # daily runtime target met, or the external stop condition like
-            # the car's SOC target) is stopped and stays off until the day
-            # rolls over. Only SURPLUS-mode devices: peak_only devices are
+            # daily max cap reached, or the external stop condition like the
+            # car's SOC target) is stopped and stays off until the day rolls
+            # over. Only SURPLUS-mode devices: peak_only devices are
             # user-managed, SEM never proactively stops them.
+            #
+            # Ordering note (#688): the force-expiry pass above has already
+            # run, so a device whose ``_batt_overnight_forced`` /
+            # ``_offpeak_forced`` marker was cleared there (day rollover,
+            # night ended) was deactivated by that pass. Anything still
+            # carrying a marker HERE is a live PAID run — exactly what the
+            # floor clause below must end, because a marked device is exempt
+            # from the deficit LIFO and nothing else would ever stop it.
             if device.control_mode == DeviceControlMode.SURPLUS:
                 done_reason = None
                 if device.daily_max_runtime_reached:
@@ -1002,8 +1019,18 @@ class SurplusController:
                     # crosses the cap keeps running past it (caught live on the
                     # Heizband PROD test). The cap overrides the min deficit.
                     done_reason = "daily max runtime cap reached"
-                elif device.daily_targets_met:
-                    done_reason = "daily target met"
+                elif (device.daily_targets_met
+                        and (device._offpeak_forced
+                             or getattr(device, "_batt_overnight_forced", False))):
+                    # (#688) The floor ends the PAID run, not the load. A
+                    # Tier-2 / cheap-grid device is EXEMPT from the deficit
+                    # LIFO (it runs without surplus by design), so nothing else
+                    # would ever end it — it would drain the battery or buy
+                    # grid past its own target all night (class 18). A load
+                    # riding free surplus is left alone: it may run on up to
+                    # the Max cap, which is what the slider promises (#245
+                    # EV floor/ceiling contract).
+                    done_reason = "daily target met — ending battery/grid top-up"
                 elif device.stop_condition_met:
                     done_reason = (
                         f"stop condition met ({device.stop_entity} >= "
@@ -1322,6 +1349,12 @@ class SurplusController:
         device may activate on surplus + battery down to the buffer, never
         below it. Everything else → 0 (inert)."""
         if not getattr(device, "battery_assist_enabled", False):
+            return 0.0
+        # (#688) Past its daily floor the device has nothing left to guarantee,
+        # so the battery stops paying for it — free surplus only from here to
+        # the Max cap. Single point: both the imperative pass and the
+        # desired-state intent builder read their headroom through here.
+        if getattr(device, "daily_targets_met", False):
             return 0.0
         soc = self._batt_soc
         if soc is None or soc <= self._batt_buffer_soc:

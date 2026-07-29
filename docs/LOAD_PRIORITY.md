@@ -166,13 +166,21 @@ separate choice, the **"Finish overnight from"** picker below.
 Under the 🎯 target button, a **dual-handle slider** sets the daily runtime
 window (shown only in the two solar modes):
 
-- **Minimum** (green handle) — the daily target. SEM keeps the load running
-  until it has accrued this much, then **stops it for the rest of the day**
-  (the *daily-target-met* stop). Set to 0 for "no target — just take surplus".
-- **Maximum** (orange handle) — a **hard cap**. The load **never runs past this
-  in a day**, even if the minimum isn't met and surplus is available. Full-scale
-  = *Uncapped*. The cap is **persisted across restarts** and **overrides the
-  minimum** — if a load is running when it hits the cap, SEM switches it off.
+- **Minimum** (green handle) — a **floor**, not a stop. This is the runtime SEM
+  will *pay* to reach: below it the load may draw on the home battery or the
+  cheap-tariff grid (see "Finish overnight from" below). Once the floor is met
+  those paid sources stand down — but **free solar surplus keeps the load
+  running** on up to the Maximum. Set to 0 for "no target — just take surplus".
+- **Maximum** (orange handle) — a **ceiling**, and the only hard stop. The load
+  never runs past this in a day. Full-scale = *Uncapped* ("run as long as the
+  sun lasts"). Persisted across restarts; if a load is running when it hits the
+  cap, SEM switches it off.
+
+So the pair reads exactly as the card labels it: **"at least X … up to Y."**
+This mirrors the EV charge-target range (#245), where the target is the
+grid-guaranteed floor and surplus may carry the charge past it up to the max.
+Before #688 the Minimum was wired as a hard stop, which made any Maximum above
+it unreachable.
 
 If both handles land on the same spot, tap the **split button** (⬍) that appears
 to nudge them apart so each is grabbable again.
