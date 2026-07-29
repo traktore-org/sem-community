@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.29] — 29.07.2026
+
+### 🐛 Fixes
+
+- ⏱️ **A load's daily *Minimum* is a floor, not a stop — *Maximum* is now reachable** (#688,
+  reported by @onkelfu) — a pool pump set to *at least 8 h, up to 11.5 h, solar only* stopped dead
+  at 8 h with sun still on the roof. The card promised a range; the engine could never traverse it.
+  `daily_targets_met` goes true **at** the minimum and was wired as a hard stop, so whenever a Min
+  was set, **any Max above it was unreachable by construction** — dead configuration behind a live
+  slider. The floor now ends only the **paid** sources: battery assist stands down, and an overnight
+  battery or cheap-hours grid run is stopped explicitly (those are exempt from the load-shedding
+  ladder by design, so nothing else would ever end them — the load would drain the battery past its
+  own target all night). **Free solar surplus carries the load on up to the Max**, which stays the
+  only hard stop and still stops a load that is already running. This is the same floor/ceiling
+  contract the EV has had since #245, which the load slider was built to mirror. *Today's Plan* also
+  stops calling a still-running load "done" the moment it passes its floor, and a latent crash on
+  its solar-peak parse (an unimported `datetime`, uncatchable by the handler around it — new bug
+  class 31) is fixed. Guarded by `tests/test_688_runtime_floor_ceiling.py`. (by @traktore-org)
+- 🔌 **A grid sign you set yourself no longer flips back on its own** (#690, reported by
+  @hrdilshan) — after correcting the grid direction, SEM silently undid it about every 3 minutes:
+  *"it automatically changes back."* SEM watches the energy balance and auto-corrects a persistently
+  negative one by flipping the grid sign — but a negative balance only proves the inputs disagree,
+  not **which** sensor is wrong, and this check always blames the grid. With the manual invert set it
+  was worse than useless: that setting short-circuits the auto-detection entirely, so the flag being
+  toggled was never even read, the balance could never improve, and it toggled again forever. Two
+  guards: an explicit user decision (manual invert **or** the one-tap flip) stands the self-heal
+  down completely, and the self-heal now gets **one** attempt — a flip that doesn't fix the balance
+  is reverted and latched off instead of oscillating for the rest of the day. Confirming a good flip
+  needs the same ~3 minutes of healthy balance that tripped it, so an intermittent non-grid fault
+  can't reopen the loop on a longer period. `reset_sign_detection` clears the latch — it *is* the
+  manual retry. Verified live on the test rig by A/B: same −2.75 kW balance, unguarded it flips at
+  3 minutes, guarded it stands down. Guarded by `tests/test_690_grid_sign_self_heal.py`.
+  (by @traktore-org)
+
 # [1.7.5-beta.28] — 29.07.2026
 
 ### 🐛 Fixes
