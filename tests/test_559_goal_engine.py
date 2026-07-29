@@ -191,12 +191,16 @@ def _mock_device(**kw):
 @pytest.mark.asyncio
 class TestControllerGoalGates:
 
-    async def test_target_met_device_deactivated(self, mock_hass):
+    async def test_target_met_device_keeps_free_surplus(self, mock_hass):
+        """(#688, was test_target_met_device_deactivated) The daily minimum is
+        a FLOOR, not a stop — with 5 kW of sun the load runs on toward its Max
+        cap. Reaching the floor only ends the PAID sources; the full contract
+        is pinned in test_688_runtime_floor_ceiling.py."""
         sc = SurplusController(mock_hass)
         dev = _mock_device(is_active=True, targets_met=True, consumption=800)
         sc.register_device(dev)
         await sc.update(5000.0)
-        dev.deactivate.assert_awaited()
+        dev.deactivate.assert_not_awaited()
 
     async def test_stop_condition_deactivates(self, mock_hass):
         sc = SurplusController(mock_hass)

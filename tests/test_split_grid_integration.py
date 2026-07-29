@@ -1937,6 +1937,10 @@ class TestSplitGridStartupRace:
         }
         coord._sensor_reader._grid_sign_inverted = False
         coord._sensor_reader._grid_sign_detected = False
+        # (#690) MUST be an explicit False: on a bare MagicMock this attribute
+        # auto-vivifies to a truthy child mock, which would stand the self-heal
+        # down and make every sign-flip test below pass vacuously.
+        coord._sensor_reader.grid_sign_user_override = False
         coord._negative_balance_count = 0
         coord._sign_flip_suppression_count = 0
         return coord

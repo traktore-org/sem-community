@@ -650,10 +650,13 @@ explicitly set its mode to a Solar mode.
 The 🎯 target button on a load's row (shown in the two Solar modes) opens the
 goal editor:
 
-- **Min / Max runtime** — a dual-handle slider. **Min** is the daily target
-  (SEM stops the load once it's accrued this much); **Max** is a hard daily
-  **cap** (persisted, overrides the Min — the load never runs past it). Full-scale
-  Max = *Uncapped*. If the handles overlap, tap the split (⬍) button to separate them.
+- **Min / Max runtime** — a dual-handle slider reading *"at least X … up to Y"*.
+  **Min** is a **floor**: the runtime SEM will pay for (battery / cheap grid).
+  Reaching it stands those paid sources down, but free solar surplus keeps the
+  load running. **Max** is the **ceiling** and the only hard stop — the load
+  never runs past it (persisted across restarts). Full-scale Max = *Uncapped*.
+  Same contract as the EV charge-target range (#245, #688). If the handles
+  overlap, tap the split (⬍) button to separate them.
 - **Finish overnight from** (shown in both solar modes) — what completes the
   runtime when the sun is gone:
   - **Off** — nothing; the load waits for sun and may miss its target.
