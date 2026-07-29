@@ -203,7 +203,14 @@ class PowerReadings:
     # SUBSET's SOC — live-caught on TEST: battery 1 unavailable at boot, so
     # the "fleet" reported battery 2's 65% while the real fleet was 76.5%.
     # A consumer that must not act on a half-resolved fleet checks this.
+    #
+    # Three counts, because there are three states wanting three reactions:
+    # units CONFIGURED, units whose SOC sensor is KNOWN, units that READ this
+    # cycle. read < expected is transient (worth waiting for); expected <
+    # configured is a config gap (waiting never fixes it, but the average is
+    # still a subset's and has to be labelled as one).
     battery_soc_partial: bool = False
+    battery_soc_units_configured: int = 0
     battery_soc_units_expected: int = 0
     battery_soc_units_read: int = 0
     # (#564) None = no temperature source — published as unknown. The old

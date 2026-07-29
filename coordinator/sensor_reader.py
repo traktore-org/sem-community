@@ -142,13 +142,22 @@ class SensorReader:
         self._inverter_temp_probe_mono: float = -1e9
         # (#638 finding #3) fleet-SOC coverage: how many battery units the
         # published average actually covers. ``expected`` counts the units
-        # whose SOC sensor is DISCOVERABLE — a unit with no findable SOC
-        # sensor is a configuration limit, not a warm-up gap, and is
-        # reported separately so it can never look like "still coming up".
+        # whose SOC sensor is KNOWN — a unit with no findable SOC sensor is a
+        # configuration limit, not a warm-up gap, and is reported separately
+        # so it can never look like "still coming up".
+        self._soc_units_configured: int = 0
         self._soc_units_expected: int = 0
         self._soc_units_read: int = 0
         self._soc_partial_logged: bool = False
         self._soc_undetected_logged: bool = False
+        # Which SOC sensor belongs to which battery power sensor, remembered
+        # once resolved. Detection rejects any candidate that is currently
+        # unavailable, so WITHOUT this map a momentary blip doesn't read as
+        # "battery 1's SOC is unreadable" — it reads as "battery 1 has no SOC
+        # sensor", and the fleet average silently becomes battery 2's SOC
+        # (live-caught on TEST, #638 finding #3). Identity must not depend on
+        # readability. Also spares a full state scan every cycle.
+        self._soc_entity_by_power: Dict[str, str] = {}
         # v1.7.0 / #312: per-PV-string sensors discovered at config-
         # flow time. Empty dict in single-string setups (no discovery
         # hit), populated by ``set_pv_strings`` from
@@ -1974,12 +1983,17 @@ class SensorReader:
             soc_val = self._read_battery_soc_average(
                 ed.battery_power_list + [to for _, to in ed.battery_power_pairs]
             ) or None
-            expected = getattr(self, "_soc_units_expected", 0)
-            got = getattr(self, "_soc_units_read", 0)
-            readings.battery_soc_units_expected = expected
-            readings.battery_soc_units_read = got
-            readings.battery_soc_partial = bool(soc_val is not None
-                                                and 0 < got < expected)
+            # Coverage, in three numbers because there are three states and
+            # they call for different reactions: units CONFIGURED, units whose
+            # SOC sensor is KNOWN, units that actually READ this cycle.
+            # known < configured is a config gap (waiting never fixes it);
+            # read < known is a warm-up/outage gap (waiting usually does).
+            readings.battery_soc_units_configured = self._soc_units_configured
+            readings.battery_soc_units_expected = self._soc_units_expected
+            readings.battery_soc_units_read = self._soc_units_read
+            readings.battery_soc_partial = bool(
+                soc_val is not None
+                and 0 < self._soc_units_read < self._soc_units_expected)
         elif ed_soc:
             soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
@@ -2797,28 +2811,30 @@ class SensorReader:
         subset average is NOT the fleet SOC, and a caller that must not act
         on a half-resolved fleet needs to be able to tell the difference.
 
-        ``_soc_units_expected`` counts the units whose SOC sensor could be
-        DISCOVERED, not the configured units. The two failure modes are not
-        the same and must not share a signal: a discovered sensor reading
-        ``unavailable`` is a warm-up gap that resolves in seconds, while a
-        unit with no findable SOC sensor never resolves. Counting the latter
-        as "expected" would leave the fleet permanently partial and would
-        starve any consumer that waits for a whole fleet — a worse failure
-        than the skewed average this coverage signal exists to catch.
+        ``_soc_units_expected`` counts the units whose SOC sensor is KNOWN
+        (see ``_auto_detect_battery_soc``'s sticky map), not the configured
+        units. The two failure modes are not the same and must not share a
+        signal: a known sensor reading ``unavailable`` is a warm-up gap that
+        resolves in seconds, while a unit whose SOC sensor was never findable
+        never resolves. Counting the latter as "expected" would leave the
+        fleet permanently partial and starve any consumer that waits for a
+        whole fleet — a worse failure than the skewed average this coverage
+        signal exists to catch.
         """
         soc_values = []
-        detected = 0
+        known = 0
         for batt_power in battery_power_entities:
             soc_entity = self._auto_detect_battery_soc(batt_power)
             if not soc_entity:
                 continue
-            detected += 1
+            known += 1
             val = self._read_sensor(soc_entity, "battery_soc")
             if val is not None and val >= 0:
                 soc_values.append(val)
-        self._soc_units_expected = detected
+        self._soc_units_configured = len(battery_power_entities)
+        self._soc_units_expected = known
         self._soc_units_read = len(soc_values)
-        if detected < len(battery_power_entities):
+        if known < len(battery_power_entities):
             # A configuration gap, reported in its own words: no amount of
             # waiting fixes it, so it must not be phrased as "still warming".
             if not self._soc_undetected_logged:
@@ -2827,14 +2843,14 @@ class SensorReader:
                     "battery units — the fleet SOC is the average of the "
                     "other %d. Set the battery SOC sensor explicitly to "
                     "include them.",
-                    len(battery_power_entities) - detected,
-                    len(battery_power_entities), detected,
+                    len(battery_power_entities) - known,
+                    len(battery_power_entities), known,
                 )
                 self._soc_undetected_logged = True
         else:
             self._soc_undetected_logged = False
         if soc_values:
-            if len(soc_values) < detected:
+            if len(soc_values) < known:
                 # Loud once per gap, not once per cycle: this silently skews
                 # every SOC consumer (reserve gates, plans) while it lasts.
                 if not self._soc_partial_logged:
@@ -2842,7 +2858,7 @@ class SensorReader:
                         "Fleet SOC covers only %d of %d battery units — "
                         "reporting %.1f%% from the units that could be read "
                         "(the rest are unavailable or still warming)",
-                        len(soc_values), detected,
+                        len(soc_values), known,
                         sum(soc_values) / len(soc_values),
                     )
                     self._soc_partial_logged = True
@@ -3368,9 +3384,31 @@ class SensorReader:
         - Huawei: sensor.battery_1_batterieladung (from battery_1_lade_entladeleistung)
         - GoodWe: sensor.goodwe_battery_soc (from sensor.goodwe_pbattery1)
         - Generic: sensor.battery_1_soc, sensor.battery_1_state_of_charge
+
+        The answer STICKS (#638 finding #3). Every strategy below rejects a
+        candidate that is currently ``unavailable`` — sound when choosing
+        between candidates, wrong as a permanent verdict, because it makes a
+        unit's SOC sensor IDENTITY depend on whether it happens to be
+        reporting this cycle. On TEST that turned a blip on battery 1 into
+        "battery 1 has no SOC sensor", and the two-battery fleet average
+        became battery 2's SOC alone — 65% instead of 78.5%, with nothing
+        downstream able to tell. Once resolved, the mapping is remembered and
+        a later unavailable state is what it actually is: a read failure of a
+        known sensor.
         """
         if not battery_power_entity or "." not in battery_power_entity:
             return None
+
+        cached = self._soc_entity_by_power.get(battery_power_entity)
+        if cached:
+            # Still a real entity? Then it is ours, readable or not. Only a
+            # vanished entity (renamed, integration removed) earns a re-detect.
+            if self.hass.states.get(cached) is not None:
+                return cached
+            self._soc_entity_by_power.pop(battery_power_entity, None)
+            _LOGGER.debug(
+                "Battery SOC sensor %s for %s disappeared — re-detecting",
+                cached, battery_power_entity)
 
         soc_keywords = ["soc", "state_of_charge", "batterieladung", "battery_level", "charge_level"]
 
@@ -3389,6 +3427,7 @@ class SensorReader:
             prefix = "_".join(parts[:k])
             result = self._try_soc_candidates(prefix, soc_keywords)
             if result:
+                self._soc_entity_by_power[battery_power_entity] = result
                 return result
 
         # Strategy 2: Device registry lookup — find all entities on the same
@@ -3430,6 +3469,8 @@ class SensorReader:
                                             eid, val,
                                         )
                                         self._battery_soc_logged = True
+                                    self._soc_entity_by_power[
+                                        battery_power_entity] = eid
                                     return eid
                             except (ValueError, TypeError):
                                 _LOGGER.debug("Battery SOC candidate %s not numeric: %r (#259)", eid, state.state)
@@ -3480,6 +3521,7 @@ class SensorReader:
                         candidates[0],
                     )
                     self._battery_soc_logged = True
+                self._soc_entity_by_power[battery_power_entity] = candidates[0]
                 return candidates[0]
             if len(candidates) > 1:
                 _LOGGER.debug(

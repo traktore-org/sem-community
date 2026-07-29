@@ -5543,11 +5543,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # plan at all, which is the worse failure. A unit still silent
             # ten minutes in is offline, not warming — plan on the units
             # that do report and carry the shortfall on the plan itself.
-            partial_note = None
+            read = int(getattr(power, "battery_soc_units_read", 0) or 0)
+            known = int(getattr(power, "battery_soc_units_expected", 0) or 0)
+            configured = int(
+                getattr(power, "battery_soc_units_configured", 0) or 0)
             if (power is not None
                     and getattr(power, "battery_soc_partial", False)):
-                read = getattr(power, "battery_soc_units_read", "?")
-                exp = getattr(power, "battery_soc_units_expected", "?")
                 since = self._shadow_partial_since
                 if since is None:
                     self._shadow_partial_since = since = now
@@ -5555,17 +5556,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _LOGGER.debug(
                         "OVERNIGHT-PLAN (shadow #638): battery fleet only "
                         "%s/%s units resolved — retrying next cycle",
-                        read, exp)
+                        read, known)
                     return False
                 _LOGGER.warning(
                     "OVERNIGHT-PLAN (shadow #638): battery fleet still only "
                     "%s/%s units after %.0f min — planning on the units that "
-                    "report. A unit silent this long is offline, not warming; "
-                    "the plan's battery figures cover %s unit(s) only.",
-                    read, exp, _SHADOW_PARTIAL_GRACE_S / 60.0, read)
-                partial_note = f"battery fleet partial: {read}/{exp} units"
+                    "report. A unit silent this long is offline, not warming.",
+                    read, known, _SHADOW_PARTIAL_GRACE_S / 60.0)
             else:
                 self._shadow_partial_since = None
+            # Label the plan whenever its battery figures came from a SUBSET,
+            # whichever reason: a unit that never reported (above) or one whose
+            # SOC sensor was never findable at all. Both make "9.8 kWh usable"
+            # a half-truth, and reading it as the fleet's is what cost a night.
+            partial_note = (
+                f"battery fleet partial: {read}/{configured} units"
+                if configured and read < configured else None)
             soc_kwh = max(0.0, float(soc or 0.0) / 100.0 * cap_kwh)
             reserve_pct = float(self.config.get("battery_priority_soc", 30) or 30)
             target_pct = float(getattr(getattr(scheduler, "decision", None),
