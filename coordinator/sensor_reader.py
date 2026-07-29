@@ -3576,8 +3576,13 @@ class SensorReader:
 
         try:
             registry = er.async_get(self.hass)
-            # A registry we cannot query is no registry — settle that once,
-            # here, instead of at every candidate below.
+            # A registry we cannot QUERY is no registry, and only a query
+            # proves it: with a stubbed hass, ``async_get`` above happily
+            # returns a half-built EntityRegistry that then raises
+            # AttributeError on first lookup. Settle it once here rather than
+            # at every candidate below. (Load-bearing — dropping this line
+            # breaks the mock-hass battery tests in
+            # tests/test_multi_device_aggregation.py.)
             registry.async_get(battery_power_entity)
         except Exception:  # noqa: BLE001 — no usable registry (stub hass)
             registry = None
@@ -3612,8 +3617,14 @@ class SensorReader:
                         if any(kw in eid_lower
                                for kw in _SOC_NAME_KEYWORDS):
                             return True
+                        # Looser than detection's signature check on purpose:
+                        # the registry may carry no unit for an entity that
+                        # has never been added, and this probe only decides
+                        # whether waiting is worthwhile — not which sensor to
+                        # read. A battery device class is enough for that.
+                        unit = (entry.unit_of_measurement or "").strip()
                         if (entry.original_device_class == "battery"
-                                and (entry.unit_of_measurement or "") == "%"):
+                                and unit in ("", "%")):
                             return True
         except Exception as e:  # noqa: BLE001
             _LOGGER.debug("Battery SOC existence probe failed: %s", e)

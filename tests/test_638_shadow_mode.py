@@ -16,6 +16,9 @@ from custom_components.solar_energy_management.coordinator import coordinator as
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
+from custom_components.solar_energy_management.coordinator import (
+    sensor_reader as sensor_reader_mod,
+)
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
 )
@@ -58,6 +61,17 @@ def _fake_load(did="pump", priority=4):
     )
 
 
+def _idle_load(did="pump"):
+    """A READY world with nothing to do: registered, no deficit. Distinct from
+    ``devices=[]``, which is the warm-up shape (finding #1) and retries."""
+    return SimpleNamespace(
+        device_id=did, has_runtime_deficit=False,
+        battery_eligible_overnight=True, top_up_policy="solar_only",
+        daily_min_runtime_sec=0, _daily_runtime_accumulated_sec=0,
+        rated_power=800.0, priority=4,
+    )
+
+
 def _fake_self(devices=()):
     fake = SimpleNamespace(
         config={
@@ -65,7 +79,8 @@ def _fake_self(devices=()):
                              "ev_voltage": 230, "ev_max_current": 16,
                              "ev_min_current": 6, "ev_target_time": "06:30",
                              "priority": 3}],
-            "peak_limit_w": 6000.0,
+            # The key the config flow actually writes, in kW (#638 finding #5).
+            "target_peak_limit": 6.0,
             "battery_priority_soc": 30,
         },
         time_manager=_FakeTime(),
@@ -77,6 +92,11 @@ def _fake_self(devices=()):
         _ev_priority_for=lambda cid: 3,
         _device_registry=SimpleNamespace(battery_surplus_priority=lambda: 2),
         _expected_night_home_w=lambda energy: 400.0,
+        # The execution gate the plan has to mirror (#638 finding #4).
+        _mode_allows_night_charging=lambda cfg: True,
+        # The peak authority execution uses — load manager first, config
+        # ``target_peak_limit`` (kW) behind it (#638 finding #5).
+        _get_peak_limit_w=lambda: 6000.0,
         battery_capacity_kwh=10.0,
         # (#638 finding #3) when the fleet first came up short, or None.
         _shadow_partial_since=None,
@@ -159,13 +179,7 @@ def test_no_demands_is_a_loud_valid_answer(freeze_targets, monkeypatch):
                         lambda coord, energy: {})
     # A READY world (a registered device — just no deficit), not the
     # zero-devices warm-up shape, which returns False and retries instead.
-    idle = SimpleNamespace(device_id="pump", has_runtime_deficit=False,
-                           battery_eligible_overnight=True,
-                           top_up_policy="solar_only",
-                           daily_min_runtime_sec=0,
-                           _daily_runtime_accumulated_sec=0,
-                           rated_power=800.0, priority=4)
-    fake = _fake_self(devices=[idle])
+    fake = _fake_self(devices=[_idle_load()])
     ok = SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
         phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
@@ -231,6 +245,53 @@ def test_shadow_respects_the_peak_cap(freeze_targets):
         assert m and float(m.group(1)) <= 6000.0, line
     # 5 kWh above the floor covers 400 W past the window — no takeover.
     assert plan["takeover"] is None
+
+
+def test_the_peak_cap_comes_from_the_execution_authority(freeze_targets):
+    """Finding #5 (TEST night 2026-07-30): the ledger read
+    ``config["peak_limit_w"]`` — a key NOTHING writes (not the config flow, not
+    a migration; ``target_peak_limit`` in kW is what installs actually carry).
+    It read 0 on every install, so the packer ran with INFINITE headroom and
+    handed a 10 kW EV slot to a house on a 6 kW limit. Ask the same authority
+    ``_get_peak_limit_w`` gives execution, or the plan is not the same night."""
+    fake = _fake_self(devices=[])
+    # 5 kW: above the charger's 6 A floor (4140 W) so it still fits, below the
+    # 11 kW ceiling it would otherwise take — the cap has to bind, not exclude.
+    fake._get_peak_limit_w = lambda: 5000.0     # e.g. a load-manager override
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    import re
+    allocs = fake._overnight_shadow_plan["allocations"]
+    assert allocs, "the EV should still fit under a 5 kW cap"
+    for line in allocs:
+        assert "inf" not in line, f"uncapped slot — the cap did not arrive: {line}"
+        m = re.search(r"(\d+) W ", line)
+        assert m and float(m.group(1)) <= 5000.0, line
+
+
+def test_the_peak_cap_falls_back_to_the_config_key_in_kw(freeze_targets):
+    """No load manager / an unreadable authority must still cap: the config
+    carries kW, the ledger needs W. Reading the kW number as watts would be a
+    6 W house — the mirror-image of the bug."""
+    fake = _fake_self(devices=[])
+    # A cap that BINDS, so "no fallback at all" (inf headroom) and "kW read as
+    # watts" (a 5 W house) are both distinguishable from the right answer.
+    fake.config["target_peak_limit"] = 5.0
+
+    def _boom():
+        raise RuntimeError("no load manager")
+    fake._get_peak_limit_w = _boom
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    import re
+    allocs = fake._overnight_shadow_plan["allocations"]
+    assert allocs, "5.0 kW read as 5 W would leave the charger nothing to fit in"
+    for line in allocs:
+        assert "inf" not in line, f"no fallback cap arrived: {line}"
+        m = re.search(r"(\d+) W ", line)
+        assert m and float(m.group(1)) <= 5000.0, line       # 5.0 kW → 5000 W
 
 
 class TestPriceLevelAt:
@@ -363,6 +424,38 @@ class TestPartialFleetIsNotReady:
         assert ok is True
         assert fake._shadow_partial_since is None
         assert fake._overnight_shadow_plan["battery_fleet_partial"] is None
+
+    def test_a_partial_fleet_blocks_even_the_nothing_to_do_answer(
+            self, monkeypatch):
+        """"Nothing needs the night" is as final as a full ledger — one stamp
+        per night, restart-only re-fire. So it has to sit BEHIND the readiness
+        gates, not in front of them (review catch: the no-demands early exit
+        used to run first and stamp straight through a half-read fleet)."""
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {})
+        fake = _fake_self(devices=[_idle_load()])
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_partial_power())
+        assert ok is False, "a half-read fleet is not a night's answer"
+        assert fake._overnight_shadow_plan is None
+
+    def test_the_nothing_to_do_answer_carries_the_subset_label(
+            self, monkeypatch):
+        """And when it does get stamped on a subset (config gap, nothing to
+        wait for), it says so — same key as every other plan shape, so no
+        consumer has to guess whether it is there."""
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {})
+        fake = _fake_self(devices=[_idle_load()])
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0,
+            power=_fleet_power(65.0, read=1, known=1, configured=2))
+        assert ok is True
+        plan = fake._overnight_shadow_plan
+        assert plan is not None and "no overnight demands" in plan["summary"][0]
+        assert plan["battery_fleet_partial"] == "battery fleet partial: 1/2 units"
 
 
 class TestFleetSocCoverage:
@@ -557,6 +650,131 @@ class TestSocCandidateExistence:
         rdr = self._reader({})
         assert SensorReader._soc_candidate_exists(rdr, "") is False
         assert SensorReader._soc_candidate_exists(rdr, "battery_1") is False
+
+
+class TestSocCandidateExistenceViaRegistry:
+    """The registry half of the probe — the case that actually bit.
+
+    An entity that has not published its first state yet is invisible to
+    ``hass.states`` but fully described in the entity registry. That IS the
+    boot window (battery 1 took 2m43s to publish), so "exists" has to be
+    answerable from the registry alone.
+    """
+
+    POWER = "sensor.battery_1_lade_entladeleistung"
+
+    @staticmethod
+    def _entry(entity_id, *, device_id="dev1", disabled_by=None,
+               device_class=None, unit=None):
+        return SimpleNamespace(
+            entity_id=entity_id, domain=entity_id.split(".", 1)[0],
+            device_id=device_id, disabled_by=disabled_by,
+            original_device_class=device_class, unit_of_measurement=unit)
+
+    def _reader(self, monkeypatch, entries):
+        by_id = {e.entity_id: e for e in entries}
+        registry = SimpleNamespace(async_get=by_id.get)
+        monkeypatch.setattr(sensor_reader_mod, "er", SimpleNamespace(
+            async_get=lambda hass: registry,
+            async_entries_for_device=lambda reg, did: [
+                e for e in entries if e.device_id == did],
+        ))
+        # Nothing has published a state — the whole point of this class.
+        return SimpleNamespace(
+            hass=SimpleNamespace(states=SimpleNamespace(get=lambda eid: None)))
+
+    def test_a_registered_but_stateless_sensor_exists(self, monkeypatch):
+        rdr = self._reader(monkeypatch, [
+            self._entry(self.POWER),
+            self._entry("sensor.battery_1_soc", device_class="battery",
+                        unit="%"),
+        ])
+        assert SensorReader._soc_candidate_exists(rdr, self.POWER) is True
+
+    def test_a_disabled_candidate_is_not_something_to_wait_for(self,
+                                                               monkeypatch):
+        """A disabled entity will never publish. Counting it as KNOWN would
+        hold the plan for the full grace window every single night."""
+        rdr = self._reader(monkeypatch, [
+            self._entry(self.POWER),
+            self._entry("sensor.battery_1_soc", disabled_by="user",
+                        device_class="battery", unit="%"),
+        ])
+        assert SensorReader._soc_candidate_exists(rdr, self.POWER) is False
+
+    def test_a_battery_device_class_on_the_same_device_counts(self,
+                                                              monkeypatch):
+        """The unit check is deliberately loose here: a never-added entity may
+        carry no unit in the registry yet. The probe only decides whether
+        waiting is worthwhile — detection still picks WHICH sensor to read."""
+        rdr = self._reader(monkeypatch, [
+            self._entry(self.POWER),
+            self._entry("sensor.luna_pack_level", device_class="battery"),
+        ])
+        assert SensorReader._soc_candidate_exists(rdr, self.POWER) is True
+
+    def test_an_unrelated_device_sensor_is_not_a_candidate(self, monkeypatch):
+        """Scoped to THIS unit's device — a neighbour's SOC is not this
+        battery's SOC (the #250 class: one device's reading standing in for
+        another's is how a fleet average goes wrong silently)."""
+        rdr = self._reader(monkeypatch, [
+            self._entry(self.POWER),
+            self._entry("sensor.battery_2_soc", device_id="dev2",
+                        device_class="battery", unit="%"),
+        ])
+        assert SensorReader._soc_candidate_exists(rdr, self.POWER) is False
+
+
+def test_off_mode_charger_is_not_a_demand(freeze_targets):
+    """Finding #4 (TEST night 2026-07-30): EV mode = Off, SEM's own state
+    reading "Night charging disabled" — and the shadow still planned 10 kWh of
+    grid for that charger. ``build_night_target_map`` answers "how much does
+    this charger still NEED", not "will SEM give it any tonight"; the night
+    loop's own ``_mode_allows_night_charging`` gate is what decides that, and
+    the plan has to consult it too. Sibling of finding #1 (the off-mode load)."""
+    fake = _fake_self(devices=[])
+    fake._mode_allows_night_charging = lambda cfg: False
+    ok = SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    assert ok is True, "an opted-out charger is an answer, not a warm-up world"
+    plan = fake._overnight_shadow_plan
+    assert plan is not None
+    joined = " ".join(plan.get("summary", []))
+    assert "ev:ev_charger" not in joined, joined
+    # And it says WHY it planned nothing — a silent shadow is the thing that
+    # hid three placement bugs.
+    assert "mode_opted_out=['ev_charger']" in joined
+
+
+def test_a_night_capable_charger_is_still_a_demand(freeze_targets):
+    """The other side of the gate: don't let the fix eat the normal case."""
+    fake = _fake_self(devices=[])
+    calls = []
+    fake._mode_allows_night_charging = lambda cfg: calls.append(cfg) or True
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    joined = " ".join(fake._overnight_shadow_plan["summary"])
+    assert "ev:ev_charger" in joined
+    # Asked with THIS charger's config, not the global one (#634: solar_only's
+    # opt-in is a PER-CHARGER floor — a global one cannot carry the intent).
+    assert calls and calls[0].get("id") == "ev_charger"
+
+
+def test_an_unevaluable_mode_still_gets_planned(freeze_targets):
+    """A gate that cannot be evaluated must not silently delete a demand:
+    over-planning is visible in the summary, under-planning is invisible."""
+    def _boom(cfg):
+        raise RuntimeError("no config")
+    fake = _fake_self(devices=[])
+    fake._mode_allows_night_charging = _boom
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    plan = fake._overnight_shadow_plan
+    assert plan is not None
+    assert "ev:ev_charger" in " ".join(plan["summary"])
 
 
 def test_off_mode_load_is_not_a_demand(freeze_targets):

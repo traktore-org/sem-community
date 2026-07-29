@@ -5399,14 +5399,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             night_end = resolve_deadline(now, night_end_s) or (now + _td(hours=8))
 
             demands = []
-            # EV floors — the REAL per-charger, mode-gated map (#652 closure).
+            # EV floors — the REAL per-charger night-need map (#652 closure).
             targets = build_night_target_map(self, energy) if energy is not None else {}
             cfg_by_id = {c.get("id"): c for c in self.config.get("ev_chargers", [])
                          if isinstance(c, dict)}
+            mode_opted_out = []
             for cid, kwh in targets.items():
+                cfg = cfg_by_id.get(cid, {})
+                # Mirror the execution gate (finding #4, TEST night 2026-07-30).
+                # ``build_night_target_map`` answers "how much does this charger
+                # still NEED" — not "will SEM give it any tonight". The night
+                # loop decides that separately, with
+                # ``_mode_allows_night_charging`` (``off``, and ``solar_only``
+                # without a per-charger "At least" floor, #634). Live: EV mode
+                # Off, SEM's own state reading "Night charging disabled", and
+                # the shadow still planned 10 kWh of grid for it. Sibling of
+                # finding #1 (the off-mode load) — the plan is only worth
+                # trusting where it packs what execution would actually run.
+                try:
+                    mode_night_ok = bool(self._mode_allows_night_charging(cfg))
+                except Exception:  # noqa: BLE001 — unevaluable: plan it
+                    # Over-planning shows up in the summary; a demand deleted
+                    # by a broken gate would be invisible. Fail visible.
+                    mode_night_ok = True
+                if not mode_night_ok:
+                    mode_opted_out.append(cid)
+                    continue
                 if kwh <= 0.05:
                     continue
-                cfg = cfg_by_id.get(cid, {})
                 wpa = (float(cfg.get("ev_phases") or 3)
                        * float(cfg.get("ev_voltage") or 230))
                 deadline = resolve_deadline(now, cfg.get("ev_target_time"))
@@ -5493,32 +5513,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     source="grid",
                 ))
 
-            if not demands:
-                # Warm-up shape: nothing registered yet (first refresh after
-                # a restart) — not an answer, retry next cycle.
-                if loads_seen == 0 and not targets and deficit <= 0.0:
-                    _LOGGER.debug(
-                        "OVERNIGHT-PLAN (shadow #638): world not ready "
-                        "(0 devices, empty target map) — retrying next cycle")
-                    return False
-                # "Nothing needs the night" IS a valid 22:00 answer — say it,
-                # WITH the why (a silent shadow is indistinguishable from a
-                # broken one; burned three placement bugs learning that).
-                why = (f"ev_targets={ {k: round(v, 2) for k, v in targets.items()} }, "
-                       f"loads_seen={loads_seen}, loads_eligible={loads_eligible}, "
-                       f"battery_deficit={deficit:.2f} kWh")
-                _LOGGER.info(
-                    "OVERNIGHT-PLAN (shadow #638): no overnight demands — %s", why)
-                self._overnight_shadow_plan = {
-                    "computed_at": now.isoformat(),
-                    "fits": True,
-                    "summary": [f"no overnight demands tonight ({why})"],
-                }
-                return True
-
-            # ── The Night Ledger (spec) ─────────────────────────────────
-            # Battery state: live SOC → kWh; the sunrise floor reserves
-            # tomorrow's need = max(reserve, the scheduler's target SOC).
+            # ── Readiness, before anything gets stamped ─────────────────
+            # Whatever is written below stands for the WHOLE night (one stamp
+            # per night, and only a restart re-fires it), so a half-read world
+            # must not produce one — not even the "nothing needs the night"
+            # answer, which is just as final as a full ledger.
             soc = getattr(power, "battery_soc", None) if power is not None else None
             cap_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
             # Power readiness is the SECOND warm-up dimension (finding #2,
@@ -5533,11 +5532,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return False
             # Finding #3 (TEST, night 2026-07-29): readiness has a THIRD
             # dimension — a multi-battery fleet resolves one unit at a time.
-            # Battery 1 was unavailable 10 s into a restart, so the "fleet"
-            # SOC was battery 2's 65% (real fleet: 76.5%) and the plan was
-            # stamped for the night on a battery 1.7 kWh too small: takeover
-            # 2 h early, a tier-2 load yielding 0.4 kWh it would in fact get.
-            # A subset is not the fleet — wait for every unit to report.
+            # Battery 1's modbus SOC took 2m43s to publish after a restart, so
+            # ten seconds in the "fleet" SOC was battery 2's 65% (real fleet:
+            # 74.5%) and the plan was stamped for the night on a battery
+            # 1.4 kWh too small: takeover 04:00 → 02:00, a tier-2 load yielding
+            # 0 kWh it would in fact get. A subset is not the fleet — wait for
+            # every unit to report.
             #
             # Bounded, though: waiting FOREVER turns a skewed plan into no
             # plan at all, which is the worse failure. A unit still silent
@@ -5572,6 +5572,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             partial_note = (
                 f"battery fleet partial: {read}/{configured} units"
                 if configured and read < configured else None)
+
+            if not demands:
+                # Warm-up shape: nothing registered yet (first refresh after
+                # a restart) — not an answer, retry next cycle.
+                if loads_seen == 0 and not targets and deficit <= 0.0:
+                    _LOGGER.debug(
+                        "OVERNIGHT-PLAN (shadow #638): world not ready "
+                        "(0 devices, empty target map) — retrying next cycle")
+                    return False
+                # "Nothing needs the night" IS a valid 22:00 answer — say it,
+                # WITH the why (a silent shadow is indistinguishable from a
+                # broken one; burned three placement bugs learning that).
+                why = (f"ev_targets={ {k: round(v, 2) for k, v in targets.items()} }, "
+                       f"mode_opted_out={mode_opted_out}, "
+                       f"loads_seen={loads_seen}, loads_eligible={loads_eligible}, "
+                       f"battery_deficit={deficit:.2f} kWh")
+                _LOGGER.info(
+                    "OVERNIGHT-PLAN (shadow #638): no overnight demands — %s", why)
+                self._overnight_shadow_plan = {
+                    "computed_at": now.isoformat(),
+                    "fits": True,
+                    "summary": [f"no overnight demands tonight ({why})"],
+                    "battery_fleet_partial": partial_note,
+                }
+                return True
+
+            # ── The Night Ledger (spec) ─────────────────────────────────
+            # Battery state: live SOC → kWh; the sunrise floor reserves
+            # tomorrow's need = max(reserve, the scheduler's target SOC).
             soc_kwh = max(0.0, float(soc or 0.0) / 100.0 * cap_kwh)
             reserve_pct = float(self.config.get("battery_priority_soc", 30) or 30)
             target_pct = float(getattr(getattr(scheduler, "decision", None),
@@ -5579,7 +5608,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             floor_kwh = max(reserve_pct, target_pct) / 100.0 * cap_kwh
             max_discharge_w = float(
                 self.config.get("battery_max_discharge_power", 5000.0) or 5000.0)
-            peak_w = float(self.config.get("peak_limit_w") or 0.0)
+            # The SAME peak authority execution uses (finding #5, TEST night
+            # 2026-07-30): the load manager's live target, config
+            # ``target_peak_limit`` (kW) behind it. This used to read
+            # ``config["peak_limit_w"]`` — a key NOTHING writes: not the config
+            # flow, not a migration, nowhere in the repo outside its own
+            # readers. So it was 0 on every install, the packer ran with
+            # INFINITE headroom, and the plan handed a 10 kW EV slot to a house
+            # on a 6 kW limit. A cap execution would enforce and the plan
+            # ignores makes every "fits" verdict meaningless.
+            try:
+                peak_w = float(self._get_peak_limit_w())
+            except Exception:  # noqa: BLE001 — no load manager yet
+                peak_w = float(
+                    self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
 
             # Home per slot: the weekday-aware hourly profile when trained,
             # else the flat night estimate (same fallback chain as the EV
@@ -5644,6 +5686,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "OVERNIGHT-PLAN (shadow #638): empty night window "
                     "(now past %s?) — no plan", night_end)
                 self._overnight_shadow_plan = None
+                # No plan means no partial wait either — don't leave a clock
+                # running that a later night would inherit.
+                self._shadow_partial_since = None
                 return True
 
             ledger = build_night_ledger(
@@ -5688,7 +5733,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "total_cost": plan.total_cost,
                 "takeover": (plan.takeover.isoformat()
                              if plan.takeover is not None else None),
-                "summary": plan.summary_lines(),
+                "summary": plan.summary_lines() + (
+                    # Say what was left OUT and why, next to what was packed
+                    # (finding #4): "the plan has no EV line" reads identically
+                    # whether the charger opted out or the builder lost it.
+                    [f"ev opted out of the night by mode: "
+                     f"{', '.join(mode_opted_out)}"] if mode_opted_out else []),
                 "allocations": [a.reason for a in plan.allocations],
                 # None on a whole fleet. A string here means the battery
                 # figures above cover a SUBSET — the plan is still the best
