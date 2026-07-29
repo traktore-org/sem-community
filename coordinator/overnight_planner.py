@@ -80,6 +80,9 @@ class LedgerSlot:
     headroom_w: float = float("inf")
     # packing events, applied/preserved on every walk:
     batt_out_kwh: float = 0.0       # Tier-2 loads drawing the battery
+    batt_out_w: float = 0.0         # their CONCURRENT power (all start at
+                                    # slot start — the discharge limit is an
+                                    # instantaneous bottleneck, not an average)
     batt_in_kwh: float = 0.0        # pre-charge raising the trajectory (G4 hook)
     grid_committed_w: float = 0.0   # grid power already allocated here — a
                                     # re-walk must NOT resurrect spent headroom
@@ -263,10 +266,19 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                             - s.home_batt_kwh - s.batt_out_kwh)
                 if avail <= 1e-9:
                     continue
-                # The battery constrains ENERGY (run length), not power — a
-                # binary 2 kW heater with 1 kWh above the floor runs at 2 kW
-                # for 30 min. Power is bounded only by device + discharge.
-                grant = min(float(d.max_power_w), max_discharge_w)
+                # The discharge limit is a SHARED per-slot bottleneck (Guido,
+                # 2026-07-29): home's battery draw + every booked Tier-2 load
+                # sum against the inverter's total — INSTANTANEOUSLY, since
+                # allocations start at slot start and overlap. Peak, not
+                # average: 500 W home + a 1 kW pump for 30 min + a second
+                # 1 kW pump is 2.5 kW while they overlap.
+                home_batt_w = (s.home_batt_kwh / h * 1000.0) if h > 0 else 0.0
+                power_left = max(0.0, max_discharge_w - home_batt_w
+                                 - s.batt_out_w)
+                # The battery constrains ENERGY (run length) via avail; POWER
+                # via the shared budget — a binary 2 kW heater with 1 kWh
+                # above the floor runs at 2 kW for 30 min if 2 kW is free.
+                grant = min(float(d.max_power_w), power_left)
                 want = min(need - planned, avail)
             else:
                 grant = min(float(d.max_power_w), s.headroom_w)
@@ -289,6 +301,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             e_kwh = power / 1000.0 * run_h
             if d.source == "battery":
                 s.batt_out_kwh += e_kwh
+                s.batt_out_w += power
                 _walk(ledger, initial_soc, floor_kwh,
                       max_discharge_w, peak_limit_w)
                 why = (f"{d.id}: {power:.0f} W {s.start:%H:%M}–{end:%H:%M} "

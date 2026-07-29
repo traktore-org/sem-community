@@ -460,3 +460,32 @@ class TestReviewFindings:
                           peak_limit_w=6000)
         assert _by_id(plan, "a").status == "fits"
         assert _by_id(plan, "b").status == "fits"
+
+
+class TestSharedDischargeBudget:
+    """Guido (2026-07-29): the battery TOTAL discharge limit is a shared
+    per-slot bottleneck — home's battery share + every Tier-2 draw sum
+    against the inverter's capability, not each against the full limit."""
+
+    def test_discharge_limit_is_shared_not_per_consumer(self):
+        # 2 kW total limit. Home takes 500 W from the battery; pump A
+        # (1 kW binary) fits (1.5 kW total); pump B (1 kW binary) would
+        # need 2.5 kW total → only 500 W left, below its floor → yields.
+        led = _ledger([0.20, 0.20], home_w=500, soc=10, floor=2,
+                      max_discharge=2000.0)
+        a = Demand(id="a", kind="load", energy_kwh=0.5, max_power_w=1000,
+                   min_power_w=1000, priority=0, source="battery")
+        b = Demand(id="b", kind="load", energy_kwh=2.0, max_power_w=1000,
+                   min_power_w=1000, priority=5, source="battery")
+        plan = pack_night([a, b], led, floor_kwh=2, max_discharge_w=2000.0,
+                          peak_limit_w=6000)
+        assert _by_id(plan, "a").status == "fits"
+        rb = _by_id(plan, "b")
+        # b cannot share slot 1 with a (500 W home + 1000 W a + 1000 W b =
+        # 2.5 kW peak > 2 kW limit — concurrent, since allocations start at
+        # slot start) — it lands in slot 2 only: partial 1.0/2.0.
+        assert rb.status == "partial"
+        assert rb.planned_kwh == pytest.approx(1.0, abs=0.01)
+        for s in led:
+            peak_w = s.home_w + s.batt_out_w      # concurrent at slot start
+            assert peak_w <= 2000.0 + 1e-6, peak_w

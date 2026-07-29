@@ -91,3 +91,15 @@ switch), the #686 fixed-hours tiered ToU, and flat. Three clauses:
    would do, instead of scheduling a run that execution would never fire.
    (EV floors and battery pre-charge pack by PRICE and are unaffected —
    their execution paths are price-driven, not level-driven.)
+
+## The battery discharge limit is a shared per-slot bottleneck (Guido, 2026-07-29)
+
+The *Battery total discharge limit* (`battery_max_discharge_power`, the same
+knob as the config card's Discharge-protection slider) enters the ledger
+twice: the trajectory bounds home-from-battery by it, and Tier-2 grants
+consume a **shared instantaneous budget** — home's battery draw plus every
+booked Tier-2 load sum against the inverter's total, peak not average
+(allocations start at slot start and overlap). A second pump that would push
+the concurrent sum over the limit is packed into a later slot or yields.
+The *Battery → EV assist limit* is a daytime knob — night EV is never
+battery-funded — and is deliberately not a night input.
