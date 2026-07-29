@@ -1965,6 +1965,12 @@ class SensorReader:
             soc_val = self._read_battery_soc_average(
                 ed.battery_power_list + [to for _, to in ed.battery_power_pairs]
             ) or None
+            expected = getattr(self, "_soc_units_expected", 0)
+            got = getattr(self, "_soc_units_read", 0)
+            readings.battery_soc_units_expected = expected
+            readings.battery_soc_units_read = got
+            readings.battery_soc_partial = bool(soc_val is not None
+                                                and 0 < got < expected)
         elif ed_soc:
             soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
@@ -2776,6 +2782,11 @@ class SensorReader:
 
         Auto-detects the SOC sensor for each battery power sensor and
         returns the simple average of all valid readings.
+
+        Records how much of the fleet that average actually covers in
+        ``_soc_units_expected`` / ``_soc_units_read`` (#638 finding #3): a
+        subset average is NOT the fleet SOC, and a caller that must not act
+        on a half-resolved fleet needs to be able to tell the difference.
         """
         soc_values = []
         for batt_power in battery_power_entities:
@@ -2784,7 +2795,23 @@ class SensorReader:
                 val = self._read_sensor(soc_entity, "battery_soc")
                 if val is not None and val >= 0:
                     soc_values.append(val)
+        self._soc_units_expected = len(battery_power_entities)
+        self._soc_units_read = len(soc_values)
         if soc_values:
+            if len(soc_values) < len(battery_power_entities):
+                # Loud once per gap, not once per cycle: this silently skews
+                # every SOC consumer (reserve gates, plans) while it lasts.
+                if not getattr(self, "_soc_partial_logged", False):
+                    _LOGGER.warning(
+                        "Fleet SOC covers only %d of %d battery units — "
+                        "reporting %.1f%% from the units that could be read "
+                        "(the rest are unavailable or still warming)",
+                        len(soc_values), len(battery_power_entities),
+                        sum(soc_values) / len(soc_values),
+                    )
+                    self._soc_partial_logged = True
+            else:
+                self._soc_partial_logged = False
             return sum(soc_values) / len(soc_values)
         return 0.0
 

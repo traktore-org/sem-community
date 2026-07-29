@@ -249,6 +249,50 @@ def test_soc_not_ready_retries(freeze_targets):
     assert fake._overnight_shadow_plan is None
 
 
+class TestPartialFleetIsNotReady:
+    """Finding #3 (TEST, night 2026-07-29): readiness has a THIRD dimension.
+
+    A two-battery fleet resolves one unit at a time. Battery 1 was still
+    unavailable 10 s into a restart, so the fleet SOC was battery 2's 65%
+    (real fleet 76.5%) — and the once-per-night plan was stamped on a
+    battery 1.7 kWh too small: takeover 2 h early, and a tier-2 load
+    "YIELDS 0.4 kWh" it would in fact have got. A subset is not the fleet.
+    """
+
+    def test_partial_fleet_retries_instead_of_planning(self, freeze_targets):
+        fake = _fake_self(devices=[_fake_load()])
+        power = SimpleNamespace(battery_soc=65.0, battery_soc_partial=True,
+                               battery_soc_units_read=1,
+                               battery_soc_units_expected=2)
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert ok is False, "a half-resolved fleet must not stamp the night"
+        assert fake._overnight_shadow_plan is None
+
+    def test_complete_fleet_plans(self, freeze_targets):
+        """The gate must not fire once every unit reports — otherwise the
+        night never gets a plan at all."""
+        fake = _fake_self(devices=[_fake_load()])
+        power = SimpleNamespace(battery_soc=76.5, battery_soc_partial=False,
+                               battery_soc_units_read=2,
+                               battery_soc_units_expected=2)
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert ok is True
+        assert fake._overnight_shadow_plan is not None
+
+    def test_single_battery_install_is_never_partial(self, freeze_targets):
+        """A one-battery install has no fleet to be partial about — the flag
+        is absent there, and absence must read as ready (not as partial)."""
+        fake = _fake_self(devices=[_fake_load()])
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_power(soc=76.5))
+        assert ok is True
+
+
 def test_off_mode_load_is_not_a_demand(freeze_targets):
     """Finding #1 (PROD night 1): the off-mode heizband 'yielded' 3.1 kWh —
     but compute_load_intent never night-runs an off/peak_only device. The

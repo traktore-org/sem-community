@@ -197,6 +197,15 @@ class PowerReadings:
     # Battery state
     battery_soc: float = 0.0
     battery_soc_unavailable: bool = False  # True when SOC sensor is offline
+    # (#638 finding #3) On a multi-battery install the fleet SOC is the
+    # average of the units that could be READ. When one unit's sensors are
+    # still warming (boot) or offline, that average silently becomes a
+    # SUBSET's SOC — live-caught on TEST: battery 1 unavailable at boot, so
+    # the "fleet" reported battery 2's 65% while the real fleet was 76.5%.
+    # A consumer that must not act on a half-resolved fleet checks this.
+    battery_soc_partial: bool = False
+    battery_soc_units_expected: int = 0
+    battery_soc_units_read: int = 0
     # (#564) None = no temperature source — published as unknown. The old
     # 25.0 default was FABRICATED and shown as a real reading.
     battery_temperature: Optional[float] = None

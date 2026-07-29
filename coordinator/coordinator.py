@@ -5518,6 +5518,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "OVERNIGHT-PLAN (shadow #638): battery SOC not ready — "
                     "retrying next cycle")
                 return False
+            # Finding #3 (TEST, night 2026-07-29): readiness has a THIRD
+            # dimension — a multi-battery fleet resolves one unit at a time.
+            # Battery 1 was unavailable 10 s into a restart, so the "fleet"
+            # SOC was battery 2's 65% (real fleet: 76.5%) and the plan was
+            # stamped for the night on a battery 1.7 kWh too small: takeover
+            # 2 h early, a tier-2 load yielding 0.4 kWh it would in fact get.
+            # A subset is not the fleet — retry until every unit reports.
+            if (power is not None
+                    and getattr(power, "battery_soc_partial", False)):
+                _LOGGER.debug(
+                    "OVERNIGHT-PLAN (shadow #638): battery fleet only %s/%s "
+                    "units resolved — retrying next cycle",
+                    getattr(power, "battery_soc_units_read", "?"),
+                    getattr(power, "battery_soc_units_expected", "?"))
+                return False
             soc_kwh = max(0.0, float(soc or 0.0) / 100.0 * cap_kwh)
             reserve_pct = float(self.config.get("battery_priority_soc", 30) or 30)
             target_pct = float(getattr(getattr(scheduler, "decision", None),
