@@ -12,10 +12,27 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.solar_energy_management.coordinator import coordinator as coord_mod
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
 from custom_components.solar_energy_management.coordinator import ev_night_targets
+
+
+@pytest.fixture(autouse=True)
+def _freeze_now(monkeypatch):
+    """Pin the wall clock — the planner window is ``now → night_end``.
+
+    Slot count, and therefore every energy figure derived from it, moves with
+    the time of day the suite happens to run at. ``test_shadow_respects_the_
+    peak_cap`` reasons about "400 W across the window vs 5 kWh above the
+    floor": that is true for a 9 h night and false for a 14 h one, so it
+    passed when written (just after midnight) and failed every run before
+    ~18:30 local. 22:00 is the hour the real trigger fires.
+    """
+    fixed = datetime(2026, 7, 29, 22, 0,
+                     tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
+    monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
 
 
 class _FakeTariff:
