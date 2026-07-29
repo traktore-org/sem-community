@@ -5333,9 +5333,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             controller = getattr(self, "_surplus_controller", None)
             loads_seen = 0
             loads_eligible = 0
+            from ..devices.base import DeviceControlMode as _DCM
             for dev in (controller.get_devices_sorted() if controller else []):
                 try:
                     loads_seen += 1
+                    # The plan must mirror the intent gate (finding #1, PROD
+                    # night 1): an off/peak_only device is never night-run by
+                    # compute_load_intent — planning it (the off-mode heizband
+                    # "yielded" 3.1 kWh) diverges from execution.
+                    if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
+                        continue
                     if not getattr(dev, "has_runtime_deficit", False):
                         continue
                     night_ok = (getattr(dev, "battery_eligible_overnight", False)
@@ -5417,6 +5424,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # tomorrow's need = max(reserve, the scheduler's target SOC).
             soc = getattr(power, "battery_soc", None) if power is not None else None
             cap_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
+            # Power readiness is the SECOND warm-up dimension (finding #2,
+            # PROD night 1): at the first refresh the SOC sensor read
+            # unavailable → None → the ledger put a 77%-full battery at
+            # 0 kWh and derived a bogus 03:00 takeover. A configured battery
+            # with no SOC reading yet is a not-ready world — retry.
+            if cap_kwh > 0 and soc is None:
+                _LOGGER.debug(
+                    "OVERNIGHT-PLAN (shadow #638): battery SOC not ready — "
+                    "retrying next cycle")
+                return False
             soc_kwh = max(0.0, float(soc or 0.0) / 100.0 * cap_kwh)
             reserve_pct = float(self.config.get("battery_priority_soc", 30) or 30)
             target_pct = float(getattr(getattr(scheduler, "decision", None),

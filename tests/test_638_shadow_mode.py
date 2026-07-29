@@ -217,3 +217,34 @@ class TestPriceLevelAt:
         )
         assert TariffProvider.get_price_level_at(
             MagicMock(spec=[]), None) is None
+
+
+def test_soc_not_ready_retries(freeze_targets):
+    """Finding #2 (PROD night 1): at the first refresh the SOC sensor was
+    unavailable — None became 0 kWh and a 77%-full battery planned as empty
+    (bogus 03:00 takeover). A configured battery with no SOC reading is a
+    not-ready world: retry, don't plan."""
+    fake = _fake_self(devices=[])
+    ok = SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=SimpleNamespace(battery_soc=None))
+    assert ok is False
+    assert fake._overnight_shadow_plan is None
+
+
+def test_off_mode_load_is_not_a_demand(freeze_targets):
+    """Finding #1 (PROD night 1): the off-mode heizband 'yielded' 3.1 kWh —
+    but compute_load_intent never night-runs an off/peak_only device. The
+    demand builder mirrors the intent gate."""
+    from custom_components.solar_energy_management.devices.base import (
+        DeviceControlMode,
+    )
+    off = _fake_load(did="heizband")
+    off.control_mode = DeviceControlMode.OFF
+    fake = _fake_self(devices=[off])
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+    plan = fake._overnight_shadow_plan
+    assert plan is not None
+    assert not any("heizband" in ln for ln in plan.get("summary", []))
