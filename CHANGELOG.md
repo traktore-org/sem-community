@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.32] — 30.07.2026 (UNRELEASED — on feature/687-open-meteo-forecast, folds at the next tag)
+
+### ✨ Enhancements
+
+- ☀️ **Open-Meteo Solar Forecast is now auto-detected** (#687) — the HACS integration
+  ([rany2/ha-open-meteo-solar-forecast](https://github.com/rany2/ha-open-meteo-solar-forecast))
+  mirrors Forecast.Solar's sensor scheme but under its own platform with device-prefixed entity
+  names, so SEM's detection never saw it. It's now a first-class source (priority: Solcast >
+  Forecast.Solar > Open-Meteo), resolved via the entity registry so renamed/localized/prefixed
+  entities all work — including multi-orientation setups, which it aggregates natively in one
+  config entry. (by @traktore-org, requested by @Azlinon)
+
 # [1.7.5-beta.31] — 30.07.2026 (UNRELEASED — on fix/690-691, folds at the next tag)
 
 ### 🐛 Fixes

@@ -3,6 +3,8 @@
 Reads forecast data from existing HA integrations:
 - Solcast PV Solar (HACS) — sensor.solcast_pv_forecast_*
 - Forecast.Solar (built-in) — sensor.energy_production_*
+- Open-Meteo Solar Forecast (HACS, #687) — same sensor scheme as
+  Forecast.Solar under platform ``open_meteo_solar_forecast``
 - Custom sensors via configuration
 
 Provides remaining-today and tomorrow forecasts for:
@@ -74,6 +76,15 @@ FORECAST_SOLAR_UNIQUE_SUFFIXES = {
     "forecast_remaining": "_energy_production_today_remaining",
     "power_now": "_power_production_now",
 }
+# (#687) Open-Meteo Solar Forecast (rany2/ha-open-meteo-solar-forecast)
+# deliberately mirrors core Forecast.Solar: unique_id = ``{entry_id}_{key}``
+# with the SAME sensor keys (verified against its sensor.py), so the
+# suffix map above is reused verbatim. Only the platform differs. Its
+# entity_ids are device-prefixed (``sensor.<device>_energy_production_
+# today``), so there is NO reliable hardcoded entity fallback — the
+# registry path is the only detection route (an empty fallback dict is
+# passed to _locate_integration).
+OPEN_METEO_SOLAR_PLATFORM = "open_meteo_solar_forecast"
 
 
 @dataclass
@@ -262,6 +273,17 @@ class ForecastReader:
             self._source = "forecast_solar"
             self._last_source_detection_path = "forecast_solar"
             _LOGGER.info("Detected Forecast.Solar integration")
+            self._clear_no_forecast_repair()
+            return self._source
+
+        # Check Open-Meteo Solar Forecast (#687) — registry-only: its
+        # entity_ids are device-prefixed, so no hardcoded fallback exists.
+        entities = self._locate_integration(OPEN_METEO_SOLAR_PLATFORM, {})
+        if entities:
+            self._entities = entities
+            self._source = "open_meteo"
+            self._last_source_detection_path = "open_meteo"
+            _LOGGER.info("Detected Open-Meteo Solar Forecast integration")
             self._clear_no_forecast_repair()
             return self._source
 
