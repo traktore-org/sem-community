@@ -177,9 +177,12 @@ class BatteryPower:
     power_w: float = 0.0
     """Instantaneous power (W). + = charge, − = discharge."""
 
-    soc_pct: float = 0.0
-    """State of charge (0-100). Fleet SOC is the
-    capacity-weighted average."""
+    soc_pct: Optional[float] = None
+    """State of charge (0-100), or ``None`` while this unit's SOC is
+    unresolved — undetected sensor or a modbus source still warming
+    after a restart (#694: publishing 0.0 there made a warming battery
+    indistinguishable from an empty one). Fleet SOC is the
+    capacity-weighted average over the RESOLVED units."""
 
     capacity_kwh: float = 0.0
     """Nameplate capacity for this unit. Used by the fleet SOC

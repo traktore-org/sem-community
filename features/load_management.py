@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -46,20 +47,35 @@ class LoadManagementCoordinator:
         self.config_entry = config_entry
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{STORAGE_KEY}")
 
-        # Load management settings
-        self._enabled = config_entry.options.get(
+        # Load management settings — read the MERGED entry view (#692), the
+        # same one the coordinator gets (__init__.py builds
+        # ``{**entry.data, **entry.options}``). The install flow writes
+        # ``target_peak_limit`` to entry.data; only an options-flow re-save
+        # copies it to options. Reading options alone therefore enforced the
+        # 5.0 kW default on every install that never re-saved — the user's
+        # configured limit was silently ignored (live on TEST: data 6.0,
+        # options absent, shedding armed at 5.0). The Mapping guard: HA's
+        # real surfaces are MappingProxy (not dict); a stub entry's may be
+        # anything — a surface that isn't a mapping contributes nothing.
+        _data = getattr(config_entry, "data", None)
+        _opts = getattr(config_entry, "options", None)
+        _cfg = {
+            **(_data if isinstance(_data, Mapping) else {}),
+            **(_opts if isinstance(_opts, Mapping) else {}),
+        }
+        self._enabled = _cfg.get(
             "load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED
         )
-        self._target_peak_limit = config_entry.options.get(
+        self._target_peak_limit = _cfg.get(
             "target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT
         )
-        self._warning_level = config_entry.options.get(
+        self._warning_level = _cfg.get(
             "warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL
         )
-        self._emergency_level = config_entry.options.get(
+        self._emergency_level = _cfg.get(
             "emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL
         )
-        self._hysteresis = config_entry.options.get(
+        self._hysteresis = _cfg.get(
             "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS
         )
 
@@ -86,8 +102,9 @@ class LoadManagementCoordinator:
         # When True, skip _discover_devices() — UnifiedDeviceRegistry owns device list
         self._unified_registry_active = False
 
-        # Observer mode: skip all hardware control
-        self._observer_mode = config_entry.options.get("observer_mode", False)
+        # Observer mode: skip all hardware control (same merged view — the
+        # switch writes options, so options still wins when present)
+        self._observer_mode = _cfg.get("observer_mode", False)
 
         # #433 — telemetry surface mirroring classifier_path /
         # dampening_path / legionella_path. Focus on the high-leverage

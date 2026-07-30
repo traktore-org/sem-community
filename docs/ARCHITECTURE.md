@@ -502,7 +502,7 @@ The schedule adapts at runtime when actual EV power differs from planned.
 | `battery_min_deficit_kwh` | 2.0 | Minimum deficit to bother charging |
 | `battery_pessimism_weight` | 0.3 | Forecast pessimism (0=trust, 1=worst case) |
 | `battery_force_charge_negative_price` | `true` | Charge during negative prices |
-| `peak_limit_w` | 0 | House connection peak limit |
+| `target_peak_limit` | 5.0 kW | House peak limit the night schedule respects (shared with load management, #693) |
 | `battery_max_grid_import_w` | 0 | Max grid draw during charging |
 
 ### Sensors

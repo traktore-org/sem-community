@@ -305,7 +305,13 @@ class SchedulerConfig:
             pessimism_weight=config.get("battery_pessimism_weight", 0.3),
             replan_soc_deviation_pct=config.get("battery_replan_soc_deviation", 5.0),
             replan_on_ev_change=config.get("battery_replan_on_ev_change", True),
-            peak_limit_w=config.get("peak_limit_w", 0.0),
+            # #693 — the cap must come from a key installs actually carry.
+            # ``peak_limit_w`` was written by NOTHING (not the config flow,
+            # not a migration), so the peak-aware slot distribution ran with
+            # ``0 = no limit`` on every install. ``target_peak_limit`` is the
+            # install-flow key, in kW (shared with load management).
+            peak_limit_w=float(
+                config.get("target_peak_limit", 0.0) or 0.0) * 1000.0,
             max_grid_import_w=config.get("battery_max_grid_import_w", 0.0),
             force_charge_on_negative_price=config.get("battery_force_charge_negative_price", True),
             arbitrage_enabled=config.get("battery_grid_arbitrage_enabled", False),

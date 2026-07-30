@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.30 — unreleased] — 30.07.2026
+
+### 🐛 Fixes
+
+- ⚡ **Your configured peak limit is now actually enforced** (#692) — load management read its
+  settings (`target_peak_limit`, warning/emergency levels, hysteresis, on/off) from the entry's
+  *options* surface, but the install flow writes them to *data*. On any install that never re-saved
+  through the options dialog, the shedder silently ran the 5.0 kW default instead of the configured
+  limit (live: config 6.0 kW, enforced 5.0). It now reads the merged view, options winning — the
+  same view the coordinator has always used. Found chasing a #638 scenario-battery discrepancy.
+  (by @traktore-org)
+- 🌙 **The night charge schedule's peak cap was dead on every install** (#693) — the scheduler read
+  `peak_limit_w`, a config key **nothing writes**, so its peak-aware slot distribution ran with
+  "no limit" everywhere. It now reads `target_peak_limit` (kW, the key installs carry — shared with
+  load management). Same dead-key class as the #638 shadow-planner finding; the unit test had kept
+  it green by feeding the phantom key directly. `docs/ARCHITECTURE.md` row corrected.
+  (by @traktore-org)
+- 🔋 **A warming battery no longer reports 0 %** (#694) — after a restart, a modbus battery's SOC
+  can take minutes to publish; the per-battery sensor showed **0.0** in that window — an "empty
+  battery" claim nothing could distinguish from the real thing — and the fleet average was dragged
+  toward 0 by the fabricated value. Unresolved units now publish *unknown* and are excluded from
+  the fleet average until they report. (by @traktore-org)
+- 🚗 **A wallbox's car SOC can no longer be adopted as the house battery** (#695) — the
+  last-resort global SOC scan (#529) excluded `ev`/`car`/`vehicle` names but not `charger`/
+  `wallbox`; a charger exposing the vehicle's SOC (Easee, Zaptec, OpenWB) could win the scan as
+  the *house* battery. #250 wrong-entity class. (by @traktore-org)
+
 # [1.7.5-beta.29] — 29.07.2026
 
 ### 🐛 Fixes
