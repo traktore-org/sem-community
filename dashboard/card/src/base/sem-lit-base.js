@@ -145,6 +145,7 @@ export class SEMLitBase extends LitElement {
         const LABELS = {
             solcast: 'Solcast',
             forecast_solar: 'Forecast.Solar',
+            open_meteo: 'Open-Meteo',
             custom: this._t('custom') || 'Custom',
         };
         return LABELS[raw] || raw;
