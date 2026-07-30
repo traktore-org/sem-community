@@ -128,31 +128,41 @@ async def restore_discharge_limit_on_startup(hass, config: dict) -> None:
     past ``decide_battery``'s NORMAL intent. This unconditionally pushes
     the configured max on startup.
     """
-    control_entity = config.get("battery_discharge_control_entity", "")
     max_discharge = config.get("battery_max_discharge_power", 5000)
 
-    if not control_entity:
-        return
+    # #691 — a multi-battery install carries PER-battery control entities
+    # (``battery_discharge_control_entities``, #523); restoring only the
+    # global key left each unit's stale limit in place across a restart.
+    # Restore every configured surface, de-duplicated (all units of one
+    # inverter bank may share a single entity).
+    entities: list[str] = []
+    global_ent = config.get("battery_discharge_control_entity", "")
+    if global_ent:
+        entities.append(global_ent)
+    per_battery = config.get("battery_discharge_control_entities")
+    if isinstance(per_battery, list):
+        entities.extend(e for e in per_battery if e)
 
-    current_state = hass.states.get(control_entity)
-    if current_state is None:
-        return
+    for control_entity in dict.fromkeys(entities):
+        current_state = hass.states.get(control_entity)
+        if current_state is None:
+            continue
 
-    try:
-        current_limit = float(current_state.state)
-    except (ValueError, TypeError):
-        return
+        try:
+            current_limit = float(current_state.state)
+        except (ValueError, TypeError):
+            continue
 
-    if current_limit < max_discharge:
-        await hass.services.async_call(
-            "number", "set_value",
-            {"entity_id": control_entity, "value": max_discharge},
-            blocking=True,
-        )
-        _LOGGER.info(
-            "Startup: restored battery discharge limit from %dW to %dW",
-            int(current_limit), max_discharge,
-        )
+        if current_limit < max_discharge:
+            await hass.services.async_call(
+                "number", "set_value",
+                {"entity_id": control_entity, "value": max_discharge},
+                blocking=True,
+            )
+            _LOGGER.info(
+                "Startup: restored battery discharge limit on %s from %dW to %dW",
+                control_entity, int(current_limit), max_discharge,
+            )
 
 
 def active_discharge_limit(adapters) -> "float | None":

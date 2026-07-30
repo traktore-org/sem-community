@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.31] — 30.07.2026 (UNRELEASED — on fix/690-691, folds at the next tag)
+
+### 🐛 Fixes
+
+- 💾 **A config-dialog save no longer erases settings the dialog doesn't own** (#690) — the options
+  dialog's final save replaced the entry's options wholesale, wiping every option written outside
+  its own pages: the *Fix grid sign* flip (`grid_sign_user_flip` — the reported "Grid Sign Always
+  Changes Back"), the battery-sign flip, battery mode/reserve selectors, vacation mode, price
+  thresholds, EV delay knobs and more (18 dashboard/service-owned settings). The save now carries
+  forward everything outside `OPTIONS_FLOW_OWNED_KEYS`; a guard test recomputes the owned set from
+  the flow source so a new form field can't silently change class. (by @traktore-org, reported by
+  @hrdilshan)
+- 🔋 **The battery discharge clamp no longer splits the home budget with batteries it doesn't
+  control** (#691) — the protective `home/N` split counted *configured* batteries: a unit set to
+  **Off** (SEM hands-off) still ate a share, so a 2-battery house with one disabled clamped the
+  active battery to *half* the home load and imported the rest all evening (live: home 1.0 kW,
+  battery 520 W, grid 552 W on SolarEdge). Batteries sharing one discharge-limit entity (e.g.
+  SolarEdge's single inverter-level *Storage Discharge Limit*) now also count as ONE consumer with
+  the full budget. Bonus gap closed: the startup restore-to-max now covers per-battery discharge
+  entities, not just the global one. (by @traktore-org, reported by @onkelfu)
+
 # [1.7.5-beta.30] — 30.07.2026
 
 ### 🐛 Fixes
