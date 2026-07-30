@@ -4976,7 +4976,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ArbitrageSignals, BatteryIntent, BatteryRuntime, BatteryView,
             FleetContext,
         )
-        from .decide_battery import decide_battery
+        from .decide_battery import decide_battery, effective_battery_count
 
         # Per-battery adapter cache (#375 — was a single
         # ``self._battery_adapter``). Adapters carry the
@@ -5073,14 +5073,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning("Export arbitrage evaluate failed: %s", e)
 
+        # #691: the LIMIT_DISCHARGE home split must divide by the batteries
+        # that actually CONSUME the budget — a mode=off battery never gets
+        # the clamp, and batteries sharing one discharge-limit entity are a
+        # single actuation surface. len(power.batteries) counted configured
+        # rows: 2 configured / 1 off / home 1 kW → the controlled battery
+        # was clamped to 500 W and the grid imported the rest (SolarEdge).
+        _n_cfg = len(getattr(power, "batteries", {}) or {})
+        _eff_battery_count = effective_battery_count(
+            [self._per_battery_config(i, _n_cfg) for i in range(_n_cfg)]
+        ) if _n_cfg else 1
+
         # Shared fleet context — same for every battery this cycle.
         fleet = FleetContext(
             solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),
             home_w=float(getattr(power, "home_consumption_power", 0.0) or 0.0),
             battery_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
             is_night=self.time_manager.is_night_mode(),
-            # #531: split per-battery LIMIT_DISCHARGE across the real fleet.
-            battery_count=max(1, len(getattr(power, "batteries", {}) or {})),
+            # #531: split per-battery LIMIT_DISCHARGE across the real fleet
+            # (#691: effective consumers, not configured rows).
+            battery_count=_eff_battery_count,
             # Solar gate for the unified discharge clamp (decide_battery):
             # below this much pure solar surplus the battery is off-limits
             # to the EV in any mode/time (0 = always allow).

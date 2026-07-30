@@ -37,6 +37,43 @@ if TYPE_CHECKING:  # pragma: no cover
 _LOGGER = logging.getLogger(__name__)
 
 
+def effective_battery_count(pbcs: "list[dict]") -> int:
+    """The divisor for the per-battery LIMIT_DISCHARGE home split (#691).
+
+    #531 introduced the split so N batteries each told to inject the FULL
+    home load don't over-inject N×. But the divisor must count CONSUMERS
+    of the home budget, not configured rows:
+
+    - a ``mode=off`` battery is hands-off (``decide_battery`` short-
+      circuits to OFF before any command) — it never receives the clamp,
+      so it must not eat a share. Live #691: 2 configured, 1 off, home
+      ≈1 kW → the one controlled battery was limited to 500 W and the
+      grid imported the other half all evening.
+    - batteries sharing ONE discharge-limit entity (SolarEdge's inverter-
+      level Storage Discharge Limit; any multi-battery install without
+      per-battery ``battery_discharge_control_entities``, where every
+      unit falls back to the same global key) are one actuation surface:
+      a single write governs the whole bank, so together they are ONE
+      consumer with the full budget. Distinct entities keep the #531
+      split. A battery with no discharge-limit entity at all counts
+      individually (unknown surface — today's behaviour).
+
+    Takes the per-battery config dicts (``_per_battery_config`` output,
+    fleet order). Returns at least 1.
+    """
+    surfaces: set[str] = set()
+    unknown = 0
+    for pbc in pbcs:
+        if str(pbc.get("battery_mode", "auto") or "auto").lower() == "off":
+            continue
+        ent = pbc.get("battery_discharge_control_entity")
+        if ent:
+            surfaces.add(str(ent))
+        else:
+            unknown += 1
+    return max(1, len(surfaces) + unknown)
+
+
 def decide_battery(view: "BatteryView") -> BatteryDecision:
     """Compute this battery's per-cycle decision.
 

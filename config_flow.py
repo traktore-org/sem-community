@@ -752,6 +752,101 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
+# #690 — every config key the options dialog itself OWNS (a form field on
+# one of its pages, or a key its steps write into ``self._data`` directly).
+# The final save replaces ``entry.options`` wholesale, so any option that is
+# NOT in this set — values written by services (``grid_sign_user_flip``),
+# dashboard entities (``battery_mode``, ``battery_reserve_soc``,
+# ``vacation_mode``, price thresholds, …) or setup helpers — must be carried
+# forward, or a config-dialog save silently erases it ("Grid Sign Always
+# Changes Back"). Owned keys keep today's semantics: present in the submitted
+# form = new value, omitted = cleared. tests/test_690_options_carry_forward.py
+# recomputes this set from the flow source, so a new form field that isn't
+# added here fails CI.
+OPTIONS_FLOW_OWNED_KEYS = frozenset({
+    "action",
+    "battery_assist_max_power",
+    "battery_assist_min_surplus",
+    "battery_auto_start_soc",
+    "battery_buffer_soc",
+    "battery_capacity_kwh",
+    "battery_charge_scheduler_enabled",
+    "battery_cycle_cost",
+    "battery_discharge_control_entity",
+    "battery_discharge_protection_enabled",
+    "battery_force_charge_negative_price",
+    "battery_max_charge_power_w",
+    "battery_max_discharge_power",
+    "battery_max_target_soc",
+    "battery_min_deficit_kwh",
+    "battery_pessimism_weight",
+    "battery_precharge_trigger_hour",
+    "battery_prefer_consecutive_window",
+    "battery_priority_soc",
+    "battery_replan_interval_min",
+    "battery_roundtrip_efficiency",
+    "charger_name",
+    "charger_to_remove",
+    "daily_ev_target",
+    "daily_ev_target_max",
+    "demand_charge_rate",
+    "diagram_style",
+    "dynamic_feedin_entity",
+    "dynamic_forecast_entity",
+    "dynamic_tariff_entity",
+    "electricity_export_rate",
+    "electricity_import_rate",
+    "electricity_off_peak_rate",
+    "emergency_peak_level",
+    "enable_charger_notifications",
+    "enable_mobile_notifications",
+    "ev_battery_capacity_kwh",
+    "ev_charge_mode_entity",
+    "ev_charge_mode_start",
+    "ev_charge_mode_stop",
+    "ev_charger_service",
+    "ev_charger_service_entity_id",
+    "ev_chargers",
+    "ev_charging_power_sensor",
+    "ev_charging_sensor",
+    "ev_connected_sensor",
+    "ev_current_control_entity",
+    "ev_current_sensor",
+    "ev_kwh_per_100km",
+    "ev_min_current",
+    "ev_start_stop_entity",
+    "ev_surplus_priority",
+    "ev_target_soc",
+    "ev_target_soc_max",
+    "ev_total_energy_sensor",
+    "grid_export_power_entity",
+    "grid_import_power_entity",
+    "grid_sign_invert",
+    "heat_pump_boost_offset",
+    "heat_pump_climate_entity",
+    "heat_pump_invert_sg_ready",
+    "heat_pump_max_setpoint",
+    "heat_pump_power_sensor",
+    "heat_pump_priority",
+    "heat_pump_relay1_entity",
+    "heat_pump_relay2_entity",
+    "initial_current",
+    "load_management_enabled",
+    "minimum_solar_power",
+    "mobile_notification_service",
+    "observer_mode",
+    "pv_string_names",
+    "target_peak_limit",
+    "tariff_classification_mode",
+    "tariff_mode",
+    "update_interval",
+    "vehicle_min_current",
+    "vehicle_range_entity",
+    "vehicle_soc_entity",
+    "warning_peak_level",
+})
+
+
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Solar Energy Management."""
 
@@ -2081,7 +2176,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if not errors:
                 self._data.update(user_input)
-                return self.async_create_entry(data=self._data)
+                # #690 — async_create_entry REPLACES entry.options wholesale.
+                # Carry forward every stored option this dialog does not own,
+                # so a config-dialog save can't erase values written by
+                # services / dashboard entities (grid_sign_user_flip,
+                # battery_mode, vacation_mode, …). Flow-owned keys keep the
+                # replace semantics (omitted from the form = cleared).
+                carried = {
+                    k: v
+                    for k, v in (self.config_entry.options or {}).items()
+                    if k not in OPTIONS_FLOW_OWNED_KEYS
+                }
+                return self.async_create_entry(data={**carried, **self._data})
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
