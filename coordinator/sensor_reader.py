@@ -1886,11 +1886,13 @@ class SensorReader:
                 w = self._read_sensor(entity, "battery")
                 per_battery_total += w
                 # Per-battery SOC via the same auto-detect heuristic
-                # the fleet average uses. Falls through to 0.0 when no
-                # matching SOC sensor is discoverable — card displays
-                # ``—`` in that case rather than fabricating a value.
+                # the fleet average uses. Stays ``None`` when no matching
+                # SOC sensor is discoverable OR the sensor is not reading
+                # yet (#694: b1's modbus SOC takes ~2m43s after a restart —
+                # fabricating 0.0 there published "empty battery" for a
+                # full one). The entity shows unknown, the card ``—``.
                 soc_entity = self._auto_detect_battery_soc(entity)
-                soc_val = 0.0
+                soc_val = None
                 if soc_entity:
                     s = self._read_sensor(
                         soc_entity, "battery_soc", allow_none=True,
@@ -1916,7 +1918,7 @@ class SensorReader:
                     discharge_w, p_from, charge_w, p_to,
                 )
                 per_battery_total += w
-                soc_val = 0.0
+                soc_val = None                       # unresolved ≠ 0% (#694)
                 soc_entity = self._auto_detect_battery_soc(p_to)
                 if soc_entity:
                     s = self._read_sensor(
@@ -3506,7 +3508,12 @@ class SensorReader:
         # a name SOC-keyword AND a ``%`` unit, excluding EV/vehicle/phone
         # batteries. Zero or multiple matches → return None (never guess).
         try:
-            _EXCLUDE = ("ev", "car", "vehicle", "phone", "iphone", "laptop",
+            # "charger"/"wallbox" (#695): an EV charger that exposes the
+            # CAR's SOC (Easee, Zaptec, OpenWB — and the rig's
+            # ``mock_charger_2_soc``) is a vehicle battery, not the house
+            # battery, but carries none of the vehicle keywords.
+            _EXCLUDE = ("ev", "car", "vehicle", "charger", "wallbox",
+                        "phone", "iphone", "laptop",
                         "tablet", "watch", "device_tracker")
             candidates: list[str] = []
             for state in self.hass.states.async_all("sensor"):

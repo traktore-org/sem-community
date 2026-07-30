@@ -280,19 +280,25 @@ class PowerReadings:
 
     @property
     def fleet_battery_soc(self) -> float:
-        """Capacity-weighted fleet SOC (0-100). Falls back to the
-        single ``battery_soc`` field when the per-battery dict is
-        empty or no unit reports its capacity."""
+        """Capacity-weighted fleet SOC (0-100) over the RESOLVED units.
+
+        A unit whose SOC is still ``None`` (undetected sensor, or a modbus
+        source warming after a restart) is excluded from BOTH sums — #694:
+        averaging a fabricated 0 in dragged a full fleet toward "empty".
+        Falls back to the single ``battery_soc`` field when the per-battery
+        dict is empty, nothing has resolved yet, or no resolved unit
+        reports its capacity."""
         if not self.batteries:
             return self.battery_soc
-        total_capacity = sum(b.capacity_kwh for b in self.batteries.values())
+        resolved = [b for b in self.batteries.values() if b.soc_pct is not None]
+        if not resolved:
+            return self.battery_soc
+        total_capacity = sum(b.capacity_kwh for b in resolved)
         if total_capacity <= 0:
             # No capacity → simple arithmetic mean (better than 0)
-            socs = [b.soc_pct for b in self.batteries.values()]
-            return sum(socs) / len(socs) if socs else self.battery_soc
-        weighted_sum = sum(
-            b.soc_pct * b.capacity_kwh for b in self.batteries.values()
-        )
+            socs = [b.soc_pct for b in resolved]
+            return sum(socs) / len(socs)
+        weighted_sum = sum(b.soc_pct * b.capacity_kwh for b in resolved)
         return weighted_sum / total_capacity
 
 
@@ -1298,7 +1304,10 @@ class SEMData:
                     status = "idle"
                 data.update({
                     f"battery_{bid}_power": round(bp.power_w, 1),
-                    f"battery_{bid}_soc": round(bp.soc_pct, 1),
+                    # None while unresolved → the entity shows unknown, not
+                    # a fabricated 0% (#694).
+                    f"battery_{bid}_soc": (round(bp.soc_pct, 1)
+                                           if bp.soc_pct is not None else None),
                     f"battery_{bid}_status": status,
                     f"battery_{bid}_capacity_kwh": round(bp.capacity_kwh, 1),
                 })
