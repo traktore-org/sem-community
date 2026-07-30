@@ -37,7 +37,9 @@ class TestBatteryPowerType:
         b = BatteryPower(battery_id="luna2000")
         assert b.battery_id == "luna2000"
         assert b.power_w == 0.0
-        assert b.soc_pct == 0.0
+        # None until the unit's SOC sensor resolves (#694) — 0.0 here was
+        # the fabricated "empty battery" claim.
+        assert b.soc_pct is None
         assert b.capacity_kwh == 0.0
 
     def test_frozen(self):
