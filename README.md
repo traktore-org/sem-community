@@ -38,7 +38,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)
 - **Daily runtime goals for household loads (#620)** — give any switch a **Min / Max runtime** window (e.g. *pool pump ≥ 4 h, ≤ 8 h/day*) via a dual-handle slider, a daytime **mode** (Off / Peak-only / Solar only / **Solar + battery** assist), and a **"Finish overnight from"** picker — **Off / Battery / Grid** (cheap-tariff window) — for completing the runtime when the sun runs short. Plus an optional stop condition picked with an entity search (e.g. water-temp ≥ 28 °C, car SOC ≥ 80 %). No forced grid deadlines. The load is prioritised in the one device list and exposes a surplus-event interface for your own automations. See [`docs/LOAD_PRIORITY.md`](docs/LOAD_PRIORITY.md).
 - **Peak load management** — automatic device shedding to stay under your grid limit
-- **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
+- **Solar forecast integration** — Solcast, Forecast.Solar or Open-Meteo Solar Forecast for smart charging decisions
 - **Dynamic tariff support** — Tibber, Nordpool, aWATTar, Amber Electric, Octopus Energy price-responsive charging
 - **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
 - **Per-PV-string visibility** — auto-discovered per-string power + daily-energy sensors and a chip strip on the system diagram + flow cards (when your inverter exposes per-string data). Works on Huawei, GoodWe, Growatt, Kostal, Sungrow, Fronius, SolarEdge, SolaX, with V·I synthesis fallback for inverters that expose voltage + current separately.
@@ -115,7 +115,7 @@ Before setting up SEM, make sure you have:
 - **Optional but recommended:**
   - Battery SOC (%) and power (W) sensors
   - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
-  - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar) or [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) for solar forecasts
+  - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for solar forecasts
   - Tibber, Nordpool, or aWATTar integration for dynamic tariffs
 
 ---

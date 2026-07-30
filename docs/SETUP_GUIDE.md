@@ -81,7 +81,7 @@ Growatt, and any inverter that exposes watt-level sensors to HA.
 OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE,
 and any charger with a controllable number entity.
 
-**Solar forecasts (optional):** Solcast, Forecast.Solar. Required for smart
+**Solar forecasts (optional):** Solcast, Forecast.Solar, Open-Meteo Solar Forecast. Required for smart
 night charging and battery charge scheduling.
 
 > **Easee note:** Easee's charging power sensor is disabled by default in HA.
@@ -505,7 +505,8 @@ must be stable for 60 seconds before a notification fires).
 
 ### Forecast settings
 
-SEM auto-detects a solar forecast integration (Solcast, Forecast.Solar or a
+SEM auto-detects a solar forecast integration (Solcast, Forecast.Solar,
+[Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) or a
 compatible sensor) and uses it for smart night charging, the battery
 scheduler and the recommendation tips.
 
@@ -889,7 +890,7 @@ separate from EV night charging.
 
 The scheduler requires:
 
-- A solar forecast integration (Solcast or Forecast.Solar)
+- A solar forecast integration (Solcast, Forecast.Solar or Open-Meteo Solar Forecast)
 - An inverter that supports forced battery charging via a HA service or
   number entity
 - The battery charge scheduler enabled in the options flow
