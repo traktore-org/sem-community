@@ -610,7 +610,11 @@ class TestSchedulerConfig:
             "battery_min_deficit_kwh": 3.0,
             "battery_forecast_confidence": 0.9,
             "battery_max_target_soc": 100.0,
-            "peak_limit_w": 9000.0,
+            # #693 — the key installs actually carry, in kW. The old
+            # ``peak_limit_w`` was written by nothing; feeding it here is how
+            # the dead read stayed green. A lingering value must be ignored.
+            "target_peak_limit": 9.0,
+            "peak_limit_w": 4000.0,
             # #604: retired key — deleted by the v14→v15 migration and no
             # longer read by from_config. A lingering value must be ignored.
             "ev_priority_over_battery": False,
@@ -624,6 +628,7 @@ class TestSchedulerConfig:
         assert config.min_deficit_kwh == 3.0
         assert config.forecast_confidence == 0.9
         assert config.max_target_soc == 100.0
+        # 9.0 kW → 9000 W; the dead ``peak_limit_w: 4000`` above must lose.
         assert config.peak_limit_w == 9000.0
         # #604: the legacy ev_priority_over_battery read is retired — the
         # internal knob keeps its default regardless of the config key.
