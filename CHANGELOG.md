@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.35] — 31.07.2026
+
+### 🐛 Fixes
+
+- 🔇 **The STOP-unenforceable warning no longer floods the log** (#700) — the (correct, important)
+  warning that a charger config has no way to open the contactor fired every reconcile cycle while
+  the condition persisted: 8000+ entries on a real install, crowding out the entire log history.
+  It now fires once per episode with the full instruction, repeats at debug, and re-arms when the
+  situation genuinely changes. (by @traktore-org, reported by @jappish84)
+- 🌍 **A configured charger's duplicate Energy-Dashboard row is now folded regardless of language**
+  (#700) — the suppression relied on an English-only name guess (`ev`, `charger`, `wallbox`, …),
+  so a Swedish "Billaddare" row for the same physical Garo survived and Load Management showed the
+  charger twice. Suppression now tests identity — the row's sensor being a configured charger's
+  entity, or living on the charger's own HA device — so it works in every language.
+  (by @traktore-org, reported by @jappish84)
+
 # [1.7.5-beta.34] — 31.07.2026
 
 ### 🐛 Fixes
