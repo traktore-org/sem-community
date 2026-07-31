@@ -44,14 +44,14 @@ def _coord():
 
 def _p(*, solar=0.0, grid=0.0, grid_import=0.0, grid_export=0.0,
        battery=0.0, batt_charge=0.0, batt_discharge=0.0, ev=0.0,
-       home=0.0, soc=50.0, soc_unavailable=False):
+       home=0.0, soc=50.0, soc_unavailable=False, ev_charging=False):
     return SimpleNamespace(
         solar_power=solar, grid_power=grid,
         grid_import_power=grid_import, grid_export_power=grid_export,
         battery_power=battery, battery_charge_power=batt_charge,
         battery_discharge_power=batt_discharge, ev_power=ev,
         home_consumption_power=home, battery_soc=soc,
-        battery_soc_unavailable=soc_unavailable,
+        battery_soc_unavailable=soc_unavailable, ev_charging=ev_charging,
     )
 
 
@@ -128,6 +128,77 @@ class TestSnapshotCoherence:
         p = _coherent_cycle()
         p.battery_soc_unavailable = True
         assert c._build_power_snapshot(p)["battery_soc"] is None
+
+
+class TestEvLagAttributionGuard:
+    """(#699 follow-up, Guido) A 4 kW step with the EV sensor lagging must
+    not land on the home node just because the balance re-closed around it.
+    The charging BINARY is the fast disambiguator: charging=on + ev_power~0
+    means the equation cannot attribute correctly → keep shipping the last
+    coherent set until the sensor catches up (bounded)."""
+
+    def _idle(self):
+        return _p(solar=300.0, grid_import=1000.0, home=1300.0, soc=80.0)
+
+    def test_ev_start_absorbed_into_home_stays_held(self):
+        """Spike guard expired, home accepted the car's 4.6 kW (residual is
+        ~0 again — the residual check alone is blind here). charging=on +
+        ev=0 → the misattributed set must NOT ship."""
+        c = _coord()
+        c._home_hold_active = False
+        c._build_power_snapshot(self._idle())            # coherent cache
+        misattributed = _p(solar=300.0, grid_import=5600.0, home=5900.0,
+                           soc=80.0, ev=0.0, ev_charging=True)
+        snap = c._build_power_snapshot(misattributed)
+        assert snap["held"] is True
+        assert snap["home_w"] == 1300.0                  # the coherent set
+
+    def test_ev_sensor_catchup_ships_fresh_attribution(self):
+        c = _coord()
+        c._home_hold_active = False
+        c._build_power_snapshot(self._idle())
+        c._build_power_snapshot(_p(solar=300.0, grid_import=5600.0,
+                                   home=5900.0, ev=0.0, ev_charging=True))
+        caught_up = _p(solar=300.0, grid_import=5600.0, ev=4600.0,
+                       home=1300.0, soc=80.0, ev_charging=True)
+        snap = c._build_power_snapshot(caught_up)
+        assert snap["held"] is False
+        assert snap["ev_w"] == 4600.0
+        assert snap["home_w"] == 1300.0
+
+    def test_paused_charge_is_believed_after_the_window(self):
+        """charging=on with a genuine 0 W (car paused/balancing) must not
+        pin the view forever — past the bound the 0 is believed."""
+        c = _coord()
+        c._home_hold_active = False
+        c._build_power_snapshot(self._idle())
+        paused = _p(solar=300.0, grid_import=1000.0, home=1300.0,
+                    soc=80.0, ev=0.0, ev_charging=True)
+        for _ in range(SEMCoordinator.SNAPSHOT_EV_LAG_MAX_CYCLES):
+            snap = c._build_power_snapshot(paused)
+            assert snap["held"] is True
+        snap = c._build_power_snapshot(paused)           # window exhausted
+        assert snap["held"] is False
+
+    def test_healthy_charge_is_never_held(self):
+        c = _coord()
+        c._home_hold_active = False
+        healthy = _p(solar=300.0, grid_import=5600.0, ev=4600.0,
+                     home=1300.0, ev_charging=True)
+        assert c._build_power_snapshot(healthy)["held"] is False
+
+    def test_counter_resets_when_the_condition_clears(self):
+        c = _coord()
+        c._home_hold_active = False
+        c._build_power_snapshot(self._idle())
+        lagging = _p(solar=300.0, grid_import=1000.0, home=1300.0,
+                     ev=0.0, ev_charging=True)
+        for _ in range(5):
+            c._build_power_snapshot(lagging)
+        c._build_power_snapshot(self._idle())            # binary off — clears
+        assert c._snapshot_ev_lag_count == 0
+        snap = c._build_power_snapshot(lagging)          # re-arms from 1
+        assert snap["held"] is True
 
 
 class TestSensorPublishesTheSnapshot:
