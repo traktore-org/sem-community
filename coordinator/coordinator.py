@@ -1216,6 +1216,72 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Hold window exhausted — accept the zero as real.
             self._home_hold_count = held + 1
 
+    # (#699) The published set must satisfy the equation within this
+    # tolerance to be cached as "coherent". In a clean cycle the residual is
+    # ~0 BY CONSTRUCTION (home is computed from the other terms), so
+    # anything beyond rounding noise means a hold substituted home or the
+    # negative-balance clamp fired — the two ways a published set lies.
+    SNAPSHOT_RESIDUAL_TOLERANCE_W = 150.0
+
+    def _build_power_snapshot(self, power) -> dict:
+        """(#699) The cards' balance set — the LAST SELF-CONSISTENT one.
+
+        Publishing the raw per-cycle values reproduces the bug this fixes:
+        during a source-cadence skew (grid meter leads the EV sensor on a
+        fast ramp) the home hold (#237/#444) deliberately substitutes home
+        while grid/EV carry the raw skewed reads — a set that violates its
+        own equation, shipped to the view. The FIRST fix for this class
+        was the held home entity itself (it protected home's value and the
+        discharge limit, but knowingly published an inconsistent SET); the
+        snapshot completes it: when this cycle's set is known-incoherent
+        (hold active, or the residual exceeds tolerance), carry the whole
+        previous coherent set forward — flagged ``held`` — instead of a
+        chimera of fresh and substituted values. SOC is overlaid fresh:
+        it is not balance-coupled, and a 5-minute-stale SOC would be worse
+        than an honest one.
+        """
+        soc = None if getattr(power, "battery_soc_unavailable", False) \
+            else getattr(power, "battery_soc", None)
+        snap = {
+            "solar_w": power.solar_power,
+            "grid_w": power.grid_power,
+            "grid_import_w": power.grid_import_power,
+            "grid_export_w": power.grid_export_power,
+            "battery_w": power.battery_power,
+            "battery_charge_w": power.battery_charge_power,
+            "battery_discharge_w": power.battery_discharge_power,
+            "ev_w": power.ev_power,
+            "home_w": power.home_consumption_power,
+            "battery_soc": soc,
+            "held": False,
+        }
+        residual = abs(
+            (power.solar_power or 0.0)
+            + (power.grid_import_power or 0.0)
+            + (power.battery_discharge_power or 0.0)
+            - (power.grid_export_power or 0.0)
+            - (power.battery_charge_power or 0.0)
+            - (power.ev_power or 0.0)
+            - (power.home_consumption_power or 0.0)
+        )
+        incoherent = (
+            getattr(self, "_home_hold_active", False)
+            or residual > self.SNAPSHOT_RESIDUAL_TOLERANCE_W
+        )
+        last = getattr(self, "_last_coherent_snapshot", None)
+        if incoherent and last is not None:
+            held = dict(last)
+            held["battery_soc"] = soc
+            held["held"] = True
+            return held
+        if not incoherent:
+            cache = dict(snap)
+            cache.pop("held", None)
+            self._last_coherent_snapshot = cache
+        # incoherent with no cache yet (cold start mid-transient): the raw
+        # set is the best available — publish it rather than nothing.
+        return snap
+
     # Class-level cache — the manifest never changes within a run, but
     # _get_version() used to re-open it on EVERY cycle (diag_version),
     # flagged live as "Detected blocking call to open" (#476 follow-up).
@@ -3316,6 +3382,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             self._initial_update_done = True
             result = sem_data.to_dict()
+            # (#699) the cards' atomic balance set — built HERE, where the
+            # home-hold state lives, so a known-incoherent cycle ships the
+            # last coherent set instead of a fresh/substituted chimera.
+            result["power_snapshot"] = self._build_power_snapshot(power)
             # 3a — core snapshot complete (power/flows/energy/battery/EV/
             # charging). Everything below is enrichment; a throw past this
             # point degrades to core data (see the except handler), it does

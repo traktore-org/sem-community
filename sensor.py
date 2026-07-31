@@ -2298,31 +2298,17 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "excess_solar": self.coordinator.data.get("excess_solar"),
             })
         elif self.entity_description.key == "home_consumption_power":
-            # (#699) The ATOMIC balance snapshot for the cards. The balance
-            # set is otherwise published as five separate entities, each
-            # committed to the state machine on its own (sem_ev_power even
-            # sub-cycle, #289) — so a card sampling them at a render instant
-            # can compose values from different moments and show an equation
-            # that doesn't add up during a fast transient (caught live on
-            # PROD: a 15 s KEBA burst put 4.8 kW on the grid tile while the
-            # EV tile still read 0). ``coordinator.data`` is replaced
-            # wholesale per cycle, so one read here is coherent by
-            # construction; home is the natural carrier because it is the
-            # last value computed FROM the others. Unrecorded — every value
+            # (#699) The ATOMIC balance snapshot for the cards, built by the
+            # coordinator (which owns the #237/#444 home-hold state): a
+            # known-incoherent cycle carries the LAST COHERENT set forward
+            # (flagged ``held``) instead of a chimera of fresh and
+            # substituted values — the cards' books add up at every render
+            # by construction. Home is the carrier because it is the last
+            # value computed FROM the others. Unrecorded — every value
             # already has its own recorded sensor.
-            d = self.coordinator.data
-            attrs["power_snapshot"] = {
-                "solar_w": d.get("solar_power"),
-                "grid_w": d.get("grid_power"),
-                "grid_import_w": d.get("grid_import_power"),
-                "grid_export_w": d.get("grid_export_power"),
-                "battery_w": d.get("battery_power"),
-                "battery_charge_w": d.get("battery_charge_power"),
-                "battery_discharge_w": d.get("battery_discharge_power"),
-                "ev_w": d.get("ev_power"),
-                "home_w": d.get("home_consumption_power"),
-                "battery_soc": d.get("battery_soc"),
-            }
+            snap = self.coordinator.data.get("power_snapshot")
+            if snap:
+                attrs["power_snapshot"] = snap
         elif self.entity_description.key == "tariff_current_import_rate":
             # Rich price data for the price card (#257): level, summary, next
             # cheap window, and the upcoming hourly curve.
