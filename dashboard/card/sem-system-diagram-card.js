@@ -189,6 +189,21 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         return isNaN(val) ? 0 : val;
     }
 
+    // (#699) The coordinator's ATOMIC balance snapshot — every value from the
+    // SAME cycle, carried as one attribute on the home sensor. Reading the
+    // balance from five separate entities lets a render instant compose
+    // values from different moments (each entity commits on its own; EV even
+    // sub-cycle, #289) — a 15 s KEBA burst put 4.8 kW on the grid tile while
+    // the EV tile still read 0 and the card's books were 5 kW short. Prefix
+    // mode only: entities mode reads user-supplied sensors that carry no
+    // snapshot. Null when the backend predates #699 → per-entity fallback.
+    _powerSnapshot() {
+        if (this._mode === 'entities' || !this._hass) return null;
+        const st = this._hass.states[this._entityId('home_consumption_power')];
+        const snap = st && st.attributes && st.attributes.power_snapshot;
+        return (snap && typeof snap === 'object') ? snap : null;
+    }
+
     _getStateStr(suffix) {
         if (!this._hass) return '';
         const eid = this._entityId(suffix);
@@ -268,12 +283,25 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         // optional split battery (charge/discharge entities), combined
         // grid entity with reverse flag, and reverse/invert flags on
         // solar/battery/ev. Prefix mode is byte-identical to pre-#455.
-        let solar = this._getState('solar_power');
+        //
+        // (#699) In prefix mode, every balance value comes from the ONE
+        // atomic snapshot when the backend provides it — the whole set is
+        // from the same coordinator cycle, so the diagram's books always
+        // add up even mid-transient.
+        const snap = this._powerSnapshot();
+        const snapNum = (v) => {
+            const f = parseFloat(v);
+            return isNaN(f) ? 0 : f;
+        };
+
+        let solar = snap ? snapNum(snap.solar_w) : this._getState('solar_power');
         if (this._entities?.solar?.reverse) solar = -solar;
 
         let battery;
         if (this._mode === 'entities' && (this._entities?.battery?.charge || this._entities?.battery?.discharge)) {
             battery = this._getState('battery_charge_power') - this._getState('battery_discharge_power');
+        } else if (snap) {
+            battery = snapNum(snap.battery_w);
         } else {
             const raw = this._getState('battery_power');
             battery = this._entities?.battery?.reverse ? -raw : raw;
@@ -285,14 +313,17 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             const rev = this._entities.grid.reverse;
             gridImport = Math.max(0, rev ? -gp : gp);
             gridExport = Math.max(0, rev ? gp : -gp);
+        } else if (snap) {
+            gridImport = snapNum(snap.grid_import_w);
+            gridExport = snapNum(snap.grid_export_w);
         } else {
             gridImport = this._getState('grid_import_power');
             gridExport = this._getState('grid_export_power');
         }
 
-        let ev = this._getState('ev_power');
+        let ev = snap ? snapNum(snap.ev_w) : this._getState('ev_power');
         if (this._entities?.ev?.invert) ev = -ev;
-        const soc = this._getState('battery_soc');
+        const soc = snap ? snapNum(snap.battery_soc) : this._getState('battery_soc');
 
         const battCharge = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
@@ -302,19 +333,23 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         // update-cadence skew so the sensor doesn't flicker to 0 while
         // the EV charges; a raw recompute here did. Fall back to the
         // residual only when the sensor is unavailable.
-        const homeEid = this._entityId('home_consumption_power');
-        const homeSt = homeEid ? this._hass?.states[homeEid] : null;
         let home;
-        if (homeSt && homeSt.state !== 'unavailable' && homeSt.state !== 'unknown'
-            && !isNaN(parseFloat(homeSt.state))) {
-            home = this._getState('home_consumption_power');
-            if (this._entities?.home?.invert) home = -home;
-            home = Math.max(0, home);
+        if (snap && snap.home_w !== null && snap.home_w !== undefined) {
+            home = Math.max(0, snapNum(snap.home_w));
         } else {
-            home = Math.max(
-                0,
-                solar + gridImport + battDischarge - gridExport - battCharge - ev
-            );
+            const homeEid = this._entityId('home_consumption_power');
+            const homeSt = homeEid ? this._hass?.states[homeEid] : null;
+            if (homeSt && homeSt.state !== 'unavailable' && homeSt.state !== 'unknown'
+                && !isNaN(parseFloat(homeSt.state))) {
+                home = this._getState('home_consumption_power');
+                if (this._entities?.home?.invert) home = -home;
+                home = Math.max(0, home);
+            } else {
+                home = Math.max(
+                    0,
+                    solar + gridImport + battDischarge - gridExport - battCharge - ev
+                );
+            }
         }
 
         const vals = { solar, battery, gridImport, gridExport, home, ev, soc };
