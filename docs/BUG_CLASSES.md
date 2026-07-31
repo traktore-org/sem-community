@@ -817,6 +817,33 @@ against the pre-fix source with the live signature. Refs #610 #552 #461.
 **Watch:** any new early `return decision` / `return state` added to a filter or reconciler, and
 any guard written *inside* a branch whose predicate is smoothed, debounced or cached.
 
+### 32. A view composes a multi-entity state set non-atomically — GUARDED
+**Symptom:** a card that draws the system as a connected balance (diagram, flow) shows books
+that don't add up: ~5 kW grid import against an EV tile reading 0, home unchanged. Transient
+(seconds to minutes), unreproducible on demand, and every individual sensor is "correct".
+**Root shape:** the view's inputs are published as N separate entities; each commits to HA's
+state machine on its own, and *the pipeline itself sometimes publishes an inconsistent set by
+design* — the #237/#444 home hold substitutes home while grid/EV carry raw skewed reads, so
+for 1-2 cycles (dip tier: up to 5 min) the published set violates its own equation. Fixing one
+MEMBER of the set (the held home entity was the first fix for this class) protects that value
+and its downstream consumers but ships the inconsistency to every view that composes the set.
+**Where it lives:** `coordinator/coordinator.py::_build_power_snapshot` (the closure),
+`_smooth_home_consumption` (the intentional incoherence source), `sensor.py`
+(`power_snapshot` attr on home, unrecorded), `sem-system-diagram-card.js` + `sem-flow-card.js`
+(snapshot-first readers).
+**Closure:** ONE atomic per-cycle snapshot of the whole set, and — the part that makes it more
+than plumbing — *the snapshot is the last self-consistent set*: when the cycle is
+known-incoherent (`_home_hold_active`, or the residual exceeds tolerance — residual is ~0 by
+construction in a clean cycle since home is computed from the other terms), the previous
+coherent set ships flagged `held`, with only the non-balance-coupled SOC overlaid fresh.
+**Guard:** `tests/test_699_power_snapshot.py` — the exact PROD chimera cycle must ship the
+prior coherent set; residual violation without the flag (zero-clamp) too.
+**Watch:** any new "hold"/"smooth"/"clamp" applied to ONE member of a published set that a view
+renders as an equation; any new card that draws 2+ balance values as connected flows must read
+`power_snapshot`, not entities. Third-party cards (k-flow) read raw entities and stay exposed —
+by choice: freezing real telemetry entities to protect a view would corrupt genuine data.
+Refs #699 #237 #444 #289.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
