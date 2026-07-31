@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.34] — 31.07.2026
+
+### 🐛 Fixes
+
+- ⚖️ **The system diagram's books now always add up** (#699) — the balance tiles (solar / grid /
+  battery / EV / home) were read from five separate entities, each committing to HA's state
+  machine on its own, so during a fast transient the card could compose values from different
+  moments (live on PROD: a 15-second wallbox burst showed 4.8 kW grid import against an EV tile
+  still reading 0 — ~5 kW missing from the view, while SEM's internal balance held throughout).
+  The whole balance set is now published as ONE atomic per-cycle snapshot on the home sensor
+  (excluded from the recorder) and the system-diagram + flow cards render from it — coherent by
+  construction; custom `entities:` configs and older backends keep the per-entity path.
+  (by @traktore-org, reported by @traktore-org from PROD)
+
 # [1.7.5-beta.33] — 31.07.2026
 
 ### ✨ Enhancements

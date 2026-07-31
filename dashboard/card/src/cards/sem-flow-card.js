@@ -398,12 +398,23 @@ class SEMFlowCard extends SEMLitBase {
     _updateFlowsImperative() {
         if (!this._hass) return;
 
-        let solar = this._getState('solar_power');
+        // (#699) In prefix mode, the whole balance set comes from the ONE
+        // atomic snapshot when the backend provides it — same coordinator
+        // cycle, so the flows always add up even mid-transient.
+        const snap = this._powerSnapshot();
+        const snapNum = (v) => {
+            const f = parseFloat(v);
+            return isNaN(f) ? 0 : f;
+        };
+
+        let solar = snap ? snapNum(snap.solar_w) : this._getState('solar_power');
         if (this._entities?.solar?.reverse) solar = -solar;
 
         let battery;
         if (this._mode === 'entities' && (this._entities?.battery?.charge || this._entities?.battery?.discharge)) {
             battery = this._getState('battery_charge_power') - this._getState('battery_discharge_power');
+        } else if (snap) {
+            battery = snapNum(snap.battery_w);
         } else {
             let raw = this._getState('battery_power');
             battery = this._entities?.battery?.reverse ? -raw : raw;
@@ -415,26 +426,33 @@ class SEMFlowCard extends SEMLitBase {
             const rev = this._entities.grid.reverse;
             gridImport = Math.max(0, rev ? -gp : gp);
             gridExport = Math.max(0, rev ? gp : -gp);
+        } else if (snap) {
+            gridImport = snapNum(snap.grid_import_w);
+            gridExport = snapNum(snap.grid_export_w);
         } else {
             gridImport = this._getState('grid_import_power');
             gridExport = this._getState('grid_export_power');
         }
 
-        let ev = this._getState('ev_power');
+        let ev = snap ? snapNum(snap.ev_w) : this._getState('ev_power');
         if (this._entities?.ev?.invert) ev = -ev;
-        const soc     = this._getState('battery_soc');
+        const soc     = snap ? snapNum(snap.battery_soc) : this._getState('battery_soc');
         const autarky = this._getState('autarky_rate');
 
         const battCharge    = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
 
-        const homeEId = this._getEntityId('home_consumption_power');
         let home;
-        if (homeEId && this._hass?.states[homeEId]) {
-            home = this._getState('home_consumption_power');
-            if (this._entities?.home?.invert) home = -home;
+        if (snap && snap.home_w !== null && snap.home_w !== undefined) {
+            home = snapNum(snap.home_w);
         } else {
-            home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
+            const homeEId = this._getEntityId('home_consumption_power');
+            if (homeEId && this._hass?.states[homeEId]) {
+                home = this._getState('home_consumption_power');
+                if (this._entities?.home?.invert) home = -home;
+            } else {
+                home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
+            }
         }
 
         const dailySolar      = this._getStateStr('daily_solar_energy');
@@ -964,6 +982,18 @@ class SEMFlowCard extends SEMLitBase {
         if (!entity) return 0;
         const val = parseFloat(entity.state);
         return isNaN(val) ? 0 : val;
+    }
+
+    // (#699) The coordinator's ATOMIC balance snapshot — all values from one
+    // cycle, carried as an attribute on the home sensor. Prefix mode only
+    // (entities mode reads user-supplied sensors that carry no snapshot);
+    // null when the backend predates #699, and callers fall back to the
+    // per-entity reads. See sem-system-diagram-card for the full rationale.
+    _powerSnapshot() {
+        if (this._mode !== 'prefix' || !this._hass) return null;
+        const st = this._hass.states[this._prefix + 'home_consumption_power'];
+        const snap = st && st.attributes && st.attributes.power_snapshot;
+        return (snap && typeof snap === 'object') ? snap : null;
     }
 
     _getStateStr(key) {
