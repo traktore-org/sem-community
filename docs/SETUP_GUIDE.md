@@ -274,6 +274,35 @@ to see all available SEM services. If none appear, the integration did not
 load — check **Settings > System > Logs** (filter for
 `solar_energy_management`).
 
+### Sensor source overrides
+
+SEM derives its grid, solar and battery power sources from HA's Energy
+Dashboard — that stays the primary path, and fixing a wrong mapping there
+(then reloading SEM) is the first thing to try. For the cases where that
+isn't enough — a sensor the inverter stops feeding (e.g. CT clamps dark
+when running off-grid), or you want SEM on a different meter than the
+HA-wide Energy Dashboard uses — the **Sensor sources** section on the
+dashboard's ⚙ Configuration tab lets you pin an explicit entity per source:
+
+| Picker | Overrides | Blank means |
+|---|---|---|
+| **Grid power** | the combined grid power sensor | auto (Energy Dashboard) |
+| **Solar power** | the solar production sensor | auto (Energy Dashboard) |
+| **Battery power** | the battery power sensor | auto (Energy Dashboard) |
+
+Notes:
+
+- **Sign conventions are detected on the override.** A Shelly EM does not
+  share the inverter's sign convention — SEM's import/export (and battery
+  charge/discharge) sign detection runs against whatever entity you pick,
+  so you don't need to match signs manually.
+- **No silent fallback.** If an override entity goes unavailable, SEM keeps
+  reading it and the Configuration card shows a warning on that row — it
+  never silently reverts to the sensor you explicitly replaced. Fix the
+  sensor or clear the override.
+- Changes are staged and committed with **Apply**, which reloads the
+  integration once for the whole batch.
+
 ---
 
 ## 5. Options Flow
