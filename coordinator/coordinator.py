@@ -1264,6 +1264,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "battery_w": power.battery_power,
             "battery_charge_w": power.battery_charge_power,
             "battery_discharge_w": power.battery_discharge_power,
+            # FLEET-READ: the cards' EV node shows the fleet total draw —
+            # the balance equation needs the sum, not one charger's share.
             "ev_w": power.ev_power,
             "home_w": power.home_consumption_power,
             "battery_soc": soc,
@@ -1275,6 +1277,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             + (power.battery_discharge_power or 0.0)
             - (power.grid_export_power or 0.0)
             - (power.battery_charge_power or 0.0)
+            # FLEET-READ: same equation, same fleet-total semantics.
             - (power.ev_power or 0.0)
             - (power.home_consumption_power or 0.0)
         )
