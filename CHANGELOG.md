@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.32] — 31.07.2026
+
+### 🐛 Fixes
+
+- 🌇 **Losing the surplus now stops a running load** (#688) — the allocation walk debited an active
+  device only its power *delta*, never its held draw; with the solar-bounded pool floored at 0 the
+  deficit trigger (−100 W) was unreachable, so a load that lost its sun ran on grid/battery all the
+  way to its daily **Max** cap (live: pool pump, Min 8 h met, still heading for 11.5 h). Active
+  loads are now debited in full — minus the share Tier-1 battery assist legitimately covers, which
+  still stands down past the daily floor — and the lowest-priority unfunded load is shed first,
+  with the ±100 W hysteresis, spike filter and anti-flicker windows unchanged. Also closes both
+  known imperative↔desired-state parity gaps. (by @traktore-org, reported by @onkelfu)
+- 🔌 **One charger, one Load Management row** (#698) — a JuiceBox exposes both a *lifetime* and a
+  *session* energy counter on the same device; HA's Energy Dashboard auto-suggests both, and SEM
+  built a load row per sensor, so every EVSE appeared twice. Same-measurement variants
+  (lifetime/session/total/today/daily) now fold into one device preferring the monotonic counter;
+  genuinely distinct loads (e.g. a Shelly 2PM's two channels) are never folded, and the entity
+  registry vetoes the fold when the sensors live on different devices. JuiceBox also joins the EV
+  charger detection patterns. (by @traktore-org, reported by @Azlinon)
+- 💬 **The Mode tooltip now describes the four modes the field actually offers** (#697) — it still
+  explained a retired three-mode set ("Surplus = …"); rewritten ×16 languages for Off / Peak only /
+  Solar only / Solar + battery, and the *Solar only* / *Solar + battery* / battery-hint labels —
+  previously English in 12 of 16 languages — are now translated everywhere.
+  (by @traktore-org, reported by @Azlinon)
+
 # [1.7.5-beta.31] — 30.07.2026
 
 ### ✨ Enhancements

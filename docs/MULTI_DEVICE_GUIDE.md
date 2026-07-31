@@ -308,7 +308,7 @@ data:
 
 | Field | Meaning |
 |---|---|
-| `daily_min_runtime_min` | Daily solar-runtime budget in minutes — the device rests once it has run this long today (the green slider handle) |
+| `daily_min_runtime_min` | Daily runtime *floor* in minutes (the green slider handle) — reaching it ends only the paid top-ups (overnight battery / cheap grid, where enabled); free solar surplus may carry the device on, up to the Max handle |
 | `top_up_policy` | `solar_only` (default, never grid) or `cheap_hours` (HW/HP off-peak top-up) |
 | `stop_entity` + `stop_at` | External completion condition |
 
@@ -329,10 +329,13 @@ above), where you control the grid-vs-solar trade-off.
 
 In every mode: **peak protection outranks the goal** (a device chasing
 its target still sheds for a grid peak), the anti-flicker minimums (5 min
-on / 1 min off) shape the switching, and once the target or the stop
-condition is reached the device is done for the day. A restart never
-orphans a device SEM switched on — running surplus devices are re-owned
-at boot.
+on / 1 min off) shape the switching, and once the daily **Max** cap or the
+stop condition is reached the device is done for the day. The **Min** is a
+floor, not a stop: reaching it ends the battery/grid top-ups, but free
+solar surplus may run the device on up to the Max — and when the surplus
+disappears, a load with its floor met stops instead of riding grid or
+battery (#688). A restart never orphans a device SEM switched on — running
+surplus devices are re-owned at boot.
 
 ## Appliance Dependencies
 
