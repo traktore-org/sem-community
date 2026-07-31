@@ -492,19 +492,12 @@ async def _run(specs, kw, use_desired):
     return {d.device_id: d.is_active for d in sc._devices.values()}
 
 
-# Known remaining parity gaps — both trace to the old deficit-LIFO (its ~100 W
-# hysteresis band + battery-unaware accounting), which the per-device walk does
-# not model yet. MUST be closed before the flag can flip (Phase 4). strict=True
-# so a later fix flips the xfail to an error and forces removing the mark.
-_XFAIL = {
-    "tier1_assist_activates":
-        "old activates the tier1 load then the deficit-LIFO kills it (decrements "
-        "the full draw without crediting the battery); the new path keeps it on "
-        "(arguably correct). Model the LIFO's battery-aware accounting first.",
-    "peak_shedding_one_per_cycle":
-        "old keeps an active load on within the -100 W LIFO hysteresis band; the "
-        "new path stops any sourceless load. Model the band in the walk first.",
-}
+# The two parity gaps that lived here (tier1_assist_activates,
+# peak_shedding_one_per_cycle) were closed by #688: the imperative walk now
+# debits an active/activated load's full draw minus the Tier-1 battery share,
+# which is exactly the battery-aware accounting the desired-state path models.
+# Full parity — no xfails left. Add new gaps back as strict xfails only.
+_XFAIL: dict = {}
 
 
 @pytest.mark.asyncio

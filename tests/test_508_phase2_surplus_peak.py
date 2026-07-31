@@ -141,12 +141,16 @@ class TestPeakFreezeActivation:
 class TestPeakShed:
     async def test_shedding_backs_off_one_device(self, mock_hass):
         # SHEDDING sheds gently — one device per cycle, lowest priority first.
+        # The pool FUNDS both loads (#688): active draws are now debited from
+        # the pool, so an unfunded load at available=0 is stopped by the
+        # deficit LIFO before this pass even runs — the gentle cadence is a
+        # peak-posture contract for loads that still have their surplus.
         sc = SurplusController(mock_hass)
         hi = _make_device("hp", priority=1, is_active=True, consumption=1500.0)
         lo = _make_device("boiler", priority=5, is_active=True, consumption=2000.0)
         sc.register_device(hi)
         sc.register_device(lo)
-        await sc.update(0.0, peak_state=LoadManagementState.SHEDDING)
+        await sc.update(3650.0, peak_state=LoadManagementState.SHEDDING)
         # Lowest priority (highest number) sheds first; the other survives.
         lo.deactivate.assert_called_once()
         hi.deactivate.assert_not_called()
