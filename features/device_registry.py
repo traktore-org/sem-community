@@ -859,10 +859,21 @@ class UnifiedDeviceRegistry:
             did = device.device_id
             if device.control_entity and device.control_entity in service_entities:
                 continue
-            if device.is_ev and (
-                chargers_configured
-                or (device.power_sensor and device.power_sensor in charger_entities)
-            ):
+            # (#700) Identity-based charger dedup. The old gate required the
+            # ED row's ``is_ev`` flag — an English-only name-pattern guess
+            # ("ev", "charger", "wallbox", …), so a Swedish "Billaddare" row
+            # for the SAME Garo the user configured as a charger survived
+            # and Load Management showed the charger twice. Names can't
+            # cover languages; identity can: the ED row is suppressed when
+            # its power/energy sensor IS a configured charger's entity or
+            # lives on the same HA registry device as one (any entity on
+            # the charger's own device is charger telemetry).
+            same_charger = (
+                (device.power_sensor and device.power_sensor in charger_entities)
+                or self._same_registry_device_as_charger(device.power_sensor)
+                or self._same_registry_device_as_charger(device.energy_sensor)
+            )
+            if same_charger or (device.is_ev and chargers_configured):
                 continue
             # (#615) SAME physical appliance already owned by a direct heat
             # pump / hot water registration (deduped on the shared entity, not
@@ -1134,6 +1145,35 @@ class UnifiedDeviceRegistry:
             c.get("power_entity") for c in self._ev_charger_rows
             if c.get("power_entity")
         }
+
+    def _same_registry_device_as_charger(self, entity_id) -> bool:
+        """(#700) Does ``entity_id`` live on the same HA registry device as a
+        configured charger's power entity? The identity test behind the ED
+        duplicate-row suppression — an ED row pointing at the charger's own
+        energy counter shares its device even when no entity string matches
+        and the English name-pattern ``is_ev`` guess fails ("Billaddare").
+        Defensive throughout: an unanswerable registry reads as "no match",
+        never as a crash in the discovery path.
+        """
+        if not entity_id or not self._ev_charger_rows:
+            return False
+        try:
+            from homeassistant.helpers import entity_registry as er
+            reg = er.async_get(self.hass)
+            ent = reg.async_get(entity_id)
+            did = getattr(ent, "device_id", None)
+            if not isinstance(did, str):
+                return False
+            for c in self._ev_charger_rows:
+                pe = c.get("power_entity")
+                if not pe:
+                    continue
+                pent = reg.async_get(pe)
+                if getattr(pent, "device_id", None) == did:
+                    return True
+        except Exception:
+            return False
+        return False
 
     def _direct_registration_entities(self) -> set:
         """(#615) Entities OWNED by a directly-registered surplus device

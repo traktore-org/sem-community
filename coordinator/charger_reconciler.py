@@ -380,9 +380,19 @@ class ChargerReconciler:
             except Exception:  # the probe must never break actuation
                 pass
 
+        await self._apply_actions(actions, adapter, decision, power)
+
+    async def _apply_actions(self, actions, adapter, decision, power) -> None:
+        """Execute the reconcile actions. Extracted (#700) so the one-shot
+        warning behaviour is testable against the real action loop."""
         for action in actions:
             if action.kind is ActionKind.NONE:
                 continue
+            # (#700) any action other than the unenforceable-report means the
+            # intent moved or a mechanism appeared — re-arm the one-shot
+            # warning so the NEXT unenforceable episode warns again.
+            if action.kind is not ActionKind.REPORT_STOP_UNENFORCEABLE:
+                self._stop_unenforceable_warned = False
             if action.kind is ActionKind.ENABLE:
                 # #536 — re-assert the start/stop switch (idempotent).
                 await adapter.ensure_enabled()
@@ -399,18 +409,36 @@ class ChargerReconciler:
                     await report()
             elif action.kind is ActionKind.REPORT_STOP_UNENFORCEABLE:
                 # #627 — the stop is structurally impossible on this config.
-                _LOGGER.warning(
-                    "reconcile(%s): STOP is unenforceable — no stop service, "
-                    "no charge-mode select, no start/stop entity, no "
-                    "<domain>.disable, and the current entity cannot express "
-                    "0 A. The car keeps drawing %.0f W against SEM's intent "
-                    "(and on a battery install that power comes out of the "
-                    "house battery). Configure a start/stop switch for this "
-                    "charger. — %s",
-                    self.charger_id,
-                    float(getattr(power, "power_w", 0.0) or 0.0),
-                    decision.reason,
-                )
+                # (#700) Once per ONSET, not per cycle: the condition persists
+                # for as long as the config lacks a stop mechanism, and at a
+                # 10 s cadence the repeat wiped out days of log history on a
+                # real install (8000+ entries). The first occurrence carries
+                # the full instruction at WARNING; repeats drop to debug; the
+                # flag re-arms when any other action lands (the intent moved
+                # or a mechanism appeared), so a NEW unenforceable episode
+                # warns again.
+                if not getattr(self, "_stop_unenforceable_warned", False):
+                    self._stop_unenforceable_warned = True
+                    _LOGGER.warning(
+                        "reconcile(%s): STOP is unenforceable — no stop service, "
+                        "no charge-mode select, no start/stop entity, no "
+                        "<domain>.disable, and the current entity cannot express "
+                        "0 A. The car keeps drawing %.0f W against SEM's intent "
+                        "(and on a battery install that power comes out of the "
+                        "house battery). Configure a start/stop switch for this "
+                        "charger. (Logged once — repeats at debug level until "
+                        "the condition clears.) — %s",
+                        self.charger_id,
+                        float(getattr(power, "power_w", 0.0) or 0.0),
+                        decision.reason,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "reconcile(%s): STOP still unenforceable (%.0f W) — %s",
+                        self.charger_id,
+                        float(getattr(power, "power_w", 0.0) or 0.0),
+                        decision.reason,
+                    )
                 self._report_stop_unenforceable(adapter, power)
             elif action.kind is ActionKind.DISABLE:
                 await adapter.command_disable()
