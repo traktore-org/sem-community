@@ -183,3 +183,21 @@ class TestPeakShed:
         sc.register_device(dev)
         await sc.update(0.0, peak_state=LoadManagementState.EMERGENCY)
         dev.deactivate.assert_not_called()
+
+    async def test_peak_only_active_draw_reduces_pool_but_is_never_stopped(
+            self, mock_hass):
+        """(#688) An active peak_only load consumes real power: its draw is
+        debited from the pool (a SURPLUS sibling can't be funded by power the
+        user's own load is already using), yet the load itself stays
+        user-managed — neither the deficit LIFO nor anything else stops it."""
+        sc = SurplusController(mock_hass)
+        po = _make_device("po", priority=1, is_active=True, consumption=2000.0,
+                          control_mode=DeviceControlMode.PEAK_ONLY)
+        po.adjust_power = AsyncMock(return_value=2000.0)
+        s = _make_device("s", priority=5, min_power=1000, is_active=False)
+        sc.register_device(po)
+        sc.register_device(s)
+        # pool 2450 after offset; the peak_only draw leaves 450 < 1000
+        await sc.update(2500.0)
+        s.activate.assert_not_called()
+        po.deactivate.assert_not_called()

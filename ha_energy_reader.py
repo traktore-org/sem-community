@@ -706,6 +706,8 @@ def _registry_device_id(hass, entity_id: str) -> Optional[str]:
 
 
 def get_all_individual_devices(config: EnergyDashboardConfig, hass=None) -> List[Dict[str, Any]]:
+    # NOTE: pass hass= — without it the (#698) registry veto can't tell two
+    # stem-alike sensors on DIFFERENT devices apart and would fold them.
     """Return all individual devices from Energy Dashboard for load management.
 
     These are devices listed in the Energy Dashboard's "Individual devices" section
