@@ -228,12 +228,7 @@ class TestSaturatingLoad:
                      rated_power=2000, min_threshold=1500, priority=2,
                      min_on_time=0, min_off_time=0)
         # Priority 3 has a 5000W threshold — well above any remaining
-        # surplus after d1+d2 activate. Guarantees d3 stays idle
-        # regardless of the controller's intermediate-cycle bookkeeping
-        # (the in-cycle ``remaining_surplus -= consumed`` is intended
-        # for one-pass activation; subsequent cycles trust that the
-        # caller passes ``available_power_w`` already netted against
-        # active loads).
+        # surplus after d1+d2 activate. Guarantees d3 stays idle.
         d3 = _switch(hass, device_id="d3", name="Device 3",
                      rated_power=5000, min_threshold=5000, priority=3,
                      min_on_time=0, min_off_time=0)
@@ -241,23 +236,21 @@ class TestSaturatingLoad:
         controller.register_device(d1)
         controller.register_device(d2)
 
-        # SurplusController expects ``available_power_w`` to already
-        # reflect active loads — in production, HA's sensors report
-        # power AFTER device draw, so the surplus passed in shrinks
-        # as devices activate. Simulate that here: start at 6000W
-        # (all devices off), then drop to 2000W (representing 6000W
-        # solar minus 4000W active loads).
+        # Since #508 W7 the coordinator passes the FEEDBACK-FREE pool:
+        # grid export PLUS the controller's own active draw (add-back), so
+        # the input does NOT shrink as devices activate. Steady state here
+        # is 2000W residual export + 4000W active draw = 6000W. (This test
+        # used to feed the pre-W7 netted value, 2000W — the old delta-only
+        # debit made the two contracts indistinguishable for running
+        # switches; the #688 full debit follows the real W7 contract.)
         await controller.update(available_power_w=6000)  # d1+d2 activate
         for _ in range(6):
-            # Simulated steady state: 6000W solar minus 4000W active
-            # consumption = 2000W remaining surplus.
-            await controller.update(available_power_w=2000)
+            await controller.update(available_power_w=6000)
 
         assert d1.is_active
         assert d2.is_active
-        # Priority 3 (threshold=2000): with ~2000W remaining, the
-        # 50W regulation_offset leaves 1950W distributable → below
-        # threshold → stays idle.
+        # d3 (threshold 5000): after the walk debits d1+d2's 4000W from the
+        # 5950W distributable, 1950W remain → below threshold → stays idle.
         assert not d3.is_active, "priority 3 stays idle when budget exhausted"
 
 

@@ -414,11 +414,12 @@ class TestDeltaTracking:
         sc.register_device(d1)
         sc.register_device(d2)
 
-        # 1000W available. First call seeds EMA, so smoothed = 1000.
-        # distributable = 1000 - 50 = 950
-        # d1: old=500, adjust_power(950+500=1450) returns 800, delta=300, remaining=950-300=650
-        # d2: 650 >= 400 → activate
-        result = await sc.update(1000.0)
+        # 1300W available (the pool includes d1's add-back). First call seeds
+        # the EMA, so smoothed = 1300; distributable = 1300 - 50 = 1250.
+        # d1: old=500, adjust_power(1250+500=1750) returns 800 — its FULL new
+        #     draw is debited (#688), remaining = 1250 - 800 = 450
+        # d2: 450 >= 400 → activate
+        result = await sc.update(1300.0)
 
         d1.adjust_power.assert_called_once()
         d2.activate.assert_called_once()

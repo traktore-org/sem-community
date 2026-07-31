@@ -1082,15 +1082,24 @@ class SurplusController:
                     continue  # #508 W2: don't add load while peak is at risk
                 if device.can_activate():
                     consumed = await _activate_owned(device, remaining_surplus)
+                    assist = 0.0
                     if consumed > 0:
                         device.reset_surplus_timer()
                         # (#620) if the battery covered a shortfall for this
-                        # assist device, subtract that from the running budget.
-                        if getattr(device, "battery_assist_enabled", False):
-                            batt_covered = max(0.0, consumed - max(0.0, remaining_surplus))
+                        # assist device, subtract that from the running budget
+                        # — capped by the actual headroom (enabled + above
+                        # buffer + budget left), which is 0 for a plain load.
+                        # (#688) Only the solar-funded remainder leaves the
+                        # pool: debiting the battery's share too made the
+                        # deficit LIFO below read it as a shortfall and kill
+                        # the assist load the same cycle it activated.
+                        headroom = self._tier1_headroom_w(device)
+                        if headroom > 0:
+                            shortfall = max(0.0, consumed - max(0.0, remaining_surplus))
+                            assist = min(headroom, shortfall)
                             self._tier1_budget_left = max(
-                                0.0, self._tier1_budget_left - batt_covered)
-                    remaining_surplus -= consumed
+                                0.0, self._tier1_budget_left - assist)
+                    remaining_surplus -= max(0.0, consumed - assist)
                     if consumed > 0:
                         active_count += 1
 
@@ -1101,8 +1110,29 @@ class SurplusController:
                 # Already active — adjust power level (applies to all modes)
                 old_consumption = device.get_current_consumption()
                 consumed = await device.adjust_power(remaining_surplus + old_consumption)
-                delta = consumed - old_consumption
-                remaining_surplus -= max(0, delta)
+                # (#688) Debit the FULL draw, not just its change. The pool was
+                # credited with every active device's draw (the feedback-free
+                # add-back), so leaving the draw in after walking past the
+                # device over-funds every lower-priority load by exactly that
+                # amount — and, because the solar bound (#620) floors the pool
+                # at 0, it kept ``remaining_surplus`` above the deficit-LIFO
+                # trigger forever: a load that lost its surplus was never
+                # stopped and ran to its Max cap on grid/battery (@onkelfu's
+                # pool pump). The LIFO has always credited a shed device's
+                # draw BACK — proof the walk was meant to debit it. Tier-1
+                # battery assist covers its share of a shortfall first (only
+                # the solar-funded remainder leaves the pool, mirroring the
+                # activation branch); ``_tier1_headroom_w`` is 0 past the
+                # daily floor, so a past-floor run is solar-funded only.
+                assist = 0.0
+                if consumed > 0:
+                    headroom = self._tier1_headroom_w(device)
+                    if headroom > 0:
+                        shortfall = max(0.0, consumed - max(0.0, remaining_surplus))
+                        assist = min(headroom, shortfall)
+                        self._tier1_budget_left = max(
+                            0.0, self._tier1_budget_left - assist)
+                remaining_surplus -= max(0.0, consumed - assist)
                 active_count += 1
 
             allocations.append(SurplusAllocation(
@@ -1120,6 +1150,14 @@ class SurplusController:
             for device in reversed(devices):
                 if remaining_surplus >= 0:
                     break
+                # (#688) Only SURPLUS-mode loads are the LIFO's to stop —
+                # peak_only and Off are user-managed (SEM never proactively
+                # turns them off; same gate the peak-shed pass carries, and
+                # what the desired-state twin's "user-managed" intents pin).
+                # Latent before: the dead trigger meant the missing gate
+                # never fired on anything.
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue
                 # (#559) off-peak-forced devices run WITHOUT surplus by
                 # design — the force-expiry section and the peak shed pass
                 # own their lifecycle; the deficit LIFO must not flap them off.
