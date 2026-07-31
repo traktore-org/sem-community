@@ -1236,6 +1236,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # anything beyond rounding noise means a hold substituted home or the
     # negative-balance clamp fired — the two ways a published set lies.
     SNAPSHOT_RESIDUAL_TOLERANCE_W = 150.0
+    # (#699 follow-up) Attribution guard: the residual check cannot see a
+    # MISATTRIBUTED set — once the spike guard accepts an EV start into
+    # home (the KEBA power sensor can push 60+ s late), the equation
+    # balances again with the car's draw sitting on the home node. The
+    # charger's charging BINARY is the fast disambiguator: charging=on
+    # while ev_power reads ~0 means the EV sensor is lagging and the
+    # balance cannot attribute correctly — keep shipping the last coherent
+    # set until the sensor catches up. Bounded: past this many cycles the
+    # 0 is believed (a paused charge legitimately draws nothing).
+    SNAPSHOT_EV_LAG_MAX_CYCLES = 12          # ~2 min @ 10 s cycles
+    SNAPSHOT_EV_LAG_POWER_FLOOR_W = 100.0
 
     def _build_power_snapshot(self, power) -> dict:
         """(#699) The cards' balance set — the LAST SELF-CONSISTENT one.
@@ -1281,9 +1292,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             - (power.ev_power or 0.0)
             - (power.home_consumption_power or 0.0)
         )
+        # (#699 follow-up) EV-sensor lag: charging binary on, power sensor
+        # still ~0 → any step the balance just absorbed into home may be
+        # the car's. Hold the coherent set rather than misattribute; the
+        # counter bounds it and only resets when the condition clears, so
+        # a genuinely paused charge (binary on, truly 0 W) is believed
+        # after the window instead of pinning the view forever.
+        ev_lag = (
+            bool(getattr(power, "ev_charging", False))
+            # FLEET-READ: fleet charging-binary OR vs fleet power total —
+            # the lag test compares like with like.
+            and (power.ev_power or 0.0) <= self.SNAPSHOT_EV_LAG_POWER_FLOOR_W
+        )
+        if ev_lag:
+            self._snapshot_ev_lag_count = getattr(
+                self, "_snapshot_ev_lag_count", 0) + 1
+        else:
+            self._snapshot_ev_lag_count = 0
+        ev_lag_hold = ev_lag and (
+            self._snapshot_ev_lag_count <= self.SNAPSHOT_EV_LAG_MAX_CYCLES
+        )
         incoherent = (
             getattr(self, "_home_hold_active", False)
             or residual > self.SNAPSHOT_RESIDUAL_TOLERANCE_W
+            or ev_lag_hold
         )
         last = getattr(self, "_last_coherent_snapshot", None)
         if incoherent and last is not None:
