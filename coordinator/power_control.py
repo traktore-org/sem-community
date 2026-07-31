@@ -7,6 +7,7 @@ so current, percentage, unavailable, and out-of-range controls fail closed.
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -124,6 +125,14 @@ def prepare_power_setpoint(
             entity_id,
         )
         return None
+    if not all(math.isfinite(value) for value in (
+        current_value, native_value, scale_to_watts,
+    )):
+        _LOGGER.warning(
+            "Battery power control %s rejected: non-finite state or setpoint",
+            entity_id,
+        )
+        return None
 
     attrs = getattr(state, "attributes", None)
     if isinstance(attrs, Mapping):
@@ -139,6 +148,13 @@ def prepare_power_setpoint(
                 bound = float(raw_bound)
             except (TypeError, ValueError, OverflowError):
                 continue
+            if not math.isfinite(bound):
+                _LOGGER.warning(
+                    "Battery power control %s rejected: non-finite %s bound",
+                    entity_id,
+                    key,
+                )
+                return None
             if compare(native_value, bound):
                 _LOGGER.warning(
                     "Battery power control %s rejected: %.3f is outside %s=%s",

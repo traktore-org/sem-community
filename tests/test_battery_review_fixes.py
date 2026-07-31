@@ -164,3 +164,70 @@ async def test_generic_adapter_scales_watts_for_kw_entity():
 
     hass.services.async_call.assert_awaited_once()
     assert hass.services.async_call.await_args.args[2]["value"] == 5.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target_w", [float("nan"), float("inf"), -float("inf")])
+async def test_power_control_rejects_non_finite_target(target_w):
+    from custom_components.solar_energy_management.coordinator.power_control import (
+        async_write_power_setpoint,
+    )
+
+    hass = _hass()
+    state = MagicMock()
+    state.state = "1200"
+    state.attributes = {"unit_of_measurement": "W", "min": 0, "max": 12000}
+    hass.states.get = MagicMock(return_value=state)
+
+    assert await async_write_power_setpoint(
+        hass, "number.battery_discharge_power", target_w, context="test",
+    ) is False
+    hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("current", ["nan", "inf", "-inf"])
+async def test_power_control_rejects_non_finite_current_state(current):
+    from custom_components.solar_energy_management.coordinator.power_control import (
+        async_write_power_setpoint,
+    )
+
+    hass = _hass()
+    state = MagicMock()
+    state.state = current
+    state.attributes = {"unit_of_measurement": "W", "min": 0, "max": 12000}
+    hass.states.get = MagicMock(return_value=state)
+
+    assert await async_write_power_setpoint(
+        hass, "number.battery_discharge_power", 5000, context="test",
+    ) is False
+    hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("key", "bound"), [
+    ("min", float("nan")),
+    ("max", float("nan")),
+    ("min", -float("inf")),
+    ("max", float("inf")),
+])
+async def test_power_control_rejects_non_finite_bounds(key, bound):
+    from custom_components.solar_energy_management.coordinator.power_control import (
+        async_write_power_setpoint,
+    )
+
+    hass = _hass()
+    state = MagicMock()
+    state.state = "1200"
+    state.attributes = {
+        "unit_of_measurement": "W",
+        "min": 0,
+        "max": 12000,
+        key: bound,
+    }
+    hass.states.get = MagicMock(return_value=state)
+
+    assert await async_write_power_setpoint(
+        hass, "number.battery_discharge_power", 5000, context="test",
+    ) is False
+    hass.services.async_call.assert_not_awaited()
