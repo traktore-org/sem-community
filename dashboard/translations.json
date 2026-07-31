@@ -1230,7 +1230,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Minimum run time",
     "anti_cycle_min_pause": "Minimum pause time",
-    "anti_cycle_hint": "Stops rapid on/off cycling — protects pumps and relays. Blank keeps the default."
+    "anti_cycle_hint": "Stops rapid on/off cycling — protects pumps and relays. Blank keeps the default.",
+    "config_section_sensor_sources": "Sensor sources",
+    "config_sources_intro": "Where SEM reads live power. Auto = derived from HA's Energy Dashboard. Override only when a detected sensor is wrong or unavailable.",
+    "config_grid_power_sensor": "Grid power",
+    "config_help_grid_power_sensor": "Overrides the auto-detected grid power sensor. The import/export sign convention is detected automatically on the chosen sensor. Leave empty for auto (Energy Dashboard).",
+    "config_sources_all_auto": "all auto (Energy Dashboard)",
+    "config_sources_overridden": "overridden",
+    "config_source_unavailable": "override sensor unavailable — SEM keeps reading it (no silent fallback). Fix the sensor or clear the override."
   },
   "de": {
     "charging": "Laden",
@@ -2463,7 +2470,14 @@
     "minutes_short": "Min.",
     "anti_cycle_min_run": "Mindestlaufzeit",
     "anti_cycle_min_pause": "Mindestpausenzeit",
-    "anti_cycle_hint": "Verhindert schnelles Ein-/Ausschalten – schützt Pumpen und Relais. Leer = Standard."
+    "anti_cycle_hint": "Verhindert schnelles Ein-/Ausschalten – schützt Pumpen und Relais. Leer = Standard.",
+    "config_section_sensor_sources": "Sensorquellen",
+    "config_sources_intro": "Woher SEM die Live-Leistung liest. Auto = aus dem HA-Energie-Dashboard abgeleitet. Nur überschreiben, wenn ein erkannter Sensor falsch oder nicht verfügbar ist.",
+    "config_grid_power_sensor": "Netzleistung",
+    "config_help_grid_power_sensor": "Überschreibt den automatisch erkannten Netzleistungssensor. Die Import/Export-Vorzeichenkonvention wird am gewählten Sensor automatisch erkannt. Leer lassen für Auto (Energie-Dashboard).",
+    "config_sources_all_auto": "alles auto (Energie-Dashboard)",
+    "config_sources_overridden": "überschrieben",
+    "config_source_unavailable": "Override-Sensor nicht verfügbar — SEM liest ihn weiter (kein stiller Fallback). Sensor reparieren oder Override entfernen."
   },
   "fr": {
     "charging": "En charge",
@@ -3696,7 +3710,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Durée min. de marche",
     "anti_cycle_min_pause": "Durée min. de pause",
-    "anti_cycle_hint": "Évite les cycles marche/arrêt rapides — protège pompes et relais. Vide = défaut."
+    "anti_cycle_hint": "Évite les cycles marche/arrêt rapides — protège pompes et relais. Vide = défaut.",
+    "config_section_sensor_sources": "Sources des capteurs",
+    "config_sources_intro": "Où SEM lit la puissance en direct. Auto = dérivé du tableau de bord Énergie de HA. Ne remplacer que si un capteur détecté est erroné ou indisponible.",
+    "config_grid_power_sensor": "Puissance réseau",
+    "config_help_grid_power_sensor": "Remplace le capteur de puissance réseau détecté automatiquement. La convention de signe import/export est détectée automatiquement sur le capteur choisi. Laisser vide pour Auto (tableau de bord Énergie).",
+    "config_sources_all_auto": "tout auto (tableau Énergie)",
+    "config_sources_overridden": "remplacé(s)",
+    "config_source_unavailable": "capteur de remplacement indisponible — SEM continue de le lire (pas de repli silencieux). Réparez le capteur ou effacez le remplacement."
   },
   "es": {
     "charging": "Cargando",
@@ -4929,7 +4950,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Tiempo mín. de marcha",
     "anti_cycle_min_pause": "Tiempo mín. de pausa",
-    "anti_cycle_hint": "Evita ciclos rápidos de encendido/apagado — protege bombas y relés. Vacío = predeterminado."
+    "anti_cycle_hint": "Evita ciclos rápidos de encendido/apagado — protege bombas y relés. Vacío = predeterminado.",
+    "config_section_sensor_sources": "Fuentes de sensores",
+    "config_sources_intro": "De dónde lee SEM la potencia en vivo. Auto = derivado del panel de Energía de HA. Anular solo si un sensor detectado es incorrecto o no está disponible.",
+    "config_grid_power_sensor": "Potencia de red",
+    "config_help_grid_power_sensor": "Anula el sensor de potencia de red autodetectado. La convención de signo import/export se detecta automáticamente en el sensor elegido. Dejar vacío para Auto (panel de Energía).",
+    "config_sources_all_auto": "todo auto (panel de Energía)",
+    "config_sources_overridden": "anulado(s)",
+    "config_source_unavailable": "sensor de anulación no disponible — SEM sigue leyéndolo (sin respaldo silencioso). Repare el sensor o borre la anulación."
   },
   "it": {
     "charging": "In carica",
@@ -6162,7 +6190,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Tempo min. di marcia",
     "anti_cycle_min_pause": "Tempo min. di pausa",
-    "anti_cycle_hint": "Evita cicli rapidi on/off — protegge pompe e relè. Vuoto = predefinito."
+    "anti_cycle_hint": "Evita cicli rapidi on/off — protegge pompe e relè. Vuoto = predefinito.",
+    "config_section_sensor_sources": "Sorgenti dei sensori",
+    "config_sources_intro": "Da dove SEM legge la potenza in tempo reale. Auto = derivato dalla dashboard Energia di HA. Sovrascrivere solo se un sensore rilevato è errato o non disponibile.",
+    "config_grid_power_sensor": "Potenza di rete",
+    "config_help_grid_power_sensor": "Sovrascrive il sensore di potenza di rete rilevato automaticamente. La convenzione di segno import/export viene rilevata automaticamente sul sensore scelto. Lasciare vuoto per Auto (dashboard Energia).",
+    "config_sources_all_auto": "tutto auto (dashboard Energia)",
+    "config_sources_overridden": "sovrascritti",
+    "config_source_unavailable": "sensore di override non disponibile — SEM continua a leggerlo (nessun fallback silenzioso). Riparare il sensore o rimuovere l'override."
   },
   "nl": {
     "charging": "Laden",
@@ -7395,7 +7430,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Minimale looptijd",
     "anti_cycle_min_pause": "Minimale pauzetijd",
-    "anti_cycle_hint": "Voorkomt snel in-/uitschakelen — beschermt pompen en relais. Leeg = standaard."
+    "anti_cycle_hint": "Voorkomt snel in-/uitschakelen — beschermt pompen en relais. Leeg = standaard.",
+    "config_section_sensor_sources": "Sensorbronnen",
+    "config_sources_intro": "Waar SEM het live vermogen leest. Auto = afgeleid van HA's Energiedashboard. Alleen overschrijven als een gedetecteerde sensor fout of niet beschikbaar is.",
+    "config_grid_power_sensor": "Netvermogen",
+    "config_help_grid_power_sensor": "Overschrijft de automatisch gedetecteerde netvermogenssensor. De import/export-tekenconventie wordt automatisch gedetecteerd op de gekozen sensor. Leeg laten voor Auto (Energiedashboard).",
+    "config_sources_all_auto": "alles auto (Energiedashboard)",
+    "config_sources_overridden": "overschreven",
+    "config_source_unavailable": "override-sensor niet beschikbaar — SEM blijft hem lezen (geen stille terugval). Repareer de sensor of wis de override."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -8628,7 +8670,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Min. doba běhu",
     "anti_cycle_min_pause": "Min. doba pauzy",
-    "anti_cycle_hint": "Zabraňuje rychlému zapínání/vypínání — chrání čerpadla a relé. Prázdné = výchozí."
+    "anti_cycle_hint": "Zabraňuje rychlému zapínání/vypínání — chrání čerpadla a relé. Prázdné = výchozí.",
+    "config_section_sensor_sources": "Zdroje senzorů",
+    "config_sources_intro": "Odkud SEM čte živý výkon. Auto = odvozeno z energetického panelu HA. Přepište jen tehdy, když je detekovaný senzor chybný nebo nedostupný.",
+    "config_grid_power_sensor": "Výkon sítě",
+    "config_help_grid_power_sensor": "Přepíše automaticky detekovaný senzor výkonu sítě. Znaménková konvence import/export se na zvoleném senzoru detekuje automaticky. Ponechte prázdné pro Auto (energetický panel).",
+    "config_sources_all_auto": "vše auto (energetický panel)",
+    "config_sources_overridden": "přepsáno",
+    "config_source_unavailable": "přepisový senzor nedostupný — SEM jej dále čte (žádný tichý fallback). Opravte senzor nebo přepis odstraňte."
   },
   "da": {
     "charging": "Oplader",
@@ -9861,7 +9910,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Min. køretid",
     "anti_cycle_min_pause": "Min. pausetid",
-    "anti_cycle_hint": "Forhindrer hurtig tænd/sluk — beskytter pumper og relæer. Tom = standard."
+    "anti_cycle_hint": "Forhindrer hurtig tænd/sluk — beskytter pumper og relæer. Tom = standard.",
+    "config_section_sensor_sources": "Sensorkilder",
+    "config_sources_intro": "Hvor SEM læser live-effekt. Auto = afledt fra HA's energidashboard. Tilsidesæt kun hvis en registreret sensor er forkert eller utilgængelig.",
+    "config_grid_power_sensor": "Neteffekt",
+    "config_help_grid_power_sensor": "Tilsidesætter den autodetekterede neteffektsensor. Import/eksport-fortegnskonventionen registreres automatisk på den valgte sensor. Lad stå tom for Auto (energidashboard).",
+    "config_sources_all_auto": "alt auto (energidashboard)",
+    "config_sources_overridden": "tilsidesat",
+    "config_source_unavailable": "tilsidesættelsessensor utilgængelig — SEM læser den fortsat (ingen stille fallback). Reparer sensoren eller ryd tilsidesættelsen."
   },
   "fi": {
     "charging": "Lataus",
@@ -11094,7 +11150,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Vähimmäiskäyntiaika",
     "anti_cycle_min_pause": "Vähimmäistaukoaika",
-    "anti_cycle_hint": "Estää nopean päälle/pois-kytkennän — suojaa pumppuja ja releitä. Tyhjä = oletus."
+    "anti_cycle_hint": "Estää nopean päälle/pois-kytkennän — suojaa pumppuja ja releitä. Tyhjä = oletus.",
+    "config_section_sensor_sources": "Anturilähteet",
+    "config_sources_intro": "Mistä SEM lukee reaaliaikaisen tehon. Auto = johdettu HA:n energiapaneelista. Ohita vain, jos tunnistettu anturi on väärä tai ei saatavilla.",
+    "config_grid_power_sensor": "Verkon teho",
+    "config_help_grid_power_sensor": "Ohittaa automaattisesti tunnistetun verkkotehon anturin. Tuonti/vienti-etumerkkikäytäntö tunnistetaan valitusta anturista automaattisesti. Jätä tyhjäksi (Auto, energiapaneeli).",
+    "config_sources_all_auto": "kaikki auto (energiapaneeli)",
+    "config_sources_overridden": "ohitettu",
+    "config_source_unavailable": "ohitusanturi ei saatavilla — SEM lukee sitä edelleen (ei hiljaista varasiirtymää). Korjaa anturi tai poista ohitus."
   },
   "hu": {
     "charging": "Töltés",
@@ -12327,7 +12390,14 @@
     "minutes_short": "perc",
     "anti_cycle_min_run": "Min. üzemidő",
     "anti_cycle_min_pause": "Min. szünetidő",
-    "anti_cycle_hint": "Megakadályozza a gyors ki-/bekapcsolást — védi a szivattyúkat és reléket. Üres = alapérték."
+    "anti_cycle_hint": "Megakadályozza a gyors ki-/bekapcsolást — védi a szivattyúkat és reléket. Üres = alapérték.",
+    "config_section_sensor_sources": "Szenzorforrások",
+    "config_sources_intro": "Honnan olvassa a SEM az élő teljesítményt. Auto = a HA Energia irányítópultból származtatva. Csak akkor írja felül, ha egy észlelt szenzor hibás vagy nem elérhető.",
+    "config_grid_power_sensor": "Hálózati teljesítmény",
+    "config_help_grid_power_sensor": "Felülírja az automatikusan észlelt hálózati teljesítményszenzort. Az import/export előjel-konvenció a kiválasztott szenzoron automatikusan felismerésre kerül. Hagyja üresen az Auto módhoz (Energia irányítópult).",
+    "config_sources_all_auto": "minden auto (Energia irányítópult)",
+    "config_sources_overridden": "felülírva",
+    "config_source_unavailable": "a felülíró szenzor nem elérhető — a SEM továbbra is azt olvassa (nincs csendes tartalék). Javítsa a szenzort vagy törölje a felülírást."
   },
   "no": {
     "charging": "Lader",
@@ -13560,7 +13630,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Min. kjøretid",
     "anti_cycle_min_pause": "Min. pausetid",
-    "anti_cycle_hint": "Hindrer rask av/på — beskytter pumper og reléer. Tom = standard."
+    "anti_cycle_hint": "Hindrer rask av/på — beskytter pumper og reléer. Tom = standard.",
+    "config_section_sensor_sources": "Sensorkilder",
+    "config_sources_intro": "Hvor SEM leser live-effekt. Auto = avledet fra HAs energidashbord. Overstyr kun hvis en oppdaget sensor er feil eller utilgjengelig.",
+    "config_grid_power_sensor": "Netteffekt",
+    "config_help_grid_power_sensor": "Overstyrer den autodetekterte netteffektsensoren. Import/eksport-fortegnskonvensjonen oppdages automatisk på valgt sensor. La stå tom for Auto (energidashbord).",
+    "config_sources_all_auto": "alt auto (energidashbord)",
+    "config_sources_overridden": "overstyrt",
+    "config_source_unavailable": "overstyringssensor utilgjengelig — SEM fortsetter å lese den (ingen stille fallback). Reparer sensoren eller fjern overstyringen."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -14793,7 +14870,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Min. czas pracy",
     "anti_cycle_min_pause": "Min. czas przerwy",
-    "anti_cycle_hint": "Zapobiega szybkiemu włączaniu/wyłączaniu — chroni pompy i przekaźniki. Puste = domyślne."
+    "anti_cycle_hint": "Zapobiega szybkiemu włączaniu/wyłączaniu — chroni pompy i przekaźniki. Puste = domyślne.",
+    "config_section_sensor_sources": "Źródła czujników",
+    "config_sources_intro": "Skąd SEM odczytuje moc na żywo. Auto = wyprowadzone z Panelu Energii HA. Nadpisuj tylko, gdy wykryty czujnik jest błędny lub niedostępny.",
+    "config_grid_power_sensor": "Moc sieci",
+    "config_help_grid_power_sensor": "Nadpisuje automatycznie wykryty czujnik mocy sieci. Konwencja znaku import/eksport jest wykrywana automatycznie na wybranym czujniku. Pozostaw puste dla Auto (Panel Energii).",
+    "config_sources_all_auto": "wszystko auto (Panel Energii)",
+    "config_sources_overridden": "nadpisane",
+    "config_source_unavailable": "czujnik nadpisania niedostępny — SEM nadal go odczytuje (brak cichego fallbacku). Napraw czujnik lub usuń nadpisanie."
   },
   "pt": {
     "charging": "A carregar",
@@ -16026,7 +16110,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Tempo mín. de funcionamento",
     "anti_cycle_min_pause": "Tempo mín. de pausa",
-    "anti_cycle_hint": "Evita ciclos rápidos de liga/desliga — protege bombas e relés. Vazio = padrão."
+    "anti_cycle_hint": "Evita ciclos rápidos de liga/desliga — protege bombas e relés. Vazio = padrão.",
+    "config_section_sensor_sources": "Fontes de sensores",
+    "config_sources_intro": "De onde o SEM lê a potência em tempo real. Auto = derivado do painel de Energia do HA. Substituir apenas se um sensor detetado estiver errado ou indisponível.",
+    "config_grid_power_sensor": "Potência da rede",
+    "config_help_grid_power_sensor": "Substitui o sensor de potência da rede autodetetado. A convenção de sinal import/export é detetada automaticamente no sensor escolhido. Deixar vazio para Auto (painel de Energia).",
+    "config_sources_all_auto": "tudo auto (painel de Energia)",
+    "config_sources_overridden": "substituído(s)",
+    "config_source_unavailable": "sensor de substituição indisponível — o SEM continua a lê-lo (sem recurso silencioso). Repare o sensor ou limpe a substituição."
   },
   "ro": {
     "charging": "Încărcare",
@@ -17259,7 +17350,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Timp min. de funcționare",
     "anti_cycle_min_pause": "Timp min. de pauză",
-    "anti_cycle_hint": "Previne pornirea/oprirea rapidă — protejează pompele și releele. Gol = implicit."
+    "anti_cycle_hint": "Previne pornirea/oprirea rapidă — protejează pompele și releele. Gol = implicit.",
+    "config_section_sensor_sources": "Surse de senzori",
+    "config_sources_intro": "De unde citește SEM puterea în timp real. Auto = derivat din panoul Energie al HA. Suprascrieți doar dacă un senzor detectat este greșit sau indisponibil.",
+    "config_grid_power_sensor": "Putere rețea",
+    "config_help_grid_power_sensor": "Suprascrie senzorul de putere de rețea autodetectat. Convenția de semn import/export este detectată automat pe senzorul ales. Lăsați gol pentru Auto (panoul Energie).",
+    "config_sources_all_auto": "totul auto (panoul Energie)",
+    "config_sources_overridden": "suprascrise",
+    "config_source_unavailable": "senzorul de suprascriere indisponibil — SEM continuă să îl citească (fără revenire silențioasă). Reparați senzorul sau ștergeți suprascrierea."
   },
   "sv": {
     "charging": "Laddar",
@@ -18492,7 +18590,14 @@
     "minutes_short": "min",
     "anti_cycle_min_run": "Min. körtid",
     "anti_cycle_min_pause": "Min. paustid",
-    "anti_cycle_hint": "Förhindrar snabb på/av — skyddar pumpar och reläer. Tomt = standard."
+    "anti_cycle_hint": "Förhindrar snabb på/av — skyddar pumpar och reläer. Tomt = standard.",
+    "config_section_sensor_sources": "Sensorkällor",
+    "config_sources_intro": "Var SEM läser live-effekt. Auto = härledd från HA:s energipanel. Åsidosätt endast om en identifierad sensor är fel eller otillgänglig.",
+    "config_grid_power_sensor": "Näteffekt",
+    "config_help_grid_power_sensor": "Åsidosätter den autodetekterade näteffektsensorn. Import/export-teckenkonventionen identifieras automatiskt på vald sensor. Lämna tomt för Auto (energipanel).",
+    "config_sources_all_auto": "allt auto (energipanel)",
+    "config_sources_overridden": "åsidosatta",
+    "config_source_unavailable": "åsidosättningssensor otillgänglig — SEM fortsätter läsa den (ingen tyst reserv). Reparera sensorn eller rensa åsidosättningen."
   },
   "zh": {
     "charging": "充电中",
@@ -19725,6 +19830,13 @@
     "minutes_short": "分钟",
     "anti_cycle_min_run": "最短运行时间",
     "anti_cycle_min_pause": "最短暂停时间",
-    "anti_cycle_hint": "防止频繁开关 — 保护水泵和继电器。留空为默认值。"
+    "anti_cycle_hint": "防止频繁开关 — 保护水泵和继电器。留空为默认值。",
+    "config_section_sensor_sources": "传感器来源",
+    "config_sources_intro": "SEM 读取实时功率的来源。自动 = 从 HA 能源仪表板推导。仅当检测到的传感器错误或不可用时才覆盖。",
+    "config_grid_power_sensor": "电网功率",
+    "config_help_grid_power_sensor": "覆盖自动检测的电网功率传感器。所选传感器的输入/输出符号约定会自动检测。留空则使用自动（能源仪表板）。",
+    "config_sources_all_auto": "全部自动（能源仪表板）",
+    "config_sources_overridden": "已覆盖",
+    "config_source_unavailable": "覆盖传感器不可用 — SEM 仍在读取它（不会静默回退）。请修复传感器或清除覆盖。"
   }
 }
