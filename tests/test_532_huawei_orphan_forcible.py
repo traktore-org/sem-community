@@ -272,10 +272,10 @@ async def test_limit_skips_when_entity_already_at_target():
 
 
 @pytest.mark.asyncio
-async def test_writes_when_entity_state_unknown():
-    """Unknown/unavailable state → re-assert (write), never silently skip."""
+async def test_skips_when_entity_state_unknown():
+    """Unknown state fails closed instead of issuing a blind hardware write."""
     h = _hass_huawei(forcible_state="Stopped")
     h.states.get = MagicMock(return_value=_fake_state("number.lim", "unknown"))
     a = _adapter(h)
     await a.command_normal()
-    assert _LIMIT in _calls(h), "unknown state → write to be safe"
+    assert _LIMIT not in _calls(h), "unknown state → no blind write"

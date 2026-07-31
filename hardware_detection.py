@@ -1341,6 +1341,22 @@ def discover_inverter_from_registry(
     if not same_integration:
         return None
 
+    # A name match is not sufficient: Deye/ha-solarman exposes e.g.
+    # ``number.inverter_battery_max_discharging_current`` in amperes. Older
+    # discovery treated that as a watt setpoint and startup could write a
+    # configured watt maximum into a 0..350 A register. Auto-detection must
+    # therefore require a live W/kW control entity.
+    from .coordinator.power_control import is_valid_power_control_entity
+
+    same_integration = [
+        eid for eid in same_integration
+        if is_valid_power_control_entity(
+            hass, eid, require_explicit_unit=True
+        )
+    ]
+    if not same_integration:
+        return None
+
     # Score each candidate against the patterns; first hit wins. Prefer
     # entity IDs containing "batter" when multiple match the same pattern.
     def _score(eid: str) -> int:

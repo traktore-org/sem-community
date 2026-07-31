@@ -1415,15 +1415,26 @@ class TestShellRetirement624:
 class TestStartupRestoreRelocated624:
     """The BatteryProtectionMixin's one job, relocated to actuate_battery."""
 
-    async def _run(self, state_value, control_entity="number.limit", max_w=5000):
+    async def _run(
+        self,
+        state_value,
+        control_entity="number.limit",
+        max_w=5000,
+        *,
+        attributes=None,
+        observer_mode=False,
+    ):
         from custom_components.solar_energy_management.coordinator.actuate_battery import (
-            restore_discharge_limit_on_startup)
+            restore_discharge_limit_on_startup,
+        )
         hass = MagicMock()
         hass.services.async_call = AsyncMock()
         st = MagicMock(); st.state = state_value
+        st.attributes = attributes or {}
         hass.states.get = MagicMock(return_value=st if state_value is not None else None)
         cfg = {"battery_discharge_control_entity": control_entity,
-               "battery_max_discharge_power": max_w}
+               "battery_max_discharge_power": max_w,
+               "observer_mode": observer_mode}
         await restore_discharge_limit_on_startup(hass, cfg)
         return hass
 
@@ -1445,3 +1456,32 @@ class TestStartupRestoreRelocated624:
     async def test_unreadable_state_noop(self):
         hass = await self._run("unavailable")
         hass.services.async_call.assert_not_awaited()
+
+    async def test_observer_mode_never_writes_stale_limit(self):
+        """Observer mode is a hard read-only boundary, including startup."""
+        hass = await self._run(
+            "1200",
+            attributes={"unit_of_measurement": "W", "min": 0, "max": 12000},
+            observer_mode=True,
+        )
+        hass.services.async_call.assert_not_awaited()
+
+    async def test_ampere_entity_rejected_without_write(self):
+        """Deye max-discharging-current is A, never a watt setpoint."""
+        hass = await self._run(
+            "185",
+            control_entity="number.inverter_battery_max_discharging_current",
+            max_w=12000,
+            attributes={"unit_of_measurement": "A", "min": 0, "max": 350},
+        )
+        hass.services.async_call.assert_not_awaited()
+
+    async def test_kw_entity_scales_watts_and_checks_native_range(self):
+        hass = await self._run(
+            "1.2",
+            max_w=5000,
+            attributes={"unit_of_measurement": "kW", "min": 0, "max": 12},
+        )
+        hass.services.async_call.assert_awaited_once()
+        args = hass.services.async_call.await_args
+        assert args.args[2]["value"] == 5.0
