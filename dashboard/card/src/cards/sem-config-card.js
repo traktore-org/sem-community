@@ -35,6 +35,18 @@ const SECTIONS = [
         expanded: true,  // open by default — gives the user a quick status read
     },
     {
+        // #628/#696 — one home for the three power-source overrides. SEM
+        // derives grid/solar/battery power from HA's Energy Dashboard; these
+        // pickers are the escape hatch when a detected sensor is wrong or
+        // dead (e.g. inverter CTs dark off-grid → external meter).
+        id: 'sensor_sources',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#sensor-source-overrides',
+        icon: 'mdi:transmission-tower',
+        color: '#488fc2',
+        titleKey: 'config_section_sensor_sources',
+        subtitleFn: (c) => c._sensorSourcesSubtitle(),
+    },
+    {
         id: 'ev_chargers',
         docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md#the-five-charge-modes',
         icon: 'mdi:ev-station',
@@ -159,6 +171,10 @@ const WATCHED = [
 // edit and commit on one Apply, so the reload fires once for the whole batch.
 const STRUCTURAL_KEYS = new Set([
     'battery_soc_sensor',
+    // #628/#696 — the three power-SOURCE overrides (Sensor sources section).
+    // Read at SensorReader construction (#592/#597) → backend reloads on
+    // set_option; staging batches the three into one Apply/reload.
+    'grid_power_sensor', 'solar_production_sensor', 'battery_power_sensor',
     'heat_pump_relay1_entity', 'heat_pump_relay2_entity',
     'heat_pump_climate_entity', 'heat_pump_power_sensor',
     'heat_pump_temperature_sensor', 'heat_pump_invert_sg_ready',
@@ -838,6 +854,50 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    // #628/#696 — the three power-SOURCE overrides in one place. Each picker
+    // shows the override (blank = auto from the Energy Dashboard); an
+    // unavailable override gets a loud warning row instead of a silent
+    // fallback. battery_power_sensor moved here from Battery & zones,
+    // solar_production_sensor from Tariff — one concept, one home.
+    _renderSensorSources(T) {
+        const opts = this._options || {};
+        return html`
+            <div class="setting-help-text" style="margin:0 0 6px">
+                ${this._t('config_sources_intro')}</div>
+            ${this._renderPicker('grid_power_sensor', 'config_grid_power_sensor',
+                'sensor', 'power', opts, 'config_help_grid_power_sensor')}
+            ${this._sourceUnavailableWarning('grid_power_sensor', opts, T)}
+            ${this._renderPicker('solar_production_sensor', 'config_solar_production_sensor',
+                'sensor', 'power', opts, 'config_help_solar_production_sensor')}
+            ${this._sourceUnavailableWarning('solar_production_sensor', opts, T)}
+            ${this._renderPicker('battery_power_sensor', 'config_battery_power_sensor',
+                'sensor', 'power', opts, 'config_help_battery_power_sensor')}
+            ${this._sourceUnavailableWarning('battery_power_sensor', opts, T)}
+        `;
+    }
+
+    // Collapsed-header glance: "all auto" or "N overridden".
+    _sensorSourcesSubtitle() {
+        const opts = this._options || {};
+        const n = ['grid_power_sensor', 'solar_production_sensor',
+                   'battery_power_sensor'].filter((k) => opts[k]).length;
+        if (!n) return this._t('config_sources_all_auto');
+        return `${n} ${this._t('config_sources_overridden')}`;
+    }
+
+    // Failure honesty (#696): an override that stops reporting must be SEEN.
+    // SEM keeps reading the override (no silent fallback to a sensor the user
+    // explicitly replaced), so the card is where the user learns it's dead.
+    _sourceUnavailableWarning(key, opts, T) {
+        const ent = opts[key];
+        if (!ent || !this._hass) return nothing;
+        const st = this._hass.states[ent];
+        if (st && st.state !== 'unavailable' && st.state !== 'unknown') return nothing;
+        return html`<div class="setting-help-text"
+            style="color:${T.warn || '#ffb74d'};margin:-2px 0 6px">
+            ⚠ ${ent} — ${this._t('config_source_unavailable')}</div>`;
+    }
+
     _renderBatteryZones(T) {
         const opts = this._options || {};
         return html`
@@ -849,10 +909,8 @@ class SEMConfigCard extends SEMLitBase {
                   → Apply-batched reload. */ ''}
             ${this._renderPicker('battery_soc_sensor', 'config_battery_soc_sensor',
                 'sensor', null, opts, 'config_help_battery_soc_sensor')}
-            ${/* #592/#597 — battery power override; #593 — hardware cycle count.
-                  Both fallbacks: SEM autodetects first, these are the escape hatch. */ ''}
-            ${this._renderPicker('battery_power_sensor', 'config_battery_power_sensor',
-                'sensor', 'power', opts, 'config_help_battery_power_sensor')}
+            ${/* #592/#597 battery power override → Sensor sources section (#628).
+                  #593 — hardware cycle count stays here. */ ''}
             ${this._renderPicker('battery_cycles_sensor', 'config_battery_cycles_sensor',
                 'sensor', null, opts, 'config_help_battery_cycles_sensor')}
             ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
@@ -923,11 +981,7 @@ class SEMConfigCard extends SEMLitBase {
                 'sensor', 'power', opts, 'config_help_grid_import_entity')}
             ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
                 'sensor', 'power', opts, 'config_help_grid_export_entity')}
-            ${/* #592 — solar power override for energy-only installs (SolarEdge/
-                  Sonnen etc.): supply a real solar power sensor so Home isn't
-                  clamped to 0. Autodetect-first; this is the escape hatch. */ ''}
-            ${this._renderPicker('solar_production_sensor', 'config_solar_production_sensor',
-                'sensor', 'power', opts, 'config_help_solar_production_sensor')}
+            ${/* #592 solar power override → Sensor sources section (#628). */ ''}
             ${this._hasBattery() ? html`
                 <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
                     <span class="ctrl-label" style="font-weight:600">${this._t('config_battery_control')}</span>
@@ -2165,6 +2219,7 @@ class SEMConfigCard extends SEMLitBase {
 
         const renderers = {
             overview: (T) => this._renderOverview(T),
+            sensor_sources: (T) => this._renderSensorSources(T),
             ev_chargers: (T) => this._renderEvChargers(T),
             battery_zones: (T) => this._renderBatteryZones(T),
             tariff: (T) => this._renderTariff(T),

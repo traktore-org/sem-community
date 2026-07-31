@@ -753,8 +753,18 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_daily_solar_energy` — today's solar production
 - `sensor.sem_daily_grid_import_energy` — today's grid import
 - `sensor.sem_daily_grid_export_energy` — today's grid export
-- `sensor.sem_daily_ev_energy` — today's EV charging energy
+- `sensor.sem_daily_ev_energy` — the current *EV day's* charging energy
 - `sensor.sem_monthly_*` — monthly equivalents
+
+> **Day boundaries:** solar / grid / home daily counters reset at **midnight**
+> (matching HA's Energy Dashboard). The EV counter is different by design:
+> its "day" runs **deadline-to-deadline**, rolling over at your charger's
+> *Charge by* time (default 07:00, latest deadline across chargers on
+> multi-charger installs) — so an overnight charge lands in one bucket
+> instead of being split at midnight. A session still charging at the
+> deadline continues into the next EV day; the counter restarting mid-session
+> at your Charge-by time is expected. For calendar-day comparisons against
+> HA's Energy Dashboard, use the charger's own daily counter instead.
 
 ### Flow Sensors (W and kWh)
 - `sensor.sem_flow_solar_to_home_power` — solar power used by home
