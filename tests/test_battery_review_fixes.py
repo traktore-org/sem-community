@@ -117,3 +117,50 @@ def test_decide_battery_now_in_window_uses_is_active_now():
     assert _now_in_window(view) is False
     view.scheduler_decision.schedule = NightChargeSchedule(slots=[_slot(-0.2, 1.0)])
     assert _now_in_window(view) is True
+
+
+# ── Deye safety: adapter writes remain power-unit aware ──────────────────
+
+@pytest.mark.asyncio
+async def test_generic_adapter_rejects_ampere_discharge_entity():
+    from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
+        GenericBatteryAdapter,
+    )
+
+    hass = _hass()
+    state = MagicMock()
+    state.state = "185"
+    state.attributes = {"unit_of_measurement": "A", "min": 0, "max": 350}
+    hass.states.get = MagicMock(return_value=state)
+    adapter = GenericBatteryAdapter(hass, {
+        "battery_discharge_control_entity": (
+            "number.inverter_battery_max_discharging_current"
+        ),
+        "battery_max_discharge_power": 12000,
+    })
+
+    await adapter.command_normal()
+
+    hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generic_adapter_scales_watts_for_kw_entity():
+    from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
+        GenericBatteryAdapter,
+    )
+
+    hass = _hass()
+    state = MagicMock()
+    state.state = "1.2"
+    state.attributes = {"unit_of_measurement": "kW", "min": 0, "max": 12}
+    hass.states.get = MagicMock(return_value=state)
+    adapter = GenericBatteryAdapter(hass, {
+        "battery_discharge_control_entity": "number.battery_discharge_power",
+        "battery_max_discharge_power": 5000,
+    })
+
+    await adapter.command_normal()
+
+    hass.services.async_call.assert_awaited_once()
+    assert hass.services.async_call.await_args.args[2]["value"] == 5.0

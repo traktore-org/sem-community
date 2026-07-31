@@ -155,3 +155,17 @@ def is_power_unit(state_or_unit) -> bool:
     """
     unit = _unit_of(state_or_unit)
     return bool(unit) and unit in _POWER_TO_W
+
+
+def is_battery_control_power_unit(state_or_unit) -> bool:
+    """True for units safe for a battery power setpoint (W or kW only).
+
+    MW/GW are valid power *sensor* units but implausible control scales for the
+    residential inverter APIs supported by SEM. Keeping this policy beside the
+    canonical unit tables prevents another inline normalization copy (#641).
+    """
+    unit = _unit_of(state_or_unit)
+    return unit in {
+        "w", "watt", "watts",
+        "kw", "kilowatt", "kilowatts",
+    }

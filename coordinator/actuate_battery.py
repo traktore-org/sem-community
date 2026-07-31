@@ -15,6 +15,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .charger_types import BatteryIntent
+from .power_control import prepare_power_setpoint
 
 if TYPE_CHECKING:  # pragma: no cover
     from .battery_adapters.base import BatteryControlAdapter
@@ -128,6 +129,15 @@ async def restore_discharge_limit_on_startup(hass, config: dict) -> None:
     past ``decide_battery``'s NORMAL intent. This unconditionally pushes
     the configured max on startup.
     """
+    # Observer mode is a hard read-only boundary. Startup restoration used to
+    # bypass the normal per-cycle observer gate and could therefore write to
+    # hardware before the observer switch had been synchronised.
+    if config.get("observer_mode", False):
+        _LOGGER.info(
+            "Startup: observer mode active — battery discharge restore skipped"
+        )
+        return
+
     max_discharge = config.get("battery_max_discharge_power", 5000)
 
     # #691 — a multi-battery install carries PER-battery control entities
@@ -144,24 +154,24 @@ async def restore_discharge_limit_on_startup(hass, config: dict) -> None:
         entities.extend(e for e in per_battery if e)
 
     for control_entity in dict.fromkeys(entities):
-        current_state = hass.states.get(control_entity)
-        if current_state is None:
+        prepared = prepare_power_setpoint(hass, control_entity, max_discharge)
+        if prepared is None:
             continue
 
-        try:
-            current_limit = float(current_state.state)
-        except (ValueError, TypeError):
-            continue
-
-        if current_limit < max_discharge:
+        if prepared.current_value < prepared.value:
             await hass.services.async_call(
-                "number", "set_value",
-                {"entity_id": control_entity, "value": max_discharge},
+                prepared.domain, "set_value",
+                {"entity_id": control_entity, "value": prepared.value},
                 blocking=True,
             )
             _LOGGER.info(
-                "Startup: restored battery discharge limit on %s from %dW to %dW",
-                control_entity, int(current_limit), max_discharge,
+                "Startup: restored battery discharge limit on %s from %.3f%s "
+                "to %.3f%s",
+                control_entity,
+                prepared.current_value,
+                prepared.unit,
+                prepared.value,
+                prepared.unit,
             )
 
 

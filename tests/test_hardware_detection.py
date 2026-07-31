@@ -697,6 +697,36 @@ class TestDiscoverInverterFromRegistry:
             result = discover_inverter_from_registry(hass, cfg)
         assert result == "number.deye_battery_discharge_limit"
 
+    def test_solarman_deye_current_entity_is_not_power_control(self):
+        """Do not mistake Deye's ampere register for a watt setpoint."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        amp_state = MagicMock()
+        amp_state.state = "185"
+        amp_state.attributes = {
+            "unit_of_measurement": "A",
+            "min": 0,
+            "max": 350,
+        }
+        hass.states.get = MagicMock(return_value=amp_state)
+        entries = [
+            _make_registry_entry("sensor.inverter_battery_power", "solarman"),
+            _make_registry_entry(
+                "number.inverter_battery_max_discharging_current", "solarman"
+            ),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.inverter_battery_power"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+
+        assert result is None
+
     def test_growatt_discharge_entity(self):
         """Growatt discharge control entity should be detected."""
         from custom_components.solar_energy_management.hardware_detection import (
