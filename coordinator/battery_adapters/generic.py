@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 
 from ..charger_types import BatteryIntent
+from ..power_control import async_write_power_setpoint
 from .base import BatteryControlAdapter
 
 _LOGGER = logging.getLogger(__name__)
@@ -280,21 +281,10 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if not self._discharge_control_entity:
             self._last_discharge_limit_w = watts
             return
-        # #531: domain-aware like _write_force_discharge — a user may point the
-        # discharge-limit at an ``input_number.*`` helper (common on HA-TEST
-        # rigs / DIY setups), which would 404 on the hardcoded ``number``
-        # domain. Both expose ``set_value``.
-        domain = self._discharge_control_entity.split(".", 1)[0]
-        if domain not in ("number", "input_number"):
-            domain = "number"
-        try:
-            await self._hass.services.async_call(
-                domain, "set_value",
-                {"entity_id": self._discharge_control_entity, "value": watts},
-                blocking=True,
-            )
+        if await async_write_power_setpoint(
+            self._hass,
+            self._discharge_control_entity,
+            watts,
+            context="Generic battery discharge limit",
+        ):
             self._last_discharge_limit_w = watts
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.warning(
-                "Generic battery: failed to set discharge limit: %s", e,
-            )

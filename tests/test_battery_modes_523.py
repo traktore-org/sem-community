@@ -225,9 +225,9 @@ def test_off_mode_beats_scheduler_arbitrage_and_protection():
 
 
 @pytest.mark.asyncio
-async def test_command_off_one_time_handoff_then_silent():
-    # First off cycle after SEM was controlling → one clean command_normal
-    # (clear force, release strategy, un-limit). Subsequent cycles: silent.
+async def test_command_off_missing_control_state_fails_closed_then_silent():
+    # A missing control entity cannot be validated, so the first OFF handoff
+    # must not issue a blind set_value. Subsequent cycles remain silent.
     from unittest.mock import AsyncMock, MagicMock
     from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
         GenericBatteryAdapter,
@@ -241,8 +241,7 @@ async def test_command_off_one_time_handoff_then_silent():
     gen._last_intent = BatteryIntent.FORCE_DISCHARGE  # was controlling
     await gen.command_off()
     assert gen.last_intent is BatteryIntent.OFF
-    first = hass.services.async_call.await_count
-    assert first > 0  # one-time handoff issued service calls
+    assert hass.services.async_call.await_count == 0
     hass.services.async_call.reset_mock()
     await gen.command_off()  # already off → silent
     assert hass.services.async_call.await_count == 0

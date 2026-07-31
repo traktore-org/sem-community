@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- 🛡️ **Battery discharge controls now fail closed** (#702) — two real risks closed: the startup
+  discharge-limit restore actuated even in Observer Mode (observer's contract is *zero* actuation),
+  and control auto-discovery trusted the entity *name* without proving its unit — on Deye/
+  ha-solarman it could select an **amperes** register (max 350 A) and feed it watt values. Now:
+  Observer Mode makes the startup restore a hard no-op, discovery requires a live, explicitly
+  W/kW-labelled entity, and every discharge-limit write (Generic / GoodWe / Huawei / startup) goes
+  through one fail-closed validator with W↔kW conversion — an unavailable, wrong-domain, A/%,
+  out-of-range or non-finite control produces **no service call**. Explicitly configured unitless
+  `input_number` helpers keep working as legacy watt controls.
+  (by @tintinz in #701 — thank you for the exceptionally thorough contribution)
+
 - 🔇 **The STOP-unenforceable warning no longer floods the log** (#700) — the (correct, important)
   warning that a charger config has no way to open the contactor fired every reconcile cycle while
   the condition persisted: 8000+ entries on a real install, crowding out the entire log history.

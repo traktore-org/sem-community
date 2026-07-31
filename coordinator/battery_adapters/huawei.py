@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 
 from ..charger_types import BatteryIntent
+from ..power_control import async_write_power_setpoint, prepare_power_setpoint
 from .base import BatteryControlAdapter
 
 _LOGGER = logging.getLogger(__name__)
@@ -452,28 +453,25 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # next polls it (~30-60s / 1-2 SEM cycles); the next cycle sees the
         # divergence and re-asserts. Bounded, and acceptable vs the per-cycle
         # Modbus flooding this guard removes.
-        st = self._hass.states.get(self._discharge_control_entity)
-        if st is not None:
-            try:
-                if abs(float(st.state) - watts) < 1.0:
-                    self._last_discharge_limit_w = watts
-                    return
-            except (TypeError, ValueError):
-                pass
-        try:
-            await self._hass.services.async_call(
-                "number", "set_value",
-                {"entity_id": self._discharge_control_entity, "value": watts},
-                blocking=True,
-            )
+        prepared = prepare_power_setpoint(
+            self._hass, self._discharge_control_entity, watts
+        )
+        if prepared is None:
+            return
+        tolerance = 1.0 / prepared.scale_to_watts
+        if abs(prepared.current_value - prepared.value) < tolerance:
+            self._last_discharge_limit_w = watts
+            return
+        if await async_write_power_setpoint(
+            self._hass,
+            self._discharge_control_entity,
+            watts,
+            context="Huawei battery discharge limit",
+        ):
             self._last_discharge_limit_w = watts
             _LOGGER.debug(
                 "Huawei battery: discharge limit %.0f W → %s",
                 watts, self._discharge_control_entity,
-            )
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.warning(
-                "Huawei battery: failed to set discharge limit: %s", e,
             )
 
     def _autodetect_battery_device(self) -> str | None:

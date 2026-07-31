@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from ..charger_types import BatteryIntent
+from ..power_control import async_write_power_setpoint
 from .base import BatteryControlAdapter
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,14 +84,10 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
         if not self._discharge_control_entity:
             self._last_discharge_limit_w = watts
             return
-        try:
-            await self._hass.services.async_call(
-                "number", "set_value",
-                {"entity_id": self._discharge_control_entity, "value": watts},
-                blocking=True,
-            )
+        if await async_write_power_setpoint(
+            self._hass,
+            self._discharge_control_entity,
+            watts,
+            context="GoodWe battery discharge limit",
+        ):
             self._last_discharge_limit_w = watts
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.warning(
-                "GoodWe battery: failed to set discharge limit: %s", e,
-            )
