@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.33] — 31.07.2026
+
+### ✨ Enhancements
+
+- 🗼 **New "Sensor sources" section on the Configuration card** (#628, #696) — the grid / solar /
+  battery power override keys have existed since #592/#597, but grid had no UI at all and
+  solar/battery hid in unrelated sections. All three pickers now live in one section: blank = auto
+  (Energy Dashboard), the collapsed header shows "all auto" vs "N overridden", sign detection runs
+  against the override source, and an override that goes unavailable shows a warning instead of a
+  silent fallback. For the off-grid / dead-CT case (EG4 FlexBOSS → Shelly EM) and any install that
+  wants SEM on a different meter than the HA-wide Energy Dashboard uses.
+  (by @traktore-org, requested by @Azlinon / @jappish84)
+
+### 📚 Documentation
+
+- 📖 **The EV daily counter's deadline-based day boundary is now documented** (#628) — it rolls at
+  the charger's *Charge by* time (default 07:00), not midnight, so an overnight charge lands in
+  one bucket; the mid-session restart at the deadline read as a bug because nothing said so.
+  (by @traktore-org, reported by @jappish84)
+
 # [1.7.5-beta.32] — 31.07.2026
 
 ### 🐛 Fixes
