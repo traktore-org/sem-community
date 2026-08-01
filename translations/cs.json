@@ -88,7 +88,8 @@
       "unknown": "Došlo k neočekávané chybě. Zkuste to prosím znovu.",
       "entity_not_found": "Entita nebyla nalezena. Ověřte prosím, že dané ID entity existuje.",
       "service_not_found": "Služba oznámení nebyla nalezena. Zkontrolujte název služby (např. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready vyžaduje OBĚ entity relé. Nastavte obě relé — nebo ponechte obě prázdná a nakonfigurujte pouze entitu climate pro navýšení cílové teploty v režimu pouze climate."
+      "heat_pump_partial_relays": "SG-Ready vyžaduje OBĚ entity relé. Nastavte obě relé — nebo ponechte obě prázdná a nakonfigurujte pouze entitu climate pro navýšení cílové teploty v režimu pouze climate.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "Solar Energy Management je již nakonfigurován. Povolena je pouze jedna instance.",

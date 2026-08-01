@@ -90,6 +90,50 @@ async def _get_recent_sem_logs(hass: HomeAssistant) -> list[str]:
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
+
+def _build_deye_diagnostics(adapters: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a read-only Deye diagnostics block for the first Deye adapter.
+
+    Exposes the fail-closed capability gate (``available`` + ``reason``),
+    the effective max charge current, the persisted unsafe latch, and the
+    last recovery/actuation error. Pure read — it never writes to the
+    adapter or store, and it never serialises the runtime snapshot store
+    object. Returns ``None`` when no Deye adapter is present so installs
+    that don't use Deye keep the dump compact.
+    """
+    deye_adapters = [
+        ad for ad in adapters.values()
+        if type(ad).__name__ == "DeyeBatteryAdapter"
+    ]
+    if not deye_adapters:
+        return None
+
+    ad = deye_adapters[0]
+    try:
+        capability = ad.capability()
+    except Exception:  # noqa: BLE001 — diagnostics must never raise
+        capability = None
+
+    available = bool(
+        getattr(capability, "available", False) if capability is not None else False
+    )
+    reason = str(
+        getattr(capability, "reason", "") if capability is not None else ""
+    )
+    return {
+        "available": available,
+        "reason": reason,
+        "max_charge_current_a": float(
+            getattr(capability, "max_charge_current_a", 0.0)
+            if capability is not None else 0.0
+        ),
+        "unsafe_latched": bool(getattr(ad, "unsafe_latched", False)),
+        "recovery_error": getattr(ad, "_last_error", None) or None,
+        "observer_mode": bool(getattr(ad, "_observer_mode", False)),
+        "actuation_enabled": bool(getattr(ad, "_actuation_enabled", False)),
+    }
+
+
 # Config keys that could contain user-specific entity IDs (not secrets, but privacy)
 REDACT_CONFIG_KEYS = {
     "ev_connected_sensor",
@@ -339,6 +383,11 @@ async def async_get_config_entry_diagnostics(
                 "state": str(getattr(getattr(sched, "state", None), "value", "")) or None,
             },
         }
+        # #709 — Deye forced-grid-charge observability. Read-only. Keep the
+        # generic payload unchanged when no Deye adapter exists.
+        deye_info = _build_deye_diagnostics(_adapters)
+        if deye_info is not None:
+            battery_info["deye"] = deye_info
     except Exception as exc:  # noqa: BLE001 — diagnostics must never raise
         battery_info = {"error": str(exc)}
 

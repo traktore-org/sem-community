@@ -770,6 +770,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_auto_start_soc",
     "battery_buffer_soc",
     "battery_capacity_kwh",
+    "battery_charge_platform",
     "battery_charge_scheduler_enabled",
     "battery_cycle_cost",
     "battery_discharge_control_entity",
@@ -790,6 +791,22 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "daily_ev_target",
     "daily_ev_target_max",
     "demand_charge_rate",
+    "deye_actuation_enabled",
+    "deye_battery_voltage_entity",
+    "deye_battery_voltage_max_age_s",
+    "deye_bms_max_charge_current_a",
+    "deye_charge_current_entity",
+    "deye_force_charge_work_mode",
+    "deye_grid_charge_switch",
+    "deye_max_charge_current_a",
+    "deye_max_discharge_power",
+    "deye_observer_mode",
+    "deye_program_control",
+    "deye_program_groups",
+    "deye_work_mode_battery_first_option",
+    "deye_work_mode_control",
+    "deye_work_mode_entity",
+    "deye_work_mode_load_first_option",
     "diagram_style",
     "dynamic_feedin_entity",
     "dynamic_forecast_entity",
@@ -1963,6 +1980,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             self._data.update(user_input)
+            if self._data.get("battery_charge_platform") == "deye":
+                return await self.async_step_deye()
             return await self.async_step_pv_naming()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
@@ -1971,6 +1990,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="battery_scheduler",
             data_schema=vol.Schema({
+                vol.Optional(
+                    "battery_charge_platform",
+                    default=_c("battery_charge_platform", "generic"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "generic", "label": "Generic / other"},
+                            {"value": "deye", "label": "Deye hybrid inverter"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional(
                     "battery_charge_scheduler_enabled",
                     default=_c("battery_charge_scheduler_enabled", False),
@@ -2072,6 +2103,249 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.BooleanSelector(),
             }),
             errors=errors,
+        )
+
+    async def async_step_deye(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """(#709) Deye forced-grid-charge configuration section.
+
+        Lets an operator wire a Deye hybrid inverter without editing YAML:
+        the grid-charge switch, the charge-current number (unit A), the
+        battery-voltage sensor, exactly six program groups (time/soc/charge
+        entities), a safe max current, an optional BMS max current, an
+        optional Work Mode select with two distinct mapping values, and the
+        two safety gates (observer mode default **on**, actuation default
+        **off** — so a bare config never writes until explicitly enabled).
+
+        The submitted form is normalised into the documented Deye contract
+        keys read by ``DeyeBatteryAdapter`` (``deye_program_groups`` as a
+        list of six {time, soc, charge} dicts). Booleans stay real bools.
+        The runtime snapshot store is never part of entry options — it is
+        attached to the adapter at runtime, not serialised here.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # Keep only the Deye-owned keys so a generic/other platform
+            # doesn't accumulate stale deye_* keys.
+            clean = {k: v for k, v in user_input.items() if k.startswith("deye_")}
+            self._data["battery_charge_platform"] = user_input.get(
+                "battery_charge_platform",
+                self._data.get("battery_charge_platform", "generic"),
+            )
+            if self._data["battery_charge_platform"] == "deye":
+                # Normalise the six numbered program groups into the list shape.
+                groups = []
+                for n in range(1, 7):
+                    group = {
+                        "time": clean.get(f"deye_program_{n}_time", "").strip(),
+                        "soc": clean.get(f"deye_program_{n}_soc", "").strip(),
+                        "charge": clean.get(f"deye_program_{n}_charge", "").strip(),
+                    }
+                    groups.append(group)
+                self._data["deye_program_groups"] = groups
+
+                # Validation: exactly six complete groups.
+                if len(groups) != 6 or not all(
+                    g["time"] and g["soc"] and g["charge"] for g in groups
+                ):
+                    errors["base"] = "deye_program_groups_incomplete"
+
+                # Work Mode mappings must be explicit and distinct when enabled.
+                load_first = clean.get("deye_work_mode_load_first_option", "").strip()
+                battery_first = clean.get(
+                    "deye_work_mode_battery_first_option", ""
+                ).strip()
+                if clean.get("deye_work_mode_control") is True:
+                    if not load_first or not battery_first or load_first == battery_first:
+                        errors["deye_work_mode_battery_first_option"] = (
+                            "deye_work_mode_mapping_not_distinct"
+                        )
+                    force_mode = clean.get("deye_force_charge_work_mode", "")
+                    if force_mode not in ("load_first", "battery_first"):
+                        errors["deye_force_charge_work_mode"] = (
+                            "deye_force_charge_work_mode_invalid"
+                        )
+
+                # Safety booleans must stay real bools (never strings).
+                self._data["deye_observer_mode"] = clean.get(
+                    "deye_observer_mode", True,
+                ) is True
+                self._data["deye_actuation_enabled"] = clean.get(
+                    "deye_actuation_enabled", False,
+                ) is True
+                self._data["deye_program_control"] = clean.get(
+                    "deye_program_control", True,
+                ) is True
+                self._data["deye_work_mode_control"] = clean.get(
+                    "deye_work_mode_control", False,
+                ) is True
+                # Copy the scalar Deye config terms through.
+                for key in (
+                    "deye_grid_charge_switch",
+                    "deye_charge_current_entity",
+                    "deye_battery_voltage_entity",
+                    "deye_battery_voltage_max_age_s",
+                    "deye_max_charge_current_a",
+                    "deye_bms_max_charge_current_a",
+                    "deye_max_discharge_power",
+                    "deye_work_mode_entity",
+                    "deye_work_mode_load_first_option",
+                    "deye_work_mode_battery_first_option",
+                    "deye_force_charge_work_mode",
+                ):
+                    if clean.get(key) is not None:
+                        self._data[key] = clean[key]
+            else:
+                # Non-Deye platform: drop stale Deye keys from the payload.
+                for key in list(self._data.keys()):
+                    if key.startswith("deye_") or key == "deye_program_groups":
+                        self._data.pop(key, None)
+
+            if not errors:
+                return await self.async_step_pv_naming()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
+        _platform = _c("battery_charge_platform", "generic")
+
+        return self.async_show_form(
+            step_id="deye",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        "deye_grid_charge_switch",
+                        description={"suggested_value": _c("deye_grid_charge_switch", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="switch")
+                    ),
+                    vol.Optional(
+                        "deye_charge_current_entity",
+                        description={"suggested_value": _c("deye_charge_current_entity", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain=["number", "input_number"])
+                    ),
+                    vol.Optional(
+                        "deye_battery_voltage_entity",
+                        description={"suggested_value": _c("deye_battery_voltage_entity", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Optional(
+                        "deye_battery_voltage_max_age_s",
+                        default=_c("deye_battery_voltage_max_age_s", 30),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1, max=600, step=1,
+                            unit_of_measurement="s",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_max_charge_current_a",
+                        default=_c("deye_max_charge_current_a", 25),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1, max=100, step=1,
+                            unit_of_measurement="A",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_bms_max_charge_current_a",
+                        default=_c("deye_bms_max_charge_current_a", 0),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0, max=200, step=1,
+                            unit_of_measurement="A",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_max_discharge_power",
+                        default=_c("deye_max_discharge_power", 0),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0, max=50000, step=100,
+                            unit_of_measurement="W",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_program_control",
+                        default=_c("deye_program_control", True),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_observer_mode",
+                        default=_c("deye_observer_mode", True),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_actuation_enabled",
+                        default=_c("deye_actuation_enabled", False),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_work_mode_control",
+                        default=_c("deye_work_mode_control", False),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_work_mode_entity",
+                        description={"suggested_value": _c("deye_work_mode_entity", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="select")
+                    ),
+                    vol.Optional(
+                        "deye_work_mode_load_first_option",
+                        description={"suggested_value": _c("deye_work_mode_load_first_option", "Load First")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_work_mode_battery_first_option",
+                        description={"suggested_value": _c("deye_work_mode_battery_first_option", "Battery First")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_force_charge_work_mode",
+                        default=_c("deye_force_charge_work_mode", "battery_first"),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": "load_first", "label": "Load First"},
+                                {"value": "battery_first", "label": "Battery First"},
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+                | {
+                    vol.Optional(
+                        f"deye_program_{n}_{kind}",
+                        description={"suggested_value": _c(
+                            f"deye_program_{n}_{kind}", None,
+                        )},
+                    ): (
+                        selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="select")
+                        )
+                        if kind == "time"
+                        else selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain=["number", "input_number"])
+                        )
+                        if kind == "soc"
+                        else selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="select")
+                        )
+                    )
+                    for n in range(1, 7)
+                    for kind in ("time", "soc", "charge")
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "platform": _platform,
+            },
         )
 
     async def async_step_pv_naming(

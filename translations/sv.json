@@ -88,7 +88,8 @@
       "unknown": "Ett oväntat fel uppstod. Försök igen.",
       "entity_not_found": "Entiteten hittades inte. Kontrollera att entitets-ID:t finns.",
       "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge."
+      "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge.",
+      "deye_program_groups_incomplete": "Alla sex Deye-programgrupper måste ha entiteter för tid, SOC och nätladdning."
     },
     "abort": {
       "already_configured": "Solar Energy Management är redan konfigurerat. Bara en instans tillåts.",

@@ -88,7 +88,8 @@
       "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
       "entity_not_found": "Entiteit niet gevonden. Controleer of de entiteit-ID bestaat.",
       "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready heeft BEIDE relais-entiteiten nodig. Stel beide relais in — of laat beide leeg en configureer alleen de klimaat-entiteit voor een klimaat-only instelpunt-boost."
+      "heat_pump_partial_relays": "SG-Ready heeft BEIDE relais-entiteiten nodig. Stel beide relais in — of laat beide leeg en configureer alleen de klimaat-entiteit voor een klimaat-only instelpunt-boost.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan.",

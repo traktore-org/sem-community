@@ -64,6 +64,11 @@ class BatteryControlAdapter(ABC):
         # always goes through; a plain -1.0 sentinel would alias a real
         # negative charge setpoint on a bidirectional entity, #523).
         self._last_force_discharge_w: Optional[float] = None
+        # #709: runtime scope — config entry + battery identity. Injected by the
+        # coordinator's ``_battery_adapter_context``; pure metadata, never part
+        # of entry data/options and never serialised into the adapter.
+        self._config_entry_id: str = config.get("config_entry_id", "")
+        self._battery_id: str = config.get("battery_id", "")
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -99,6 +104,15 @@ class BatteryControlAdapter(ABC):
         return self._last_error
 
     # ─── Commands ──────────────────────────────────────────────
+
+    async def async_recover_pending(self) -> bool:
+        """Recover persistent brand state before first actuation.
+
+        Most adapters have no transactional state and therefore need no work.
+        Stateful adapters override this method and fail closed on recovery
+        errors.
+        """
+        return True
 
     @abstractmethod
     async def command_normal(self) -> None:

@@ -980,6 +980,40 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
 
     # ─── Commands ──────────────────────────────────────────────
 
+    async def async_recover_pending(self) -> bool:
+        """Load the persisted unsafe latch and recover a pending snapshot.
+
+        Called once by the coordinator before the adapter's first actuation.
+        Any latch/store failure is fail-closed and leaves active control blocked.
+        A persisted unsafe latch is never acknowledged or reset automatically.
+        """
+        load_latch = getattr(self._snapshot_store, "async_load_latch", None)
+        if not callable(load_latch):
+            self._unsafe_latched = True
+            self._last_error = "Deye unsafe latch store is unavailable"
+            await self._store_unsafe(True)
+            return False
+        try:
+            loaded = load_latch()
+            if inspect.isawaitable(loaded):
+                loaded = await loaded
+        except Exception as err:  # noqa: BLE001
+            self._unsafe_latched = True
+            self._last_error = f"Deye unsafe latch load failed: {err}"
+            await self._store_unsafe(True)
+            return False
+        if type(loaded) is not bool:
+            self._unsafe_latched = True
+            self._last_error = "Deye unsafe latch payload is invalid"
+            await self._store_unsafe(True)
+            return False
+        self._unsafe_latched = loaded
+        if loaded:
+            self._last_error = "Deye unsafe latch is set"
+            return False
+        await self.command_normal()
+        return not self._unsafe_latched and not self._snapshot_load_failed
+
     async def command_normal(self) -> None:
         snapshot = await self._load_snapshot()
         if snapshot is None:

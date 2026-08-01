@@ -88,7 +88,8 @@
       "unknown": "An unexpected error occurred. Please try again.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
       "service_not_found": "Notification service not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost."
+      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "Solar Energy Management is already configured. Only one instance is allowed.",

@@ -88,7 +88,8 @@
       "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "entity_not_found": "Entité introuvable. Vérifiez que l'ID d'entité existe.",
       "service_not_found": "Service de notification introuvable. Veuillez vérifier le nom du service (par ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready nécessite les DEUX entités relais. Renseignez les deux relais — ou laissez-les vides et configurez uniquement l'entité climate pour un boost de consigne climate seul."
+      "heat_pump_partial_relays": "SG-Ready nécessite les DEUX entités relais. Renseignez les deux relais — ou laissez-les vides et configurez uniquement l'entité climate pour un boost de consigne climate seul.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "Solar Energy Management est déjà configuré. Une seule instance est autorisée.",
