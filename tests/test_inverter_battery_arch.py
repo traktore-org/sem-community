@@ -18,6 +18,7 @@ from custom_components.solar_energy_management.coordinator.actuate_battery impor
     actuate_battery,
 )
 from custom_components.solar_energy_management.coordinator.battery_adapters import (
+    DeyeBatteryAdapter,
     GenericBatteryAdapter,
     GoodWeBatteryAdapter,
     HuaweiBatteryAdapter,
@@ -521,6 +522,11 @@ class TestEnergyTotalsViews:
 
 
 class TestAdapterFactory:
+    def test_explicit_deye(self):
+        hass = MagicMock()
+        a = adapter_for(hass, {"battery_charge_platform": "deye"})
+        assert isinstance(a, DeyeBatteryAdapter)
+
     def test_explicit_huawei(self):
         hass = MagicMock()
         a = adapter_for(hass, {"battery_charge_platform": "huawei"})
