@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- 🌅 **The loads' day now comes from the same meter-day class the EV uses** (#704) — the loads
+  carried their own inline, stateful day-boundary latch; on a mid-night restart it fell back to
+  the calendar date, resetting every runtime target hours early and re-arming exactly the
+  overnight battery drain the boundary exists to prevent. The latch is gone: the sunrise meter
+  day is computed statelessly by the shared TimeManager class — restart-proof by construction,
+  and in winter the day now rolls at actual sunrise instead of the 07:00 night-window cap.
+  (by @traktore-org, root-caused by Guido's review question)
 - 🕛 **Overnight top-ups no longer flap at midnight** (#703) — the grid/battery top-up force was
   stamped and expired against the *calendar* date while a load's runtime day is held to **sunrise**,
   so every load running an overnight top-up was stopped at exactly 00:00 ("day rollover") and

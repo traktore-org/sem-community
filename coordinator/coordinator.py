@@ -4276,21 +4276,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Surplus controller update failed: %s", e)
 
-        # Device runtimes. (#620 + Guido) The load "day" rolls over only once
-        # we're OUT of night mode — i.e. after sunrise — NOT at calendar
-        # midnight. Same reasoning as the EV's sunrise reset: if the counter
-        # reset at 00:00, a Tier-2 battery-eligible load would see 0/target in
-        # the small hours and start draining the battery overnight to refill a
-        # brand-new day's target BEFORE the day's surplus has any chance. By
-        # holding the meter day through the night, an overnight run keeps
-        # counting to the SAME day; the reset lands after sunrise when solar is
-        # already available, so the load fills from surplus first.
+        # Device runtimes. (#620 + Guido) The load "day" rolls over at
+        # SUNRISE, not calendar midnight: if the counter reset at 00:00, a
+        # Tier-2 battery-eligible load would see 0/target in the small hours
+        # and drain the battery overnight to refill a brand-new day's target
+        # BEFORE the day's surplus has any chance.
+        #
+        # (#704) The day comes from the SAME TimeManager meter-day class the
+        # EV uses (#279) — stateless, so it is restart-proof by construction.
+        # The previous inline latch (hold the day while is_night_mode()) fell
+        # back to the CALENDAR date when a mid-night restart cleared it: a
+        # boot at 02:00 stamped the new day, reset every deficit hours early,
+        # and re-armed exactly the battery drain this boundary exists to
+        # prevent. Also feeds the #703 force-expiry boundary via
+        # ``device._daily_runtime_meter_day`` — one class, one day.
         try:
-            _cal_day = dt_util.now().date()
-            if not self.time_manager.is_night_mode():
-                self._load_meter_day = _cal_day
-            meter_day = getattr(self, "_load_meter_day", None) or _cal_day
-            self._load_meter_day = meter_day
+            meter_day = self.time_manager.get_current_meter_day_sunrise_based()
+            self._load_meter_day = meter_day   # observability/back-compat
             for device in self._surplus_controller._devices.values():
                 device.update_daily_runtime(meter_day)
         except (AttributeError, TypeError) as e:
