@@ -1,8 +1,7 @@
-"""Grid import surcharge (nätägarpåslag).
+"""Grid import surcharge.
 
-SEM optionally adds a constant per-kWh network-owner fee (the Swedish
-"nätägarpåslag" / grid import surcharge, e.g. 0.725 SEK/kWh) on top of the
-raw spot price for dynamic tariffs.
+SEM optionally adds a constant per-kWh network-owner fee (for example
+0.725 SEK/kWh) on top of the raw spot price for dynamic tariffs.
 
 Requirements enforced here:
 

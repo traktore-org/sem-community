@@ -1999,7 +1999,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=100000.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")  # #549 currency-agnostic
                 ),
-                # Nätägarpåslag (grid import surcharge): a constant
+                # Grid import surcharge: a constant
                 # per-kWh network-owner fee (e.g. 0.725 SEK/kWh) added to
                 # every IMPORTED kWh on dynamic tariffs. Explicit config
                 # only — 0 disables it. Nonnegative NumberSelector with the

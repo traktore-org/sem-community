@@ -278,7 +278,7 @@ class DynamicTariffProvider(TariffProvider):
         currency: str = "CHF",
         classification_mode: str = "percentile",
         fallback_price: float = 0.30,
-        # Nätägarpåslag (grid import surcharge): a constant per-kWh network
+        # Grid import surcharge: a constant per-kWh network
         # fee (e.g. 0.725 SEK/kWh) applied on top of the raw spot price for
         # every IMPORTED kWh. Explicit config only — 0 disables it. Never
         # applies to export; never mutates the raw spot series (classification,
@@ -1210,7 +1210,7 @@ class DynamicTariffProvider(TariffProvider):
     def get_current_import_rate(self) -> float:
         """Current effective import rate: raw spot + grid import surcharge.
 
-        ``grid_import_surcharge`` (the nätägarpåslag) is an explicit,
+        ``grid_import_surcharge`` is an explicit,
         constant per-kWh add-on applied to every IMPORTED kWh, so it is
         included here — this is the value that feeds the cost accumulators
         and savings break-even. Classification keeps the raw
@@ -1240,7 +1240,7 @@ class DynamicTariffProvider(TariffProvider):
         1.0 means the cheapest slot is genuinely cheaper than now, which we
         keep.
 
-        The configured ``grid_import_surcharge`` (nätägarpåslag) is applied
+        The configured ``grid_import_surcharge`` is applied
         EXACTLY ONCE to every imported kWh, *after* the state-vs-curve
         correction. It must not enter the correction factor: the factor
         compares like-for-like raw spot (state vs curve), so we use the raw
@@ -1478,7 +1478,7 @@ class DynamicTariffProvider(TariffProvider):
         if not slots:
             return None
         # Average of the raw selected slots, then apply the configured
-        # grid import surcharge (nätägarpåslag) exactly once — it applies
+        # grid import surcharge exactly once — it applies
         # to every imported kWh, and each selected slot is one kWh of
         # import. The raw ``PricePoint`` objects stay untouched.
         return sum(p.price for p in slots) / len(slots) + self._grid_import_surcharge()

@@ -409,7 +409,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 fallback_price=_cfg_rate(
                     config, "electricity_import_rate", default=0.30,
                 ),
-                # Nätägarpåslag (grid import surcharge): explicit constant
+                # Grid import surcharge: explicit constant
                 # per-kWh network fee added to every IMPORTED kWh for
                 # dynamic tariffs. 0 disables it. Defaults to 0.0 so an
                 # existing config without the key is unaffected.
