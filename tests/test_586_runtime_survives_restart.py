@@ -72,9 +72,16 @@ async def test_accrued_runtime_survives_reload(
     assert device.daily_min_runtime_sec == 330 * 60
 
     # Accrue runtime toward the target, as a running day would, and persist
-    # it exactly the way the coordinator's step-13 persistence does.
+    # it exactly the way the coordinator's step-13 persistence does. The
+    # meter-day stamp must come from the coordinator's OWN day source
+    # (#704: the TimeManager sunrise meter day) — a hand-stamped calendar
+    # date diverges whenever the test clock is before sunrise (HA test envs
+    # run US/Pacific), and the first post-reload tick would then read the
+    # restored day as a rollover and reset the accrued value.
     device._daily_runtime_accumulated_sec = _ACCRUED_SEC
-    device._daily_runtime_meter_day = dt_util.now().date()
+    device._daily_runtime_meter_day = (
+        coordinator.time_manager.get_current_meter_day_sunrise_based()
+    )
     coordinator._persist_device_runtimes()
     await coordinator._storage.async_save_daily()
 

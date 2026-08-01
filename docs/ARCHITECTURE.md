@@ -224,16 +224,16 @@ deploying to HA-TEST and watching log lines for the rare combination
 that triggered a bug. The deterministic CI scenarios run in under a
 second.
 
-### What's queued for v1.7.1
+### Delivered during the v1.7.x line
 
-- Per-inverter / per-battery dashboard sensors (gated on `len(...) >= 2`)
-- Per-inverter / per-battery flow attribution in `flow_calculator`
-- `sensor_reader` migration to populate `EnergyTotals.per_inverter` /
-  `per_battery` each cycle
-- Delete the `BatteryProtectionMixin` + `BatteryChargeAdapter` shells
-  (currently left in the tree as backward-compat wrappers; the
-  new `BatteryControlAdapter` already supersedes them)
-- Per-string-to-destination attribution (#312 deferred work)
+- Per-inverter / per-battery dashboard sensors + flow attribution (#623,
+  v1.7.2–v1.7.5) and the `sensor_reader` per-unit population
+- `BatteryProtectionMixin` / `BatteryChargeAdapter` shells deleted (#624);
+  `BatteryControlAdapter` is the only battery control surface
+- Unit-safe, fail-closed battery power writes centralized in
+  `power_control.py` (#702)
+
+Still deferred: per-string-to-destination attribution (#312).
 
 ---
 
@@ -253,6 +253,9 @@ coordinator/
 ├── decide_battery.py       — Pure decide_battery(view) → BatteryDecision
 ├── actuate.py              — Thin delegation of ChargerDecision to ChargerReconciler
 ├── actuate_battery.py      — Intent dispatch onto BatteryControlAdapter
+├── power_control.py        — Unit-safe battery power setpoint writes (#702):
+│                             fail-closed validation + W↔kW conversion; rejects
+│                             current/percent/unitless-unknown/out-of-range controls
 ├── build_view.py           — Builds ChargerView from PowerReadings + config
 ├── charge_stability.py     — Stability filter between decide() and actuate():
 │                             median smoothing, enable/disable delays, start-kick

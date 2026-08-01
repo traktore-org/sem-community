@@ -141,7 +141,7 @@ With the floor at zero and/or night charging off, the charger only draws solar s
 1. Confirm the coordinator is running: `sensor.sem_charging_state` should NOT be `unavailable`. If it is, the integration failed to start — see HA logs.
 2. Verify power sensors have numeric values (not "unknown" or "unavailable")
 3. Check HA logs for SEM errors: **Settings > System > Logs**, filter for `solar_energy_management`
-4. Daily energy values reset at **sunrise** (not midnight) — this is by design for accurate night charging tracking
+4. Daily ENERGY values (solar / home / grid / battery) reset at **midnight** — matching HA's Energy Dashboard. Two deliberate exceptions: the EV daily counter rolls at the charger's **Charge-by deadline** (default 07:00, so an overnight charge stays in one bucket), and load **runtime targets** roll at **sunrise** (see MULTI_DEVICE_GUIDE)
 
 ---
 
@@ -161,9 +161,12 @@ config flow. If it doesn't:
    cards from `/config/www/` are picked up.
 
 **If the dashboard appears but cards show "Custom element doesn't exist":**
-some HACS frontend cards are missing. See [Dashboard Guide → Required
-HACS Cards](docs/DASHBOARD_GUIDE.md#required-hacs-cards) for the full
-list — `card-mod`, `apexcharts-card` and `mushroom` are the most commonly missing.
+as of v1.7.5 (#617) the dashboard has **zero required HACS cards** — every SEM
+card ships in the bundled `sem-cards.js` and the rest is native HA. This error
+after an update is almost always a stale browser cache: hard-refresh
+(Ctrl+Shift+R) or clear the companion-app cache. Optional extras
+(`sankey-chart`, `k-flow-card`) are auto-detected when installed — see
+[Dashboard Guide → Required HACS Cards](DASHBOARD_GUIDE.md#required-hacs-cards).
 
 ---
 
@@ -307,7 +310,7 @@ read-only by design — SEM can't suppress it), but the cards will load.
 1. Check import/export rates in the integration configuration
 2. For dynamic tariffs (Tibber/Nordpool/aWATTar): verify the price sensor entity exists and has a numeric state
 3. Currency is read from HA settings: **Settings > General > Currency**
-4. Cost sensors reset daily at sunrise — partial-day values are expected
+4. Cost sensors reset daily at midnight (with the energy counters) — partial-day values are expected
 
 ---
 

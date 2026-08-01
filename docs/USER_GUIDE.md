@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/icon@2x.png" alt="SEM Logo" width="120">
+  <img src="../brand/icon@2x.png" alt="SEM Logo" width="120">
 </p>
 
 # User Guide
@@ -582,13 +582,18 @@ The fix persists across restarts — SEM locks the correction so a restart won't
 
 Every device registered in SEM has a **control mode** that determines how SEM is allowed to interact with it. This is the most important setting for each device — it defines the boundary between what SEM controls and what the user controls.
 
-| Mode | SEM turns ON? | SEM turns OFF (peak)? | Use case |
-|------|--------------|----------------------|----------|
-| **off** | Never | Never | Monitoring only (coffee machine, lights you don't want managed) |
-| **peak_only** | Never | Yes, when peak limit reached | Devices that should stay under user control, but SEM can shed to protect the grid limit (towel heaters, general appliances) |
-| **surplus** | Yes, when solar surplus available | Yes, when surplus drops or peak limit reached | Devices you want SEM to actively control based on solar (hot water heater, pool pump) |
+The **Mode** dropdown on a device's Control-tab row offers four options:
 
-**Default for all devices: `peak_only`** — SEM will never proactively turn on a device unless you explicitly set it to `surplus` mode.
+| Mode | SEM turns ON? | SEM turns OFF? | Use case |
+|------|--------------|----------------|----------|
+| **Off** | Never | Never | Monitoring only (coffee machine, lights you don't want managed) |
+| **Peak Only** | Never | Yes, during grid peaks | Devices under your control that SEM may shed to protect the grid limit |
+| **Solar only** | Yes, on PV surplus | Yes, when surplus drops or during peaks | Discretionary loads on sun alone (pool pump, boiler) |
+| **Solar + battery** | Yes, on PV surplus + home-battery assist above the buffer | Same | Loads that should ride through cloud/evening on the battery (#620) |
+
+**Default for all devices: Peak Only** — SEM never proactively turns a device on unless you pick one of the Solar modes.
+
+Internally the two Solar modes share the `surplus` control mode (`control_mode`: `off` / `peak_only` / `surplus`), differentiated by the battery-assist flag — relevant when writing the mode via the service below.
 
 ### Changing the mode
 
@@ -747,7 +752,10 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_grid_import_power` — always ≥ 0, derived from `grid_power`
 - `sensor.sem_grid_export_power` — always ≥ 0, derived from `grid_power`
 - `sensor.sem_ev_power` — current EV charging power
-- `sensor.sem_home_consumption_power` — total home power draw (excludes EV)
+- `sensor.sem_home_consumption_power` — total home power draw (excludes EV). Carries the
+  `power_snapshot` attribute: the whole balance set (solar/grid/battery/EV/home/SOC) from one
+  coordinator cycle, used by the diagram/flow cards so their books always add up (#699)
+- `sensor.sem_inverter_temperature` — inverter temperature (°C, when the inverter exposes it)
 
 ### Energy Sensors (kWh)
 - `sensor.sem_daily_solar_energy` — today's solar production

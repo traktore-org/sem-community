@@ -275,7 +275,7 @@ Some HEMS tools bundle vendor-specific Modbus templates that write directly to i
 
 ## Related docs
 
-- [README — Recent Improvements](../README.md#recent-improvements-v15x) — release notes for each version
+- [README — Recent Improvements](../README.md#recent-improvements) — release notes for each version
 - [USER_GUIDE — Configuration Options](USER_GUIDE.md#configuration-options) — full settings reference
 - [MULTI_DEVICE_GUIDE](MULTI_DEVICE_GUIDE.md) — multi-charger setup
 - [DASHBOARD_GUIDE](DASHBOARD_GUIDE.md) — card-by-card UI reference

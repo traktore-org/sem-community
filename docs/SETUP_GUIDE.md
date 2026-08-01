@@ -104,13 +104,10 @@ night charging and battery charge scheduling.
 ## 2. Installation via HACS
 
 1. Open Home Assistant and click **HACS** in the sidebar.
-2. Click **Integrations**, then the three-dot menu (top right), then
-   **Custom repositories**.
-3. Paste `https://github.com/traktore-org/sem-community` into the URL field,
-   set category to **Integration**, and click **Add**.
-4. Close the dialog and search for **Solar Energy Management** in the list.
-5. Click the result, then **Download** at the bottom right.
-6. When the download finishes, go to **Settings > System > Restart** and
+2. Search for **Solar Energy Management** — SEM is in the **default HACS
+   store**, no custom repository needed.
+3. Click the result, then **Download** at the bottom right.
+4. When the download finishes, go to **Settings > System > Restart** and
    restart Home Assistant. Wait 30–60 seconds for it to come back.
 
 After the restart, SEM is installed but not yet active. Complete the config
@@ -173,7 +170,7 @@ control-path field your charger needs (number entity OR service call). All
 per-charger tunables (daily target kWh, target SOC, surplus priority,
 night-charging current, battery capacity) live in **Configure** after install,
 with sensible defaults until you change them. See
-[Per-charger tunables](#per-charger-tunables) below.
+[EV Charging settings](#ev-charging-settings) below.
 
 | Field | Default | Description |
 |-------|---------|-------------|

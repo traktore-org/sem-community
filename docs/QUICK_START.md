@@ -30,10 +30,9 @@ EV charger setup is optional. SEM works as a monitoring and battery management s
 
 1. Open **HACS** in the Home Assistant sidebar.
 2. Go to **Integrations**.
-3. Click the 3-dot menu in the top-right corner and select **Custom repositories**.
-4. Enter the URL: `https://github.com/traktore-org/sem-community` and set the category to **Integration**. Click **Add**.
-5. Search for **Solar Energy Management** and click **Download**.
-6. When prompted, restart Home Assistant: **Settings > System > Restart**.
+3. Search for **Solar Energy Management** (SEM is in the default HACS store — no
+   custom repository needed) and click **Download**.
+4. When prompted, restart Home Assistant: **Settings > System > Restart**.
 
 ![SEM on the HACS page](images/sem_hacs_page.png)
 

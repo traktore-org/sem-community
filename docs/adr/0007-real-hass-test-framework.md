@@ -51,5 +51,5 @@ slower".
 
 See `tests/test_setup_entry_smoke.py`, `tests/test_setup_entry_lifecycle.py`,
 and `tests/test_unload_reload_cycle.py` for the real-hass test suite.
-See [`CONTRIBUTING.md`](../../CONTRIBUTING.md#the-three-layer-test-pyramid)
+See [`CONTRIBUTING.md`](../../CONTRIBUTING.md#the-four-layer-test-pyramid)
 for the full pyramid description.
