@@ -52,5 +52,7 @@ and needs to handle every supported brand's quirk. Mitigation:
 pipeline tests (ADR 0005) cover every supported brand's full chain,
 so any regression surfaces deterministically in CI.
 
-See [`CLAUDE.md`](../../CLAUDE.md#sign-convention-summary) for the
-operator-level summary and the commit `00e449c` postmortem.
+See [`HARDWARE_SENSORS.md`](../HARDWARE_SENSORS.md) for the per-signal
+sign conventions and override surface; the commit `00e449c` postmortem
+(an unconditional negation that broke Huawei) is why the boundary rule
+exists: never negate a source sensor without verifying the live reading.

@@ -55,5 +55,6 @@ Reference charger patterns (control method):
 - Power unit: W vs kW auto-conversion
 
 See `tests/test_split_grid_integration.py` for the existing scenarios
-and [`CLAUDE.md`](../../CLAUDE.md#mandatory-pipeline-tests-for-every-supported-device)
-for the operator-level summary.
+and [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the standing rule:
+every brand listed in the README must have a pipeline test — adding a
+brand to the supported list requires adding its test in the same change.
