@@ -320,12 +320,23 @@ data:
 #### What happens when the budget is NOT reached?
 
 **Surplus (solar only):** nothing is forced. On a dark day the device
-simply runs less than its budget and progress resets at midnight — this
-mode **never draws grid power**. The budget is a *ceiling*, not a floor:
-SEM will not run the device from grid to "catch up." If you need a
+simply runs less than its budget and progress resets at the day boundary —
+this mode **never draws grid power**. The budget is a *ceiling*, not a
+floor: SEM will not run the device from grid to "catch up." If you need a
 *guaranteed* minimum runtime even on cloudy days, run the device from your
 own automation triggered on `binary_sensor.sem_surplus_available` (see
 above), where you control the grid-vs-solar trade-off.
+
+**Cheap hours / "Finish overnight from" (#688):** the day's runtime target
+can be completed from the paid source during **tonight's** cheap windows —
+and "tonight" genuinely spans midnight: a load's runtime day is held
+through the night and rolls over at **sunrise**, so a cheap window at
+02:00 still fills *yesterday evening's* remaining minutes and books them
+to that day. What never happens is carry-over **across the sunrise
+boundary**: if the tariff offers no cheap window at all before sunrise,
+the day simply ends short and the new day starts at zero. This is
+deliberate — carried-over debt would compound across a cloudy or expensive
+week and force ever-longer grid runs to "repay" it.
 
 In every mode: **peak protection outranks the goal** (a device chasing
 its target still sheds for a grid peak), the anti-flicker minimums (5 min

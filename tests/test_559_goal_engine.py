@@ -389,17 +389,21 @@ async def test_loads_goal_with_removed_keys(registry):
 class TestForceExpiry:
 
     async def test_cheap_force_expires_on_day_rollover_in_cheap_window(self, mock_hass):
+        # (#703) "day rollover" = the load's METER day moved on (sunrise
+        # boundary), not the calendar flip at midnight. Force stamped for the
+        # OLD meter day + meter day now advanced → stale → stop, and the
+        # re-force stamps the CURRENT meter day.
         from datetime import date as _date
-        from homeassistant.util import dt as dt_util
         sc = SurplusController(mock_hass)
         dev = _mock_device(is_active=True, policy="cheap_hours",
                            needs_offpeak=True, remaining_sec=3600)
         dev._offpeak_forced = True
-        dev._offpeak_forced_date = _date(2020, 1, 1)  # forced YESTERDAY
+        dev._offpeak_forced_date = _date(2020, 1, 1)      # the OLD meter day
+        dev._daily_runtime_meter_day = _date(2020, 1, 2)  # sunrise rolled over
         sc.register_device(dev)
         await sc.update(0.0, price_level="cheap")
         dev.deactivate.assert_awaited()
-        assert dev._offpeak_forced_date == dt_util.now().date()
+        assert dev._offpeak_forced_date == _date(2020, 1, 2)
 
     async def test_cheap_force_rollover_without_new_deficit_stays_off(self, mock_hass):
         from datetime import date as _date
@@ -415,11 +419,14 @@ class TestForceExpiry:
         dev.activate.assert_not_called()
 
     async def test_cheap_force_holds_same_day_in_cheap_window(self, mock_hass):
-        from homeassistant.util import dt as dt_util
+        # (#703) same METER day (even if the calendar flipped at midnight —
+        # the sunrise-held day is the boundary that matters) → NOT stale.
+        from datetime import date as _date
         sc = SurplusController(mock_hass)
         dev = _mock_device(is_active=True, policy="cheap_hours")
         dev._offpeak_forced = True
-        dev._offpeak_forced_date = dt_util.now().date()
+        dev._offpeak_forced_date = _date(2020, 1, 1)
+        dev._daily_runtime_meter_day = _date(2020, 1, 1)
         sc.register_device(dev)
         await sc.update(0.0, price_level="cheap")
         dev.deactivate.assert_not_called()

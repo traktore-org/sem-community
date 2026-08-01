@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.36] — 01.08.2026
+
+### 🐛 Fixes
+
+- 🕛 **Overnight top-ups no longer flap at midnight** (#703) — the grid/battery top-up force was
+  stamped and expired against the *calendar* date while a load's runtime day is held to **sunrise**,
+  so every load running an overnight top-up was stopped at exactly 00:00 ("day rollover") and
+  restarted a minute later — one spurious contactor cycle per night. One boundary authority now:
+  stamps and expiry both read the load's own sunrise-held meter day, so a "Finish overnight" run
+  sails through midnight and ends exactly when its day does. Found while answering @onkelfu's
+  day-boundary question on #688, which is now also documented (sunrise boundary, no carry-over).
+  (by @traktore-org)
+
+### 🧪 Hardening
+
+- 🎯 **The load goal engine is now invariant-guarded** — a simulated multi-day walk through the
+  real allocation engine asserts the whole contract at every cycle (midnight crossing, every paid
+  source's start/stop symmetry, floor/ceiling, marker hygiene, sunrise-only deficit reset, a full
+  48-hour scenario). The bug class that produced eight instances across #559/#620/#633/#688/#703
+  now fails in CI instead of on a reporter's pool pump.
+
 # [1.7.5-beta.35] — 31.07.2026
 
 ### 🐛 Fixes
