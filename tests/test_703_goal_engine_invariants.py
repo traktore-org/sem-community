@@ -342,3 +342,51 @@ def test_load_meter_day_fallback():
     assert _load_meter_day(d) is not None
     d2 = SimpleNamespace(_daily_runtime_meter_day=DAY1)
     assert _load_meter_day(d2) == DAY1
+
+
+class TestOneMeterDayClass:
+    """(#704) The loads' day comes from the SAME TimeManager meter-day class
+    the EV uses — not from inline day arithmetic in the coordinator. The
+    previous stateful latch reset a day early on a mid-night restart."""
+
+    def test_coordinator_reads_the_timemanager_class(self):
+        from pathlib import Path
+        src = (Path(__file__).resolve().parents[1]
+               / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
+        assert "get_current_meter_day_sunrise_based()" in src, (
+            "the load-runtime tick no longer reads the TimeManager meter-day "
+            "class (#704) — inline day arithmetic reintroduces the "
+            "mid-night-restart day-jump"
+        )
+        # the latch's signature move — guarding the day assignment behind
+        # is_night_mode — must not come back
+        assert "if not self.time_manager.is_night_mode():\n                self._load_meter_day" \
+            not in src, "the stateful meter-day latch is back (#704)"
+
+    def test_sunrise_boundary_is_stateless_and_restart_proof(self):
+        """Before sunrise → yesterday, after → today — on a FRESH instance
+        each time (the restart case the latch got wrong)."""
+        from datetime import datetime, timedelta
+        from unittest.mock import patch
+        from custom_components.solar_energy_management.utils.time_manager import (
+            TimeManager,
+        )
+        from homeassistant.util import dt as dt_util
+
+        now = dt_util.now()
+        night = now.replace(hour=2, minute=0, second=0)      # a 02:00 boot
+        sunrise = now.replace(hour=6, minute=15, second=0)
+        tm = TimeManager.__new__(TimeManager)
+        with patch.object(TimeManager, "get_sunrise_datetime",
+                          return_value=sunrise), \
+             patch.object(dt_util, "now", return_value=night):
+            assert tm.get_current_meter_day_sunrise_based() == \
+                (night.date() - timedelta(days=1)), (
+                    "a mid-night boot must still be YESTERDAY's meter day"
+                )
+        day = now.replace(hour=9, minute=0, second=0)
+        tm2 = TimeManager.__new__(TimeManager)
+        with patch.object(TimeManager, "get_sunrise_datetime",
+                          return_value=sunrise), \
+             patch.object(dt_util, "now", return_value=day):
+            assert tm2.get_current_meter_day_sunrise_based() == day.date()
