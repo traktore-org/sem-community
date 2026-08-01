@@ -840,6 +840,9 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "phase_guard_grid_limit_a",
     "phase_guard_inverter_limit_a",
     "phase_guard_max_age_s",
+    "phase_guard_grid_l1_current_entity",
+    "phase_guard_grid_l2_current_entity",
+    "phase_guard_grid_l3_current_entity",
     "phase_guard_grid_l1_power_entity",
     "phase_guard_grid_l2_power_entity",
     "phase_guard_grid_l3_power_entity",
@@ -1724,6 +1727,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             **self._data,
         }
         topology = current_config.get("phase_guard_topology", "grid_only")
+        from .coordinator.phase_current_discovery import (
+            discover_grid_phase_current_entities,
+        )
+
+        discovered_currents = {}
+        if not any(
+            current_config.get(f"phase_guard_grid_l{phase}_current_entity")
+            for phase in range(1, 4)
+        ):
+            discovered_currents = discover_grid_phase_current_entities(
+                self.hass.states.async_all("sensor")
+            )
 
         fields: dict[Any, Any] = {
             vol.Optional(
@@ -1755,6 +1770,42 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             selector.EntitySelectorConfig(domain="sensor")
         )
         fields.update({
+            vol.Optional(
+                "phase_guard_grid_l1_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l1_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l1_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l2_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l2_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l2_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l3_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l3_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l3_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
             vol.Optional(
                 "phase_guard_grid_l1_power_entity",
                 description={"suggested_value": current_config.get("phase_guard_grid_l1_power_entity") or None},

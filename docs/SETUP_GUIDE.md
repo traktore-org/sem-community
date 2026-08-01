@@ -1187,6 +1187,17 @@ Enable Observer Mode on the secondary instance. Both instances can read
 sensors simultaneously without conflict. Toggle via `switch.sem_observer_mode`
 or the Configure screen — no reinstall needed.
 
+### Direct per-phase grid-current sensors
+
+The Observer Mode phase guard can use either a complete L1-L3 family of direct
+RMS grid-current sensors in amperes or signed per-phase power plus voltage. A
+direct family takes precedence and must contain all three phases from one
+coherent meter family. SEM rejects mixed, partial, unavailable, stale,
+wrong-unit, negative and non-finite readings instead of silently changing
+source. Radio, meter and field-bus pairing remain the responsibility of the
+hardware and its Home Assistant integration; SEM consumes only the resulting
+HA sensor entities.
+
 In Observer Mode SEM still runs its **full** decision logic against your live
 sensors every cycle — it just never actuates. It logs each command it *would*
 have sent (e.g. `OBSERVER · WOULD ACTIVATE Heizband @ 800W [source=solar]`), so

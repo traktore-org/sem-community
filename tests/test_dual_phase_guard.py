@@ -67,6 +67,57 @@ def test_dual_guard_keeps_lanes_independent_and_handles_export():
     assert result["inverter"]["l3"]["margin_a"] == pytest.approx(4.0)
 
 
+def test_grid_lane_prefers_direct_rms_current_over_power_voltage_fallback():
+    states = _healthy_states()
+    config = _guard_config()
+    for phase in range(1, 4):
+        config[f"phase_guard_grid_l{phase}_current_entity"] = (
+            f"sensor.smart_meter_grid_l{phase}_current"
+        )
+        states[f"sensor.smart_meter_grid_l{phase}_current"] = _state(7 + phase, "A")
+        states.pop(f"sensor.grid_l{phase}_power")
+        states.pop(f"sensor.grid_l{phase}_voltage")
+
+    result = evaluate_dual_phase_guard(_States(states), config)
+
+    assert result["safe"] is True
+    assert result["grid"]["l1"]["current_a"] == pytest.approx(8.0)
+    assert result["grid"]["l1"]["source"] == "direct_current"
+
+
+def test_grid_direct_current_fails_closed_instead_of_falling_back_when_invalid():
+    states = _healthy_states()
+    config = _guard_config()
+    for phase in range(1, 4):
+        entity_id = f"sensor.grid_l{phase}_current"
+        config[f"phase_guard_grid_l{phase}_current_entity"] = entity_id
+        states[entity_id] = _state(8, "A")
+    states["sensor.grid_l1_current"] = _state("unavailable", "A")
+
+    result = evaluate_dual_phase_guard(_States(states), config)
+
+    assert result["safe"] is False
+    assert result["grid"]["l1"]["source"] == "direct_current"
+    assert "grid:l1:unavailable" in result["stop_reason"]
+
+
+def test_partial_direct_grid_current_triplet_is_invalid_configuration():
+    config = _guard_config()
+    config["phase_guard_grid_l1_current_entity"] = "sensor.grid_l1_current"
+
+    result = evaluate_dual_phase_guard(_States(_healthy_states()), config)
+
+    assert result["safe"] is False
+    assert result["data_fresh"] is False
+    assert result["stop_reason"] == "invalid_configuration"
+
+
+def test_grid_power_voltage_fallback_reports_derived_source():
+    result = evaluate_dual_phase_guard(_States(_healthy_states()), _guard_config())
+
+    assert result["grid"]["l1"]["source"] == "derived_power_voltage"
+
+
 def test_dual_guard_over_limit_names_lane_and_phase():
     states = _healthy_states()
     states["sensor.internal_ct2_current"] = _state(16.5, "A")

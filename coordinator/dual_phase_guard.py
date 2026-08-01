@@ -55,7 +55,7 @@ def _read_number(
     return value, None
 
 
-def _unsafe_phase(reason: str, limit_a: float) -> Dict[str, Any]:
+def _unsafe_phase(reason: str, limit_a: float, *, source: str | None = None) -> Dict[str, Any]:
     return {
         "current_a": None,
         "margin_a": None,
@@ -63,10 +63,13 @@ def _unsafe_phase(reason: str, limit_a: float) -> Dict[str, Any]:
         "safe": False,
         "data_fresh": False,
         "reason": reason,
+        "source": source,
     }
 
 
-def _phase_result(current_a: float, limit_a: float) -> Dict[str, Any]:
+def _phase_result(
+    current_a: float, limit_a: float, *, source: str | None = None
+) -> Dict[str, Any]:
     safe = current_a <= limit_a
     return {
         "current_a": round(current_a, 3),
@@ -75,6 +78,7 @@ def _phase_result(current_a: float, limit_a: float) -> Dict[str, Any]:
         "safe": safe,
         "data_fresh": True,
         "reason": None if safe else "over_limit",
+        "source": source,
     }
 
 
@@ -101,6 +105,12 @@ def evaluate_dual_phase_guard(states, config: Dict[str, Any]) -> Dict[str, Any]:
         or inverter_limit <= 0
         or max_age <= 0
     ):
+        invalid_configuration = True
+    configured_grid_currents = sum(
+        bool(config.get(f"phase_guard_grid_l{phase}_current_entity"))
+        for phase in range(1, 4)
+    )
+    if configured_grid_currents not in {0, 3}:
         invalid_configuration = True
 
     result: Dict[str, Any] = {
@@ -131,28 +141,63 @@ def evaluate_dual_phase_guard(states, config: Dict[str, Any]) -> Dict[str, Any]:
 
     for phase in range(1, 4):
         key = f"l{phase}"
-        power, power_error = _read_number(
-            states,
-            config.get(f"phase_guard_grid_l{phase}_power_entity"),
-            max_age_s=max_age,
-            expected_unit="W",
+        direct_current_entity = config.get(
+            f"phase_guard_grid_l{phase}_current_entity"
         )
-        voltage, voltage_error = _read_number(
-            states,
-            config.get(f"phase_guard_grid_l{phase}_voltage_entity"),
-            max_age_s=max_age,
-            expected_unit="V",
-        )
-        if power_error:
-            lane = _unsafe_phase(power_error, grid_limit)
-        elif voltage_error:
-            lane = _unsafe_phase(voltage_error, grid_limit)
-        elif power is None:
-            lane = _unsafe_phase("invalid_power", grid_limit)
-        elif voltage is None or voltage <= 0:
-            lane = _unsafe_phase("invalid_voltage", grid_limit)
+        if direct_current_entity:
+            current, current_error = _read_number(
+                states,
+                direct_current_entity,
+                max_age_s=max_age,
+                expected_unit="A",
+            )
+            if current_error:
+                lane = _unsafe_phase(
+                    current_error, grid_limit, source="direct_current"
+                )
+            elif current is None or current < 0:
+                lane = _unsafe_phase(
+                    "invalid_current", grid_limit, source="direct_current"
+                )
+            else:
+                lane = _phase_result(
+                    current, grid_limit, source="direct_current"
+                )
         else:
-            lane = _phase_result(abs(power) / voltage, grid_limit)
+            power, power_error = _read_number(
+                states,
+                config.get(f"phase_guard_grid_l{phase}_power_entity"),
+                max_age_s=max_age,
+                expected_unit="W",
+            )
+            voltage, voltage_error = _read_number(
+                states,
+                config.get(f"phase_guard_grid_l{phase}_voltage_entity"),
+                max_age_s=max_age,
+                expected_unit="V",
+            )
+            if power_error:
+                lane = _unsafe_phase(
+                    power_error, grid_limit, source="derived_power_voltage"
+                )
+            elif voltage_error:
+                lane = _unsafe_phase(
+                    voltage_error, grid_limit, source="derived_power_voltage"
+                )
+            elif power is None:
+                lane = _unsafe_phase(
+                    "invalid_power", grid_limit, source="derived_power_voltage"
+                )
+            elif voltage is None or voltage <= 0:
+                lane = _unsafe_phase(
+                    "invalid_voltage", grid_limit, source="derived_power_voltage"
+                )
+            else:
+                lane = _phase_result(
+                    abs(power) / voltage,
+                    grid_limit,
+                    source="derived_power_voltage",
+                )
         result["grid"][key] = lane
         if not lane["safe"]:
             reasons.append(f"grid:{key}:{lane['reason']}")
