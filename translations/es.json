@@ -209,6 +209,7 @@
         "description": "Tarifas eléctricas y parámetros avanzados de ajuste.",
         "data": {
           "electricity_import_rate": "Tarifa de importación",
+          "grid_import_surcharge": "Tarifa variable del titular de la red (moneda/kWh)",
           "electricity_off_peak_rate": "Tarifa nocturna (si diferente)",
           "electricity_export_rate": "Tarifa de exportación",
           "demand_charge_rate": "Tarifa por demanda de potencia",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Tarifa de importación diurna/plana (moneda/kWh, IVA incluido). Se utiliza como alternativa cuando el precio dinámico no está disponible.",
+          "grid_import_surcharge": "Tarifa variable total opcional del titular de la red añadida a cada kWh importado. Puede combinar transporte eléctrico e impuesto sobre la energía. Sin cuota fija; no afecta a la exportación.",
           "electricity_off_peak_rate": "Tarifa de importación nocturna/valle (moneda/kWh). Póngala igual que la tarifa de importación si tiene una tarifa plana.",
           "electricity_export_rate": "Tarifa de inyección que paga la comercializadora (moneda/kWh).",
           "demand_charge_rate": "Término de potencia mensual por pico de demanda (moneda/kW/mes). Póngalo a 0 si su contrato no lo tiene.",

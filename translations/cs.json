@@ -209,6 +209,7 @@
         "description": "Sazby elektřiny a pokročilé parametry ladění.",
         "data": {
           "electricity_import_rate": "Sazba za odběr",
+          "grid_import_surcharge": "Variabilní poplatek provozovatele sítě (měna/kWh)",
           "electricity_off_peak_rate": "Noční sazba",
           "electricity_export_rate": "Sazba exportu",
           "demand_charge_rate": "Sazba poptávky",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Denní/jednotná sazba za odběr (měna/kWh včetně DPH). Používá se jako záloha, když není dynamické ceny.",
+          "grid_import_surcharge": "Volitelný celkový variabilní poplatek provozovatele sítě přičtený ke každé importované kWh. Může kombinovat přenos elektřiny a energetickou daň. Žádný stálý poplatek; žádný vliv na export.",
           "electricity_off_peak_rate": "Noční sazba za odběr / nízký tarif (měna/kWh). Máte-li jednotný tarif, nastavte ji stejně jako sazbu za odběr.",
           "electricity_export_rate": "Výkupní sazba placená distributorem (měna/kWh).",
           "demand_charge_rate": "Měsíční poplatek za špičkový příkon (měna/kW/měsíc). Nastavte 0, pokud jej vaše smlouva nemá.",

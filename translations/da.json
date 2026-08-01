@@ -209,6 +209,7 @@
         "description": "Elpriser og avancerede justeringsparametre.",
         "data": {
           "electricity_import_rate": "Importpris",
+          "grid_import_surcharge": "Variabel nettarif (valuta/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Eksportpris",
           "demand_charge_rate": "Effekttarif",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Dag-/fast importpris (valuta/kWh inkl. moms). Bruges som reserve, når dynamisk prissætning ikke er tilgængelig.",
+          "grid_import_surcharge": "Valgfrit samlet variabelt nettarif tilføjet for hver importeret kWh. Kan kombinere eltransport og energiafgift. Ingen fast abonnement; ingen effekt på eksport.",
           "electricity_off_peak_rate": "Nat-/lavlastimportpris (valuta/kWh). Sæt den lig med importprisen, hvis du har en fast tarif.",
           "electricity_export_rate": "Den afregningspris, netselskabet betaler for overskudsproduktion (valuta/kWh).",
           "demand_charge_rate": "Månedlig effekttarif for spidsbelastning (valuta/kW/måned). Sæt til 0, hvis din aftale ikke har en.",

@@ -209,6 +209,7 @@
         "description": "Tariffe elettriche e parametri avanzati di regolazione.",
         "data": {
           "electricity_import_rate": "Tariffa di importazione",
+          "grid_import_surcharge": "Quota variabile rete (valuta/kWh)",
           "electricity_off_peak_rate": "Tariffa notturna (se diversa)",
           "electricity_export_rate": "Tariffa di esportazione",
           "demand_charge_rate": "Tariffa potenza impegnata",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Tariffa di importazione diurna/fissa (valuta/kWh, IVA inclusa). Usata come ripiego quando il prezzo dinamico non è disponibile.",
+          "grid_import_surcharge": "Quota variabile totale facoltativa dell'operatore di rete aggiunta a ogni kWh importato. Può combinare trasporto elettrico e imposta sull'energia. Nessun abbonamento fisso; non incide sull'export.",
           "electricity_off_peak_rate": "Tariffa di importazione notturna/fuori punta (valuta/kWh). Impostala uguale alla tariffa di importazione se hai una tariffa fissa.",
           "electricity_export_rate": "Tariffa di immissione pagata dal fornitore (valuta/kWh).",
           "demand_charge_rate": "Costo mensile per la potenza di picco impegnata (valuta/kW/mese). Imposta 0 se il tuo contratto non lo prevede.",

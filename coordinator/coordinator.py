@@ -409,6 +409,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 fallback_price=_cfg_rate(
                     config, "electricity_import_rate", default=0.30,
                 ),
+                # Nätägarpåslag (grid import surcharge): explicit constant
+                # per-kWh network fee added to every IMPORTED kWh for
+                # dynamic tariffs. 0 disables it. Defaults to 0.0 so an
+                # existing config without the key is unaffected.
+                grid_import_surcharge=config.get("grid_import_surcharge", 0.0),
             )
         elif tariff_mode == "calendar":
             schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI

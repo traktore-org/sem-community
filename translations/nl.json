@@ -209,6 +209,7 @@
         "description": "Elektriciteitstarieven en geavanceerde afstemmingsparameters.",
         "data": {
           "electricity_import_rate": "Importtarief",
+          "grid_import_surcharge": "Variabel netbeheerdersoort (valuta/kWh)",
           "electricity_off_peak_rate": "Nachttarief (indien afwijkend)",
           "electricity_export_rate": "Exporttarief",
           "demand_charge_rate": "Vermogenstarief",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Dag-/standaard importtarief (valuta/kWh incl. btw). Wordt gebruikt als terugval wanneer dynamische prijzen niet beschikbaar zijn.",
+          "grid_import_surcharge": "Optionele totale variabele netbeheerdersoort toegevoegd aan elke geïmporteerde kWh. Kan elektriciteitstransport en energiebelasting combineren. Geen vast abonnement; geen effect op export.",
           "electricity_off_peak_rate": "Nacht-/dalimporttarief (valuta/kWh). Stel gelijk aan het importtarief in bij een vast tarief.",
           "electricity_export_rate": "Teruglevertarief dat door de energieleverancier wordt vergoed (valuta/kWh).",
           "demand_charge_rate": "Maandelijkse piekvermogensheffing (valuta/kW/maand). Stel in op 0 als uw contract dit niet heeft.",

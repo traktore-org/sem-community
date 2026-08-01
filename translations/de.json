@@ -209,6 +209,7 @@
         "description": "Stromtarife und erweiterte Optimierungsparameter.",
         "data": {
           "electricity_import_rate": "Importtarif",
+          "grid_import_surcharge": "Variables Netznutzungsentgelt (Währung/kWh)",
           "electricity_off_peak_rate": "Nachttarif (falls abweichend)",
           "electricity_export_rate": "Exporttarif",
           "demand_charge_rate": "Leistungspreis",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Tag-/Einheitstarif für den Import (Währung/kWh inkl. MwSt.). Wird als Rückfallwert verwendet, wenn keine dynamische Preisgestaltung verfügbar ist.",
+          "grid_import_surcharge": "Optionales gesamtes variables Netznutzungsentgelt, das auf jede importierte kWh aufgeschlagen wird. Kann Stromübertragung und Energiesteuer kombinieren. Nur verwenden, wenn die dynamische Preisentität diese Gebühren nicht bereits enthält. Kein fester Grundpreis; keine Auswirkung auf den Export.",
           "electricity_off_peak_rate": "Nacht-/Niedertarif für den Import (Währung/kWh). Bei einem Einheitstarif gleich dem Importtarif setzen.",
           "electricity_export_rate": "Einspeisevergütung des Energieversorgers (Währung/kWh).",
           "demand_charge_rate": "Monatlicher Leistungspreis für die Spitzenlast (Währung/kW/Monat). Auf 0 setzen, wenn Ihr Vertrag keinen hat.",

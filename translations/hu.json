@@ -209,6 +209,7 @@
         "description": "Villamosenergia-árak és haladó hangolási paraméterek.",
         "data": {
           "electricity_import_rate": "Vételezési ár",
+          "grid_import_surcharge": "Változó hálózatüzemeltetői díj (pénznem/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Export ár",
           "demand_charge_rate": "Teljesítménydíj",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Nappali/egységes vételezési ár (pénznem/kWh, áfával). Tartalékként használatos, ha a dinamikus árazás nem érhető el.",
+          "grid_import_surcharge": "Opcionális összes változó hálózatüzemeltetői díj, amely minden importált kWh-hoz hozzáadódik. Egyesítheti az elektromos átvitelt és az energiaadót. Nincs fix előfizetés; nincs hatása az exportra.",
           "electricity_off_peak_rate": "Éjszakai/völgyidőszaki vételezési ár (pénznem/kWh). Egységes tarifa esetén állítsa a vételezési árral azonosra.",
           "electricity_export_rate": "A szolgáltató által fizetett betáplálási ár (pénznem/kWh).",
           "demand_charge_rate": "Havi csúcsteljesítmény-díj (pénznem/kW/hó). Állítsa 0-ra, ha a szerződése nem tartalmaz ilyet.",

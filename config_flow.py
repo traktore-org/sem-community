@@ -838,6 +838,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_total_energy_sensor",
     "grid_export_power_entity",
     "grid_import_power_entity",
+    "grid_import_surcharge",
     "grid_sign_invert",
     "heat_pump_boost_offset",
     "heat_pump_climate_entity",
@@ -1997,6 +1998,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("demand_charge_rate", 4.32),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=100000.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")  # #549 currency-agnostic
+                ),
+                # Nätägarpåslag (grid import surcharge): a constant
+                # per-kWh network-owner fee (e.g. 0.725 SEK/kWh) added to
+                # every IMPORTED kWh on dynamic tariffs. Explicit config
+                # only — 0 disables it. Nonnegative NumberSelector with the
+                # same currency/kWh denomination and 0.001 step as the
+                # other SEK/NOK/HUF-safe rates (#549). Default carried from
+                # the current config/options so re-saving the dialog never
+                # drops a previously set value.
+                vol.Optional(
+                    "grid_import_surcharge",
+                    default=_c("grid_import_surcharge", 0.0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic / SEK/NOK/HUF-safe
                 ),
                 vol.Optional(
                     "update_interval",
