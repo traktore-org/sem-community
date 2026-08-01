@@ -216,12 +216,30 @@ def compute_load_intent(
     return LoadIntent(False, 0.0, None, "no source available")
 
 
+def _load_meter_day(device: "ControllableDevice"):
+    """(#703) The load's OWN day boundary — the sunrise-held meter day its
+    runtime/deficit live on, NOT the calendar date. The coordinator holds
+    ``_load_meter_day`` through the night, so an overnight top-up keeps
+    serving the day it started; a force stamped and expired against the
+    CALENDAR date instead was killed at exactly 00:00 ("day rollover") while
+    its deficit was still open, then re-forced a min_off later — a spurious
+    contactor flap every midnight. Stamping AND staleness both read this one
+    boundary, so expiry lands at sunrise — the same instant the deficit
+    itself resets — by construction. Falls back to the calendar date before
+    the first runtime tick stamps the device (fresh boot)."""
+    day = getattr(device, "_daily_runtime_meter_day", None)
+    if day is not None:
+        return day
+    from homeassistant.util import dt as dt_util
+    return dt_util.now().date()
+
+
 def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> None:
     """(desired-state, phase 2) The legacy force markers become a DERIVED VIEW of
     the intent's source — recomputed each reconcile, never hand-set — so they
-    cannot leak (bug-class 18). Dates are stamped for the day it was set."""
-    from homeassistant.util import dt as dt_util
-    today = dt_util.now().date()
+    cannot leak (bug-class 18). Dates are stamped for the load's METER day
+    (#703) — the same boundary its deficit lives on."""
+    today = _load_meter_day(device)
     is_tier2 = intent.source == "tier2_battery"
     is_grid = intent.source == "cheap_grid"
     device._batt_overnight_forced = is_tier2
@@ -913,12 +931,15 @@ class SurplusController:
         # it served was YESTERDAY's — without the date check a device forced
         # into a cheap midnight window would re-fill the NEW day's target from
         # grid all night).
-        from homeassistant.util import dt as dt_util
         from ..devices.base import DeviceControlMode
-        today_local = dt_util.now().date()
         for device in devices:
             if not device.is_active:
                 continue
+            # (#703) Staleness is judged against the load's OWN meter day —
+            # the sunrise-held boundary its deficit lives on — never the
+            # calendar date, which flips at 00:00 mid-top-up and produced a
+            # spurious stop/restart flap every midnight.
+            device_day = _load_meter_day(device)
             reason = None
             # (class-17 sibling, caught live 2026-07-23) Mode switched to Off
             # while SEM is DRIVING the load: release it — stop once, clear
@@ -932,7 +953,7 @@ class SurplusController:
             if reason is None and device._offpeak_forced:
                 stale = (
                     device._offpeak_forced_date is not None
-                    and device._offpeak_forced_date != today_local
+                    and device._offpeak_forced_date != device_day
                 )
                 if getattr(device, "top_up_policy", "solar_only") == "solar_only":
                     # (#620) the "Finish overnight from" picker moved off Grid
@@ -959,7 +980,7 @@ class SurplusController:
                     # else it keeps draining until reserve/rollover (caught live
                     # on the Heizband toggle test).
                     reason = "overnight battery disabled by user"
-                elif (_bo_date is not None and _bo_date != today_local):
+                elif (_bo_date is not None and _bo_date != device_day):
                     reason = "overnight battery force expired (day rollover)"
                 elif not getattr(self, "_is_night_cycle", True):
                     # (#633) the overnight window ended — a load still running
@@ -1282,7 +1303,7 @@ class SurplusController:
                     consumed = await _activate_owned(device, device.min_power_threshold)
                     if consumed > 0:
                         device._offpeak_forced = True
-                        device._offpeak_forced_date = today_local
+                        device._offpeak_forced_date = _load_meter_day(device)
                         active_count += 1
                         remaining_surplus -= consumed
                         # Update or add allocation entry
@@ -1332,7 +1353,7 @@ class SurplusController:
                 consumed = await _activate_owned(device, device.min_power_threshold)
                 if consumed > 0:
                     device._batt_overnight_forced = True  # (#620) own marker
-                    device._batt_overnight_forced_date = today_local
+                    device._batt_overnight_forced_date = _load_meter_day(device)
                     active_count += 1
                     for a in allocations:
                         if a.device_id == device.device_id:

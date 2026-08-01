@@ -54,6 +54,9 @@ def _mock(**kw):
     d._offpeak_forced_date = None
     d._batt_overnight_forced = kw.get("_batt_overnight_forced", False)
     d._batt_overnight_forced_date = None
+    # (#703) fresh device: no meter day stamped yet → the staleness check
+    # falls back to the calendar date, matching the markers stamped below
+    d._daily_runtime_meter_day = None
     d.needs_offpeak_activation = kw.get("needs_offpeak", False)
     d.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     d.daily_min_runtime_sec = 0
