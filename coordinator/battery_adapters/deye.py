@@ -28,6 +28,11 @@ Config shape (documented):
     deye_bms_max_charge_current_a: 30      # optional BMS max
     deye_max_discharge_power: 5000         # safe discharge config (or 0)
     deye_program_control: true             # require 6 complete slices
+    deye_work_mode_control: true           # optional, explicit only
+    deye_work_mode_entity: select.deye_energy_pattern
+    deye_work_mode_load_first_option: Load First
+    deye_work_mode_battery_first_option: Battery First
+    deye_force_charge_work_mode: battery_first
     deye_program_groups:                   # list of 6 dicts (preferred)
       - time: select.deye_slice_1_time
         soc: number.deye_slice_1_soc
@@ -54,6 +59,11 @@ from homeassistant.util import dt as dt_util
 
 from ..charger_types import BatteryIntent
 from .base import BatteryControlAdapter
+from .deye_schedule import (
+    DeyeScheduleError,
+    compile_deye_charge_window,
+    validate_deye_boundaries,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -97,6 +107,7 @@ class DeyeControlSnapshot:
     program_times: tuple[str, ...]
     program_socs: tuple[float, ...]
     program_charging: tuple[str, ...]
+    work_mode: str
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -110,6 +121,8 @@ class DeyeControlSnapshot:
     def from_dict(cls, data: dict[str, Any]) -> "DeyeControlSnapshot":
         if type(data.get("grid_charge_enabled")) is not bool:
             raise ValueError("grid_charge_enabled must be a boolean")
+        if not isinstance(data.get("work_mode"), str):
+            raise ValueError("work_mode must be a string")
         return cls(
             schema_version=int(data["schema_version"]),
             config_entry_id=str(data["config_entry_id"]),
@@ -126,6 +139,7 @@ class DeyeControlSnapshot:
             program_charging=tuple(
                 str(value) for value in data["program_charging"]
             ),
+            work_mode=data["work_mode"],
         )
 
 
@@ -143,6 +157,23 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         self._voltage_entity = self._clean_string(
             config.get("deye_battery_voltage_entity"),
         )
+        self._work_mode_control = config.get("deye_work_mode_control", False) is True
+        self._work_mode_entity = self._clean_string(
+            config.get("deye_work_mode_entity"),
+        )
+        self._work_mode_options = {
+            "load_first": self._clean_string(
+                config.get("deye_work_mode_load_first_option"),
+            ),
+            "battery_first": self._clean_string(
+                config.get("deye_work_mode_battery_first_option"),
+            ),
+        }
+        self._force_charge_work_mode = self._clean_string(
+            config.get("deye_force_charge_work_mode"),
+        ).lower()
+        now_provider = config.get("deye_now_provider")
+        self._now_provider = now_provider if callable(now_provider) else dt_util.now
         self._voltage_max_age_raw = config.get(
             "deye_battery_voltage_max_age_s", _DEFAULT_VOLTAGE_MAX_AGE_S,
         )
@@ -173,10 +204,6 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         # such as "false" must never become truthy actuation permissions.
         self._observer_mode = config.get("deye_observer_mode", True) is not False
         self._actuation_enabled = config.get("deye_actuation_enabled", False) is True
-        try:
-            self._active_program_index = int(config.get("deye_active_program_index", 1))
-        except (TypeError, ValueError):
-            self._active_program_index = 0
         self._snapshot: Optional[DeyeControlSnapshot] = None
         self._snapshot_load_failed = False
         self._session_first_write_at: Optional[float] = None
@@ -285,6 +312,43 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             }
             slots.append(slot if all(slot.values()) else None)
         return slots
+
+    def _program_time_values(self) -> tuple[str, ...]:
+        """Read all six program boundaries without guessing or reordering."""
+        slots = self._program_slots()
+        if len(slots) != _DEFAULT_PROGRAM_COUNT or any(slot is None for slot in slots):
+            raise DeyeScheduleError("Deye schedule requires six complete slots")
+        values: list[str] = []
+        for slot in slots:
+            assert slot is not None
+            state = self._get_state(slot["time"])
+            if state is None or not self._state_is_usable(state):
+                raise DeyeScheduleError("Deye program boundary state is unavailable")
+            values.append(self._normalise_time(state.state))
+        validate_deye_boundaries(values)
+        return tuple(values)
+
+    def _validate_work_mode(self) -> str:
+        """Return an error for any ambiguous Work Mode mapping/state."""
+        if not self._work_mode_control:
+            return ""
+        if self._work_mode_entity.split(".", 1)[0] != "select":
+            return "Deye Work Mode entity must be select.*"
+        state = self._get_state(self._work_mode_entity)
+        if state is None or not self._state_is_usable(state):
+            return "Deye Work Mode state is unavailable"
+        options = getattr(state, "attributes", {}).get("options", [])
+        load_first = self._work_mode_options["load_first"]
+        battery_first = self._work_mode_options["battery_first"]
+        if not load_first or not battery_first or load_first == battery_first:
+            return "Deye Work Mode mappings must be explicit and distinct"
+        if load_first not in options or battery_first not in options:
+            return "Deye Work Mode mappings are not offered select options"
+        if state.state not in options:
+            return "Deye Work Mode state is not an offered option"
+        if self._force_charge_work_mode not in self._work_mode_options:
+            return "Deye force-charge Work Mode must be load_first or battery_first"
+        return ""
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -411,6 +475,14 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
                 slot_reason = self._validate_slot(slot, idx)
                 if slot_reason:
                     return self._unavailable(slot_reason)
+            try:
+                self._program_time_values()
+            except DeyeScheduleError as err:
+                return self._unavailable(str(err))
+
+        work_mode_reason = self._validate_work_mode()
+        if work_mode_reason:
+            return self._unavailable(work_mode_reason)
 
         return DeyeCapability(
             available=True,
@@ -525,6 +597,8 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             ("charge_current", self._charge_current_entity),
             ("battery_voltage", self._voltage_entity),
         ]
+        if self._work_mode_control:
+            mapping.append(("work_mode", self._work_mode_entity))
         for index, slot in enumerate(self._program_slots(), start=1):
             if slot:
                 mapping.extend(
@@ -601,7 +675,7 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
     def _snapshot_scope_valid(
         self, snapshot: DeyeControlSnapshot, *, require_fresh: bool,
     ) -> tuple[bool, str]:
-        if snapshot.schema_version != 1:
+        if snapshot.schema_version != 2:
             return False, "snapshot schema mismatch"
         if (
             not snapshot.session_id
@@ -635,10 +709,6 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             return False, "snapshot requires six complete program slots"
         for index, slot in enumerate(slots):
             assert slot is not None
-            try:
-                time.fromisoformat(self._normalise_time(snapshot.program_times[index]))
-            except ValueError:
-                return False, "snapshot program time is invalid"
             soc = snapshot.program_socs[index]
             if not math.isfinite(soc) or not 0 <= soc <= 100:
                 return False, "snapshot program SOC is invalid"
@@ -646,6 +716,17 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             options = getattr(charge_state, "attributes", {}).get("options", [])
             if snapshot.program_charging[index] not in options:
                 return False, "snapshot program charging source is invalid"
+        try:
+            validate_deye_boundaries(snapshot.program_times)
+        except DeyeScheduleError:
+            return False, "snapshot program times are invalid"
+        if self._work_mode_control:
+            mode_state = self._get_state(self._work_mode_entity)
+            mode_options = getattr(mode_state, "attributes", {}).get("options", [])
+            if not snapshot.work_mode or snapshot.work_mode not in mode_options:
+                return False, "snapshot Work Mode is invalid"
+        elif snapshot.work_mode:
+            return False, "snapshot unexpectedly contains Work Mode"
         if not self._config_entry_id or not self._battery_id:
             return False, "config entry and battery scope are required"
         if snapshot.config_entry_id != self._config_entry_id:
@@ -706,8 +787,15 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             times.append(self._normalise_time(time_state.state))
             socs.append(soc)
             charging.append(str(charge_state.state))
+        work_mode = ""
+        if self._work_mode_control:
+            work_mode_state = self._get_state(self._work_mode_entity)
+            if work_mode_state is None or not self._state_is_usable(work_mode_state):
+                self._last_error = "snapshot Work Mode state unavailable"
+                return None
+            work_mode = str(work_mode_state.state)
         snapshot = DeyeControlSnapshot(
-            schema_version=1,
+            schema_version=2,
             config_entry_id=self._config_entry_id,
             battery_id=self._battery_id,
             session_id=session_id,
@@ -718,6 +806,7 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             program_times=tuple(times),
             program_socs=tuple(socs),
             program_charging=tuple(charging),
+            work_mode=work_mode,
         )
         valid, reason = self._snapshot_scope_valid(snapshot, require_fresh=True)
         if not valid:
@@ -820,6 +909,10 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             ok = await self._write_and_verify(
                 slot["charge"], snapshot.program_charging[index], "select",
             ) and ok
+        if self._work_mode_control:
+            ok = await self._write_and_verify(
+                self._work_mode_entity, snapshot.work_mode, "select",
+            ) and ok
         ok = await self._write_and_verify(
             self._charge_current_entity, snapshot.charge_current_a, "number",
         ) and ok
@@ -877,7 +970,6 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             and self._config_entry_id
             and self._battery_id
             and self._program_control
-            and 1 <= self._active_program_index <= 6
             and self._readback_attempts > 0
             and math.isfinite(self._readback_delay_s)
             and self._readback_delay_s >= 0
@@ -931,11 +1023,17 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
                 reason = capability.reason
             self._last_error = f"Deye force charge blocked: {reason}"
             return
+        if any(
+            isinstance(value, bool)
+            for value in (target_soc, charge_power_w, duration_min)
+        ):
+            self._last_error = "Deye force charge parameters are invalid"
+            return
         try:
             target = float(target_soc)
             requested_power = float(charge_power_w)
             duration = int(duration_min)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             self._last_error = "Deye force charge parameters are invalid"
             return
         if not (
@@ -946,6 +1044,19 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             and duration > 0
         ):
             self._last_error = "Deye force charge parameters are out of range"
+            return
+        try:
+            schedule_now = self._now_provider()
+            if not isinstance(schedule_now, datetime):
+                raise DeyeScheduleError("current time provider did not return datetime")
+            schedule_plan = compile_deye_charge_window(
+                self._program_time_values(),
+                schedule_now,
+                duration,
+                target,
+            )
+        except DeyeScheduleError as err:
+            self._last_error = f"Deye schedule compile failed: {err}"
             return
         existing = await self._load_snapshot()
         if self._snapshot_load_failed:
@@ -975,14 +1086,28 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         if not math.isfinite(current) or current <= 0:
             await self._rollback_after_failure(snapshot, "calculated charge current is zero")
             return
-        slot = self._program_slots()[self._active_program_index - 1]
-        assert slot is not None
-        operations = (
+        operations: list[tuple[str, Any, str]] = [
             (self._charge_current_entity, current, "number"),
-            (slot["soc"], target, "number"),
-            (slot["charge"], "Grid", "select"),
-            (self._grid_charge_switch, True, "switch"),
-        )
+        ]
+        slots = self._program_slots()
+        for slot_index in schedule_plan.slot_indices:
+            slot = slots[slot_index - 1]
+            assert slot is not None
+            operations.extend(
+                (
+                    (slot["soc"], schedule_plan.reserve_soc, "number"),
+                    (slot["charge"], schedule_plan.charging_source, "select"),
+                )
+            )
+        if self._work_mode_control:
+            operations.append(
+                (
+                    self._work_mode_entity,
+                    self._work_mode_options[self._force_charge_work_mode],
+                    "select",
+                )
+            )
+        operations.append((self._grid_charge_switch, True, "switch"))
         for entity_id, value, kind in operations:
             if not await self._write_and_verify(entity_id, value, kind):
                 error = self._last_error or f"Deye write failed for {entity_id}"

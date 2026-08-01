@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
+
+from custom_components.solar_energy_management.coordinator.battery_adapters.deye_schedule import (
+    DeyeScheduleError,
+    active_deye_slot,
+    compile_deye_charge_window,
+)
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -106,6 +112,7 @@ def _valid_setup(*, program_control=True):
         ),
         "sensor.battery_voltage": _state(53.35),
     }
+    program_times = ("01:00:00", "05:00:00", "09:00:00", "13:00:00", "17:00:00", "21:00:00")
     for index in range(1, 7):
         time_entity = f"time.program_{index}"
         soc_entity = f"number.program_{index}_soc"
@@ -113,7 +120,7 @@ def _valid_setup(*, program_control=True):
         config["deye_program_groups"].append(
             {"time": time_entity, "soc": soc_entity, "charge": charge_entity}
         )
-        states[time_entity] = _state("00:00:00")
+        states[time_entity] = _state(program_times[index - 1])
         states[soc_entity] = _state(
             21, unit_of_measurement="%", min=0, max=100,
         )
@@ -129,7 +136,9 @@ def _adapter(config=None, states=None, *, hass=None):
     return DeyeBatteryAdapter(hass or _Hass(states), config)
 
 
-def _active_adapter(*, mismatch_pairs=None, fail_pairs=None, store=None, events=None):
+def _active_adapter(
+    *, mismatch_pairs=None, fail_pairs=None, store=None, events=None, work_mode=False
+):
     config, states = _valid_setup()
     shared_events = events if events is not None else []
     snapshot_store = store or _Store(shared_events)
@@ -140,7 +149,12 @@ def _active_adapter(*, mismatch_pairs=None, fail_pairs=None, store=None, events=
         deye_observer_mode=False,
         deye_actuation_enabled=True,
         deye_readback_attempts=1,
+        deye_now_provider=lambda: datetime(
+            2026, 8, 1, 1, 30, tzinfo=timezone.utc
+        ),
     )
+    if work_mode:
+        _enable_work_mode(config, states)
     hass = _Hass(
         states,
         events=shared_events,
@@ -148,6 +162,19 @@ def _active_adapter(*, mismatch_pairs=None, fail_pairs=None, store=None, events=
         fail_pairs=fail_pairs,
     )
     return DeyeBatteryAdapter(hass, config), config, states, snapshot_store, shared_events
+
+
+def _enable_work_mode(config, states, *, state="Load First"):
+    config.update(
+        deye_work_mode_control=True,
+        deye_work_mode_entity="select.work_mode",
+        deye_work_mode_load_first_option="Load First",
+        deye_work_mode_battery_first_option="Battery First",
+        deye_force_charge_work_mode="battery_first",
+    )
+    states["select.work_mode"] = _state(
+        state, options=["Load First", "Battery First"]
+    )
 
 
 def test_complete_capability_is_available_and_serialisable():
@@ -483,3 +510,154 @@ async def test_corrupt_snapshot_never_reports_successful_stop_or_writes():
     assert store.unsafe is True
     assert store.data == {"grid_charge_enabled": "false"}
     assert "snapshot load failed" in restarted.last_error
+
+
+def test_work_mode_requires_explicit_verified_select_mapping():
+    config, states = _valid_setup()
+    _enable_work_mode(config, states)
+    assert _adapter(config, states).capability().available is True
+
+    config["deye_work_mode_entity"] = "input_select.work_mode"
+    capability = _adapter(config, states).capability()
+    assert capability.available is False
+    assert "select.*" in capability.reason
+
+
+def test_equal_program_boundaries_make_adapter_fail_closed():
+    config, states = _valid_setup()
+    states["time.program_2"].state = states["time.program_1"].state
+
+    capability = _adapter(config, states).capability()
+
+    assert capability.available is False
+    assert "unique" in capability.reason
+
+
+@pytest.mark.asyncio
+async def test_work_mode_is_snapshotted_written_and_restored():
+    adapter, _, states, store, events = _active_adapter(work_mode=True)
+
+    await adapter.command_force_charge(80, 1067, 60)
+
+    assert store.data["work_mode"] == "Load First"
+    assert states["select.work_mode"].state == "Battery First"
+    assert ("select.work_mode", "Battery First") in events
+
+    await adapter.command_stop_force_charge()
+
+    assert states["select.work_mode"].state == "Load First"
+    assert store.data is None
+
+
+@pytest.mark.asyncio
+async def test_work_mode_readback_mismatch_rolls_back_without_success():
+    adapter, _, states, store, _ = _active_adapter(
+        work_mode=True,
+        mismatch_pairs={("select.work_mode", "Battery First")},
+    )
+
+    await adapter.command_force_charge(80, 1067, 60)
+
+    assert adapter.last_intent is None
+    assert "rollback verified" in adapter.last_error
+    assert adapter.unsafe_latched is False
+    assert store.data is None
+    assert states["select.work_mode"].state == "Load First"
+
+
+BOUNDARIES = ("01:00", "05:00", "09:00", "13:00", "17:00", "21:00")
+
+
+def test_active_slot_is_deterministic_and_wraps_midnight():
+    assert active_deye_slot(
+        BOUNDARIES, datetime(2026, 8, 1, 0, 30, tzinfo=timezone.utc)
+    ) == 6
+    assert active_deye_slot(
+        BOUNDARIES, datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+    ) == 3
+
+
+@pytest.mark.parametrize(
+    "boundaries",
+    [
+        BOUNDARIES[:5],
+        ("01:00", "05:00", "05:00", "13:00", "17:00", "21:00"),
+        ("01:00", "09:00", "05:00", "13:00", "17:00", "21:00"),
+        ("01:00", "05:00", "bad", "13:00", "17:00", "21:00"),
+    ],
+)
+def test_active_slot_rejects_invalid_or_ambiguous_schedules(boundaries):
+    with pytest.raises(DeyeScheduleError):
+        active_deye_slot(
+            boundaries, datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
+        )
+
+
+def test_active_slot_requires_timezone_aware_now():
+    with pytest.raises(DeyeScheduleError, match="timezone-aware"):
+        active_deye_slot(BOUNDARIES, datetime(2026, 8, 1, 10, 0))
+
+
+def test_charge_window_compiler_changes_only_overlapping_slots():
+    daytime = compile_deye_charge_window(
+        BOUNDARIES,
+        datetime(2026, 8, 1, 12, 30, tzinfo=timezone.utc),
+        90,
+        80,
+    )
+    midnight = compile_deye_charge_window(
+        BOUNDARIES,
+        datetime(2026, 8, 1, 23, 30, tzinfo=timezone.utc),
+        120,
+        75,
+    )
+
+    assert daytime.slot_indices == (3, 4)
+    assert daytime.reserve_soc == 80
+    assert midnight.slot_indices == (1, 6)
+
+
+@pytest.mark.parametrize("duration", [0, -1, 1441, 1.5, True])
+def test_charge_window_compiler_rejects_unsafe_durations(duration):
+    with pytest.raises(DeyeScheduleError):
+        compile_deye_charge_window(
+            BOUNDARIES,
+            datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+            duration,
+            80,
+        )
+
+
+@pytest.mark.parametrize(
+    ("duration", "reserve_soc"),
+    [(float("inf"), 80), (60, True)],
+)
+def test_charge_window_compiler_rejects_non_finite_or_boolean_inputs(
+    duration, reserve_soc
+):
+    with pytest.raises(DeyeScheduleError):
+        compile_deye_charge_window(
+            BOUNDARIES,
+            datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+            duration,
+            reserve_soc,
+        )
+
+
+@pytest.mark.asyncio
+async def test_tampered_snapshot_with_ambiguous_times_is_never_restored():
+    adapter, config, states, store, events = _active_adapter()
+    await adapter.command_force_charge(80, 1067, 60)
+    assert store.data is not None
+    store.data["program_times"][1] = store.data["program_times"][0]
+    restarted_hass = _Hass(states, events=events)
+    restarted = DeyeBatteryAdapter(restarted_hass, config)
+    writes_before = restarted_hass.services.async_call.await_count
+
+    await restarted.command_stop_force_charge()
+
+    assert restarted_hass.services.async_call.await_count == writes_before
+    assert restarted.last_intent is None
+    assert restarted.unsafe_latched is True
+    assert store.unsafe is True
+    assert "program times are invalid" in restarted.last_error
