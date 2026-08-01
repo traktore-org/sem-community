@@ -35,7 +35,7 @@ we **think** it behaves. Patterns by data location:
 |---|---|
 | Coordinator daily storage | `ssh ha-prod cat /config/.storage/solar_energy_management_<entry>_daily` then `python3 -c 'import json; …'` |
 | Energy totals storage | `ssh ha-prod cat /config/.storage/solar_energy_management_<entry>_energy` |
-| Live sensor attributes | `curl -sH "Authorization: Bearer $HA_PROD_TOKEN" http://10.10.20.150:8123/api/states/sensor.sem_<name>` (mind the [login_attempts_threshold](../CLAUDE.md#ha-test-machine) ban — prefer SSH) |
+| Live sensor attributes | `curl -sH "Authorization: Bearer $HA_PROD_TOKEN" http://10.10.20.150:8123/api/states/sensor.sem_<name>` (mind HA's `login_attempts_threshold` IP ban during restarts — prefer SSH polling) |
 | Config-entry options | `ssh ha-prod cat /config/.storage/core.config_entries | jq` |
 | HA validation report | `~/bin/validate-sem.sh` |
 
