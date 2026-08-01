@@ -852,6 +852,23 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "minimum_solar_power",
     "mobile_notification_service",
     "observer_mode",
+    "phase_guard_enabled",
+    "phase_guard_topology",
+    "phase_guard_grid_limit_a",
+    "phase_guard_inverter_limit_a",
+    "phase_guard_max_age_s",
+    "phase_guard_grid_l1_current_entity",
+    "phase_guard_grid_l2_current_entity",
+    "phase_guard_grid_l3_current_entity",
+    "phase_guard_grid_l1_power_entity",
+    "phase_guard_grid_l2_power_entity",
+    "phase_guard_grid_l3_power_entity",
+    "phase_guard_grid_l1_voltage_entity",
+    "phase_guard_grid_l2_voltage_entity",
+    "phase_guard_grid_l3_voltage_entity",
+    "phase_guard_inverter_l1_current_entity",
+    "phase_guard_inverter_l2_current_entity",
+    "phase_guard_inverter_l3_current_entity",
     "pv_string_names",
     "target_peak_limit",
     "tariff_classification_mode",
@@ -1642,10 +1659,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_settings_ev(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """EV Charging & Solar settings."""
+        """EV charging, solar and observer-mode settings."""
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_settings_tariff()
+            return await self.async_step_settings_phase_guard_topology()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -1669,14 +1686,210 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "observer_mode",
                     default=_c("observer_mode", DEFAULT_OBSERVER_MODE),
                 ): selector.BooleanSelector(),
-                # ``smart_night_charging`` removed in #277 Phase C — the
-                # named ``charge_mode`` carries that intent (implicit ON
-                # for ``min_plus_solar`` / ``solar_plus_cheap``). Phase B
-                # already routed ``_smart_night_charging_enabled()``
-                # through the mode resolver, so this options-flow field
-                # has been inert for a release; Phase C removes it from
-                # the UI to match.
             }),
+        )
+
+    async def async_step_settings_phase_guard_topology(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Choose which electrical lanes need independent phase protection."""
+        if user_input is not None:
+            topology = user_input["phase_guard_topology"]
+            self._data.update(user_input)
+            self._data["phase_guard_enabled"] = topology != "disabled"
+            if topology == "disabled":
+                return await self.async_step_settings_tariff()
+            return await self.async_step_settings_phase_guard()
+
+        current_config = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+            **self._data,
+        }
+        topology = current_config.get("phase_guard_topology")
+        if topology not in {"disabled", "grid_only", "hybrid_load_port"}:
+            topology = "disabled"
+
+        return self.async_show_form(
+            step_id="settings_phase_guard_topology",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "phase_guard_topology",
+                    default=topology,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            "disabled",
+                            "grid_only",
+                            "hybrid_load_port",
+                        ],
+                        translation_key="phase_guard_topology",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }),
+        )
+
+    async def async_step_settings_phase_guard(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Map per-phase sensors for the selected electrical topology."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_settings_tariff()
+
+        current_config = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+            **self._data,
+        }
+        topology = current_config.get("phase_guard_topology", "grid_only")
+        from .coordinator.phase_current_discovery import (
+            discover_grid_phase_current_entities,
+        )
+
+        discovered_currents = {}
+        if not any(
+            current_config.get(f"phase_guard_grid_l{phase}_current_entity")
+            for phase in range(1, 4)
+        ):
+            discovered_currents = discover_grid_phase_current_entities(
+                self.hass.states.async_all("sensor")
+            )
+
+        fields: dict[Any, Any] = {
+            vol.Optional(
+                "phase_guard_grid_limit_a",
+                default=self._cfg(current_config, "phase_guard_grid_limit_a", 16.0),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1.0,
+                    max=63.0,
+                    step=0.5,
+                    unit_of_measurement="A",
+                    mode="box",
+                )
+            ),
+            vol.Optional(
+                "phase_guard_max_age_s",
+                default=self._cfg(current_config, "phase_guard_max_age_s", 30.0),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5.0,
+                    max=300.0,
+                    step=5.0,
+                    unit_of_measurement="s",
+                    mode="box",
+                )
+            ),
+        }
+        sensor_selector = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor")
+        )
+        fields.update({
+            vol.Optional(
+                "phase_guard_grid_l1_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l1_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l1_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l2_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l2_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l2_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l3_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l3_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l3_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l1_power_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l1_power_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l2_power_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l2_power_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l3_power_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l3_power_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l1_voltage_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l1_voltage_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l2_voltage_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l2_voltage_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l3_voltage_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l3_voltage_entity") or None},
+            ): sensor_selector,
+        })
+
+        if topology == "hybrid_load_port":
+            fields[
+                vol.Optional(
+                    "phase_guard_inverter_limit_a",
+                    default=self._cfg(
+                        current_config, "phase_guard_inverter_limit_a", 16.0
+                    ),
+                )
+            ] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1.0,
+                    max=63.0,
+                    step=0.5,
+                    unit_of_measurement="A",
+                    mode="box",
+                )
+            )
+            fields.update({
+                vol.Optional(
+                    "phase_guard_inverter_l1_current_entity",
+                    description={"suggested_value": current_config.get("phase_guard_inverter_l1_current_entity") or None},
+                ): sensor_selector,
+                vol.Optional(
+                    "phase_guard_inverter_l2_current_entity",
+                    description={"suggested_value": current_config.get("phase_guard_inverter_l2_current_entity") or None},
+                ): sensor_selector,
+                vol.Optional(
+                    "phase_guard_inverter_l3_current_entity",
+                    description={"suggested_value": current_config.get("phase_guard_inverter_l3_current_entity") or None},
+                ): sensor_selector,
+            })
+
+        topology_summary = (
+            "grid and inverter Load/EPS output"
+            if topology == "hybrid_load_port"
+            else "grid supply"
+        )
+        return self.async_show_form(
+            step_id="settings_phase_guard",
+            data_schema=vol.Schema(fields),
+            description_placeholders={"topology": topology_summary},
         )
 
     async def async_step_settings_tariff(
