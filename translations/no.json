@@ -88,7 +88,8 @@
       "unknown": "En uventet feil oppstod. Vennligst prøv igjen.",
       "entity_not_found": "Entiteten ble ikke funnet. Kontroller at entitets-ID-en finnes.",
       "service_not_found": "Varslingstjenesten ble ikke funnet. Kontroller tjenestenavnet (f.eks. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready krever BEGGE reléentitetene. Angi begge reléene — eller la begge stå tomme og konfigurer kun klimaentiteten for settpunkt-boost i kun-klima-modus."
+      "heat_pump_partial_relays": "SG-Ready krever BEGGE reléentitetene. Angi begge reléene — eller la begge stå tomme og konfigurer kun klimaentiteten for settpunkt-boost i kun-klima-modus.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "Solar Energy Management er allerede konfigurert. Bare én instans er tillatt.",

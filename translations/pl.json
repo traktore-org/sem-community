@@ -88,7 +88,8 @@
       "unknown": "Wystąpił nieoczekiwany błąd. Spróbuj ponownie.",
       "entity_not_found": "Nie znaleziono encji. Sprawdź, czy podany identyfikator encji istnieje.",
       "service_not_found": "Nie znaleziono usługi powiadomień. Sprawdź nazwę usługi (np. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready wymaga OBU encji przekaźników. Ustaw oba przekaźniki — albo pozostaw oba puste i skonfiguruj tylko encję climate, aby korzystać z podbicia nastawy w trybie climate-only."
+      "heat_pump_partial_relays": "SG-Ready wymaga OBU encji przekaźników. Ustaw oba przekaźniki — albo pozostaw oba puste i skonfiguruj tylko encję climate, aby korzystać z podbicia nastawy w trybie climate-only.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "Solar Energy Management jest już skonfigurowany. Dozwolona jest tylko jedna instancja.",

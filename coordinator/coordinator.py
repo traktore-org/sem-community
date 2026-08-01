@@ -4756,6 +4756,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 overrides[single_key] = multi_default
         return {**cfg, **overrides} if overrides else cfg
 
+    def _battery_adapter_context(
+        self, battery_id: str, index: int = 0, count: int = 1,
+    ) -> Dict[str, Any]:
+        """Runtime-only context used to build a battery adapter (#709).
+
+        Merges the coordinator config with the per-battery entity overlays,
+        then injects the runtime scope — ``config_entry_id``, ``battery_id``
+        and, for the Deye platform, a persistent ``DeyeSnapshotStore``.
+
+        The store and scope are *runtime attachments*: they are passed to the
+        adapter constructor and held on the adapter object only.  They are
+        never written into entry ``data``/``options`` (HA serialises those),
+        so nothing here can leak into persisted config.
+        """
+        base = self._per_battery_config(index, count) or dict(self.config)
+        ctx = dict(base)
+        entry_id = str(getattr(self.config_entry, "entry_id", "") or "")
+        ctx.setdefault("config_entry_id", "")
+        if entry_id:
+            ctx["config_entry_id"] = entry_id
+        ctx["battery_id"] = str(battery_id)
+        platform = (ctx.get("battery_charge_platform") or "auto").lower()
+        if platform == "deye":
+            if not entry_id:
+                # Never share a degenerate ``entry_id=''`` persistence scope
+                # between config entries.  The Deye adapter then remains
+                # unavailable/fail-closed until runtime identity is complete.
+                ctx["deye_snapshot_store"] = None
+            else:
+                from .battery_adapters.deye_snapshot_store import DeyeSnapshotStore
+
+                ctx["deye_snapshot_store"] = DeyeSnapshotStore(
+                    self.hass, entry_id, ctx["battery_id"],
+                )
+        return ctx
+
     def _warn_battery_entity_collision(self, battery_id: str, pbc: dict) -> None:
         """Warn (once per entity) when two batteries share a control entity.
 
@@ -5228,7 +5264,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # independently. Falls back to the global single-entity keys.
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
-                _pbc = self._per_battery_config(batt_idx, _bat_count)
+                # #709: runtime context — injects the persistent Deye snapshot
+                # store + config-entry/battery scope at build time (never part of
+                # entry data/options, and never for non-Deye brands).
+                _pbc = self._battery_adapter_context(battery_id, batt_idx, _bat_count)
                 self._warn_battery_entity_collision(battery_id, _pbc)
                 adapter = adapter_for(self.hass, _pbc)
                 # H2 (review): share one orphan-stop guard across the fleet so a
@@ -5239,6 +5278,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._battery_orphan_guard = {}
                     adapter._orphan_guard = self._battery_orphan_guard
                 self._battery_adapters[battery_id] = adapter
+                recovered = await adapter.async_recover_pending()
+                if not recovered:
+                    _LOGGER.warning(
+                        "Battery %s: startup recovery blocked active control: %s",
+                        battery_id, getattr(adapter, "last_error", "unknown error"),
+                    )
                 _LOGGER.info(
                     "Battery %s: %s (forced-discharge support=%s)",
                     battery_id, type(adapter).__name__,

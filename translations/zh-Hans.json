@@ -88,7 +88,8 @@
       "unknown": "发生了未知错误。请重试。",
       "entity_not_found": "未找到实体。请确认该实体 ID 确实存在。",
       "service_not_found": "未找到通知服务。请检查服务名称（例如 notify.mobile_app_your_phone）。",
-      "heat_pump_partial_relays": "SG-Ready 需要【两个】继电器实体。请同时设置两个继电器 —— 或者将两者都留空，仅配置 climate 实体以使用仅温控设定值增强模式。"
+      "heat_pump_partial_relays": "SG-Ready 需要【两个】继电器实体。请同时设置两个继电器 —— 或者将两者都留空，仅配置 climate 实体以使用仅温控设定值增强模式。",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "太阳能消纳管理 (SEM) 已经配置过了。只允许存在一个实例。",
