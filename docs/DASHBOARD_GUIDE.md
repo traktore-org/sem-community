@@ -175,7 +175,7 @@ Entity types use a searchable entity picker filtered to the right domain. **Rese
 ![Configuration Tab](images/sem_config_tab.png)
 
 The single home for **every changeable setting** (`sem-config-card`),
-organized in collapsible sections: Setup overview, EV chargers, Battery
+organized in collapsible sections: Setup overview, Sensor sources (power-source overrides for grid / solar / battery, #628), EV chargers, Battery zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load management, Solar forecast, PV strings (when 2+ strings are detected), Notifications, and Advanced
 zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load
 management, Solar forecast, Notifications, and Advanced (update
 interval, deltas, min solar power, regulation offset, Observer Mode).

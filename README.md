@@ -26,7 +26,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 ## Features
 
 - **Smart EV charging** — dynamic 6-32A current control based on real-time solar surplus
-- **Six charging modes** — Auto (forecast-aware), Solar+Battery, Self-Consumption, Min+PV, Maximum, Off
+- **Five charging modes** — Solar only, Solar + cheapest hours, Min + Solar, Always (max), Off
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
 - **Min/Max charge-target range** — a per-charger dual-handle slider (kWh or SOC %): **Min** is the guaranteed amount (night/grid tops up to it), **Max** is the solar ceiling (surplus charges up to it, then stops). E.g. *Min 50% / Max 80%* — always keep 50% from the grid, let solar add up to 80% for battery longevity. Max defaults to full (charge freely from sun)

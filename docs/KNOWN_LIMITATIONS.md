@@ -28,7 +28,7 @@ Battery → grid export arbitrage (selling stored energy to the grid when the dy
 
 ## Sunrise-based meter day
 
-Daily energy totals reset at **sunrise**, not at midnight. This is intentional — it keeps night charging sessions (22:00-06:00) in a single daily bucket. However, it means daily totals may not align with utility billing periods that reset at midnight.
+SEM deliberately uses three day boundaries: daily ENERGY totals (solar / home / grid / battery) reset at **midnight**, matching HA's Energy Dashboard and utility billing. The EV daily counter rolls at the charger's **Charge-by deadline** (default 07:00) so an overnight charge lands in one bucket — it will not match a calendar-day comparison. Load **runtime targets** roll at **sunrise**, so an overnight top-up finishes yesterday's hours. Comparing any of the three against a source with a different boundary shows expected offsets, not drift.
 
 ## Financial tracking
 
