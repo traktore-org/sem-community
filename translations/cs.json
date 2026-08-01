@@ -192,15 +192,15 @@
         "description": "Nakonfigurujte cíle nabíjení EV a solární prahy.",
         "data": {
           "daily_ev_target": "Cíl nočního nabíjení (kWh)",
-          "min_solar_power": "Minimální solární výkon pro nabíjení (W)",
           "observer_mode": "Režim pozorovatele (pouze čtení)",
-          "smart_night_charging": "Snížit noční cíl na základě předpovědi"
+          "smart_night_charging": "Snížit noční cíl na základě předpovědi",
+          "minimum_solar_power": "Minimální solární výkon pro nabíjení (W)"
         },
         "data_description": {
           "daily_ev_target": "Cílový počet kWh, které se každou noc nabijí ze sítě. Nastavením na 0 noční nabíjení ze sítě vypnete.",
-          "min_solar_power": "Minimální přebytečný solární výkon (W) potřebný k tomu, aby SEM zahájil solární nabíjení EV.",
           "observer_mode": "Je-li ZAPNUTO, SEM vše sleduje, ale nikdy neposílá příkazy do hardwaru.",
-          "smart_night_charging": "Je-li ZAPNUTO, SEM sníží cíl nočního nabíjení, pokud je zítřejší solární předpověď dostatečná."
+          "smart_night_charging": "Je-li ZAPNUTO, SEM sníží cíl nočního nabíjení, pokud je zítřejší solární předpověď dostatečná.",
+          "minimum_solar_power": "Minimální přebytečný solární výkon (W) potřebný k tomu, aby SEM zahájil solární nabíjení EV."
         }
       },
       "settings_tariff": {
@@ -421,6 +421,48 @@
         },
         "data_description": {
           "charger_to_remove": "Vyberte nabíječku, kterou chcete odebrat ze SEM. Primární nabíječku nelze smazat."
+        }
+      },
+      "settings_phase_guard_topology": {
+        "title": "Electrical topology",
+        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "data": {
+          "phase_guard_topology": "Supply topology"
+        },
+        "data_description": {
+          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+        }
+      },
+      "settings_phase_guard": {
+        "title": "Per-phase guard sensors",
+        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "data": {
+          "phase_guard_grid_limit_a": "Main-fuse limit per phase",
+          "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
+          "phase_guard_max_age_s": "Maximum sensor age",
+          "phase_guard_grid_l1_power_entity": "Grid L1 power sensor",
+          "phase_guard_grid_l2_power_entity": "Grid L2 power sensor",
+          "phase_guard_grid_l3_power_entity": "Grid L3 power sensor",
+          "phase_guard_grid_l1_voltage_entity": "Grid L1 voltage sensor",
+          "phase_guard_grid_l2_voltage_entity": "Grid L2 voltage sensor",
+          "phase_guard_grid_l3_voltage_entity": "Grid L3 voltage sensor",
+          "phase_guard_inverter_l1_current_entity": "Inverter Load/EPS L1 RMS current",
+          "phase_guard_inverter_l2_current_entity": "Inverter Load/EPS L2 RMS current",
+          "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
+        },
+        "data_description": {
+          "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
+          "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
+          "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
+          "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
+          "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
+          "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",
+          "phase_guard_grid_l1_voltage_entity": "Grid voltage for phase L1 in V.",
+          "phase_guard_grid_l2_voltage_entity": "Grid voltage for phase L2 in V.",
+          "phase_guard_grid_l3_voltage_entity": "Grid voltage for phase L3 in V.",
+          "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
+          "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
+          "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
     }
@@ -931,6 +973,54 @@
       "diag_observer_mode": {
         "name": "Režim pozorovatele"
       },
+      "diag_grid_l1_current_a": {
+        "name": "Grid L1 Current"
+      },
+      "diag_grid_l1_margin_a": {
+        "name": "Grid L1 Current Margin"
+      },
+      "diag_grid_l2_current_a": {
+        "name": "Grid L2 Current"
+      },
+      "diag_grid_l2_margin_a": {
+        "name": "Grid L2 Current Margin"
+      },
+      "diag_grid_l3_current_a": {
+        "name": "Grid L3 Current"
+      },
+      "diag_grid_l3_margin_a": {
+        "name": "Grid L3 Current Margin"
+      },
+      "diag_inverter_l1_current_a": {
+        "name": "Inverter Load/EPS L1 Current"
+      },
+      "diag_inverter_l1_margin_a": {
+        "name": "Inverter Load/EPS L1 Current Margin"
+      },
+      "diag_inverter_l2_current_a": {
+        "name": "Inverter Load/EPS L2 Current"
+      },
+      "diag_inverter_l2_margin_a": {
+        "name": "Inverter Load/EPS L2 Current Margin"
+      },
+      "diag_inverter_l3_current_a": {
+        "name": "Inverter Load/EPS L3 Current"
+      },
+      "diag_inverter_l3_margin_a": {
+        "name": "Inverter Load/EPS L3 Current Margin"
+      },
+      "diag_phase_guard_mode": {
+        "name": "Phase Guard Mode"
+      },
+      "diag_phase_guard_safe": {
+        "name": "Phase Guard Safe"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
+      "diag_phase_guard_stop_reason": {
+        "name": "Phase Guard Stop Reason"
+      },
       "diag_sensors_unavailable": {
         "name": "Senzory nedostupné"
       },
@@ -1234,6 +1324,15 @@
     "soc_cap_unenforceable": {
       "title": "Nelze vynutit limit nabíjení {target} %: {name}",
       "description": "**{name}** má nastaven procentní cíl nabíjení, ale vaše vozidlo právě nehlásí svůj stav nabití, takže SEM nemůže zastavit na **{target} %** — bude nabíjet dál, dokud vůz sám nesníží výkon (téměř plný).\n\nPokud váš panel ukazuje procenta baterie, jde o SEM *odhadovaný* SOC, který je pro tvrdý limit záměrně ignorován (může se rozcházet). Chcete-li limit vynutit, připojte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → EV → Entita SOC vozidla). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečné čtení SOC."
+    }
+  },
+  "selector": {
+    "phase_guard_topology": {
+      "options": {
+        "disabled": "Disabled",
+        "grid_only": "Grid supply only",
+        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+      }
     }
   }
 }

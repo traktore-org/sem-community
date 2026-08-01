@@ -192,15 +192,15 @@
         "description": "Konfigurera laddningsmål för elbilen och soltrösklar.",
         "data": {
           "daily_ev_target": "Nattladdningsmål (kWh)",
-          "min_solar_power": "Minsta soleffekt för att starta EV-laddning (W)",
           "observer_mode": "Observatörsläge (skrivskyddat, ingen hårdvarustyrning)",
-          "smart_night_charging": "Minska nattmålet utifrån morgondagens prognos"
+          "smart_night_charging": "Minska nattmålet utifrån morgondagens prognos",
+          "minimum_solar_power": "Minsta soleffekt för att starta EV-laddning (W)"
         },
         "data_description": {
           "daily_ev_target": "Mål i kWh att ladda från nätet varje natt. Sätt till 0 för att inaktivera nattladdning från nätet.",
-          "min_solar_power": "Minsta solöverskott (W) som krävs innan SEM startar solladdning av elbilen.",
           "observer_mode": "När detta är PÅ övervakar SEM allt men skickar aldrig kommandon till hårdvaran.",
-          "smart_night_charging": "När detta är PÅ minskar SEM nattladdningsmålet när morgondagens solprognos är tillräcklig."
+          "smart_night_charging": "När detta är PÅ minskar SEM nattladdningsmålet när morgondagens solprognos är tillräcklig.",
+          "minimum_solar_power": "Minsta solöverskott (W) som krävs innan SEM startar solladdning av elbilen."
         }
       },
       "settings_tariff": {
@@ -421,6 +421,48 @@
         },
         "data_description": {
           "charger_to_remove": "Välj den laddare du vill ta bort från SEM. Den primära laddaren kan inte raderas."
+        }
+      },
+      "settings_phase_guard_topology": {
+        "title": "Elektrisk topologi",
+        "description": "Välj hur husets last matas. I en hybridinstallation kan elnätet och växelriktarens Load-/EPS-/Backup-utgång mata huset samtidigt. Husets interna last kan därför vara högre än strömmen genom huvudsäkringen. SEM övervakar de två lastvägarna separat. Den här förhandsversionen är endast diagnostisk och agerar aldrig på resultatet.",
+        "data": {
+          "phase_guard_topology": "Matningstopologi"
+        },
+        "data_description": {
+          "phase_guard_topology": "Välj Endast elnät för en vanlig installation. Välj Elnät + hybridväxelriktare när laster även matas via en Load-, EPS- eller Backup-utgång."
+        }
+      },
+      "settings_phase_guard": {
+        "title": "Fasvaktens sensorer",
+        "description": "Koppla sensorer för {topology}. Nätströmmen beräknas per fas som effektens absolutvärde delat med spänningen, så även export hanteras säkert. För hybridens Load-/EPS-väg väljer du icke-negativa RMS-strömsensorer. Saknade, gamla, ogiltiga eller negativa värden ger fail-closed. Observatörsläget publicerar bara diagnostik och skickar inga styrkommandon.",
+        "data": {
+          "phase_guard_grid_limit_a": "Huvudsäkringens gräns per fas",
+          "phase_guard_inverter_limit_a": "Gräns för inverter Load/EPS per fas",
+          "phase_guard_max_age_s": "Högsta sensorålder",
+          "phase_guard_grid_l1_power_entity": "Näteffekt L1",
+          "phase_guard_grid_l2_power_entity": "Näteffekt L2",
+          "phase_guard_grid_l3_power_entity": "Näteffekt L3",
+          "phase_guard_grid_l1_voltage_entity": "Nätspänning L1",
+          "phase_guard_grid_l2_voltage_entity": "Nätspänning L2",
+          "phase_guard_grid_l3_voltage_entity": "Nätspänning L3",
+          "phase_guard_inverter_l1_current_entity": "Inverter Load/EPS RMS-ström L1",
+          "phase_guard_inverter_l2_current_entity": "Inverter Load/EPS RMS-ström L2",
+          "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS RMS-ström L3"
+        },
+        "data_description": {
+          "phase_guard_grid_limit_a": "Högsta tillåtna nätström per fas, normalt huvudsäkringens märkström.",
+          "phase_guard_inverter_limit_a": "Högsta tillåtna RMS-ström per fas på växelriktarens Load-/EPS-/Backup-utgång.",
+          "phase_guard_max_age_s": "Ett mätvärde som är äldre än detta behandlas som osäkert.",
+          "phase_guard_grid_l1_power_entity": "Signerad näteffekt för L1 i W. Import och export accepteras.",
+          "phase_guard_grid_l2_power_entity": "Signerad näteffekt för L2 i W. Import och export accepteras.",
+          "phase_guard_grid_l3_power_entity": "Signerad näteffekt för L3 i W. Import och export accepteras.",
+          "phase_guard_grid_l1_voltage_entity": "Nätspänning för L1 i V.",
+          "phase_guard_grid_l2_voltage_entity": "Nätspänning för L2 i V.",
+          "phase_guard_grid_l3_voltage_entity": "Nätspänning för L3 i V.",
+          "phase_guard_inverter_l1_current_entity": "Icke-negativ RMS-ström för inverter Load/EPS L1.",
+          "phase_guard_inverter_l2_current_entity": "Icke-negativ RMS-ström för inverter Load/EPS L2.",
+          "phase_guard_inverter_l3_current_entity": "Icke-negativ RMS-ström för inverter Load/EPS L3."
         }
       }
     }
@@ -931,6 +973,54 @@
       "diag_observer_mode": {
         "name": "Observatörsläge"
       },
+      "diag_grid_l1_current_a": {
+        "name": "Nät L1 ström"
+      },
+      "diag_grid_l1_margin_a": {
+        "name": "Nät L1 strömmarginal"
+      },
+      "diag_grid_l2_current_a": {
+        "name": "Nät L2 ström"
+      },
+      "diag_grid_l2_margin_a": {
+        "name": "Nät L2 strömmarginal"
+      },
+      "diag_grid_l3_current_a": {
+        "name": "Nät L3 ström"
+      },
+      "diag_grid_l3_margin_a": {
+        "name": "Nät L3 strömmarginal"
+      },
+      "diag_inverter_l1_current_a": {
+        "name": "Växelriktare Load/EPS L1 ström"
+      },
+      "diag_inverter_l1_margin_a": {
+        "name": "Växelriktare Load/EPS L1 strömmarginal"
+      },
+      "diag_inverter_l2_current_a": {
+        "name": "Växelriktare Load/EPS L2 ström"
+      },
+      "diag_inverter_l2_margin_a": {
+        "name": "Växelriktare Load/EPS L2 strömmarginal"
+      },
+      "diag_inverter_l3_current_a": {
+        "name": "Växelriktare Load/EPS L3 ström"
+      },
+      "diag_inverter_l3_margin_a": {
+        "name": "Växelriktare Load/EPS L3 strömmarginal"
+      },
+      "diag_phase_guard_mode": {
+        "name": "Fasvaktens läge"
+      },
+      "diag_phase_guard_safe": {
+        "name": "Fasvakten säker"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Fasvaktens data aktuell"
+      },
+      "diag_phase_guard_stop_reason": {
+        "name": "Fasvaktens stopporsak"
+      },
       "diag_sensors_unavailable": {
         "name": "Sensorer otillgängliga"
       },
@@ -1234,6 +1324,15 @@
     "soc_cap_unenforceable": {
       "title": "Kan inte upprätthålla laddgränsen på {target} %: {name}",
       "description": "**{name}** är inställd på ett procentuellt laddmål, men ditt fordon rapporterar inte sin laddningsnivå just nu, så SEM kan inte stoppa vid **{target} %** — laddningen fortsätter tills bilen själv trappar ner (nästan full).\n\nOm din instrumentpanel visar en batteriprocent är det SEM:s *uppskattade* SOC, som medvetet ignoreras för den hårda gränsen (den kan driva). För att upprätthålla gränsen kopplar du in en **verklig SOC-sensor för fordonet** till denna laddare (Konfiguration → EV → Fordonets SOC-entitet). Denna reparation försvinner automatiskt så snart ett verkligt SOC-värde är tillgängligt igen."
+    }
+  },
+  "selector": {
+    "phase_guard_topology": {
+      "options": {
+        "disabled": "Inaktiverad",
+        "grid_only": "Endast elnät",
+        "hybrid_load_port": "Elnät + hybridväxelriktarens Load-/EPS-utgång"
+      }
     }
   }
 }

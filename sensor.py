@@ -41,6 +41,19 @@ _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
+
+def _phase_guard_current_description(*, key: str) -> SensorEntityDescription:
+    """Create one translated read-only phase-current diagnostic."""
+    return SensorEntityDescription(
+        key=key,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+    )
+
+
 SENSOR_TYPES = [
 
     # ============================================================================
@@ -1349,6 +1362,35 @@ SENSOR_TYPES = [
         key="diag_observer_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # Read-only diagnostics for independent grid and inverter/Load lanes.
+    SensorEntityDescription(
+        key="diag_phase_guard_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_phase_guard_safe",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_phase_guard_data_fresh",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_phase_guard_stop_reason",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    _phase_guard_current_description(key="diag_grid_l1_current_a"),
+    _phase_guard_current_description(key="diag_grid_l1_margin_a"),
+    _phase_guard_current_description(key="diag_grid_l2_current_a"),
+    _phase_guard_current_description(key="diag_grid_l2_margin_a"),
+    _phase_guard_current_description(key="diag_grid_l3_current_a"),
+    _phase_guard_current_description(key="diag_grid_l3_margin_a"),
+    _phase_guard_current_description(key="diag_inverter_l1_current_a"),
+    _phase_guard_current_description(key="diag_inverter_l1_margin_a"),
+    _phase_guard_current_description(key="diag_inverter_l2_current_a"),
+    _phase_guard_current_description(key="diag_inverter_l2_margin_a"),
+    _phase_guard_current_description(key="diag_inverter_l3_current_a"),
+    _phase_guard_current_description(key="diag_inverter_l3_margin_a"),
     # diag_ev_assist_headroom removed — observe-only instrumentation for #545
     # (the Zone-4 chicken-and-egg), now fixed + closed.
     SensorEntityDescription(
