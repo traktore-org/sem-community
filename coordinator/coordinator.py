@@ -5287,7 +5287,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),
-                ev_connected=bool(getattr(power, "ev_connected", False)),
+                # Same operational gate as the charging context: a legacy flat
+                # sensor with no registered charger must not make the battery
+                # hold discharge protection for a phantom EV.
+                ev_connected=operational_ev_connected(
+                    self._ev_devices, getattr(power, "ev_connected", False)
+                ),
                 home_consumption_w=float(
                     getattr(power, "home_consumption_power", 0.0) or 0.0
                 ),
@@ -5338,8 +5343,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         now = dt_util.now()
 
         if not scheduler.should_trigger_evaluation(now):
-            # Check for re-plan trigger (price update / SOC drift / EV change)
-            ev_connected = bool(getattr(power, "ev_connected", False))
+            # Check for re-plan trigger (price update / SOC drift / EV change).
+            # Operationally gated: a phantom EV (legacy sensor, no registered
+            # charger) must not force scheduler re-plans either.
+            ev_connected = operational_ev_connected(
+                self._ev_devices, getattr(power, "ev_connected", False)
+            )
             price_fp = None
             # Only worth computing when the scheduler holds a
             # fingerprint to compare against (#485 F2) — before the

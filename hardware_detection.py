@@ -931,14 +931,19 @@ def _discover_zaptec(entities) -> Dict[str, str]:
             result["ev_start_stop_entity"] = eid
 
     # Site/installation aggregates commonly contain only power/energy. A real
-    # charger must expose at least one charger-identity/control entity.
+    # charger must expose at least one charger-identity/control entity — and
+    # at least one STATE sensor: a resume button alone would register a
+    # charger SEM can command but never read (#695/#698 discovery class).
     identity_keys = {
         "ev_connected_sensor",
         "ev_charging_sensor",
         "ev_current_control_entity",
         "ev_start_stop_entity",
     }
+    state_keys = {"ev_connected_sensor", "ev_charging_sensor"}
     if not identity_keys.intersection(result):
+        return {}
+    if not state_keys.intersection(result):
         return {}
 
     # Prefer number entity control if found, otherwise use Zaptec's service.
