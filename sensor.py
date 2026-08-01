@@ -43,7 +43,12 @@ PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
 
 def _phase_guard_current_description(*, key: str) -> SensorEntityDescription:
-    """Create one translated read-only phase-current diagnostic."""
+    """Create one translated read-only phase-current diagnostic.
+
+    Disabled by default: these only carry data once the phase guard is
+    configured, and registering 12 permanently-unavailable entities on
+    every unconfigured install is registry churn (repo pattern for
+    rarely-used diagnostics)."""
     return SensorEntityDescription(
         key=key,
         device_class=SensorDeviceClass.CURRENT,
@@ -51,6 +56,7 @@ def _phase_guard_current_description(*, key: str) -> SensorEntityDescription:
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=2,
+        entity_registry_enabled_default=False,
     )
 
 
@@ -1363,21 +1369,26 @@ SENSOR_TYPES = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     # Read-only diagnostics for independent grid and inverter/Load lanes.
+    # Disabled by default — only meaningful once the phase guard is configured.
     SensorEntityDescription(
         key="diag_phase_guard_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
         key="diag_phase_guard_safe",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
         key="diag_phase_guard_data_fresh",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
         key="diag_phase_guard_stop_reason",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     _phase_guard_current_description(key="diag_grid_l1_current_a"),
     _phase_guard_current_description(key="diag_grid_l1_margin_a"),

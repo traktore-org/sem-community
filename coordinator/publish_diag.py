@@ -91,16 +91,21 @@ def build_diagnostics(coord) -> Dict[str, Any]:
     # Keep the output keys literal: the repository's sensor contract test scans
     # coordinator/features source for concrete producers rather than evaluating
     # dynamically constructed f-strings.
+    # Per-phase current + margin only. Per-phase "safe" is margin > 0 by
+    # definition, and the actionable state lives on the guard-level scalars
+    # (diag_phase_guard_safe / diag_phase_guard_stop_reason) — publishing six
+    # more keys would create coordinator.data entries with no matching
+    # SensorEntityDescription in sensor.py.
     phase_guard_sensor_keys = {
         "grid": {
-            "l1": ("diag_grid_l1_current_a", "diag_grid_l1_margin_a", "diag_grid_l1_safe"),
-            "l2": ("diag_grid_l2_current_a", "diag_grid_l2_margin_a", "diag_grid_l2_safe"),
-            "l3": ("diag_grid_l3_current_a", "diag_grid_l3_margin_a", "diag_grid_l3_safe"),
+            "l1": ("diag_grid_l1_current_a", "diag_grid_l1_margin_a"),
+            "l2": ("diag_grid_l2_current_a", "diag_grid_l2_margin_a"),
+            "l3": ("diag_grid_l3_current_a", "diag_grid_l3_margin_a"),
         },
         "inverter": {
-            "l1": ("diag_inverter_l1_current_a", "diag_inverter_l1_margin_a", "diag_inverter_l1_safe"),
-            "l2": ("diag_inverter_l2_current_a", "diag_inverter_l2_margin_a", "diag_inverter_l2_safe"),
-            "l3": ("diag_inverter_l3_current_a", "diag_inverter_l3_margin_a", "diag_inverter_l3_safe"),
+            "l1": ("diag_inverter_l1_current_a", "diag_inverter_l1_margin_a"),
+            "l2": ("diag_inverter_l2_current_a", "diag_inverter_l2_margin_a"),
+            "l3": ("diag_inverter_l3_current_a", "diag_inverter_l3_margin_a"),
         },
     }
     # The evaluator never calls HA services or charger APIs. Publish both the
@@ -115,13 +120,12 @@ def build_diagnostics(coord) -> Dict[str, Any]:
         out["diag_phase_guard_data_fresh"] = guard["data_fresh"]
         out["diag_phase_guard_stop_reason"] = guard["stop_reason"] or "none"
         for lane, phases in phase_guard_sensor_keys.items():
-            for phase, (current_key, margin_key, safe_key) in phases.items():
+            for phase, (current_key, margin_key) in phases.items():
                 phase_data = guard[lane].get(phase)
                 if phase_data is None:
                     continue
                 out[current_key] = phase_data["current_a"]
                 out[margin_key] = phase_data["margin_a"]
-                out[safe_key] = phase_data["safe"]
 
     out["diag_sensors_unavailable"] = sum(
         1 for _ in reader._sensor_unavailable
