@@ -209,7 +209,13 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         self._session_first_write_at: Optional[float] = None
         try:
             self._readback_attempts = int(config.get("deye_readback_attempts", 3))
-            self._readback_delay_s = float(config.get("deye_readback_delay_s", 0))
+            # Default 2 s between verify reads: Deye registers travel a
+            # Modbus TCP/serial hop and HA's entity state reflects them on
+            # the NEXT poll, not synchronously. A 0 s verify races that
+            # poll, reads back the pre-write value, and rolls back a write
+            # that actually succeeded — latching the adapter unsafe on
+            # perfectly healthy hardware.
+            self._readback_delay_s = float(config.get("deye_readback_delay_s", 2.0))
         except (TypeError, ValueError):
             self._readback_attempts = 0
             self._readback_delay_s = -1.0
@@ -652,6 +658,12 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             self._snapshot_load_failed = False
             return self._snapshot
         self._snapshot_load_failed = False
+        if self._snapshot_store is None:
+            # No store configured is a CONFIGURATION, not a failure: there
+            # is nothing to load and nothing pending. Treating it as a load
+            # failure would latch the adapter unsafe on the first
+            # command_normal of every store-less install.
+            return None
         try:
             raw = await self._store_call("async_load")
             if raw:
@@ -1027,6 +1039,19 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             self._last_error = None
             self._last_intent = BatteryIntent.NORMAL
             return
+        # Restore WRITES 18 registers. The same gates that protect
+        # command_force_charge protect the restore path: a persisted
+        # snapshot from an earlier actuation-enabled session must not be
+        # replayed to the inverter on an observer-mode startup (#702 —
+        # the exact class this adapter's contract promises to close).
+        # The snapshot is held, not cleared: it replays once the user
+        # re-opens the gates.
+        if self._observer_mode or not self._actuation_enabled:
+            self._last_error = (
+                "pending Deye snapshot held: restore requires actuation "
+                "enabled and observer mode off"
+            )
+            return
         restored = await self._restore_snapshot(snapshot)
         if restored:
             if self._unsafe_latched:
@@ -1039,7 +1064,11 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             await self._store_unsafe(True)
 
     async def command_limit_discharge(self, watts: float) -> None:
-        # Deye discharge limiting is intentionally outside this first contract.
+        # Deye discharge limiting is intentionally outside this first
+        # contract. The intent still records what the coordinator asked
+        # for — last_intent tracks the accepted command stream, last_error
+        # carries the honesty (sibling adapters' convention).
+        self._last_intent = BatteryIntent.LIMIT_DISCHARGE
         self._last_error = "Deye discharge limiting is not implemented"
 
     async def command_force_charge(
@@ -1098,6 +1127,18 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             await self._store_unsafe(True)
             return
         if existing is not None:
+            # The coordinator re-issues FORCE_CHARGE every cycle for the
+            # duration of a session (~30 s cadence, like every sibling
+            # adapter). A snapshot belonging to the session THIS adapter
+            # instance opened is the active session — re-issue is a no-op
+            # success, not an error, or last_error flags a healthy session
+            # on every cycle. Changed parameters are NOT re-applied
+            # mid-session; the inverter holds the compiled plan. A snapshot
+            # this instance did NOT open (restart recovery) still refuses:
+            # it must replay through command_normal first.
+            if self._last_intent is BatteryIntent.FORCE_CHARGE:
+                self._last_error = None
+                return
             self._last_error = "pending Deye snapshot must be restored before a new session"
             return
         snapshot = await self._take_snapshot(str(uuid4()))
@@ -1166,6 +1207,13 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
                 return
             self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
+            return
+        # Same write gate as command_normal — restore is a hardware write.
+        if self._observer_mode or not self._actuation_enabled:
+            self._last_error = (
+                "pending Deye snapshot held: restore requires actuation "
+                "enabled and observer mode off"
+            )
             return
         restored = await self._restore_snapshot(snapshot)
         if restored:

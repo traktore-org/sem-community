@@ -661,3 +661,109 @@ async def test_tampered_snapshot_with_ambiguous_times_is_never_restored():
     assert restarted.unsafe_latched is True
     assert store.unsafe is True
     assert "program times are invalid" in restarted.last_error
+
+
+# ---------------------------------------------------------------------------
+# Maintainer-review additions: the restore path is a WRITE and must honour
+# the same gates as force charge; a re-issued force charge is the session
+# heartbeat, not an error; a store-less config is a configuration, not a
+# failure.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_observer_mode_startup_never_replays_a_persisted_snapshot():
+    """The #702 class: a snapshot from an earlier actuation-enabled session
+    must not reach the inverter on an observer-mode startup via
+    command_normal's recovery path."""
+    adapter, config, states, store, events = _active_adapter()
+    await adapter.command_force_charge(80, 1067, 60)
+    assert store.data is not None
+
+    observer_config = dict(config)
+    observer_config["deye_observer_mode"] = True
+    observer_config["deye_actuation_enabled"] = False
+    restarted_hass = _Hass(states, events=events)
+    restarted = DeyeBatteryAdapter(restarted_hass, observer_config)
+
+    await restarted.command_normal()
+
+    restarted_hass.services.async_call.assert_not_awaited()
+    assert store.data is not None  # held, not cleared — replays when gated open
+    assert "held" in restarted.last_error
+    assert restarted.last_intent is None
+
+
+@pytest.mark.asyncio
+async def test_observer_mode_startup_never_replays_via_stop_force_charge():
+    adapter, config, states, store, events = _active_adapter()
+    await adapter.command_force_charge(80, 1067, 60)
+
+    observer_config = dict(config)
+    observer_config["deye_observer_mode"] = True
+    restarted_hass = _Hass(states, events=events)
+    restarted = DeyeBatteryAdapter(restarted_hass, observer_config)
+
+    await restarted.command_stop_force_charge()
+
+    restarted_hass.services.async_call.assert_not_awaited()
+    assert store.data is not None
+    assert "held" in restarted.last_error
+
+
+@pytest.mark.asyncio
+async def test_reissued_force_charge_is_the_session_heartbeat_not_an_error():
+    """The coordinator re-issues FORCE_CHARGE every cycle for the whole
+    session, like every sibling adapter. The second issue must be a no-op
+    success — otherwise last_error flags a healthy session every ~30 s."""
+    adapter, _, _, store, _ = _active_adapter()
+    await adapter.command_force_charge(80, 1067, 60)
+    assert adapter.last_error is None
+    saved = store.data
+
+    await adapter.command_force_charge(80, 1067, 60)
+
+    assert adapter.last_error is None
+    assert adapter.last_intent.name == "FORCE_CHARGE"
+    assert store.data is saved  # no second snapshot was taken
+
+
+@pytest.mark.asyncio
+async def test_snapshot_from_another_life_still_refuses_a_new_session():
+    """Restart recovery keeps its teeth: a snapshot THIS instance did not
+    open must replay through command_normal before a new session starts."""
+    adapter, config, states, store, events = _active_adapter()
+    await adapter.command_force_charge(80, 1067, 60)
+
+    restarted_hass = _Hass(states, events=events)
+    restarted = DeyeBatteryAdapter(restarted_hass, config)
+
+    await restarted.command_force_charge(80, 1067, 60)
+
+    assert "must be restored" in restarted.last_error
+
+
+@pytest.mark.asyncio
+async def test_no_snapshot_store_is_a_configuration_not_a_failure():
+    """A store-less install (capability reporting only) must not latch the
+    adapter unsafe on its first command_normal."""
+    config, states = _valid_setup()
+    hass = _Hass(states)
+    adapter = DeyeBatteryAdapter(hass, config)
+
+    await adapter.command_normal()
+
+    assert adapter.unsafe_latched is False
+    assert adapter.last_error is None
+    assert adapter.last_intent.name == "NORMAL"
+    hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_limit_discharge_records_the_intent_it_declined():
+    adapter, _, _, _, _ = _active_adapter()
+
+    await adapter.command_limit_discharge(1500)
+
+    assert adapter.last_intent.name == "LIMIT_DISCHARGE"
+    assert "not implemented" in adapter.last_error
