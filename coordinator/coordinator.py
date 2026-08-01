@@ -47,6 +47,8 @@ from .types import (
 )
 from .health_check import HealthCheck
 from .units import energy_state_to_kwh, power_state_to_watts
+from .distance_units import distance_to_km
+from .ev_availability import operational_ev_connected, operational_night_target
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -3548,10 +3550,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if _range_entity:
                 _rs = self.hass.states.get(_range_entity)
                 if _rs and _rs.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                    try:
-                        result["ev_remaining_range"] = round(float(_rs.state))
-                    except (ValueError, TypeError):
-                        pass
+                    _range_km = distance_to_km(
+                        _rs.state,
+                        _rs.attributes.get("unit_of_measurement"),
+                    )
+                    if _range_km is not None:
+                        result["ev_remaining_range"] = round(_range_km)
+                    else:
+                        _LOGGER.warning(
+                            "Ignoring vehicle range %s with unsupported/invalid unit %r",
+                            _range_entity,
+                            _rs.attributes.get("unit_of_measurement"),
+                        )
             if "ev_remaining_range" not in result and self._cycle_vehicle_soc is not None:
                 # Capacity + efficiency are per-car → read the (primary) charger's
                 # values, falling back to global config. One car per charger (#245).
@@ -6024,8 +6034,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # take the non-wait branch. Multi-charger loop downstream
         # already had access via the cached ChargingContext; this
         # brings the primary to parity.
-        night_target = remaining_floor
-        if self.time_manager.is_night_mode() and self._smart_night_charging_enabled():
+        night_target = operational_night_target(self._ev_devices, remaining_floor)
+        if (
+            self._ev_devices
+            and self.time_manager.is_night_mode()
+            and self._smart_night_charging_enabled()
+        ):
             night_target = self._calculate_forecast_night_target(
                 remaining_floor, energy, _primary_cfg,
             )
@@ -6193,8 +6207,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # are already populated and consumed below.
 
         return ChargingContext(
-            ev_connected=power.ev_connected,
-            ev_charging=power.ev_charging,
+            ev_connected=operational_ev_connected(self._ev_devices, power.ev_connected),
+            ev_charging=bool(self._ev_devices) and power.ev_charging,
             battery_soc=power.battery_soc,
             battery_too_low=battery_too_low,
             battery_needs_priority=battery_needs_priority,
