@@ -107,7 +107,7 @@ Each configured charger creates its own sensor entities:
 
 ### Surplus Priority
 
-Set a priority per charger (1 = highest). The highest-priority charger gets surplus power first. When it's full or at minimum power, remaining surplus flows to the next charger.
+Each charger's surplus priority is its position in the **unified priority list** on the Control tab — drag its row up or down relative to loads and the battery (#576). The highest-priority charger gets surplus first; when it's full or at minimum power, the remainder flows down the list.
 
 ### Night Charging
 

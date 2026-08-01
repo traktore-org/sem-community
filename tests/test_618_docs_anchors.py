@@ -140,3 +140,84 @@ class TestEveryRelativeMarkdownLinkResolves672:
         assert not (guide.parent / "docs/images/sem_home_tab.png").resolve().exists()
         # The corrected form.
         assert (guide.parent / "images/sem_home_tab.png").resolve().exists()
+
+
+# ── (stable-prep 2026-08-01) the classes the original guard missed ──────────
+#
+# The pre-stable link sweep found 5 broken references CI never saw: anchor rot
+# in RELATIVE markdown links (the guard only checked file existence), a broken
+# HTML <img src> (not markdown-link syntax at all), and ISSUE_TEMPLATE
+# ``?template=`` params pointing at renamed files. Three guards close those
+# classes for good.
+
+_DOCS_DIR = _ROOT / "docs"
+
+
+def _md_files():
+    # CLAUDE.md is gitignored local context — its links point at machine-local
+    # paths outside the repo and must not gate CI.
+    out = [p for p in _ROOT.glob("*.md") if p.name != "CLAUDE.md"]
+    out += [p for p in _DOCS_DIR.rglob("*.md")]
+    return out
+
+
+@pytest.mark.unit
+class TestRelativeDocLinks:
+    def test_relative_markdown_anchors_resolve(self):
+        """Every ``[text](path.md#anchor)`` and same-page ``(#anchor)`` link in
+        every tracked markdown file must slug-match a real heading."""
+        problems = []
+        for md in _md_files():
+            text = md.read_text(encoding="utf-8")
+            # strip fenced code blocks — sample links inside them aren't real
+            text = re.sub(r"```.*?```", "", text, flags=re.S)
+            for m in re.finditer(r"\]\(([^)\s]+)\)", text):
+                target = m.group(1)
+                if target.startswith(("http://", "https://", "mailto:")):
+                    continue
+                path_part, _, anchor = target.partition("#")
+                if path_part:
+                    tpath = (md.parent / path_part).resolve()
+                    if not tpath.exists():
+                        problems.append(f"{md.relative_to(_ROOT)} → {target}: file missing")
+                        continue
+                    if anchor and tpath.suffix == ".md":
+                        if anchor not in _doc_slugs(tpath):
+                            problems.append(
+                                f"{md.relative_to(_ROOT)} → {target}: no such heading")
+                elif anchor:  # same-page link
+                    if anchor not in _doc_slugs(md):
+                        problems.append(
+                            f"{md.relative_to(_ROOT)} → #{anchor}: no such heading")
+        assert not problems, "broken relative doc links:\n  " + "\n  ".join(problems)
+
+    def test_html_img_and_href_paths_resolve(self):
+        """HTML <img src>/<a href> with relative paths — the syntax the
+        markdown-link guard can't see (the broken USER_GUIDE logo class)."""
+        problems = []
+        for md in _md_files():
+            text = md.read_text(encoding="utf-8")
+            for m in re.finditer(r'(?:src|href)="([^"]+)"', text):
+                target = m.group(1)
+                if target.startswith(("http://", "https://", "mailto:", "#", "data:")):
+                    continue
+                if not (md.parent / target.partition("#")[0]).resolve().exists():
+                    problems.append(f"{md.relative_to(_ROOT)} → {target}")
+        assert not problems, "broken HTML src/href paths:\n  " + "\n  ".join(problems)
+
+
+@pytest.mark.unit
+class TestIssueTemplateReferences:
+    def test_template_params_name_real_files(self):
+        """GitHub's ``?template=`` must match a filename in ISSUE_TEMPLATE
+        exactly — a rename silently degrades the link to a blank issue."""
+        tdir = _ROOT / ".github" / "ISSUE_TEMPLATE"
+        if not tdir.is_dir():
+            pytest.skip("no ISSUE_TEMPLATE dir")
+        real = {p.name for p in tdir.iterdir()}
+        problems = []
+        for f in tdir.glob("*.yml"):
+            for m in re.finditer(r"template=([\w.\-]+)", f.read_text(encoding="utf-8")):
+                if m.group(1) not in real:
+                    problems.append(f"{f.name}: template={m.group(1)} (have: {sorted(real)})")
+        assert not problems, "\n".join(problems)
