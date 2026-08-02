@@ -13,6 +13,7 @@ per :class:`BatteryIntent`. Mirrors the EV ``charger_adapters/``
 pattern.
 """
 from .base import BatteryControlAdapter
+from .deye import DeyeBatteryAdapter, DeyeCapability, DeyeControlSnapshot
 from .generic import GenericBatteryAdapter
 from .goodwe import GoodWeBatteryAdapter
 from .huawei import HuaweiBatteryAdapter
@@ -30,6 +31,8 @@ def adapter_for(hass, config: dict) -> BatteryControlAdapter:
     4. Otherwise → GenericBatteryAdapter (switch + number target)
     """
     platform = (config.get("battery_charge_platform") or "auto").lower()
+    if platform == "deye":
+        return DeyeBatteryAdapter(hass, config)
     if platform == "huawei":
         return HuaweiBatteryAdapter(hass, config)
     if platform == "goodwe":
@@ -85,6 +88,9 @@ def _integration_loaded(hass, domain: str) -> bool:
 
 __all__ = [
     "BatteryControlAdapter",
+    "DeyeBatteryAdapter",
+    "DeyeCapability",
+    "DeyeControlSnapshot",
     "HuaweiBatteryAdapter",
     "GoodWeBatteryAdapter",
     "GenericBatteryAdapter",

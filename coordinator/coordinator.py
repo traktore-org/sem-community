@@ -47,6 +47,8 @@ from .types import (
 )
 from .health_check import HealthCheck
 from .units import energy_state_to_kwh, power_state_to_watts
+from .distance_units import distance_to_km
+from .ev_availability import operational_ev_connected, operational_night_target
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -3548,10 +3550,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if _range_entity:
                 _rs = self.hass.states.get(_range_entity)
                 if _rs and _rs.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                    try:
-                        result["ev_remaining_range"] = round(float(_rs.state))
-                    except (ValueError, TypeError):
-                        pass
+                    _range_km = distance_to_km(
+                        _rs.state,
+                        _rs.attributes.get("unit_of_measurement"),
+                    )
+                    if _range_km is not None:
+                        result["ev_remaining_range"] = round(_range_km)
+                    else:
+                        _LOGGER.warning(
+                            "Ignoring vehicle range %s with unsupported/invalid unit %r",
+                            _range_entity,
+                            _rs.attributes.get("unit_of_measurement"),
+                        )
             if "ev_remaining_range" not in result and self._cycle_vehicle_soc is not None:
                 # Capacity + efficiency are per-car → read the (primary) charger's
                 # values, falling back to global config. One car per charger (#245).
@@ -4746,6 +4756,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 overrides[single_key] = multi_default
         return {**cfg, **overrides} if overrides else cfg
 
+    def _battery_adapter_context(
+        self, battery_id: str, index: int = 0, count: int = 1,
+    ) -> Dict[str, Any]:
+        """Runtime-only context used to build a battery adapter (#709).
+
+        Merges the coordinator config with the per-battery entity overlays,
+        then injects the runtime scope — ``config_entry_id``, ``battery_id``
+        and, for the Deye platform, a persistent ``DeyeSnapshotStore``.
+
+        The store and scope are *runtime attachments*: they are passed to the
+        adapter constructor and held on the adapter object only.  They are
+        never written into entry ``data``/``options`` (HA serialises those),
+        so nothing here can leak into persisted config.
+        """
+        base = self._per_battery_config(index, count) or dict(self.config)
+        ctx = dict(base)
+        entry_id = str(getattr(self.config_entry, "entry_id", "") or "")
+        ctx.setdefault("config_entry_id", "")
+        if entry_id:
+            ctx["config_entry_id"] = entry_id
+        ctx["battery_id"] = str(battery_id)
+        platform = (ctx.get("battery_charge_platform") or "auto").lower()
+        if platform == "deye":
+            if not entry_id:
+                # Never share a degenerate ``entry_id=''`` persistence scope
+                # between config entries.  The Deye adapter then remains
+                # unavailable/fail-closed until runtime identity is complete.
+                ctx["deye_snapshot_store"] = None
+            else:
+                from .battery_adapters.deye_snapshot_store import DeyeSnapshotStore
+
+                ctx["deye_snapshot_store"] = DeyeSnapshotStore(
+                    self.hass, entry_id, ctx["battery_id"],
+                )
+        return ctx
+
     def _warn_battery_entity_collision(self, battery_id: str, pbc: dict) -> None:
         """Warn (once per entity) when two batteries share a control entity.
 
@@ -5218,7 +5264,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # independently. Falls back to the global single-entity keys.
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
-                _pbc = self._per_battery_config(batt_idx, _bat_count)
+                # #709: runtime context — injects the persistent Deye snapshot
+                # store + config-entry/battery scope at build time (never part of
+                # entry data/options, and never for non-Deye brands).
+                _pbc = self._battery_adapter_context(battery_id, batt_idx, _bat_count)
                 self._warn_battery_entity_collision(battery_id, _pbc)
                 adapter = adapter_for(self.hass, _pbc)
                 # H2 (review): share one orphan-stop guard across the fleet so a
@@ -5229,6 +5278,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._battery_orphan_guard = {}
                     adapter._orphan_guard = self._battery_orphan_guard
                 self._battery_adapters[battery_id] = adapter
+                recovered = await adapter.async_recover_pending()
+                if not recovered:
+                    _LOGGER.warning(
+                        "Battery %s: startup recovery blocked active control: %s",
+                        battery_id, getattr(adapter, "last_error", "unknown error"),
+                    )
                 _LOGGER.info(
                     "Battery %s: %s (forced-discharge support=%s)",
                     battery_id, type(adapter).__name__,
@@ -5277,7 +5332,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),
-                ev_connected=bool(getattr(power, "ev_connected", False)),
+                # Same operational gate as the charging context: a legacy flat
+                # sensor with no registered charger must not make the battery
+                # hold discharge protection for a phantom EV.
+                ev_connected=operational_ev_connected(
+                    self._ev_devices, getattr(power, "ev_connected", False)
+                ),
                 home_consumption_w=float(
                     getattr(power, "home_consumption_power", 0.0) or 0.0
                 ),
@@ -5328,8 +5388,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         now = dt_util.now()
 
         if not scheduler.should_trigger_evaluation(now):
-            # Check for re-plan trigger (price update / SOC drift / EV change)
-            ev_connected = bool(getattr(power, "ev_connected", False))
+            # Check for re-plan trigger (price update / SOC drift / EV change).
+            # Operationally gated: a phantom EV (legacy sensor, no registered
+            # charger) must not force scheduler re-plans either.
+            ev_connected = operational_ev_connected(
+                self._ev_devices, getattr(power, "ev_connected", False)
+            )
             price_fp = None
             # Only worth computing when the scheduler holds a
             # fingerprint to compare against (#485 F2) — before the
@@ -6024,8 +6088,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # take the non-wait branch. Multi-charger loop downstream
         # already had access via the cached ChargingContext; this
         # brings the primary to parity.
-        night_target = remaining_floor
-        if self.time_manager.is_night_mode() and self._smart_night_charging_enabled():
+        night_target = operational_night_target(self._ev_devices, remaining_floor)
+        if (
+            self._ev_devices
+            and self.time_manager.is_night_mode()
+            and self._smart_night_charging_enabled()
+        ):
             night_target = self._calculate_forecast_night_target(
                 remaining_floor, energy, _primary_cfg,
             )
@@ -6193,8 +6261,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # are already populated and consumed below.
 
         return ChargingContext(
-            ev_connected=power.ev_connected,
-            ev_charging=power.ev_charging,
+            ev_connected=operational_ev_connected(self._ev_devices, power.ev_connected),
+            ev_charging=bool(self._ev_devices) and power.ev_charging,
             battery_soc=power.battery_soc,
             battery_too_low=battery_too_low,
             battery_needs_priority=battery_needs_priority,

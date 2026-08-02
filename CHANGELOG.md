@@ -11,6 +11,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.38] — 02.08.2026
+
+### 🐛 Fixes
+
+- 📐 **Phase guard: a flat-but-alive sensor is fresh, not stale** (#707 follow-up) — freshness
+  keyed on `last_updated`, which HA only moves when a value actually *changes*; a healthy sensor
+  holding a constant reading (grid voltage rounding to 230 for minutes, a quiet phase at 0 W all
+  night) only bumps `last_reported`, so the guard declared it stale and failed closed on a healthy
+  install. Caught by the HA-TEST sim gauntlet within a day of the beta.37 merge. Freshness now
+  reads `last_reported` with `last_updated` as the fallback for older cores. The rest of the
+  gauntlet passed live: export sign-safety (−1153 W → 5.0 A), stale/invalid-unit/over-limit all
+  fail closed with per-phase stop reasons. (by @traktore-org)
+
+# [1.7.5-beta.37] — 01.08.2026
+
+### ✨ Features
+
+- 🔌 **Fail-closed Deye battery support** (by @tintinz in #709) — explicit `battery_charge_platform:
+  deye` adapter with a transactional snapshot/restore protocol over the six-slot TOU register model:
+  every write is verified by read-back, any failure rolls the inverter back to its pre-session state,
+  a tampered or stale snapshot is never replayed, and a persisted unsafe latch survives restarts.
+  Zero effect unless Deye is explicitly selected. Maintainer review hardened the contract: the
+  restore path now honours the observer/actuation gates (the #702 class), a re-issued force charge
+  is the session heartbeat instead of a per-cycle error, a store-less config no longer latches
+  unsafe, and read-back waits 2 s for the Modbus poll instead of racing it.
+- 📐 **Read-only per-phase grid diagnostics** (by @tintinz in #707) — opt-in phase guard for
+  grid-only and hybrid Load/EPS topologies: per-phase current and margin sensors from direct RMS
+  entities when available, else `abs(power)/voltage` (sign-safe for import AND export), with
+  missing/stale/invalid readings failing closed. Diagnostics are disabled-by-default in the entity
+  registry, so unconfigured installs see no new entities. Also fixes the `minimum_solar_power`
+  config label, which was missing on every install (key rename never reached the translations).
+
+### 🐛 Fixes
+
+- 🚗 **Zaptec discovery persists and phantom plans are suppressed** (by @tintinz in #706) — a
+  failed first discovery no longer leaves legacy flat sensors driving charging logic with no
+  registered charger: discovery persists under a stable per-device ID, night plans are suppressed
+  until a controllable charger exists, and vehicle range readings without a unit are dropped
+  instead of guessed (metres-as-km would inflate 1000×). Maintainer review extended the
+  operational gate to the battery view and scheduler re-plan — no more discharge protection held
+  for a phantom EV — and Zaptec identity now requires a state sensor, not just a resume button.
+
 # [1.7.5-beta.36] — 01.08.2026
 
 ### 🐛 Fixes
