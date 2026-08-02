@@ -30,6 +30,8 @@ Battery → grid export arbitrage (selling stored energy to the grid when the dy
 
 SEM deliberately uses three day boundaries: daily ENERGY totals (solar / home / grid / battery) reset at **midnight**, matching HA's Energy Dashboard and utility billing. The EV daily counter rolls at the charger's **Charge-by deadline** (default 07:00) so an overnight charge lands in one bucket — it will not match a calendar-day comparison. Load **runtime targets** roll at **sunrise**, so an overnight top-up finishes yesterday's hours. Comparing any of the three against a source with a different boundary shows expected offsets, not drift.
 
+Since v1.7.5 the daily **home** row is derived from the day's reconciled counters rather than integrated (#628) — see the [Troubleshooting entry](TROUBLESHOOTING.md#daily-home-consumption-doesnt-match-my-meter-or-the-other-daily-rows). One consequence worth knowing: **on the day you upgrade to v1.7.5**, the home row keeps the old behaviour for that single calendar day and switches to the balance from the following midnight.
+
 ## Financial tracking
 
 Cost tracking uses either statically configured rates (HT/NT) or a dynamic tariff entity (Tibber, Nordpool, aWATTar). There is no automatic rate detection from utility providers. Export (feed-in) rates must be manually configured.
