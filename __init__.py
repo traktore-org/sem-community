@@ -1409,6 +1409,45 @@ def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) ->
         _LOGGER.info("Folded ev_limit_surplus into the Max charge ceiling (#245)")
 
 
+def stable_discovered_charger_id(discovered: Dict[str, Any]) -> str:
+    """Build a deterministic, storage-safe ID from registry identity."""
+    import hashlib
+    import re
+
+    platform = str(discovered.get("_platform") or "ev_charger").lower()
+    platform = re.sub(r"[^a-z0-9_]+", "_", platform).strip("_") or "ev_charger"
+    identity = str(
+        discovered.get("_device_id")
+        or discovered.get("ev_current_control_entity")
+        or discovered.get("ev_charging_power_sensor")
+        or platform
+    )
+    digest = hashlib.sha256(f"{platform}:{identity}".encode()).hexdigest()[:10]
+    return f"{platform}_{digest}"
+
+
+def build_discovered_charger_storage(
+    entry_data: Dict[str, Any],
+    entry_options: Dict[str, Any],
+    discovered: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
+    """Return matching data/options payloads for one discovered charger."""
+    charger = {
+        key: value
+        for key, value in discovered.items()
+        if not key.startswith("_") and value is not None
+    }
+    charger["id"] = stable_discovered_charger_id(discovered)
+    platform = str(discovered.get("_platform") or "EV").split("_", 1)[0]
+    charger["name"] = f"{platform.title()} Charger"
+    chargers = [charger]
+    return (
+        {**dict(entry_data or {}), "ev_chargers": chargers},
+        {**dict(entry_options or {}), "ev_chargers": chargers},
+        chargers,
+    )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Set up Solar Energy Management from a config entry.
 
@@ -1638,13 +1677,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_auto = coordinator._device_registry.discover_ev_charger()
                 if ev_auto:
                     _LOGGER.info("Auto-discovered EV charger config: %s", list(ev_auto.keys()))
-                    ev_auto["id"] = "ev_charger"
-                    ev_auto["name"] = "EV Charger"
-                    ev_chargers_config = [ev_auto]
-                    # Persist discovered config
-                    new_options = dict(entry.options)
-                    new_options["ev_chargers"] = ev_chargers_config
-                    hass.config_entries.async_update_entry(entry, options=new_options)
+                    new_data, new_options, ev_chargers_config = (
+                        build_discovered_charger_storage(
+                            dict(entry.data or {}),
+                            dict(entry.options or {}),
+                            ev_auto,
+                        )
+                    )
+                    # Persist the same stable list on both sides. Options are
+                    # the live source; data is the recovery source used by the
+                    # existing storage-healing path if options is clobbered.
+                    hass.config_entries.async_update_entry(
+                        entry,
+                        data=new_data,
+                        options=new_options,
+                    )
                     full_config["ev_chargers"] = ev_chargers_config
             # Fallback: check flat keys (pre-migration installs)
             if not ev_chargers_config:

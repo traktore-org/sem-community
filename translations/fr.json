@@ -88,7 +88,8 @@
       "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "entity_not_found": "Entité introuvable. Vérifiez que l'ID d'entité existe.",
       "service_not_found": "Service de notification introuvable. Veuillez vérifier le nom du service (par ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready nécessite les DEUX entités relais. Renseignez les deux relais — ou laissez-les vides et configurez uniquement l'entité climate pour un boost de consigne climate seul."
+      "heat_pump_partial_relays": "SG-Ready nécessite les DEUX entités relais. Renseignez les deux relais — ou laissez-les vides et configurez uniquement l'entité climate pour un boost de consigne climate seul.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
       "already_configured": "Solar Energy Management est déjà configuré. Une seule instance est autorisée.",
@@ -192,15 +193,15 @@
         "description": "Configurer les objectifs de charge VE et les seuils solaires.",
         "data": {
           "daily_ev_target": "Objectif de charge nocturne (kWh)",
-          "min_solar_power": "Puissance solaire minimale pour démarrer la charge VE (W)",
           "observer_mode": "Mode observation (lecture seule, pas de contrôle matériel)",
-          "smart_night_charging": "Réduire l'objectif nocturne selon la prévision de demain"
+          "smart_night_charging": "Réduire l'objectif nocturne selon la prévision de demain",
+          "minimum_solar_power": "Puissance solaire minimale pour démarrer la charge VE (W)"
         },
         "data_description": {
           "daily_ev_target": "Objectif en kWh à charger depuis le réseau chaque nuit. Réglez sur 0 pour désactiver la charge nocturne sur le réseau.",
-          "min_solar_power": "Surplus solaire minimal (W) requis avant que SEM ne démarre la charge solaire du VE.",
           "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille tout mais n'envoie jamais de commandes au matériel.",
-          "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM réduit l'objectif de charge nocturne lorsque la prévision solaire de demain est suffisante."
+          "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM réduit l'objectif de charge nocturne lorsque la prévision solaire de demain est suffisante.",
+          "minimum_solar_power": "Surplus solaire minimal (W) requis avant que SEM ne démarre la charge solaire du VE."
         }
       },
       "settings_tariff": {
@@ -421,6 +422,54 @@
         },
         "data_description": {
           "charger_to_remove": "Sélectionnez le chargeur que vous souhaitez retirer de SEM. Le chargeur principal ne peut pas être supprimé."
+        }
+      },
+      "settings_phase_guard_topology": {
+        "title": "Electrical topology",
+        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "data": {
+          "phase_guard_topology": "Supply topology"
+        },
+        "data_description": {
+          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+        }
+      },
+      "settings_phase_guard": {
+        "title": "Per-phase guard sensors",
+        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "data": {
+          "phase_guard_grid_limit_a": "Main-fuse limit per phase",
+          "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
+          "phase_guard_max_age_s": "Maximum sensor age",
+          "phase_guard_grid_l1_current_entity": "Direct Grid L1 RMS current",
+          "phase_guard_grid_l2_current_entity": "Direct Grid L2 RMS current",
+          "phase_guard_grid_l3_current_entity": "Direct Grid L3 RMS current",
+          "phase_guard_grid_l1_power_entity": "Grid L1 power sensor",
+          "phase_guard_grid_l2_power_entity": "Grid L2 power sensor",
+          "phase_guard_grid_l3_power_entity": "Grid L3 power sensor",
+          "phase_guard_grid_l1_voltage_entity": "Grid L1 voltage sensor",
+          "phase_guard_grid_l2_voltage_entity": "Grid L2 voltage sensor",
+          "phase_guard_grid_l3_voltage_entity": "Grid L3 voltage sensor",
+          "phase_guard_inverter_l1_current_entity": "Inverter Load/EPS L1 RMS current",
+          "phase_guard_inverter_l2_current_entity": "Inverter Load/EPS L2 RMS current",
+          "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
+        },
+        "data_description": {
+          "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
+          "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
+          "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
+          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
+          "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
+          "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",
+          "phase_guard_grid_l1_voltage_entity": "Grid voltage for phase L1 in V.",
+          "phase_guard_grid_l2_voltage_entity": "Grid voltage for phase L2 in V.",
+          "phase_guard_grid_l3_voltage_entity": "Grid voltage for phase L3 in V.",
+          "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
+          "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
+          "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
     }
@@ -931,6 +980,54 @@
       "diag_observer_mode": {
         "name": "Mode observation"
       },
+      "diag_grid_l1_current_a": {
+        "name": "Grid L1 Current"
+      },
+      "diag_grid_l1_margin_a": {
+        "name": "Grid L1 Current Margin"
+      },
+      "diag_grid_l2_current_a": {
+        "name": "Grid L2 Current"
+      },
+      "diag_grid_l2_margin_a": {
+        "name": "Grid L2 Current Margin"
+      },
+      "diag_grid_l3_current_a": {
+        "name": "Grid L3 Current"
+      },
+      "diag_grid_l3_margin_a": {
+        "name": "Grid L3 Current Margin"
+      },
+      "diag_inverter_l1_current_a": {
+        "name": "Inverter Load/EPS L1 Current"
+      },
+      "diag_inverter_l1_margin_a": {
+        "name": "Inverter Load/EPS L1 Current Margin"
+      },
+      "diag_inverter_l2_current_a": {
+        "name": "Inverter Load/EPS L2 Current"
+      },
+      "diag_inverter_l2_margin_a": {
+        "name": "Inverter Load/EPS L2 Current Margin"
+      },
+      "diag_inverter_l3_current_a": {
+        "name": "Inverter Load/EPS L3 Current"
+      },
+      "diag_inverter_l3_margin_a": {
+        "name": "Inverter Load/EPS L3 Current Margin"
+      },
+      "diag_phase_guard_mode": {
+        "name": "Phase Guard Mode"
+      },
+      "diag_phase_guard_safe": {
+        "name": "Phase Guard Safe"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
+      "diag_phase_guard_stop_reason": {
+        "name": "Phase Guard Stop Reason"
+      },
       "diag_sensors_unavailable": {
         "name": "Capteurs indisponibles"
       },
@@ -1234,6 +1331,15 @@
     "soc_cap_unenforceable": {
       "title": "Impossible d'appliquer la limite de charge de {target}% : {name}",
       "description": "**{name}** est réglé sur un objectif de charge en pourcentage, mais votre véhicule ne communique pas son état de charge actuellement : SEM ne peut donc pas s'arrêter à **{target}%** — la charge se poursuivra jusqu'à ce que la voiture réduise d'elle-même (proche du plein).\n\nSi votre tableau de bord affiche un pourcentage de batterie, il s'agit du SOC *estimé* par SEM, délibérément ignoré pour la limite stricte (il peut dériver). Pour appliquer la limite, raccordez un **véritable capteur de SOC du véhicule** à ce chargeur (Configuration → EV → Entité SOC véhicule). Cette réparation disparaît automatiquement dès qu'une valeur de SOC réelle est de nouveau disponible."
+    }
+  },
+  "selector": {
+    "phase_guard_topology": {
+      "options": {
+        "disabled": "Disabled",
+        "grid_only": "Grid supply only",
+        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+      }
     }
   }
 }
