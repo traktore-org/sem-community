@@ -31,7 +31,25 @@ Open an issue with the `enhancement` label. Describe the use case, not just the 
 2. Make your changes
 3. Ensure tests pass (see the namespaced test-runner note under [Development Setup](#development-setup) — a direct `pytest` from the repo root fails because `select.py` shadows the stdlib module)
 4. Update documentation if your change affects user-facing behavior
-5. Submit a PR to `develop` (not `main`)
+5. Submit a PR to `develop` (not `main`) — the PR template's checklist mirrors
+   exactly what the review will hold you to
+
+**What to expect after you open a PR:**
+
+- An **automated maintainer review** hard-challenges every PR against SEM's
+  invariants (sign conventions, fail-closed control paths, translation
+  parity, persisted-state round-trips, multi-charger rules — the template
+  checklist). It requests changes with specific file-and-line findings, or
+  formally approves. Either way you get substantive feedback, usually within
+  the hour.
+- **Merging is always a human maintainer decision** — an approval means
+  "cleared for merge", not merged.
+- During a **stabilization phase** (feature freeze before a stable release),
+  feature PRs are parked with a friendly note and get their full review once
+  the freeze lifts. Bug fixes are always reviewed immediately. The
+  `parked: feature freeze` label marks this state.
+- CI on a first-time contribution waits for a manual approval before running —
+  GitHub policy for fork code, not distrust.
 
 ### Code Style
 
