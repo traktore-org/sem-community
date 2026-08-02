@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5-beta.38] — 02.08.2026
+
+### 🐛 Fixes
+
+- 📐 **Phase guard: a flat-but-alive sensor is fresh, not stale** (#707 follow-up) — freshness
+  keyed on `last_updated`, which HA only moves when a value actually *changes*; a healthy sensor
+  holding a constant reading (grid voltage rounding to 230 for minutes, a quiet phase at 0 W all
+  night) only bumps `last_reported`, so the guard declared it stale and failed closed on a healthy
+  install. Caught by the HA-TEST sim gauntlet within a day of the beta.37 merge. Freshness now
+  reads `last_reported` with `last_updated` as the fallback for older cores. The rest of the
+  gauntlet passed live: export sign-safety (−1153 W → 5.0 A), stale/invalid-unit/over-limit all
+  fail closed with per-phase stop reasons. (by @traktore-org)
+
 # [1.7.5-beta.37] — 01.08.2026
 
 ### ✨ Features
