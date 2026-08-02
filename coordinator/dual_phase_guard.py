@@ -36,11 +36,23 @@ def _read_number(
     if unit != expected_unit.lower():
         return None, "invalid_unit"
 
-    last_updated = getattr(state, "last_updated", None)
-    if last_updated is None:
+    # Freshness comes from last_REPORTED, not last_updated: HA only moves
+    # last_updated when the value or attributes actually CHANGE, while a
+    # healthy sensor holding a flat reading (grid voltage rounding to 230
+    # for minutes, a quiet phase at exactly 0 W all night) keeps
+    # re-reporting the same value — bumping only last_reported. Keying on
+    # last_updated declared exactly those healthy-but-flat sensors stale
+    # and failed the guard closed on a healthy install (caught live on the
+    # HA-TEST rig). last_updated stays as the fallback for cores without
+    # last_reported.
+    reported = (
+        getattr(state, "last_reported", None)
+        or getattr(state, "last_updated", None)
+    )
+    if reported is None:
         return None, "missing_timestamp"
     try:
-        age = (dt_util.utcnow() - last_updated).total_seconds()
+        age = (dt_util.utcnow() - reported).total_seconds()
     except (TypeError, ValueError):
         return None, "invalid_timestamp"
     if age < -5 or age > max_age_s:

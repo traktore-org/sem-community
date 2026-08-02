@@ -233,3 +233,39 @@ def test_dual_guard_fails_closed_for_bad_or_stale_data(
     assert result["safe"] is False
     assert result["data_fresh"] is False
     assert reason in result["stop_reason"]
+
+
+def test_a_flat_but_alive_sensor_is_fresh_not_stale():
+    """A healthy sensor holding a constant reading (grid voltage rounding to
+    230 for minutes, a quiet phase at 0 W all night) only bumps
+    last_REPORTED — HA moves last_updated exclusively on value/attribute
+    CHANGES. Keying freshness on last_updated declared exactly those
+    healthy-but-flat sensors stale and failed the guard closed on a healthy
+    install (caught live on the HA-TEST rig, 2026-08-02)."""
+    from homeassistant.util import dt as dt_util
+
+    states = _healthy_states()
+    flat = states["sensor.grid_l1_voltage"]
+    flat.last_updated = dt_util.utcnow() - timedelta(seconds=600)  # flat for 10 min
+    flat.last_reported = dt_util.utcnow() - timedelta(seconds=2)   # but reporting
+
+    result = evaluate_dual_phase_guard(_States(states), _guard_config())
+
+    assert result["safe"] is True
+    assert result["data_fresh"] is True
+
+
+def test_a_sensor_that_stopped_reporting_is_still_stale():
+    """The counterpart: last_reported old = genuinely dead, regardless of
+    what last_updated says. Fail closed."""
+    from homeassistant.util import dt as dt_util
+
+    states = _healthy_states()
+    dead = states["sensor.grid_l1_voltage"]
+    dead.last_updated = dt_util.utcnow() - timedelta(seconds=600)
+    dead.last_reported = dt_util.utcnow() - timedelta(seconds=600)
+
+    result = evaluate_dual_phase_guard(_States(states), _guard_config())
+
+    assert result["safe"] is False
+    assert "stale" in (result["stop_reason"] or "")
