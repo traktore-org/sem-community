@@ -426,18 +426,24 @@
       },
       "settings_phase_guard_topology": {
         "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
         "data": {
-          "phase_guard_topology": "Supply topology"
+          "phase_guard_topology": "Supply topology",
+          "phase_guard_phase_count": "Fázisok száma"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
+          "phase_guard_phase_count": "Válasszon 1-et egyfázisú vagy 3-at háromfázisú tápláláshoz. Csak a kiválasztott fázisok szükségesek és figyeltek."
         }
       },
       "settings_phase_guard": {
         "title": "Per-phase guard sensors",
-        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "description": "Rendelje hozzá az érzékelőket a(z) {topology} elemhez. Egyfázisú táplálásnál csak az L1 szükséges. Háromfázisú táplálásnál válasszon teljes L1-L3 közvetlen RMS-áramkészletet, ha elérhető; különben a hálózati áram az abszolút teljesítmény és a feszültség hányadosaként számítódik. Hibrid Load/EPS sávnál válasszon nem negatív RMS-áramérzékelőket a konfigurált fázisokhoz. A hiányzó, elavult, érvénytelen vagy negatív kötelező értékek biztonságos hibával (fail closed) végződnek. Az Observer Mode csak diagnosztikát tesz közzé; nem küld vezérlőparancsokat.",
         "data": {
+          "phase_guard_enforcement_enabled": "Enforce phase guard on EV charging",
+          "phase_guard_notifications_enabled": "Fázisőr-értesítések küldése",
+          "phase_guard_recovery_margin_a": "Recovery margin below each phase limit",
+          "phase_guard_recovery_cycles": "Fresh safe cycles before restart",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -455,12 +461,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "When enabled, unsafe or stale readings immediately disable every managed EV charger. Disabled by default so the guard can first be verified in Observer Mode.",
+          "phase_guard_recovery_margin_a": "Every required phase must remain at least this far below its own limit before restart recovery can progress.",
+          "phase_guard_recovery_cycles": "Number of consecutive fresh safe coordinator cycles required before EV charging is authorised again.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
-          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_current_entity": "Opcionális közvetlen, nem negatív RMS hálózati áram A-ban. Közvetlen forrás használata esetén az összes konfigurált fázist meg kell adni.",
+          "phase_guard_grid_l2_current_entity": "Opcionális közvetlen, nem negatív RMS hálózati áram A-ban. Közvetlen forrás használata esetén az összes konfigurált fázist meg kell adni.",
+          "phase_guard_grid_l3_current_entity": "Opcionális közvetlen, nem negatív RMS hálózati áram A-ban. Közvetlen forrás használata esetén az összes konfigurált fázist meg kell adni.",
           "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
           "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
           "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",

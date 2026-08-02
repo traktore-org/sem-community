@@ -2615,6 +2615,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             charging_state = self._state_machine.update_state(charging_context)
 
             # Step 7.5a: Unified EV control via CurrentControlDevice
+            # Evaluate the dual-source phase guard once per cycle before any
+            # charger decision can reach an adapter.  The resulting state is
+            # cached for every charger and for diagnostics publication.
+            from .active_phase_guard import update_active_phase_guard
+            phase_guard_snapshot = update_active_phase_guard(self)
+            await self._notification_manager.notify_phase_guard_transition(
+                phase_guard_snapshot,
+                enabled=bool(self.config.get("phase_guard_enabled", False)),
+            )
+
             # Multi-charger (#112): control each charger in priority order
             if not self._ev_device and not self._ev_devices:
                 await self._retry_ev_device_with_backoff()
@@ -2955,6 +2965,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             **self._charge_stability_kwargs(),
                             now_ts=_now_mono_cycle,
                         )
+                        # Safety write gate is deliberately LAST: stability
+                        # logic must never bridge or ramp around an emergency
+                        # phase-guard stop.
+                        from .active_phase_guard import filter_charger_decision
+                        decision = filter_charger_decision(
+                            self, decision, adapter=adapter, power=view.power
+                        )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -3145,6 +3162,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     decision, view, adapter,
                     **self._charge_stability_kwargs(),
                     now_ts=_now_mono_cycle,
+                )
+                from .active_phase_guard import filter_charger_decision
+                decision = filter_charger_decision(
+                    self, decision, adapter=adapter, power=view.power
                 )
                 try:
                     await actuate(decision, adapter, view.power, reconciler=reconciler)

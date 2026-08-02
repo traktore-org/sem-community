@@ -95,7 +95,7 @@ def _phase_result(
 
 
 def evaluate_dual_phase_guard(states, config: Dict[str, Any]) -> Dict[str, Any]:
-    """Evaluate two independent L1-L3 16 A guards without actuating.
+    """Evaluate independent one- or three-phase guards without actuating.
 
     Grid current is ``abs(power_w / voltage_v)`` so export is protected too.
     Inverter/Load current is read directly from the configured non-negative RMS
@@ -103,6 +103,22 @@ def evaluate_dual_phase_guard(states, config: Dict[str, Any]) -> Dict[str, Any]:
     """
     topology = str(config.get("phase_guard_topology", "hybrid_load_port"))
     invalid_configuration = False
+    phase_count: Optional[int] = None
+    raw_phase_count = config.get("phase_guard_phase_count", 3)
+    try:
+        numeric_phase_count = float(raw_phase_count)
+        if (
+            isinstance(raw_phase_count, bool)
+            or not math.isfinite(numeric_phase_count)
+            or not numeric_phase_count.is_integer()
+        ):
+            raise ValueError
+        phase_count = int(numeric_phase_count)
+    except (TypeError, ValueError):
+        invalid_configuration = True
+    if phase_count not in {1, 3}:
+        invalid_configuration = True
+    required_phases = range(1, (phase_count or 3) + 1)
     try:
         grid_limit = float(config.get("phase_guard_grid_limit_a", 16))
         inverter_limit = float(config.get("phase_guard_inverter_limit_a", 16))
@@ -120,14 +136,15 @@ def evaluate_dual_phase_guard(states, config: Dict[str, Any]) -> Dict[str, Any]:
         invalid_configuration = True
     configured_grid_currents = sum(
         bool(config.get(f"phase_guard_grid_l{phase}_current_entity"))
-        for phase in range(1, 4)
+        for phase in required_phases
     )
-    if configured_grid_currents not in {0, 3}:
+    if configured_grid_currents not in {0, phase_count}:
         invalid_configuration = True
 
     result: Dict[str, Any] = {
         "mode": "observer",
         "topology": topology,
+        "phase_count": phase_count,
         "read_only": True,
         "safe": True,
         "data_fresh": True,
@@ -151,7 +168,7 @@ def evaluate_dual_phase_guard(states, config: Dict[str, Any]) -> Dict[str, Any]:
 
     include_inverter = topology == "hybrid_load_port"
 
-    for phase in range(1, 4):
+    for phase in required_phases:
         key = f"l{phase}"
         direct_current_entity = config.get(
             f"phase_guard_grid_l{phase}_current_entity"

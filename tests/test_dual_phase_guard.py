@@ -153,6 +153,61 @@ def test_grid_only_topology_does_not_require_inverter_lane_sensors():
     assert result["inverter"] == {}
 
 
+def test_single_phase_hybrid_only_requires_l1_on_both_lanes():
+    config = _guard_config()
+    config["phase_guard_phase_count"] = 1
+    for phase in (2, 3):
+        config.pop(f"phase_guard_grid_l{phase}_power_entity")
+        config.pop(f"phase_guard_grid_l{phase}_voltage_entity")
+        config.pop(f"phase_guard_inverter_l{phase}_current_entity")
+
+    result = evaluate_dual_phase_guard(_States(_healthy_states()), config)
+
+    assert result["phase_count"] == 1
+    assert result["safe"] is True
+    assert result["data_fresh"] is True
+    assert set(result["grid"]) == {"l1"}
+    assert set(result["inverter"]) == {"l1"}
+
+
+def test_single_phase_direct_grid_current_only_requires_l1():
+    config = _guard_config()
+    config["phase_guard_phase_count"] = 1
+    config["phase_guard_grid_l1_current_entity"] = "sensor.grid_l1_current"
+    states = _healthy_states()
+    states["sensor.grid_l1_current"] = _state(11, "A")
+
+    result = evaluate_dual_phase_guard(_States(states), config)
+
+    assert result["safe"] is True
+    assert result["grid"]["l1"]["current_a"] == pytest.approx(11.0)
+    assert set(result["grid"]) == {"l1"}
+
+
+def test_single_phase_hybrid_still_fails_closed_when_required_l1_is_missing():
+    config = _guard_config()
+    config["phase_guard_phase_count"] = 1
+    config.pop("phase_guard_inverter_l1_current_entity")
+
+    result = evaluate_dual_phase_guard(_States(_healthy_states()), config)
+
+    assert result["safe"] is False
+    assert result["data_fresh"] is False
+    assert "inverter:l1:not_configured" in result["stop_reason"]
+
+
+@pytest.mark.parametrize("phase_count", [0, 2, 4, "invalid"])
+def test_unsupported_phase_count_fails_closed(phase_count):
+    config = _guard_config()
+    config["phase_guard_phase_count"] = phase_count
+
+    result = evaluate_dual_phase_guard(_States(_healthy_states()), config)
+
+    assert result["safe"] is False
+    assert result["data_fresh"] is False
+    assert result["stop_reason"] == "invalid_configuration"
+
+
 @pytest.mark.parametrize(
     ("entity", "replacement_factory", "reason"),
     [

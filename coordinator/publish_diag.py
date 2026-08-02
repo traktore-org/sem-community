@@ -111,9 +111,14 @@ def build_diagnostics(coord) -> Dict[str, Any]:
     # The evaluator never calls HA services or charger APIs. Publish both the
     # structured snapshot and scalar fields for coordinator and entity users.
     if coord.config.get("phase_guard_enabled", False):
-        from .dual_phase_guard import evaluate_dual_phase_guard
-
-        guard = evaluate_dual_phase_guard(coord.hass.states, coord.config)
+        # The active write gate evaluates once before EV actuation and caches
+        # that exact runtime snapshot.  Reuse it so diagnostics cannot disagree
+        # with the decision that reached the charger.  Direct unit callers that
+        # have not run a coordinator cycle retain the read-only evaluator.
+        guard = getattr(coord, "_phase_guard_snapshot", None)
+        if not isinstance(guard, dict):
+            from .dual_phase_guard import evaluate_dual_phase_guard
+            guard = evaluate_dual_phase_guard(coord.hass.states, coord.config)
         out["diag_phase_guard"] = guard
         out["diag_phase_guard_mode"] = guard["mode"]
         out["diag_phase_guard_safe"] = guard["safe"]
