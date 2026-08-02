@@ -186,6 +186,22 @@ class TestRefreshRuntimeConfig:
         assert tp.export_rate == 0.08
         assert tp.fallback_price == 0.31
 
+    def test_dynamic_tariff_surcharge_pushed_live(self):
+        tp = DynamicTariffProvider(None, grid_import_surcharge=0.0)
+        coord = _coord({"grid_import_surcharge": 0.725}, tariff=tp)
+
+        SEMCoordinator.refresh_runtime_config(coord)
+
+        assert tp.grid_import_surcharge == pytest.approx(0.725)
+
+    def test_dynamic_tariff_surcharge_unchanged_when_key_absent(self):
+        tp = DynamicTariffProvider(None, grid_import_surcharge=0.725)
+        coord = _coord({}, tariff=tp)
+
+        SEMCoordinator.refresh_runtime_config(coord)
+
+        assert tp.grid_import_surcharge == pytest.approx(0.725)
+
     def test_calendar_tariff_rates_pushed(self):
         tp = CalendarTariffProvider(None, peak_rate=0.1, off_peak_rate=0.1,
                                     export_rate=0.01)

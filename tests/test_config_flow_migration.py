@@ -537,6 +537,26 @@ async def test_v15_to_v16_idempotent_without_legacy_flags(hass) -> None:
 
 
 @pytest.mark.asyncio
+async def test_v15_upgrade_without_grid_surcharge_keeps_legacy_shape(hass) -> None:
+    """A real v15 upgrade needs no persisted #710 key to load safely."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=15,
+        minor_version=1,
+        data={"update_interval": 30},
+        options={"tariff_mode": "dynamic", "custom_marker": "preserve-me"},
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.version == 16
+    assert "grid_import_surcharge" not in updated.data
+    assert "grid_import_surcharge" not in updated.options
+    assert updated.options["custom_marker"] == "preserve-me"
+
+@pytest.mark.asyncio
 async def test_v14_to_v15_strips_retired_shed_priority(hass) -> None:
     """v14 → v15 (#576): the retired ``ev_shed_priority`` knob is stripped
     from every charger (surplus + shed order are now the one drag-list

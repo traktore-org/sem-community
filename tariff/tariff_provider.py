@@ -292,13 +292,8 @@ class DynamicTariffProvider(TariffProvider):
         # existed) could slip NaN / a negative through. Never let a corrupt
         # surcharge produce NaN or negative import cost at runtime: clamp
         # non-finite / negative values to 0.0 (off).
-        self.grid_import_surcharge = (
-            0.0
-            if isinstance(grid_import_surcharge, bool)
-            or not isinstance(grid_import_surcharge, (int, float))
-            or not math.isfinite(float(grid_import_surcharge))
-            or float(grid_import_surcharge) < 0.0
-            else float(grid_import_surcharge)
+        self.grid_import_surcharge = self.normalize_grid_import_surcharge(
+            grid_import_surcharge
         )
         self.cheap_threshold = cheap_threshold
         self.expensive_threshold = expensive_threshold
@@ -1207,6 +1202,14 @@ class DynamicTariffProvider(TariffProvider):
         self._percentile_breaks_for = window_key
         return breaks
 
+    @staticmethod
+    def normalize_grid_import_surcharge(value: object) -> float:
+        """Return a safe non-negative surcharge value, or ``0.0``."""
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0.0
+        value = float(value)
+        return value if math.isfinite(value) and value >= 0.0 else 0.0
+
     def get_current_import_rate(self) -> float:
         """Current effective import rate: raw spot + grid import surcharge.
 
@@ -1384,9 +1387,16 @@ class DynamicTariffProvider(TariffProvider):
                 if _local_date(p.timestamp) == today
             ]
             if today_prices:
-                data.today_min_price = min(today_prices)
-                data.today_max_price = max(today_prices)
-                data.today_avg_price = sum(today_prices) / len(today_prices)
+                # These attributes accompany current_import_rate on the
+                # import-rate sensor, so expose the same effective all-in
+                # convention. Keep upcoming_prices raw: optimisation applies
+                # the surcharge later via effective_import_floor().
+                surcharge = self._grid_import_surcharge()
+                data.today_min_price = min(today_prices) + surcharge
+                data.today_max_price = max(today_prices) + surcharge
+                data.today_avg_price = (
+                    sum(today_prices) / len(today_prices) + surcharge
+                )
 
             # Find next cheap window
             for p in prices:

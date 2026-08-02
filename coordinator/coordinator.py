@@ -7505,6 +7505,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     tp.fallback_price = _cfg_rate(
                         cfg, "electricity_import_rate", default=0.30
                     )
+                    # #710: cached at construction, so options updates must
+                    # push this live like the thresholds above. An absent key
+                    # (upgraded install) preserves the current/legacy value.
+                    tp.grid_import_surcharge = (
+                        DynamicTariffProvider.normalize_grid_import_surcharge(
+                            cfg.get(
+                                "grid_import_surcharge",
+                                tp.grid_import_surcharge,
+                            )
+                        )
+                    )
                 else:
                     # Static / Calendar share peak/off-peak rate fields. Fall
                     # back to the provider's CURRENT value when the key is

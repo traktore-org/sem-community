@@ -26,6 +26,11 @@ from custom_components.solar_energy_management.tariff.tariff_provider import (
     PriceLevel,
     PricePoint,
 )
+from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+    BatteryChargeScheduler,
+    SchedulerConfig,
+    SchedulerState,
+)
 
 DT_UTIL_PATH = "custom_components.solar_energy_management.tariff.tariff_provider.dt_util"
 
@@ -127,6 +132,32 @@ class TestForecastRatesSurcharge:
         # daytime avg (0.30+0.31+0.32)/3 + surcharge
         assert rate == pytest.approx((0.30 + 0.31 + 0.32) / 3 + 0.725)
 
+    def test_today_statistics_use_effective_import_rate(self, mock_hass):
+        """Import sensor state and its day statistics use one convention."""
+        now = datetime(2026, 6, 10, 12, 0)
+        prices_today = [
+            {"start": (now.replace(hour=0) + timedelta(hours=h)).isoformat(), "total": p}
+            for h, p in enumerate((0.10, 0.20, 0.30))
+        ]
+        mock_hass.states.get = MagicMock(
+            return_value=_make_price_state(
+                0.20, attributes={"prices_today": prices_today},
+            ),
+        )
+        provider = DynamicTariffProvider(
+            mock_hass, price_entity="sensor.p", grid_import_surcharge=0.725,
+        )
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            mock_dt.as_local = lambda ts: ts
+            data = provider.get_tariff_data()
+
+        assert data.current_import_rate == pytest.approx(0.20 + 0.725)
+        assert data.today_min_price == pytest.approx(0.10 + 0.725)
+        assert data.today_max_price == pytest.approx(0.30 + 0.725)
+        assert data.today_avg_price == pytest.approx(0.20 + 0.725)
+
 
 # ---------------------------------------------------------------------------
 # Raw spot preserved for classification / order / schedule / display
@@ -220,6 +251,15 @@ class TestCoordinatorWiring:
         coord = self._coordinator(mock_hass)
         assert coord._tariff_provider.grid_import_surcharge == 0.0
 
+    def test_upgraded_install_without_key_keeps_legacy_zero_cost(self, mock_hass):
+        """A pre-#710 config entry has no key and must retain old behaviour."""
+        from custom_components.solar_energy_management.coordinator import SEMCoordinator
+
+        coord = SEMCoordinator(
+            mock_hass, {"tariff_mode": "dynamic", "update_interval": 30},
+        )
+        assert coord._tariff_provider.grid_import_surcharge == 0.0
+
 
 # ---------------------------------------------------------------------------
 # effective_import_floor: surcharge applied exactly once, never double-counted
@@ -260,6 +300,36 @@ class TestEffectiveImportFloor:
         # No curve (None) -> identity path, but surcharge still applies once.
         prov = self._floor_provider(live_raw=0.30, curve_now=None, surcharge=0.725)
         assert prov.effective_import_floor(0.10) == pytest.approx(0.825)
+
+    def test_surcharge_flips_real_arbitrage_decision(self):
+        """The configured fee reaches the scheduler's economic decision."""
+        provider = self._floor_provider(
+            live_raw=0.10, curve_now=0.10, surcharge=0.0,
+        )
+        scheduler = BatteryChargeScheduler(
+            MagicMock(),
+            SchedulerConfig(
+                arbitrage_enabled=True,
+                arbitrage_min_export_price=0.20,
+                arbitrage_reserve_soc=50.0,
+                max_discharge_power_w=4000.0,
+                roundtrip_efficiency=0.90,
+                battery_cycle_cost=0.0,
+            ),
+        )
+
+        without_fee = scheduler.evaluate_arbitrage(
+            80.0, export_rate=0.45,
+            import_forecast_min=provider.effective_import_floor(0.10),
+        )
+        provider.grid_import_surcharge = 0.725
+        with_fee = scheduler.evaluate_arbitrage(
+            80.0, export_rate=0.45,
+            import_forecast_min=provider.effective_import_floor(0.10),
+        )
+
+        assert without_fee.state is SchedulerState.DISCHARGING_ARBITRAGE
+        assert with_fee.state is SchedulerState.NOT_PROFITABLE
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +379,7 @@ class TestOptionsFlow:
             OptionsFlowHandler,
         )
 
+        config_entry.options = {"tariff_mode": "dynamic"}
         flow = OptionsFlowHandler(config_entry)
         flow.hass = mock_hass
         with patch.object(
@@ -320,3 +391,49 @@ class TestOptionsFlow:
 
         schema_keys = {key.schema for key in result["data_schema"].schema}
         assert "grid_import_surcharge" in schema_keys
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tariff_mode", ["static", "calendar"])
+    async def test_wizard_hides_surcharge_outside_dynamic_mode(
+        self, mock_hass, config_entry, tariff_mode,
+    ):
+        from custom_components.solar_energy_management.config_flow import (
+            OptionsFlowHandler,
+        )
+
+        config_entry.options = {"tariff_mode": tariff_mode}
+        flow = OptionsFlowHandler(config_entry)
+        flow.hass = mock_hass
+        with patch.object(
+            type(flow),
+            "config_entry",
+            new_callable=lambda: property(lambda self: config_entry),
+        ):
+            result = await flow.async_step_settings_tariff()
+
+        schema_keys = {key.schema for key in result["data_schema"].schema}
+        assert "grid_import_surcharge" not in schema_keys
+
+    @pytest.mark.asyncio
+    async def test_hidden_surcharge_survives_static_mode_save(
+        self, mock_hass, config_entry,
+    ):
+        """Mode-gating must not silently erase the dynamic-mode setting."""
+        from custom_components.solar_energy_management.config_flow import (
+            OptionsFlowHandler,
+        )
+
+        config_entry.options = {
+            "tariff_mode": "dynamic",
+            "grid_import_surcharge": 0.725,
+        }
+        flow = OptionsFlowHandler(config_entry)
+        flow.hass = mock_hass
+        with patch.object(
+            type(flow),
+            "config_entry",
+            new_callable=lambda: property(lambda self: config_entry),
+        ):
+            await flow.async_step_settings_tariff({"tariff_mode": "static"})
+
+        assert flow._data["grid_import_surcharge"] == pytest.approx(0.725)
