@@ -585,7 +585,39 @@ Your support helps keep SEM maintained, tested on real hardware, and free for ev
 
 ## Contributing
 
-Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request.
+Contributions are welcome! Fork the repo, branch, and open a PR against
+`develop`. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — the PR template's
+checklist is exactly what the review holds you to.
+
+### How work is tracked
+
+Every open issue and PR carries a state label, mirrored onto the
+[SEM Board](https://github.com/users/traktore-org/projects/2). The label is
+the source of truth.
+
+| State | Meaning |
+|---|---|
+| **Soaking** | Fix released as a beta, running on real hardware pending confirmation |
+| **Queued** | Diagnosed, scheduled for work |
+| **Awaiting reporter** | Waiting on logs, data or a confirmation from the reporter |
+| **Parked** | Enhancement held until after the next stable release |
+| **In review / Changes requested / Ready to merge** | Pull request states |
+
+### Issue and PR handling
+
+- Bug reports are triaged, fixed and released as a beta; the reporter is then
+  asked to confirm.
+- Enhancement requests are labelled and scheduled by a maintainer.
+- Pull requests are reviewed against the project's invariants. Merging is a
+  maintainer decision.
+- A comment on a closed issue reopens it.
+- An issue awaiting a reporter is nudged after 3 days, and closed with an
+  invitation to reopen after 7.
+
+### Current phase
+
+Stabilising for 1.7.5: bug fixes are reviewed and merged as usual; feature PRs
+are parked until the release is cut.
 
 ## License
 
