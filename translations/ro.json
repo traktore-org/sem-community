@@ -440,10 +440,10 @@
         "title": "Per-phase guard sensors",
         "description": "Asociați senzorii pentru {topology}. Pentru o alimentare monofazată, este necesar doar L1. Pentru o alimentare trifazată, selectați o familie completă de curenți RMS directi L1-L3 atunci când este disponibilă; în caz contrar, curentul de rețea se calculează ca putere absolută împărțită la tensiune. Pentru o bandă hibridă Load/EPS, selectați senzori de curent RMS nenegativi pentru fazele configurate. Citirile obligatorii lipsă, învechite, invalide sau negative eșuează în siguranță (fail closed). Modul Observer Mode publică doar diagnostice; nu trimite comenzi de control.",
         "data": {
-          "phase_guard_enforcement_enabled": "Enforce phase guard on EV charging",
+          "phase_guard_enforcement_enabled": "Opriți încărcarea EV când limitele de fază sunt depășite",
           "phase_guard_notifications_enabled": "Trimite alertele monitorului de fază",
-          "phase_guard_recovery_margin_a": "Recovery margin below each phase limit",
-          "phase_guard_recovery_cycles": "Fresh safe cycles before restart",
+          "phase_guard_recovery_margin_a": "Marjă de siguranță sub fiecare limită de fază",
+          "phase_guard_recovery_cycles": "Citiri sigure înainte de reluarea încărcării",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -461,9 +461,9 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
-          "phase_guard_enforcement_enabled": "When enabled, unsafe or stale readings immediately disable every managed EV charger. Disabled by default so the guard can first be verified in Observer Mode.",
-          "phase_guard_recovery_margin_a": "Every required phase must remain at least this far below its own limit before restart recovery can progress.",
-          "phase_guard_recovery_cycles": "Number of consecutive fresh safe coordinator cycles required before EV charging is authorised again.",
+          "phase_guard_enforcement_enabled": "Când opțiunea este activată, toate încărcătoarele EV gestionate sunt oprite imediat dacă citirile sunt nesigure sau învechite, pentru a evita declanșarea siguranței principale. Este dezactivată implicit, astfel încât protecția de fază să poată fi verificată mai întâi în modul de observare.",
+          "phase_guard_recovery_margin_a": "Încărcarea rămâne blocată până când fiecare fază necesară se află cu cel puțin această marjă sub propria limită.",
+          "phase_guard_recovery_cycles": "Numărul de citiri valide și sigure consecutive necesare înainte ca încărcarea EV să poată fi pornită din nou.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",

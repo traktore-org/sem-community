@@ -2619,11 +2619,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # charger decision can reach an adapter.  The resulting state is
             # cached for every charger and for diagnostics publication.
             from .active_phase_guard import update_active_phase_guard
-            phase_guard_snapshot = update_active_phase_guard(self)
-            await self._notification_manager.notify_phase_guard_transition(
-                phase_guard_snapshot,
-                enabled=bool(self.config.get("phase_guard_enabled", False)),
-            )
+            if self.config.get("phase_guard_enabled", False):
+                phase_guard_snapshot = update_active_phase_guard(self)
+                await self._notification_manager.notify_phase_guard_transition(
+                    phase_guard_snapshot,
+                    enabled=True,
+                )
 
             # Multi-charger (#112): control each charger in priority order
             if not self._ev_device and not self._ev_devices:

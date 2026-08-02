@@ -440,10 +440,10 @@
         "title": "Fasvaktens sensorer",
         "description": "Kartlägg sensorerna för {topology}. För enfasförsörjning krävs endast L1. För trefasförsörjning väljer du en komplett direkt RMS-strömfamilj L1-L3 när sådan finns tillgänglig; annars beräknas nätströmmen som absolut effekt dividerat med spänning. För en hybrid Load/EPS-bana väljer du icke-negativa RMS-strömsensorer för de konfigurerade faserna. Saknade, inaktuella, ogiltiga eller negativa obligatoriska avläsningar misslyckas stängt (fail closed). Observer Mode publicerar endast diagnostik; det skickar inga styrkommandon.",
         "data": {
-          "phase_guard_enforcement_enabled": "Aktivera fasvakten för EV-laddning",
+          "phase_guard_enforcement_enabled": "Stoppa EV-laddning när fasgränser överskrids",
           "phase_guard_notifications_enabled": "Skicka fasvaktsnotiser",
-          "phase_guard_recovery_margin_a": "Återställningsmarginal under varje fasgräns",
-          "phase_guard_recovery_cycles": "Friska mätcykler före återstart",
+          "phase_guard_recovery_margin_a": "Säkerhetsmarginal under varje fasgräns",
+          "phase_guard_recovery_cycles": "Säkra mätvärden innan laddning återupptas",
           "phase_guard_grid_limit_a": "Huvudsäkringens gräns per fas",
           "phase_guard_inverter_limit_a": "Gräns för inverter Load/EPS per fas",
           "phase_guard_max_age_s": "Högsta sensorålder",
@@ -461,9 +461,9 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS RMS-ström L3"
         },
         "data_description": {
-          "phase_guard_enforcement_enabled": "När detta aktiveras stoppar osäkra eller gamla mätvärden omedelbart alla EV-laddare som SEM styr. Avstängt som standard så att fasvakten först kan verifieras i Observatörsläge.",
-          "phase_guard_recovery_margin_a": "Varje nödvändig fas måste ligga minst så här långt under sin egen gräns innan återställningen kan börja räknas.",
-          "phase_guard_recovery_cycles": "Antal sammanhängande cykler med friska och säkra värden som krävs innan EV-laddning tillåts igen.",
+          "phase_guard_enforcement_enabled": "När detta är aktiverat stängs alla EV-laddare som SEM styr omedelbart av vid osäkra eller inaktuella mätvärden för att undvika att huvudsäkringen löser ut. Avstängt som standard så att du först kan verifiera fasvakten i Observatörsläge.",
+          "phase_guard_recovery_margin_a": "Laddningen förblir blockerad tills varje obligatorisk fas ligger minst så här långt under sin egen gräns.",
+          "phase_guard_recovery_cycles": "Så många sammanhängande friska och säkra mätvärden krävs innan EV-laddningen får slås på igen.",
           "phase_guard_grid_limit_a": "Högsta tillåtna nätström per fas, normalt huvudsäkringens märkström.",
           "phase_guard_inverter_limit_a": "Högsta tillåtna RMS-ström per fas på växelriktarens Load-/EPS-/Backup-utgång.",
           "phase_guard_max_age_s": "Ett mätvärde som är äldre än detta behandlas som osäkert.",

@@ -440,10 +440,10 @@
         "title": "Per-phase guard sensors",
         "description": "Tilknyt sensorerne til {topology}. For en enkeltfaset forsyning kræves kun L1. For en trefaset forsyning skal du vælge en komplet L1-L3 direkte RMS-strømpakke, når det er tilgængeligt; ellers beregnes netstrømmen som absolut effekt divideret med spænding. For en hybrid Load/EPS-lane skal du vælge ikke-negative RMS-strømsensorer for de konfigurerede faser. Manglende, forældede, ugyldige eller negative krævede aflæsninger fejler lukket. Observer Mode publicerer kun diagnostik; den sender ingen kontrolkommandoer.",
         "data": {
-          "phase_guard_enforcement_enabled": "Enforce phase guard on EV charging",
+          "phase_guard_enforcement_enabled": "Stop EV-opladning, når fasegrænser overskrides",
           "phase_guard_notifications_enabled": "Send fasevagt-notifikationer",
-          "phase_guard_recovery_margin_a": "Recovery margin below each phase limit",
-          "phase_guard_recovery_cycles": "Fresh safe cycles before restart",
+          "phase_guard_recovery_margin_a": "Sikkerhedsmargin under hver fasegrænse",
+          "phase_guard_recovery_cycles": "Sikre aflæsninger, før opladning genoptages",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -461,9 +461,9 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
-          "phase_guard_enforcement_enabled": "When enabled, unsafe or stale readings immediately disable every managed EV charger. Disabled by default so the guard can first be verified in Observer Mode.",
-          "phase_guard_recovery_margin_a": "Every required phase must remain at least this far below its own limit before restart recovery can progress.",
-          "phase_guard_recovery_cycles": "Number of consecutive fresh safe coordinator cycles required before EV charging is authorised again.",
+          "phase_guard_enforcement_enabled": "Når dette er aktiveret, slukkes alle administrerede EV-ladere straks ved usikre eller forældede aflæsninger for at undgå, at hovedsikringen springer. Funktionen er som standard slået fra, så du først kan kontrollere fasevagten i observatørtilstand.",
+          "phase_guard_recovery_margin_a": "Opladningen forbliver blokeret, indtil hver påkrævet fase ligger mindst så meget under sin egen grænse.",
+          "phase_guard_recovery_cycles": "Så mange sammenhængende sunde og sikre aflæsninger kræves, før EV-opladning må slås til igen.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",

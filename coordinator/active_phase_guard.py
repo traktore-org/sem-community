@@ -68,7 +68,11 @@ class ActivePhaseGuard:
             self._recovery_cycles = 0
             snapshot = dict(guard) if isinstance(guard, dict) else {}
             snapshot.update(
-                mode="observer",
+                mode=(
+                    "observer"
+                    if config.get("phase_guard_enabled", False)
+                    else "disabled"
+                ),
                 read_only=True,
                 control_authorized=True,
                 recovery_cycles=0,
@@ -339,6 +343,10 @@ def update_active_phase_guard(coord: Any) -> Dict[str, Any]:
         enforcer = ActivePhaseGuard()
         coord._active_phase_guard = enforcer
     config = _runtime_config(coord)
+    if not config.get("phase_guard_enabled", False):
+        runtime = enforcer.update({}, config)
+        coord._phase_guard_snapshot = runtime
+        return runtime
     try:
         raw = evaluate_dual_phase_guard(coord.hass.states, config)
     except Exception:  # noqa: BLE001 — safety boundary must fail closed
@@ -368,6 +376,11 @@ def filter_charger_decision(
     if not isinstance(enforcer, ActivePhaseGuard):
         enforcer = ActivePhaseGuard()
         coord._active_phase_guard = enforcer
-        runtime = enforcer.update({}, _runtime_config(coord))
+    config = _runtime_config(coord)
+    if not config.get("phase_guard_enabled", False):
+        runtime = enforcer.update({}, config)
+        coord._phase_guard_snapshot = runtime
+    elif not hasattr(coord, "_phase_guard_snapshot"):
+        runtime = enforcer.update({}, config)
         coord._phase_guard_snapshot = runtime
     return enforcer.filter_decision(decision, adapter=adapter, power=power)

@@ -440,10 +440,10 @@
         "title": "Per-phase guard sensors",
         "description": "Rendelje hozzá az érzékelőket a(z) {topology} elemhez. Egyfázisú táplálásnál csak az L1 szükséges. Háromfázisú táplálásnál válasszon teljes L1-L3 közvetlen RMS-áramkészletet, ha elérhető; különben a hálózati áram az abszolút teljesítmény és a feszültség hányadosaként számítódik. Hibrid Load/EPS sávnál válasszon nem negatív RMS-áramérzékelőket a konfigurált fázisokhoz. A hiányzó, elavult, érvénytelen vagy negatív kötelező értékek biztonságos hibával (fail closed) végződnek. Az Observer Mode csak diagnosztikát tesz közzé; nem küld vezérlőparancsokat.",
         "data": {
-          "phase_guard_enforcement_enabled": "Enforce phase guard on EV charging",
+          "phase_guard_enforcement_enabled": "Az EV-töltés leállítása fázishatár túllépésekor",
           "phase_guard_notifications_enabled": "Fázisőr-értesítések küldése",
-          "phase_guard_recovery_margin_a": "Recovery margin below each phase limit",
-          "phase_guard_recovery_cycles": "Fresh safe cycles before restart",
+          "phase_guard_recovery_margin_a": "Biztonsági tartalék minden fázishatár alatt",
+          "phase_guard_recovery_cycles": "Biztonságos értékek a töltés folytatása előtt",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -461,9 +461,9 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
-          "phase_guard_enforcement_enabled": "When enabled, unsafe or stale readings immediately disable every managed EV charger. Disabled by default so the guard can first be verified in Observer Mode.",
-          "phase_guard_recovery_margin_a": "Every required phase must remain at least this far below its own limit before restart recovery can progress.",
-          "phase_guard_recovery_cycles": "Number of consecutive fresh safe coordinator cycles required before EV charging is authorised again.",
+          "phase_guard_enforcement_enabled": "Bekapcsolva minden felügyelt EV-töltő azonnal leáll, ha a mért érték nem biztonságos vagy elavult, így elkerülhető a főbiztosító leoldása. Alapértelmezés szerint ki van kapcsolva, hogy a fázisvédelem először megfigyelő módban ellenőrizhető legyen.",
+          "phase_guard_recovery_margin_a": "A töltés addig blokkolva marad, amíg minden szükséges fázis legalább ekkora értékkel a saját határa alatt nem marad.",
+          "phase_guard_recovery_cycles": "Ennyi egymást követő érvényes és biztonságos mérés szükséges az EV-töltés újbóli engedélyezéséhez.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",

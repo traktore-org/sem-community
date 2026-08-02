@@ -8,8 +8,10 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, Optional, Tuple
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfPower
 from homeassistant.util import dt as dt_util
+
+from .units import is_power_unit, power_state_to_watts
 
 _BAD_STATES = {STATE_UNKNOWN, STATE_UNAVAILABLE, "none", "None", ""}
 
@@ -30,10 +32,16 @@ def _read_number(
     if raw in _BAD_STATES or str(raw).lower() in {"unknown", "unavailable", "none", ""}:
         return None, str(raw).lower() if raw is not None else "missing"
 
-    unit = str(
-        getattr(state, "attributes", {}).get("unit_of_measurement", "")
-    ).strip().lower()
-    if unit != expected_unit.lower():
+    attributes = getattr(state, "attributes", {}) or {}
+    unit = str(attributes.get("unit_of_measurement", "")).strip().lower()
+    is_power = expected_unit == UnitOfPower.WATT
+    if is_power:
+        # The shared converter also supports a historical unitless-as-watts
+        # fallback. A safety gate must be stricter: only an explicit power unit
+        # is accepted, then the canonical converter normalizes it to watts.
+        if not is_power_unit(state):
+            return None, "invalid_unit"
+    elif unit != str(expected_unit).strip().lower():
         return None, "invalid_unit"
 
     # Freshness comes from last_REPORTED, not last_updated: HA only moves
@@ -58,9 +66,14 @@ def _read_number(
     if age < -5 or age > max_age_s:
         return None, "stale"
 
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
+    if is_power:
+        value = power_state_to_watts(state, default=None)
+    else:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None, "non_numeric"
+    if value is None:
         return None, "non_numeric"
     if not math.isfinite(value):
         return None, "non_numeric"

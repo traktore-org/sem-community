@@ -1,8 +1,9 @@
 """Regression tests for the active EV write gate of the dual phase guard."""
 
+import ast
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from pathlib import Path
 
 from custom_components.solar_energy_management.coordinator.active_phase_guard import (
     ActivePhaseGuard,
@@ -120,6 +121,26 @@ def test_evaluator_exception_fails_closed_instead_of_breaking_control_cycle():
     assert snapshot["data_fresh"] is False
     assert snapshot["stop_reason"] == "phase_guard_evaluation_failed"
     assert coord._active_phase_guard.control_authorized is False
+
+
+def test_disabled_guard_skips_measurement_evaluation():
+    coord = SimpleNamespace(
+        config=_config(phase_guard_enabled=False),
+        hass=SimpleNamespace(states=object()),
+        _observer_mode=False,
+    )
+
+    with patch(
+        "custom_components.solar_energy_management.coordinator.dual_phase_guard."
+        "evaluate_dual_phase_guard",
+        side_effect=AssertionError("disabled guard must not read sensors"),
+    ) as evaluate:
+        snapshot = update_active_phase_guard(coord)
+
+    evaluate.assert_not_called()
+    assert snapshot["mode"] == "disabled"
+    assert snapshot["control_authorized"] is True
+    assert filter_charger_decision(coord, _decision()) == _decision()
 
 
 def test_enabling_after_observer_mode_still_starts_fail_closed():
@@ -272,6 +293,24 @@ def test_safe_write_is_clamped_to_measured_headroom_before_actuation():
     assert filtered.commanded_amps == 11
     assert filtered.budget_w == 11 * 3 * 230
     assert "clamped" in filtered.reason
+
+
+def test_running_charger_command_is_brought_down_to_in_flight_headroom():
+    enforcer = ActivePhaseGuard()
+    for _ in range(3):
+        enforcer.update(_guard(margin=4.0), _config())
+    enforcer.update(_guard(margin=0.4), _config())
+
+    filtered = enforcer.filter_decision(
+        _decision(ChargerIntent.CHARGE_AT_AMPS, 16),
+        adapter=_adapter(),
+        power=_power(14),
+    )
+
+    assert filtered.intent is ChargerIntent.CHARGE_AT_AMPS
+    assert filtered.commanded_amps == 14
+    assert filtered.commanded_amps < 16
+    assert filtered.budget_w == 14 * 3 * 230
 
 
 def test_multi_charger_increases_reserve_shared_headroom_within_cycle():
@@ -446,18 +485,65 @@ def test_coordinator_wires_one_cycle_evaluation_and_both_actuation_paths():
     source = (
         Path(__file__).parents[1] / "coordinator" / "coordinator.py"
     ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
 
-    assert source.count("update_active_phase_guard(self)") == 1
-    assert source.count(
-        "decision = filter_charger_decision(\n"
-        "                            self, decision, adapter=adapter, power=view.power\n"
-        "                        )"
-    ) == 1
-    assert source.count(
-        "decision = filter_charger_decision(\n"
-        "                    self, decision, adapter=adapter, power=view.power\n"
-        "                )"
-    ) == 1
-    assert source.index("update_active_phase_guard(self)") < source.index(
-        "await actuate(decision"
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "filter_charger_decision"
+    ]
+    assert len(calls) == 2
+    for call in calls:
+        assert [ast.unparse(arg) for arg in call.args] == ["self", "decision"]
+        keywords = {item.arg: ast.unparse(item.value) for item in call.keywords}
+        assert keywords == {"adapter": "adapter", "power": "view.power"}
+
+    updates = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "update_active_phase_guard"
+    ]
+    assert len(updates) == 1
+    assert ast.unparse(updates[0]) == "update_active_phase_guard(self)"
+
+    actuations = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "actuate"
+    ]
+    assert len(actuations) == 2
+    assert len(calls) == len(actuations) == 2
+    assert max(call.lineno for call in updates) < min(call.lineno for call in calls)
+    guard_lines = sorted(call.lineno for call in calls)
+    actuation_lines = sorted(call.lineno for call in actuations)
+    assert all(
+        guard_line < actuation_line
+        for guard_line, actuation_line in zip(guard_lines, actuation_lines)
     )
+
+
+def test_coordinator_only_updates_and_notifies_guard_when_enabled():
+    source = (
+        Path(__file__).parents[1] / "coordinator" / "coordinator.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    guarded_calls = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        if "phase_guard_enabled" not in ast.unparse(node.test):
+            continue
+        for child in node.body:
+            for call in ast.walk(child):
+                if isinstance(call, ast.Call):
+                    guarded_calls.add(ast.unparse(call.func))
+
+    assert "update_active_phase_guard" in guarded_calls
+    assert "self._notification_manager.notify_phase_guard_transition" in guarded_calls

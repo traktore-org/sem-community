@@ -440,10 +440,10 @@
         "title": "Per-phase guard sensors",
         "description": "Kartoita anturit kohteelle {topology}. Yksivaiheisessa syötössä vaaditaan vain L1. Kolmivaiheisessa syötössä valitse täydellinen L1-L3 suoran RMS-virran perhe, jos saatavilla; muuten verkkovirta lasketaan absoluuttisen tehon ja jännitteen osamääränä. Hybridi Load/EPS-väylässä valitse ei-negatiiviset RMS-virta-anturit määritetyille vaiheille. Puuttuvat, vanhentuneet, virheelliset tai negatiiviset pakolliset lukemat epäonnistuvat suljetusti (fail closed). Observer Mode julkaisee vain diagnostiikkaa; se ei lähetä ohjauskomentoja.",
         "data": {
-          "phase_guard_enforcement_enabled": "Enforce phase guard on EV charging",
+          "phase_guard_enforcement_enabled": "Pysäytä EV-lataus, kun vaiherajat ylittyvät",
           "phase_guard_notifications_enabled": "Lähetä vaihevahtihälytykset",
-          "phase_guard_recovery_margin_a": "Recovery margin below each phase limit",
-          "phase_guard_recovery_cycles": "Fresh safe cycles before restart",
+          "phase_guard_recovery_margin_a": "Turvamarginaali kunkin vaiherajan alapuolella",
+          "phase_guard_recovery_cycles": "Turvalliset lukemat ennen latauksen jatkamista",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -461,9 +461,9 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
-          "phase_guard_enforcement_enabled": "When enabled, unsafe or stale readings immediately disable every managed EV charger. Disabled by default so the guard can first be verified in Observer Mode.",
-          "phase_guard_recovery_margin_a": "Every required phase must remain at least this far below its own limit before restart recovery can progress.",
-          "phase_guard_recovery_cycles": "Number of consecutive fresh safe coordinator cycles required before EV charging is authorised again.",
+          "phase_guard_enforcement_enabled": "Kun tämä on käytössä, kaikki hallitut EV-laturit sammutetaan heti, jos lukemat ovat vaarallisia tai vanhentuneita, jotta pääsulake ei laukea. Oletuksena pois käytöstä, jotta vaihevahdin voi ensin tarkistaa tarkkailutilassa.",
+          "phase_guard_recovery_margin_a": "Lataus pysyy estettynä, kunnes jokainen vaadittu vaihe on vähintään tämän verran oman rajansa alapuolella.",
+          "phase_guard_recovery_cycles": "Näin monta peräkkäistä kelvollista ja turvallista lukemaa tarvitaan, ennen kuin EV-lataus voidaan käynnistää uudelleen.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",

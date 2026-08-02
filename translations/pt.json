@@ -440,10 +440,10 @@
         "title": "Per-phase guard sensors",
         "description": "Mapeie os sensores para {topology}. Para uma alimentação monofásica, apenas L1 é necessária. Para uma alimentação trifásica, selecione uma família completa de corrente RMS direta L1-L3 quando disponível; caso contrário, a corrente da rede é calculada como potência absoluta dividida pela tensão. Para uma via híbrida Load/EPS, selecione sensores de corrente RMS não negativos para as fases configuradas. Leituras exigidas ausentes, desatualizadas, inválidas ou negativas falham de forma segura (fail closed). O Observer Mode publica apenas diagnósticos; não envia comandos de controle.",
         "data": {
-          "phase_guard_enforcement_enabled": "Enforce phase guard on EV charging",
+          "phase_guard_enforcement_enabled": "Parar o carregamento do VE quando os limites de fase forem excedidos",
           "phase_guard_notifications_enabled": "Enviar alertas do monitor de fases",
-          "phase_guard_recovery_margin_a": "Recovery margin below each phase limit",
-          "phase_guard_recovery_cycles": "Fresh safe cycles before restart",
+          "phase_guard_recovery_margin_a": "Margem de segurança abaixo de cada limite de fase",
+          "phase_guard_recovery_cycles": "Leituras seguras antes de retomar o carregamento",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -461,9 +461,9 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
-          "phase_guard_enforcement_enabled": "When enabled, unsafe or stale readings immediately disable every managed EV charger. Disabled by default so the guard can first be verified in Observer Mode.",
-          "phase_guard_recovery_margin_a": "Every required phase must remain at least this far below its own limit before restart recovery can progress.",
-          "phase_guard_recovery_cycles": "Number of consecutive fresh safe coordinator cycles required before EV charging is authorised again.",
+          "phase_guard_enforcement_enabled": "Quando ativado, todos os carregadores de VE geridos são desligados imediatamente se as leituras forem inseguras ou estiverem desatualizadas, para evitar que o disjuntor principal dispare. Está desativado por predefinição para permitir verificar primeiro a proteção de fase no modo Observador.",
+          "phase_guard_recovery_margin_a": "O carregamento permanece bloqueado até que cada fase necessária esteja pelo menos esta margem abaixo do respetivo limite.",
+          "phase_guard_recovery_cycles": "Número de leituras válidas e seguras consecutivas necessárias antes de permitir que o carregamento do VE volte a ser ligado.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",

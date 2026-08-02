@@ -1,4 +1,6 @@
 """Regression tests for the phase-guard topology wizard."""
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -151,3 +153,41 @@ async def test_single_phase_mapping_step_only_exposes_l1_sensor_fields():
     assert "phase_guard_grid_l3_current_entity" not in keys
     assert "phase_guard_inverter_l2_current_entity" not in keys
     assert "phase_guard_inverter_l3_current_entity" not in keys
+
+
+def test_phase_guard_safety_controls_are_localized_in_every_language():
+    root = Path(__file__).resolve().parents[1]
+    keys = {
+        "phase_guard_enforcement_enabled",
+        "phase_guard_recovery_margin_a",
+        "phase_guard_recovery_cycles",
+    }
+    english = json.loads(
+        (root / "translations" / "en.json").read_text(encoding="utf-8")
+    )["options"]["step"]["settings_phase_guard"]
+
+    for path in sorted((root / "translations").glob("*.json")):
+        block = json.loads(path.read_text(encoding="utf-8"))["options"]["step"][
+            "settings_phase_guard"
+        ]
+        assert keys <= block["data"].keys()
+        assert keys <= block["data_description"].keys()
+        if path.name != "en.json":
+            for key in keys:
+                assert block["data"][key] != english["data"][key], (path.name, key)
+                assert block["data_description"][key] != english["data_description"][key], (
+                    path.name,
+                    key,
+                )
+
+
+def test_english_phase_guard_labels_explain_effect_without_internal_jargon():
+    root = Path(__file__).resolve().parents[1]
+    block = json.loads(
+        (root / "translations" / "en.json").read_text(encoding="utf-8")
+    )["options"]["step"]["settings_phase_guard"]
+
+    assert "stop" in block["data"]["phase_guard_enforcement_enabled"].lower()
+    recovery_label = block["data"]["phase_guard_recovery_cycles"].lower()
+    assert "cycle" not in recovery_label
+    assert "restart" not in recovery_label
