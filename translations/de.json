@@ -428,18 +428,24 @@
       },
       "settings_phase_guard_topology": {
         "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
         "data": {
-          "phase_guard_topology": "Supply topology"
+          "phase_guard_topology": "Supply topology",
+          "phase_guard_phase_count": "Anzahl der Phasen"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
+          "phase_guard_phase_count": "Wählen Sie 1 für eine einphasige oder 3 für eine dreiphasige Versorgung. Nur die ausgewählten Phasen werden benötigt und überwacht."
         }
       },
       "settings_phase_guard": {
         "title": "Per-phase guard sensors",
-        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "description": "Ordnen Sie die Sensoren für {topology} zu. Bei einer einphasigen Versorgung ist nur L1 erforderlich. Bei einer dreiphasigen Versorgung wählen Sie, falls verfügbar, eine vollständige direkte L1-L3-RMS-Stromfamilie; andernfalls wird der Netzstrom als Absolutwert der Leistung geteilt durch die Spannung berechnet. Für eine hybride Load/EPS-Spur wählen Sie nicht-negative RMS-Stromsensoren für die konfigurierten Phasen. Fehlende, veraltete, ungültige oder negative erforderliche Messwerte führen zu einem sicheren Fehlschlag (fail closed). Der Observer Mode veröffentlicht nur Diagnosen; er sendet keine Steuerbefehle.",
         "data": {
+          "phase_guard_enforcement_enabled": "EV-Ladung stoppen, wenn Phasengrenzen überschritten werden",
+          "phase_guard_notifications_enabled": "Phasenwächter-Benachrichtigungen senden",
+          "phase_guard_recovery_margin_a": "Sicherheitsabstand unter jeder Phasengrenze",
+          "phase_guard_recovery_cycles": "Sichere Messwerte vor Wiederaufnahme des Ladens",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -457,12 +463,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "Wenn aktiviert, werden alle verwalteten EV-Ladegeräte bei unsicheren oder veralteten Messwerten sofort ausgeschaltet, damit die Hauptsicherung nicht auslöst. Standardmäßig deaktiviert, damit der Phasenwächter zuerst im Beobachtermodus geprüft werden kann.",
+          "phase_guard_recovery_margin_a": "Das Laden bleibt gesperrt, bis jede erforderliche Phase mindestens so weit unter ihrem eigenen Grenzwert liegt.",
+          "phase_guard_recovery_cycles": "So viele aufeinanderfolgende fehlerfreie und sichere Messwerte sind erforderlich, bevor die EV-Ladung wieder eingeschaltet werden darf.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
-          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_current_entity": "Optionaler direkter, nicht-negativer RMS-Netzstrom in A. Wenn eine direkte Quelle verwendet wird, müssen alle konfigurierten Phasen bereitgestellt werden.",
+          "phase_guard_grid_l2_current_entity": "Optionaler direkter, nicht-negativer RMS-Netzstrom in A. Wenn eine direkte Quelle verwendet wird, müssen alle konfigurierten Phasen bereitgestellt werden.",
+          "phase_guard_grid_l3_current_entity": "Optionaler direkter, nicht-negativer RMS-Netzstrom in A. Wenn eine direkte Quelle verwendet wird, müssen alle konfigurierten Phasen bereitgestellt werden.",
           "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
           "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
           "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",

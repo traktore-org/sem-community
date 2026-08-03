@@ -1368,8 +1368,8 @@ SENSOR_TYPES = [
         key="diag_observer_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    # Read-only diagnostics for independent grid and inverter/Load lanes.
-    # Disabled by default — only meaningful once the phase guard is configured.
+    # Diagnostics for the independent grid and inverter/Load lanes plus the
+    # active gate state. Disabled by default — only meaningful once configured.
     SensorEntityDescription(
         key="diag_phase_guard_mode",
         entity_category=EntityCategory.DIAGNOSTIC,

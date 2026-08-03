@@ -80,6 +80,9 @@ class NotificationManager:
         self._mobile_service_name: str = ""
         self._mobile_service_domain: str = "notify"
         self._mobile_service_is_companion: bool = False
+        # Independent from EV connection state: the phase guard watches the
+        # electrical installation even when every charger is idle or disabled.
+        self._last_phase_guard_alert_state: Optional[str] = None
 
     # ──────────────────────────────────────────────────────────────────
     # v1.6.8-compat shims for flap-suppression fields. Reads/writes
@@ -444,6 +447,166 @@ class NotificationManager:
                 messages["charger"] = _t("notif_charger_complete", "Complete")
 
         return messages
+
+    async def notify_phase_guard_transition(
+        self, snapshot: Dict[str, Any], *, enabled: bool = True
+    ) -> None:
+        """Alert once on a phase-guard incident and once after safe re-arming."""
+        if not enabled or not self.config.get(
+            "phase_guard_notifications_enabled", True
+        ):
+            # Re-enabling notifications starts from a clean baseline instead of
+            # replaying an incident or recovery that happened while opted out.
+            self._last_phase_guard_alert_state = None
+            return
+        if not isinstance(snapshot, dict):
+            return
+
+        unsafe = not bool(snapshot.get("safe")) or not bool(
+            snapshot.get("data_fresh")
+        )
+        read_only = bool(snapshot.get("read_only", False))
+        if unsafe:
+            state = (
+                "phase_guard_observer_warning"
+                if read_only
+                else "phase_guard_blocked"
+            )
+        elif self._last_phase_guard_alert_state == "phase_guard_blocked" and not bool(
+            snapshot.get("control_authorized", True)
+        ):
+            # Keep an enforcing incident open throughout the recovery hold. The
+            # recovery notification means the active gate is actually armed again.
+            return
+        else:
+            state = "phase_guard_normal"
+
+        previous = self._last_phase_guard_alert_state
+        if state == previous:
+            return
+        self._last_phase_guard_alert_state = state
+
+        # Establishing an initial healthy baseline is silent.
+        if previous is None and state == "phase_guard_normal":
+            return
+
+        from ..utils.translate import get_text
+
+        if state == "phase_guard_blocked":
+            reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
+            location = self._phase_guard_alert_location(snapshot, reason)
+            message = get_text(
+                self.hass,
+                "notif_phase_guard_blocked",
+                "Phase guard blocked: {location} ({reason}).",
+                location=location,
+                reason=reason,
+            )
+            event_state = state
+        elif state == "phase_guard_observer_warning":
+            reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
+            location = self._phase_guard_alert_location(snapshot, reason)
+            message = get_text(
+                self.hass,
+                "notif_phase_guard_observer_warning",
+                "Phase limit exceeded in Observer Mode at {location} "
+                "({reason}) — no action was taken.",
+                location=location,
+                reason=reason,
+            )
+            event_state = state
+        else:
+            if read_only:
+                message = get_text(
+                    self.hass,
+                    "notif_phase_guard_recovered_observer",
+                    "Phase readings returned to safe levels.",
+                )
+            else:
+                message = get_text(
+                    self.hass,
+                    "notif_phase_guard_recovered",
+                    "Phase guard restored and armed after fresh safe readings.",
+                )
+            event_state = "phase_guard_recovered"
+
+        try:
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_notification",
+                {
+                    "state": event_state,
+                    "message": message,
+                    "category": "alerts",
+                    "reason": str(snapshot.get("stop_reason") or ""),
+                },
+            )
+        except Exception as err:  # noqa: BLE001 — notifications cannot stop control
+            _LOGGER.warning("Could not fire phase-guard notification event: %s", err)
+        if self.config.get("enable_mobile_notifications", False):
+            await self._send_mobile_notification(
+                message,
+                channel=_CHANNEL_ALERTS,
+                group="sem_alerts",
+            )
+
+    @classmethod
+    def _phase_guard_alert_location(
+        cls, snapshot: Dict[str, Any], reason: str
+    ) -> str:
+        """Name the failed phase from the reason, falling back to hottest data."""
+        parts = reason.split(":")
+        if (
+            len(parts) >= 2
+            and parts[0] in {"grid", "inverter"}
+            and parts[1] in {"l1", "l2", "l3"}
+        ):
+            lane, phase = parts[0], parts[1]
+            phases = snapshot.get(lane)
+            data = phases.get(phase, {}) if isinstance(phases, dict) else {}
+            raw_current = data.get("current_a") if isinstance(data, dict) else None
+            if raw_current is not None:
+                try:
+                    current = float(raw_current)
+                except (TypeError, ValueError):
+                    current = None
+                if current is not None and current == current and current not in (
+                    float("inf"),
+                    float("-inf"),
+                ):
+                    return f"{lane} {phase.upper()} {current:.1f} A"
+            return f"{lane} {phase.upper()} sensor"
+
+        lane, phase, current = cls._hottest_phase_guard_lane(snapshot)
+        if lane and phase and current is not None:
+            return f"{lane} {phase.upper()} {current:.1f} A"
+        return "sensor data"
+
+    @staticmethod
+    def _hottest_phase_guard_lane(
+        snapshot: Dict[str, Any],
+    ) -> tuple[str, str, Optional[float]]:
+        """Return the lane/phase with the largest finite measured current."""
+        hottest: tuple[str, str, Optional[float]] = ("", "", None)
+        for lane in ("grid", "inverter"):
+            phases = snapshot.get(lane)
+            if not isinstance(phases, dict):
+                continue
+            for phase in ("l1", "l2", "l3"):
+                data = phases.get(phase)
+                if not isinstance(data, dict):
+                    continue
+                raw_current = data.get("current_a")
+                if raw_current is None:
+                    continue
+                try:
+                    current = float(raw_current)
+                except (TypeError, ValueError):
+                    continue
+                if current != current or current in (float("inf"), float("-inf")):
+                    continue
+                if hottest[2] is None or current > hottest[2]:
+                    hottest = (lane, phase, current)
+        return hottest
 
     async def notify_battery_full(self, soc: float) -> None:
         """Send notification when battery reaches 100%."""

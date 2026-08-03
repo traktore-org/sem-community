@@ -654,6 +654,8 @@ class TestPublishDiag625:
         c._observer_mode = over.get("observer", False)
         c._health_check = MagicMock(total_violations=0)
         c._build_ed_config_summary = MagicMock(return_value="ed-summary")
+        if "phase_guard_snapshot" in over:
+            c._phase_guard_snapshot = over["phase_guard_snapshot"]
         return c
 
     def _diag(self, **over):
@@ -692,6 +694,25 @@ class TestPublishDiag625:
         svc = MagicMock(spec=[]);
         d = self._diag(ev_devices={"a": MagicMock(current_entity_id=None)})
         assert d["diag_charger_control"] == "service"
+
+    def test_grid_only_diagnostics_tolerate_absent_optional_inverter_lane(self):
+        snapshot = {
+            "mode": "enforcing_blocked",
+            "topology": "grid_only",
+            "safe": False,
+            "data_fresh": False,
+            "stop_reason": "phase_guard_evaluation_failed",
+            "grid": {},
+        }
+
+        diagnostics = self._diag(
+            config={"phase_guard_enabled": True},
+            phase_guard_snapshot=snapshot,
+        )
+
+        assert diagnostics["diag_phase_guard"] is snapshot
+        assert diagnostics["diag_phase_guard_safe"] is False
+        assert "diag_inverter_l1_current_a" not in diagnostics
 
     def test_formatter_alias_still_importable(self):
         from custom_components.solar_energy_management.coordinator.coordinator import (

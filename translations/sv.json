@@ -428,18 +428,24 @@
       },
       "settings_phase_guard_topology": {
         "title": "Elektrisk topologi",
-        "description": "Välj hur husets last matas. I en hybridinstallation kan elnätet och växelriktarens Load-/EPS-/Backup-utgång mata huset samtidigt. Husets interna last kan därför vara högre än strömmen genom huvudsäkringen. SEM övervakar de två lastvägarna separat. Den här förhandsversionen är endast diagnostisk och agerar aldrig på resultatet.",
+        "description": "Välj hur husets last matas. I en hybridinstallation kan elnätet och växelriktarens Load-/EPS-/Backup-utgång mata huset samtidigt. Husets interna last kan därför vara högre än strömmen genom huvudsäkringen. SEM övervakar de två lastvägarna separat. Aktiv styrning är ett separat val; verifiera först mätvärdena i Observatörsläge innan EV-styrningen aktiveras.",
         "data": {
-          "phase_guard_topology": "Matningstopologi"
+          "phase_guard_topology": "Matningstopologi",
+          "phase_guard_phase_count": "Antal faser"
         },
         "data_description": {
-          "phase_guard_topology": "Välj Endast elnät för en vanlig installation. Välj Elnät + hybridväxelriktare när laster även matas via en Load-, EPS- eller Backup-utgång."
+          "phase_guard_topology": "Välj Endast elnät för en vanlig installation. Välj Elnät + hybridväxelriktare när laster även matas via en Load-, EPS- eller Backup-utgång.",
+          "phase_guard_phase_count": "Välj 1 för enfasförsörjning eller 3 för trefasförsörjning. Endast de valda faserna krävs och övervakas."
         }
       },
       "settings_phase_guard": {
         "title": "Fasvaktens sensorer",
-        "description": "Koppla sensorer för {topology}. Välj en komplett L1–L3-familj med direkt RMS-ström när den finns; annars beräknas nätströmmen från effektens absolutvärde delat med spänningen. För hybridens Load-/EPS-väg väljer du icke-negativa RMS-strömsensorer. Saknade, gamla, ogiltiga eller negativa värden ger fail-closed. Observatörsläget publicerar bara diagnostik och skickar inga styrkommandon.",
+        "description": "Kartlägg sensorerna för {topology}. För enfasförsörjning krävs endast L1. För trefasförsörjning väljer du en komplett direkt RMS-strömfamilj L1-L3 när sådan finns tillgänglig; annars beräknas nätströmmen som absolut effekt dividerat med spänning. För en hybrid Load/EPS-bana väljer du icke-negativa RMS-strömsensorer för de konfigurerade faserna. Saknade, inaktuella, ogiltiga eller negativa obligatoriska avläsningar misslyckas stängt (fail closed). Observer Mode publicerar endast diagnostik; det skickar inga styrkommandon.",
         "data": {
+          "phase_guard_enforcement_enabled": "Stoppa EV-laddning när fasgränser överskrids",
+          "phase_guard_notifications_enabled": "Skicka fasvaktsnotiser",
+          "phase_guard_recovery_margin_a": "Säkerhetsmarginal under varje fasgräns",
+          "phase_guard_recovery_cycles": "Säkra mätvärden innan laddning återupptas",
           "phase_guard_grid_limit_a": "Huvudsäkringens gräns per fas",
           "phase_guard_inverter_limit_a": "Gräns för inverter Load/EPS per fas",
           "phase_guard_max_age_s": "Högsta sensorålder",
@@ -457,12 +463,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS RMS-ström L3"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "När detta är aktiverat stängs alla EV-laddare som SEM styr omedelbart av vid osäkra eller inaktuella mätvärden för att undvika att huvudsäkringen löser ut. Avstängt som standard så att du först kan verifiera fasvakten i Observatörsläge.",
+          "phase_guard_recovery_margin_a": "Laddningen förblir blockerad tills varje obligatorisk fas ligger minst så här långt under sin egen gräns.",
+          "phase_guard_recovery_cycles": "Så många sammanhängande friska och säkra mätvärden krävs innan EV-laddningen får slås på igen.",
           "phase_guard_grid_limit_a": "Högsta tillåtna nätström per fas, normalt huvudsäkringens märkström.",
           "phase_guard_inverter_limit_a": "Högsta tillåtna RMS-ström per fas på växelriktarens Load-/EPS-/Backup-utgång.",
           "phase_guard_max_age_s": "Ett mätvärde som är äldre än detta behandlas som osäkert.",
-          "phase_guard_grid_l1_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste L1–L3 anges.",
-          "phase_guard_grid_l2_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste L1–L3 anges.",
-          "phase_guard_grid_l3_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste L1–L3 anges.",
+          "phase_guard_grid_l1_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste alla konfigurerade faser anges.",
+          "phase_guard_grid_l2_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste alla konfigurerade faser anges.",
+          "phase_guard_grid_l3_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste alla konfigurerade faser anges.",
           "phase_guard_grid_l1_power_entity": "Signerad näteffekt för L1 i W. Import och export accepteras.",
           "phase_guard_grid_l2_power_entity": "Signerad näteffekt för L2 i W. Import och export accepteras.",
           "phase_guard_grid_l3_power_entity": "Signerad näteffekt för L3 i W. Import och export accepteras.",
