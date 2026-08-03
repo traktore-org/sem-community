@@ -465,13 +465,18 @@ class NotificationManager:
         unsafe = not bool(snapshot.get("safe")) or not bool(
             snapshot.get("data_fresh")
         )
+        read_only = bool(snapshot.get("read_only", False))
         if unsafe:
-            state = "phase_guard_blocked"
+            state = (
+                "phase_guard_observer_warning"
+                if read_only
+                else "phase_guard_blocked"
+            )
         elif self._last_phase_guard_alert_state == "phase_guard_blocked" and not bool(
             snapshot.get("control_authorized", True)
         ):
-            # Keep the incident open throughout the recovery hold. The recovery
-            # notification means the active gate is actually armed again.
+            # Keep an enforcing incident open throughout the recovery hold. The
+            # recovery notification means the active gate is actually armed again.
             return
         else:
             state = "phase_guard_normal"
@@ -498,8 +503,20 @@ class NotificationManager:
                 reason=reason,
             )
             event_state = state
+        elif state == "phase_guard_observer_warning":
+            reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
+            location = self._phase_guard_alert_location(snapshot, reason)
+            message = get_text(
+                self.hass,
+                "notif_phase_guard_observer_warning",
+                "Phase limit exceeded in Observer Mode at {location} "
+                "({reason}) — no action was taken.",
+                location=location,
+                reason=reason,
+            )
+            event_state = state
         else:
-            if bool(snapshot.get("read_only", False)):
+            if read_only:
                 message = get_text(
                     self.hass,
                     "notif_phase_guard_recovered_observer",

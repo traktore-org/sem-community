@@ -125,8 +125,11 @@ def build_diagnostics(coord) -> Dict[str, Any]:
         out["diag_phase_guard_data_fresh"] = guard["data_fresh"]
         out["diag_phase_guard_stop_reason"] = guard["stop_reason"] or "none"
         for lane, phases in phase_guard_sensor_keys.items():
+            lane_data = guard.get(lane, {})
+            if not isinstance(lane_data, dict):
+                continue
             for phase, (current_key, margin_key) in phases.items():
-                phase_data = guard[lane].get(phase)
+                phase_data = lane_data.get(phase)
                 if phase_data is None:
                     continue
                 out[current_key] = phase_data["current_a"]

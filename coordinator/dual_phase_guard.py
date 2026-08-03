@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional, Tuple
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfPower
 from homeassistant.util import dt as dt_util
 
+from ..const import DEFAULT_PHASE_GUARD_TOPOLOGY
 from .units import is_power_unit, power_state_to_watts
 
 _BAD_STATES = {STATE_UNKNOWN, STATE_UNAVAILABLE, "none", "None", ""}
@@ -114,7 +115,9 @@ def evaluate_dual_phase_guard(states, config: Dict[str, Any]) -> Dict[str, Any]:
     Inverter/Load current is read directly from the configured non-negative RMS
     current entities.
     """
-    topology = str(config.get("phase_guard_topology", "hybrid_load_port"))
+    topology = str(
+        config.get("phase_guard_topology", DEFAULT_PHASE_GUARD_TOPOLOGY)
+    )
     invalid_configuration = False
     phase_count: Optional[int] = None
     raw_phase_count = config.get("phase_guard_phase_count", 3)

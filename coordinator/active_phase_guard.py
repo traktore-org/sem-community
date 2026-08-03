@@ -12,6 +12,7 @@ import logging
 import math
 from typing import Any, Dict
 
+from ..const import DEFAULT_PHASE_GUARD_TOPOLOGY
 from .charger_types import ChargerDecision, ChargerIntent
 
 _LOGGER = logging.getLogger(__name__)
@@ -104,7 +105,11 @@ class ActivePhaseGuard:
             return self._runtime_snapshot(guard, "enforcing_blocked")
 
         self._required_recovery_cycles = required_cycles
-        topology = str(guard.get("topology", "hybrid_load_port")) if isinstance(guard, dict) else ""
+        topology = (
+            str(guard.get("topology", DEFAULT_PHASE_GUARD_TOPOLOGY))
+            if isinstance(guard, dict)
+            else ""
+        )
         valid_snapshot = (
             isinstance(guard, dict)
             and isinstance(guard.get("grid"), dict)
@@ -189,6 +194,10 @@ class ActivePhaseGuard:
                 return self._disable_decision(decision, "context_invalid")
             desired_a = min(desired_a, maximum_a)
 
+        # This is deliberately an increase clamp, not a second ramp controller.
+        # A snapshot that is already unsafe is stopped above; while safe, SEM's
+        # stabilizer owns gradual current changes and this final gate only limits
+        # new demand to measured shared headroom.
         available_increase_a = max(0.0, min_margin - self._reserved_increase_a)
         max_safe_a = math.floor(current_a + available_increase_a + 1e-9)
         target_a = int(min(desired_a, max_safe_a))
@@ -252,7 +261,7 @@ class ActivePhaseGuard:
 
     def _minimum_required_margin(self):
         guard = self._guard_snapshot
-        topology = str(guard.get("topology", "hybrid_load_port"))
+        topology = str(guard.get("topology", DEFAULT_PHASE_GUARD_TOPOLOGY))
         lane_names = ("grid",) if topology == "grid_only" else ("grid", "inverter")
         required_phases = self._required_phase_keys(guard)
         if required_phases is None:
@@ -293,7 +302,7 @@ class ActivePhaseGuard:
     def _all_required_margins_at_least(
         guard: Dict[str, Any], recovery_margin: float
     ) -> bool:
-        topology = str(guard.get("topology", "hybrid_load_port"))
+        topology = str(guard.get("topology", DEFAULT_PHASE_GUARD_TOPOLOGY))
         lane_names = ("grid",) if topology == "grid_only" else ("grid", "inverter")
         required_phases = ActivePhaseGuard._required_phase_keys(guard)
         if required_phases is None:
@@ -351,7 +360,9 @@ def update_active_phase_guard(coord: Any) -> Dict[str, Any]:
         raw = evaluate_dual_phase_guard(coord.hass.states, config)
     except Exception:  # noqa: BLE001 — safety boundary must fail closed
         _LOGGER.exception("Phase-guard measurement evaluation failed")
-        topology = str(config.get("phase_guard_topology", "hybrid_load_port"))
+        topology = str(
+            config.get("phase_guard_topology", DEFAULT_PHASE_GUARD_TOPOLOGY)
+        )
         raw = {
             "mode": "observer",
             "topology": topology,
@@ -360,9 +371,8 @@ def update_active_phase_guard(coord: Any) -> Dict[str, Any]:
             "data_fresh": False,
             "stop_reason": "phase_guard_evaluation_failed",
             "grid": {},
+            "inverter": {},
         }
-        if topology != "grid_only":
-            raw["inverter"] = {}
     runtime = enforcer.update(raw, config)
     coord._phase_guard_snapshot = runtime
     return runtime

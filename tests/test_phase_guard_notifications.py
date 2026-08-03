@@ -86,7 +86,7 @@ async def test_guard_recovery_waits_until_active_gate_is_rearmed():
 
 
 @pytest.mark.asyncio
-async def test_observer_recovery_message_does_not_claim_gate_is_armed():
+async def test_observer_warning_and_recovery_never_claim_hardware_was_blocked():
     manager = _manager()
     unsafe = _snapshot(safe=False, authorized=True, reason="grid:l2:over_limit")
     unsafe["read_only"] = True
@@ -96,9 +96,21 @@ async def test_observer_recovery_message_does_not_claim_gate_is_armed():
     await manager.notify_phase_guard_transition(unsafe)
     await manager.notify_phase_guard_transition(safe)
 
-    message = manager._send_mobile_notification.await_args.args[0].lower()
-    assert "safe levels" in message
-    assert "armed" not in message
+    messages = [
+        call.args[0].lower()
+        for call in manager._send_mobile_notification.await_args_list
+    ]
+    assert len(messages) == 2
+    assert "observer mode" in messages[0]
+    assert "no action" in messages[0]
+    assert "blocked" not in messages[0]
+    assert "safe levels" in messages[1]
+    assert "armed" not in messages[1]
+    states = [
+        call.args[1]["state"]
+        for call in manager.hass.bus.async_fire.call_args_list
+    ]
+    assert states == ["phase_guard_observer_warning", "phase_guard_recovered"]
 
 
 @pytest.mark.asyncio

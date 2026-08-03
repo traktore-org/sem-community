@@ -15,6 +15,7 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     DOMAIN,
+    DEFAULT_PHASE_GUARD_TOPOLOGY,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_PRIORITY_SOC,
     DEFAULT_BATTERY_BUFFER_SOC,
@@ -1760,7 +1761,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             **self.config_entry.options,
             **self._data,
         }
-        topology = current_config.get("phase_guard_topology", "grid_only")
+        topology = current_config.get(
+            "phase_guard_topology", DEFAULT_PHASE_GUARD_TOPOLOGY
+        )
         try:
             phase_count = int(current_config.get("phase_guard_phase_count", 3))
         except (TypeError, ValueError):

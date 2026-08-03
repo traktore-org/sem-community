@@ -195,6 +195,20 @@ def test_grid_only_topology_does_not_require_inverter_lane_sensors():
     assert result["inverter"] == {}
 
 
+def test_missing_topology_defaults_to_conservative_grid_only_monitoring():
+    config = _guard_config()
+    config.pop("phase_guard_topology")
+    for phase in range(1, 4):
+        config.pop(f"phase_guard_inverter_l{phase}_current_entity")
+
+    result = evaluate_dual_phase_guard(_States(_healthy_states()), config)
+
+    assert result["topology"] == "grid_only"
+    assert result["safe"] is True
+    assert result["data_fresh"] is True
+    assert result["inverter"] == {}
+
+
 def test_single_phase_hybrid_only_requires_l1_on_both_lanes():
     config = _guard_config()
     config["phase_guard_phase_count"] = 1

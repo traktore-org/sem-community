@@ -380,6 +380,35 @@ def test_charge_max_is_converted_to_a_headroom_clamped_amp_command():
     assert filtered.commanded_amps == 11
 
 
+def test_charge_max_reserves_shared_headroom_before_next_charger():
+    enforcer = ActivePhaseGuard()
+    for _ in range(3):
+        enforcer.update(_guard(margin=4.0), _config())
+    enforcer.update(_guard(margin=3.0), _config())
+
+    first = enforcer.filter_decision(
+        _decision(ChargerIntent.CHARGE_MAX, 0),
+        adapter=_adapter(maximum=32),
+        power=_power(8),
+    )
+    second = enforcer.filter_decision(
+        ChargerDecision(
+            charger_id="second",
+            mode="always_max",
+            intent=ChargerIntent.CHARGE_AT_AMPS,
+            commanded_amps=10,
+            reason="second",
+        ),
+        adapter=_adapter(),
+        power=_power(0),
+    )
+
+    assert first.intent is ChargerIntent.CHARGE_AT_AMPS
+    assert first.commanded_amps == 11
+    assert second.intent is ChargerIntent.DISABLE
+    assert "headroom_below_minimum" in second.reason
+
+
 def test_headroom_below_charger_minimum_forces_disable():
     enforcer = ActivePhaseGuard()
     for _ in range(3):
@@ -468,6 +497,24 @@ def test_cycle_helper_uses_live_observer_mode_over_stale_config_value():
     assert runtime["mode"] == "observer"
     assert runtime["read_only"] is True
     assert filter_charger_decision(coord, _decision()) == _decision()
+
+
+def test_grid_only_evaluator_failure_keeps_complete_diagnostic_lane_schema():
+    coord = SimpleNamespace(
+        config=_config(phase_guard_topology="grid_only"),
+        hass=SimpleNamespace(states=object()),
+    )
+
+    with patch(
+        "custom_components.solar_energy_management.coordinator.dual_phase_guard.evaluate_dual_phase_guard",
+        side_effect=RuntimeError("sensor registry unavailable"),
+    ):
+        runtime = update_active_phase_guard(coord)
+
+    assert runtime["safe"] is False
+    assert runtime["stop_reason"] == "phase_guard_evaluation_failed"
+    assert runtime["grid"] == {}
+    assert runtime["inverter"] == {}
 
 
 def test_filter_helper_is_fail_closed_if_cycle_snapshot_was_not_evaluated():
