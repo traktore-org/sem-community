@@ -493,6 +493,30 @@ so inflated solar inflates it 1:1.
 **Note:** the day the fix lands, the affected day's figures are already banked. Daily values are
 correct from the following midnight; monthly/yearly/lifetime keep the historic inflation.
 
+## Daily home consumption doesn't match my meter (or the other daily rows)
+
+**Cause (fixed in v1.7.5):** home is the one row nothing meters — it is by definition what is left
+when the metered rows are subtracted from each other. SEM used to evaluate that balance
+*instantaneously* (in watts, every cycle) and integrate the result. Because home is a small
+difference of large terms, every sensor's tiny error lands on the home row magnified: installs
+whose solar/grid/battery rows each matched their meters to ≤0.5 % still saw daily home off by
+−8 % to +15 %, in both directions.
+
+**Since v1.7.5** the daily home row is derived from the day's *reconciled* counters
+(`solar + import − export + discharge − charge − EV`), the same way lifetime and yearly home were
+already computed. The practical consequence: SEM's seven daily numbers now add up — home is the
+exact residual of the six rows published beside it.
+
+**Notes:**
+- **The day you upgrade**, the home row keeps the old behaviour for one calendar day (the internal
+  midnight EV mirror needs a full day of history before it can enter the balance). It derives from
+  the following midnight.
+- The balance only takes over when every flowing term is backed by a hardware counter from your
+  Energy Dashboard; otherwise the old integrator keeps the row. If home still drifts, check that
+  solar, grid and battery counters are configured in **Settings → Dashboards → Energy**.
+- The *instantaneous* `sensor.sem_home_consumption_power` is unchanged (see ADR 0004) — only the
+  daily energy row moved to the balance.
+
 ## Energy values spiked after integration update or restart
 
 **Cause:** When a hardware integration (e.g. Huawei Solar) restarts or updates, its sensors go `unavailable` briefly. When they come back, SEM's energy integrator could multiply the returned power value by the entire gap duration, producing unrealistic energy spikes (e.g. 40+ kWh battery discharge on a 15 kWh battery).
