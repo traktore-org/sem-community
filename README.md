@@ -26,7 +26,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 ## Features
 
 - **Smart EV charging** — dynamic 6-32A current control based on real-time solar surplus
-- **Six charging modes** — Auto (forecast-aware), Solar+Battery, Self-Consumption, Min+PV, Maximum, Off
+- **Five charging modes** — Solar only, Solar + cheapest hours, Min + Solar, Always (max), Off
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
 - **Min/Max charge-target range** — a per-charger dual-handle slider (kWh or SOC %): **Min** is the guaranteed amount (night/grid tops up to it), **Max** is the solar ceiling (surplus charges up to it, then stops). E.g. *Min 50% / Max 80%* — always keep 50% from the grid, let solar add up to 80% for battery longevity. Max defaults to full (charge freely from sun)
@@ -36,9 +36,9 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Battery export arbitrage** — on a dynamic/spot tariff, opt-in sell the home battery to the grid when the export price beats the cost of recharging later (round-trip + wear accounted for); never below your reserve SOC, brand-agnostic, shown live as a "Selling to grid" state. See [docs/BATTERY_EXPORT_ARBITRAGE.md](docs/BATTERY_EXPORT_ARBITRAGE.md)
 - **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)
-- **Daily targets for household loads** — give any switch a daily goal (e.g. *pool pump ≥ 4 h/day* or *5 kWh/day*, set on an EV-style dual slider): runs on surplus first, then per policy — solar-only, cheap-hours top-up, or guaranteed by a deadline. Optional stop condition (e.g. car SOC ≥ 80 % on a dumb socket) and a surplus event interface for your own automations
+- **Daily runtime goals for household loads (#620)** — give any switch a **Min / Max runtime** window (e.g. *pool pump ≥ 4 h, ≤ 8 h/day*) via a dual-handle slider, a daytime **mode** (Off / Peak-only / Solar only / **Solar + battery** assist), and a **"Finish overnight from"** picker — **Off / Battery / Grid** (cheap-tariff window) — for completing the runtime when the sun runs short. Plus an optional stop condition picked with an entity search (e.g. water-temp ≥ 28 °C, car SOC ≥ 80 %). No forced grid deadlines. The load is prioritised in the one device list and exposes a surplus-event interface for your own automations. See [`docs/LOAD_PRIORITY.md`](docs/LOAD_PRIORITY.md).
 - **Peak load management** — automatic device shedding to stay under your grid limit
-- **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
+- **Solar forecast integration** — Solcast, Forecast.Solar or Open-Meteo Solar Forecast for smart charging decisions
 - **Dynamic tariff support** — Tibber, Nordpool, aWATTar, Amber Electric, Octopus Energy price-responsive charging
 - **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
 - **Per-PV-string visibility** — auto-discovered per-string power + daily-energy sensors and a chip strip on the system diagram + flow cards (when your inverter exposes per-string data). Works on Huawei, GoodWe, Growatt, Kostal, Sungrow, Fronius, SolarEdge, SolaX, with V·I synthesis fallback for inverters that expose voltage + current separately.
@@ -115,7 +115,7 @@ Before setting up SEM, make sure you have:
 - **Optional but recommended:**
   - Battery SOC (%) and power (W) sensors
   - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
-  - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar) or [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) for solar forecasts
+  - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for solar forecasts
   - Tibber, Nordpool, or aWATTar integration for dynamic tariffs
 
 ---
@@ -239,7 +239,7 @@ SEM includes a built-in dashboard with 8 views and a unified glassmorphism dark 
 | **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
 | **EV** | Charging status, session stats, solar share gauge, lifetime totals, EV Intelligence (taper trend, virtual SOC, charge skip reasoning, battery health) |
 | **Control** | Live surplus allocation, load-priority drag-and-drop, per-device control modes, today's schedule |
-| **Configuration** | All post-setup configuration in one place — colorful SOC-zone controls, entity pickers, EV charger add/remove, tariff, heat pump, hot water, battery scheduler. Rarely need HA's native config flow |
+| **Configuration** | All post-setup configuration in one place — staged **Apply/Revert per section** (nothing saves on an accidental tap), a ⓘ on every setting with its explanation, **factory default and one-tap ↺ reset**, an **Explain settings** toggle that opens all help at once, and a 📖 link on each section header straight to the matching [docs](docs/SETUP_GUIDE.md) chapter. Rarely need HA's native config flow |
 | **Costs** | Today/month/year KPIs, period selector, cost & savings charts, demand charge, tariff rates |
 | **System** | Health diagnostics, sensor status, charging state, peak management |
 
@@ -441,8 +441,9 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - **Multi-battery control + per-battery modes** (#523) — per-battery control entities and five modes (`auto`, `self-consumption`, `force-charge`, `force-discharge`, `off`), zero-config Huawei forcible discharge, corrected SG-Ready relay map.
 - **Smarter EV control** — no draining the battery to hold a dead solar session, no charging from expensive grid after the cheap window ends (#461/#524); EV target by daily **kWh** *or* **vehicle SOC %**; per-charger independent surplus vs shed priority (#470).
 - **Robust grid-sign autodetection + one-tap fix** (#461) — solar-anchored detector with `Fix grid sign` / `Reset` buttons and a `flip_grid_sign` service; locks survive restarts (#476).
+- **Battery-sign autodetection + one-tap fix** (#588) — brand-seeded (deterministic for known inverters) + counter-correlation detector with a `Fix battery sign` button and a `flip_battery_sign` service, at parity with the grid-sign handling; per-battery on multi-battery installs, locks survive restarts.
 - **Idempotent Huawei Modbus write** (#538), **dashboard time labels in the home timezone** (#539), and **full 15-locale dashboard translations** (parity-tested).
-- Battery → grid export arbitrage shipped in beta but is **off in this stable**, pending more soak (#533, re-enable targeted for v1.7.4).
+- Battery → grid export arbitrage shipped in beta but remains **deactivated** pending more review and soak (#533; re-evaluation planned for a later v1.7.x release).
 
 ### v1.7.2 — Hot Water boiler control (08.06.2026)
 - **HotWaterController fully wired** (#454) — setting `hot_water_entity` now actually controls the boiler at runtime (the class existed from day one but was never instantiated). Live status block, Repair issues for unavailable temp sensor / boiler entity, fail-safe semantics (boiler is NOT activated on surplus when the temp sensor is broken), and orphan-repair sweep when the user reconfigures the boiler entity.
@@ -456,7 +457,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ### v1.7.0 — Audit telemetry + architecture cleanup (04.06.2026)
 - **Per-PV-string visibility** (#312) — auto-discovered per-string power + daily-energy sensors plus a chip strip on the system diagram and flow cards. Works on Huawei, GoodWe, Growatt, Kostal, Sungrow, Fronius, SolarEdge, SolaX, with V·I synthesis fallback for inverters that expose voltage + current separately.
-- **Audit telemetry across 10 modules** — decision-path enums published as sensor attributes (forecast_tracker, hot_water_controller, heat_pump_controller, pv_performance, time_manager, consumption_predictor, appliance_scheduler, utility_signals, load_management, forecast_reader) so you can self-diagnose without us reading a debug log.
+- **Audit telemetry across 10 modules** — decision-path enums published as sensor attributes (forecast_tracker, hot_water_controller, heat_pump_controller, pv_performance, time_manager, consumption_predictor, appliance_scheduler, load_management, forecast_reader) so you can self-diagnose without us reading a debug log.
 - **FleetCycleState refactor** — single source of truth for fleet-level coordinator inputs; eliminates the class of fleet-vs-per-charger read bugs that produced four hotfixes between v1.6.0 and v1.6.6.
 - **9 Architecture Decision Records** committed under `docs/adr/` (PerChargerContext, EVBudget, sign-convention boundary, home_consumption clamp, per-brand pipeline test, FleetCycleState, real-hass test framework, FleetEvPower newtype, multi-charger priority cascade).
 - **v7 → v8 config schema migration** (#359) — auto-flips legacy `tariff_classification_mode=static` to `percentile` for dynamic-tariff users on first restart.
@@ -536,7 +537,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - All three use deduplication (fire once per event, reset automatically)
 
 ### Heat Pump SG-Ready (#112)
-- **SG-Ready 4-state control** — BLOCKED (00), NORMAL (01), BOOST (10), FORCE_ON (11) via two relay entities
+- **SG-Ready 4-state control** — BLOCKED (1:0), NORMAL (0:0), BOOST (0:1), FORCE_ON (1:1) via two relay entities. (This line originally documented a plain 2-bit count, 00/01/10/11, which is not the SG-Ready standard — corrected in #523 in the code and in #655 here.)
 - **Surplus-driven** — BOOST mode activates on solar surplus, FORCE_ON on high surplus (configurable threshold)
 - **Temperature boost** — optionally raises climate entity setpoint during surplus periods
 - **Config flow** — new Heat Pump step in options flow (relay1, relay2, climate, power sensor, priority)
@@ -584,7 +585,39 @@ Your support helps keep SEM maintained, tested on real hardware, and free for ev
 
 ## Contributing
 
-Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request.
+Contributions are welcome! Fork the repo, branch, and open a PR against
+`develop`. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — the PR template's
+checklist is exactly what the review holds you to.
+
+### How work is tracked
+
+Every open issue and PR carries a state label, mirrored onto the
+[SEM Board](https://github.com/users/traktore-org/projects/2). The label is
+the source of truth.
+
+| State | Meaning |
+|---|---|
+| **Soaking** | Fix released as a beta, running on real hardware pending confirmation |
+| **Queued** | Diagnosed, scheduled for work |
+| **Awaiting reporter** | Waiting on logs, data or a confirmation from the reporter |
+| **Parked** | Enhancement held until after the next stable release |
+| **In review / Changes requested / Ready to merge** | Pull request states |
+
+### Issue and PR handling
+
+- Bug reports are triaged, fixed and released as a beta; the reporter is then
+  asked to confirm.
+- Enhancement requests are labelled and scheduled by a maintainer.
+- Pull requests are reviewed against the project's invariants. Merging is a
+  maintainer decision.
+- A comment on a closed issue reopens it.
+- An issue awaiting a reporter is nudged after 3 days, and closed with an
+  invitation to reopen after 7.
+
+### Current phase
+
+Stabilising for 1.7.5: bug fixes are reviewed and merged as usual; feature PRs
+are parked until the release is cut.
 
 ## License
 

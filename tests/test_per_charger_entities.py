@@ -653,3 +653,146 @@ class TestPerChargerAggregation:
 
         readings = reader.read_power()
         assert readings.ev_power == 3000.0
+
+    def test_single_charger_connected_sensor_in_list_sets_fleet_connected(self):
+        """#616 — a lone charger whose plug/charging sensors live ONLY in
+        ``ev_chargers[0]`` (not the flat top-level keys) must still drive the
+        fleet ``ev_connected`` and populate the per-charger map.
+
+        Regression: the connection-status read gated on ``len(ev_chargers) > 1``,
+        so a single config-flow charger fell back to the (empty) legacy
+        top-level ``ev_connected_sensor``. Result: ``ev_connected=False`` while
+        ``charger_ev_charger_connected=True`` — the EV policy read "EV
+        disconnected" and commanded 0 A forever.
+        """
+        from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
+
+        hass = MagicMock()
+        # Sensors live INSIDE the charger entry, NOT at the top level —
+        # exactly how a generic/manual charger added via config-flow is stored.
+        config = {
+            "solar_production_sensor": "sensor.solar",
+            "grid_power_sensor": "sensor.grid",
+            "battery_power_sensor": "sensor.battery",
+            "ev_chargers": [
+                {
+                    "id": "ev_charger",
+                    "name": "Generic",
+                    "ev_charging_power_sensor": "sensor.wb_active_power",
+                    "ev_connected_sensor": "binary_sensor.wb_cable_connected",
+                    "ev_charging_sensor": "binary_sensor.wb_charging",
+                },
+            ],
+        }
+
+        reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
+
+        def mock_get(entity_id):
+            states = {
+                "sensor.solar": MagicMock(state="5000", attributes={"unit_of_measurement": "W"}),
+                "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.wb_active_power": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "binary_sensor.wb_cable_connected": MagicMock(state="on"),
+                "binary_sensor.wb_charging": MagicMock(state="off"),
+            }
+            return states.get(entity_id)
+
+        hass.states.get = mock_get
+
+        readings = reader.read_power()
+        # Fleet flag is what the EV policy gates on — must be True now.
+        assert readings.ev_connected is True
+        # Per-charger map must be populated so build_charger_view uses it
+        # directly instead of the fleet OR fallback.
+        assert readings.ev_connected_per_charger.get("ev_charger") is True
+        # Charging sensor is off → fleet + per-charger charging stay False.
+        assert readings.ev_charging is False
+        assert readings.ev_charging_per_charger.get("ev_charger") is False
+
+    def test_single_charger_mixed_config_falls_back_to_flat_charging(self):
+        """#616 — a single charger with an ``ev_connected_sensor`` in the list
+        but NO ``ev_charging_sensor`` must fall back to the flat top-level
+        ``ev_charging_sensor`` for the fleet ``ev_charging`` signal (the
+        per-signal legacy fallback), not silently zero it."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
+
+        hass = MagicMock()
+        config = {
+            "solar_production_sensor": "sensor.solar",
+            "grid_power_sensor": "sensor.grid",
+            "battery_power_sensor": "sensor.battery",
+            # Flat charging sensor is the ONLY charging signal.
+            "ev_charging_sensor": "binary_sensor.flat_charging",
+            "ev_chargers": [
+                {
+                    "id": "ev_charger",
+                    "name": "Generic",
+                    "ev_charging_power_sensor": "sensor.wb_active_power",
+                    "ev_connected_sensor": "binary_sensor.wb_cable_connected",
+                },
+            ],
+        }
+        reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
+
+        def mock_get(entity_id):
+            states = {
+                "sensor.solar": MagicMock(state="5000", attributes={"unit_of_measurement": "W"}),
+                "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.wb_active_power": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "binary_sensor.wb_cable_connected": MagicMock(state="on"),
+                "binary_sensor.flat_charging": MagicMock(state="on"),
+            }
+            return states.get(entity_id)
+        hass.states.get = mock_get
+
+        readings = reader.read_power()
+        assert readings.ev_connected is True
+        assert readings.ev_connected_per_charger.get("ev_charger") is True
+        # Charging comes from the flat fallback, not a per-charger sensor.
+        assert readings.ev_charging is True
+        assert "ev_charger" not in readings.ev_charging_per_charger
+
+    def test_multi_charger_no_charging_sensor_ignores_flat_key(self):
+        """#616 guard — a genuine multi-charger fleet must NOT OR in the flat
+        top-level ``ev_charging_sensor`` (that key is only charger[0]'s mirror);
+        it stays byte-for-byte the old ``len > 1`` behaviour → ev_charging is
+        the per-charger OR (False here), even though a flat key reads on."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
+
+        hass = MagicMock()
+        config = {
+            "solar_production_sensor": "sensor.solar",
+            "grid_power_sensor": "sensor.grid",
+            "battery_power_sensor": "sensor.battery",
+            "ev_charging_sensor": "binary_sensor.flat_charging",
+            "ev_chargers": [
+                {"id": "ev_charger", "name": "A",
+                 "ev_connected_sensor": "binary_sensor.a_plug"},
+                {"id": "ev_charger_1", "name": "B",
+                 "ev_connected_sensor": "binary_sensor.b_plug"},
+            ],
+        }
+        reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
+
+        def mock_get(entity_id):
+            states = {
+                "sensor.solar": MagicMock(state="5000", attributes={"unit_of_measurement": "W"}),
+                "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "binary_sensor.a_plug": MagicMock(state="on"),
+                "binary_sensor.b_plug": MagicMock(state="off"),
+                "binary_sensor.flat_charging": MagicMock(state="on"),
+            }
+            return states.get(entity_id)
+        hass.states.get = mock_get
+
+        readings = reader.read_power()
+        assert readings.ev_connected is True  # a_plug on
+        # No charger defines a charging sensor → fleet OR is False; the flat
+        # key is NOT consulted for a multi-charger fleet.
+        assert readings.ev_charging is False

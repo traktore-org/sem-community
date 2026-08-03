@@ -193,7 +193,23 @@ class TestLayer2EnergyDashboardFallback:
 # ===========================================================================
 
 class TestLayer3HardwareReconciliation:
-    """EnergyCalculator reconciles integrated EV energy with KEBA counter."""
+    """EnergyCalculator reconciles integrated EV energy with the wallbox counter.
+
+    Layer 3 shipped in a shape that could not be switched on: it compared the
+    counter's ABSOLUTE value against the daily bucket, and those two do not
+    share a day boundary (KEBA resets at midnight, ``ev_day`` rolls at the
+    charge deadline). Six of these tests were therefore born skipped. #658
+    rebuilt the reconciliation on counter DELTAS, which makes the boundary
+    question disappear — a reset is just a reset — and the tests are live
+    again, now asserting the delta contract:
+
+    **A counter is never adopted for what it read before SEM was watching.**
+    First sight only establishes a baseline; ``15.5`` on the counter at
+    startup could be today's charging or a lifetime total and SEM has no way
+    to tell. What it recovers is what the counter ADVANCES by while
+    integration does not — which is exactly the SEM-was-down case the issue
+    is about (see ``test_658_ev_counter_reconcile.py``).
+    """
 
     @pytest.fixture
     def mock_hass(self):
@@ -219,30 +235,61 @@ class TestLayer3HardwareReconciliation:
         energy = calc.calculate_energy(power)
         assert energy.daily_ev == 0.0
 
-    @pytest.mark.skip(reason="Reconciliation disabled - midnight/sunrise date mismatch")
-    def test_reconciliation_adopts_higher_hardware(self, calc, mock_hass):
-        """Hardware counter 15.5 kWh > integrated 0.0 → adopt 15.5."""
-        sensors = {"sensor.keba_p30_charging_daily": (15.5, {})}
-        hw_hass = _make_hass(sensors)
-        calc.set_ev_daily_energy_sensor(hw_hass, "sensor.keba_p30_charging_daily")
+    @freeze_time("2026-05-15 12:00:00")
+    def test_counter_advance_is_adopted(self, calc):
+        """The un-skipped original: a 15.5 kWh advance SEM did not integrate.
 
-        # Simulate a cycle where ev_power = 0 (SEM couldn't read it)
+        Same scenario the skipped version asserted (SEM sees ev_power = 0
+        throughout, the wallbox charges anyway), stated as a delta: the
+        counter is baselined first, then advances.
+        """
+        sensors = {"sensor.keba_p30_charging_daily": (0.0, {})}
+        hw_hass = _make_hass(sensors)
+        calc.configure_ev_counters(
+            hw_hass, ["sensor.keba_p30_charging_daily"], True)
+
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
-        calc.calculate_energy(power)  # first call to set _last_update
+        calc.calculate_energy(power)  # first call sets _last_update + baseline
+        calc.calculate_energy(power)
+
+        sensors["sensor.keba_p30_charging_daily"] = (15.5, {})
         energy = calc.calculate_energy(power)
 
         assert energy.daily_ev == 15.5
 
-    def test_reconciliation_ignores_small_delta(self, calc, mock_hass):
-        """Hardware 0.3 kWh > integrated 0.0 → below threshold, don't adopt."""
-        sensors = {"sensor.keba_p30_charging_daily": (0.3, {})}
+    @freeze_time("2026-05-15 12:00:00")
+    def test_first_sight_of_a_counter_is_not_adopted(self, calc):
+        """The half of the old expectation that #658 deliberately dropped.
+
+        A counter reading 15.5 the first time SEM looks at it is a baseline,
+        not a finding. Adopting it would credit a lifetime total to today —
+        the shape of the mis-adoption that got Layer 3 parked.
+        """
+        sensors = {"sensor.keba_p30_charging_daily": (15.5, {})}
         hw_hass = _make_hass(sensors)
-        calc.set_ev_daily_energy_sensor(hw_hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hw_hass, ["sensor.keba_p30_charging_daily"], True)
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
         calc.calculate_energy(power)
+        energy = calc.calculate_energy(power)
+
+        assert energy.daily_ev == 0.0
+
+    @freeze_time("2026-05-15 12:00:00")
+    def test_reconciliation_ignores_small_delta(self, calc):
+        """A 0.3 kWh advance is below the threshold → integrator keeps the day."""
+        sensors = {"sensor.keba_p30_charging_daily": (0.0, {})}
+        hw_hass = _make_hass(sensors)
+        calc.configure_ev_counters(
+            hw_hass, ["sensor.keba_p30_charging_daily"], True)
+
+        power = PowerReadings(ev_power=0.0)
+        power.calculate_derived()
+        calc.calculate_energy(power)
+        sensors["sensor.keba_p30_charging_daily"] = (0.3, {})
         energy = calc.calculate_energy(power)
 
         # 0.3 < threshold (0.5), should stay at integrated value (0.0)
@@ -250,7 +297,7 @@ class TestLayer3HardwareReconciliation:
 
     @freeze_time("2026-05-15 12:00:00")
     def test_reconciliation_when_integrated_close_to_hardware(self, calc):
-        """Integrated 14.8, hardware 15.0 → delta 0.2 < threshold, no override.
+        """Integrated 14.8, counter advances 0.2 → below threshold, no override.
 
         Pinned to a fixed datetime (#294 fix): pre-fix the test depended
         on wall-clock and broke on two fronts whenever a CI run crossed
@@ -264,23 +311,25 @@ class TestLayer3HardwareReconciliation:
         crossings, no key-drift, no flake. Verified against PR #295 CI
         run that failed at 06:24 UTC.
         """
-        sensors = {"sensor.keba_p30_charging_daily": (15.0, {})}
+        sensors = {"sensor.keba_p30_charging_daily": (14.8, {})}
         hw_hass = _make_hass(sensors)
-        calc.set_ev_daily_energy_sensor(hw_hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hw_hass, ["sensor.keba_p30_charging_daily"], True)
 
         # Manually seed the accumulator to simulate prior integration.
         # Use the same method ``calculate_energy`` uses internally so the
         # key matches by construction regardless of which path
         # ``_ev_reset_day`` takes (sunrise vs offset).
         today = calc._ev_reset_day(None)
-        calc._daily_accumulators[f"ev_daily_sun_{today}"] = 14.8
+        calc._daily_accumulators[f"ev_{today}"] = 14.8
         calc._monthly_accumulators[
-            f"ev_daily_sun_{today.year}_{today.month}"
+            f"ev_{today.year}_{today.month}"
         ] = 14.8
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
         calc.calculate_energy(power)
+        sensors["sensor.keba_p30_charging_daily"] = (15.0, {})
         energy = calc.calculate_energy(power)
 
         # Delta 0.2 < 0.5 threshold → keep integrated value
@@ -290,7 +339,8 @@ class TestLayer3HardwareReconciliation:
         """Hardware sensor unavailable → no crash, keep integrated value."""
         sensors = {"sensor.keba_p30_charging_daily": ("unavailable", {})}
         hw_hass = _make_hass(sensors)
-        calc.set_ev_daily_energy_sensor(hw_hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hw_hass, ["sensor.keba_p30_charging_daily"], True)
 
         power = PowerReadings(ev_power=500.0)
         power.calculate_derived()
@@ -303,7 +353,8 @@ class TestLayer3HardwareReconciliation:
     def test_reconciliation_hardware_missing_entity(self, calc):
         """Hardware sensor entity doesn't exist → no crash."""
         hw_hass = _make_hass({})  # empty — entity not found
-        calc.set_ev_daily_energy_sensor(hw_hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hw_hass, ["sensor.keba_p30_charging_daily"], True)
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
@@ -311,29 +362,35 @@ class TestLayer3HardwareReconciliation:
         energy = calc.calculate_energy(power)
         assert energy.daily_ev == 0.0
 
-    @pytest.mark.skip(reason="Reconciliation disabled - midnight/sunrise date mismatch")
+    @freeze_time("2026-05-15 12:00:00")
     def test_reconciliation_updates_monthly_accumulator(self, calc):
-        """When reconciliation fires, monthly accumulator gets the delta too."""
-        sensors = {"sensor.keba_p30_charging_daily": (10.0, {})}
+        """When reconciliation fires, monthly accumulator gets the delta too.
+
+        #666's lesson in reverse: one ``_accumulate`` call writes daily,
+        monthly, yearly and lifetime, so one correction must move all four or
+        the periods drift apart in a way nothing reports.
+        """
+        sensors = {"sensor.keba_p30_charging_daily": (0.0, {})}
         hw_hass = _make_hass(sensors)
-        calc.set_ev_daily_energy_sensor(hw_hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hw_hass, ["sensor.keba_p30_charging_daily"], True)
 
         # Seed daily at 2.0, monthly at 50.0
-        today = calc._time_manager.get_current_meter_day_sunrise_based()
+        today = calc._ev_reset_day(None)
         month_key = f"{today.year}_{today.month}"
-        calc._daily_accumulators[f"ev_daily_sun_{today}"] = 2.0
-        calc._monthly_accumulators[f"ev_daily_sun_{month_key}"] = 50.0
+        calc._daily_accumulators[f"ev_{today}"] = 2.0
+        calc._monthly_accumulators[f"ev_{month_key}"] = 50.0
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
-        calc.calculate_energy(power)
+        calc.calculate_energy(power)  # baselines the counter at 0.0
+        sensors["sensor.keba_p30_charging_daily"] = (8.0, {})
         energy = calc.calculate_energy(power)
 
-        # Daily should be hardware value
+        # Daily = anchor (2.0) + counter advance (8.0)
         assert energy.daily_ev == 10.0
-        # Monthly should have gained the delta (10.0 - 2.0 = 8.0)
-        monthly = calc._get_monthly("ev", month_key)
-        assert monthly == 58.0
+        # Monthly should have gained the same delta (8.0)
+        assert calc._get_monthly("ev", month_key) == 58.0
 
 
 # ===========================================================================
@@ -391,7 +448,7 @@ class TestEndToEndOriginalBug:
     Result: ev_power always 0, daily_ev always 0, night charging thinks 10 kWh remaining.
     """
 
-    @pytest.mark.skip(reason="Reconciliation disabled - midnight/sunrise date mismatch")
+    @freeze_time("2026-05-15 12:00:00")
     def test_full_scenario_all_layers(self):
         """All three layers working together to fix the bug."""
         sensors = {
@@ -431,36 +488,41 @@ class TestEndToEndOriginalBug:
         assert readings.ev_power == 7200.0
         assert readings.ev_connected is True
 
-        # Layer 3: Even if power was somehow missed, hardware reconciliation catches up
+        # Layer 3: even with power integration missing the charge entirely,
+        # the wallbox counter's advance is recovered. (The counter must be
+        # baselined first — see TestLayer3HardwareReconciliation's docstring.)
         tm = _make_time_manager(hass)
         calc = EnergyCalculator(config, tm)
-        calc.set_ev_daily_energy_sensor(hass, reader.config.ev_daily_energy_sensor)
+        calc.configure_ev_counters(
+            hass, ["sensor.keba_p30_charging_daily"], True)
 
         # Simulate scenario where power integration somehow drifted
         # (e.g. SEM was restarted mid-charge, missed 10 kWh)
+        sensors["sensor.keba_p30_charging_daily"] = (0.0, {})
         power_zero = PowerReadings(ev_power=0.0)
         power_zero.calculate_derived()
         calc.calculate_energy(power_zero)
+        sensors["sensor.keba_p30_charging_daily"] = (15.5, {})
         energy = calc.calculate_energy(power_zero)
 
         # Hardware reconciliation should catch us up to 15.5
         assert energy.daily_ev == 15.5
 
-    @pytest.mark.skip(reason="Reconciliation disabled - midnight/sunrise date mismatch")
+    @freeze_time("2026-05-15 12:00:00")
     def test_night_charging_remaining_correct(self):
         """After fix, remaining energy for night charging is correct."""
-        sensors = {
-            "sensor.keba_p30_charging_daily": (15.5, {}),
-        }
+        sensors = {"sensor.keba_p30_charging_daily": (0.0, {})}
         hass = _make_hass(sensors)
         config = {"update_interval": 10, "daily_ev_target": 10}
         tm = _make_time_manager(hass)
         calc = EnergyCalculator(config, tm)
-        calc.set_ev_daily_energy_sensor(hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hass, ["sensor.keba_p30_charging_daily"], True)
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
         calc.calculate_energy(power)
+        sensors["sensor.keba_p30_charging_daily"] = (15.5, {})
         energy = calc.calculate_energy(power)
 
         # daily_ev = 15.5 (from hardware), target = 10
@@ -469,50 +531,65 @@ class TestEndToEndOriginalBug:
         remaining = max(0, daily_target - energy.daily_ev)
         assert remaining == 0.0
 
-    @pytest.mark.skip(reason="Reconciliation disabled - midnight/sunrise date mismatch")
+    @freeze_time("2026-05-15 12:00:00")
     def test_external_charge_via_keba_app(self):
         """User charges via KEBA app (SEM never saw ev_power) → hardware catches it."""
-        sensors = {
-            "sensor.keba_p30_charging_daily": (8.3, {}),
-        }
+        sensors = {"sensor.keba_p30_charging_daily": (0.0, {})}
         hass = _make_hass(sensors)
         config = {"update_interval": 10}
         tm = _make_time_manager(hass)
         calc = EnergyCalculator(config, tm)
-        calc.set_ev_daily_energy_sensor(hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hass, ["sensor.keba_p30_charging_daily"], True)
 
         # SEM never saw any ev_power (external charge)
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
         calc.calculate_energy(power)
+        sensors["sensor.keba_p30_charging_daily"] = (8.3, {})
         energy = calc.calculate_energy(power)
 
         assert energy.daily_ev == 8.3
 
-    @pytest.mark.skip(reason="Reconciliation disabled - midnight/sunrise date mismatch")
+    @freeze_time("2026-05-15 12:00:00")
     def test_sem_restart_midcharge_catches_up(self):
-        """SEM restarts mid-charge, misses 5 kWh, hardware counter has it all."""
-        sensors = {
-            "sensor.keba_p30_charging_daily": (12.0, {}),
-        }
+        """SEM restarts mid-charge, misses 5 kWh, hardware counter has it all.
+
+        THE scenario #658 exists for, and the one that only works because the
+        baselines are persisted with the accumulators: here the restored store
+        carries ``base = 7.0`` from before the restart, so the counter's climb
+        to 12.0 during the downtime is a 5.0 kWh advance rather than a fresh
+        baseline. Drop the persistence and this test goes back to 7.0.
+        """
+        sensors = {"sensor.keba_p30_charging_daily": (12.0, {})}
         hass = _make_hass(sensors)
         config = {"update_interval": 10}
         tm = _make_time_manager(hass)
         calc = EnergyCalculator(config, tm)
-        calc.set_ev_daily_energy_sensor(hass, "sensor.keba_p30_charging_daily")
+        calc.configure_ev_counters(
+            hass, ["sensor.keba_p30_charging_daily"], True)
 
-        # SEM only integrated 7 kWh before restart
-        today = tm.get_current_meter_day_sunrise_based()
+        # SEM only integrated 7 kWh before restart, and its last look at the
+        # counter — persisted across the restart — also read 7.0.
+        today = calc._ev_reset_day(None)
         month_key = f"{today.year}_{today.month}"
-        calc._daily_accumulators[f"ev_daily_sun_{today}"] = 7.0
-        calc._monthly_accumulators[f"ev_daily_sun_{month_key}"] = 7.0
+        calc.restore_state({
+            "daily_accumulators": {f"ev_{today}": 7.0},
+            "monthly_accumulators": {f"ev_{month_key}": 7.0},
+            "ev_counter_baselines": {
+                "date": str(today),
+                "base": {"sensor.keba_p30_charging_daily": 7.0},
+                "last": {"sensor.keba_p30_charging_daily": 7.0},
+                "anchor": 7.0,
+            },
+        })
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
         calc.calculate_energy(power)
         energy = calc.calculate_energy(power)
 
-        # Hardware 12.0 > integrated 7.0 + 0.5 threshold → adopt 12.0
+        # Counter advanced 7.0 → 12.0 while SEM integrated nothing → adopt 12.0
         assert energy.daily_ev == 12.0
         # Monthly should have gained the delta (5.0)
         assert calc._get_monthly("ev", month_key) == 12.0

@@ -119,13 +119,41 @@ MUST_COVER: tuple[Cell, ...] = (
     Cell("always_max", "ignores_zone_and_tariff",
          "always_max contract — charge at max regardless of regime"),
 
-    # ─── multi-charger distribution ───────────────────────────
-    Cell("multi_charger", "split_canonical_total_equals_sum",
-         "#284 Phase B.5 — distribution must sum to canonical"),
+    # ─── multi-charger ────────────────────────────────────────
+    Cell("multi_charger", "fleet_cycle_with_multiple_chargers",
+         "2+ chargers run a full cycle and land on the right "
+         "canonical strategy"),
     Cell("multi_charger", "off_plus_solar_only_per_charger_state",
          "#315/#316 — per-charger effective state isolation"),
-    Cell("multi_charger", "priority_cascade_with_mixed_modes",
-         "Mixed-mode multi-charger — priority cascade isolation"),
+    Cell("multi_charger", "priority_cascade_mixed_modes",
+         "#462/#464 — per-charger flow isolation under mixed modes "
+         "(@RienduPre dual-Wallbox replay)"),
+    Cell("multi_charger", "solar_commitment_cascade",
+         "#665 — the allocator production runs: each charger sees only "
+         "the surplus its seniors left (#678 pins the ceiling it "
+         "decides against)"),
+    Cell("multi_charger", "mixed_mode_cascade_ordering",
+         "#665 — same cascade under three modes at three priorities; "
+         "always_max claims nameplate and the juniors correctly idle "
+         "rather than charge from grid/battery"),
+
+    # #651 retired ``split_canonical_total_equals_sum`` and
+    # ``priority_cascade_with_mixed_modes``. Both named invariants of
+    # ``SurplusController.distribute_ev_budget``, whose output
+    # production wrote to ``pcc.budget_w`` and never read — so the
+    # cells claimed coverage of an allocator no install ran, and this
+    # comment used to say plainly that the allocator which DOES run
+    # (the per-charger loop threading ``_solar_committed_w_per_cycle``)
+    # had no scenario coverage at all.
+    #
+    # #665 did that work: the harness now drives that loop for real
+    # (build_charger_view → decide → charger_types.solar_commitment_w,
+    # the same function production calls) and the two cells above assert
+    # over its output. The source half — the coordinator dropping the
+    # reset or the call, which no harness driving its own copy of the
+    # loop can notice — is guarded by AST in
+    # tests/test_665_allocator_coverage.py. Unit-level ordering coverage
+    # remains at tests/test_step6_multi_charger_surplus_sharing.py.
 )
 
 

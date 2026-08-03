@@ -1,0 +1,518 @@
+"""#589 follow-up reliability fixes.
+
+1. EV W2/W3 — the primary EV taper detector must NOT be re-fed the fleet
+   ``power.ev_power`` sum after the per-charger loop already updated it with
+   its own power (that false-anchored the primary's SOC on another charger's
+   draw). Source-structure guard (the method is too heavy to execute; the repo
+   already uses AST/source guards for _update_ev_intelligence — see #517/#318).
+
+2. W7 — the read_power ``else`` branch (per_battery_mode off, e.g. a single
+   per-battery meter with _n_units == 1) must negate the per-battery
+   ``readings.batteries[bid].power_w`` in lockstep with the fleet scalar, since
+   the actuator sources BatteryRuntime.last_known_w from the per-battery dict.
+"""
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+_COORD = Path(__file__).resolve().parents[1] / "coordinator" / "coordinator.py"
+
+
+def _method_src(name: str) -> str:
+    text = _COORD.read_text()
+    tree = ast.parse(text)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+            return ast.get_source_segment(text, node)
+    raise AssertionError(f"{name} not found")
+
+
+class TestEvFleetReadNoDoubleUpdate:
+    """The fleet-sum taper update must be on the legacy single-detector path only."""
+
+    def test_primary_taper_captured_from_own_loop(self):
+        src = _method_src("_update_ev_intelligence")
+        assert "primary_taper_data" in src, (
+            "the primary charger's own per-charger taper result must be captured"
+        )
+
+    def test_fleet_update_is_legacy_only(self):
+        src = _method_src("_update_ev_intelligence")
+        # multi-charger selects the primary's own result...
+        assert "if self._ev_devices:" in src
+        # ...and the fleet-sum update only runs when NO per-charger devices exist
+        # (the elif), never unconditionally.
+        assert "elif power.ev_power > 0 or power.ev_connected:" in src
+
+    def test_no_unconditional_fleet_taper_update(self):
+        """Guard: the fleet `self._ev_taper_detector.update(power.ev_power ...)`
+        must not sit directly in the method body (must be inside the elif)."""
+        text = _COORD.read_text()
+        tree = ast.parse(text)
+        method = next(
+            n for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and n.name == "_update_ev_intelligence"
+        )
+        # Any call to self._ev_taper_detector.update with power.ev_power as first
+        # arg must be nested under an If (not a top-level statement of the method).
+        top_level = set(method.body)
+        for node in ast.walk(method):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "update"
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "_ev_taper_detector"
+            ):
+                # first positional arg is power.ev_power
+                if node.args and isinstance(node.args[0], ast.Attribute) \
+                        and node.args[0].attr == "ev_power":
+                    # find the Expr/Assign stmt wrapping it and ensure it's not
+                    # a direct child of the method body
+                    assert not any(
+                        isinstance(s, (ast.Assign, ast.Expr)) and s in top_level
+                        and any(c is node for c in ast.walk(s))
+                        for s in top_level
+                    ), "fleet taper update must be gated, not unconditional"
+
+
+class TestW7ElseBranchPerBatterySync:
+    """read_power else-branch negate keeps the per-battery dict in lockstep."""
+
+    def _reader(self):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        hass = MagicMock()
+        hass.states = MagicMock()
+        return SensorReader(hass, {})
+
+    def test_else_branch_negates_per_battery_dict(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            PowerReadings,
+        )
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            BatteryPower,
+        )
+        r = self._reader()
+        # single per-battery meter → _n_units == 1 → per_battery_mode is False
+        ed = MagicMock()
+        ed.battery_power_list = ["sensor.b1_power"]
+        ed.battery_power_pairs = []
+        r.set_energy_dashboard_config(ed)
+
+        readings = PowerReadings()
+        readings.battery_power = 500.0
+        readings.batteries = {
+            "b1": BatteryPower(battery_id="b1", power_w=500.0, soc_pct=80.0, name="sensor.b1_power"),
+        }
+        # force the fleet auto-detect to say "negate"
+        with patch.object(r, "_detect_battery_sign", return_value=True), \
+                patch.object(r, "_read_from_energy_dashboard", return_value=readings), \
+                patch.object(r, "_audit_battery_sign_lock"):
+            result = r.read_power()
+
+        assert result.battery_power == -500.0
+        # the per-battery dict MUST be negated in lockstep (actuator reads this)
+        assert result.batteries["b1"].power_w == -500.0, (
+            "else-branch negate desynced the per-battery power_w from the fleet scalar"
+        )
+
+    def test_else_branch_user_flip_negates_per_battery_dict(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            PowerReadings,
+        )
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            BatteryPower,
+        )
+        r = self._reader()
+        r._raw_config = {"battery_sign_user_flip": True}
+        ed = MagicMock()
+        ed.battery_power_list = ["sensor.b1_power"]
+        ed.battery_power_pairs = []
+        r.set_energy_dashboard_config(ed)
+
+        readings = PowerReadings()
+        readings.battery_power = 300.0
+        readings.batteries = {
+            "b1": BatteryPower(battery_id="b1", power_w=300.0, soc_pct=70.0, name="sensor.b1_power"),
+        }
+        with patch.object(r, "_detect_battery_sign", return_value=False), \
+                patch.object(r, "_read_from_energy_dashboard", return_value=readings), \
+                patch.object(r, "_audit_battery_sign_lock"):
+            result = r.read_power()
+
+        assert result.battery_power == -300.0
+        assert result.batteries["b1"].power_w == -300.0
+
+
+class TestSurfaceBTaperNoSwap:
+    """#589 C step 1 — the primary taper detector is COMPUTED (property), not
+    swapped per-cycle. The former `_ev_taper_detector = _ev_taper_detectors[
+    primary_id]` reassignment (one of two parallel per-charger swap surfaces)
+    is gone, so the primary can never drift out of sync."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        hass = MagicMock()
+        return SEMCoordinator(hass, {})
+
+    def test_returns_default_when_no_per_charger_detectors(self):
+        c = self._coord()
+        c._ev_devices = {}
+        assert c._ev_taper_detector is c._ev_taper_detector_default
+
+    def test_resolves_primary_from_per_charger_dict(self):
+        from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
+            EVTaperDetector,
+        )
+        c = self._coord()
+        prim = EVTaperDetector({})
+        second = EVTaperDetector({})
+        c._ev_devices = {"keba": object(), "wallbox": object()}
+        c._ev_taper_detectors = {"keba": prim, "wallbox": second}
+        # primary = first _ev_devices key = "keba"
+        assert c._ev_taper_detector is prim
+        assert c._ev_taper_detector is not second
+
+    def test_no_swap_reassignment_in_update_ev_intelligence(self):
+        # Guard: the per-cycle swap must not come back.
+        import pathlib
+        coord = pathlib.Path(__file__).resolve().parents[1] / "coordinator" / "coordinator.py"
+        src = coord.read_text()
+        assert "self._ev_taper_detector = self._ev_taper_detectors[primary_id]" not in src, (
+            "the Surface-B per-cycle taper swap was reintroduced"
+        )
+
+
+class TestSurfaceAStalledSinceIsolation:
+    """#589 Surface-A — the migrated _ev_stalled_since must NOT leak between
+    chargers. This is the oracle the class historically lacked ('a missed
+    swap-back passes every unit test'): two chargers with divergent values,
+    assert no cross-contamination + per-charger persistence across cycles."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import (
+            PerChargerContext,
+        )
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_stalled_since_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        # charger A: fresh, then sets its stall time
+        with self._ctx(coord, "a"):
+            assert coord._ev_stalled_since is None
+            coord._ev_stalled_since = 100.0
+            assert coord._ev_stalled_since == 100.0
+        # charger B: MUST NOT see A's value (the leak guard)
+        with self._ctx(coord, "b"):
+            assert coord._ev_stalled_since is None, "A's stall time leaked into B"
+            coord._ev_stalled_since = 200.0
+        # re-enter A next cycle: its OWN value persisted (durable _pcc_store)
+        with self._ctx(coord, "a"):
+            assert coord._ev_stalled_since == 100.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_stalled_since == 200.0
+
+    def test_out_of_loop_uses_default_backing(self):
+        coord = self._coord()
+        # no active pcc → default backing field
+        assert coord._ev_stalled_since is None
+        coord._ev_stalled_since = 42.0
+        assert coord._ev_stalled_since == 42.0
+        assert coord._ev_stalled_since_default == 42.0
+
+
+class TestSurfaceAEnableSurplusSinceIsolation:
+    """#589 Surface-A — _ev_enable_surplus_since must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_enable_surplus_since is None
+            coord._ev_enable_surplus_since = 111.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_enable_surplus_since is None, "a leaked into b"
+            coord._ev_enable_surplus_since = 222.0
+        with self._ctx(coord, "a"):
+            assert coord._ev_enable_surplus_since == 111.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_enable_surplus_since == 222.0
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_enable_surplus_since is None
+        coord._ev_enable_surplus_since = 50.0
+        assert coord._ev_enable_surplus_since == 50.0
+        assert coord._ev_enable_surplus_since_default == 50.0
+
+
+class TestSurfaceAChargeStartedAtIsolation:
+    """#589 Surface-A — _ev_charge_started_at must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_started_at is None
+            coord._ev_charge_started_at = 300.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_charge_started_at is None, "a leaked into b"
+            coord._ev_charge_started_at = 400.0
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_started_at == 300.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_charge_started_at == 400.0
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_charge_started_at is None
+        coord._ev_charge_started_at = 99.0
+        assert coord._ev_charge_started_at == 99.0
+        assert coord._ev_charge_started_at_default == 99.0
+
+
+class TestSurfaceALastChangeTimeIsolation:
+    """#589 Surface-A — _ev_last_change_time must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_change_time is None
+            coord._ev_last_change_time = "ts_a"
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_change_time is None, "a leaked into b"
+            coord._ev_last_change_time = "ts_b"
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_change_time == "ts_a"
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_change_time == "ts_b"
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_last_change_time is None
+        coord._ev_last_change_time = "ts_x"
+        assert coord._ev_last_change_time == "ts_x"
+        assert coord._ev_last_change_time_default == "ts_x"
+
+
+class TestSurfaceAReenableAttemptsIsolation:
+    """#589 Surface-A — _ev_reenable_attempts must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_reenable_attempts == 0
+            coord._ev_reenable_attempts = 5
+        with self._ctx(coord, "b"):
+            assert coord._ev_reenable_attempts == 0, "a leaked into b"
+            coord._ev_reenable_attempts = 2
+        with self._ctx(coord, "a"):
+            assert coord._ev_reenable_attempts == 5
+        with self._ctx(coord, "b"):
+            assert coord._ev_reenable_attempts == 2
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_reenable_attempts == 0
+        coord._ev_reenable_attempts = 7
+        assert coord._ev_reenable_attempts == 7
+        assert coord._ev_reenable_attempts_default == 7
+
+
+class TestSurfaceAChargeRefusedIsolation:
+    """#589 Surface-A — _ev_charge_refused must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_refused is False
+            coord._ev_charge_refused = True
+        with self._ctx(coord, "b"):
+            assert coord._ev_charge_refused is False, "a leaked into b"
+        with self._ctx(coord, "a"):
+            assert coord._ev_charge_refused is True
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_charge_refused is False
+        coord._ev_charge_refused = True
+        assert coord._ev_charge_refused is True
+        assert coord._ev_charge_refused_default is True
+
+
+class TestSurfaceALastSetAmpsTsIsolation:
+    """#589 Surface-A — _ev_last_set_amps_ts must not leak between chargers."""
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import PerChargerContext
+        return PerChargerContext(cid=cid, ev_dev=object(), charger_cfg={}, _coord=coord)
+
+    def test_no_leak_and_persists_per_charger(self):
+        coord = self._coord()
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_set_amps_ts is None
+            coord._ev_last_set_amps_ts = 500.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_set_amps_ts is None, "a leaked into b"
+            coord._ev_last_set_amps_ts = 600.0
+        with self._ctx(coord, "a"):
+            assert coord._ev_last_set_amps_ts == 500.0
+        with self._ctx(coord, "b"):
+            assert coord._ev_last_set_amps_ts == 600.0
+
+    def test_out_of_loop_default(self):
+        coord = self._coord()
+        assert coord._ev_last_set_amps_ts is None
+        coord._ev_last_set_amps_ts = 123.4
+        assert coord._ev_last_set_amps_ts == 123.4
+        assert coord._ev_last_set_amps_ts_default == 123.4
+
+
+class TestSwapRetirementInterleaved:
+    """#589 swap retirement — the rig-shaped oracle, in-process.
+
+    The design spec mandated the two-charger HA-TEST rig because 'a
+    missed swap-back passes every unit test and only shows on two live
+    chargers'. Post-retirement there IS no swap-back — but this test
+    still walks the exact production loop shape (sequential contexts
+    over two chargers across multiple simulated cycles, interleaving
+    EVERY migrated/retired field) against a real SEMCoordinator, so any
+    future regression in the property dispatch reproduces the live-rig
+    failure signature (charger B inheriting charger A's state) right
+    here in CI. Live-rig actuation coverage is impossible on the shared-
+    hardware TEST rig in observer mode (the per-charger loop is
+    observer-gated); this is the sanctioned equivalent.
+    """
+
+    def _coord(self):
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        return SEMCoordinator(MagicMock(), {})
+
+    def _ctx(self, coord, cid, ev_dev=None):
+        from custom_components.solar_energy_management.coordinator.per_charger_context import (
+            PerChargerContext,
+        )
+        return PerChargerContext(
+            cid=cid, ev_dev=ev_dev if ev_dev is not None else object(),
+            charger_cfg={}, _coord=coord,
+        )
+
+    def test_two_chargers_three_cycles_full_field_matrix(self):
+        from unittest.mock import MagicMock
+        coord = self._coord()
+        primary = MagicMock(name="primary")
+        coord._ev_device = primary          # registration (out-of-loop)
+        coord._cycle_vehicle_soc = 50.0     # global per-cycle SOC read
+        dev_a, dev_b = MagicMock(name="dev_a"), MagicMock(name="dev_b")
+
+        # ── cycle 1: A stalls + overrides SOC; B stays clean ──────────
+        with self._ctx(coord, "a", dev_a):
+            assert coord._ev_device is dev_a
+            assert coord._cycle_vehicle_soc == 50.0   # seeded from global
+            coord._ev_stalled_since = 111.0
+            coord._ev_reenable_attempts = 2
+            coord._cycle_vehicle_soc = 81.0           # per-charger entity
+        with self._ctx(coord, "b", dev_b):
+            assert coord._ev_device is dev_b
+            assert coord._cycle_vehicle_soc == 50.0, "A's SOC override leaked into B"
+            assert coord._ev_stalled_since is None, "A's stall leaked into B"
+            assert coord._ev_reenable_attempts == 0
+            coord._ev_charge_refused = True
+
+        # between cycles: primary view intact, no residue
+        assert coord._ev_device is primary
+        assert coord._cycle_vehicle_soc == 50.0
+        assert coord._ev_stalled_since is None
+        assert coord._current_pcc is None
+
+        # ── cycle 2: durable state came back per-charger ──────────────
+        with self._ctx(coord, "a", dev_a):
+            assert coord._ev_stalled_since == 111.0
+            assert coord._ev_reenable_attempts == 2
+            assert coord._ev_charge_refused is False, "B's refusal leaked into A"
+            coord._ev_stalled_since = None            # A's stall resolves
+        with self._ctx(coord, "b", dev_b):
+            assert coord._ev_charge_refused is True
+            assert coord._ev_stalled_since is None
+
+        # ── cycle 3: exception mid-A must not poison B ────────────────
+        try:
+            with self._ctx(coord, "a", dev_a):
+                coord._ev_reenable_attempts = 9
+                raise RuntimeError("decide blew up")
+        except RuntimeError:
+            pass
+        assert coord._current_pcc is None             # pointer unbound
+        with self._ctx(coord, "b", dev_b):
+            assert coord._ev_reenable_attempts == 0, "A's crash residue reached B"
+            assert coord._ev_device is dev_b
+        with self._ctx(coord, "a", dev_a):
+            assert coord._ev_reenable_attempts == 9   # A's write persisted

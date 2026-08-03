@@ -12,6 +12,7 @@ from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -343,7 +344,10 @@ class EnergyAssistant:
         daily_solar_kwh: float,
     ) -> None:
         """Generate forecast-aware scheduling recommendations."""
-        now = datetime.now()
+        # (#645) These tips name wall-clock hours to the user ("run the
+        # dishwasher at 13:00"), so the hour must be HA-local. On a UTC
+        # container the OS clock was off by the user's whole UTC offset.
+        now = dt_util.now()
         hour = now.hour
 
         from ..utils.translate import get_text
@@ -458,7 +462,11 @@ class EnergyAssistant:
         self_consumption: float, autarky: float,
     ) -> None:
         """Record daily stats for trend analysis."""
-        today = date.today().isoformat()
+        # (#645) HA-local, NOT ``date.today()``. The OS clock is routinely UTC
+        # inside the container while ``hass.config.time_zone`` is the user's —
+        # near midnight the two disagree and a day's stats land on the wrong
+        # key, or overwrite the previous day's entry.
+        today = dt_util.now().date().isoformat()
         # Only keep one entry per day
         if self._daily_stats and self._daily_stats[-1].get("date") == today:
             self._daily_stats[-1] = {

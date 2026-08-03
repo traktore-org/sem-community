@@ -11,7 +11,7 @@ closes (default 9 h later, 06:00). Each evaluation:
    day-ahead price series when a dynamic tariff is configured)
 4. Selects the cheapest contiguous price window (dynamic tariff) or
    uses the full NT window (static)
-5. Issues forced charge commands via BatteryChargeAdapter
+5. Publishes SchedulerDecision — the battery pipeline actuates it (#624)
 6. Monitors SOC and stops when target reached
 
 Re-plans immediately on day-ahead price updates, SOC drift and EV
@@ -28,7 +28,6 @@ from typing import List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .battery_charge_adapter import BatteryChargeAdapter
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -252,6 +251,12 @@ class SchedulerConfig:
     # Peak management
     peak_limit_w: float = 0.0  # 0 = no limit
     max_grid_import_w: float = 0.0  # 0 = no limit; cap total grid draw during charge
+    # #604: internal planner knob — the legacy ``ev_priority_over_battery``
+    # config key no longer feeds it (it was never reachable from any UI, so
+    # this always held its default True; the v14→v15 migration deletes the
+    # key). The list-based replacement is the unified device-priority list
+    # (#576): the battery's list position vs the charger's, once the
+    # battery's position is plumbed into this planner.
     ev_priority: bool = True  # EV gets priority over battery in peak conflicts
 
     # Negative tariff handling
@@ -300,9 +305,14 @@ class SchedulerConfig:
             pessimism_weight=config.get("battery_pessimism_weight", 0.3),
             replan_soc_deviation_pct=config.get("battery_replan_soc_deviation", 5.0),
             replan_on_ev_change=config.get("battery_replan_on_ev_change", True),
-            peak_limit_w=config.get("peak_limit_w", 0.0),
+            # #693 — the cap must come from a key installs actually carry.
+            # ``peak_limit_w`` was written by NOTHING (not the config flow,
+            # not a migration), so the peak-aware slot distribution ran with
+            # ``0 = no limit`` on every install. ``target_peak_limit`` is the
+            # install-flow key, in kW (shared with load management).
+            peak_limit_w=float(
+                config.get("target_peak_limit", 0.0) or 0.0) * 1000.0,
             max_grid_import_w=config.get("battery_max_grid_import_w", 0.0),
-            ev_priority=config.get("ev_priority_over_battery", True),
             force_charge_on_negative_price=config.get("battery_force_charge_negative_price", True),
             arbitrage_enabled=config.get("battery_grid_arbitrage_enabled", False),
             arbitrage_min_export_price=config.get("battery_arbitrage_min_export_price", 0.20),
@@ -332,11 +342,14 @@ class BatteryChargeScheduler:
     def __init__(
         self,
         hass: HomeAssistant,
-        adapter: BatteryChargeAdapter,
         scheduler_config: SchedulerConfig,
     ) -> None:
+        # (#624) The scheduler is a pure planner: it produces
+        # SchedulerDecision; actuation belongs to the battery pipeline
+        # (decide_battery -> actuate_battery -> BatteryControlAdapter).
+        # The old standalone BatteryChargeAdapter dependency was
+        # vestigial (its is_active was always False here).
         self.hass = hass
-        self._adapter = adapter
         self._config = scheduler_config
         self._decision: SchedulerDecision = SchedulerDecision(state=SchedulerState.IDLE)
         self._last_evaluation_date: Optional[datetime] = None
@@ -1014,8 +1027,6 @@ class BatteryChargeScheduler:
 
     def reset(self) -> None:
         """Reset scheduler to idle state (call when night ends)."""
-        if self._adapter.is_active:
-            _LOGGER.warning("Resetting scheduler while charge still active")
         self._decision = SchedulerDecision(state=SchedulerState.IDLE)
         self._charge_started_at = None
         self._planned_soc = None

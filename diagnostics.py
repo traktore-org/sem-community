@@ -90,6 +90,50 @@ async def _get_recent_sem_logs(hass: HomeAssistant) -> list[str]:
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
+
+def _build_deye_diagnostics(adapters: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a read-only Deye diagnostics block for the first Deye adapter.
+
+    Exposes the fail-closed capability gate (``available`` + ``reason``),
+    the effective max charge current, the persisted unsafe latch, and the
+    last recovery/actuation error. Pure read — it never writes to the
+    adapter or store, and it never serialises the runtime snapshot store
+    object. Returns ``None`` when no Deye adapter is present so installs
+    that don't use Deye keep the dump compact.
+    """
+    deye_adapters = [
+        ad for ad in adapters.values()
+        if type(ad).__name__ == "DeyeBatteryAdapter"
+    ]
+    if not deye_adapters:
+        return None
+
+    ad = deye_adapters[0]
+    try:
+        capability = ad.capability()
+    except Exception:  # noqa: BLE001 — diagnostics must never raise
+        capability = None
+
+    available = bool(
+        getattr(capability, "available", False) if capability is not None else False
+    )
+    reason = str(
+        getattr(capability, "reason", "") if capability is not None else ""
+    )
+    return {
+        "available": available,
+        "reason": reason,
+        "max_charge_current_a": float(
+            getattr(capability, "max_charge_current_a", 0.0)
+            if capability is not None else 0.0
+        ),
+        "unsafe_latched": bool(getattr(ad, "unsafe_latched", False)),
+        "recovery_error": getattr(ad, "_last_error", None) or None,
+        "observer_mode": bool(getattr(ad, "_observer_mode", False)),
+        "actuation_enabled": bool(getattr(ad, "_actuation_enabled", False)),
+    }
+
+
 # Config keys that could contain user-specific entity IDs (not secrets, but privacy)
 REDACT_CONFIG_KEYS = {
     "ev_connected_sensor",
@@ -205,6 +249,15 @@ async def async_get_config_entry_diagnostics(
                 "battery_discharge": ed_config.battery_discharge_energy,
             },
         }
+
+    # #588 — battery sign detection state (mirrors grid sign block above).
+    battery_sign_info: dict[str, Any] = {}
+    reader_pre = getattr(coordinator, "_sensor_reader", None)
+    if reader_pre is not None:
+        try:
+            battery_sign_info = reader_pre.battery_sign_diagnostics()
+        except Exception:  # noqa: BLE001 — diagnostics must never raise
+            battery_sign_info = {"error": "diagnostics_failed"}
 
     # Split-grid discovery state (issue #166): surface which import/export
     # sensors auto-discovery picked and how confident it is. A "split-lowconf"
@@ -330,6 +383,11 @@ async def async_get_config_entry_diagnostics(
                 "state": str(getattr(getattr(sched, "state", None), "value", "")) or None,
             },
         }
+        # #709 — Deye forced-grid-charge observability. Read-only. Keep the
+        # generic payload unchanged when no Deye adapter exists.
+        deye_info = _build_deye_diagnostics(_adapters)
+        if deye_info is not None:
+            battery_info["deye"] = deye_info
     except Exception as exc:  # noqa: BLE001 — diagnostics must never raise
         battery_info = {"error": str(exc)}
 
@@ -418,8 +476,16 @@ async def async_get_config_entry_diagnostics(
         },
         "battery_control": battery_info,
         "surplus": surplus_info,
+        # (#653) Appliance schedules — the run state machine and the #426
+        # transition telemetry. ``None`` on the vast majority of installs,
+        # which never call ``schedule_appliance``. This is the READER for
+        # ``diag_appliance_schedules``: publishing the summary into
+        # ``coordinator.data`` with nothing consuming it would repeat the
+        # exact defect this issue fixes.
+        "appliance_schedules": data.get("diag_appliance_schedules"),
         "load_management": load_info,
         "energy_dashboard": ed_info,
+        "battery_sign": battery_sign_info,
         "split_grid_discovery": split_grid_info,
         "pv_strings_discovery": pv_strings_info,
         "charger_adapters": charger_adapter_info,

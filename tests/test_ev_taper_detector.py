@@ -720,6 +720,24 @@ def _generate_charge_session_history(
     return states
 
 
+def _hass_with_unit(unit):
+    """A hass whose current state for the seeded entity declares ``unit``.
+
+    #641: the seeder reads the entity's unit to scale recorder history. These
+    tests used to pass a bare ``MagicMock()``, whose attribute lookup returns a
+    MagicMock that is never equal to ``"w"`` — so the old ``== "w"`` rule fell
+    through to "assume kW" and the kW intent below was never actually declared.
+    Now that unlabelled means WATTS everywhere (matching ``sensor_reader``,
+    which reads the very same entity on the live path), the unit has to be
+    stated rather than inferred from mock truthiness.
+    """
+    hass = MagicMock()
+    state = MagicMock()
+    state.attributes = {"unit_of_measurement": unit}
+    hass.states.get.return_value = state
+    return hass
+
+
 def _patch_recorder(entity_id, history_states):
     """Return context managers to patch recorder for history seeding tests."""
 
@@ -755,7 +773,7 @@ async def test_history_seed_detects_sessions():
 
     p1, p2 = _patch_recorder(eid, states)
     with p1, p2:
-        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+        result = await det.async_seed_from_history(_hass_with_unit("kW"), eid, days=7)
 
     assert result is not None
     assert result["session_count"] == 2
@@ -774,7 +792,7 @@ async def test_history_seed_detects_full_charge():
 
     p1, p2 = _patch_recorder(eid, states)
     with p1, p2:
-        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+        result = await det.async_seed_from_history(_hass_with_unit("kW"), eid, days=7)
 
     assert result is not None
     assert result["improved"] is True
@@ -800,7 +818,7 @@ async def test_history_seed_weekday_totals():
 
     p1, p2 = _patch_recorder(eid, states)
     with p1, p2:
-        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+        result = await det.async_seed_from_history(_hass_with_unit("kW"), eid, days=7)
 
     assert result is not None
     wt = result["weekday_totals"]
@@ -825,7 +843,7 @@ async def test_history_seed_no_overwrite_newer():
 
     p1, p2 = _patch_recorder(eid, states)
     with p1, p2:
-        await det.async_seed_from_history(MagicMock(), eid, days=7)
+        await det.async_seed_from_history(_hass_with_unit("kW"), eid, days=7)
 
     assert det._last_full_timestamp == "2026-04-28T18:00:00+00:00"
     assert det._energy_since_full == 5.0
@@ -839,7 +857,7 @@ async def test_history_seed_empty_history():
 
     p1, p2 = _patch_recorder(eid, [])
     with p1, p2:
-        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+        result = await det.async_seed_from_history(_hass_with_unit("kW"), eid, days=7)
 
     assert result is None
     assert det._soc_anchored is False
@@ -855,7 +873,7 @@ async def test_history_seed_recorder_unavailable():
         "homeassistant.components.recorder.get_instance",
         side_effect=Exception("Recorder not ready"),
     ):
-        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+        result = await det.async_seed_from_history(_hass_with_unit("kW"), eid, days=7)
 
     assert result is None
 
@@ -864,8 +882,57 @@ async def test_history_seed_recorder_unavailable():
 async def test_history_seed_no_entity():
     """Test that None entity returns None immediately."""
     det = EVTaperDetector(DEFAULT_CONFIG)
-    result = await det.async_seed_from_history(MagicMock(), None, days=7)
+    result = await det.async_seed_from_history(_hass_with_unit("kW"), None, days=7)
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_history_seed_watt_sensor_is_not_read_as_kilowatts():
+    """#641 — a KEBA-style sensor reporting WATTS must seed the same energy as
+    the kW sensor below, not 1000x more.
+
+    The old rule here was ``unit == "w"``, exact-case and unstripped, so a
+    ``"W "`` or ``"Watts"`` sensor fell through to assume-kW.
+    """
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+    base = datetime(2026, 4, 27, 14, 0, 0)
+    states = [_make_mock_state(eid, 10000.0, base + timedelta(seconds=i * 30)) for i in range(40)]
+    states.append(_make_mock_state(eid, 0.0, base + timedelta(minutes=20)))
+    states.append(_make_mock_state(eid, 0.0, base + timedelta(minutes=25)))
+
+    p1, p2 = _patch_recorder(eid, states)
+    with p1, p2:
+        result = await det.async_seed_from_history(_hass_with_unit("Watts"), eid, days=7)
+
+    assert result is not None
+    assert result["session_count"] == 1
+    total = list(result["weekday_totals"].values())[0]
+    assert 2.0 < total < 5.0  # 10 kW × 20 min ≈ 3.3 kWh — same as the kW case
+
+
+@pytest.mark.asyncio
+async def test_history_seed_unlabelled_sensor_means_watts():
+    """#641 behaviour change, pinned deliberately.
+
+    An UNLABELLED sensor used to be assumed kW *here* while
+    ``sensor_reader._read_sensor`` assumed W for the very same entity on the
+    live path — the bootstrap and the live reader disagreed by 1000x about one
+    sensor. Unlabelled now means watts in both, so unlabelled kW-magnitude
+    values are too small to be a session at all.
+    """
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+    base = datetime(2026, 4, 27, 14, 0, 0)
+    states = [_make_mock_state(eid, 10.0, base + timedelta(seconds=i * 30)) for i in range(40)]
+    states.append(_make_mock_state(eid, 0.0, base + timedelta(minutes=20)))
+
+    p1, p2 = _patch_recorder(eid, states)
+    with p1, p2:
+        result = await det.async_seed_from_history(_hass_with_unit(None), eid, days=7)
+
+    # 10 W never crosses the 0.5 kW session floor.
+    assert result is None or result["session_count"] == 0
 
 
 @pytest.mark.asyncio
@@ -883,7 +950,7 @@ async def test_history_seed_kw_values():
 
     p1, p2 = _patch_recorder(eid, states)
     with p1, p2:
-        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+        result = await det.async_seed_from_history(_hass_with_unit("kW"), eid, days=7)
 
     assert result is not None
     assert result["session_count"] == 1

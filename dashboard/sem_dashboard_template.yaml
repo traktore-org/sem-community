@@ -6,13 +6,17 @@
 # 8 views: Home, Energy, Battery, EV, Control, Configuration, Costs, System
 # Dark glassmorphism theme, mobile-first responsive design
 #
-# Required HACS cards (only 4):
-#   mushroom         — chips, entity, template, number, title cards
-#   card-mod         — *glass_card YAML anchor for unified styling
-#   apexcharts-card  — all trend / power / cost charts
-#   sankey-chart     — Energy flow diagram on Energy tab
+# Required HACS cards: NONE (#617 — zero-prerequisite dashboard).
+#   Everything on this dashboard is a bundled SEM card, a native HA card,
+#   or degrades gracefully. The former "required 4" are retired:
+#     mushroom         — 0 uses (vestigial since the bundled-card era)
+#     apexcharts-card  — 0 uses (sem-chart-card renders via vendored Chart.js)
+#     card-mod         — glass chrome now baked into the SEM cards' own CSS
+#     sankey-chart     — OPTIONAL (see below)
 #
-# Optional HACS cards:
+# Optional HACS cards (auto-detected by the generator):
+#   sankey-chart     — richer SEM-entity sankey on the Energy tab;
+#                      falls back to HA's native energy-sankey when absent.
 #   k-flow-card      — animated energy flow visualization (#206)
 #                      Auto-configured by dashboard generator when installed.
 #                      Falls back to sem-system-diagram-card when absent.
@@ -22,17 +26,9 @@
 #   sem-system-diagram-card  — illustrated SVG system diagram, SEM-native (default on Home tab)
 #   sem-solar-summary-card   — solar yield summary
 #   sem-weather-card         — weather + clock header
-#   sem-chart-card           — cost / savings charts
+#   sem-chart-card           — cost / savings charts (vendored Chart.js, offline-capable)
 #   sem-period-selector-card — period selector for Costs tab
 #   sem-load-priority-card   — drag-and-drop device priority (inlined SortableJS)
-#
-# Removed in v2.6.x (replaced by bundled SEM cards or native HA):
-#   power-flow-card-plus → sem-system-diagram-card → sem-flow-card
-#   mini-graph-card      → apexcharts-card
-#   solar-card           → sem-solar-summary-card
-#   clock-weather-card   → sem-weather-card
-#   bar-card             → native HA gauge
-#   bubble-card, button-card → mushroom standardization
 # ============================================================
 
 title: Solar Energy Management
@@ -76,32 +72,12 @@ views:
           - type: custom:sem-home-status-card
             entity_prefix: sensor.sem_
 
-          # ── Solar Summary ── (&glass_card anchor defined here)
+          # ── Solar Summary ── (glass chrome lives in the cards' own CSS since #617)
           - type: custom:sem-solar-card
             entity_prefix: sensor.sem_
-            card_mod:
-              style: &glass_card |
-                ha-card {
-                  background-color: var(--card-background-color) !important;
-                  color: var(--primary-text-color) !important;
-                  border: 1px solid var(--divider-color) !important;
-                  border-radius: 16px !important;
-                  box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.08)) !important;
-                  max-width: 900px !important;
-                  font-family: 'Segoe UI','Roboto',sans-serif !important;
-                  transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), border-color 0.3s cubic-bezier(0.4,0,0.2,1) !important;
-                  --chip-background: var(--secondary-background-color);
-                  --primary-font-family: 'Segoe UI','Roboto',sans-serif;
-                }
-                ha-card:hover {
-                  box-shadow: var(--ha-card-box-shadow, 0 4px 16px rgba(0,0,0,0.12)) !important;
-                }
-
           # ── Weather & Clock ──
           - type: custom:sem-weather-card
             entity: weather.home
-            card_mod:
-              style: *glass_card
 
           # ── 7-Day Summary (sem-chart-card replaces apexcharts) ──
           - type: custom:sem-chart-card
@@ -221,8 +197,6 @@ views:
                   - entity_id: sensor.sem_daily_grid_export_energy
                     color: "#8353d1"
                     name: Export
-              card_mod:
-              style: *glass_card
 
           # ── Self-Consumption & Autarky Gauges ──
           - type: horizontal-stack
@@ -383,24 +357,18 @@ views:
           # ══════════════════════════════════════════════════════
           - type: custom:sem-period-selector-card
             default_period: week
-            card_mod:
-              style: *glass_card
 
           # ══════════════════════════════════════════════════════
           # 3. COSTS CHART (reacts to period selector)
           # ══════════════════════════════════════════════════════
           - type: custom:sem-chart-card
             preset: costs
-            card_mod:
-              style: *glass_card
 
           # ══════════════════════════════════════════════════════
           # 3. SAVINGS CHART (reacts to period selector)
           # ══════════════════════════════════════════════════════
           - type: custom:sem-chart-card
             preset: savings
-            card_mod:
-              style: *glass_card
 
           # ══════════════════════════════════════════════════════
           # 6. COSTS DETAIL CARD

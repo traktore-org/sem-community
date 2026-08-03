@@ -20,6 +20,13 @@ export const SEM_COLORS = {
 
 /* ── Device colors for individual device nodes ── */
 export const SEM_DEVICE_COLORS = ['#FF8A65', '#AED581', '#CE93D8', '#64B5F6', '#ff9800', '#96CAEE'];
+// #614 — unified accent for the system diagram's house-load devices
+// (chips on mobile, satellites on desktop). One muted cyan-family shade,
+// deliberately DISTINCT from Home #5BC8D8 / inverter #96CAEE / grid
+// #488fc2 / battery #4db6ac: the positional SEM_DEVICE_COLORS read as
+// fake semantics next to the meaning-bearing flow colors (user call
+// 2026-07-19). Active/idle is carried by brightness, not hue.
+export const SEM_DEVICE_ACCENT = '#86A9B4';
 
 /* ── Power formatting ── */
 export function semFormatPower(watts) {

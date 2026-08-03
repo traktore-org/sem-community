@@ -49,6 +49,10 @@ class SGReadyState(IntEnum):
 # are wired normally-closed (NC) instead of normally-open use the per-pump
 # ``invert_sg_ready`` toggle, which flips both contacts.
 SG_READY_RELAY_MAP = {
+    # SEM never COMMANDS state 1 — it has no ripple-control/Sperrzeiten
+    # surface (#664, decided rather than built). The row stays because the
+    # table is the SG-Ready standard's truth table, which the SETUP_GUIDE
+    # wiring check is verified against (#655/#523).
     SGReadyState.BLOCKED:  (True,  False),  # 1:0
     SGReadyState.NORMAL:   (False, False),  # 0:0
     SGReadyState.BOOST:    (False, True),   # 0:1
@@ -97,6 +101,7 @@ class HeatPumpController(SetpointDevice):
         min_power_change_interval: float = 300.0,
         daily_min_runtime_sec: int = 0,
         invert_sg_ready: bool = False,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass=hass,
@@ -111,6 +116,7 @@ class HeatPumpController(SetpointDevice):
             boost_offset=boost_offset,
             max_setpoint=max_setpoint,
             min_power_change_interval=min_power_change_interval,
+            energy_entity_id=energy_entity_id,  # #600 — heat-pump kWh counter → derived power
         )
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.relay1_entity_id = relay1_entity_id
@@ -123,6 +129,14 @@ class HeatPumpController(SetpointDevice):
         self.temperature_entity_id = temperature_entity_id
         self.force_on_threshold = force_on_threshold
         self._hp_status = HeatPumpStatus()
+
+        # #594 — vacation mode. Set each cycle by the coordinator. While
+        # True, SEM stops ENCOURAGING the pump (no SG-Ready boost/force-on,
+        # no climate setpoint boost, no cheap-tariff force). SEM never sends
+        # a BLOCKING signal for vacation — deactivation returns the pump to
+        # SG-Ready NORMAL (state 2), so the pump's own frost/safety logic is
+        # untouched.
+        self.vacation: bool = False
 
         # #421 — telemetry surface mirroring #359/#416/#420
         # classifier_path / dampening_path / legionella_path patterns.
@@ -164,6 +178,10 @@ class HeatPumpController(SetpointDevice):
         Records the decision branch on ``self._last_offpeak_path`` (#421):
         ``parent_declines`` / ``already_warm_skip`` / ``activate``.
         """
+        if self.vacation:
+            # #594 — no cheap-tariff comfort forcing while away.
+            self._last_offpeak_path = "vacation_blocked"
+            return False
         if not super().needs_offpeak_activation:
             self._last_offpeak_path = "parent_declines"
             return False
@@ -181,7 +199,15 @@ class HeatPumpController(SetpointDevice):
         ``boost`` (surplus < force_on_threshold) or
         ``force_on`` (surplus >= threshold). Climate boost is composed via
         a ``+climate`` suffix when ``climate_entity_id`` is configured.
+
+        #594: while vacation mode is active the pump receives NO
+        comfort-driven activation — return 0 W without touching the relays
+        (``vacation_blocked`` path). The coordinator already deactivated a
+        running boost on the vacation transition.
         """
+        if self.vacation:
+            self._last_activation_path = "vacation_blocked"
+            return 0.0
         if available_watts >= self.force_on_threshold:
             target_state = SGReadyState.FORCE_ON
             self._last_activation_path = "force_on"
@@ -244,26 +270,6 @@ class HeatPumpController(SetpointDevice):
         self._hp_status.is_solar_boosted = False
 
         _LOGGER.info("Heat pump returned to normal operation")
-
-    async def block(self) -> None:
-        """Block heat pump (utility signal / load shedding).
-
-        Sets ``self._last_deactivation_path = "blocked"`` (#421).
-        """
-        await self._set_sg_ready_state(SGReadyState.BLOCKED)
-        self._status.state = DeviceState.BLOCKED
-        self._last_deactivation_path = "blocked"
-        _LOGGER.info("Heat pump blocked by utility signal")
-
-    async def unblock(self) -> None:
-        """Unblock heat pump (return to normal).
-
-        Sets ``self._last_deactivation_path = "unblocked"`` (#421).
-        """
-        await self._set_sg_ready_state(SGReadyState.NORMAL)
-        self._status.state = DeviceState.IDLE
-        self._last_deactivation_path = "unblocked"
-        _LOGGER.info("Heat pump unblocked")
 
     def _relays_for(self, state: SGReadyState) -> tuple[bool, bool]:
         """(relay1_on, relay2_on) for an SG-Ready state, applying the
@@ -377,6 +383,7 @@ class HeatPumpController(SetpointDevice):
             "is_solar_boosted": self._hp_status.is_solar_boosted,
             "current_temperature": self.get_current_temperature(),
             "force_on_threshold": self.force_on_threshold,
+            "vacation": self.vacation,  # #594
             # #421 — telemetry surface (mirrors #359/#416/#420 pattern).
             "activation_path": self._last_activation_path,
             "deactivation_path": self._last_deactivation_path,

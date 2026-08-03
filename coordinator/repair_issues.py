@@ -100,6 +100,47 @@ def clear_sensor_unavailable(hass: HomeAssistant, entity_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
+def _stale_issue_id(entity_id: str) -> str:
+    """Stable per-entity issue id for a FROZEN (available-but-stale) sensor."""
+    return f"sensor_stale_{entity_id}"
+
+
+def raise_sensor_stale(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    friendly_name: str | None = None,
+    minutes_stale: int = 10,
+) -> None:
+    """File a repair when a fast power ``entity_id`` is 'available' but has not
+    updated past the freeze threshold (#589 W3). Idempotent."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_stale_issue_id(entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="sensor_stale",
+            translation_placeholders={
+                "entity_id": entity_id,
+                "friendly_name": friendly_name or entity_id,
+                "minutes": str(minutes_stale),
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create (stale) failed for %s: %s", entity_id, e)
+
+
+def clear_sensor_stale(hass: HomeAssistant, entity_id: str) -> None:
+    """Clear the frozen-sensor repair when ``entity_id`` updates again."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _stale_issue_id(entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete (stale) failed for %s: %s", entity_id, e)
+
+
 def _actuation_issue_id(device_id: str) -> str:
     return f"charger_actuation_failed_{device_id}"
 
@@ -143,6 +184,58 @@ def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
     """Clear the actuation repair after a successful write."""
     try:
         ir.async_delete_issue(hass, DOMAIN, _actuation_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
+def _stop_unenforceable_issue_id(device_id: str) -> str:
+    return f"charger_stop_unenforceable_{device_id}"
+
+
+def raise_charger_stop_unenforceable(
+    hass: HomeAssistant,
+    device_id: str,
+    *,
+    name: str,
+    power_w: float,
+    entity: str,
+) -> None:
+    """File a repair when NOTHING SEM can call will stop this charger (#627).
+
+    Distinct from ``charger_actuation_failed``, which means a command was
+    sent and rejected. Here no command exists to send: the charger was
+    configured with only a current-control ``number.*`` entity whose minimum
+    is 6 A, so the 0 A stop is unwritable (#487) and no brand stop mechanism
+    is configured either. SEM keeps asking; the car keeps charging.
+
+    That is worth a hard ERROR rather than a log line, because the power has
+    to come from somewhere: onkelfu's install pulled 4.1 kW for hours with
+    3.5 kW of it out of the house batteries, at night, with the charger set
+    to *off*. Cleared as soon as the charger stops drawing.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_stop_unenforceable_issue_id(device_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="charger_stop_unenforceable",
+            translation_placeholders={
+                "name": name,
+                "power": f"{power_w:.0f}",
+                "entity": entity,
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_charger_stop_unenforceable(hass: HomeAssistant, device_id: str) -> None:
+    """Clear the #627 repair once the charger is no longer drawing."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _stop_unenforceable_issue_id(device_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
 

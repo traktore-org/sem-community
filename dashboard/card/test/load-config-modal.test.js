@@ -14,9 +14,31 @@ import {
     controlToFormValues,
     formValuesToServiceData,
     buildLoadConfigModalHTML,
+    findDeviceForConfig,
 } from '../src/cards/load-config-modal.js';
 
 const t = (k) => k; // identity translator — assert on raw keys
+
+// ── #621: the config card must resolve the row by its UNIQUE id, never by
+// energySensor. energySensor is null/'' for service-registered loads, direct
+// heat-pump/hot-water and the battery row, so two such rows collide on the
+// empty key — opening one showed the OTHER's switch (car socket → pool pump).
+test('findDeviceForConfig resolves by id even when energySensors collide', () => {
+    const devices = [
+        // Pool pump comes first (lower priority) — the row an energySensor
+        // lookup on '' would wrongly return for BOTH devices.
+        { id: 'pool_pump', energySensor: '', control: { type: 'switch', entity: 'switch.pool_pump' } },
+        { id: 'car_socket', energySensor: '', control: { type: 'switch', entity: 'switch.car_socket' } },
+    ];
+    // Each id resolves to its OWN row — no sibling leak.
+    assert.equal(findDeviceForConfig(devices, 'car_socket').control.entity, 'switch.car_socket');
+    assert.equal(findDeviceForConfig(devices, 'pool_pump').control.entity, 'switch.pool_pump');
+});
+
+test('findDeviceForConfig returns null for an unknown id / empty list', () => {
+    assert.equal(findDeviceForConfig([{ id: 'a' }], 'missing'), null);
+    assert.equal(findDeviceForConfig(null, 'a'), null);
+});
 
 test('controlToFormValues: switch mapping round-trips entity + type', () => {
     const v = controlToFormValues({ type: 'switch', entity: 'switch.dryer' });

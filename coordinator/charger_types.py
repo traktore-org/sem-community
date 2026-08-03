@@ -177,9 +177,12 @@ class BatteryPower:
     power_w: float = 0.0
     """Instantaneous power (W). + = charge, − = discharge."""
 
-    soc_pct: float = 0.0
-    """State of charge (0-100). Fleet SOC is the
-    capacity-weighted average."""
+    soc_pct: Optional[float] = None
+    """State of charge (0-100), or ``None`` while this unit's SOC is
+    unresolved — undetected sensor or a modbus source still warming
+    after a restart (#694: publishing 0.0 there made a warming battery
+    indistinguishable from an empty one). Fleet SOC is the
+    capacity-weighted average over the RESOLVED units."""
 
     capacity_kwh: float = 0.0
     """Nameplate capacity for this unit. Used by the fleet SOC
@@ -304,7 +307,7 @@ class BatteryIntent(Enum):
     LIMIT_DISCHARGE = "limit_discharge"
     """Reactive protection during night EV charging — hold
     discharge to a specific watts value (typically home consumption,
-    1:1 limit). Today's ``BatteryProtectionMixin`` logic."""
+    1:1 limit). Formerly the ``BatteryProtectionMixin`` logic (#624)."""
 
     FORCE_CHARGE = "force_charge"
     """Proactive grid-to-battery charge with target SOC and power.
@@ -394,6 +397,14 @@ class BatteryView:
     Typed as ``Any`` so importing scheduler types in this module
     isn't load-bearing — the actual type is
     :class:`SchedulerDecision` from ``battery_charge_scheduler.py``."""
+    grid_funded_load_w: float = 0.0
+    """(#620) Total draw of loads currently running on the cheap-hours
+    GRID top-up ("Finish overnight from: Grid"). The battery must not
+    fund these — decide_battery subtracts this from the home-load
+    discharge limit so the grid actually feeds them. Without it the
+    inverter's self-consumption logic covers the load from the battery
+    and the Battery/Grid picker choices behave identically
+    (observed live, PROD 2026-07-22)."""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -483,6 +494,56 @@ class ChargerDecision:
     idles (the bridge stops on the short grace). Honours the dataclass
     contract: 'All fields are computed once in decide … no re-derivation
     downstream.'"""
+
+
+def solar_commitment_w(
+    decision: ChargerDecision,
+    *,
+    phases: int,
+    voltage: float,
+    max_current_a: float,
+) -> float:
+    """Solar this charger claims out of the cycle's shared surplus (#665).
+
+    The coordinator's per-charger loop accumulates this into
+    ``_solar_committed_w_per_cycle`` and threads the running total into
+    the next (lower-priority) charger's ``ChargerView.fleet.solar_committed_w``,
+    so the cascade hands each charger only the surplus its seniors left.
+
+    This lives here, named and importable, for one reason: it is the
+    arithmetic the scenario harness must run to have honest multi-charger
+    coverage. Before #665 it was inline in ``_async_update_data``, so the
+    harness could only re-implement it test-side — and a re-implementation
+    that drifts asserts nothing. One function, one caller in production,
+    one caller in the harness: the two cannot disagree.
+
+    Only the two CHARGE intents commit. IDLE and DISABLE claim nothing —
+    an off-mode or idling charger must not shrink the surplus its
+    lower-priority siblings can see (the invariant
+    ``test_351_umbrella_regression.py::TestM5`` pins from the other side).
+
+    Args:
+        decision: This charger's ``decide()`` output.
+        phases: The charger's phase count.
+        voltage: The charger's per-phase voltage.
+        max_current_a: The charger's ceiling, used for ``CHARGE_MAX``
+            where ``commanded_amps`` is not meaningful (the adapter
+            resolves the actual current).
+
+    Returns:
+        Watts of solar this charger claims — 0.0 for non-charging intents.
+    """
+    if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+        # Never credit more than the budget the decision was granted:
+        # commanded_amps can be raised by a floor (deadline / Min) that
+        # grid or battery funds, and grid-funded watts are not solar.
+        return max(0.0, min(
+            float(decision.budget_w),
+            float(decision.commanded_amps) * float(phases) * float(voltage),
+        ))
+    if decision.intent is ChargerIntent.CHARGE_MAX:
+        return max(0.0, float(max_current_a) * float(phases) * float(voltage))
+    return 0.0
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -635,6 +696,19 @@ class FleetContext:
     ``solar_plus_cheap`` mode falls back to pure self-consumption
     during ``expensive`` / ``very_expensive`` windows."""
 
+    # ─── #576 priority list ────────────────────────────────────
+    battery_priority: "Optional[int]" = None
+    """The home battery's slot in the ONE device-priority list
+    (``registry.battery_surplus_priority()``). ``None`` when the install
+    has no battery. An EV reclaims battery-charge power (charges before the
+    battery) only when it sits ABOVE this slot — see
+    ``energy_reclaim.ev_reclaims_battery_charge``."""
+
+    battery_commanded: bool = False
+    """The battery is under an explicit charge/discharge command this cycle
+    (force_charge / scheduled / arbitrage). While commanded the EV never
+    reclaims — the battery command is honored (#576 U6)."""
+
 
 @dataclass(frozen=True)
 class FleetCycleState:
@@ -678,6 +752,10 @@ class FleetCycleState:
     is_night: bool = False
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
+    # #576 — fleet-level priority-list inputs (one home battery). Threaded
+    # here so every charger's view sees the same slot + command state.
+    battery_priority: "Optional[int]" = None
+    battery_commanded: bool = False
 
 
 @dataclass(frozen=True)
@@ -710,6 +788,7 @@ class ChargerView:
     """Per-charger SOC target (#245). ``None`` when kWh-bound."""
 
     deadline_amps: int = 0
+    top_up_amps: int = 0  # (#630) peak-managed plain night top-up rate
     """The peak-aware required current to reach Min by the per-
     charger ``ev_target_time`` (#246). ``0`` when no deadline."""
 
@@ -722,6 +801,14 @@ class ChargerView:
     Default ``inf`` (floor never engages) so call sites that don't
     compute it get the self-consumption-maximizing behaviour rather
     than silent grid pull."""
+
+    ev_priority: int = 999
+    """This charger's slot in the ONE device-priority list
+    (``registry.priority_for(cid)`` == the drag position). Compared against
+    ``fleet.battery_priority``: this charger reclaims battery-charge power
+    (charges before the battery) only when ``ev_priority <
+    fleet.battery_priority`` AND SOC ≥ reserve floor (#576 P2.2). Defaults to
+    999 (bottom) so a view built without it never spuriously reclaims."""
 
     soc_ceiling_reached: bool = False
     """The car has reached its configured MAX target (SOC % ceiling, or

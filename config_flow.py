@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     DEFAULT_OBSERVER_MODE,
 )
+from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
 from .hardware_detection import (
     HardwareDetector,
@@ -68,11 +69,16 @@ def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
             if fnmatch.fnmatch(state.entity_id, pattern):
                 try:
                     val = float(state.state)
-                    unit = state.attributes.get("unit_of_measurement", "")
                     if val > 0:
-                        # Convert Wh to kWh if needed
-                        if unit.lower() == "wh" or val > 500:
-                            val = val / 1000
+                        # #641 — the unit half goes through units.py (so MWh
+                        # converts too). The ``> 500`` magnitude heuristic
+                        # applies ONLY to an UNLABELLED counter, which is the
+                        # case it was written for: applying it after a unit
+                        # conversion would divide a labelled 600 kWh bank twice.
+                        labelled = bool(normalize_unit(state))
+                        val = energy_state_to_kwh(state, default=val)
+                        if not labelled and val > 500:
+                            val = val / 1000  # unlabelled Wh → kWh
                         detected["battery_capacity_kwh"] = round(val, 1)
                         break
                 except (ValueError, TypeError):
@@ -146,7 +152,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     ``initial_current`` (decouples from the misleading "night"
     #     prefix — the value is the session-start ramp current, applied
     #     whenever a session begins). Display: "Vehicle Start Amps".
-    VERSION = 14
+    VERSION = 16
 
     @staticmethod
     @callback
@@ -553,7 +559,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ev_start_service", "ev_start_service_data",
                         "ev_stop_service", "ev_stop_service_data",
                         "ev_charger_needs_cycle", "ev_surplus_priority",
-                        "ev_shed_priority",
                         # Wallbox-style control path (#384 Part 2 kept). The
                         # other 8 per-charger fields from #390 reverted to
                         # OptionsFlow-only in #397 — they were tunables with
@@ -747,6 +752,135 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
+# #690 — every config key the options dialog itself OWNS (a form field on
+# one of its pages, or a key its steps write into ``self._data`` directly).
+# The final save replaces ``entry.options`` wholesale, so any option that is
+# NOT in this set — values written by services (``grid_sign_user_flip``),
+# dashboard entities (``battery_mode``, ``battery_reserve_soc``,
+# ``vacation_mode``, price thresholds, …) or setup helpers — must be carried
+# forward, or a config-dialog save silently erases it ("Grid Sign Always
+# Changes Back"). Owned keys keep today's semantics: present in the submitted
+# form = new value, omitted = cleared. tests/test_690_options_carry_forward.py
+# recomputes this set from the flow source, so a new form field that isn't
+# added here fails CI.
+OPTIONS_FLOW_OWNED_KEYS = frozenset({
+    "action",
+    "battery_assist_max_power",
+    "battery_assist_min_surplus",
+    "battery_auto_start_soc",
+    "battery_buffer_soc",
+    "battery_capacity_kwh",
+    "battery_charge_platform",
+    "battery_charge_scheduler_enabled",
+    "battery_cycle_cost",
+    "battery_discharge_control_entity",
+    "battery_discharge_protection_enabled",
+    "battery_force_charge_negative_price",
+    "battery_max_charge_power_w",
+    "battery_max_discharge_power",
+    "battery_max_target_soc",
+    "battery_min_deficit_kwh",
+    "battery_pessimism_weight",
+    "battery_precharge_trigger_hour",
+    "battery_prefer_consecutive_window",
+    "battery_priority_soc",
+    "battery_replan_interval_min",
+    "battery_roundtrip_efficiency",
+    "charger_name",
+    "charger_to_remove",
+    "daily_ev_target",
+    "daily_ev_target_max",
+    "demand_charge_rate",
+    "deye_actuation_enabled",
+    "deye_battery_voltage_entity",
+    "deye_battery_voltage_max_age_s",
+    "deye_bms_max_charge_current_a",
+    "deye_charge_current_entity",
+    "deye_force_charge_work_mode",
+    "deye_grid_charge_switch",
+    "deye_max_charge_current_a",
+    "deye_max_discharge_power",
+    "deye_observer_mode",
+    "deye_program_control",
+    "deye_program_groups",
+    "deye_work_mode_battery_first_option",
+    "deye_work_mode_control",
+    "deye_work_mode_entity",
+    "deye_work_mode_load_first_option",
+    "diagram_style",
+    "dynamic_feedin_entity",
+    "dynamic_forecast_entity",
+    "dynamic_tariff_entity",
+    "electricity_export_rate",
+    "electricity_import_rate",
+    "electricity_off_peak_rate",
+    "emergency_peak_level",
+    "enable_charger_notifications",
+    "enable_mobile_notifications",
+    "ev_battery_capacity_kwh",
+    "ev_charge_mode_entity",
+    "ev_charge_mode_start",
+    "ev_charge_mode_stop",
+    "ev_charger_service",
+    "ev_charger_service_entity_id",
+    "ev_chargers",
+    "ev_charging_power_sensor",
+    "ev_charging_sensor",
+    "ev_connected_sensor",
+    "ev_current_control_entity",
+    "ev_current_sensor",
+    "ev_kwh_per_100km",
+    "ev_min_current",
+    "ev_start_stop_entity",
+    "ev_surplus_priority",
+    "ev_target_soc",
+    "ev_target_soc_max",
+    "ev_total_energy_sensor",
+    "grid_export_power_entity",
+    "grid_import_power_entity",
+    "grid_sign_invert",
+    "heat_pump_boost_offset",
+    "heat_pump_climate_entity",
+    "heat_pump_invert_sg_ready",
+    "heat_pump_max_setpoint",
+    "heat_pump_power_sensor",
+    "heat_pump_priority",
+    "heat_pump_relay1_entity",
+    "heat_pump_relay2_entity",
+    "initial_current",
+    "load_management_enabled",
+    "minimum_solar_power",
+    "mobile_notification_service",
+    "observer_mode",
+    "phase_guard_enabled",
+    "phase_guard_topology",
+    "phase_guard_grid_limit_a",
+    "phase_guard_inverter_limit_a",
+    "phase_guard_max_age_s",
+    "phase_guard_grid_l1_current_entity",
+    "phase_guard_grid_l2_current_entity",
+    "phase_guard_grid_l3_current_entity",
+    "phase_guard_grid_l1_power_entity",
+    "phase_guard_grid_l2_power_entity",
+    "phase_guard_grid_l3_power_entity",
+    "phase_guard_grid_l1_voltage_entity",
+    "phase_guard_grid_l2_voltage_entity",
+    "phase_guard_grid_l3_voltage_entity",
+    "phase_guard_inverter_l1_current_entity",
+    "phase_guard_inverter_l2_current_entity",
+    "phase_guard_inverter_l3_current_entity",
+    "pv_string_names",
+    "target_peak_limit",
+    "tariff_classification_mode",
+    "tariff_mode",
+    "update_interval",
+    "vehicle_min_current",
+    "vehicle_range_entity",
+    "vehicle_soc_entity",
+    "warning_peak_level",
+})
+
+
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Solar Energy Management."""
 
@@ -896,7 +1030,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("ev_target_soc", 80),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
+                        min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
                 # Optional solar ceiling (Max): surplus charges up to this, then
@@ -914,7 +1048,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("ev_target_soc_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
+                        min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
             }),
@@ -1046,16 +1180,45 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
+                # #627 (bug class 30): ``__init__.py`` reads all four keys
+                # below off the per-charger dict and ``hardware_detection``
+                # auto-fills them for several brands — but none had an
+                # editable surface, so a wrong or missing auto-detect could
+                # not be corrected, and a charger ADDED after install never
+                # got them at all. The reported symptom: a box that keeps
+                # its contactor closed at 0 A had no way to be told to open.
+                vol.Optional(
+                    "ev_start_stop_entity",
+                    description={"suggested_value": suggestions.get("ev_start_stop_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "button"])
+                ),
+                vol.Optional(
+                    "ev_current_sensor",
+                    description={"suggested_value": suggestions.get("ev_current_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="current")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_entity",
+                    description={"suggested_value": suggestions.get("ev_charge_mode_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="select")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_start",
+                    description={"suggested_value": suggestions.get("ev_charge_mode_start")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_charge_mode_stop",
+                    description={"suggested_value": suggestions.get("ev_charge_mode_stop")},
+                ): selector.TextSelector(),
+                # #604: ONE priority axis — the unified device-priority list
+                # (#576). Shed order under peak is the reverse list walk
+                # (#470: higher list number sheds first), so there is no
+                # separate shed slider.
                 vol.Optional(
                     "ev_surplus_priority",
-                    default=5,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
-                ),
-                # #470: independent shed order under peak; defaults to the
-                # surplus priority above.
-                vol.Optional(
-                    "ev_shed_priority",
                     default=5,
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
@@ -1129,7 +1292,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("ev_target_soc", 80),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),
@@ -1138,7 +1301,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("ev_target_soc_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),
@@ -1217,21 +1380,41 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
+                # #627 — see async_step_ev_charger_add for the why.
+                vol.Optional(
+                    "ev_start_stop_entity",
+                    description={"suggested_value": charger.get("ev_start_stop_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "button"])
+                ),
+                vol.Optional(
+                    "ev_current_sensor",
+                    description={"suggested_value": charger.get("ev_current_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="current")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_entity",
+                    description={"suggested_value": charger.get("ev_charge_mode_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="select")
+                ),
+                vol.Optional(
+                    "ev_charge_mode_start",
+                    description={"suggested_value": charger.get("ev_charge_mode_start")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_charge_mode_stop",
+                    description={"suggested_value": charger.get("ev_charge_mode_stop")},
+                ): selector.TextSelector(),
+                # #604: ONE priority axis — the unified device-priority list
+                # (#576). Lower number = charges first on surplus; shed
+                # order under peak is the reverse list walk (#470: higher
+                # list number sheds first). The legacy per-charger
+                # ``ev_shed_priority`` slider is retired.
                 vol.Optional(
                     "ev_surplus_priority",
                     default=charger.get("ev_surplus_priority", 5),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
-                ),
-                # #470: shed order under peak — independent of the surplus
-                # order above. Lower number = charges first on surplus;
-                # higher number = shed first under peak. Defaults to the
-                # surplus priority so they coincide until deliberately split.
-                vol.Optional(
-                    "ev_shed_priority",
-                    default=charger.get(
-                        "ev_shed_priority", charger.get("ev_surplus_priority", 5),
-                    ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),
@@ -1320,7 +1503,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("ev_target_soc", self._data.get("ev_target_soc", 80)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),
@@ -1329,7 +1512,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("ev_target_soc_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
+                        min=0, max=100, step=5,
                         unit_of_measurement="%", mode="slider",
                     )
                 ),
@@ -1421,7 +1604,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_assist_max_power",
                     default=_c("battery_assist_max_power", _c("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1000, max=10000, step=500, unit_of_measurement="W", mode="slider")
+                    # #689: 25 kW ceiling (was 10 kW) — matches the charge-power
+                    # slider; a Flexboss 21 discharges 12 kW, parallel stacks more.
+                    selector.NumberSelectorConfig(min=1000, max=25000, step=500, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "battery_assist_min_surplus",
@@ -1437,7 +1622,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_max_discharge_power",
                     default=_c("battery_max_discharge_power", DEFAULT_BATTERY_MAX_DISCHARGE_POWER),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=500, max=10000, step=250, unit_of_measurement="W", mode="slider")
+                    # #689: 25 kW ceiling (was 10 kW) — see battery_assist_max_power.
+                    selector.NumberSelectorConfig(min=500, max=25000, step=250, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "battery_discharge_control_entity",
@@ -1473,10 +1659,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_settings_ev(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """EV Charging & Solar settings."""
+        """EV charging, solar and observer-mode settings."""
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_settings_tariff()
+            return await self.async_step_settings_phase_guard_topology()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -1500,14 +1686,210 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "observer_mode",
                     default=_c("observer_mode", DEFAULT_OBSERVER_MODE),
                 ): selector.BooleanSelector(),
-                # ``smart_night_charging`` removed in #277 Phase C — the
-                # named ``charge_mode`` carries that intent (implicit ON
-                # for ``min_plus_solar`` / ``solar_plus_cheap``). Phase B
-                # already routed ``_smart_night_charging_enabled()``
-                # through the mode resolver, so this options-flow field
-                # has been inert for a release; Phase C removes it from
-                # the UI to match.
             }),
+        )
+
+    async def async_step_settings_phase_guard_topology(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Choose which electrical lanes need independent phase protection."""
+        if user_input is not None:
+            topology = user_input["phase_guard_topology"]
+            self._data.update(user_input)
+            self._data["phase_guard_enabled"] = topology != "disabled"
+            if topology == "disabled":
+                return await self.async_step_settings_tariff()
+            return await self.async_step_settings_phase_guard()
+
+        current_config = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+            **self._data,
+        }
+        topology = current_config.get("phase_guard_topology")
+        if topology not in {"disabled", "grid_only", "hybrid_load_port"}:
+            topology = "disabled"
+
+        return self.async_show_form(
+            step_id="settings_phase_guard_topology",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "phase_guard_topology",
+                    default=topology,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            "disabled",
+                            "grid_only",
+                            "hybrid_load_port",
+                        ],
+                        translation_key="phase_guard_topology",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }),
+        )
+
+    async def async_step_settings_phase_guard(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Map per-phase sensors for the selected electrical topology."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_settings_tariff()
+
+        current_config = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+            **self._data,
+        }
+        topology = current_config.get("phase_guard_topology", "grid_only")
+        from .coordinator.phase_current_discovery import (
+            discover_grid_phase_current_entities,
+        )
+
+        discovered_currents = {}
+        if not any(
+            current_config.get(f"phase_guard_grid_l{phase}_current_entity")
+            for phase in range(1, 4)
+        ):
+            discovered_currents = discover_grid_phase_current_entities(
+                self.hass.states.async_all("sensor")
+            )
+
+        fields: dict[Any, Any] = {
+            vol.Optional(
+                "phase_guard_grid_limit_a",
+                default=self._cfg(current_config, "phase_guard_grid_limit_a", 16.0),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1.0,
+                    max=63.0,
+                    step=0.5,
+                    unit_of_measurement="A",
+                    mode="box",
+                )
+            ),
+            vol.Optional(
+                "phase_guard_max_age_s",
+                default=self._cfg(current_config, "phase_guard_max_age_s", 30.0),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5.0,
+                    max=300.0,
+                    step=5.0,
+                    unit_of_measurement="s",
+                    mode="box",
+                )
+            ),
+        }
+        sensor_selector = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor")
+        )
+        fields.update({
+            vol.Optional(
+                "phase_guard_grid_l1_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l1_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l1_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l2_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l2_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l2_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l3_current_entity",
+                description={
+                    "suggested_value": current_config.get(
+                        "phase_guard_grid_l3_current_entity"
+                    )
+                    or discovered_currents.get(
+                        "phase_guard_grid_l3_current_entity"
+                    )
+                    or None
+                },
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l1_power_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l1_power_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l2_power_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l2_power_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l3_power_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l3_power_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l1_voltage_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l1_voltage_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l2_voltage_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l2_voltage_entity") or None},
+            ): sensor_selector,
+            vol.Optional(
+                "phase_guard_grid_l3_voltage_entity",
+                description={"suggested_value": current_config.get("phase_guard_grid_l3_voltage_entity") or None},
+            ): sensor_selector,
+        })
+
+        if topology == "hybrid_load_port":
+            fields[
+                vol.Optional(
+                    "phase_guard_inverter_limit_a",
+                    default=self._cfg(
+                        current_config, "phase_guard_inverter_limit_a", 16.0
+                    ),
+                )
+            ] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1.0,
+                    max=63.0,
+                    step=0.5,
+                    unit_of_measurement="A",
+                    mode="box",
+                )
+            )
+            fields.update({
+                vol.Optional(
+                    "phase_guard_inverter_l1_current_entity",
+                    description={"suggested_value": current_config.get("phase_guard_inverter_l1_current_entity") or None},
+                ): sensor_selector,
+                vol.Optional(
+                    "phase_guard_inverter_l2_current_entity",
+                    description={"suggested_value": current_config.get("phase_guard_inverter_l2_current_entity") or None},
+                ): sensor_selector,
+                vol.Optional(
+                    "phase_guard_inverter_l3_current_entity",
+                    description={"suggested_value": current_config.get("phase_guard_inverter_l3_current_entity") or None},
+                ): sensor_selector,
+            })
+
+        topology_summary = (
+            "grid and inverter Load/EPS output"
+            if topology == "hybrid_load_port"
+            else "grid supply"
+        )
+        return self.async_show_form(
+            step_id="settings_phase_guard",
+            data_schema=vol.Schema(fields),
+            description_placeholders={"topology": topology_summary},
         )
 
     async def async_step_settings_tariff(
@@ -1545,7 +1927,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[
                             {"value": "static", "label": "Static (fixed HT/NT rates)"},
-                            {"value": "dynamic", "label": "Dynamic (Tibber / Nordpool / aWATTar / Amber / Octopus)"},
+                            {"value": "dynamic", "label": "Dynamic / price sensor (Tibber / Nordpool / aWATTar / Amber / Octopus — or any entity with the current price as state, e.g. a template sensor)"},
                             {"value": "calendar", "label": "Calendar (time-based HT/NT schedule)"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
@@ -1700,8 +2082,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         Two control paths are supported (#437):
 
         - **SG-Ready** — configure both relay entities. Drives the heat
-          pump via the standard SG-Ready 4-state protocol (BLOCKED /
-          NORMAL / BOOST / FORCE_ON). For Viessmann / Stiebel Eltron /
+          pump via the standard SG-Ready relay table: NORMAL / BOOST /
+          FORCE_ON. State 1 (BLOCKED) is the grid operator's own
+          ripple-control lock — SEM does not drive it and has no
+          Sperrzeiten surface (#664). For Viessmann / Stiebel Eltron /
           Vaillant and similar hardware-relay setups.
         - **Climate-only** — configure only ``heat_pump_climate_entity``.
           Drives ``climate.set_temperature`` with ``boost_offset``
@@ -1809,6 +2193,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             self._data.update(user_input)
+            if self._data.get("battery_charge_platform") == "deye":
+                return await self.async_step_deye()
             return await self.async_step_pv_naming()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
@@ -1817,6 +2203,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="battery_scheduler",
             data_schema=vol.Schema({
+                vol.Optional(
+                    "battery_charge_platform",
+                    default=_c("battery_charge_platform", "generic"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "generic", "label": "Generic / other"},
+                            {"value": "deye", "label": "Deye hybrid inverter"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional(
                     "battery_charge_scheduler_enabled",
                     default=_c("battery_charge_scheduler_enabled", False),
@@ -1918,6 +2316,249 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.BooleanSelector(),
             }),
             errors=errors,
+        )
+
+    async def async_step_deye(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """(#709) Deye forced-grid-charge configuration section.
+
+        Lets an operator wire a Deye hybrid inverter without editing YAML:
+        the grid-charge switch, the charge-current number (unit A), the
+        battery-voltage sensor, exactly six program groups (time/soc/charge
+        entities), a safe max current, an optional BMS max current, an
+        optional Work Mode select with two distinct mapping values, and the
+        two safety gates (observer mode default **on**, actuation default
+        **off** — so a bare config never writes until explicitly enabled).
+
+        The submitted form is normalised into the documented Deye contract
+        keys read by ``DeyeBatteryAdapter`` (``deye_program_groups`` as a
+        list of six {time, soc, charge} dicts). Booleans stay real bools.
+        The runtime snapshot store is never part of entry options — it is
+        attached to the adapter at runtime, not serialised here.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # Keep only the Deye-owned keys so a generic/other platform
+            # doesn't accumulate stale deye_* keys.
+            clean = {k: v for k, v in user_input.items() if k.startswith("deye_")}
+            self._data["battery_charge_platform"] = user_input.get(
+                "battery_charge_platform",
+                self._data.get("battery_charge_platform", "generic"),
+            )
+            if self._data["battery_charge_platform"] == "deye":
+                # Normalise the six numbered program groups into the list shape.
+                groups = []
+                for n in range(1, 7):
+                    group = {
+                        "time": clean.get(f"deye_program_{n}_time", "").strip(),
+                        "soc": clean.get(f"deye_program_{n}_soc", "").strip(),
+                        "charge": clean.get(f"deye_program_{n}_charge", "").strip(),
+                    }
+                    groups.append(group)
+                self._data["deye_program_groups"] = groups
+
+                # Validation: exactly six complete groups.
+                if len(groups) != 6 or not all(
+                    g["time"] and g["soc"] and g["charge"] for g in groups
+                ):
+                    errors["base"] = "deye_program_groups_incomplete"
+
+                # Work Mode mappings must be explicit and distinct when enabled.
+                load_first = clean.get("deye_work_mode_load_first_option", "").strip()
+                battery_first = clean.get(
+                    "deye_work_mode_battery_first_option", ""
+                ).strip()
+                if clean.get("deye_work_mode_control") is True:
+                    if not load_first or not battery_first or load_first == battery_first:
+                        errors["deye_work_mode_battery_first_option"] = (
+                            "deye_work_mode_mapping_not_distinct"
+                        )
+                    force_mode = clean.get("deye_force_charge_work_mode", "")
+                    if force_mode not in ("load_first", "battery_first"):
+                        errors["deye_force_charge_work_mode"] = (
+                            "deye_force_charge_work_mode_invalid"
+                        )
+
+                # Safety booleans must stay real bools (never strings).
+                self._data["deye_observer_mode"] = clean.get(
+                    "deye_observer_mode", True,
+                ) is True
+                self._data["deye_actuation_enabled"] = clean.get(
+                    "deye_actuation_enabled", False,
+                ) is True
+                self._data["deye_program_control"] = clean.get(
+                    "deye_program_control", True,
+                ) is True
+                self._data["deye_work_mode_control"] = clean.get(
+                    "deye_work_mode_control", False,
+                ) is True
+                # Copy the scalar Deye config terms through.
+                for key in (
+                    "deye_grid_charge_switch",
+                    "deye_charge_current_entity",
+                    "deye_battery_voltage_entity",
+                    "deye_battery_voltage_max_age_s",
+                    "deye_max_charge_current_a",
+                    "deye_bms_max_charge_current_a",
+                    "deye_max_discharge_power",
+                    "deye_work_mode_entity",
+                    "deye_work_mode_load_first_option",
+                    "deye_work_mode_battery_first_option",
+                    "deye_force_charge_work_mode",
+                ):
+                    if clean.get(key) is not None:
+                        self._data[key] = clean[key]
+            else:
+                # Non-Deye platform: drop stale Deye keys from the payload.
+                for key in list(self._data.keys()):
+                    if key.startswith("deye_") or key == "deye_program_groups":
+                        self._data.pop(key, None)
+
+            if not errors:
+                return await self.async_step_pv_naming()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
+        _platform = _c("battery_charge_platform", "generic")
+
+        return self.async_show_form(
+            step_id="deye",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        "deye_grid_charge_switch",
+                        description={"suggested_value": _c("deye_grid_charge_switch", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="switch")
+                    ),
+                    vol.Optional(
+                        "deye_charge_current_entity",
+                        description={"suggested_value": _c("deye_charge_current_entity", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain=["number", "input_number"])
+                    ),
+                    vol.Optional(
+                        "deye_battery_voltage_entity",
+                        description={"suggested_value": _c("deye_battery_voltage_entity", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Optional(
+                        "deye_battery_voltage_max_age_s",
+                        default=_c("deye_battery_voltage_max_age_s", 30),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1, max=600, step=1,
+                            unit_of_measurement="s",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_max_charge_current_a",
+                        default=_c("deye_max_charge_current_a", 25),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1, max=100, step=1,
+                            unit_of_measurement="A",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_bms_max_charge_current_a",
+                        default=_c("deye_bms_max_charge_current_a", 0),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0, max=200, step=1,
+                            unit_of_measurement="A",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_max_discharge_power",
+                        default=_c("deye_max_discharge_power", 0),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0, max=50000, step=100,
+                            unit_of_measurement="W",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        "deye_program_control",
+                        default=_c("deye_program_control", True),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_observer_mode",
+                        default=_c("deye_observer_mode", True),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_actuation_enabled",
+                        default=_c("deye_actuation_enabled", False),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_work_mode_control",
+                        default=_c("deye_work_mode_control", False),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_work_mode_entity",
+                        description={"suggested_value": _c("deye_work_mode_entity", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="select")
+                    ),
+                    vol.Optional(
+                        "deye_work_mode_load_first_option",
+                        description={"suggested_value": _c("deye_work_mode_load_first_option", "Load First")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_work_mode_battery_first_option",
+                        description={"suggested_value": _c("deye_work_mode_battery_first_option", "Battery First")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_force_charge_work_mode",
+                        default=_c("deye_force_charge_work_mode", "battery_first"),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": "load_first", "label": "Load First"},
+                                {"value": "battery_first", "label": "Battery First"},
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+                | {
+                    vol.Optional(
+                        f"deye_program_{n}_{kind}",
+                        description={"suggested_value": _c(
+                            f"deye_program_{n}_{kind}", None,
+                        )},
+                    ): (
+                        selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="select")
+                        )
+                        if kind == "time"
+                        else selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain=["number", "input_number"])
+                        )
+                        if kind == "soc"
+                        else selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="select")
+                        )
+                    )
+                    for n in range(1, 7)
+                    for kind in ("time", "soc", "charge")
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "platform": _platform,
+            },
         )
 
     async def async_step_pv_naming(
@@ -2022,7 +2663,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if not errors:
                 self._data.update(user_input)
-                return self.async_create_entry(data=self._data)
+                # #690 — async_create_entry REPLACES entry.options wholesale.
+                # Carry forward every stored option this dialog does not own,
+                # so a config-dialog save can't erase values written by
+                # services / dashboard entities (grid_sign_user_flip,
+                # battery_mode, vacation_mode, …). Flow-owned keys keep the
+                # replace semantics (omitted from the form = cleared).
+                carried = {
+                    k: v
+                    for k, v in (self.config_entry.options or {}).items()
+                    if k not in OPTIONS_FLOW_OWNED_KEYS
+                }
+                return self.async_create_entry(data={**carried, **self._data})
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)

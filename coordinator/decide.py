@@ -42,8 +42,22 @@ from .charger_types import (
     ChargerIntent,
     ChargerView,
 )
+from .energy_reclaim import ev_reclaims_battery_charge
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _ev_reclaims(view: ChargerView) -> bool:
+    """#576 P2.2 — does this charger reclaim battery-charge power? (Above the
+    battery in the one list, SOC ≥ reserve floor, battery not commanded.)"""
+    f = view.fleet
+    return ev_reclaims_battery_charge(
+        soc=f.battery_soc,
+        priority_soc=f.priority_soc,
+        ev_priority=view.ev_priority,
+        battery_priority=f.battery_priority,
+        battery_commanded=f.battery_commanded,
+    )
 
 
 def solar_charge_display_override(intent, drawing: bool,
@@ -115,7 +129,12 @@ def self_consumption_surplus_w(view: ChargerView) -> float:
     """
     f = view.fleet
     available = f.solar_w - f.home_w - f.solar_committed_w
-    if f.battery_soc < f.auto_start_soc:
+    # #576 P2.2 — the EV reclaims battery-charge power (charges BEFORE the
+    # battery) iff it sits above the battery in the one priority list AND SOC
+    # ≥ the reserve floor AND the battery isn't under a command. Otherwise the
+    # battery keeps its charge (subtract it). Replaces the old fixed
+    # ``auto_start_soc`` (90 %) gate with the position rule the loads use.
+    if not _ev_reclaims(view):
         available -= f.battery_charge_w
     return max(0.0, available)
 
@@ -404,6 +423,14 @@ class SolarOnlyMode(ModeStrategy):
                 reason="solar_only mode but EV disconnected",
             )
 
+        # (#634) The "At least" floor is a mode-independent GUARANTEE: at
+        # night, when the day's solar under-delivered the floor, top up the
+        # DIFFERENCE from grid (the shared night decision — deadline-sized,
+        # peak-managed #630). Floor 0 keeps the classic behaviour below:
+        # solar_only never grids at night (#346).
+        if f.is_night and view.target_kwh is not None and view.target_kwh > 0.1:
+            return night_top_up_decision(view, "solar_only")
+
         # No meaningful solar → idle. At night this fires immediately
         # (solar=0) producing the #346-correct behaviour: solar_only
         # at night never imports grid.
@@ -432,8 +459,13 @@ class SolarOnlyMode(ModeStrategy):
         # to run — the regression
         # ``tests/scenarios/2026-05-29_budget_unify_redirect.yaml``
         # pins.
+        # #576 P2.2 — avoid the double-count: when the position rule already
+        # reclaims the battery charge (bare_surplus stops subtracting it), the
+        # forecast redirect must NOT add it a second time. The redirect stays
+        # only as the fallback for when the EV does NOT reclaim by position
+        # (below the battery, or below the reserve floor) — its original role.
         from .flow_calculator import battery_redirect_w as _redirect
-        redirect_w = _redirect(
+        redirect_w = 0.0 if _ev_reclaims(view) else _redirect(
             f.battery_charge_w, f.battery_soc,
             f.battery_capacity_kwh, f.forecast_remaining_kwh,
         )
@@ -483,6 +515,76 @@ class SolarOnlyMode(ModeStrategy):
 # min_plus_solar — solar surplus + Min floor at night
 # ─────────────────────────────────────────────────────────────────
 
+def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecision":
+    """(#634) The shared overnight floor top-up decision — the "At least"
+    guarantee. The MODE is the daytime axis; ANY night-capable mode delegates
+    here (min_plus_solar always; solar_only when its floor > 0). Overnight
+    source is GRID by design — never the home battery (#634 standing rule);
+    internally this is the #620 three-source axis with the source
+    auto-derived (floor>0 ⇒ grid, floor=0 ⇒ off), no GUI surface.
+    Inherits the #630 peak-managed top-up rate and the deadline sizing."""
+    cid = view.power.charger_id
+
+    # Already at Min — idle.
+    if view.target_kwh is not None and view.target_kwh <= 0.1:
+        return ChargerDecision(
+            charger_id=cid, mode=mode_name,
+            intent=ChargerIntent.IDLE,
+            reason=(
+                f"{mode_name} night: target reached "
+                f"(remaining={view.target_kwh:.2f} kWh)"
+            ),
+        )
+
+    cfg = view.config if isinstance(view.config, dict) else {}
+    min_amps = effective_min_amps(cfg, 6)
+    max_amps = int(cfg.get("ev_max_current", 32))
+
+    # Deadline override (#246) — the planner pre-computed the
+    # required current and put it on the view. If the deadline
+    # is active, use it as the floor.
+    if view.deadline_amps > 0:
+        # (#630 precedence fix) The deadline gives the REQUIRED floor; the
+        # peak-managed top-up rate (#630) may charge FASTER than required —
+        # finish early, free the window. Take whichever is higher, clamped.
+        # Pre-fix the deadline branch shadowed top_up_amps entirely, so the
+        # peak-managed rate never engaged at night (deadline_amps is always
+        # >0 once a night window resolves).
+        governed = max(view.deadline_amps, view.top_up_amps)
+        amps = min(max_amps, max(min_amps, governed))
+        tag = " (peak-managed)" if view.top_up_amps > view.deadline_amps else ""
+        return ChargerDecision(
+            charger_id=cid, mode=mode_name,
+            intent=ChargerIntent.CHARGE_AT_AMPS,
+            commanded_amps=amps,
+            reason=(
+                f"{mode_name} night: deadline floor {amps}A{tag}, "
+                f"remaining {view.target_kwh:.1f} kWh"
+            ),
+        )
+
+    # Plain night top-up. (#630) Run at the peak-managed headroom rate
+    # when the planner computed one — finish early and free the window
+    # for lower-priority cheap-hours loads — else the legacy Min floor.
+    amps = max(min_amps, min(max_amps, view.top_up_amps)) \
+        if view.top_up_amps > 0 else min_amps
+    remaining_str = (
+        f"{view.target_kwh:.1f}" if view.target_kwh is not None else "?"
+    )
+    return ChargerDecision(
+        charger_id=cid, mode=mode_name,
+        intent=ChargerIntent.CHARGE_AT_AMPS,
+        commanded_amps=amps,
+        reason=(
+            f"{mode_name} night: top-up at {amps}A"
+            + (" (peak-managed)" if amps != min_amps else "")
+            + f", remaining {remaining_str} kWh"
+        ),
+    )
+
+
+
+
 class MinPlusSolarMode(ModeStrategy):
     """Daytime: zone-aware surplus (same as solar_only when SOC
     high enough). Night: top up to ``target_kwh`` Min floor using
@@ -505,51 +607,7 @@ class MinPlusSolarMode(ModeStrategy):
         return self._decide_day(view)
 
     def _decide_night(self, view: ChargerView) -> ChargerDecision:
-        cid = view.power.charger_id
-
-        # Already at Min — idle.
-        if view.target_kwh is not None and view.target_kwh <= 0.1:
-            return ChargerDecision(
-                charger_id=cid, mode="min_plus_solar",
-                intent=ChargerIntent.IDLE,
-                reason=(
-                    f"min_plus_solar night: target reached "
-                    f"(remaining={view.target_kwh:.2f} kWh)"
-                ),
-            )
-
-        cfg = view.config if isinstance(view.config, dict) else {}
-        min_amps = effective_min_amps(cfg, 6)
-        max_amps = int(cfg.get("ev_max_current", 32))
-
-        # Deadline override (#246) — the planner pre-computed the
-        # required current and put it on the view. If the deadline
-        # is active, use it as the floor.
-        if view.deadline_amps > 0:
-            amps = min(max_amps, max(min_amps, view.deadline_amps))
-            return ChargerDecision(
-                charger_id=cid, mode="min_plus_solar",
-                intent=ChargerIntent.CHARGE_AT_AMPS,
-                commanded_amps=amps,
-                reason=(
-                    f"min_plus_solar night: deadline floor {amps}A, "
-                    f"remaining {view.target_kwh:.1f} kWh"
-                ),
-            )
-
-        # Plain night top-up at Min current (the floor).
-        remaining_str = (
-            f"{view.target_kwh:.1f}" if view.target_kwh is not None else "?"
-        )
-        return ChargerDecision(
-            charger_id=cid, mode="min_plus_solar",
-            intent=ChargerIntent.CHARGE_AT_AMPS,
-            commanded_amps=min_amps,
-            reason=(
-                f"min_plus_solar night: top-up at {min_amps}A, "
-                f"remaining {remaining_str} kWh"
-            ),
-        )
+        return night_top_up_decision(view, "min_plus_solar")
 
     def _decide_day(self, view: ChargerView) -> ChargerDecision:
         """Daytime min_plus_solar: Zone-aware battery assist on top

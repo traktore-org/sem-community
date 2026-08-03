@@ -7,9 +7,9 @@ the adapter dispatches to the brand-specific HA service.
 
 Pre-v1.7.0 the battery command surface was split across:
 
-- ``coordinator/battery_protection.py`` (BatteryProtectionMixin) —
+- the deleted ``battery_protection.py`` (#624) —
   discharge limiting via ``number.set_value``
-- ``coordinator/battery_charge_adapter.py`` (BatteryChargeAdapter
+- ``battery_adapters/force_charge.py`` (brand force-charge impls
   + brand subclasses) — forced charge via brand services
 
 This protocol unifies both axes. New brand support: subclass
@@ -45,10 +45,11 @@ class BatteryControlAdapter(ABC):
         self._hass = hass
         self._config = config
         self._last_intent: "Optional[BatteryIntent]" = None
+        self._last_error: "Optional[str]" = None
         self._last_discharge_limit_w: float = -1.0
         """Last applied discharge limit — used by command_limit_discharge
         to de-dup consecutive same-value writes. Mirrors today's
-        100 W hysteresis in BatteryProtectionMixin
+        100 W hysteresis (formerly BatteryProtectionMixin)
         (battery_protection.py:106-109)."""
         # #523 export arbitrage — the number entity that sets the battery's
         # forcible discharge-to-grid power. Brand-agnostic: any battery whose
@@ -63,6 +64,11 @@ class BatteryControlAdapter(ABC):
         # always goes through; a plain -1.0 sentinel would alias a real
         # negative charge setpoint on a bidirectional entity, #523).
         self._last_force_discharge_w: Optional[float] = None
+        # #709: runtime scope — config entry + battery identity. Injected by the
+        # coordinator's ``_battery_adapter_context``; pure metadata, never part
+        # of entry data/options and never serialised into the adapter.
+        self._config_entry_id: str = config.get("config_entry_id", "")
+        self._battery_id: str = config.get("battery_id", "")
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -93,7 +99,20 @@ class BatteryControlAdapter(ABC):
     def last_intent(self) -> "Optional[BatteryIntent]":
         return self._last_intent
 
+    @property
+    def last_error(self) -> "Optional[str]":
+        return self._last_error
+
     # ─── Commands ──────────────────────────────────────────────
+
+    async def async_recover_pending(self) -> bool:
+        """Recover persistent brand state before first actuation.
+
+        Most adapters have no transactional state and therefore need no work.
+        Stateful adapters override this method and fail closed on recovery
+        errors.
+        """
+        return True
 
     @abstractmethod
     async def command_normal(self) -> None:
@@ -123,16 +142,33 @@ class BatteryControlAdapter(ABC):
     ) -> None:
         """Sell to grid: set the configured forcible-discharge power
         (#523), clamped to the brand's max discharge. Brand-agnostic —
-        any battery with a discharge-power number entity can use it."""
+        any battery with a discharge-power number entity can use it.
+
+        Sets ``_last_intent`` ONLY when the write succeeds — a failed
+        write leaves ``_last_intent`` unchanged so the next cycle
+        re-issues the command rather than masquerading as successful."""
         watts = max(0.0, min(float(power_w), self.max_discharge_power_w))
-        await self._write_force_discharge(watts)
-        self._last_intent = BatteryIntent.FORCE_DISCHARGE
+        ok = await self._write_force_discharge(watts)
+        if ok:
+            self._last_error = None
+            self._last_intent = BatteryIntent.FORCE_DISCHARGE
+        else:
+            self._last_error = "write_force_discharge failed"
 
     async def command_stop_force_discharge(self) -> None:
         """Stop selling — zero the forcible-discharge power and restore
-        the brand default discharge limit."""
-        await self._write_force_discharge(0.0)
+        the brand default discharge limit.
+
+        Both writes must succeed to record STOP_FORCE_DISCHARGE — a
+        partial failure leaves ``_last_intent`` unchanged so the next
+        cycle retries."""
+        ok = await self._write_force_discharge(0.0)
+        if not ok:
+            self._last_error = "write_force_discharge(0) failed on stop"
+            return
         await self.command_normal()
+        # command_normal sets _last_intent = NORMAL; override to STOP.
+        self._last_error = None
         self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
 
     async def command_off(self) -> None:
@@ -144,13 +180,20 @@ class BatteryControlAdapter(ABC):
         discharge) so the battery isn't stranded in a SEM-imposed mode.
         After that, every subsequent off cycle is a true no-op: SEM issues
         nothing and the inverter manages the battery on its own. Brand-
-        agnostic — relies only on each adapter's ``command_normal``."""
+        agnostic — relies only on each adapter's ``command_normal``.
+
+        If the internal ``command_normal`` fails, OFF is NOT recorded so
+        the next cycle retries the clean handoff."""
         if self._last_intent is BatteryIntent.OFF:
             return  # already handed off — stay completely silent
         await self.command_normal()
-        self._last_intent = BatteryIntent.OFF
+        # Only record OFF if command_normal succeeded (it sets NORMAL on
+        # success; if it failed _last_intent stays at the prior value).
+        if self._last_intent is BatteryIntent.NORMAL:
+            self._last_error = None
+            self._last_intent = BatteryIntent.OFF
 
-    async def _write_force_discharge(self, watts: float) -> None:
+    async def _write_force_discharge(self, watts: float) -> bool:
         """De-dup'd write of the battery power setpoint. ``watts`` is a
         SIGNED setpoint on a bidirectional control entity: ``> 0`` =
         discharge to grid (the #523 arbitrage path), ``< 0`` = charge from
@@ -158,9 +201,13 @@ class BatteryControlAdapter(ABC):
         Mutual exclusion is the callers' job: ``command_normal`` /
         ``command_limit_discharge`` / ``command_force_charge`` /
         ``command_stop_force_charge`` zero this so the battery can't keep
-        selling once SEM moves to any other mode."""
+        selling once SEM moves to any other mode.
+
+        Returns True on success (including benign no-ops), False only on
+        an exception from the HA service call. Callers must check the
+        return value and NOT record intent when False (#589)."""
         if not self._force_discharge_entity:
-            return
+            return True  # no-op needed — benign success
         # Clamp to the control entity's actual min/max (#523, mirrors the EV
         # #487 fix). A Sessy setpoint maxes at roughly ±2200 W, but the
         # computed charge/discharge power can exceed that (e.g. a fleet
@@ -193,7 +240,7 @@ class BatteryControlAdapter(ABC):
         # (the common NORMAL cycle) must not spam the bus.
         if (self._last_force_discharge_w is not None
                 and abs(watts - self._last_force_discharge_w) < 100.0):
-            return
+            return True  # de-dup skip — no write needed, treat as success
         try:
             # Domain-aware: real-hardware setpoints are ``number.*`` (Huawei
             # forcible-discharge, Growatt/Sessy power numbers), but a user may
@@ -219,7 +266,9 @@ class BatteryControlAdapter(ABC):
                     "(bidirectional setpoint)",
                     -watts, self._force_discharge_entity,
                 )
+            return True
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning(
                 "Battery: failed to set forcible discharge: %s", e,
             )
+            return False

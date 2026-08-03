@@ -1036,6 +1036,76 @@ class TestBatteryPowerConfigPipeline:
 
         assert power.battery_power == -1200  # flipped → discharge
 
+    def test_battery_power_sensor_override_on_ed_path(self):
+        """#597 — the SEM ``battery_power_sensor`` override must be honoured on
+        the Energy-Dashboard path (it was only wired on the legacy path, while
+        ``battery_soc_sensor`` was wired on both). Repro: a Huawei install whose
+        Energy Dashboard exposes battery charge/discharge ENERGY only
+        (``batt:pwr=none``); the user set ``battery_power_sensor`` to a real
+        combined power sensor → SEM read null. Now it reads the override."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power=None,          # batt:pwr=none — ED exposes energy only
+        )
+        states = {
+            "sensor.pv": _state(4000),
+            "sensor.grid": _state(0),
+            "sensor.batt_override": _state(-1800),  # −1800 W = discharging (SEM)
+        }
+        reader = _make_reader_with_states(
+            hass, states, ed,
+            extra_config={"battery_power_sensor": "sensor.batt_override"},
+        )
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.battery_power == -1800  # override honoured, not null/0
+
+    def test_solar_power_sensor_override_on_ed_path(self):
+        """#592 — the SEM solar power override (config key
+        ``solar_production_sensor`` → ``solar_power_sensor``) must be honoured on
+        the Energy-Dashboard path (sibling of the #597 battery override). Repro:
+        a SolarEdge+Sonnen install exposes solar ENERGY only, so ``ed.solar_power``
+        is None → the Home balance read solar=0 → Home clamped to 0. The override
+        supplies a real solar power sensor."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power=None,               # ED exposes solar energy only
+            grid_import_power="sensor.grid",
+            battery_power=None,
+        )
+        states = {
+            "sensor.grid": _state(0),
+            "sensor.solar_override": _state(4200),
+        }
+        reader = _make_reader_with_states(
+            hass, states, ed,
+            extra_config={"solar_production_sensor": "sensor.solar_override"},
+        )
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.solar_power == 4200  # override honoured, not 0
+
+    def test_no_battery_power_override_still_null_when_ed_has_none(self):
+        """Guard the other side: with NO override and ``batt:pwr=none`` the
+        reader still reports 0 (unchanged behaviour — the fix only adds the
+        override branch, it doesn't fabricate a value)."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.pv",
+            grid_import_power="sensor.grid",
+            battery_power=None,
+        )
+        states = {"sensor.pv": _state(4000), "sensor.grid": _state(0)}
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.battery_power == 0
+
     def test_two_sensor_grid_power_config_pipeline(self):
         """#553 review B1 — declared two-sensor GRID pair must be consumed
         as export − import (manual-override semantics), not read as a
@@ -1422,6 +1492,39 @@ class TestChargerControlPipeline:
 
         val = reader._read_sensor("sensor.wallbox_power", "ev")
         assert val == 4500  # Already in W
+
+    def test_single_charger_in_list_ev_power_aggregates(self):
+        """A SINGLE charger defined through the config-flow ``ev_chargers``
+        list (power sensor nested inside the entry, no top-level sensor) must
+        still populate fleet ``ev_power``.
+
+        Regression: the fleet-sum used ``len(ev_chargers) > 1``, so a single
+        charger-in-list fell through to the empty legacy top-level sensor and
+        read ev_power=0. The EV's real draw then masqueraded as a home
+        consumption spike and the surplus budget oscillated (charger flap).
+        """
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar",
+            grid_import_power="sensor.grid",
+        )
+        states = {
+            "sensor.solar": _state(9000),
+            "sensor.grid": _state(7000),
+            "sensor.keba_p30_charging_power": _state(5.28, unit="kW",
+                                                     device_class="power"),
+        }
+        reader = _make_reader_with_states(hass, states, ed, extra_config={
+            "ev_chargers": [{
+                "id": "ev_charger",
+                "name": "EV Charger",
+                "ev_charging_power_sensor": "sensor.keba_p30_charging_power",
+            }],
+        })
+        power = reader.read_power()
+        # 5.28 kW → 5280 W, summed for the single charger (not 0).
+        assert power.ev_power == pytest.approx(5280, abs=1)
+        assert power.ev_power_per_charger.get("ev_charger") == pytest.approx(5280, abs=1)
 
     @pytest.mark.asyncio
     async def test_number_entity_with_all_charger_brands(self):
@@ -1834,6 +1937,10 @@ class TestSplitGridStartupRace:
         }
         coord._sensor_reader._grid_sign_inverted = False
         coord._sensor_reader._grid_sign_detected = False
+        # (#690) MUST be an explicit False: on a bare MagicMock this attribute
+        # auto-vivifies to a truthy child mock, which would stand the self-heal
+        # down and make every sign-flip test below pass vacuously.
+        coord._sensor_reader.grid_sign_user_override = False
         coord._negative_balance_count = 0
         coord._sign_flip_suppression_count = 0
         return coord

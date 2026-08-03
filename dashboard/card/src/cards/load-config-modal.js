@@ -19,6 +19,22 @@ export const ENTITY_DOMAINS = {
     input_boolean: ['input_boolean'],
 };
 
+/**
+ * Resolve the load-device row a "Configure" action targets. Rows MUST be
+ * matched by their UNIQUE `id`, never by `energySensor`: the latter is
+ * null/'' for every device without an Energy-Dashboard energy counter
+ * (service-registered loads, direct heat-pump/hot-water, the battery row), so
+ * an energySensor lookup collides all such rows onto the first empty-key
+ * device and opens a sibling's control in the config card (#621). Pure.
+ *
+ * @param {Array<{id:string}>} devices
+ * @param {string} deviceId
+ * @returns {object|null} the matching device row, or null
+ */
+export function findDeviceForConfig(devices, deviceId) {
+    return (devices || []).find((d) => d.id === deviceId) || null;
+}
+
 export function escapeHtml(s) {
     return String(s ?? '')
         .replace(/&/g, '&amp;')

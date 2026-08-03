@@ -8,30 +8,30 @@
           "observer_mode": "Teszt mód (csak olvasás — nem vezérli a hardvert)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Normál telepítésnél hagyja KIKAPCSOLVA. Csak olyan teszt/staging Home Assistanton kapcsolja BE, amely egy éles példányt tükröz, így a SEM soha nem küld parancsot a KEBA-nak, az inverternek vagy bármely kapcsolónak."
         }
       },
       "ev_charger": {
         "title": "EV Töltő",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
+        "description": "A SEM automatikusan felismerte az EV-töltőjét a Home Assistant entitásnyilvántartásából. Tekintse át az alábbi bejegyzéseket, majd kattintson a **Küldés** gombra — általában nincs mit módosítani. Az opcionális mezők üresen hagyhatók.\n\nVálasszon EGY vezérlési utat: vagy Number entitást (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …), VAGY szolgáltatáshívást (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
-          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
+          "ev_connected_sensor": "🔌 EV csatlakoztatási állapot — a jármű dugaszának csatlakozása",
+          "ev_charging_sensor": "⚡ EV töltés aktív — aktuális töltési állapot",
+          "ev_charging_power_sensor": "🚗 EV töltési teljesítmény — a járműnek átadott teljesítmény (W)",
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_charger_service_entity_id": "EV-töltő szolgáltatás célentitása (opcionális)",
+          "ev_current_sensor": "⚡ EV töltőáram — töltési áramerősség (A)",
+          "ev_total_energy_sensor": "🔋 EV összes energia — halmozott leadott energia (kWh)",
           "ev_current_control_entity": "Number entitás az áramerősség szabályozásához (Wallbox típusú töltők)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
-          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_connected_sensor": "Bináris érzékelő, amely jelzi, hogy a jármű dugasza csatlakoztatva van-e. Automatikusan felismerve a következőkből: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
+          "ev_charging_sensor": "Bináris érzékelő, amely jelzi, hogy a SEM aktívnak tekintse-e a töltést. Automatikusan felismerve a töltő integrációjából.",
+          "ev_charging_power_sensor": "Numerikus érzékelő (W), amely megmutatja, mekkora teljesítmény áramlik éppen a járműbe. Automatikusan felismerve a töltő integrációjából.",
+          "ev_charger_service": "A töltőáram beállításához meghívott Home Assistant szolgáltatás (pl. keba.set_current, easee.set_charger_max_limit). KEBA esetén automatikusan kitöltve. Hagyja üresen, ha fent a Number entitás útvonalat tölti ki.",
+          "ev_charger_service_entity_id": "A szolgáltatáshívás céljaként átadott entitásazonosító. Szükség esetén automatikusan kitöltve; hagyja üresen, ha a szolgáltatás globális.",
+          "ev_current_sensor": "Opcionális. Numerikus érzékelő (A), amely a tényleges töltőáramot jelenti. Diagnosztikára használatos.",
+          "ev_total_energy_sensor": "Opcionális. Halmozott kWh-számláló a járműnek átadott energiáról. A pontos munkamenet-követéshez használatos.",
           "ev_current_control_entity": "Number entitás, amelybe a SEM ír, hogy módosítsa a töltőáramot (pl. number.wallbox_charging_current). Olyan töltőkhöz használja, amelyek Number entitást tesznek elérhetővé szolgáltatáshívás helyett. Hagyja üresen, ha alább a Szolgáltatás útvonalat tölti ki."
         }
       },
@@ -39,70 +39,62 @@
         "title": "Hardver",
         "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
-          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-          "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
+          "battery_capacity_kwh": "Házi akkumulátor kapacitása (kWh)",
+          "target_peak_limit": "Csúcsteljesítmény-korlát (kW)",
+          "generate_dashboard_on_install": "SEM irányítópult létrehozása most (újraindítja a HA-t)",
           "diagram_style": "Rendszerdiagram stílusa"
         },
         "data_description": {
-          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
+          "battery_capacity_kwh": "A házi akkumulátor (NEM az EV) teljes hasznos kapacitása kWh-ban. Az előrejelzés-vezérelt töltési stratégia ez alapján becsli meg, mekkora napenergia-hiányt tud az akkumulátor áthidalni. Nézze meg az inverter műszaki adatait.",
+          "target_peak_limit": "A maximális kW, amelyet a hálózati szerződése megenged, mielőtt a SEM megkezdi a terheléslekapcsolást. Teljesítménydíjas tarifáknál jellemzően 3–5 kW; egyébként állítsa a biztosíték névleges értékének negyedére, hogy maradjon tartalék.",
+          "generate_dashboard_on_install": "Bekapcsolva a SEM közvetlenül e lépés befejezése után létrehozza a Lovelace irányítópultot, majd kb. 5 másodperccel később újraindítja a Home Assistantot, hogy az új irányítópult láthatóvá váljon. Ezt később bármikor újrafuttathatja kézzel a solar_energy_management.generate_dashboard szolgáltatással.",
           "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő)."
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "A Solar Energy Management újrakonfigurálása",
+        "description": "Frissítse az EV-töltő és az értesítési beállításokat",
         "data": {
           "ev_connected_sensor": "EV Csatlakoztatva",
           "ev_charging_sensor": "EV Töltési állapot",
           "ev_charging_power_sensor": "EV Töltési teljesítmény",
-          "ev_charger_service": "EV Charger Service",
-          "ev_charger_service_entity_id": "EV Charger Service Entity",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "ev_charger_service": "EV-töltő szolgáltatás",
+          "ev_charger_service_entity_id": "EV-töltő szolgáltatás entitása",
+          "ev_total_energy_sensor": "EV összesenergia-számláló",
+          "enable_charger_notifications": "Töltőkijelző értesítések engedélyezése",
           "enable_mobile_notifications": "Mobil értesítések engedélyezése",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Mobil értesítési szolgáltatás",
+          "vehicle_soc_entity": "Jármű akkumulátor SOC",
+          "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
+          "ev_target_soc": "EV cél-SOC (%)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current (e.g. keba.set_current). Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "enable_charger_notifications": "Enable/disable persistent notification banners shown on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor that reports the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_connected_sensor": "Bináris érzékelő, amely jelzi, hogy a jármű dugasza csatlakoztatva van-e.",
+          "ev_charging_sensor": "Bináris érzékelő, amely jelzi, hogy az EV aktívan tölt-e.",
+          "ev_charging_power_sensor": "Numerikus érzékelő (W), amely a járműbe éppen áramló teljesítményt jelenti.",
+          "ev_charger_service": "A töltőáram beállításához meghívott HA-szolgáltatás (pl. keba.set_current). Number entitást használó töltőknél hagyja üresen.",
+          "ev_charger_service_entity_id": "A szolgáltatáshívás céljaként átadott entitásazonosító. Hagyja üresen, ha nincs rá szükség.",
+          "ev_total_energy_sensor": "Opcionális halmozott kWh-számláló a járműnek átadott energiáról.",
+          "enable_charger_notifications": "A töltő állapotkártyáján megjelenő állandó értesítési sávok be- és kikapcsolása.",
+          "enable_mobile_notifications": "A mobileszközre küldött push értesítések be- és kikapcsolása.",
+          "mobile_notification_service": "HA notify szolgáltatás mobil push értesítéshez (pl. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
+          "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
+          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
         }
       }
     },
     "error": {
       "unknown": "Váratlan hiba történt. Kérjük, próbálja újra.",
-      "entity_not_found": "Entity not found. Please verify the entity ID exists.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "entity_not_found": "Az entitás nem található. Ellenőrizze, hogy az entitásazonosító létezik-e.",
+      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone).",
+      "heat_pump_partial_relays": "Az SG-Ready MINDKÉT relé entitást igényli. Állítsa be mindkét relét — vagy hagyja mindkettőt üresen, és csak a climate entitást konfigurálja a kizárólag climate alapú célhőmérséklet-emeléshez.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
     },
     "abort": {
-      "already_configured": "A Solar Energy Management már konfigurálva van. Csak egy példány engedélyezett."
+      "already_configured": "A Solar Energy Management már konfigurálva van. Csak egy példány engedélyezett.",
+      "energy_dashboard_not_configured": "A SEM a napelemes, hálózati és akkumulátoros érzékelőket a Home Assistant Energia irányítópultjáról olvassa be, ez azonban még nincs beállítva.\n\nElőször állítsa be a Beállítások → Irányítópultok → Energia ({url}) menüpontban — adja hozzá legalább a napelemes termelést és a hálózati fogyasztást —, majd indítsa el újra ezt a telepítést.",
+      "energy_dashboard_incomplete": "Az Energia irányítópult be van állítva, de a következő hiányzik: {missing}.\n\nA SEM-nek szüksége van ezekre a forrásokra a rendszer beolvasásához. Adja hozzá őket a Beállítások → Irányítópultok → Energia ({url}) menüpontban, majd indítsa el újra ezt a telepítést."
     }
   },
   "options": {
@@ -114,27 +106,27 @@
           "ev_connected_sensor": "EV Csatlakoztatva",
           "ev_charging_sensor": "EV Töltési állapot",
           "ev_charging_power_sensor": "EV Töltési teljesítmény",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
-          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
-          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)",
+          "ev_charger_service": "EV-töltő áramerősség-beállító szolgáltatása (opcionális)",
+          "ev_charger_service_entity_id": "EV-töltő szolgáltatás célentitása (opcionális)",
+          "ev_total_energy_sensor": "EV összesenergia-számláló (opcionális)",
+          "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
+          "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
+          "ev_target_soc": "EV cél-SOC (%)",
           "daily_ev_target_max": "Napelemes töltési limit (kWh)",
           "ev_target_soc_max": "Napelemes töltési limit (SOC %)",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
           "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current. Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the service call target. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_connected_sensor": "Bináris érzékelő, amely jelzi, hogy a jármű dugasza csatlakoztatva van-e.",
+          "ev_charging_sensor": "Bináris érzékelő, amely jelzi, hogy az EV aktívan tölt-e.",
+          "ev_charging_power_sensor": "Numerikus érzékelő (W), amely a járműbe éppen áramló teljesítményt jelenti.",
+          "ev_charger_service": "A töltőáram beállításához meghívott HA-szolgáltatás. Number entitást használó töltőknél hagyja üresen.",
+          "ev_charger_service_entity_id": "A szolgáltatáshívás céljaként átadott entitásazonosító. Hagyja üresen, ha nincs rá szükség.",
+          "ev_total_energy_sensor": "Opcionális halmozott kWh-számláló a járműnek átadott energiáról.",
+          "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
+          "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
+          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t.",
           "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
           "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból.",
           "ev_kwh_per_100km": "A hatótáv becsléséhez használatos, ha nincs hatótáv-érzékelő konfigurálva.",
@@ -142,209 +134,197 @@
         }
       },
       "settings": {
-        "title": "SEM Optimization Settings",
-        "description": "Update your SEM optimization parameters",
+        "title": "SEM optimalizálási beállítások",
+        "description": "Frissítse a SEM optimalizálási paramétereit",
         "data": {
-          "update_interval": "Update Interval (seconds)",
-          "battery_priority_soc": "Battery Priority SOC (%)",
+          "update_interval": "Frissítési időköz (másodperc)",
+          "battery_priority_soc": "Akkumulátor prioritási SOC (%)",
           "min_solar_power": "Minimális napenergia-teljesítmény — nyers PV-termelés (W)",
-          "daily_ev_target": "Daily EV Target (kWh)",
-          "battery_assist_max_power": "Battery Assist Max Power (W)",
-          "battery_capacity_kwh": "Battery Capacity (kWh)",
-          "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
-          "battery_max_discharge_power": "Maximum Discharge Power (W)",
-          "electricity_import_rate": "Electricity Import Rate (per kWh)",
+          "daily_ev_target": "Napi EV-cél (kWh)",
+          "battery_assist_max_power": "Akkumulátor-támogatás max. teljesítménye (W)",
+          "battery_capacity_kwh": "Akkumulátor kapacitása (kWh)",
+          "battery_discharge_protection_enabled": "Akkumulátor kisütésvédelem engedélyezése",
+          "battery_max_discharge_power": "Maximális kisütési teljesítmény (W)",
+          "electricity_import_rate": "Villamos energia vételezési ára (kWh-ként)",
           "electricity_off_peak_rate": "Electricity NT Rate (per kWh)",
-          "electricity_export_rate": "Electricity Export Rate (per kWh)",
-          "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
-          "observer_mode": "Observer Mode (Read-Only)",
-          "smart_night_charging": "Smart Night Charging",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
-          "hot_water_solar_target": "Hot water solar heating target (°C)",
-          "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles",
-          "diagram_style": "Rendszerdiagram stílusa"
+          "electricity_export_rate": "Villamos energia betáplálási ára (kWh-ként)",
+          "demand_charge_rate": "Teljesítménydíj (CHF/kW/hó)",
+          "observer_mode": "Megfigyelő mód (csak olvasás)",
+          "smart_night_charging": "Intelligens éjszakai töltés",
+          "vehicle_soc_entity": "Jármű akkumulátor SOC",
+          "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
+          "ev_target_soc": "EV cél-SOC (%)",
+          "battery_buffer_soc": "2/3 zóna határa — akkumulátor puffer SOC (%)",
+          "battery_auto_start_soc": "3/4 zóna határa — akkumulátor automatikus indítási SOC (%)",
+          "battery_discharge_control_entity": "Akkumulátor kisütésvezérlő entitás (opcionális)",
+          "hot_water_solar_target": "Melegvíz napenergiás fűtési célhőmérséklete (°C)",
+          "legionella_target_temp": "Legionella-fertőtlenítés célhőmérséklete (°C)",
+          "legionella_interval_hours": "Max. óraszám a fertőtlenítési ciklusok között",
+          "diagram_style": "Rendszerdiagram stílusa",
+          "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)"
         },
         "data_description": {
-          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
-          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
-          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "update_interval": "Milyen gyakran olvassa a koordinátor az érzékelőket és szabályozza a hardvert. A 10 s adja a legpontosabb energiaintegrálást; a 30 s feletti értékek alulmérik az energiát. Tartomány: 10–60 s.",
+          "battery_priority_soc": "Az 1. → 2. zóna határa. E töltöttségi szint alatt minden napenergia az akkumulátorba megy, az EV pedig blokkolva van. Alapértelmezés 30 %. A négyzónás stratégiához (Architektúra dokumentáció) ezt ALACSONYAN kell tartani (5–60 %) — ne keverje össze a régi 3 zónás jelentéssel, ahol ez magas célérték volt.",
+          "battery_buffer_soc": "A 2. → 3. zóna határa. E töltöttségi szint felett az akkumulátor kisülhet, hogy az EV töltése közben áthidalja a napenergia-hiányt. Alapértelmezés 70 %.",
+          "battery_auto_start_soc": "A 3. → 4. zóna határa. E töltöttségi szint felett az EV napenergia-többlet nélkül is megkezdheti a töltést, az akkumulátorból merítve. Alapértelmezés 90 %.",
           "min_solar_power": "A nyers PV-termelés alsó határa — az a panelteljesítmény, amely alatt a „napenergia aktív” hamis: a solar_only nem indul el, és a mély hiány elleni védelem sötétségként kezeli (a töltés tehát gyorsan leáll, ahelyett hogy hálózatról hidalná át). Ez NYERS termelés, NEM többlet — szemben az „Akkumulátor-támogatás – min. napenergia-többlet” beállítással (nap − ház), amely eldönti, mikor segíthet a házi akkumulátor. Alapértelmezett 1000 W; tartsa az EV-töltő hardveres minimuma alatt (~4140 W 3 fázison, ~1380 W 1 fázison).",
-          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
-          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
-          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
-          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
-          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
-          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
+          "daily_ev_target": "A napi cél kWh az éjszakai, hálózatról történő töltéshez. Állítsa 0-ra az éjszakai töltés teljes kikapcsolásához.",
+          "battery_assist_max_power": "A maximális teljesítmény, amellyel a házi akkumulátor kisülhet az EV támogatására a 3./4. zónában. Alapértelmezés 4500 W.",
+          "battery_capacity_kwh": "A házi akkumulátor teljes hasznos kapacitása (NEM az EV akkumulátoráé — az külön mező az EV lépésben). Az előrejelzés-vezérelt töltési stratégia használja.",
+          "battery_discharge_protection_enabled": "Bekapcsolva a SEM korlátozza az inverter kisütési határát az éjszakai EV-töltés alatt, így a házi akkumulátor csak a házat látja el (az EV-t nem).",
+          "battery_max_discharge_power": "Az akkumulátor kisütésének kemény felső korlátja, amelyet a védelmi funkció érvényesít.",
+          "electricity_import_rate": "Nappali / egységes tarifa (CHF/kWh, áfával). Költségkövetésre használatos.",
           "electricity_off_peak_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
-          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
-          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
-          "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
-          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed.",
+          "electricity_export_rate": "A szolgáltató által fizetett betáplálási ár (CHF/kWh).",
+          "demand_charge_rate": "Havi teljesítménydíj a csúcs kW-jára vetítve (CHF/kW/hó). Állítsa 0-ra, ha a szerződése nem tartalmaz teljesítménydíjat.",
+          "observer_mode": "Bekapcsolva a SEM mindent figyel és számol, de soha nem küld szolgáltatáshívást a hardvernek. Éles telepítést tükröző teszt/staging HA-n használja.",
+          "smart_night_charging": "Bekapcsolva a SEM intelligensen kihagyja vagy csökkenti az éjszakai töltést a becsült EV-SOC, a napelemes előrejelzés, a hőmérséklettel korrigált fogyasztásbecslés és a megtanult vezetési szokások alapján.",
+          "battery_discharge_control_entity": "Number entitás, amely az inverter kisütési teljesítménykorlátját vezérli (pl. number.batteries_maximale_entladeleistung Huawei esetén). Telepítéskor automatikusan felismerve; szükség esetén itt írható felül.",
           "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő).",
-          "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
-          "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "hot_water_solar_target": "Célhőmérséklet (°C) a napenergiával támogatott melegvíz-fűtéshez. A SEM megemeli a bojlert, amikor többlet áll rendelkezésre.",
+          "legionella_target_temp": "Az a hőmérséklet (°C), amelyet a melegvízrendszernek el kell érnie a legionella-fertőtlenítési ciklus során.",
+          "legionella_interval_hours": "A legionella-fertőtlenítési ciklusok közötti maximális óraszám, mielőtt a SEM kényszerfelfűtést indít.",
+          "battery_assist_min_surplus": "A legkisebb tényleges napenergia-többlet, amely felett a házi akkumulátor segíthet az EV töltésében — bármely töltési módban. Ez alatt az akkumulátor a ház számára van fenntartva (az autó a hálózatból + napenergiából tölt). Alapértelmezés 1200 W. Állítsa 0-ra, hogy az akkumulátor mindenhol támogassa az EV-t, éjszaka is."
         }
       },
       "settings_ev": {
         "title": "EV Töltés és napelem",
-        "description": "Configure EV charging targets and solar thresholds.",
+        "description": "Az EV-töltési célok és napenergia-küszöbök beállítása.",
         "data": {
-          "daily_ev_target": "Night charge target (kWh)",
-          "min_solar_power": "Minimum solar power to start EV charging (W)",
-          "observer_mode": "Observer mode (read-only, no hardware control)",
-          "smart_night_charging": "Reduce night target based on tomorrow's forecast"
+          "daily_ev_target": "Éjszakai töltési cél (kWh)",
+          "observer_mode": "Megfigyelő mód (csak olvasás, nincs hardvervezérlés)",
+          "smart_night_charging": "Éjszakai cél csökkentése a holnapi előrejelzés alapján",
+          "minimum_solar_power": "Minimális napenergia-teljesítmény az EV-töltés indításához (W)"
         },
         "data_description": {
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
-          "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
-          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
+          "daily_ev_target": "A hálózatról minden éjjel megtöltendő cél kWh. Állítsa 0-ra az éjszakai hálózati töltés kikapcsolásához.",
+          "observer_mode": "Bekapcsolva a SEM mindent figyel, de soha nem küld parancsot a hardvernek.",
+          "smart_night_charging": "Bekapcsolva a SEM csökkenti az éjszakai töltési célt, ha a holnapi napelemes előrejelzés elegendő.",
+          "minimum_solar_power": "A minimális napenergia-többlet (W), amely szükséges ahhoz, hogy a SEM elindítsa a napelemes EV-töltést."
         }
       },
       "settings_tariff": {
         "title": "Tarifa és haladó",
-        "description": "Electricity rates and advanced tuning parameters.",
+        "description": "Villamosenergia-árak és haladó hangolási paraméterek.",
         "data": {
-          "electricity_import_rate": "Import rate",
+          "electricity_import_rate": "Vételezési ár",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Export ár",
-          "demand_charge_rate": "Demand charge rate",
-          "update_interval": "Update interval (s)",
-          "tariff_mode": "Tariff mode",
-          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
-          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
+          "demand_charge_rate": "Teljesítménydíj",
+          "update_interval": "Frissítési időköz (s)",
+          "tariff_mode": "Tarifa mód",
+          "dynamic_tariff_entity": "Dinamikus ár entitás (üresen automatikusan felismerve)",
+          "dynamic_forecast_entity": "Előrejelzés entitás (opcionális, üresen automatikusan felismerve)",
+          "dynamic_feedin_entity": "Betáplálási ár entitás (opcionális, dinamikus betáplálási árhoz)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
         },
         "data_description": {
-          "electricity_import_rate": "Day/flat import rate (currency/kWh incl. VAT). Used as fallback when dynamic pricing is unavailable.",
-          "electricity_off_peak_rate": "Night/off-peak import rate (currency/kWh). Set equal to import rate if you have a flat tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
-          "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
-          "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
-          "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
-          "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
-          "dynamic_feedin_entity": "Optional sensor providing the current feed-in / export price for dynamic export rate.",
-          "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed."
+          "electricity_import_rate": "Nappali/egységes vételezési ár (pénznem/kWh, áfával). Tartalékként használatos, ha a dinamikus árazás nem érhető el.",
+          "electricity_off_peak_rate": "Éjszakai/völgyidőszaki vételezési ár (pénznem/kWh). Egységes tarifa esetén állítsa a vételezési árral azonosra.",
+          "electricity_export_rate": "A szolgáltató által fizetett betáplálási ár (pénznem/kWh).",
+          "demand_charge_rate": "Havi csúcsteljesítmény-díj (pénznem/kW/hó). Állítsa 0-ra, ha a szerződése nem tartalmaz ilyet.",
+          "update_interval": "Milyen gyakran olvassa a SEM az érzékelőket és szabályozza a hardvert (másodperc). Tartomány: 10–60 s.",
+          "tariff_mode": "Válassza a „Statikus” lehetőséget fix árakhoz, a „Dinamikus” lehetőséget valós idejű árazáshoz, vagy a „Naptár” lehetőséget időszakfüggő menetrendekhez.",
+          "dynamic_tariff_entity": "Érzékelő, amely az aktuális villamosenergia-vételezési árat adja. Automatikusan felismerve a Tibber, Nordpool stb. forrásokból.",
+          "dynamic_forecast_entity": "Opcionális érzékelő órás árelőrejelzésekkel, az intelligens ütemezéshez.",
+          "dynamic_feedin_entity": "Opcionális érzékelő, amely az aktuális betáplálási / export árat adja a dinamikus betáplálási árhoz.",
+          "grid_import_power_entity": "Opcionális érzékelő (W) a hálózati vételezési teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül.",
+          "grid_export_power_entity": "Opcionális érzékelő (W) a hálózati betáplálási teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül."
         }
       },
       "load_management": {
         "title": "Terheléskezelés",
-        "description": "Update load management configuration",
+        "description": "A terheléskezelés konfigurációjának frissítése",
         "data": {
-          "load_management_enabled": "Enable Load Management",
-          "target_peak_limit": "Target Peak Limit (kW)",
-          "warning_peak_level": "Warning Peak Level (kW)",
-          "emergency_peak_level": "Emergency Peak Level (kW)",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "load_management_enabled": "Terheléskezelés engedélyezése",
+          "target_peak_limit": "Cél csúcskorlát (kW)",
+          "warning_peak_level": "Figyelmeztetési csúcsszint (kW)",
+          "emergency_peak_level": "Vészhelyzeti csúcsszint (kW)",
+          "vehicle_soc_entity": "Jármű akkumulátor SOC",
+          "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
+          "ev_target_soc": "EV cél-SOC (%)"
         },
         "data_description": {
-          "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
-          "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
-          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
-          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "load_management_enabled": "A SEM automatikus terheléslekapcsolásának be- és kikapcsolása, hogy a hálózati csúcskorlát alatt maradjon.",
+          "target_peak_limit": "Az a maximális hálózati teljesítmény (kW), amely felett a SEM megkezdi a vezérelhető terhelések lekapcsolását.",
+          "warning_peak_level": "Az a teljesítményszint (kW), amelynél a SEM figyelmeztetést ad ki, mielőtt beavatkozna.",
+          "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében.",
+          "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
+          "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban.",
+          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
         }
       },
       "notifications": {
         "title": "Értesítési beállítások",
-        "description": "Update notification configuration",
+        "description": "Az értesítési konfiguráció frissítése",
         "data": {
-          "enable_charger_notifications": "Enable Charger Display Notifications",
+          "enable_charger_notifications": "Töltőkijelző értesítések engedélyezése",
           "enable_mobile_notifications": "Mobil értesítések engedélyezése",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "mobile_notification_service": "Mobil értesítési szolgáltatás",
+          "vehicle_soc_entity": "Jármű akkumulátor SOC",
+          "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
+          "ev_target_soc": "EV cél-SOC (%)"
         },
         "data_description": {
-          "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
-        }
-      },
-      "dashboard_options": {
-        "title": "Dashboard Installation",
-        "description": "Install or reinstall the SEM dashboard",
-        "data": {
-          "generate_dashboard": "Dashboard létrehozása",
-          "dashboard_title": "Dashboard Title",
-          "dashboard_path": "Dashboard Path (URL)",
-          "include_financial": "Include Financial Tracking",
-          "include_flows": "Include Power Flow Visualization",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
-        },
-        "data_description": {
-          "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
-          "dashboard_title": "Display name for the dashboard in the sidebar. Example: 'Solar Energy Management'",
-          "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
-          "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
-          "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "enable_charger_notifications": "A töltő állapotkártyáján megjelenő állandó értesítési sávok be- és kikapcsolása.",
+          "enable_mobile_notifications": "A mobileszközre küldött push értesítések be- és kikapcsolása.",
+          "mobile_notification_service": "HA notify szolgáltatás mobil push értesítéshez (pl. notify.mobile_app_your_phone).",
+          "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
+          "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban.",
+          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
         }
       },
       "battery_scheduler": {
         "title": "Akkumulátor töltésütemező",
-        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "description": "Az előrejelzés-tudatos, hálózatról történő akkumulátortöltés beállítása az olcsó órákban",
         "data": {
-          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
-          "battery_capacity_kwh": "Battery Capacity",
-          "battery_max_charge_power_w": "Max Charge Power",
-          "battery_roundtrip_efficiency": "Round-trip Efficiency",
-          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
-          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
-          "battery_max_target_soc": "Maximum Target SOC",
-          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
-          "battery_pessimism_weight": "Forecast Pessimism",
-          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+          "battery_charge_scheduler_enabled": "Akkumulátor töltésütemező engedélyezése",
+          "battery_capacity_kwh": "Akkumulátor kapacitása",
+          "battery_max_charge_power_w": "Max. töltési teljesítmény",
+          "battery_roundtrip_efficiency": "Körfolyamat-hatásfok",
+          "battery_cycle_cost": "Akkumulátor-ciklus költsége (elhasználódás)",
+          "battery_precharge_trigger_hour": "Napi kiértékelés órája",
+          "battery_max_target_soc": "Maximális cél-SOC",
+          "battery_min_deficit_kwh": "Minimális hiányküszöb",
+          "battery_pessimism_weight": "Előrejelzési pesszimizmus",
+          "battery_force_charge_negative_price": "Kényszertöltés negatív ár esetén"
         }
       },
       "ev_charger_edit": {
         "title": "EV Töltő szerkesztése",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "description": "Frissítse az érzékelő-hozzárendeléseket és a prioritást ehhez a töltőhöz.",
         "data": {
           "charger_name": "Töltő neve",
           "ev_connected_sensor": "EV Csatlakoztatva",
           "ev_charging_sensor": "EV Töltési állapot",
           "ev_charging_power_sensor": "EV Töltési teljesítmény",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Töltő áramerősség-beállító szolgáltatása (opcionális)",
+          "ev_charger_service_entity_id": "Töltő szolgáltatásának célentitása (opcionális)",
+          "ev_start_stop_entity": "Start/Stop Entity (optional)",
+          "ev_current_sensor": "Offered Current Sensor (optional)",
+          "ev_charge_mode_entity": "Charge Mode Select (optional)",
+          "ev_charge_mode_start": "Charge Mode — Start Value (optional)",
+          "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
+          "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Napelemes töltési limit (kWh)",
           "ev_target_soc_max": "Napelemes töltési limit (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
+          "ev_connected_sensor": "Bináris érzékelő, amely jelzi, hogy van-e jármű csatlakoztatva ehhez a töltőhöz.",
+          "ev_charging_sensor": "Bináris érzékelő, amely jelzi, hogy ez a töltő aktívan ad-e le teljesítményt.",
+          "ev_charging_power_sensor": "Numerikus érzékelő (W), amely az e töltő által leadott teljesítményt jelenti.",
+          "ev_charger_service": "A töltőáram beállításához használt HA-szolgáltatás. KEBA vagy Easee esetén használja.",
+          "ev_charger_service_entity_id": "A szolgáltatáshívás céljaként átadott entitásazonosító. Hagyja üresen, ha nincs rá szükség.",
+          "ev_start_stop_entity": "Switch or button that physically starts/stops charging. Set this when dropping to 0 A does not release the charger (Smart EVSE, some OCPP boxes) — SEM opens it instead of leaving the contactor cycling.",
+          "ev_current_sensor": "Sensor reporting the current the charger is actually offering (A). Lets SEM verify a command landed instead of assuming it did.",
+          "ev_charge_mode_entity": "Select entity SEM switches to start/stop charging on boxes that need a mode change rather than a current of 0 A (go-e, Ohme, some OCPP).",
+          "ev_charge_mode_start": "The option SEM selects to START charging (e.g. \"Instant Charging\", \"2\"). Must match the select's option exactly.",
+          "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
+          "ev_surplus_priority": "A többlet elosztásának sorrendje több töltő között. Alacsonyabb szám = magasabb prioritás.",
           "ev_current_control_entity": "Number entitás, amellyel a töltőáram (A) beállítható. Wallbox, go-eCharger és hasonló töltőkhöz.",
           "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
           "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból."
@@ -358,36 +338,138 @@
           "ev_connected_sensor": "EV Csatlakoztatva",
           "ev_charging_sensor": "EV Töltési állapot",
           "ev_charging_power_sensor": "EV Töltési teljesítmény",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_charger_service": "Töltő áramerősség-beállító szolgáltatása (opcionális)",
+          "ev_charger_service_entity_id": "Töltő szolgáltatásának célentitása (opcionális)",
+          "ev_start_stop_entity": "Start/Stop Entity (optional)",
+          "ev_current_sensor": "Offered Current Sensor (optional)",
+          "ev_charge_mode_entity": "Charge Mode Select (optional)",
+          "ev_charge_mode_start": "Charge Mode — Start Value (optional)",
+          "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
+          "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Napelemes töltési limit (kWh)",
           "ev_target_soc_max": "Napelemes töltési limit (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
+          "ev_connected_sensor": "Bináris érzékelő, amely jelzi, hogy van-e jármű csatlakoztatva ehhez a töltőhöz.",
+          "ev_charging_sensor": "Bináris érzékelő, amely jelzi, hogy ez a töltő aktívan ad-e le teljesítményt.",
+          "ev_charging_power_sensor": "Numerikus érzékelő (W), amely az e töltő által leadott teljesítményt jelenti.",
+          "ev_charger_service": "A töltőáram beállításához használt HA-szolgáltatás. KEBA vagy Easee esetén használja.",
+          "ev_charger_service_entity_id": "A szolgáltatáshívás céljaként átadott entitásazonosító. Hagyja üresen, ha nincs rá szükség.",
+          "ev_start_stop_entity": "Switch or button that physically starts/stops charging. Set this when dropping to 0 A does not release the charger (Smart EVSE, some OCPP boxes) — SEM opens it instead of leaving the contactor cycling.",
+          "ev_current_sensor": "Sensor reporting the current the charger is actually offering (A). Lets SEM verify a command landed instead of assuming it did.",
+          "ev_charge_mode_entity": "Select entity SEM switches to start/stop charging on boxes that need a mode change rather than a current of 0 A (go-e, Ohme, some OCPP).",
+          "ev_charge_mode_start": "The option SEM selects to START charging (e.g. \"Instant Charging\", \"2\"). Must match the select's option exactly.",
+          "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
+          "ev_surplus_priority": "A többlet elosztásának sorrendje több töltő között. Alacsonyabb szám = magasabb prioritás.",
           "ev_current_control_entity": "Number entitás, amellyel a töltőáram (A) beállítható. Wallbox, go-eCharger és hasonló töltőkhöz.",
           "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
           "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból."
         }
       },
       "pv_naming": {
-        "title": "Name your PV strings",
-        "description": "Give each solar string a name (e.g. East / South / West). Which slot maps to which panel — the numbering follows your Energy-Dashboard solar list, not compass direction:\n\n{mapping}\n\nLeave a field blank to keep the default (PV1/PV2/…).",
+        "title": "Nevezze el a PV-stringjeit",
+        "description": "Adjon nevet minden napelem-stringnek (pl. Kelet / Dél / Nyugat). Hogy melyik hely melyik panelhez tartozik — a számozás az Energia irányítópult napelem-listáját követi, nem az égtájakat:\n\n{mapping}\n\nHagyjon üresen egy mezőt az alapértelmezés megtartásához (PV1/PV2/…).",
         "data": {
-          "pv_name_pv1": "PV1 name",
-          "pv_name_pv2": "PV2 name",
-          "pv_name_pv3": "PV3 name",
-          "pv_name_pv4": "PV4 name",
-          "pv_name_pv5": "PV5 name",
-          "pv_name_pv6": "PV6 name"
+          "pv_name_pv1": "PV1 neve",
+          "pv_name_pv2": "PV2 neve",
+          "pv_name_pv3": "PV3 neve",
+          "pv_name_pv4": "PV4 neve",
+          "pv_name_pv5": "PV5 neve",
+          "pv_name_pv6": "PV6 neve"
+        }
+      },
+      "heat_pump": {
+        "title": "Hőszivattyú",
+        "description": "Állítsa be hőszivattyúját a napelemes többlettel történő emeléshez. Két vezérlési út támogatott:\n• **SG-Ready** — állítsa be mindkét relé entitást (Viessmann, Stiebel Eltron, Vaillant).\n• **Csak climate** — csak a climate entitást állítsa be (Nibe, Mitsubishi, Daikin és minden HA-val vezérelt hőszivattyú SG-Ready relék nélkül).\nA két út kombinálható is. Hagyja mindet üresen a kihagyáshoz.",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready relé 1 (opcionális switch entitás)",
+          "heat_pump_relay2_entity": "SG-Ready relé 2 (opcionális switch entitás)",
+          "heat_pump_invert_sg_ready": "SG-Ready érintkezők invertálása (NC bekötéshez)",
+          "heat_pump_climate_entity": "Climate entitás a célhőmérséklet emeléséhez (opcionális)",
+          "heat_pump_power_sensor": "Teljesítmény-érzékelő (opcionális)",
+          "heat_pump_boost_offset": "Hőmérséklet-emelés (°C)",
+          "heat_pump_max_setpoint": "Maximális célhőmérséklet (°C)",
+          "heat_pump_priority": "Többlet prioritás (1=legmagasabb)"
+        },
+        "data_description": {
+          "heat_pump_relay1_entity": "Switch entitás az SG-Ready 1-es reléhez (normál üzem jelzése). Az SG-Ready protokollhoz a 2-es relével együtt állítsa be.",
+          "heat_pump_relay2_entity": "Switch entitás az SG-Ready 2-es reléhez (többlet-emelés jelzése). Az SG-Ready protokollhoz az 1-es relével együtt állítsa be.",
+          "heat_pump_invert_sg_ready": "Csak akkor engedélyezze, ha hőszivattyúja SG-Ready érintkezői alapesetben zárt (NC) bekötésűek. A SEM a szabványos SG-Ready igazságtáblát vezérli; ha az emelés blokkolja a szivattyút (és fordítva), kapcsolja be ezt mindkét relé megfordításához.",
+          "heat_pump_climate_entity": "A napelemes többlet idején a célhőmérséklet emelésére használt climate entitás. Önmagában elegendő a csak climate módhoz (relék nem szükségesek).",
+          "heat_pump_power_sensor": "Opcionális érzékelő (W), amely a hőszivattyú aktuális teljesítményfelvételét jelenti.",
+          "heat_pump_boost_offset": "A normál célhőmérséklethez hozzáadott Celsius-fok a napelemes többlettel történő emelés alatt.",
+          "heat_pump_max_setpoint": "Felső hőmérsékleti határ (°C), amelyet a SEM az emelési ciklus alatt beállít.",
+          "heat_pump_priority": "A többlet elosztásának prioritása a többi eszközhöz képest. Az alacsonyabb számok kerülnek sorra előbb."
+        }
+      },
+      "ev_charger_menu": {
+        "title": "EV-töltők",
+        "description": "Kezelje az EV-töltők konfigurációját.",
+        "data": {
+          "action": "Művelet"
+        },
+        "data_description": {
+          "action": "Válassza ki, hogy új töltőt ad hozzá, meglévőt szerkeszt, vagy eltávolít egyet."
+        }
+      },
+      "ev_charger_remove": {
+        "title": "EV-töltő eltávolítása",
+        "description": "Válasszon egy eltávolítandó töltőt. Az elsődleges töltő nem távolítható el.",
+        "data": {
+          "charger_to_remove": "Eltávolítandó töltő"
+        },
+        "data_description": {
+          "charger_to_remove": "Válassza ki azt a töltőt, amelyet el szeretne távolítani a SEM-ből. Az elsődleges töltő nem törölhető."
+        }
+      },
+      "settings_phase_guard_topology": {
+        "title": "Electrical topology",
+        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "data": {
+          "phase_guard_topology": "Supply topology"
+        },
+        "data_description": {
+          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+        }
+      },
+      "settings_phase_guard": {
+        "title": "Per-phase guard sensors",
+        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "data": {
+          "phase_guard_grid_limit_a": "Main-fuse limit per phase",
+          "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
+          "phase_guard_max_age_s": "Maximum sensor age",
+          "phase_guard_grid_l1_current_entity": "Direct Grid L1 RMS current",
+          "phase_guard_grid_l2_current_entity": "Direct Grid L2 RMS current",
+          "phase_guard_grid_l3_current_entity": "Direct Grid L3 RMS current",
+          "phase_guard_grid_l1_power_entity": "Grid L1 power sensor",
+          "phase_guard_grid_l2_power_entity": "Grid L2 power sensor",
+          "phase_guard_grid_l3_power_entity": "Grid L3 power sensor",
+          "phase_guard_grid_l1_voltage_entity": "Grid L1 voltage sensor",
+          "phase_guard_grid_l2_voltage_entity": "Grid L2 voltage sensor",
+          "phase_guard_grid_l3_voltage_entity": "Grid L3 voltage sensor",
+          "phase_guard_inverter_l1_current_entity": "Inverter Load/EPS L1 RMS current",
+          "phase_guard_inverter_l2_current_entity": "Inverter Load/EPS L2 RMS current",
+          "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
+        },
+        "data_description": {
+          "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
+          "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
+          "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
+          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
+          "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
+          "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",
+          "phase_guard_grid_l1_voltage_entity": "Grid voltage for phase L1 in V.",
+          "phase_guard_grid_l2_voltage_entity": "Grid voltage for phase L2 in V.",
+          "phase_guard_grid_l3_voltage_entity": "Grid voltage for phase L3 in V.",
+          "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
+          "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
+          "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
     }
@@ -395,532 +477,580 @@
   "entity": {
     "sensor": {
       "solar_power": {
-        "name": "Solar Power"
+        "name": "Napelemes teljesítmény"
       },
       "home_consumption_power": {
-        "name": "Home Power"
+        "name": "Házi teljesítmény"
       },
       "grid_power": {
-        "name": "Grid Power"
+        "name": "Hálózati teljesítmény"
       },
       "grid_active_power": {
-        "name": "Grid Active Power"
+        "name": "Hálózati hatásos teljesítmény"
       },
       "grid_import_power": {
-        "name": "Grid Import"
+        "name": "Hálózati vételezés"
       },
       "grid_export_power": {
-        "name": "Grid Export"
+        "name": "Hálózati betáplálás"
       },
       "battery_power": {
-        "name": "Battery Power"
+        "name": "Akkumulátor teljesítménye"
       },
       "battery_charge_power": {
-        "name": "Battery Charge Power"
+        "name": "Akkumulátor töltési teljesítménye"
       },
       "battery_discharge_power": {
-        "name": "Battery Discharge Power"
+        "name": "Akkumulátor kisütési teljesítménye"
       },
       "ev_power": {
-        "name": "EV Power"
+        "name": "EV teljesítmény"
       },
       "available_power": {
-        "name": "Available Power"
+        "name": "Elérhető teljesítmény"
       },
       "battery_soc": {
-        "name": "Battery SOC"
+        "name": "Akkumulátor SOC"
       },
       "battery_status": {
-        "name": "Battery Status"
+        "name": "Akkumulátor állapota"
       },
       "battery_temperature": {
-        "name": "Battery Temperature"
+        "name": "Akkumulátor hőmérséklete"
       },
       "inverter_temperature": {
         "name": "Inverter hőmérséklete"
       },
       "battery_cycles_estimated": {
-        "name": "Battery Cycles (Estimated)"
+        "name": "Akkumulátor-ciklusok (becsült)"
       },
       "battery_health_score": {
-        "name": "Battery Health Score"
+        "name": "Akkumulátor állapotpontszáma"
       },
       "calculated_current": {
-        "name": "Calculated Current"
+        "name": "Számított áramerősség"
       },
       "charging_state": {
-        "name": "Charging State"
+        "name": "Töltési állapot"
       },
       "grid_status": {
-        "name": "Grid Status"
+        "name": "Hálózat állapota"
       },
       "solar_charging_status": {
-        "name": "Solar Charging"
+        "name": "Napelemes töltés"
       },
       "night_charging_status": {
-        "name": "Night Charging"
+        "name": "Éjszakai töltés"
       },
       "battery_priority_status": {
-        "name": "Battery Priority"
+        "name": "Akkumulátor prioritása"
       },
       "charging_strategy": {
-        "name": "Charging Strategy"
+        "name": "Töltési stratégia"
       },
       "daily_solar_energy": {
-        "name": "Today Solar"
+        "name": "Mai napenergia"
       },
       "daily_home_energy": {
-        "name": "Today Home"
+        "name": "Mai ház"
       },
       "daily_grid_import_energy": {
-        "name": "Today Import"
+        "name": "Mai vételezés"
       },
       "daily_grid_export_energy": {
-        "name": "Today Export"
+        "name": "Mai betáplálás"
       },
       "daily_battery_charge_energy": {
-        "name": "Today Charge"
+        "name": "Mai töltés"
       },
       "daily_battery_discharge_energy": {
-        "name": "Today Discharge"
+        "name": "Mai kisütés"
       },
       "daily_ev_energy": {
-        "name": "Today EV"
+        "name": "Mai EV"
       },
       "monthly_solar_yield_energy": {
-        "name": "Monthly Solar"
+        "name": "Havi napenergia"
       },
       "monthly_grid_import_energy": {
-        "name": "Monthly Import"
+        "name": "Havi vételezés"
       },
       "monthly_grid_export_energy": {
-        "name": "Monthly Export"
+        "name": "Havi betáplálás"
       },
       "monthly_battery_charge_energy": {
-        "name": "Monthly Charge"
+        "name": "Havi töltés"
       },
       "monthly_battery_discharge_energy": {
-        "name": "Monthly Discharge"
+        "name": "Havi kisütés"
       },
       "monthly_home_consumption_energy": {
-        "name": "Monthly Home"
+        "name": "Havi ház"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "Havi EV"
       },
       "flow_solar_to_home_power": {
-        "name": "Solar to Home"
+        "name": "Napelemből házba"
       },
       "flow_solar_to_battery_power": {
-        "name": "Solar to Battery"
+        "name": "Napelemből akkumulátorba"
       },
       "flow_solar_to_grid_power": {
-        "name": "Solar to Grid"
+        "name": "Napelemből hálózatba"
       },
       "flow_solar_to_ev_power": {
-        "name": "Solar to EV"
+        "name": "Napelemből EV-be"
       },
       "flow_battery_to_home_power": {
-        "name": "Battery to Home"
+        "name": "Akkumulátorból házba"
       },
       "flow_battery_to_ev_power": {
-        "name": "Battery to EV"
+        "name": "Akkumulátorból EV-be"
       },
       "flow_grid_to_home_power": {
-        "name": "Grid to Home"
+        "name": "Hálózatból házba"
       },
       "flow_grid_to_ev_power": {
-        "name": "Grid to EV"
+        "name": "Hálózatból EV-be"
       },
       "flow_grid_to_battery_power": {
-        "name": "Grid to Battery"
+        "name": "Hálózatból akkumulátorba"
       },
       "flow_solar_to_home_energy": {
-        "name": "Solar to Home Energy"
+        "name": "Napelemből házba energia"
       },
       "flow_solar_to_ev_energy": {
-        "name": "Solar to EV Energy"
+        "name": "Napelemből EV-be energia"
       },
       "flow_solar_to_battery_energy": {
-        "name": "Solar to Battery Energy"
+        "name": "Napelemből akkumulátorba energia"
       },
       "flow_solar_to_grid_energy": {
-        "name": "Solar to Grid Energy"
+        "name": "Napelemből hálózatba energia"
       },
       "flow_grid_to_home_energy": {
-        "name": "Grid to Home Energy"
+        "name": "Hálózatból házba energia"
       },
       "flow_grid_to_ev_energy": {
-        "name": "Grid to EV Energy"
+        "name": "Hálózatból EV-be energia"
       },
       "flow_grid_to_battery_energy": {
-        "name": "Grid to Battery Energy"
+        "name": "Hálózatból akkumulátorba energia"
       },
       "flow_battery_to_home_energy": {
-        "name": "Battery to Home Energy"
+        "name": "Akkumulátorból házba energia"
       },
       "flow_battery_to_ev_energy": {
-        "name": "Battery to EV Energy"
+        "name": "Akkumulátorból EV-be energia"
       },
       "self_consumption_rate": {
-        "name": "Self Consumption"
+        "name": "Saját felhasználás"
       },
       "autarky_rate": {
-        "name": "Autarky Rate"
+        "name": "Önellátási arány"
       },
       "daily_savings": {
-        "name": "Today Savings"
+        "name": "Mai megtakarítás"
       },
       "daily_battery_savings": {
-        "name": "Battery Savings Daily"
+        "name": "Napi akkumulátor-megtakarítás"
       },
       "daily_costs": {
-        "name": "Costs Daily"
+        "name": "Napi költségek"
       },
       "daily_export_revenue": {
-        "name": "Export Revenue Daily"
+        "name": "Napi betáplálási bevétel"
       },
       "daily_net_cost": {
-        "name": "Net Cost Daily"
+        "name": "Napi nettó költség"
       },
       "monthly_savings": {
-        "name": "Monthly Savings"
+        "name": "Havi megtakarítás"
       },
       "monthly_battery_savings": {
-        "name": "Battery Savings Monthly"
+        "name": "Havi akkumulátor-megtakarítás"
       },
       "monthly_costs": {
-        "name": "Costs Monthly"
+        "name": "Havi költségek"
       },
       "monthly_export_revenue": {
-        "name": "Export Revenue Monthly"
+        "name": "Havi betáplálási bevétel"
       },
       "monthly_net_cost": {
-        "name": "Net Cost Monthly"
+        "name": "Havi nettó költség"
       },
       "yearly_solar_yield_energy": {
-        "name": "Yearly Solar"
+        "name": "Éves napenergia"
       },
       "lifetime_solar_yield_energy": {
         "name": "Teljes napelemes termelés"
       },
       "yearly_grid_import_energy": {
-        "name": "Yearly Grid Import"
+        "name": "Éves hálózati vételezés"
       },
       "yearly_grid_export_energy": {
-        "name": "Yearly Grid Export"
+        "name": "Éves hálózati betáplálás"
       },
       "yearly_battery_charge_energy": {
-        "name": "Yearly Battery Charge"
+        "name": "Éves akkumulátortöltés"
       },
       "yearly_battery_discharge_energy": {
-        "name": "Yearly Battery Discharge"
+        "name": "Éves akkumulátor-kisütés"
       },
       "yearly_home_consumption_energy": {
-        "name": "Yearly Home Consumption"
+        "name": "Éves házi fogyasztás"
       },
       "yearly_ev_energy": {
-        "name": "Yearly EV Energy"
+        "name": "Éves EV-energia"
       },
       "yearly_costs": {
-        "name": "Yearly Costs"
+        "name": "Éves költségek"
       },
       "yearly_savings": {
-        "name": "Yearly Savings"
+        "name": "Éves megtakarítás"
       },
       "yearly_battery_savings": {
-        "name": "Yearly Battery Savings"
+        "name": "Éves akkumulátor-megtakarítás"
       },
       "yearly_export_revenue": {
-        "name": "Yearly Export Revenue"
+        "name": "Éves betáplálási bevétel"
       },
       "yearly_net_cost": {
-        "name": "Yearly Net Cost"
+        "name": "Éves nettó költség"
       },
       "lifetime_total_savings": {
-        "name": "Lifetime Total Savings"
+        "name": "Összes megtakarítás"
       },
       "lifetime_grid_cost": {
-        "name": "Lifetime Grid Cost"
+        "name": "Összes hálózati költség"
       },
       "roi_percentage": {
-        "name": "ROI Percentage"
+        "name": "ROI százalék"
       },
       "roi_payback_years": {
-        "name": "ROI Payback Years"
+        "name": "ROI megtérülési évek"
       },
       "roi_annual_savings": {
-        "name": "ROI Annual Savings"
+        "name": "ROI éves megtakarítás"
       },
       "forecast_correction_factor": {
-        "name": "Forecast Correction Factor"
+        "name": "Előrejelzés korrekciós tényezője"
       },
       "forecast_corrected_today": {
-        "name": "Corrected Forecast Today"
+        "name": "Korrigált előrejelzés ma"
       },
       "forecast_history_days": {
-        "name": "Forecast History Days"
+        "name": "Előrejelzés előzményei (nap)"
       },
       "daily_co2_avoided": {
-        "name": "CO2 Avoided Today"
+        "name": "Mai elkerült CO2"
       },
       "yearly_co2_avoided": {
-        "name": "CO2 Avoided This Year"
+        "name": "Idei elkerült CO2"
       },
       "yearly_trees_equivalent": {
-        "name": "Trees Equivalent This Year"
+        "name": "Idei faegyenérték"
       },
       "lifetime_co2_avoided": {
-        "name": "Lifetime CO2 Avoided"
+        "name": "Összes elkerült CO2"
       },
       "lifetime_trees_equivalent": {
-        "name": "Lifetime Trees Equivalent"
+        "name": "Összes faegyenérték"
       },
       "power_charge_cost": {
-        "name": "Power Charge Cost"
+        "name": "Teljesítménydíj költsége"
       },
       "consecutive_peak_15min": {
-        "name": "15min Peak"
+        "name": "15 perces csúcs"
       },
       "monthly_consecutive_peak": {
-        "name": "Monthly Peak"
+        "name": "Havi csúcs"
       },
       "current_vs_peak_percentage": {
-        "name": "Peak Percentage"
+        "name": "Csúcs százaléka"
       },
       "target_peak_limit": {
-        "name": "Peak Limit"
+        "name": "Csúcskorlát"
       },
       "peak_margin": {
-        "name": "Peak Margin"
+        "name": "Csúcstartalék"
       },
       "load_management_status": {
-        "name": "Load Management"
+        "name": "Terheléskezelés"
       },
       "load_management_recommendation": {
-        "name": "Load Recommendation"
+        "name": "Terhelési javaslat"
       },
       "loads_currently_shed": {
-        "name": "Loads Shed"
+        "name": "Lekapcsolt terhelések"
       },
       "available_load_reduction": {
-        "name": "Available Reduction"
+        "name": "Elérhető csökkentés"
       },
       "controllable_devices_count": {
-        "name": "Devices Count"
+        "name": "Eszközök száma"
       },
       "surplus_total_w": {
-        "name": "Surplus Total"
+        "name": "Összes többlet"
       },
       "surplus_distributable_w": {
-        "name": "Surplus Distributable"
+        "name": "Szétosztható többlet"
       },
       "surplus_allocated_w": {
-        "name": "Surplus Allocated"
+        "name": "Kiosztott többlet"
       },
       "surplus_unallocated_w": {
-        "name": "Surplus Unallocated"
+        "name": "Kiosztatlan többlet"
       },
       "surplus_active_devices": {
-        "name": "Surplus Active Devices"
+        "name": "Többletet fogadó aktív eszközök"
       },
       "surplus_total_devices": {
-        "name": "Surplus Total Devices"
+        "name": "Többlet-eszközök összesen"
       },
       "forecast_today_kwh": {
-        "name": "Forecast Today"
+        "name": "Előrejelzés ma"
       },
       "forecast_tomorrow_kwh": {
-        "name": "Forecast Tomorrow"
+        "name": "Előrejelzés holnap"
       },
       "forecast_remaining_today_kwh": {
-        "name": "Forecast Remaining Today"
+        "name": "Előrejelzett hátralévő ma"
       },
       "forecast_power_now_w": {
-        "name": "Forecast Power Now"
+        "name": "Előrejelzett teljesítmény most"
       },
       "forecast_source": {
-        "name": "Forecast Source"
+        "name": "Előrejelzés forrása"
       },
       "charging_recommendation": {
-        "name": "Charging Recommendation"
+        "name": "Töltési javaslat"
       },
       "tariff_current_import_rate": {
-        "name": "Electricity Price"
+        "name": "Villamosenergia-ár"
       },
       "tariff_current_export_rate": {
-        "name": "Export Rate"
+        "name": "Betáplálási ár"
       },
       "tariff_price_level": {
-        "name": "Price Level"
+        "name": "Árszint"
       },
       "tariff_provider": {
-        "name": "Tariff Provider"
+        "name": "Tarifaszolgáltató"
       },
       "tariff_next_cheap_start": {
-        "name": "Next Cheap Window"
+        "name": "Következő olcsó időszak"
       },
       "heat_pump_mode": {
-        "name": "Heat Pump Mode"
+        "name": "Hőszivattyú üzemmódja"
       },
       "heat_pump_sg_ready_state": {
-        "name": "Heat Pump SG-Ready State"
+        "name": "Hőszivattyú SG-Ready állapota"
       },
       "pv_daily_specific_yield": {
-        "name": "PV Specific Yield"
+        "name": "PV fajlagos hozam"
       },
       "pv_performance_vs_forecast": {
-        "name": "PV vs Forecast"
+        "name": "PV az előrejelzéshez képest"
       },
       "pv_estimated_annual_degradation": {
-        "name": "PV Annual Degradation"
+        "name": "PV éves degradáció"
       },
       "pv_degradation_trend": {
-        "name": "PV Degradation Trend"
+        "name": "PV degradációs trend"
       },
       "energy_optimization_score": {
-        "name": "Optimization Score"
+        "name": "Optimalizálási pontszám"
       },
       "energy_tip": {
-        "name": "Energy Tip"
+        "name": "Energiatipp"
       },
       "energy_tip_category": {
-        "name": "Energy Tip Category"
+        "name": "Energiatipp kategóriája"
       },
       "energy_ev_solar_percentage": {
-        "name": "EV Solar Charging %"
-      },
-      "utility_signal_source": {
-        "name": "Utility Signal Source"
-      },
-      "utility_signal_count_today": {
-        "name": "Utility Signals Today"
+        "name": "EV napenergiás töltés %"
       },
       "predictor_training_status": {
-        "name": "Predictor Training Status"
+        "name": "Predictor tanítási állapota"
       },
       "predictor_model_accuracy": {
         "name": "Predictor Accuracy"
       },
       "predicted_surplus_window": {
-        "name": "Predicted Surplus Window"
+        "name": "Előrejelzett többletidőszak"
       },
       "session_energy": {
-        "name": "Session Energy"
+        "name": "Munkamenet energiája"
       },
       "session_solar_share": {
-        "name": "Session Solar Share"
+        "name": "Munkamenet napenergia-aránya"
       },
       "session_cost": {
-        "name": "Session Cost"
+        "name": "Munkamenet költsége"
       },
       "session_duration": {
-        "name": "Session Duration"
+        "name": "Munkamenet időtartama"
       },
       "lifetime_ev_energy": {
-        "name": "Lifetime EV Energy"
+        "name": "Összes EV-energia"
       },
       "lifetime_ev_solar": {
-        "name": "Lifetime EV Solar Energy"
+        "name": "Összes EV napenergia"
       },
       "lifetime_ev_cost": {
-        "name": "Lifetime EV Cost"
+        "name": "Összes EV-költség"
       },
       "lifetime_ev_sessions": {
-        "name": "Lifetime EV Sessions"
+        "name": "Összes EV-munkamenet"
       },
       "lifetime_ev_solar_share": {
-        "name": "Lifetime EV Solar Share"
+        "name": "Összes EV napenergia-aránya"
       },
       "vehicle_soc": {
-        "name": "Vehicle SOC"
+        "name": "Jármű SOC"
       },
       "ev_remaining_range": {
         "name": "EV hatótáv"
       },
       "best_surplus_window": {
-        "name": "Best Surplus Window"
+        "name": "Legjobb többletidőszak"
       },
       "night_start_time": {
-        "name": "Night Start Time"
+        "name": "Éjszaka kezdete"
       },
       "night_end_time": {
-        "name": "Night End Time"
+        "name": "Éjszaka vége"
       },
       "night_window_hours": {
-        "name": "Night Window Hours"
+        "name": "Éjszakai időszak (óra)"
       },
       "forecast_peak_power_today_w": {
-        "name": "Forecast Peak Power Today"
+        "name": "Előrejelzett mai csúcsteljesítmény"
       },
       "forecast_peak_time_today": {
-        "name": "Forecast Peak Time Today"
+        "name": "Előrejelzett mai csúcsidőpont"
       },
       "forecast_surplus_kwh": {
-        "name": "Forecast Surplus"
+        "name": "Előrejelzett többlet"
       },
       "forecast_dampening_factor": {
-        "name": "Forecast Dampening Factor"
+        "name": "Előrejelzés csillapítási tényezője"
       },
       "battery_scheduler_state": {
         "name": "Akkutöltő ütemező állapot"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "Akkuütemező cél-SOC"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Akkuütemező hiánya"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Akkuütemező indoka"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "EV-töltők száma"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "EV teljesítménycsökkenési trend"
       },
       "diag_version": {
         "name": "SEM Verzió"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Hálózati érzékelő módja"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Hálózati előjel-konvenció"
+      },
+      "diag_battery_sign": {
+        "name": "Akkumulátor előjel-konvenciója"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Töltő vezérlési módja"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Akkumulátor kapacitása (konfig)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Frissítési időköz"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Megfigyelő mód"
+      },
+      "diag_grid_l1_current_a": {
+        "name": "Grid L1 Current"
+      },
+      "diag_grid_l1_margin_a": {
+        "name": "Grid L1 Current Margin"
+      },
+      "diag_grid_l2_current_a": {
+        "name": "Grid L2 Current"
+      },
+      "diag_grid_l2_margin_a": {
+        "name": "Grid L2 Current Margin"
+      },
+      "diag_grid_l3_current_a": {
+        "name": "Grid L3 Current"
+      },
+      "diag_grid_l3_margin_a": {
+        "name": "Grid L3 Current Margin"
+      },
+      "diag_inverter_l1_current_a": {
+        "name": "Inverter Load/EPS L1 Current"
+      },
+      "diag_inverter_l1_margin_a": {
+        "name": "Inverter Load/EPS L1 Current Margin"
+      },
+      "diag_inverter_l2_current_a": {
+        "name": "Inverter Load/EPS L2 Current"
+      },
+      "diag_inverter_l2_margin_a": {
+        "name": "Inverter Load/EPS L2 Current Margin"
+      },
+      "diag_inverter_l3_current_a": {
+        "name": "Inverter Load/EPS L3 Current"
+      },
+      "diag_inverter_l3_margin_a": {
+        "name": "Inverter Load/EPS L3 Current Margin"
+      },
+      "diag_phase_guard_mode": {
+        "name": "Phase Guard Mode"
+      },
+      "diag_phase_guard_safe": {
+        "name": "Phase Guard Safe"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
+      "diag_phase_guard_stop_reason": {
+        "name": "Phase Guard Stop Reason"
       },
       "diag_sensors_unavailable": {
         "name": "Érzékelők nem elérhetők"
       },
       "battery_session_type": {
-        "name": "Battery Session Type"
+        "name": "Akkumulátor-munkamenet típusa"
       },
       "battery_session_energy": {
-        "name": "Battery Session Energy"
+        "name": "Akkumulátor-munkamenet energiája"
       },
       "battery_session_solar_share": {
-        "name": "Battery Session Solar Share"
+        "name": "Akkumulátor-munkamenet napenergia-aránya"
       },
       "battery_session_cost": {
-        "name": "Battery Session Cost"
+        "name": "Akkumulátor-munkamenet költsége"
       },
       "battery_session_savings": {
-        "name": "Battery Session Savings"
+        "name": "Akkumulátor-munkamenet megtakarítása"
       },
       "battery_session_duration": {
-        "name": "Battery Session Duration"
+        "name": "Akkumulátor-munkamenet időtartama"
       },
       "battery_session_avg_power": {
-        "name": "Battery Session Avg Power"
+        "name": "Akkumulátor-munkamenet átl. teljesítménye"
       },
       "diag_charger_count": {
         "name": "Konfigurált töltők"
@@ -929,94 +1059,94 @@
         "name": "Energia-irányítópult konfiguráció"
       },
       "heat_pump_registration_status": {
-        "name": "Heat Pump Registration Status"
+        "name": "Hőszivattyú regisztrációs állapota"
+      },
+      "vpp_event": {
+        "name": "VPP-esemény"
       }
     },
     "binary_sensor": {
       "ev_connected": {
-        "name": "EV Connected"
+        "name": "EV csatlakoztatva"
       },
       "ev_charging": {
-        "name": "EV Charging"
+        "name": "EV töltés"
       },
       "battery_charging": {
-        "name": "Battery Charging"
+        "name": "Akkumulátor töltése"
       },
       "battery_discharging": {
-        "name": "Battery Discharging"
+        "name": "Akkumulátor kisütése"
       },
       "grid_export_active": {
-        "name": "Grid Export Active"
+        "name": "Hálózati betáplálás aktív"
       },
       "solar_active": {
-        "name": "Solar Active"
+        "name": "Napenergia aktív"
       },
       "surplus_available": {
         "name": "Többlet elérhető"
       },
       "forecast_available": {
-        "name": "Forecast Available"
+        "name": "Előrejelzés elérhető"
       },
       "tariff_is_dynamic": {
-        "name": "Dynamic Tariff"
+        "name": "Dinamikus tarifa"
       },
       "heat_pump_solar_boost": {
-        "name": "Heat Pump Solar Boost"
+        "name": "Hőszivattyú napenergia-emelés"
       },
       "heat_pump_registered": {
         "name": "Hőszivattyú regisztrálva"
       },
-      "utility_signal_active": {
-        "name": "Utility Signal Active"
+      "layer_mismatch": {
+        "name": "Rétegeltérés"
       }
     },
     "switch": {
       "observer_mode": {
-        "name": "Observer Mode"
+        "name": "Megfigyelő mód"
+      },
+      "vacation_mode": {
+        "name": "Vakáció üzemmód"
       }
     },
     "number": {
       "update_interval": {
-        "name": "Update Interval"
+        "name": "Frissítési időköz"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC"
+        "name": "Akkumulátor prioritási SOC"
       },
       "minimum_solar_power": {
-        "name": "Minimum Solar Power"
-      },
-      "daily_ev_target": {
-        "name": "Daily EV Target"
+        "name": "Minimális napenergia-teljesítmény"
       },
       "battery_assist_max_power": {
-        "name": "Battery Assist Max Power"
+        "name": "Akkumulátor-támogatás max. teljesítménye"
       },
       "battery_assist_min_surplus": {
         "name": "Akkumulátor-támogatás – min. napenergia-többlet"
       },
       "regulation_offset": {
-        "name": "Regulation Offset"
+        "name": "Szabályozási eltolás"
       },
       "demand_charge_rate": {
-        "name": "Demand Charge Rate"
+        "name": "Teljesítménydíj"
       },
       "cheap_price_threshold": {
-        "name": "Cheap Price Threshold"
+        "name": "Olcsó ár küszöbe"
       },
       "expensive_price_threshold": {
-        "name": "Expensive Price Threshold"
+        "name": "Drága ár küszöbe"
       },
       "heat_pump_boost_offset": {
-        "name": "Heat Pump Boost Offset"
+        "name": "Hőszivattyú emelési eltolása"
       },
       "hot_water_max_temperature": {
-        "name": "Hot Water Max Temperature"
+        "name": "Melegvíz max. hőmérséklete"
       },
       "system_size_kwp": {
-        "name": "PV System Size"
-      },
-      "ev_min_current": {
-        "name": "EV Minimum Current"
+        "name": "PV-rendszer mérete"
       },
       "ev_enable_delay_seconds": {
         "name": "EV indítási késleltetés (többlet)"
@@ -1025,79 +1155,82 @@
         "name": "EV leállítási késleltetés (hiány)"
       },
       "battery_buffer_soc": {
-        "name": "Battery Buffer SOC"
+        "name": "Akkumulátor puffer SOC"
       },
       "battery_auto_start_soc": {
-        "name": "Battery Auto Start SOC"
-      },
-      "battery_capacity_kwh": {
-        "name": "Battery Capacity"
+        "name": "Akkumulátor automatikus indítási SOC"
       },
       "battery_max_discharge_power": {
-        "name": "Battery Max Discharge Power"
+        "name": "Akkumulátor max. kisütési teljesítménye"
       },
       "system_investment_cost": {
-        "name": "System Investment Cost"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimum Current"
-      },
-      "ev_phases": {
-        "name": "EV Phases"
+        "name": "Rendszer beruházási költsége"
       },
       "electricity_import_rate": {
-        "name": "Electricity Import Rate"
+        "name": "Villamos energia vételezési ára"
       },
       "electricity_export_rate": {
-        "name": "Electricity Export Rate"
+        "name": "Villamos energia betáplálási ára"
       },
       "night_earliest_start": {
-        "name": "Night Earliest Start"
+        "name": "Éjszakai legkorábbi kezdés"
       },
       "night_latest_end": {
-        "name": "Night Latest End"
+        "name": "Éjszakai legkésőbbi befejezés"
       },
       "battery_capacity": {
-        "name": "Battery Capacity"
+        "name": "Akkumulátor kapacitása"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Melegvíz napenergia-célhőmérséklete"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Legionella-célhőmérséklet"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
-      },
-      "ev_target_soc": {
-        "name": "EV Target SOC (%)"
-      },
-      "daily_ev_target_max": {
-        "name": "Max. napelemes EV töltés (kWh)"
-      },
-      "ev_target_soc_max": {
-        "name": "Max. napelemes EV töltés SOC (%)"
-      },
-      "ev_kwh_per_100km": {
-        "name": "Jármű fogyasztás (kWh/100km)"
-      },
-      "initial_current": {
-        "name": "Jármű indítóáram"
+        "name": "Legionella-ciklus időköze (óra)"
       },
       "surplus_event_threshold": {
         "name": "Többlet esemény küszöb"
+      },
+      "daily_ev_target": {
+        "name": "{charger} Éjszakai cél"
+      },
+      "ev_min_current": {
+        "name": "{charger} Min. áramerősség"
+      },
+      "vehicle_min_current": {
+        "name": "{charger} Jármű min. áramerőssége"
+      },
+      "ev_target_soc": {
+        "name": "{charger} Cél-SOC"
+      },
+      "daily_ev_target_max": {
+        "name": "{charger} Napelemes maximum"
+      },
+      "ev_target_soc_max": {
+        "name": "{charger} Max. napelemes SOC"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "{charger} Akkumulátor kapacitása"
+      },
+      "ev_kwh_per_100km": {
+        "name": "{charger} Fogyasztás"
+      },
+      "ev_phases": {
+        "name": "{charger} Fázisok"
       }
     },
     "select": {
       "ev_target_type": {
-        "name": "EV céltípus",
+        "name": "{charger} EV céltípus",
         "state": {
           "kwh": "kWh cél",
           "soc": "SoC % cél"
         }
       },
       "charge_mode": {
-        "name": "Töltési mód",
+        "name": "{charger} Töltési mód",
         "state": {
           "solar_only": "Csak nap",
           "solar_plus_cheap": "Nap + legolcsóbb órák",
@@ -1132,6 +1265,18 @@
     },
     "invalid_deadline_format": {
       "message": "Érvénytelen határidőformátum: „{deadline}”. Használjon ISO 8601 formátumot, például 2026-05-27T07:00:00."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Az Energia irányítópult konfigurálása sikertelen. Ellenőrizze, hogy minden szükséges érzékelő elérhető-e."
+    },
+    "set_option_invalid_payload": {
+      "message": "A set_option egy 'options' szótárat igényel, amely a konfigurációs kulcsokat új értékekre képezi le."
+    },
+    "set_option_no_entry": {
+      "message": "Nem található SEM ConfigEntry — először telepítse a SEM-et a Beállítások → Eszközök és szolgáltatások menüpontban."
+    },
+    "unknown_appliance_schedule": {
+      "message": "Nem található készülék-ütemezés ehhez: {device_id}. Ellenőrizze az eszközazonosítót, amelyet a schedule_appliance szolgáltatással használt."
     }
   },
   "issues": {
@@ -1140,40 +1285,61 @@
       "description": "Nincsenek konfigurálva EV-töltő érzékelők, ezért az EV-töltési funkciók nem érhetők el. Az EV-töltés engedélyezéséhez adjon hozzá egy „csatlakoztatva” érzékelőt vagy egy töltési teljesítmény érzékelőt az integráció beállításaiban."
     },
     "sensor_unavailable": {
-      "title": "Sensor unavailable",
-      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+      "title": "Az érzékelő nem érhető el",
+      "description": "A(z) `{entity_id}` ({friendly_name}) érzékelő már több mint {minutes} perce nem érhető el. A SEM nem tudja bevonni a számításokba, amíg helyre nem áll. Ellenőrizze a mögöttes integrációt (Huawei modbus / Solcast / Forecast.Solar / az inverter hálózata). Ez a bejegyzés automatikusan eltűnik, amint az érzékelő legközelebb érvényes értéket jelent."
+    },
+    "sensor_stale": {
+      "title": "Az érzékelő befagyott",
+      "description": "A(z) `{entity_id}` ({friendly_name}) érzékelő továbbra is elérhetőnek jelenti magát, de már több mint {minutes} perce nem frissült — úgy tűnik, befagyott. A SEM az elavult értékét használja az energiamérlegben és az előjelfelismerésben, ami torzíthatja az adatait. Ellenőrizze a mögöttes integrációt (Huawei modbus / Growatt felhő / az inverter hálózata). Ez a bejegyzés automatikusan eltűnik, amint az érzékelő legközelebb frissül."
     },
     "charger_actuation_failed": {
-      "title": "EV charger not accepting commands: {name}",
-      "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command."
+      "title": "Az EV-töltő nem fogadja a parancsokat: {name}",
+      "description": "A SEM legutóbbi 3 vagy több áramerősség-parancsát a következő elutasította: **{name}** — `{error}`. A töltő jelenleg NEM áll a SEM vezérlése alatt — továbbra is azt teszi, amit utoljára utasításba kapott (akár teljes teljesítménnyel tölt kikapcsolt módban is). A leggyakoribb okok: a töltő vezérlőentitását átnevezte egy integrációfrissítés, vagy az `ev_charger_service` olyan szolgáltatásra mutat, amelynek eltérő a paraméterséma. Ellenőrizze a töltő vezérlőentitását / szolgáltatását a SEM konfigurációjában. Ez a bejegyzés automatikusan eltűnik a következő sikeres parancs után."
+    },
+    "charger_stop_unenforceable": {
+      "title": "A töltő nem állítható le: {name}",
+      "description": "A SEM leállítást parancsolt a(z) **{name}** töltőnek, de egyetlen beállított mechanizmus sem tudja ténylegesen bontani a kontaktort — az autó továbbra is {power} W-ot vesz fel. A SEM egyetlen vezérlője ehhez a töltőhöz a(z) `{entity}`, amelynek minimuma 0 A fölött van, így a 0 A kiírása nem csinál semmit (a SEM soha nem ír ki olyan értéket, amelyet az entitás elutasítana). Ha van házi akkumulátorod, ez a teljesítmény onnan jön — a nappal vagy az éjszaka bármely szakában. Megoldás: állíts be ehhez a töltőhöz a SEM beállításaiban egy start/stop entitást (`ev_start_stop_entity`), egy töltési mód entitást vagy egy leállító szolgáltatást. A figyelmeztetés eltűnik, amint a töltő már nem vesz fel teljesítményt."
     },
     "no_forecast_integration": {
-      "title": "No solar forecast integration detected",
-      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+      "title": "Nem található napelemes előrejelzés-integráció",
+      "description": "A SEM az indulás után egy órán át keresett napelemes előrejelzés-integrációt (Forecast.Solar, Solcast PV Solar vagy egyéni előrejelzés-érzékelő), de nem talált. Az előrejelzésre épülő funkciók (legjobb többletidőszak tippjei, intelligens éjszakai töltés, előrejelzés-csillapítás) inaktívak, amíg nem telepít egyet. A bejegyzés automatikusan eltűnik, amint a SEM észlel egy előrejelzés-integrációt."
     },
     "no_recorder": {
-      "title": "Recorder integration unavailable",
-      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+      "title": "A Recorder integráció nem érhető el",
+      "description": "A SEM megpróbálta betölteni az EV/töltési előzményeket a HA recorderéből, de az olvasás sikertelen volt. Az EV intelligencia (becsült SOC, napi csökkenés) enélkül nem tud gyorsindítást végezni; az értékek helyette lassan, az élő ciklusokból töltődnek fel. Általában egyszeri, átmeneti hiba — a következő sikeres recorder-olvasás után automatikusan eltűnik."
     },
     "heat_pump_relay_unavailable": {
-      "title": "Heat pump SG-Ready {slot} unavailable",
-      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+      "title": "A hőszivattyú SG-Ready {slot} nem érhető el",
+      "description": "A beállított SG-Ready relé entitás (`{entity_id}` — {slot}) már több mint {minutes} perce nem érhető el / ismeretlen. A SEM a hőszivattyú-vezérlőt gond nélkül regisztrálja, de minden SG-Ready parancs csendben hatástalan marad, amíg ez az entitás nem jelent valós állapotot. Ellenőrizze a mögöttes eszközt — ESP relépanel, Shelly, Modbus-hidas sablonkapcsoló vagy bármely integráció, amelyhez ez az entitás tartozik. A bejegyzés automatikusan eltűnik, amint a relé legközelebb be/ki állapotot jelent."
     },
     "heat_pump_partial_sg_ready": {
-      "title": "Heat pump SG-Ready half-configured",
-      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
+      "title": "A hőszivattyú SG-Ready beállítása félkész",
+      "description": "A két SG-Ready relé (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) közül pontosan az egyik van beállítva a SEM-ben, climate entitásos tartalék nélkül. Az SG-Ready protokoll a négy állapotot (BLOCKED / NORMAL / BOOST / FORCE_ON) 2 bites bináris kódként MINDKÉT relén keresztül fejezi ki, ezért egyetlen relével nem vezérelhető a protokoll. Vagy állítsa be a második relét is, vagy adjon meg egy `heat_pump_climate_entity` entitást, hogy helyette a csak climate alapú célhőmérséklet-emelés útját használja. A bejegyzés automatikusan eltűnik, amint a konfiguráció érvényes."
     },
     "hot_water_entity_unavailable": {
-      "title": "Hot water boiler control unavailable",
-      "description": "The configured hot-water control entity `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM can register the controller fine, but every surplus-dispatch command will silently no-op until the entity reports a real state. Check the upstream device — the boiler relay, water_heater integration, climate device, or whichever integration owns this entity. The issue clears automatically when the entity recovers."
+      "title": "A melegvíz-bojler vezérlése nem érhető el",
+      "description": "A beállított melegvíz-vezérlő entitás (`{entity_id}`) már több mint {minutes} perce nem érhető el / ismeretlen. A SEM a vezérlőt gond nélkül regisztrálja, de minden többletelosztási parancs csendben hatástalan marad, amíg az entitás nem jelent valós állapotot. Ellenőrizze a mögöttes eszközt — a bojler reléjét, a water_heater integrációt, a climate eszközt vagy bármely integrációt, amelyhez ez az entitás tartozik. A bejegyzés automatikusan eltűnik, amint az entitás helyreáll."
     },
     "hot_water_temperature_sensor_unavailable": {
-      "title": "Hot water temperature sensor unavailable",
-      "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+      "title": "A melegvíz-hőmérséklet érzékelője nem érhető el",
+      "description": "A beállított melegvíz-hőmérséklet érzékelő (`{entity_id}`) már több mint {minutes} perce nem érhető el / ismeretlen. A SEM biztonságosan viselkedik, ha ez az érzékelő hibás — a bojler NEM kapcsol be többletre, amíg valós hőmérséklet-leolvasás nem érkezik, nehogy a fűtés visszajelzés nélkül túllépje a célértéket. Ellenőrizze az érzékelő mögöttes integrációját. A bejegyzés automatikusan eltűnik, amint az érzékelő helyreáll."
     },
     "keba_failsafe_active": {
-      "title": "KEBA failsafe is enabled — disable it for steady charging",
-      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+      "title": "A KEBA failsafe be van kapcsolva — kapcsolja ki az egyenletes töltéshez",
+      "description": "A(z) „{name}” KEBA töltőjén be van kapcsolva a failsafe watchdog. A SEM (az evcc-hez hasonlóan) már nem támaszkodik rá, de amíg be van kapcsolva, a töltő a parancsok között visszaejti a felkínált áramot a 6 A-es tartalékértékre, ami a töltés ingadozását okozza (6↔9 A), és egyes autók (pl. Renault Zoe) emiatt nem hajlandók egyenletesen tölteni.\n\nA Home Assistant KEBA szolgáltatása nem tudja kikapcsolni (nem fogad el 0 időtúllépést), ezért magán a töltőn kell letiltania: állítsa a **failsafe időtúllépést 0-ra** (KEBA UDP `failsafe 0 0 1`, vagy a KEBA KeContact eszközével). A lépésről lépésre útmutatót lásd a hivatkozott leírásban. Ez a javítási bejegyzés automatikusan eltűnik, amint a failsafe ki van kapcsolva."
+    },
+    "soc_cap_unenforceable": {
+      "title": "A(z) {target}%-os töltési limit nem érvényesíthető: {name}",
+      "description": "A(z) **{name}** százalékos töltési célra van állítva, de a járműve jelenleg nem jelenti a töltöttségi szintjét, így a SEM nem tud **{target}%**-nál megállni — addig tölt tovább, amíg maga az autó nem csökkenti a teljesítményt (közel teli állapotban).\n\nHa az irányítópulton látható egy akkumulátor-százalék, az a SEM *becsült* SOC-ja, amelyet a kemény limitnél szándékosan figyelmen kívül hagy (elcsúszhat). A limit érvényesítéséhez kössön be ehhez a töltőhöz egy **valós jármű SOC-érzékelőt** (Konfiguráció → EV → Jármű SOC entitás). Ez a javítási bejegyzés automatikusan eltűnik, amint ismét elérhető egy valós SOC-leolvasás."
+    }
+  },
+  "selector": {
+    "phase_guard_topology": {
+      "options": {
+        "disabled": "Disabled",
+        "grid_only": "Grid supply only",
+        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+      }
     }
   }
 }

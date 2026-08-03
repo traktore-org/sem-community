@@ -10,10 +10,12 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+
+from .coordinator.units import is_power_unit
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,8 +43,37 @@ _POWER_DERIVE_RULES: Dict[str, Dict[str, tuple]] = {
         # combined `battery_power` AND a `battery_power_charge`, the shortest-name
         # tie-break favours the combined (bidirectional) sensor. SolaX only has
         # `battery_power_charge` (which is itself signed), so it is still picked.
-        "include": ("battery_power", "batt_power", "power_battery"),
-        "prefer": ("total",),
+        #
+        # #597 — the keyword list is brand/locale-specific (bug-class "power-derive
+        # keyword gap"): Huawei Solar names its combined battery power
+        # `..._charge_discharge_power` (EN) / `..._lade_entladeleistung` (DE), so
+        # neither of the SolaX-shaped keywords matched and the sensor stayed null
+        # with no manual override to fall back on. Multilingual coverage mirrors
+        # the `_DISCHARGE_CONTROL_PATTERNS` approach in hardware_detection.py.
+        "include": (
+            "battery_power", "batt_power", "power_battery",
+            "charge_discharge_power",   # Huawei Solar (EN combined)
+            "lade_entladeleistung",     # Huawei Solar (DE combined)
+        ),
+        # #597 — when a Huawei device exposes BOTH the fleet-combined
+        # (`batteries_…` / `batterien_…`, plural) and a per-battery
+        # (`battery_1_…`, singular) power sensor, the two slugs are the same
+        # length so the length tie-break is non-deterministic. The plural
+        # "batteries"/"batterien" tokens name the combined fleet sensor and
+        # never appear in the singular per-battery slug, so they pick the
+        # combined deterministically (SolaX's `battery_power` vs
+        # `battery_power_charge` still discriminates on length as before).
+        "prefer": ("total", "batteries", "batterien"),
+    },
+    # #600 — generic LOAD device (heat pump / hot water / switch): find the
+    # device's own power sensor to feed a kWh-only load. Broad power keywords
+    # (EN+DE); the same-device scope keeps it specific. Extend as reported.
+    "load": {
+        "include": (
+            "power", "leistung", "consumption", "verbrauch",
+            "active_power", "current_power",
+        ),
+        "prefer": ("total", "current"),
     },
 }
 # Substrings that disqualify a candidate regardless of type (non-real power).
@@ -546,8 +577,9 @@ def _find_power_sensor_on_device(
             if not state:
                 continue
             dc = state.attributes.get("device_class")
-            unit = (state.attributes.get("unit_of_measurement") or "").lower()
-            if dc != "power" and unit not in ("w", "kw"):
+            # #641 — asking units.py instead of re-listing the suffixes, so a
+            # MW/GW-labelled sensor is recognised as power here too.
+            if dc != "power" and not is_power_unit(state):
                 continue
             candidates.append(eid)
 
@@ -633,12 +665,60 @@ def _derive_missing_power_sensors(
             )
 
 
+# (#698) Same-measurement variant tokens: two energy sensors whose object_ids
+# differ only by one of these trailing tokens are the SAME physical load
+# counted two ways (a JuiceBox ships energy_lifetime AND energy_session; heat
+# pumps often ship _total and _daily). Ordered by preference — the monotonic
+# lifetime/total counter beats a resetting daily/session one. A missing token
+# ranks between them ("" = the plain _energy sensor).
+_VARIANT_RANK = {"lifetime": 0, "total": 1, "": 2, "today": 3, "daily": 4,
+                 "session": 5}
+
+
+def _variant_stem(entity_id: str) -> Tuple[str, int]:
+    """Split ``sensor.juicebox_x_energy_lifetime`` → (``juicebox_x_energy``, rank).
+
+    Only a trailing token from ``_VARIANT_RANK`` is stripped — a Shelly 2PM's
+    ``channel_a_energy`` / ``channel_b_energy`` keep distinct stems and are
+    never treated as variants of each other.
+    """
+    object_id = entity_id.split(".", 1)[-1].lower()
+    parts = object_id.rsplit("_", 1)
+    if len(parts) == 2 and parts[1] in _VARIANT_RANK:
+        return parts[0], _VARIANT_RANK[parts[1]]
+    return object_id, _VARIANT_RANK[""]
+
+
+def _registry_device_id(hass, entity_id: str) -> Optional[str]:
+    """The entity registry's device_id for an entity — None when unknowable.
+
+    Defensive: discovery must keep working on a hass (or registry state) that
+    can't answer, so any failure reads as "unknown", never as a crash.
+    """
+    if hass is None:
+        return None
+    try:
+        entry = er.async_get(hass).async_get(entity_id)
+        did = getattr(entry, "device_id", None)
+        return did if isinstance(did, str) else None
+    except Exception:
+        return None
+
+
 def get_all_individual_devices(config: EnergyDashboardConfig, hass=None) -> List[Dict[str, Any]]:
+    # NOTE: pass hass= — without it the (#698) registry veto can't tell two
+    # stem-alike sensors on DIFFERENT devices apart and would fold them.
     """Return all individual devices from Energy Dashboard for load management.
 
     These are devices listed in the Energy Dashboard's "Individual devices" section
     (device_consumption). Each device can be used for peak management if a
     corresponding switch entity is found for control.
+
+    (#698) Same-measurement variants are folded to ONE device: HA auto-suggests
+    every ``total_increasing`` energy sensor into the dashboard, so a charger
+    exposing both a lifetime and a session counter otherwise becomes two load
+    rows. The fold is vetoed when the entity registry proves the two sensors
+    live on different devices.
 
     Args:
         config: EnergyDashboardConfig from read_energy_dashboard_config()
@@ -647,7 +727,8 @@ def get_all_individual_devices(config: EnergyDashboardConfig, hass=None) -> List
         List of device dicts with energy_sensor, power_sensor, name, is_ev
     """
     devices = []
-    ev_patterns = ["ev", "charger", "keba", "wallbox", "easee", "zappi", "tesla_wall"]
+    ev_patterns = ["ev", "charger", "keba", "wallbox", "easee", "zappi", "tesla_wall",
+                   "juicebox"]
 
     for device in config.device_consumption:
         energy_sensor = device.get("stat_consumption", "")
@@ -680,6 +761,46 @@ def get_all_individual_devices(config: EnergyDashboardConfig, hass=None) -> List
             "name": name,
             "is_ev": is_ev,
         })
+
+    # (#698) Fold same-measurement variants (lifetime/session/total/daily/…)
+    # into one device. Grouped by stem; a group whose members the entity
+    # registry places on DIFFERENT devices is left un-folded (two real loads
+    # that merely share a naming shape).
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    order: List[str] = []
+    for dev in devices:
+        stem, rank = _variant_stem(dev["energy_sensor"])
+        dev["_variant_rank"] = rank
+        if stem not in grouped:
+            order.append(stem)
+        grouped.setdefault(stem, []).append(dev)
+
+    folded: List[Dict[str, Any]] = []
+    for stem in order:
+        group = grouped[stem]
+        reg_ids = {
+            rid for rid in (
+                _registry_device_id(hass, d["energy_sensor"]) for d in group
+            ) if rid is not None
+        }
+        if len(group) == 1 or len(reg_ids) > 1:
+            folded.extend(group)          # solo, or registry veto — keep all
+            continue
+        keep = min(group, key=lambda d: d["_variant_rank"])
+        # the folded siblings may carry what the kept entry lacks
+        keep["power_sensor"] = keep["power_sensor"] or next(
+            (d["power_sensor"] for d in group if d["power_sensor"]), None)
+        keep["is_ev"] = any(d["is_ev"] for d in group)
+        dropped = [d["energy_sensor"] for d in group if d is not keep]
+        _LOGGER.info(
+            "Folded %d Energy Dashboard variants of the same load into %s "
+            "(dropped: %s) — one physical device, one load row (#698)",
+            len(group), keep["energy_sensor"], ", ".join(dropped),
+        )
+        folded.append(keep)
+    for dev in folded:
+        dev.pop("_variant_rank", None)
+    devices = folded
 
     _LOGGER.debug("Found %d individual devices in Energy Dashboard", len(devices))
     return devices

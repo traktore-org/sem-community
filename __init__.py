@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
@@ -35,6 +35,9 @@ from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
+
+if TYPE_CHECKING:
+    from .devices.base import ControllableDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +69,15 @@ def _content_hash_cache_bust(card_root: str, base_url: str, version: str) -> str
 
 _VERSION_STORE_VERSION = 1
 _VERSION_STORE_KEY_PREFIX = "sem_seen_version_"
+
+# #656 — entry_id → the devices detached at unload, parked so
+# ``async_remove_entry`` still has something to deactivate. HA runs unload
+# FIRST and pops the coordinator out of ``hass.data``, so by remove time there
+# is no other way back to the loads SEM is holding. The controller's registry
+# is still cleared at unload (the reload-leak contract); only the detached
+# device objects live here. A reload drops the stash in ``async_setup_entry``
+# without deactivating anything.
+_PENDING_LOAD_TEARDOWN: Dict[str, List["ControllableDevice"]] = {}
 
 
 async def _maybe_emit_upgrade_notification(hass, entry) -> None:
@@ -194,9 +206,22 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # reach it (SOC on a different device than the power sensor, or a generic
     # template helper). Read at SensorReader construction → must reload.
     "battery_soc_sensor",
+    # #592/#597 — the solar/battery/grid POWER sensor overrides are read at
+    # SensorReader construction too (same as battery_soc_sensor), so a
+    # set_option change must reload for it to take effect; without this the
+    # override only applied on the next full restart.
+    "solar_production_sensor", "battery_power_sensor", "grid_power_sensor",
+    # #593: hardware battery lifetime-cycle sensor (preferred over the estimate).
+    "battery_cycles_sensor",
     "heat_pump_relay1_entity", "heat_pump_relay2_entity",
     "heat_pump_climate_entity", "heat_pump_power_sensor",
     "heat_pump_temperature_sensor",
+    # #600 — load-device kWh energy counters (derive power when no power sensor);
+    # read at controller construction → reload on change.
+    "heat_pump_energy_sensor", "hot_water_energy_sensor",
+    # #602 — heat pump / hot water rated power (W), read at controller
+    # construction; was config-flow-only, now settable from the dashboard.
+    "heat_pump_rated_power", "hot_water_rated_power",
     # #523: read at HeatPumpController construction, so a change must reload
     # to rebuild the controller with the new relay polarity.
     "heat_pump_invert_sg_ready",
@@ -212,8 +237,8 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     "battery_discharge_control_entity",
     # #528: the discharge-protection toggle has no runtime switch entity, so a
     # set_option would otherwise hit the "unrouted → reload" path silently.
-    # Declare it structural so the reload is explicit (battery_protection reads
-    # it from the config snapshot, which is rebuilt on reload). Rarely changed.
+    # Declare it structural so the reload is explicit (decide_battery reads it
+    # from the config snapshot, which is rebuilt on reload). Rarely changed.
     "battery_discharge_protection_enabled",
     # #523 multi-battery: per-battery control-entity lists are read at
     # adapter construction too, so a change must reload.
@@ -381,12 +406,37 @@ def _refresh_runtime_config(coordinator) -> None:
     those no-reload writes apply immediately too. Defensive: never let a
     refresh hiccup break the option persist itself.
     """
+
+    # (#637) a changed mobile_notification_service must re-run service
+    # detection — the notifier caches validation on first send (#47).
+    _nm = getattr(coordinator, "_notification_manager", None)
+    if _nm is not None:
+        _nm._mobile_service_checked = False
     fn = getattr(coordinator, "refresh_runtime_config", None)
     if callable(fn):
         try:
             fn()
         except Exception:  # noqa: BLE001 — refresh must never break persist
             _LOGGER.debug("refresh_runtime_config failed", exc_info=True)
+
+
+def _seed_legionella_time(coordinator, hw_device) -> None:
+    """(#640) Seed the hot-water legionella timestamp AT registration.
+
+    The old first-refresh restore ran BEFORE the device was registered —
+    always a no-op — so a None timestamp read as 999 h overdue and every
+    restart forced a grid-powered 65°C disinfection cycle (audit class 14).
+    Stored time → restore; fresh install / unparsable → seed NOW so the
+    first cycle is ~interval_hours away, not immediate. Idempotent across
+    reloads (re-seeds from the same persisted value)."""
+    from homeassistant.util import dt as dt_util
+    try:
+        stored = coordinator._storage.get_legionella_time() \
+            if getattr(coordinator, "_storage", None) else None
+        ts = dt_util.parse_datetime(stored) if stored else None
+        hw_device.record_legionella_cycle(ts or dt_util.now())
+    except (ValueError, TypeError):
+        hw_device.record_legionella_cycle(dt_util.now())
 
 
 def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
@@ -1113,6 +1163,125 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 15:
+        # v14 → v15 (#576): the per-charger ``ev_shed_priority`` knob is
+        # retired. Surplus order AND shed order are now the single drag-list
+        # position (shed = the reverse walk — latest-to-charge sheds first),
+        # so the separate field is dead. Strip it from every stored charger so
+        # upgraded installs don't carry an ignored value. ``ev_surplus_priority``
+        # is kept — it seeds the drag order at boot.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            stripped = 0
+            for bag in (new_data, new_options):
+                chargers = bag.get("ev_chargers")
+                if not isinstance(chargers, list):
+                    continue
+                rebuilt = []
+                for c in chargers:
+                    if isinstance(c, dict) and "ev_shed_priority" in c:
+                        c = {k: v for k, v in c.items() if k != "ev_shed_priority"}
+                        stripped += 1
+                    rebuilt.append(c)
+                bag["ev_chargers"] = rebuilt
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=15, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if stripped:
+                _LOGGER.info(
+                    "#576: removed the retired ev_shed_priority from %d "
+                    "charger(s) — shed order now follows the drag list", stripped,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v15 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
+    if entry.version < 16:
+        # v15 → v16 (#604): retire the remaining legacy EV priority flags.
+        # ``ev_load_priority`` was a pre-#470 alias for the surplus priority —
+        # map it into ``ev_surplus_priority`` where that is absent, then drop
+        # it. ``ev_shed_priority`` (already stripped from chargers in v15) and
+        # ``ev_priority_over_battery`` (fed a planner knob that was never
+        # reachable from any UI, so it always held its default) are deleted
+        # wherever they linger — top level AND per-charger entries. The ONE
+        # drag list (#576) is the single priority axis; shed order stays the
+        # reverse walk (#470 rule preserved by list position).
+        _LEGACY_PRIO_KEYS = (
+            "ev_load_priority", "ev_shed_priority", "ev_priority_over_battery",
+        )
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            mapped = removed = 0
+            # Captured BEFORE any alias mapping: only an ORIGINAL global
+            # canonical outranked the per-charger alias in the old fallback
+            # chain (charger-surplus → global-surplus → charger-alias →
+            # global-alias). A mapped global ALIAS ranked BELOW the
+            # charger alias, so it must not block the per-charger mapping.
+            _orig_global_surplus = (
+                new_data.get("ev_surplus_priority")
+                if new_data.get("ev_surplus_priority") is not None
+                else new_options.get("ev_surplus_priority")
+            )
+            for bag in (new_data, new_options):
+                # top-level: map alias → canonical, then delete legacy keys
+                if new_data.get("ev_surplus_priority") is None \
+                        and new_options.get("ev_surplus_priority") is None \
+                        and bag.get("ev_load_priority") is not None:
+                    try:
+                        bag["ev_surplus_priority"] = int(bag["ev_load_priority"])
+                        mapped += 1
+                    except (TypeError, ValueError):
+                        pass
+                for k in _LEGACY_PRIO_KEYS:
+                    if k in bag:
+                        del bag[k]
+                        removed += 1
+                chargers = bag.get("ev_chargers")
+                if not isinstance(chargers, list):
+                    continue
+                rebuilt = []
+                for c in chargers:
+                    if isinstance(c, dict):
+                        c = dict(c)
+                        if _orig_global_surplus is None \
+                                and c.get("ev_surplus_priority") is None \
+                                and c.get("ev_load_priority") is not None:
+                            try:
+                                c["ev_surplus_priority"] = int(c["ev_load_priority"])
+                                mapped += 1
+                            except (TypeError, ValueError):
+                                pass
+                        for k in _LEGACY_PRIO_KEYS:
+                            if k in c:
+                                del c[k]
+                                removed += 1
+                    rebuilt.append(c)
+                bag["ev_chargers"] = rebuilt
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=16, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if mapped or removed:
+                _LOGGER.info(
+                    "#604: retired legacy EV priority flags — mapped %d "
+                    "ev_load_priority value(s) to ev_surplus_priority, "
+                    "removed %d legacy key(s)", mapped, removed,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v16 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -1240,6 +1409,45 @@ def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) ->
         _LOGGER.info("Folded ev_limit_surplus into the Max charge ceiling (#245)")
 
 
+def stable_discovered_charger_id(discovered: Dict[str, Any]) -> str:
+    """Build a deterministic, storage-safe ID from registry identity."""
+    import hashlib
+    import re
+
+    platform = str(discovered.get("_platform") or "ev_charger").lower()
+    platform = re.sub(r"[^a-z0-9_]+", "_", platform).strip("_") or "ev_charger"
+    identity = str(
+        discovered.get("_device_id")
+        or discovered.get("ev_current_control_entity")
+        or discovered.get("ev_charging_power_sensor")
+        or platform
+    )
+    digest = hashlib.sha256(f"{platform}:{identity}".encode()).hexdigest()[:10]
+    return f"{platform}_{digest}"
+
+
+def build_discovered_charger_storage(
+    entry_data: Dict[str, Any],
+    entry_options: Dict[str, Any],
+    discovered: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
+    """Return matching data/options payloads for one discovered charger."""
+    charger = {
+        key: value
+        for key, value in discovered.items()
+        if not key.startswith("_") and value is not None
+    }
+    charger["id"] = stable_discovered_charger_id(discovered)
+    platform = str(discovered.get("_platform") or "EV").split("_", 1)[0]
+    charger["name"] = f"{platform.title()} Charger"
+    chargers = [charger]
+    return (
+        {**dict(entry_data or {}), "ev_chargers": chargers},
+        {**dict(entry_options or {}), "ev_chargers": chargers},
+        chargers,
+    )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Set up Solar Energy Management from a config entry.
 
@@ -1257,6 +1465,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
     # Initialize domain data storage (kept for backward compatibility with services)
     hass.data.setdefault(DOMAIN, {})
+
+    # #656 — we're setting up, so the preceding unload was a reload (or an
+    # HA start), not a removal. Drop the teardown stash WITHOUT deactivating:
+    # the devices it holds are about to be re-registered on a fresh controller,
+    # and bouncing a running heat pump on every options change is not a safety
+    # improvement.
+    _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
 
     # In-memory SEM log ring buffer for the diagnose surface (#461/#462
     # triage gap on Supervisor installs — no flat log file to tail).
@@ -1415,8 +1630,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             registry = UnifiedDeviceRegistry(
                 hass, coordinator._surplus_controller, coordinator._load_manager, discovery
             )
+            # (#622) Let every device rebuild (incl. the 35 s delayed
+            # re-discovery inside async_initialize) re-apply persisted accrued
+            # runtime from storage, so a late-arriving auto-discovered load
+            # doesn't reset its daily-target progress to 0 and re-run. Set
+            # BEFORE async_initialize so the first refresh already benefits.
+            registry._runtime_restore_hook = coordinator._restore_device_runtimes
             await registry.async_initialize()
             coordinator._device_registry = registry
+            # (#586) Restore each device's accrued daily runtime NOW — the
+            # registry has just (re-)registered the surplus devices, so
+            # get_device() can find them. Doing this during
+            # async_config_entry_first_refresh (above) was too early: no
+            # device existed yet, so on a mid-day restart the accrued
+            # "X/Y u op zon vandaag" progress reset to 0 while the target
+            # (applied at registration via _apply_goals) survived.
+            # (#622) The registry now also re-runs this via _runtime_restore_hook
+            # after every async_refresh_devices (incl. the 35 s delayed
+            # re-discovery), so this explicit call is belt-and-suspenders: the
+            # idempotent restore is a no-op for any device the hook already
+            # filled, and it still guarantees a restore for devices present at
+            # setup even if the hook wiring changes.
+            coordinator._restore_device_runtimes()
             # Tell load manager to skip its own discovery — registry owns the device list
             if coordinator._load_manager:
                 coordinator._load_manager._unified_registry_active = True
@@ -1442,13 +1677,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_auto = coordinator._device_registry.discover_ev_charger()
                 if ev_auto:
                     _LOGGER.info("Auto-discovered EV charger config: %s", list(ev_auto.keys()))
-                    ev_auto["id"] = "ev_charger"
-                    ev_auto["name"] = "EV Charger"
-                    ev_chargers_config = [ev_auto]
-                    # Persist discovered config
-                    new_options = dict(entry.options)
-                    new_options["ev_chargers"] = ev_chargers_config
-                    hass.config_entries.async_update_entry(entry, options=new_options)
+                    new_data, new_options, ev_chargers_config = (
+                        build_discovered_charger_storage(
+                            dict(entry.data or {}),
+                            dict(entry.options or {}),
+                            ev_auto,
+                        )
+                    )
+                    # Persist the same stable list on both sides. Options are
+                    # the live source; data is the recovery source used by the
+                    # existing storage-healing path if options is clobbered.
+                    hass.config_entries.async_update_entry(
+                        entry,
+                        data=new_data,
+                        options=new_options,
+                    )
                     full_config["ev_chargers"] = ev_chargers_config
             # Fallback: check flat keys (pre-migration installs)
             if not ev_chargers_config:
@@ -1507,16 +1750,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             ev_charger_service = _cfg("ev_charger_service")
             ev_service_entity = _cfg("ev_charger_service_entity_id")
             ev_current_entity = _cfg("ev_current_control_entity")
-            ev_priority = int(_cfg("ev_surplus_priority", _cfg("ev_load_priority", 3 + idx)))
-            # #470: shed priority is independent of surplus priority. A
-            # mixed fleet wants e.g. the long-range EV to charge FIRST on
-            # surplus (big battery soaks watts) yet shed FIRST under peak
-            # (range cushion absorbs a throttle). ``ev_shed_priority``
-            # carries the load-manager order; it falls back to the surplus
-            # priority so single-charger / homogeneous installs are
-            # behaviour-identical (the v12→v13 migration seeds it
-            # explicitly per charger so flips are deliberate).
-            ev_shed_priority = int(_cfg("ev_shed_priority", ev_priority))
+            # #604: ``ev_surplus_priority`` is the ONE priority axis (#576).
+            # The legacy ``ev_load_priority`` alias is mapped into it by the
+            # v15→v16 migration, so the construction-time alias fallback is
+            # gone; ``ev_shed_priority`` stays retired (shed = reverse walk,
+            # #470 rule preserved by list position).
+            ev_priority = int(_cfg("ev_surplus_priority", 3 + idx))
 
             # Also auto-fill sensor reader config from first charger
             if idx == 0:
@@ -1649,7 +1888,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 await coordinator._load_manager.register_ev_charger(
                     current_control_entity=ev_current_entity,
                     power_entity=ev_power_entity,
-                    priority=ev_shed_priority,  # #470: shed order, not surplus order
+                    # #576: shed order = the ONE list position. The retired
+                    # ``ev_shed_priority`` knob is gone; ``refresh_runtime_config``
+                    # already overwrites this every cycle with the drag slot, so
+                    # seed it with the same list position here (was a boot-only
+                    # discrepancy). Latest-to-charge (highest number) sheds first.
+                    priority=ev_priority,
                     is_critical=False,
                     charger_service=ev_charger_service,
                     charger_id=charger_id,
@@ -1693,6 +1937,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 relay2_entity_id=hp_relay2,
                 climate_entity_id=hp_climate,
                 power_entity_id=full_config.get("heat_pump_power_sensor"),
+                energy_entity_id=full_config.get("heat_pump_energy_sensor"),  # #600
                 temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
                 boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
                 max_setpoint=float(full_config.get("heat_pump_max_setpoint", 55.0)),
@@ -1743,6 +1988,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 priority=int(full_config.get("hot_water_priority", 6)),
                 entity_id=hw_entity,
                 power_entity_id=full_config.get("hot_water_power_sensor"),
+                energy_entity_id=full_config.get("hot_water_energy_sensor"),  # #600
                 temperature_entity_id=full_config.get("hot_water_temperature_sensor"),
                 max_temperature=float(full_config.get("hot_water_max_temperature", 70.0)),
                 min_temperature=float(full_config.get("hot_water_minimum_temperature", 40.0)),
@@ -1751,6 +1997,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 legionella_interval_hours=float(full_config.get("hot_water_legionella_interval_hours", 168.0)),
             )
             coordinator._surplus_controller.register_device(hw_device)
+            _seed_legionella_time(coordinator, hw_device)
             _LOGGER.info(
                 "Hot water registered (entity=%s, priority=%d, "
                 "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
@@ -2022,6 +2269,42 @@ async def async_remove_config_entry_device(
     return True
 
 
+async def _async_deactivate_surplus_loads(devices, reason: str) -> None:
+    """Command every SEM-controlled load back to normal (#656).
+
+    Best-effort and never raises: this runs on teardown paths where the
+    alternative to swallowing an error is an unattended heating device left
+    latched on by an integration that no longer exists.
+    """
+    if not devices:
+        return
+    try:
+        from .coordinator.surplus_controller import deactivate_devices
+
+        await deactivate_devices(devices, reason)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.warning(
+            "Could not deactivate SEM-controlled loads on %s "
+            "(non-blocking): %s", reason, e,
+        )
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
+    """Release any load SEM was still holding when it was removed (#656).
+
+    ``async_unload_entry`` has already run and taken the coordinator out of
+    ``hass.data``, so it detached the devices and parked them for us. Without
+    this, a hot-water boost temperature, an SG-Ready relay or a SEM-forced
+    switch stays commanded indefinitely with nothing left to expire it — and a
+    re-install won't fix it either: ``DeviceReconciler`` classifies a
+    leftover-ON load as ``external_on`` and deliberately refuses to fight it.
+    """
+    devices = _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
+    if not devices:
+        return
+    await _async_deactivate_surplus_loads(devices, "integration removed")
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Unload a config entry."""
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
@@ -2032,9 +2315,54 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
         # would otherwise grow the list. Guarded — coordinator may be
         # missing if setup never completed.
         if coordinator is not None:
+            # Part B (#589): clear any active force-op before dropping adapters.
+            # Prevents a reload mid-force-op stranding the inverter in a
+            # forced charge/discharge mode that SEM will no longer manage.
+            # Only issues a STOP (command_normal) — never a new command.
+            # Failures are swallowed so a flaky Modbus never blocks unload.
+            _battery_adapters = getattr(coordinator, "_battery_adapters", {}) or {}
+            for _bid, _adapter in _battery_adapters.items():
+                try:
+                    await _adapter.command_normal()
+                    _LOGGER.debug(
+                        "Battery adapter %s: command_normal on unload", _bid,
+                    )
+                except Exception as _e:  # noqa: BLE001
+                    _LOGGER.debug(
+                        "Battery adapter %s: command_normal on unload failed "
+                        "(non-blocking): %s", _bid, _e,
+                    )
+
+            # #656 — loads must not be stranded ON when SEM goes away.
+            #
+            # HA calls this for a reload, a disable AND a removal, and the
+            # right answer differs per case:
+            #
+            # * reload — SEM is coming back in seconds. Turning the hot-water
+            #   boost or the SG-Ready relay off here would bounce a running
+            #   heating device on every options change (and trip its
+            #   compressor anti-short-cycle timer), so don't.
+            #   (An HA shutdown/restart never reaches this function at all —
+            #   HA fires EVENT_HOMEASSISTANT_STOP → ConfigEntries.
+            #   _async_shutdown → entry.async_shutdown(), which does not
+            #   unload entries. So no stash is created on that path, and the
+            #   load simply stays as it was until SEM comes back up.)
+            # * disabled — nothing is coming back. Deactivate now.
+            # * removed — HA runs THIS first and then ``async_remove_entry``,
+            #   by which point the coordinator is out of ``hass.data``. So the
+            #   controller is stashed here and deactivated there. The stash is
+            #   dropped by the next ``async_setup_entry`` (i.e. a reload), so a
+            #   device list only lingers between an unload and whatever
+            #   follows it.
             sc = getattr(coordinator, "_surplus_controller", None)
-            if sc is not None and hasattr(sc, "clear_devices"):
-                sc.clear_devices()
+            if sc is not None:
+                # detach_devices() clears the registry AND hands the devices
+                # back, so the reload-leak contract holds on every path below.
+                devices = sc.detach_devices()
+                if entry.disabled_by is not None:
+                    await _async_deactivate_surplus_loads(devices, "disabled")
+                elif devices:
+                    _PENDING_LOAD_TEARDOWN[entry.entry_id] = devices
 
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
@@ -2048,6 +2376,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "update_target_peak",
             "register_surplus_device",
             "schedule_appliance",
+            "cancel_appliance_schedule",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 
@@ -2687,10 +3016,22 @@ async def _async_register_services(
         prop = call.data.get("property")
         value = call.data.get("value")
 
-        if prop == "critical":
-            await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
-        elif prop == "controllable":
-            await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+        if prop in ("critical", "controllable"):
+            # (#650) Persist via the REGISTRY. Writing only into the
+            # LoadManagement dict — as this did pre-fix — lost the flag on the
+            # next `_sync_to_load_manager`, which replaces that entry wholesale
+            # (drag / 35 s re-discovery / config change / restart). The registry
+            # re-applies its overrides at device build, so the toggle sticks.
+            # The LoadManagement write stays: it takes effect this cycle and it
+            # is the ONLY store for devices the registry doesn't build
+            # (per-charger `load_device_*` entries, service registrations).
+            if prop == "critical":
+                await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
+            else:
+                await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+            reg = getattr(coordinator, "_device_registry", None)
+            if reg is not None:
+                await reg.async_set_device_flag(device_id, prop, bool(value))
         elif prop == "control_mode":
             # Update device control mode: off / peak_only / surplus (#49)
             registry = getattr(coordinator, '_device_registry', None)
@@ -2702,20 +3043,20 @@ async def _async_register_services(
                     translation_key="device_registry_not_initialized",
                 )
         elif prop == "depends_on":
-            # Update device dependency (#122)
+            # Update device dependency (#122). Persist via the REGISTRY so a
+            # rebuild (drag / re-discovery / restart) re-applies it — pre-fix it
+            # lived only on the transient device and got wiped ("separated all
+            # the time"). #576.
+            reg = getattr(coordinator, "_device_registry", None)
             device = coordinator._surplus_controller.get_device(device_id)
-            if device:
+            if reg is not None and (device or value):
+                await reg.async_set_dependency(device_id, [str(value)] if value else [])
+                _LOGGER.info("Updated %s depends_on = %s", device_id,
+                             [str(value)] if value else [])
+            elif device:
                 device.depends_on = [str(value)] if value else []
-                _LOGGER.info("Updated %s depends_on = %s", device_id, device.depends_on)
-                # Persist to storage
-                if coordinator._load_manager and hasattr(coordinator._load_manager, '_store'):
-                    try:
-                        store_data = await coordinator._load_manager._store.async_load() or {"devices": {}}
-                        dev_data = store_data.setdefault("devices", {}).setdefault(device_id, {})
-                        dev_data["depends_on"] = device.depends_on
-                        await coordinator._load_manager._store.async_save(store_data)
-                    except Exception as e:
-                        _LOGGER.debug("Could not persist dependency: %s", e)
+                _LOGGER.info("Updated %s depends_on = %s (no registry)", device_id,
+                             device.depends_on)
             else:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
@@ -2724,8 +3065,13 @@ async def _async_register_services(
                 )
         elif prop in (
             "daily_min_runtime_min", "top_up_policy", "stop_entity", "stop_at",
+            # (#620) max cap + battery tiers
+            "daily_max_runtime_min", "battery_assist_enabled",
+            "battery_eligible_overnight",
+            # (#688) per-load anti-cycling (minutes)
+            "min_on_time_min", "min_off_time_min",
         ):
-            # (#559) goal engine — grounded core, persisted + applied live
+            # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
             if not registry:
                 raise HomeAssistantError(
@@ -2740,6 +3086,21 @@ async def _async_register_services(
                     translation_key="invalid_device_property",
                     translation_placeholders={"property": f"{prop}={value}"},
                 )
+            # (#620) normalize the two battery flags to a canonical bool string
+            # so the stored dict + live apply agree regardless of "true"/"1"/"on".
+            if prop in ("battery_assist_enabled", "battery_eligible_overnight"):
+                value = str(str(value).strip().lower() in ("true", "1", "on", "yes"))
+            # (#688) anti-cycle windows are non-negative minutes.
+            if prop in ("min_on_time_min", "min_off_time_min"):
+                try:
+                    if float(value) < 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
             await registry.async_update_device_goal(device_id, prop, value)
         else:
             raise ServiceValidationError(
@@ -2762,6 +3123,11 @@ async def _async_register_services(
                     # (#559) goal engine — grounded core
                     "daily_min_runtime_min", "top_up_policy",
                     "stop_entity", "stop_at",
+                    # (#620) max cap + battery tiers
+                    "daily_max_runtime_min", "battery_assist_enabled",
+                    "battery_eligible_overnight",
+                    # (#688) per-load anti-cycling
+                    "min_on_time_min", "min_off_time_min",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -3065,18 +3431,23 @@ async def _async_install_card_assets(
                     if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
                         shutil.copy2(src, dst)
                         cards.append(fname)
-        # Copy Lit bundle from dist/ subdirectory
-        dist_src_dir = os.path.join(card_src_dir, "dist")
-        dist_www_dir = os.path.join(card_www_dir, "dist")
-        if os.path.isdir(dist_src_dir):
-            os.makedirs(dist_www_dir, exist_ok=True)
-            for fname in os.listdir(dist_src_dir):
-                if fname.endswith(".js"):
-                    src = os.path.join(dist_src_dir, fname)
-                    dst = os.path.join(dist_www_dir, fname)
-                    if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
-                        shutil.copy2(src, dst)
-                        cards.append(f"dist/{fname}")
+        # Copy Lit bundle from dist/ + vendored chart libs from vendor/
+        # (#617 — sem-chart-card loads Chart.js from the local vendor path
+        # first; without this sync the file 404s under HA's /local→www
+        # route and the CDN fallback silently reintroduces the internet
+        # dependency).
+        for sub in ("dist", "vendor"):
+            sub_src_dir = os.path.join(card_src_dir, sub)
+            sub_www_dir = os.path.join(card_www_dir, sub)
+            if os.path.isdir(sub_src_dir):
+                os.makedirs(sub_www_dir, exist_ok=True)
+                for fname in os.listdir(sub_src_dir):
+                    if fname.endswith(".js"):
+                        src = os.path.join(sub_src_dir, fname)
+                        dst = os.path.join(sub_www_dir, fname)
+                        if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
+                            shutil.copy2(src, dst)
+                            cards.append(f"{sub}/{fname}")
         # Also copy translations.json for sem-localize.js (#60)
         dashboard_dir = os.path.dirname(card_src_dir)
         translations_src = os.path.join(dashboard_dir, "translations.json")
@@ -3121,6 +3492,9 @@ async def _async_register_phase_services(
             "priority": call.data.get("priority", 5),
             "rated_power": call.data.get("rated_power", 1000),
             "power_entity_id": call.data.get("power_entity_id"),
+            # #600 — optional kWh energy counter; SEM autodetects a companion
+            # power sensor on the device first, else derives power from this.
+            "energy_entity_id": call.data.get("energy_entity_id"),
             "control_mode": call.data.get("control_mode", "surplus"),
             "depends_on": call.data.get("depends_on") or [],
             # (#569) climate device support
@@ -3133,6 +3507,9 @@ async def _async_register_phase_services(
             for k in (
                 "daily_min_runtime_min", "top_up_policy",
                 "stop_entity", "stop_at",
+                # (#620) max cap + battery tiers
+                "daily_max_runtime_min", "battery_assist_enabled",
+                "battery_eligible_overnight",
             )
             if k in call.data
         }
@@ -3174,6 +3551,7 @@ async def _async_register_phase_services(
             vol.Optional("priority", default=5): vol.All(int, vol.Range(min=1, max=10)),
             vol.Optional("rated_power", default=1000): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
+            vol.Optional("energy_entity_id"): cv.string,  # #600
             vol.Optional("control_mode", default="surplus"): vol.In(
                 ["off", "peak_only", "surplus"]
             ),
@@ -3195,6 +3573,14 @@ async def _async_register_phase_services(
             ),
             vol.Optional("stop_entity"): cv.string,
             vol.Optional("stop_at"): vol.Coerce(float),
+            # (#620) max cap + battery tiers — must be in the schema too, else
+            # voluptuous rejects them as extra keys (400) even though the
+            # handler reads them into goal_fields.
+            vol.Optional("daily_max_runtime_min"): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=1440)
+            ),
+            vol.Optional("battery_assist_enabled"): cv.boolean,
+            vol.Optional("battery_eligible_overnight"): cv.boolean,
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )
@@ -3255,6 +3641,19 @@ async def _async_register_phase_services(
                 translation_placeholders={"deadline": str(deadline_str)},
             )
 
+        # (#653) Normalise to LOCAL-naive. The scheduler compares deadlines
+        # against ``datetime.now()``, which is naive, and an HA template
+        # deadline — ``{{ today_at('18:00') }}``, the obvious way to write
+        # this in an automation — is timezone-AWARE. Comparing the two
+        # raises TypeError. That was harmless while nothing ticked the
+        # scheduler; now that the coordinator cycle does, it would raise
+        # every cycle and the run would never complete or release its
+        # allocation, silently reinstating the very bug #653 fixes.
+        # ``as_local`` first, so an explicit offset lands on the right wall
+        # clock instead of being truncated.
+        if deadline.tzinfo is not None:
+            deadline = dt_util.as_local(deadline).replace(tzinfo=None)
+
         # Lazy-init appliance scheduler
         if not hasattr(coordinator, '_appliance_scheduler'):
             from .devices.appliance_scheduler import ApplianceScheduler
@@ -3297,7 +3696,41 @@ async def _async_register_phase_services(
         }),
     )
 
-    _LOGGER.debug("Phase services registered: register_surplus_device, schedule_appliance")
+    async def async_cancel_appliance_schedule(call) -> None:
+        """Cancel a pending appliance schedule (#653).
+
+        ``ApplianceScheduler.cancel_schedule`` existed from the start with
+        no way to reach it: no service, no button, no automation hook. The
+        only way to undo a mis-typed deadline was to restart HA (which drops
+        the in-memory scheduler entirely).
+        """
+        device_id = call.data.get("device_id")
+        scheduler = getattr(coordinator, "_appliance_scheduler", None)
+        # Raise only when the device is genuinely unknown. For a KNOWN
+        # device with no pending entry, ``cancel_schedule`` still clears the
+        # device's deadline and returns False — a real state change. Raising
+        # there would report a failure after having done the work, on
+        # exactly the path someone uses to unstick a device.
+        known = scheduler is not None and device_id in scheduler._devices
+        cancelled = scheduler.cancel_schedule(device_id) if scheduler else False
+        if not cancelled and not known:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_appliance_schedule",
+                translation_placeholders={"device_id": str(device_id)},
+            )
+
+    hass.services.async_register(
+        DOMAIN,
+        "cancel_appliance_schedule",
+        async_cancel_appliance_schedule,
+        schema=vol.Schema({vol.Required("device_id"): cv.string}),
+    )
+
+    _LOGGER.debug(
+        "Phase services registered: register_surplus_device, "
+        "schedule_appliance, cancel_appliance_schedule"
+    )
 
     # #442: in-dashboard option writes. The Configuration tab card
     # writes one key at a time via this service rather than walking the
@@ -3408,9 +3841,56 @@ async def _async_register_phase_services(
         # and snapshots _skip_options_reload — so no reload, AND
         # entity state is fresh. Unrecognized keys fall through to
         # the direct write.
+        # (#637) Keys that the runtime re-reads from coordinator.config every
+        # cycle (hw/hp refresh block, vpp_dispatch, the notifier) — route via
+        # persist_global_option: in-place config update + _refresh_runtime_
+        # config + snapshot, NO reload. Keys consumed only at construction
+        # (tariff_mode, battery scheduler params) deliberately stay on the
+        # reload path — live-applying them would be the #462 lie.
+        _SET_OPTION_LIVE_CONFIG_KEYS = {
+            "hot_water_minimum_temperature", "hot_water_legionella_target",
+            "heat_pump_max_setpoint", "vpp_reserve_soc",
+            "mobile_notification_service",
+        }
+        # (#637) Some options are backed by number entities under a DIFFERENT
+        # name (number.py CONFIG_KEY_MAP, #542) — the naive number.sem_<key>
+        # check missed them (the legionella dual-path confusion). Reverse-map
+        # option key → entity suffix so they entity-route like any other.
+        from .number import CONFIG_KEY_MAP as _NUM_MAP
+        _OPTION_TO_ENTITY = {v: k for k, v in _NUM_MAP.items()}
+
+        # (#636) Load-management peaks have LIVE updaters but no number
+        # entities — pre-fix they fell to the unrouted → entry-write →
+        # RELOAD path, so a card slider change never reached the running
+        # planner mid-session (the #462 silent-no-op class, caught live
+        # when a mid-charge peak change didn't step the EV night rate).
+        _LM_LIVE_KEYS = {
+            "target_peak_limit": "update_target_peak_limit",
+            "warning_peak_level": "update_warning_peak_level",
+            "emergency_peak_level": "update_emergency_peak_level",
+        }
         unrouted: list[str] = []
         for key in tunable_keys:
             value = options[key]
+            _coord = getattr(target_entry, "runtime_data", None)
+            if (key in _LM_LIVE_KEYS and _coord is not None
+                    and getattr(_coord, "_load_manager", None)):
+                await getattr(_coord._load_manager, _LM_LIVE_KEYS[key])(
+                    float(value))
+                continue
+            if key in _SET_OPTION_LIVE_CONFIG_KEYS:
+                _c2 = getattr(target_entry, "runtime_data", None)
+                if _c2 is not None:
+                    persist_global_option(hass, target_entry, _c2, key, value)
+                    continue
+            _ent_suffix = _OPTION_TO_ENTITY.get(key, key)
+            if hass.states.get(f"number.sem_{_ent_suffix}") is not None:
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": f"number.sem_{_ent_suffix}", "value": value},
+                    blocking=True,
+                )
+                continue
             if hass.states.get(f"number.sem_{key}") is not None:
                 await hass.services.async_call(
                     "number", "set_value",
@@ -3458,12 +3938,16 @@ async def _async_register_phase_services(
                 )
                 await hass.config_entries.async_reload(target_entry.entry_id)
 
-        _LOGGER.debug(
-            "set_option wrote %d key(s) to entry %s "
-            "(structural=%s tunable=%s unrouted=%s reload=%s)",
+        # #605 — INFO, not debug: these lines ARE the config change history.
+        # The Config tab's Diagnose panel surfaces recent SEM log lines, so a
+        # user who fat-fingered a value can see exactly which keys changed and
+        # when (values included; the bulky ev_chargers list is elided).
+        _LOGGER.info(
+            "set_option wrote %d key(s) to entry %s: %s "
+            "(structural=%s reload=%s)",
             len(options), target_entry.entry_id,
-            structural_keys, tunable_keys, unrouted,
-            bool(direct_keys),
+            {k: options[k] for k in list(options)[:8] if k != "ev_chargers"},
+            structural_keys, bool(direct_keys),
         )
 
     hass.services.async_register(
@@ -3570,11 +4054,20 @@ async def _async_register_phase_services(
             return
         target = sem_entries[0]
         requested = call.data.get("entry_id") if call.data else None
-        if requested and len(sem_entries) > 1:
-            for e in sem_entries:
-                if e.entry_id == requested:
-                    target = e
-                    break
+        # #588 L1 — fix the entry_id guard: the old ``len > 1`` condition
+        # silently fell through to entry[0] when requested was set but the
+        # install only had one entry (stale/wrong entry_id). Now ANY non-None
+        # requested must match, else fail loudly.
+        if requested:
+            matched = next((e for e in sem_entries if e.entry_id == requested), None)
+            if matched is None:
+                _LOGGER.warning(
+                    "reset_sign_detection: requested entry_id %r not found "
+                    "(known: %s)",
+                    requested, [e.entry_id for e in sem_entries],
+                )
+                return
+            target = matched
         coordinator = getattr(target, "runtime_data", None)
         if coordinator is None:
             _LOGGER.warning("reset_sign_detection: no coordinator on entry %s", target.entry_id)
@@ -3582,16 +4075,25 @@ async def _async_register_phase_services(
         reader = getattr(coordinator, "_sensor_reader", None)
         if reader is not None:
             reader.reset_sign_state()
+        # (#690) A reverted auto-correction latches the balance self-heal off so
+        # it can't oscillate. This service IS the manual retry, so clear it.
+        coordinator._sign_flip_latched = False
+        coordinator._sign_flip_attempted = False
+        coordinator._negative_balance_count = 0
+        coordinator._positive_balance_count = 0
         storage = getattr(coordinator, "_storage", None)
         if storage is not None:
             storage.set_sign_state({})
             await storage.async_save_energy_delayed()
         # A re-learn must start clean: drop any prior one-tap user flip
-        # (#461) so the freshly-learned sign isn't silently re-inverted on
-        # top. Only touches the entry — and reloads — when a flip was
+        # (#461 / #588) so the freshly-learned sign isn't silently re-inverted
+        # on top. Only touches the entry — and reloads — when a flip was
         # actually set, so the common reset path stays reload-free.
-        if bool((target.options or {}).get("grid_sign_user_flip", False)):
-            cleared = {**(target.options or {}), "grid_sign_user_flip": False}
+        opts = target.options or {}
+        grid_flip = bool(opts.get("grid_sign_user_flip", False))
+        batt_flip = bool(opts.get("battery_sign_user_flip", False))  # #588 H3
+        if grid_flip or batt_flip:
+            cleared = {**opts, "grid_sign_user_flip": False, "battery_sign_user_flip": False}
             if coordinator is not None:
                 coordinator._skip_options_reload = dict(cleared)
             hass.config_entries.async_update_entry(target, options=cleared)
@@ -3622,11 +4124,15 @@ async def _async_register_phase_services(
             return {"ok": False, "error": "no_entry"}
         target = sem_entries[0]
         requested = call.data.get("entry_id") if call.data else None
-        if requested and len(sem_entries) > 1:
-            for e in sem_entries:
-                if e.entry_id == requested:
-                    target = e
-                    break
+        # #588 L1 — same entry_id fix as reset/flip_battery
+        if requested:
+            matched = next((e for e in sem_entries if e.entry_id == requested), None)
+            if matched is None:
+                _LOGGER.warning(
+                    "flip_grid_sign: requested entry_id %r not found", requested,
+                )
+                return {"ok": False, "error": "entry_not_found"}
+            target = matched
         coordinator = getattr(target, "runtime_data", None)
         # Snapshot diagnostics BEFORE the flip — captures the state the
         # user is reporting as wrong (raw meter value, counters, evidence).
@@ -3659,6 +4165,64 @@ async def _async_register_phase_services(
         DOMAIN,
         "flip_grid_sign",
         async_flip_grid_sign,
+        schema=vol.Schema({
+            vol.Optional("entry_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    # #588 B1 — battery sign flip, mirrors async_flip_grid_sign exactly.
+    # When the battery charge/discharge appears inverted and the auto-detect
+    # or brand seed locked the wrong sign, the user taps "Fix battery sign"
+    # on the Config tab: this toggles the persisted ``battery_sign_user_flip``
+    # option, reloads so the corrected sign takes effect immediately, and
+    # returns a diagnostics dict for a GitHub issue.
+    async def async_flip_battery_sign(call):
+        """Flip the battery-power sign and return a #588 support payload."""
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return {"ok": False, "error": "no_entry"}
+        target = sem_entries[0]
+        requested = call.data.get("entry_id") if call.data else None
+        # #588 L1 — entry_id must match exactly (not silently fall through)
+        if requested:
+            matched = next((e for e in sem_entries if e.entry_id == requested), None)
+            if matched is None:
+                _LOGGER.warning(
+                    "flip_battery_sign: requested entry_id %r not found", requested,
+                )
+                return {"ok": False, "error": "entry_not_found"}
+            target = matched
+        coordinator = getattr(target, "runtime_data", None)
+        # Snapshot diagnostics BEFORE the flip — captures the state the
+        # user is reporting as wrong (raw battery value, counters, evidence).
+        diag = {}
+        reader = getattr(coordinator, "_sensor_reader", None) if coordinator else None
+        if reader is not None:
+            try:
+                diag = reader.battery_sign_diagnostics()
+            except Exception:  # noqa: BLE001 — diag must never block the flip
+                _LOGGER.debug("flip_battery_sign: diagnostics snapshot failed", exc_info=True)
+
+        current = bool((target.options or {}).get("battery_sign_user_flip", False))
+        new_flip = not current
+        new_options = {**(target.options or {}), "battery_sign_user_flip": new_flip}
+        # Suppress the update-listener reload; one explicit reload issued below.
+        if coordinator is not None:
+            coordinator._skip_options_reload = dict(new_options)
+        hass.config_entries.async_update_entry(target, options=new_options)
+        await hass.config_entries.async_reload(target.entry_id)
+        _LOGGER.info(
+            "flip_battery_sign: user_flip %s -> %s on entry %s",
+            current, new_flip, target.entry_id,
+        )
+        diag["user_flip_now"] = new_flip
+        return {"ok": True, "user_flip": new_flip, "diagnostics": diag}
+
+    hass.services.async_register(
+        DOMAIN,
+        "flip_battery_sign",
+        async_flip_battery_sign,
         schema=vol.Schema({
             vol.Optional("entry_id"): cv.string,
         }),
@@ -4028,6 +4592,18 @@ async def _async_register_phase_services(
             "recent_logs": recent_logs,
         }
 
+        # Layered-trace health summary (1.7.5) — tiny, so EVERY Diagnose
+        # button surfaces "is a control layer disagreeing right now?" at a
+        # glance. The FULL per-cycle chain is added to the trace / ev_chargers
+        # sections below. Best-effort, never raises.
+        try:
+            payload["trace_health"] = {
+                "health": coordinator.trace_health(),
+                "mismatch": coordinator.trace_latest_mismatch(),
+            }
+        except Exception as exc:  # noqa: BLE001
+            payload["trace_health"] = {"error": str(exc)}
+
         # ev_chargers storage split (#462/#464 follow-up). The merged
         # ``config`` block hides whether a charger entry lives in
         # entry.data or entry.options — the load-bearing fact when a
@@ -4065,6 +4641,24 @@ async def _async_register_phase_services(
                 payload["ev_actuation"] = _charger_actuation_diag(hass, coordinator)
             except Exception as exc:  # noqa: BLE001
                 payload["ev_actuation"] = {"error": str(exc)}
+
+        if section in ("all", "trace", "ev_chargers"):
+            # Layered-trace observability (1.7.5) — the recent
+            # management→process→integration chain per cycle, plus the current
+            # layer-boundary mismatch (acted but observed disagrees) if any.
+            # This is the "pull the last 30 cycles and read the chain" tool
+            # that would have made the 2026-07-10 EV flap a minutes-long
+            # debug. Included on the EV Diagnose button (the primary debug
+            # case) as well as the dedicated trace section. Read-only,
+            # best-effort, never raises.
+            try:
+                payload["trace"] = {
+                    "health": coordinator.trace_health(),
+                    "mismatch": coordinator.trace_latest_mismatch(),
+                    "recent": coordinator.trace_recent(30),
+                }
+            except Exception as exc:  # noqa: BLE001
+                payload["trace"] = {"error": str(exc)}
 
         return {"section": section, "payload": payload}
 

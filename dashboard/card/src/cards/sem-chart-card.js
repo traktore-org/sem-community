@@ -13,28 +13,59 @@
  * - Chart instance destroyed in disconnectedCallback()
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, nothing, semGlassCss } from '../base/sem-lit-base.js';
 import { semTheme, semGetCurrency, semDefineCard, SEM_COLORS } from '../base/sem-shared.js';
 import { startOfDayInHaTz } from '../util/time-zone.js';
 import { formatLegendLabels } from '../util/legend-format.js';
 
-/* ── Chart.js CDN singleton loader ── */
+/* ── Chart.js singleton loader — LOCAL first, CDN fallback (#617) ──
+   The library ships vendored under dashboard/card/vendor/ and is served
+   from SEM's static path, so charts work offline / on isolated installs.
+   The CDN remains only as a fallback for installs whose static path
+   registration failed. */
+const _CHARTJS_SOURCES = [
+    '/local/custom_components/solar_energy_management/dashboard/card/vendor/chart.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js',
+];
+const _ADAPTER_SOURCES = [
+    '/local/custom_components/solar_energy_management/dashboard/card/vendor/chartjs-adapter-date-fns.bundle.min.js',
+    'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js',
+];
+
+function _loadScriptChain(sources, resolve, reject) {
+    if (!sources.length) { reject(new Error('all sources failed')); return; }
+    const script = document.createElement('script');
+    script.src = sources[0];
+    script.onload = () => resolve();
+    script.onerror = () => _loadScriptChain(sources.slice(1), resolve, reject);
+    document.head.appendChild(script);
+}
+
 let _chartJsReady = null;
 function _loadChartJs() {
     if (_chartJsReady) return _chartJsReady;
     _chartJsReady = new Promise((resolve, reject) => {
-        if (window.Chart) { resolve(window.Chart); return; }
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js';
-        script.onload = () => {
-            const adapter = document.createElement('script');
-            adapter.src = 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js';
-            adapter.onload  = () => resolve(window.Chart);
-            adapter.onerror = () => resolve(window.Chart); // adapter optional
-            document.head.appendChild(adapter);
-        };
-        script.onerror = () => reject(new Error('Failed to load Chart.js'));
-        document.head.appendChild(script);
+        // adapter is optional — resolve with Chart either way
+        const loadAdapter = () => _loadScriptChain(_ADAPTER_SOURCES,
+            () => resolve(window.Chart),
+            () => resolve(window.Chart));
+        if (window.Chart) {
+            // (#646) another card's bundle may have defined window.Chart
+            // WITHOUT the date adapter — the old early-exit skipped the
+            // adapter entirely, so time-scale presets (energy "Last 7 Days")
+            // threw "a complete date adapter is provided". The adapter
+            // registers against the existing Chart; double-load is harmless.
+            const hasDateAdapter = (() => {
+                // the unextended stub's formats() just throws
+                try { new window.Chart._adapters._date({}).formats(); return true; }
+                catch { return false; }
+            })();
+            if (hasDateAdapter) { resolve(window.Chart); return; }
+            loadAdapter();
+            return;
+        }
+        _loadScriptChain(_CHARTJS_SOURCES, loadAdapter,
+            () => reject(new Error('Failed to load Chart.js')));
     });
     return _chartJsReady;
 }
@@ -50,14 +81,17 @@ const PRESETS = {
     costs: {
         title: 'energy_costs', y_label: '_currency_', stacked: false,
         daily:   [
-            { suffix: 'daily_costs',           name: 'Import',  color: C.gridImport, type: 'bar'  },
+            // (#585) cash-flow sign convention: Import (spending) drawn NEGATIVE
+            // / below the axis, Export (earnings) positive, Net signed so a
+            // net earning reads positive (up) — see _fetchStatistics negate.
+            { suffix: 'daily_costs',           name: 'Import',  color: C.gridImport, type: 'bar',  negate: true },
             { suffix: 'daily_export_revenue',   name: 'export',  color: C.gridExport, type: 'bar'  },
-            { suffix: 'daily_net_cost',         name: 'net',     color: C.solar,      type: 'line' },
+            { suffix: 'daily_net_cost',         name: 'net',     color: C.solar,      type: 'line', negate: true },
         ],
         monthly: [
-            { suffix: 'monthly_costs',          name: 'Import',  color: C.gridImport, type: 'bar'  },
+            { suffix: 'monthly_costs',          name: 'Import',  color: C.gridImport, type: 'bar',  negate: true },
             { suffix: 'monthly_export_revenue', name: 'export',  color: C.gridExport, type: 'bar'  },
-            { suffix: 'monthly_net_cost',       name: 'net',     color: C.solar,      type: 'line' },
+            { suffix: 'monthly_net_cost',       name: 'net',     color: C.solar,      type: 'line', negate: true },
         ],
     },
     savings: {
@@ -214,7 +248,8 @@ class SEMChartCard extends SEMLitBase {
 
     // ── Static CSS ──
     static get styles() {
-        return css`
+        // #617 — glass chrome baked in (was card-mod *glass_card)
+        return [semGlassCss, css`
             :host { display: block; }
             .sem-chart-wrap {
                 padding: 16px;
@@ -253,7 +288,7 @@ class SEMChartCard extends SEMLitBase {
                 font-family: 'Segoe UI','Roboto',sans-serif;
             }
             .empty-msg.visible { display: flex; }
-        `;
+        `];
     }
 
     // ── Render: static skeleton; chart canvas is populated imperatively ──
@@ -363,6 +398,7 @@ class SEMChartCard extends SEMLitBase {
             entity: `${this._prefix}${d.suffix}`,
             name:   this._t(d.name),
             color:  d.color, type: d.type, y_axis: d.y_axis || 0,
+            negate: d.negate || false,
         }));
     }
 
@@ -451,12 +487,17 @@ class SEMChartCard extends SEMLitBase {
         const stacked = this._config?.stacked ?? this._preset?.stacked ?? false;
         const stackedPower = stacked && period === 'hour';
         return series.map(s => ({
-            data: (stats[s.entity] || []).map(p => ({
-                x: new Date(p.start),
-                y: stackedPower
+            data: (stats[s.entity] || []).map(p => {
+                let y = stackedPower
                     ? (p.mean ?? p.state ?? 0)
-                    : (p.max ?? p.state ?? p.mean ?? 0),
-            })),
+                    : (p.max ?? p.state ?? p.mean ?? 0);
+                // (#585) cash-flow sign: negated series (Import / Net cost) are
+                // drawn below the axis, so spending points down and a net
+                // earning reads positive. Legend totals read the same y, so
+                // they stay consistent with the bars/line.
+                if (s.negate) y = -y;
+                return { x: new Date(p.start), y };
+            }),
         }));
     }
 

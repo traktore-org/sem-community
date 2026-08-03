@@ -15,6 +15,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .charger_types import BatteryIntent
+from .power_control import prepare_power_setpoint
 
 if TYPE_CHECKING:  # pragma: no cover
     from .battery_adapters.base import BatteryControlAdapter
@@ -117,3 +118,74 @@ async def actuate_battery(
         "actuate_battery(%s): unknown intent %r",
         decision.battery_id, decision.intent,
     )
+
+
+async def restore_discharge_limit_on_startup(hass, config: dict) -> None:
+    """Startup-only: push the configured max discharge limit.
+
+    (#624 — relocated from the deleted ``BatteryProtectionMixin``.)
+    After a restart the adapter's ``last_discharge_limit_w`` hysteresis
+    is empty, so a stale limit left behind by a previous run could leak
+    past ``decide_battery``'s NORMAL intent. This unconditionally pushes
+    the configured max on startup.
+    """
+    # Observer mode is a hard read-only boundary. Startup restoration used to
+    # bypass the normal per-cycle observer gate and could therefore write to
+    # hardware before the observer switch had been synchronised.
+    if config.get("observer_mode", False):
+        _LOGGER.info(
+            "Startup: observer mode active — battery discharge restore skipped"
+        )
+        return
+
+    max_discharge = config.get("battery_max_discharge_power", 5000)
+
+    # #691 — a multi-battery install carries PER-battery control entities
+    # (``battery_discharge_control_entities``, #523); restoring only the
+    # global key left each unit's stale limit in place across a restart.
+    # Restore every configured surface, de-duplicated (all units of one
+    # inverter bank may share a single entity).
+    entities: list[str] = []
+    global_ent = config.get("battery_discharge_control_entity", "")
+    if global_ent:
+        entities.append(global_ent)
+    per_battery = config.get("battery_discharge_control_entities")
+    if isinstance(per_battery, list):
+        entities.extend(e for e in per_battery if e)
+
+    for control_entity in dict.fromkeys(entities):
+        prepared = prepare_power_setpoint(hass, control_entity, max_discharge)
+        if prepared is None:
+            continue
+
+        if prepared.current_value < prepared.value:
+            await hass.services.async_call(
+                prepared.domain, "set_value",
+                {"entity_id": control_entity, "value": prepared.value},
+                blocking=True,
+            )
+            _LOGGER.info(
+                "Startup: restored battery discharge limit on %s from %.3f%s "
+                "to %.3f%s",
+                control_entity,
+                prepared.current_value,
+                prepared.unit,
+                prepared.value,
+                prepared.unit,
+            )
+
+
+def active_discharge_limit(adapters) -> "float | None":
+    """(#625 phase 4, extracted) The tightest ACTIVE discharge limit across
+    the per-battery adapter fleet, for the discharge-limit sensor (#375).
+
+    The protection gate fires fleet-wide on EV night charging, so in
+    practice every adapter reports the same value — ``min()`` is defensive.
+    ``None`` when no adapter is currently in LIMIT_DISCHARGE.
+    """
+    limits = [
+        a._last_discharge_limit_w for a in (adapters or {}).values()
+        if a.last_intent is BatteryIntent.LIMIT_DISCHARGE
+        and a._last_discharge_limit_w is not None
+    ]
+    return min(limits) if limits else None

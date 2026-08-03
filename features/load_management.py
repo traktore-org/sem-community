@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -46,20 +47,35 @@ class LoadManagementCoordinator:
         self.config_entry = config_entry
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{STORAGE_KEY}")
 
-        # Load management settings
-        self._enabled = config_entry.options.get(
+        # Load management settings — read the MERGED entry view (#692), the
+        # same one the coordinator gets (__init__.py builds
+        # ``{**entry.data, **entry.options}``). The install flow writes
+        # ``target_peak_limit`` to entry.data; only an options-flow re-save
+        # copies it to options. Reading options alone therefore enforced the
+        # 5.0 kW default on every install that never re-saved — the user's
+        # configured limit was silently ignored (live on TEST: data 6.0,
+        # options absent, shedding armed at 5.0). The Mapping guard: HA's
+        # real surfaces are MappingProxy (not dict); a stub entry's may be
+        # anything — a surface that isn't a mapping contributes nothing.
+        _data = getattr(config_entry, "data", None)
+        _opts = getattr(config_entry, "options", None)
+        _cfg = {
+            **(_data if isinstance(_data, Mapping) else {}),
+            **(_opts if isinstance(_opts, Mapping) else {}),
+        }
+        self._enabled = _cfg.get(
             "load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED
         )
-        self._target_peak_limit = config_entry.options.get(
+        self._target_peak_limit = _cfg.get(
             "target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT
         )
-        self._warning_level = config_entry.options.get(
+        self._warning_level = _cfg.get(
             "warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL
         )
-        self._emergency_level = config_entry.options.get(
+        self._emergency_level = _cfg.get(
             "emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL
         )
-        self._hysteresis = config_entry.options.get(
+        self._hysteresis = _cfg.get(
             "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS
         )
 
@@ -86,8 +102,9 @@ class LoadManagementCoordinator:
         # When True, skip _discover_devices() — UnifiedDeviceRegistry owns device list
         self._unified_registry_active = False
 
-        # Observer mode: skip all hardware control
-        self._observer_mode = config_entry.options.get("observer_mode", False)
+        # Observer mode: skip all hardware control (same merged view — the
+        # switch writes options, so options still wins when present)
+        self._observer_mode = _cfg.get("observer_mode", False)
 
         # #433 — telemetry surface mirroring classifier_path /
         # dampening_path / legionella_path. Focus on the high-leverage
@@ -382,12 +399,49 @@ class LoadManagementCoordinator:
         """Update the target peak limit and persist to config entry."""
         self._target_peak_limit = new_limit
         # Persist to config_entry.options so value survives restart (#199)
+        new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
         coordinator = getattr(self.config_entry, "runtime_data", None)
         if coordinator:
-            coordinator._skip_options_reload = True
-        new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
+            # (#636b) the listener honors a SNAPSHOT (dict == new options,
+            # recently armed) — the legacy bool True never matched and a
+            # redundant reload followed every live-apply (seen 05:49:39).
+            from homeassistant.util import dt as dt_util
+            coordinator._skip_options_reload = dict(new_options)
+            coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
         self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
         _LOGGER.info("Updated target peak limit to %skW", new_limit)
+        self._trigger_callbacks()
+
+    async def update_warning_peak_level(self, new_level: float):
+        """(#636) Live-apply + persist the warning peak level."""
+        self._warning_level = new_level
+        new_options = {**self.config_entry.options, "warning_peak_level": new_level}
+        coordinator = getattr(self.config_entry, "runtime_data", None)
+        if coordinator:
+            # (#636b) the listener honors a SNAPSHOT (dict == new options,
+            # recently armed) — the legacy bool True never matched and a
+            # redundant reload followed every live-apply (seen 05:49:39).
+            from homeassistant.util import dt as dt_util
+            coordinator._skip_options_reload = dict(new_options)
+            coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
+        self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
+        _LOGGER.info("Updated warning peak level to %skW", new_level)
+        self._trigger_callbacks()
+
+    async def update_emergency_peak_level(self, new_level: float):
+        """(#636) Live-apply + persist the emergency peak level."""
+        self._emergency_level = new_level
+        new_options = {**self.config_entry.options, "emergency_peak_level": new_level}
+        coordinator = getattr(self.config_entry, "runtime_data", None)
+        if coordinator:
+            # (#636b) the listener honors a SNAPSHOT (dict == new options,
+            # recently armed) — the legacy bool True never matched and a
+            # redundant reload followed every live-apply (seen 05:49:39).
+            from homeassistant.util import dt as dt_util
+            coordinator._skip_options_reload = dict(new_options)
+            coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
+        self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
+        _LOGGER.info("Updated emergency peak level to %skW", new_level)
         self._trigger_callbacks()
 
     async def update_device_priority(self, device_id: str, priority: int):
@@ -548,6 +602,17 @@ class LoadManagementCoordinator:
                 stale.append(device_id)
                 continue
 
+            # (#649) Not ours to hold — evict regardless of on/off. A stale
+            # entry (upgrade, or a mode flip made while the device was shed)
+            # otherwise pins the state machine: a non-empty _devices_shed reads
+            # as SHEDDING, so _restore_loads never runs, so the guard that drops
+            # the entry is never reached, and genuinely LM-shed peak_only loads
+            # stay off indefinitely. Only reachable when the owning engine has
+            # the device back ON (an off device is cleaned below anyway).
+            if self._peak_managed_elsewhere(device_info):
+                stale.append(device_id)
+                continue
+
             device_state = self._device_discovery.get_device_current_state(device_info)
             if not device_state["is_on"] and device_state["current_power"] <= 0:
                 stale.append(device_id)
@@ -665,19 +730,50 @@ class LoadManagementCoordinator:
             # WARNING / ERROR states intentionally take no action
             self._last_action_path = f"no_action:{self._state}"
 
+    @staticmethod
+    def _peak_managed_elsewhere(device_info: Dict) -> bool:
+        """Does another engine already own this device's peak shed + restart?
+
+        Two kinds, one rule — the load manager must not actuate a device whose
+        run/stop decision belongs to a different writer, because the two engines
+        keep SEPARATE shed state, anti-flicker and restore criteria and will
+        fight each other:
+
+        * **EV chargers** (#461-peak) — peak-managed by ``decide()`` / the night
+          planner, actuated through the reconciler. Daytime charging is
+          solar-driven (no grid peak) and the night grid top-up is already
+          peak-aware (``ev_control._night_peak_managed_amps``).
+        * **SURPLUS-mode loads** (#649) — the surplus controller receives
+          ``peak_state`` every cycle and sheds its own actives (SHEDDING: one
+          per cycle, EMERGENCY: all of them). Shedding them here too was
+          survivable; RESTORING them was not. ``_restore_device`` turns the
+          switch back on the moment the peak recedes — with zero surplus, and
+          with surplus intent OFF — after which ``device_reconciler``
+          classifies the load ``external_on`` ("don't fight the user") and it
+          runs on grid all night. The comment at ``surplus_controller.py:155``
+          has always claimed the load manager owns only ``peak_only``; this is
+          the code finally saying the same thing.
+
+        ``surplus_managed`` is set by the registry sync for devices actually
+        registered with the surplus controller — a surplus-mode device that
+        nothing else drives (no live controller object) stays ours to shed,
+        so the exclusion can't silently orphan a load.
+        """
+        if device_info.get("device_type") == "ev_charger":
+            return True
+        return (
+            device_info.get("control_mode") == "surplus"
+            and bool(device_info.get("surplus_managed"))
+        )
+
     async def _emergency_load_shedding(self):
         """Emergency load shedding - turn off all non-critical loads immediately."""
         devices_to_shed = [
             device_id for device_id, device_info in self._devices.items()
             if (device_info.get("control_mode") != "off" and
-                # EV chargers are NOT shed here (#461-peak). Daytime EV
-                # charging is solar/surplus-driven (no grid peak), and the
-                # night grid top-up is peak-managed by the night planner
-                # (ev_control._night_peak_managed_amps) — both via the single
-                # decide()/reconciler writer. load_management shedding the EV
-                # via its side-channel fought that writer / mis-read
-                # number-entity chargers, so the EV is never actuated here.
-                device_info.get("device_type") != "ev_charger" and
+                # Devices another engine peak-manages are never actuated from
+                # here (#461-peak EV, #649 surplus) — see the helper.
+                not self._peak_managed_elsewhere(device_info) and
                 device_info.get("is_controllable", True) and
                 device_info.get("is_available", False) and
                 not device_info.get("is_critical", False) and
@@ -782,10 +878,10 @@ class LoadManagementCoordinator:
             # Skip devices in "off" mode — SEM never touches these (#49)
             if device_info.get("control_mode") == "off":
                 continue
-            # EV chargers are peak-managed by decide()/the night planner (the
-            # single reconciler writer), never shed from here (#461-peak — see
-            # _emergency_load_shedding for the full rationale).
-            if device_info.get("device_type") == "ev_charger":
+            # Devices another engine peak-manages (#461-peak EV, #649
+            # surplus-mode loads) are never shed from here — see
+            # _peak_managed_elsewhere for the full rationale.
+            if self._peak_managed_elsewhere(device_info):
                 continue
             if (device_info.get("is_controllable", True) and
                 not device_info.get("is_critical", False) and
@@ -823,15 +919,13 @@ class LoadManagementCoordinator:
         if device_id not in self._devices:
             return
 
-        # Single-writer guard (#461-peak): EV chargers are peak-managed by
-        # decide()/the night planner → the reconciler. Never shed one from
-        # here even if a future caller reaches this — the side-channel write
-        # would fight the reconciler heartbeat. Belt-and-braces with the two
-        # selection-path skips.
-        if self._devices[device_id].get("device_type") == "ev_charger":
+        # Single-writer guard (#461-peak EV, #649 surplus): the side-channel
+        # write would fight the owning engine's heartbeat. Belt-and-braces with
+        # the two selection-path skips, for any future caller that reaches here.
+        if self._peak_managed_elsewhere(self._devices[device_id]):
             _LOGGER.debug(
-                "Skipping load-manager shed of EV charger %s — peak-managed "
-                "by decide()/night planner (#461-peak)", device_id,
+                "Skipping load-manager shed of %s — peak-managed by another "
+                "writer (#461-peak / #649)", device_id,
             )
             return
 
@@ -992,11 +1086,14 @@ class LoadManagementCoordinator:
 
         device_info = self._devices[device_id]
 
-        # Single-writer guard (#461-peak): never restore an EV charger from
-        # here — load_management doesn't shed it, so it should never be in
-        # _devices_shed, but a side-channel restore would still fight the
-        # reconciler. Belt-and-braces with _shed_device.
-        if device_info.get("device_type") == "ev_charger":
+        # Single-writer guard (#461-peak EV, #649 surplus): never restore a
+        # device another engine owns — we don't shed them, so they shouldn't be
+        # in _devices_shed, but an entry can survive an upgrade or a mode change
+        # made while the device was already shed. Drop it WITHOUT turning the
+        # load on: the owning engine restarts it on its own criteria (for a
+        # surplus load, when there is actually surplus). Turning it on here is
+        # exactly the #649 all-night-on-grid failure.
+        if self._peak_managed_elsewhere(device_info):
             self._devices_shed = [d for d in self._devices_shed if d != device_id]
             return
 
@@ -1122,12 +1219,15 @@ class LoadManagementCoordinator:
         # "Switchable" = controllable AND currently on (i.e. could be shed now).
         # Previously counted all available+controllable devices, which kept the
         # number at "10" even when the user had turned them all off (#193).
-        # EV chargers are excluded everywhere (#461-peak): load_management
-        # neither sheds them nor counts them as sheddable, so the sensor
-        # doesn't over-report (a 22 kW EV draw is NOT reducible from here).
+        # Devices another engine peak-manages are excluded everywhere
+        # (#461-peak EV, #649 surplus loads): load_management neither sheds them
+        # nor counts them as sheddable, so the sensor doesn't over-report — "how
+        # much can we shed?" must match what shedding will actually target (a
+        # 22 kW EV draw, or a surplus pump the surplus controller owns, is NOT
+        # reducible from here).
         controllable_devices = sum(
             1 for d in self._devices.values()
-            if d.get("device_type") != "ev_charger"
+            if not self._peak_managed_elsewhere(d)
             and d.get("is_controllable", True)
             and d.get("is_available", False)
             and self._is_device_currently_on(d)
@@ -1136,7 +1236,7 @@ class LoadManagementCoordinator:
         available_reduction = sum(
             self._device_discovery.get_device_current_state(device_info)["current_power"] / 1000
             for device_id, device_info in self._devices.items()
-            if (device_info.get("device_type") != "ev_charger" and
+            if (not self._peak_managed_elsewhere(device_info) and
                 device_info.get("is_controllable", True) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and

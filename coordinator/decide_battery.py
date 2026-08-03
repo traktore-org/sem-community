@@ -1,7 +1,7 @@
 """Pure ``decide_battery(view) → BatteryDecision`` (Group B Step 3).
 
 One pure function per cycle per battery. Replaces the branching
-in :class:`BatteryProtectionMixin` + :meth:`BatteryChargeScheduler.update`
+in the deleted ``BatteryProtectionMixin`` (#624) + :meth:`BatteryChargeScheduler.update`
 that pre-v1.7.0 spread across two modules.
 
 Pure: no ``self``, no HA calls. Input :class:`BatteryView`, output
@@ -13,11 +13,15 @@ Decision tree (precedence top-down):
    charge window.
 2. STOP_FORCE_CHARGE — scheduler decided TARGET_REACHED / NOT_NEEDED /
    IDLE but the adapter is still in FORCE_CHARGE intent.
-3. LIMIT_DISCHARGE — EV charging AND either solar surplus is below the
-   ``battery_assist_min_surplus`` gate OR battery SoC is below the
+3. LIMIT_DISCHARGE (EV) — EV charging AND either solar surplus is below
+   the ``battery_assist_min_surplus`` gate OR battery SoC is below the
    ``battery_buffer_soc`` floor (any mode/time); clamp battery to home
-   consumption (1:1 protection) so grid+solar fund the car.
-4. NORMAL — default.
+   consumption (1:1 protection) so grid+solar fund the car. Grid-funded
+   cheap-hours load draw is excluded from the home budget.
+4. LIMIT_DISCHARGE (grid-funded loads, #620) — cheap-hours top-up loads
+   ("Finish overnight from: Grid") are running; clamp battery to
+   home − grid_funded so the grid, not the battery, feeds them.
+5. NORMAL — default.
 """
 from __future__ import annotations
 
@@ -31,6 +35,43 @@ if TYPE_CHECKING:  # pragma: no cover
     from .charger_types import BatteryView
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def effective_battery_count(pbcs: "list[dict]") -> int:
+    """The divisor for the per-battery LIMIT_DISCHARGE home split (#691).
+
+    #531 introduced the split so N batteries each told to inject the FULL
+    home load don't over-inject N×. But the divisor must count CONSUMERS
+    of the home budget, not configured rows:
+
+    - a ``mode=off`` battery is hands-off (``decide_battery`` short-
+      circuits to OFF before any command) — it never receives the clamp,
+      so it must not eat a share. Live #691: 2 configured, 1 off, home
+      ≈1 kW → the one controlled battery was limited to 500 W and the
+      grid imported the other half all evening.
+    - batteries sharing ONE discharge-limit entity (SolarEdge's inverter-
+      level Storage Discharge Limit; any multi-battery install without
+      per-battery ``battery_discharge_control_entities``, where every
+      unit falls back to the same global key) are one actuation surface:
+      a single write governs the whole bank, so together they are ONE
+      consumer with the full budget. Distinct entities keep the #531
+      split. A battery with no discharge-limit entity at all counts
+      individually (unknown surface — today's behaviour).
+
+    Takes the per-battery config dicts (``_per_battery_config`` output,
+    fleet order). Returns at least 1.
+    """
+    surfaces: set[str] = set()
+    unknown = 0
+    for pbc in pbcs:
+        if str(pbc.get("battery_mode", "auto") or "auto").lower() == "off":
+            continue
+        ent = pbc.get("battery_discharge_control_entity")
+        if ent:
+            surfaces.add(str(ent))
+        else:
+            unknown += 1
+    return max(1, len(surfaces) + unknown)
 
 
 def decide_battery(view: "BatteryView") -> BatteryDecision:
@@ -148,6 +189,25 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 # #531: don't sell blind — a setpoint battery has no hardware
                 # reserve-stop, so an unavailable SOC must hold, not discharge.
                 if soc is not None and soc > floor:
+                    # ⚠️ MULTI-BATTERY RE-ACTIVATION GUARD (arbitrage is dormant
+                    # in stable — #533 migration v14 forces it off; _any_allow_arb
+                    # is False and the UI is hidden). ``discharge_power_w`` here is
+                    # the scheduler's single ``max_discharge_power_w`` (the global
+                    # ``battery_max_discharge_power`` config, battery_charge_scheduler
+                    # .py:723). It is handed UNSPLIT to EVERY arbitrage battery, so
+                    # an N-battery fleet exports N× this value.
+                    #
+                    # The sibling LIMIT_DISCHARGE path below (~line 242) already hit
+                    # this exact class (#531) and splits ``home/n``. BEFORE re-enabling
+                    # arbitrage, resolve the intended semantics of the config value
+                    # and apply the matching treatment:
+                    #   • if it means "total battery→grid export" → split ``/n``
+                    #     (``n = max(1, int(getattr(f, "battery_count", 1) or 1))``),
+                    #     mirroring LIMIT_DISCHARGE;
+                    #   • if it means "per-battery export cap" → leave unsplit but
+                    #     clamp each battery to its own capability, not a shared max.
+                    # Left UNSPLIT deliberately for now so the fix lands with the
+                    # design decision, not a guess on dormant code (#523/#533).
                     return BatteryDecision(
                         battery_id=rt.battery_id,
                         intent=BatteryIntent.FORCE_DISCHARGE,
@@ -239,8 +299,11 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             # #531: split the home budget across the fleet — N batteries each
             # told to inject the FULL home load over-injects N× and leaks the
             # surplus to the EV, defeating the protection. Each gets home/N.
+            # (#620) grid-funded cheap-hours loads are excluded from the home
+            # budget — the grid feeds them, not the battery (see below).
             n = max(1, int(getattr(f, "battery_count", 1) or 1))
-            home_w = max(0.0, view.home_consumption_w) / n
+            gf_w = max(0.0, float(getattr(view, "grid_funded_load_w", 0.0) or 0.0))
+            home_w = max(0.0, view.home_consumption_w - gf_w) / n
             if below_buffer:
                 why = (
                     f"ev plugged in + battery SoC {f.battery_soc:.0f}% < buffer "
@@ -251,12 +314,40 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                     f"ev plugged in + solar surplus {surplus_w:.0f}W < gate "
                     f"{gate_w:.0f}W"
                 )
+            if gf_w > 0:
+                why += f" (excl. {gf_w:.0f}W grid-funded load)"
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.LIMIT_DISCHARGE,
                 discharge_limit_w=home_w,
                 reason=(
                     f"{why} → discharge limit {home_w:.0f} W (home/{n} across fleet)"
+                ),
+            )
+
+    # ─── LIMIT_DISCHARGE for grid-funded loads (#620) ───
+    # "Finish overnight from: Grid" must actually pull from the GRID. The
+    # inverter's self-consumption logic covers any house load from the battery,
+    # so without a clamp the Battery/Grid picker choices are physically
+    # identical (observed live: identical discharge either way, PROD
+    # 2026-07-22). While cheap-hours loads run, cap discharge at the rest of
+    # the home load — the grid funds the forced loads, the battery still
+    # serves everything else. Independent of the EV (the branch above already
+    # subtracts when both are active).
+    if protection_enabled:
+        gf_w = max(0.0, float(getattr(view, "grid_funded_load_w", 0.0) or 0.0))
+        if gf_w > 0:
+            f = view.fleet
+            n = max(1, int(getattr(f, "battery_count", 1) or 1))
+            home_w = max(0.0, view.home_consumption_w - gf_w) / n
+            return BatteryDecision(
+                battery_id=rt.battery_id,
+                intent=BatteryIntent.LIMIT_DISCHARGE,
+                discharge_limit_w=home_w,
+                reason=(
+                    f"grid-funded load(s) {gf_w:.0f}W running (cheap-hours "
+                    f"top-up) → discharge limit {home_w:.0f} W (home/{n} "
+                    f"across fleet) so the grid feeds them"
                 ),
             )
 

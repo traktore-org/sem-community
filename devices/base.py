@@ -54,7 +54,8 @@ _BRAND_WATCHDOG_REFRESH_S = {
 # Persisted so it overwrites the box's short built-in failsafe.
 FAILSAFE_TIMEOUT_S = 600
 
-from ..consts.core import KEBA_IDLE_GUARD_KWH
+from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
+from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -132,6 +133,7 @@ class ControllableDevice(ABC):
         min_power_threshold: float = 0.0,
         entity_id: Optional[str] = None,
         power_entity_id: Optional[str] = None,
+        energy_entity_id: Optional[str] = None,
     ):
         self.hass = hass
         self.device_id = device_id
@@ -140,6 +142,11 @@ class ControllableDevice(ABC):
         self.min_power_threshold = min_power_threshold
         self.entity_id = entity_id
         self.power_entity_id = power_entity_id
+        # #600 — a kWh-only load device (no power sensor) can supply a
+        # TOTAL_INCREASING energy counter; live power is derived from it. A
+        # power sensor always wins; the deriver is the fallback. Lazily created.
+        self.energy_entity_id = energy_entity_id
+        self._energy_deriver = None
         self._status = DeviceStatus()
         self._enabled = True
         self._managed_externally = False
@@ -161,10 +168,27 @@ class ControllableDevice(ABC):
 
         # Daily runtime tracking (Feature 2)
         self.daily_min_runtime_sec: int = 0  # 0 = disabled
+        # (#620) daily MAXIMUM runtime cap — the device never runs past this in
+        # a day (pump wear / waste protection). 0 = uncapped. Persisted +
+        # restored (the #559 HIGH-1 was an un-persisted cap lost on restart).
+        self.daily_max_runtime_sec: int = 0  # 0 = uncapped
         self._daily_runtime_accumulated_sec: float = 0.0
         self._daily_runtime_last_check: Optional[datetime] = None
         self._daily_runtime_meter_day: Optional[date] = None
         self._offpeak_forced: bool = False
+
+        # (#620) Battery use, two tiers gated by the existing Buffer + Reserve
+        # SoC. Tier 1 (``battery_assist_enabled``) = the "Solar + battery" mode:
+        # the battery assists this device above the Buffer SoC when real surplus
+        # exists (self-consumption max, mirrors the EV #545) — automatic, no
+        # per-cycle drain of stored house energy. Tier 2
+        # (``battery_eligible_overnight``) = the opt-in to draw BELOW the buffer,
+        # down to the Reserve SoC, when there is no surplus (spends stored house
+        # energy at night). Both default off — a bare switch load never touches
+        # the battery until the user chooses a battery mode. The allocation that
+        # CONSUMES these flags lands in surplus_controller (#620 Phase 2).
+        self.battery_assist_enabled: bool = False
+        self.battery_eligible_overnight: bool = False
 
         # (#559) Goal engine — grounded core. daily_min_runtime_sec (above,
         # pre-#559 "Feature 2") is the only target; solar_only default means
@@ -178,6 +202,13 @@ class ControllableDevice(ABC):
         # rollover (the deficit was YESTERDAY's) so it can't re-fill the new
         # day's target from grid overnight.
         self._offpeak_forced_date: Optional[date] = None
+        # (#620) Tier-2 overnight battery force marker — SEPARATE from the
+        # cheap-hours ``_offpeak_forced`` so the cheap-hours force-expiry (which
+        # deactivates at non-cheap tariff) can't kill a battery-overnight run
+        # every cycle. Tier 2 expires on its own terms: the Reserve floor, the
+        # daily target met, or the day rollover.
+        self._batt_overnight_forced: bool = False
+        self._batt_overnight_forced_date: Optional[date] = None
 
         # Appliance dependencies (#122): device only activates when dependencies are met
         self.depends_on: List[str] = []  # device_ids that must be active
@@ -319,10 +350,59 @@ class ControllableDevice(ABC):
 
         self._daily_runtime_last_check = now
 
+    def observed_power_w(self) -> Optional[float]:
+        """#600 — the device's live consumption in W: the power sensor if
+        present and readable, else derived from an energy (kWh) counter, else
+        None. A power sensor ALWAYS wins; the energy deriver is the fallback for
+        kWh-only devices (e.g. Viessmann ViCare yearly counter)."""
+        # #641 — this read did NO unit conversion at all. A heat-pump or
+        # pool-pump power sensor reporting kW taught ``calibrate_rated_power`` a
+        # ~3 W rated power, which collapses the activation threshold and makes
+        # runtime-on-solar credit and shed decisions garbage, silently.
+        if self.hass and self.power_entity_id:
+            watts = power_state_to_watts(self.hass.states.get(self.power_entity_id))
+            if watts is not None:
+                return watts
+        if self.hass and self.energy_entity_id:
+            # Same gap on the energy side: a raw float went into
+            # ``EnergyRateDeriver`` with no unit check, so a Wh counter derived
+            # a 1000x power.
+            energy = energy_state_to_kwh(self.hass.states.get(self.energy_entity_id))
+            if self._energy_deriver is None:
+                from ..coordinator.energy_rate_deriver import EnergyRateDeriver
+                self._energy_deriver = EnergyRateDeriver()
+            rated = getattr(self, "rated_power", None)
+            cap = rated * 2 if rated else None
+            return self._energy_deriver.update(energy, time.monotonic(), max_power_w=cap)
+        return None
+
     def calibrate_rated_power(self) -> None:
-        """(#559) Hook: devices that can learn their real draw override this.
-        Base is a no-op."""
-        return
+        """(#559/#576) Learn the device's real draw from its power sensor.
+
+        Runs every cycle while the device is ON: if the sensor reports a
+        larger draw than the current ``rated_power``, adopt it as both the
+        rated power and the surplus-activation threshold. Promoted from
+        ``SwitchDevice`` to the base (#576) so EVERY device type — switch,
+        heat pump, climate — "sees where it goes", not just switches.
+
+        #600 — reads via ``observed_power_w`` so a kWh-only device (energy
+        counter, no power sensor) still calibrates from its derived power.
+        No-op for devices without any consumption signal or a ``rated_power``
+        (e.g. the modulating EV, which measures draw its own way)."""
+        rated = getattr(self, "rated_power", None)
+        if rated is None or not self.hass or not self.is_active:
+            return
+        observed = self.observed_power_w()
+        if observed is None:
+            return
+        if observed > self.rated_power:
+            _LOGGER.info(
+                "%s: calibrated rated_power %.0fW -> %.0fW from %s",
+                self.name, self.rated_power, observed,
+                self.power_entity_id or self.energy_entity_id,
+            )
+            self.rated_power = observed
+            self.min_power_threshold = observed
 
     @property
     def remaining_daily_runtime_sec(self) -> float:
@@ -330,22 +410,50 @@ class ControllableDevice(ABC):
         return max(0, self.daily_min_runtime_sec - self._daily_runtime_accumulated_sec)
 
     @property
-    def needs_offpeak_activation(self) -> bool:
-        """True if device has a runtime deficit, is enabled, and not already active."""
+    def daily_max_runtime_reached(self) -> bool:
+        """(#620) True when the device has hit its daily MAXIMUM runtime cap —
+        it must not run again today. 0 = uncapped (never reached). The
+        allocation passes exclude a capped device for the rest of the day."""
+        if self.daily_max_runtime_sec <= 0:
+            return False
+        return self._daily_runtime_accumulated_sec >= self.daily_max_runtime_sec
+
+    @property
+    def has_runtime_deficit(self) -> bool:
+        """Runtime target not yet met — **independent of whether the device is
+        currently active**. This is the deficit that drives the overnight-battery
+        and cheap-grid intents in the desired-state model: those sources must
+        KEEP a running load on until the deficit closes, so they can't use the
+        ``not is_active`` gate that ``needs_offpeak_activation`` carries."""
         if self.daily_min_runtime_sec <= 0:
             return False
         if not self._enabled:
             return False
-        if self.is_active:
+        if self.daily_max_runtime_reached:  # (#620) cap overrides the deficit
             return False
         return self.remaining_daily_runtime_sec > 0
+
+    @property
+    def needs_offpeak_activation(self) -> bool:
+        """True if device has a runtime deficit, is enabled, and not already
+        active. The activation-side view of ``has_runtime_deficit``."""
+        return self.has_runtime_deficit and not self.is_active
 
     # --- (#559) goal engine — grounded core (runtime target + stop condition) ---
 
     @property
     def daily_targets_met(self) -> bool:
         """Runtime minimum target achieved. No target configured = False —
-        the stop condition is an independent gate, not a target."""
+        the stop condition is an independent gate, not a target.
+
+        (#688) This is a FLOOR, not a stop. True means the PAID sources
+        (battery assist, overnight battery drain, cheap-grid top-up) have
+        nothing left to guarantee and stand down — free solar surplus may
+        carry the load on up to ``daily_max_runtime_sec``, which is the only
+        hard stop. Mirrors the EV floor/ceiling contract (#245). Do not
+        re-wire this as a deactivation gate: that made any Max above the Min
+        unreachable by construction.
+        """
         if self.daily_min_runtime_sec <= 0:
             return False
         return self._daily_runtime_accumulated_sec >= self.daily_min_runtime_sec
@@ -401,6 +509,11 @@ class ControllableDevice(ABC):
 
     def can_activate(self) -> bool:
         """Check if device can be activated (respects dependencies, min_off, activation_delay)."""
+        # (#620) daily maximum cap — a capped-out device never re-activates
+        # today. Gated first: it overrides surplus, off-peak and deadline
+        # passes alike (the cap is a hard "done for today").
+        if self.daily_max_runtime_reached:
+            return False
         # Dependency check (#122): all depends_on devices must be in required state
         if not self._check_dependencies():
             return False
@@ -528,14 +641,12 @@ class ControllableDevice(ABC):
         return True
 
     def get_current_consumption(self) -> float:
-        """Get current power consumption from HA entity or estimate."""
+        """Get current power consumption in W from HA entity or estimate."""
         if self.power_entity_id:
-            state = self.hass.states.get(self.power_entity_id)
-            if state and state.state not in ("unknown", "unavailable"):
-                try:
-                    return float(state.state)
-                except (ValueError, TypeError):
-                    pass
+            # #641 — unit-aware; this copy had no conversion either.
+            watts = power_state_to_watts(self.hass.states.get(self.power_entity_id))
+            if watts is not None:
+                return watts
         return self._status.current_consumption_w
 
     @property
@@ -573,13 +684,21 @@ class ControllableDevice(ABC):
             "observed_on": obs,
             "sem_owned": self._sem_owned,
         }
-        if self.daily_min_runtime_sec > 0:
+        if (self.daily_min_runtime_sec > 0 or self.daily_max_runtime_sec > 0
+                or self.battery_assist_enabled or self.battery_eligible_overnight):
             d.update({
                 "daily_min_runtime_sec": self.daily_min_runtime_sec,
                 "daily_runtime_accumulated_sec": round(self._daily_runtime_accumulated_sec, 1),
                 "top_up_policy": self.top_up_policy,
                 "remaining_daily_runtime_sec": round(self.remaining_daily_runtime_sec, 1),
                 "offpeak_forced": self._offpeak_forced,
+                # (#620) max cap + battery tiers — surfaced for the card + the
+                # allocation, and PERSISTED (the max cap is restored across a
+                # restart, closing the #559 HIGH-1 un-persisted-cap bug).
+                "daily_max_runtime_sec": self.daily_max_runtime_sec,
+                "daily_max_runtime_reached": self.daily_max_runtime_reached,
+                "battery_assist_enabled": self.battery_assist_enabled,
+                "battery_eligible_overnight": self.battery_eligible_overnight,
             })
         # Dependency info (#122)
         if self.depends_on:
@@ -608,18 +727,61 @@ class SwitchDevice(ControllableDevice):
         entity_id: Optional[str] = None,
         power_entity_id: Optional[str] = None,
         min_on_time: int = 300,
-        min_off_time: int = 60,
+        # (#688) 300 s (was 60): a deferrable load like a pool pump should not be
+        # re-startable a minute after it stopped. With min_on also 300 s this caps
+        # cycling at a ~10-min period and lets min_on hold the load through a
+        # passing cloud instead of stopping. Overridden per-load via the
+        # min_off_time_min goal; subclasses (hot water) pass their own.
+        min_off_time: int = 300,
         daily_min_runtime_sec: int = 0,
+        daily_max_runtime_sec: int = 0,        # (#620) 0 = uncapped
+        battery_assist_enabled: bool = False,  # (#620) Tier 1 — Solar + battery
+        battery_eligible_overnight: bool = False,  # (#620) Tier 2 — overnight
+        energy_entity_id: Optional[str] = None,
     ):
+        # (#576) 1 kW default for a sensor-less / discovery-zero switch: a saner
+        # floor than 0 W (which left the activation threshold tiny, so the
+        # switch turned on at any surplus and imported the rest from grid).
+        # When a power sensor IS present, calibrate_rated_power() learns the
+        # real draw and snaps up from here.
+        rp = rated_power if (rated_power and rated_power > 0) else DEFAULT_DEVICE_RATED_POWER
         super().__init__(
             hass, device_id, name, priority,
-            min_power_threshold or rated_power,
+            min_power_threshold or rp,
             entity_id, power_entity_id,
+            energy_entity_id=energy_entity_id,
         )
-        self.rated_power = rated_power
-        self.min_on_time = min_on_time
-        self.min_off_time = min_off_time
+        self.rated_power = rp
+        # (#644) ONE anti-cycle mechanism: the legacy min_on_time/min_off_time
+        # knobs map onto the base-layer min_on_seconds/min_off_seconds, whose
+        # epochs (_last_activated/_last_deactivated) are rebuild-transplanted
+        # (#620 _VOLATILE_CONTROL_FIELDS). Pre-#644 the subclasses kept a
+        # SECOND clock on _status.last_* — wiped on every rediscovery rebuild,
+        # so a compressor could short-cycle 20 s after stopping.
+        self.min_on_seconds = int(min_on_time)
+        self.min_off_seconds = int(min_off_time)
         self.daily_min_runtime_sec = daily_min_runtime_sec
+        self.daily_max_runtime_sec = daily_max_runtime_sec
+        self.battery_assist_enabled = battery_assist_enabled
+        self.battery_eligible_overnight = battery_eligible_overnight
+
+    @property
+    def min_on_time(self) -> int:
+        """(#644) alias of the unified anti-cycle knob."""
+        return self.min_on_seconds
+
+    @min_on_time.setter
+    def min_on_time(self, v: int) -> None:
+        self.min_on_seconds = int(v)
+
+    @property
+    def min_off_time(self) -> int:
+        """(#644) alias of the unified anti-cycle knob."""
+        return self.min_off_seconds
+
+    @min_off_time.setter
+    def min_off_time(self, v: int) -> None:
+        self.min_off_seconds = int(v)
 
     @property
     def device_type(self) -> DeviceType:
@@ -642,6 +804,7 @@ class SwitchDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._last_activated = self._status.last_activated  # (#644) unified clock
         self._sem_owned = True  # (arc) re-own on restart → SEM manages it
         _LOGGER.info(
             "%s: switch %s was ON at registration — re-owned as active",
@@ -649,38 +812,15 @@ class SwitchDevice(ControllableDevice):
         )
         return True
 
-    def calibrate_rated_power(self) -> None:
-        """(#559) Self-heal an unknown rated_power. Auto-discovered switches
-        snapshot the power sensor's reading at discovery (often 0 W while the
-        load is off), which leaves min_power_threshold tiny — the switch then
-        turns on at almost any surplus and imports the rest from grid. When
-        the switch is ON and its power sensor reports a larger real draw,
-        adopt it as both the rated power and the surplus threshold."""
-        if not self.power_entity_id or not self.hass or not self.is_active:
-            return
-        state = self.hass.states.get(self.power_entity_id)
-        if not state or state.state in ("unknown", "unavailable", None):
-            return
-        try:
-            observed = float(state.state)
-        except (ValueError, TypeError):
-            return
-        if observed > self.rated_power:
-            _LOGGER.info(
-                "%s: calibrated rated_power %.0fW -> %.0fW from %s",
-                self.name, self.rated_power, observed, self.power_entity_id,
-            )
-            self.rated_power = observed
-            self.min_power_threshold = observed
-
     async def activate(self, available_watts: float) -> float:
         if not self.entity_id:
             return 0.0
 
-        # Anti-flicker: check minimum off time
-        if self._status.last_deactivated:
-            elapsed = (datetime.now() - self._status.last_deactivated).total_seconds()
-            if elapsed < self.min_off_time:
+        # Anti-flicker: minimum off time — the UNIFIED clock (#644): the
+        # base-layer epoch survives rediscovery rebuilds via the transplant.
+        if self._last_deactivated:
+            elapsed = (datetime.now() - self._last_deactivated).total_seconds()
+            if elapsed < self.min_off_seconds:
                 return 0.0
 
         try:
@@ -693,6 +833,7 @@ class SwitchDevice(ControllableDevice):
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
             self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated  # (#644) unified clock
             self._status.activation_count += 1
             _LOGGER.info("Activated switch device %s (%dW)", self.name, self.rated_power)
             return self.rated_power
@@ -706,10 +847,10 @@ class SwitchDevice(ControllableDevice):
         if not self.entity_id:
             return
 
-        # Anti-flicker: check minimum on time
-        if self._status.last_activated:
-            elapsed = (datetime.now() - self._status.last_activated).total_seconds()
-            if elapsed < self.min_on_time:
+        # Anti-flicker: minimum on time — the UNIFIED clock (#644).
+        if self._last_activated:
+            elapsed = (datetime.now() - self._last_activated).total_seconds()
+            if elapsed < self.min_on_seconds:
                 return
 
         try:
@@ -722,6 +863,7 @@ class SwitchDevice(ControllableDevice):
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
             self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             _LOGGER.info("Deactivated switch device %s", self.name)
         except Exception as e:
             _LOGGER.error("Failed to deactivate %s: %s", self.name, e)
@@ -769,18 +911,27 @@ class ClimateDevice(ControllableDevice):
         min_on_time: int = 300,
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
+        daily_max_runtime_sec: int = 0,        # (#620) 0 = uncapped
+        battery_assist_enabled: bool = False,  # (#620) Tier 1 — Solar + battery
+        battery_eligible_overnight: bool = False,  # (#620) Tier 2 — overnight
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass, device_id, name, priority,
             min_power_threshold or rated_power,
             entity_id, power_entity_id,
+            energy_entity_id=energy_entity_id,
         )
         self.rated_power = rated_power
         self.hvac_mode = hvac_mode or "cool"
         self.target_temperature = target_temperature
-        self.min_on_time = min_on_time
-        self.min_off_time = min_off_time
+        # (#644) unified anti-cycle knobs (see SwitchDevice)
+        self.min_on_seconds = int(min_on_time)
+        self.min_off_seconds = int(min_off_time)
         self.daily_min_runtime_sec = daily_min_runtime_sec
+        self.daily_max_runtime_sec = daily_max_runtime_sec
+        self.battery_assist_enabled = battery_assist_enabled
+        self.battery_eligible_overnight = battery_eligible_overnight
 
     @property
     def device_type(self) -> DeviceType:
@@ -808,6 +959,7 @@ class ClimateDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._last_activated = self._status.last_activated  # (#644) unified clock
         self._sem_owned = True  # (arc) re-own on restart → SEM manages it
         _LOGGER.info(
             "%s: climate %s was %s at registration — re-owned as active",
@@ -832,10 +984,11 @@ class ClimateDevice(ControllableDevice):
         if not self.entity_id:
             return 0.0
 
-        # Anti-flicker: check minimum off time
-        if self._status.last_deactivated:
-            elapsed = (datetime.now() - self._status.last_deactivated).total_seconds()
-            if elapsed < self.min_off_time:
+        # Anti-flicker: minimum off time — the UNIFIED clock (#644): the
+        # base-layer epoch survives rediscovery rebuilds via the transplant.
+        if self._last_deactivated:
+            elapsed = (datetime.now() - self._last_deactivated).total_seconds()
+            if elapsed < self.min_off_seconds:
                 return 0.0
 
         # Set the mode first. If THIS fails the unit never turned on — report
@@ -860,6 +1013,7 @@ class ClimateDevice(ControllableDevice):
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
+        self._last_activated = self._status.last_activated  # (#644) unified clock
         self._status.activation_count += 1
 
         if self.target_temperature is not None:
@@ -895,10 +1049,10 @@ class ClimateDevice(ControllableDevice):
         if not self.entity_id:
             return
 
-        # Anti-flicker: check minimum on time
-        if self._status.last_activated:
-            elapsed = (datetime.now() - self._status.last_activated).total_seconds()
-            if elapsed < self.min_on_time:
+        # Anti-flicker: minimum on time — the UNIFIED clock (#644).
+        if self._last_activated:
+            elapsed = (datetime.now() - self._last_activated).total_seconds()
+            if elapsed < self.min_on_seconds:
                 return
 
         try:
@@ -911,6 +1065,7 @@ class ClimateDevice(ControllableDevice):
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
             self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             _LOGGER.info("Deactivated climate device %s", self.name)
         except Exception as e:
             _LOGGER.error("Failed to deactivate %s: %s", self.name, e)
@@ -1023,12 +1178,6 @@ class CurrentControlDevice(ControllableDevice):
         self.start_service_data: Optional[Dict] = None  # e.g. {"action_command": "resume"}
         self.stop_service: Optional[str] = None
         self.stop_service_data: Optional[Dict] = None
-        # Phase switching (1p/3p)
-        self.min_phases: int = 1
-        self.max_phases: int = phases
-        self.phase_switch_entity: Optional[str] = None  # Entity to call for switching
-        self._phase_switch_hysteresis_up: float = 500  # W above 3p threshold to switch up
-        self._phase_switch_hysteresis_down: float = 200  # W below 3p threshold to switch down
         self._current_setpoint: float = 0.0
         # #392: monotonic timestamp of the last successful write to the
         # device's current-control surface. Used by _set_current to decide
@@ -1053,55 +1202,78 @@ class CurrentControlDevice(ControllableDevice):
     def device_type(self) -> DeviceType:
         return DeviceType.CURRENT_CONTROL
 
-    async def check_phase_switch(self, available_watts: float) -> None:
-        """Switch between 1-phase and 3-phase based on available surplus.
+    def can_stop_charging(self) -> bool:
+        """Whether SEM has ANY mechanism that can actually open the contactor.
 
-        1-phase min = 6A × 230V = 1380W (usable with small surplus)
-        3-phase min = 6A × 3 × 230V = 4140W (needs large surplus)
+        #627. ``stop_session`` walks four brand mechanisms and, if none is
+        configured, falls through to ``_set_current(0)`` — and its warning
+        says so ("relying on _set_current(0) alone"). But #487 taught
+        ``_set_current`` to SKIP the write when the control number's own
+        ``min`` is above 0, because HA core rejects out-of-range writes:
+        "the actual stop is the adapter's job". Each layer defers to the
+        other, so on a charger configured with *only* a ``number.*`` current
+        entity whose min is 6 A, **nothing stops it at all**. onkelfu's
+        install commanded STOP 130 consecutive times while the car pulled
+        4.1 kW — 3.5 kW of it out of the house batteries — and SEM logged a
+        warning at counts 3, 12 and 60, then went quiet.
 
-        Switches down when surplus drops below 3-phase minimum.
-        Switches up when surplus exceeds 3-phase minimum + hysteresis.
+        A capability that is asserted rather than checked is the same shape
+        as the bug: the reconciler believed the stop was taking because
+        nothing told it otherwise. So the capability is computed here, from
+        the same fields ``stop_session`` actually dispatches on, and the
+        reconciler surfaces it instead of counting.
         """
-        if not self.phase_switch_entity or self.min_phases == self.max_phases:
-            return
-
-        three_phase_min = self.min_current * self.max_phases * self.voltage
-
-        if self.phases == self.max_phases and available_watts < three_phase_min - self._phase_switch_hysteresis_down:
-            # Switch down to 1-phase
-            await self._set_phases(self.min_phases)
-            _LOGGER.info("Phase switch: %dp → %dp (surplus %.0fW < %.0fW)",
-                         self.max_phases, self.min_phases, available_watts, three_phase_min)
-
-        elif self.phases == self.min_phases and available_watts > three_phase_min + self._phase_switch_hysteresis_up:
-            # Switch up to 3-phase
-            await self._set_phases(self.max_phases)
-            _LOGGER.info("Phase switch: %dp → %dp (surplus %.0fW > %.0fW)",
-                         self.min_phases, self.max_phases, available_watts, three_phase_min)
-
-    async def _set_phases(self, phases: int) -> None:
-        """Set charging phases via entity or service."""
-        self.phases = phases
-        self.min_power_threshold = self.min_current * phases * self.voltage
-        if self.phase_switch_entity:
+        if self.stop_service:
+            return True
+        if self.charge_mode_entity and self.charge_mode_stop:
+            return True
+        if self.start_stop_entity:
+            return True
+        if self.charger_service:
+            domain = str(self.charger_service).split(".", 1)[0]
             try:
-                # Support switch entity (relay) or number entity
-                domain = self.phase_switch_entity.split(".")[0]
-                if domain == "switch":
-                    action = "turn_on" if phases == self.max_phases else "turn_off"
-                    await self.hass.services.async_call(
-                        "switch", action,
-                        {"entity_id": self.phase_switch_entity},
-                        blocking=True,
-                    )
-                elif domain == "number":
-                    await self.hass.services.async_call(
-                        "number", "set_value",
-                        {"entity_id": self.phase_switch_entity, "value": phases},
-                        blocking=True,
-                    )
-            except Exception as e:
-                _LOGGER.warning("Phase switch failed: %s", e)
+                if self.hass.services.has_service(domain, "disable"):
+                    return True
+            except Exception:  # noqa: BLE001 — capability probe, never raise
+                pass
+        # Last resort: a 0 A write, which only stops the car if the control
+        # entity can express 0. ``_bound_to_entity_range`` returns the
+        # skip-flag for exactly that question.
+        entity = self.current_entity_id or self.charger_service_entity_id
+        if not entity:
+            return False
+        try:
+            _bounded, skip = self._bound_to_entity_range(entity, 0)
+        except Exception:  # noqa: BLE001
+            return True  # unknown → don't cry wolf
+        return not skip
+
+    # Dynamic 1p/3p phase switching lived here until #659:
+    # ``check_phase_switch`` + ``_set_phases``, plus the ``min_phases`` /
+    # ``max_phases`` / ``phase_switch_entity`` / hysteresis fields. The
+    # implementation looked complete — switch- and number-entity actuation,
+    # up/down hysteresis, min_power_threshold recomputation — and it could
+    # never run, dead on two independent axes:
+    #
+    #   * No production caller. The only one there ever was, the legacy
+    #     ``_execute_ev_control``, was deleted as dead in 561e28a
+    #     (2026-06-22), which also removed the method's unit tests. What
+    #     remained were two ``AsyncMock`` assignments in test fixtures.
+    #   * No way to configure it. ``phase_switch_entity`` was written
+    #     nowhere outside this file — not in config_flow.py, __init__.py,
+    #     services.yaml or the config card. It was always None, so the very
+    #     first line returned early even if something had called it.
+    #
+    # This is the #219-shaped trap: a contributor answering a go-e/Wattpilot
+    # 1p/3p request finds working-looking code, adds only the config key, and
+    # ships switching that still never runs.
+    #
+    # To actually implement it: add the config key, call it from the live EV
+    # actuation path (charger_adapters / ev_control), and test the
+    # interplay with ``min_power_threshold`` — changing phases changes the
+    # charger's minimum, which the budget logic reads. ``self.phases``,
+    # ``watts_to_current`` and ``current_to_watts`` below are the live
+    # surface and are unaffected.
 
     def watts_to_current(self, watts: float) -> float:
         """Convert watts to amperes."""
@@ -1327,6 +1499,7 @@ class CurrentControlDevice(ControllableDevice):
             else:
                 self._status.state = DeviceState.IDLE
                 self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             return consumed
 
         except Exception as e:
@@ -1429,6 +1602,122 @@ class CurrentControlDevice(ControllableDevice):
             )
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Failed to set charger failsafe: %s", e)
+
+    def _energy_target_sensor_id(self) -> Optional[str]:
+        """Entity id of the box's OWN energy-target register sensor, if the
+        charger integration exposes one (KEBA: ``sensor.*_energy_target``).
+
+        Discovered once via the entity registry as a sibling of the configured
+        power sensor's device — same strategy as the SOC / temperature sibling
+        discovery. None when undiscoverable (non-KEBA, no registry entry)."""
+        cached = getattr(self, "_energy_target_sensor_cache", None)
+        if cached:
+            return cached
+        # NO negative caching (PROD 2026-07-18): the first lookup can run
+        # before the entity registry is ready at boot — caching that None
+        # permanently killed the guard backstop for the process lifetime
+        # (the armed flag is instance state and resets on reload, so the
+        # sensor check was the ONLY durable detector — and it was dark).
+        # Retry every call until found; cache only a positive hit.
+        found = None
+        try:
+            anchor = self.power_entity_id or self.current_sensor_entity_id
+            if anchor and self.hass is not None:
+                # Strategy 1 — device-registry sibling (integrations that
+                # attach entities to a device).
+                from homeassistant.helpers import entity_registry as er
+                reg = er.async_get(self.hass)
+                ent = reg.async_get(anchor)
+                if ent is not None and ent.device_id:
+                    for other in er.async_entries_for_device(reg, ent.device_id):
+                        if other.entity_id.endswith("energy_target"):
+                            found = other.entity_id
+                            break
+                # Strategy 2 — name derivation. The KEBA integration is a
+                # hub-style YAML platform whose entities carry NO device_id
+                # (PROD 2026-07-18: device-registry discovery structurally
+                # blind → the guard backstop never fired). Derive the
+                # register sensor from the anchor's naming:
+                # sensor.<box>_charging_power → sensor.<box>_energy_target.
+                if not found:
+                    obj = anchor.split(".", 1)[-1]
+                    for suf in ("_charging_power", "_power", "_max_current"):
+                        if obj.endswith(suf):
+                            cand = "sensor." + obj[: -len(suf)] + "_energy_target"
+                            if self.hass.states.get(cand) is not None:
+                                found = cand
+                            break
+                # Strategy 3 — unique prefix match across all states.
+                if not found:
+                    prefix = anchor.split(".", 1)[-1].split("_", 1)[0]
+                    cands = [
+                        eid for eid in self.hass.states.async_entity_ids("sensor")
+                        if eid.endswith("_energy_target")
+                        and eid.split(".", 1)[-1].startswith(prefix)
+                    ]
+                    if len(cands) == 1:
+                        found = cands[0]
+        except Exception:  # noqa: BLE001 — discovery must never break a command
+            found = None
+        if found:
+            self._energy_target_sensor_cache = found
+        elif not getattr(self, "_energy_target_warned", False):
+            self._energy_target_warned = True
+            _LOGGER.debug(
+                "%s: energy-target register sensor not discoverable (yet) — "
+                "the guard backstop retries each charge command", self.name,
+            )
+        return found
+
+    async def ensure_energy_guard_released(self) -> None:
+        """(#553 follow-up) Verify the box actually RELEASED the runaway-cap
+        energy target — and re-send the release if not.
+
+        ``start_session`` sends ``set_energy 0`` exactly once, fire-and-forget.
+        KEBA speaks lossy UDP: PROD 2026-07-17 showed the release datagram
+        dropped — the box kept its armed 1 kWh target, terminated every new
+        session within seconds (session_energy 9.1 ≥ target 1.0), and the car
+        burst-cycled for 25 minutes while SEM faithfully wrote currents into a
+        session the box kept killing. SEM reconciles the *current* every
+        cycle; the guard register must be reconciled the same way, not
+        trusted from one write.
+
+        Checks SEM's own armed flag AND (when discoverable) the box's
+        ``energy_target`` sensor; either says armed → re-send ``set_energy 0``.
+        Cheap no-op in the common case (flag False + sensor 0/absent).
+        """
+        armed = bool(getattr(self, "_idle_guard_armed", False))
+        if not armed:
+            sensor = self._energy_target_sensor_id()
+            if sensor:
+                st = self.hass.states.get(sensor) if self.hass else None
+                if st is not None and st.state not in (
+                    "unknown", "unavailable", None, "",
+                ):
+                    try:
+                        armed = float(st.state) > 0
+                    except (ValueError, TypeError):
+                        armed = False
+        if not armed:
+            return
+        domain = (self.charger_service or "").split(".", 1)[0]
+        if not (domain and self.hass.services.has_service(domain, "set_energy")):
+            return
+        try:
+            await self.hass.services.async_call(
+                domain, "set_energy", {"energy": 0}, blocking=True,
+            )
+            self._idle_guard_armed = False
+            _LOGGER.info(
+                "%s: released a STALE energy-target guard the box still held "
+                "(lost/unapplied set_energy release, #553) — charging can "
+                "proceed unbounded again", self.name,
+            )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "%s: stale energy-target guard release failed (%s) — the box "
+                "may keep ending sessions at the runaway cap", self.name, e,
+            )
 
     async def start_session(self, energy_target_kwh: float = 0) -> None:
         """Start a charging session.
@@ -1679,11 +1968,13 @@ class SetpointDevice(ControllableDevice):
         normal_setpoint: float = 21.0,
         boost_offset: float = 2.0,
         min_power_change_interval: float = 300.0,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass, device_id, name, priority,
             min_power_threshold or rated_power,
             entity_id, power_entity_id,
+            energy_entity_id=energy_entity_id,
         )
         self.rated_power = rated_power
         self.climate_entity_id = climate_entity_id
@@ -1714,6 +2005,7 @@ class SetpointDevice(ControllableDevice):
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
             self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated  # (#644) unified clock
             self._status.activation_count += 1
             _LOGGER.info("Boosted %s setpoint to %.1f", self.name, target)
             return self.rated_power
@@ -1738,6 +2030,7 @@ class SetpointDevice(ControllableDevice):
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
             self._status.last_deactivated = datetime.now()
+            self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
             _LOGGER.info("Restored %s setpoint to %.1f", self.name, self.normal_setpoint)
         except Exception as e:
             _LOGGER.error("Failed to restore %s setpoint: %s", self.name, e)
@@ -1849,6 +2142,7 @@ class ScheduleDevice(ControllableDevice):
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
             self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated  # (#644) unified clock
             self._status.activation_count += 1
             _LOGGER.info("Started scheduled device %s", self.name)
             return self.rated_power
@@ -1918,6 +2212,23 @@ def surplus_device_from_spec(
     priority = spec.get("priority", 5)
     entity_id = spec.get("entity_id", "")
     power_entity_id = spec.get("power_entity_id")
+    energy_entity_id = spec.get("energy_entity_id")
+    # #600 — autodetect-FIRST: a kWh-only load device (energy sensor, no power
+    # sensor) first tries to find a companion power sensor on the same device;
+    # only when none exists does the device fall back to deriving power from the
+    # energy counter (EnergyRateDeriver). A power sensor always beats derivation.
+    if energy_entity_id and not power_entity_id:
+        try:
+            from ..ha_energy_reader import (
+                _find_power_sensor_on_device, _POWER_DERIVE_RULES,
+            )
+            found = _find_power_sensor_on_device(
+                hass, energy_entity_id, _POWER_DERIVE_RULES["load"],
+            )
+            if found:
+                power_entity_id = found
+        except Exception:  # noqa: BLE001 — best-effort autodetect
+            pass
     if dtype == "climate":
         target = spec.get("target_temperature")
         return ClimateDevice(
@@ -1928,6 +2239,7 @@ def surplus_device_from_spec(
             priority=priority,
             entity_id=entity_id,
             power_entity_id=power_entity_id,
+            energy_entity_id=energy_entity_id,
             hvac_mode=spec.get("hvac_mode", "cool"),
             target_temperature=float(target) if target is not None else None,
         )
@@ -1939,4 +2251,5 @@ def surplus_device_from_spec(
         priority=priority,
         entity_id=entity_id,
         power_entity_id=power_entity_id,
+        energy_entity_id=energy_entity_id,
     )

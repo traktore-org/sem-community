@@ -297,12 +297,6 @@
       },
       "energy_ev_solar_percentage": {
         "default": "mdi:ev-plug-type2"
-      },
-      "utility_signal_source": {
-        "default": "mdi:broadcast"
-      },
-      "utility_signal_count_today": {
-        "default": "mdi:counter"
       }
     },
     "binary_sensor": {
@@ -332,9 +326,6 @@
       },
       "heat_pump_solar_boost": {
         "default": "mdi:heat-pump-outline"
-      },
-      "utility_signal_active": {
-        "default": "mdi:broadcast"
       }
     },
     "switch": {

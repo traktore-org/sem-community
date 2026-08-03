@@ -81,7 +81,7 @@ Growatt, and any inverter that exposes watt-level sensors to HA.
 OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE,
 and any charger with a controllable number entity.
 
-**Solar forecasts (optional):** Solcast, Forecast.Solar. Required for smart
+**Solar forecasts (optional):** Solcast, Forecast.Solar, Open-Meteo Solar Forecast. Required for smart
 night charging and battery charge scheduling.
 
 > **Easee note:** Easee's charging power sensor is disabled by default in HA.
@@ -104,13 +104,10 @@ night charging and battery charge scheduling.
 ## 2. Installation via HACS
 
 1. Open Home Assistant and click **HACS** in the sidebar.
-2. Click **Integrations**, then the three-dot menu (top right), then
-   **Custom repositories**.
-3. Paste `https://github.com/traktore-org/sem-community` into the URL field,
-   set category to **Integration**, and click **Add**.
-4. Close the dialog and search for **Solar Energy Management** in the list.
-5. Click the result, then **Download** at the bottom right.
-6. When the download finishes, go to **Settings > System > Restart** and
+2. Search for **Solar Energy Management** — SEM is in the **default HACS
+   store**, no custom repository needed.
+3. Click the result, then **Download** at the bottom right.
+4. When the download finishes, go to **Settings > System > Restart** and
    restart Home Assistant. Wait 30–60 seconds for it to come back.
 
 After the restart, SEM is installed but not yet active. Complete the config
@@ -118,17 +115,19 @@ flow in the next step to start it.
 
 ### Dashboard frontend cards
 
-The SEM dashboard uses several HACS frontend cards. Install these via
-**HACS > Frontend** if they are not already present:
+**No HACS frontend cards are required.** Every card on the SEM dashboard is
+either bundled with the integration or a native Home Assistant card, and the
+charts render with a locally vendored Chart.js (no internet needed).
 
-| Card | Why it is required |
-|------|--------------------|
-| `mushroom` | Chips, entity cards, template cards throughout the dashboard |
-| `card-mod` | Glass card styling -- without this, all dashboard tabs are blank |
-| `apexcharts-card` | All power and energy charts |
-| `sankey-chart` | Energy flow diagram on the Energy tab |
+Two cards are **optional** and auto-detected — install them via
+**HACS > Frontend** only if you want the richer variant:
 
-See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full list and
+| Card | What it adds when installed |
+|------|-----------------------------|
+| `sankey-chart` | A richer SEM-entity energy-flow sankey on the Energy tab (otherwise HA's native `energy-sankey` card is used) |
+| `k-flow-card` | An animated flow visualization replacing the built-in system diagram (opt-in via the *Diagram style* setting) |
+
+See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full card list and
 troubleshooting steps when a card shows "Custom element doesn't exist".
 
 ---
@@ -171,7 +170,7 @@ control-path field your charger needs (number entity OR service call). All
 per-charger tunables (daily target kWh, target SOC, surplus priority,
 night-charging current, battery capacity) live in **Configure** after install,
 with sensible defaults until you change them. See
-[Per-charger tunables](#per-charger-tunables) below.
+[EV Charging settings](#ev-charging-settings) below.
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -272,16 +271,61 @@ to see all available SEM services. If none appear, the integration did not
 load — check **Settings > System > Logs** (filter for
 `solar_energy_management`).
 
+### Sensor source overrides
+
+SEM derives its grid, solar and battery power sources from HA's Energy
+Dashboard — that stays the primary path, and fixing a wrong mapping there
+(then reloading SEM) is the first thing to try. For the cases where that
+isn't enough — a sensor the inverter stops feeding (e.g. CT clamps dark
+when running off-grid), or you want SEM on a different meter than the
+HA-wide Energy Dashboard uses — the **Sensor sources** section on the
+dashboard's ⚙ Configuration tab lets you pin an explicit entity per source:
+
+| Picker | Overrides | Blank means |
+|---|---|---|
+| **Grid power** | the combined grid power sensor | auto (Energy Dashboard) |
+| **Solar power** | the solar production sensor | auto (Energy Dashboard) |
+| **Battery power** | the battery power sensor | auto (Energy Dashboard) |
+
+Notes:
+
+- **Sign conventions are detected on the override.** A Shelly EM does not
+  share the inverter's sign convention — SEM's import/export (and battery
+  charge/discharge) sign detection runs against whatever entity you pick,
+  so you don't need to match signs manually.
+- **No silent fallback.** If an override entity goes unavailable, SEM keeps
+  reading it and the Configuration card shows a warning on that row — it
+  never silently reverts to the sensor you explicitly replaced. Fix the
+  sensor or clear the override.
+- Changes are staged and committed with **Apply**, which reloads the
+  integration once for the whole batch.
+
 ---
 
 ## 5. Options Flow
 
-Once SEM is running, open **Settings > Devices & Services**, find the SEM
-card, and click **Configure** to adjust any setting without reinstalling.
-Changes take effect within one coordinator cycle (default 10 seconds).
+**The dashboard Configuration tab is the primary place to change settings** —
+open your SEM dashboard and switch to the ⚙ Configuration tab. Everything below
+is editable there, organized in the same sections as this guide, with:
 
+- **Staged changes with Apply/Revert per section** — nothing saves while you
+  scroll or on an accidental tap; changed rows are highlighted and commit only
+  when you press *Apply changes* (or *Revert* to undo).
+- **ⓘ help on every setting** — tap the info icon for the explanation, the
+  factory **default**, and a one-tap **↺ Reset to default**. The *Explain
+  settings* toggle at the top opens all help texts at once.
+- **📖 docs links** — each section header links straight to its chapter in
+  this guide.
+- **🩺 Diagnose per section** — copies a focused JSON snapshot (config + live
+  state + recent related log lines, including your recent config changes) for
+  sharing in an issue.
 
-The options flow is organized into these pages:
+Changes take effect within one coordinator cycle (default 10 seconds);
+settings that re-wire entities trigger a one-time reload on Apply.
+
+*Fallback:* the classic HA options flow still exists under **Settings >
+Devices & Services → SEM → Configure** — useful when the dashboard isn't
+generated yet. It is organized into these pages:
 1. **EV Charger** — charger sensors and control method
 2. **Battery & SOC Zones** — battery capacity, SOC thresholds, discharge protection
 3. **EV Charging & Solar** — daily targets, surplus settings, night charging
@@ -320,6 +364,7 @@ The options flow is organized into these pages:
 | Max assist power (W) | 4500 W | Maximum battery discharge power allowed for EV charging. Set it to the lower of your battery's rated discharge power and your charger's maximum input. |
 | Assist gate / Solar Gate (v1.7.3) (W) | 1200 W | **Battery assist threshold** — battery only supplements EV charging when real solar surplus is at least this value (0–5000 W). Set to 0 to allow battery assist everywhere, including overnight. Prevents battery draining into the car at dusk/dawn. |
 | Grid sign flip | Off | Manual override for grid power polarity (v1.7.3). SEM auto-detects at startup whether `positive = import` or `positive = export`. Flip this on only if import/export are inverted in your system diagram. Use the **Fix grid sign** button on the Control tab (simpler). When enabled, auto-detect is bypassed. |
+| Battery sign flip | Off | Manual override for battery power polarity (v1.7.5, #588). SEM auto-detects whether `positive = charge` or `positive = discharge` — from your inverter's brand (deterministic for known brands) and from the Energy-Dashboard charge/discharge counters. Flip this on only if charge/discharge look inverted (battery shows charging when it's really discharging). Use the **Fix battery sign** button in Config → Advanced (simpler — it also copies a paste-ready report for the GitHub issue). `Reset` re-learns and clears both grid and battery flips. When enabled, auto-detect is bypassed. |
 
 ### Tariff and Pricing settings
 
@@ -367,6 +412,103 @@ v1.7.0-beta.16).
 Switch modes from **Settings → Devices & Services → Solar Energy Management
 → Configure → Tariff settings → "Price classification mode"**.
 
+#### Bring your own price sensor — the universal tariff contract (#612)
+
+Dynamic mode does **not** require a supported provider integration. The
+Dynamic price sensor can be **any entity whose state is the current import
+price per kWh** — a community tariff integration, the Spanish PVPC core
+integration, or a **template sensor you write yourself** encoding your
+contract. SEM treats a user-configured entity as authoritative (provider
+"custom") and reads it every cycle.
+
+The contract, in full:
+
+- **State** = the current price per kWh (plain number). This alone gives
+  correct cost tracking and (via the observed price) level classification
+  fallbacks.
+- **Optional but recommended: a day-curve attribute** — expose today's
+  hourly prices as `raw_today` (and ideally `raw_tomorrow`), each an array
+  of `{start, end, value}` entries (Nordpool shape; several other shapes
+  are auto-detected too). With a curve, the **entire** dynamic machinery
+  lights up: percentile price levels, cheap-window detection, the
+  overnight cheapest-hours planner and the battery charge scheduler.
+  The `tariff_classifier_path` attribute on the price-level sensor shows
+  which path/attribute SEM matched — check it if classification looks off.
+- **Minimal variant without a curve**: set *Price classification mode* to
+  `static` and enter your own cheap/expensive thresholds between your
+  known plateau prices — deterministic levels with zero extra YAML (no
+  window planning; use the normal night-window setting instead).
+
+#### Spain — the 2.0TD three-period tariff, ready to paste
+
+Spain's regulated 2.0TD structure (P1 *punta* / P2 *llano* / P3 *valle*,
+weekends **and national holidays** all-valle) is a fixed national schedule,
+so the whole tariff fits in one template sensor. Set your three prices at
+the top; SEM's Dynamic mode does the rest (verified live: percentile
+classification + the midnight valle window planned correctly).
+
+- **On PVPC (regulated hourly prices)?** Skip the template — install the
+  core [PVPC Hourly Pricing](https://www.home-assistant.io/integrations/pvpc_hourly_pricing/)
+  integration and point the Dynamic price sensor at it.
+- **Holidays**: for the ~10 weekday national holidays a year, add the core
+  [Workday](https://www.home-assistant.io/integrations/workday/) integration
+  and extend both `valle_day` lines to
+  `{% set valle_day = ... >= 5 or is_state('binary_sensor.workday_sensor', 'off') %}`.
+  Without it, holidays classify as normal weekdays (no safety impact).
+
+```yaml
+# /config/packages/es_tariff_20td.yaml  (or under `template:` in configuration.yaml)
+template:
+  - sensor:
+      - name: "Electricity Price ES 2.0TD"
+        unique_id: es_20td_price
+        unit_of_measurement: "EUR/kWh"
+        state: >-
+          {% set p = {'p1': 0.182, 'p2': 0.131, 'p3': 0.092} %}
+          {% set valle_day = now().weekday() >= 5 %}
+          {% set h = now().hour %}
+          {% if valle_day or h < 8 %}{{ p.p3 }}
+          {% elif 10 <= h < 14 or 18 <= h < 22 %}{{ p.p1 }}
+          {% else %}{{ p.p2 }}{% endif %}
+        attributes:
+          raw_today: >-
+            {% set p = {'p1': 0.182, 'p2': 0.131, 'p3': 0.092} %}
+            {% set valle_day = now().weekday() >= 5 %}
+            {% set midnight = today_at() %}
+            {% set ns = namespace(out=[]) %}
+            {% for h in range(24) %}
+              {% if valle_day or h < 8 %}{% set v = p.p3 %}
+              {% elif 10 <= h < 14 or 18 <= h < 22 %}{% set v = p.p1 %}
+              {% else %}{% set v = p.p2 %}{% endif %}
+              {% set ns.out = ns.out + [{'start': (midnight + timedelta(hours=h)).isoformat(),
+                                         'end': (midnight + timedelta(hours=h + 1)).isoformat(),
+                                         'value': v}] %}
+            {% endfor %}
+            {{ ns.out }}
+          raw_tomorrow: >-
+            {% set p = {'p1': 0.182, 'p2': 0.131, 'p3': 0.092} %}
+            {% set tmr = today_at() + timedelta(days=1) %}
+            {% set valle_day = tmr.weekday() >= 5 %}
+            {% set ns = namespace(out=[]) %}
+            {% for h in range(24) %}
+              {% if valle_day or h < 8 %}{% set v = p.p3 %}
+              {% elif 10 <= h < 14 or 18 <= h < 22 %}{% set v = p.p1 %}
+              {% else %}{% set v = p.p2 %}{% endif %}
+              {% set ns.out = ns.out + [{'start': (tmr + timedelta(hours=h)).isoformat(),
+                                         'end': (tmr + timedelta(hours=h + 1)).isoformat(),
+                                         'value': v}] %}
+            {% endfor %}
+            {{ ns.out }}
+```
+
+Then: **Settings → Configure → Tariff** → mode **Dynamic** → Dynamic price
+sensor = `sensor.electricity_price_es_2_0td`. On plateaued tariffs the
+percentile buckets land on the extremes — expect *valle → very_cheap/cheap*
+and *punta → expensive/very_expensive*; that's correct (punta IS the day's
+most expensive period). What SEM deliberately does **not** model: the
+contracted-power term, meter rental and taxes — SEM's costs are decision
+estimates, not invoice replication (see #612).
+
 ### Notification settings
 
 | Setting | Default | What it does and when to change it |
@@ -386,6 +528,23 @@ Switch modes from **Settings → Devices & Services → Solar Energy Management
 Notifications have a 10-minute cooldown per type to prevent alert fatigue.
 Flap suppression prevents notifications for transient state changes (state
 must be stable for 60 seconds before a notification fires).
+
+### Forecast settings
+
+SEM auto-detects a solar forecast integration (Solcast, Forecast.Solar,
+[Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) or a
+compatible sensor) and uses it for smart night charging, the battery
+scheduler and the recommendation tips.
+
+| Setting | Default | What it does and when to change it |
+|---------|---------|-------------------------------------|
+| Forecast entity | Auto | The forecast sensor SEM reads. Auto-detection prefers Solcast; set it manually if you run several forecast integrations or a custom one. |
+| Weather entity | Auto | Feeds the weather card and forecast dampening. Auto-generated `weather.forecast_*` subentities are skipped (they lack the needed attributes) — any real `weather.*` entity is preferred. |
+
+**Forecast dampening** (#168): SEM continuously compares the forecast against
+actual production and applies a live correction factor, so an optimistic
+forecast on a hazy day doesn't skip a night charge your morning commute
+needed. The current factor is exposed on the forecast sensor's attributes.
 
 ### Advanced settings
 
@@ -501,16 +660,47 @@ free solar power is available and turns them off when surplus disappears.
 
 ### The four control modes
 
-Every managed device has a **Mode** setting:
+Every managed device has a **Mode** setting on its Control-tab row:
 
 | Mode | SEM turns it ON? | SEM turns it OFF? | Best for |
 |------|-----------------|------------------|----------|
 | **Off** | Never | Never | Devices you control manually |
 | **Peak Only** | Never | Yes, during grid peaks | Devices that should run normally but can be temporarily shed |
-| **Surplus** | Yes, when surplus is available | Yes, when surplus drops or during peaks | Discretionary loads (hot water boiler, pool pump, dishwasher) |
+| **Solar only** | Yes, on PV surplus | Yes, when surplus drops or during peaks | Discretionary loads on sun alone (pool pump, boiler) |
+| **Solar + battery** | Yes, on PV surplus **+ home-battery assist** | Same | Loads you want to keep running through cloud/evening from the battery (#620) |
 
 **The default mode is Peak Only.** SEM will never turn a device ON unless you
-explicitly set its mode to Surplus.
+explicitly set its mode to a Solar mode.
+
+#### Daily runtime goals (#620)
+
+The 🎯 target button on a load's row (shown in the two Solar modes) opens the
+goal editor:
+
+- **Min / Max runtime** — a dual-handle slider reading *"at least X … up to Y"*.
+  **Min** is a **floor**: the runtime SEM will pay for (battery / cheap grid).
+  Reaching it stands those paid sources down, but free solar surplus keeps the
+  load running. **Max** is the **ceiling** and the only hard stop — the load
+  never runs past it (persisted across restarts). Full-scale Max = *Uncapped*.
+  Same contract as the EV charge-target range (#245, #688). If the handles
+  overlap, tap the split (⬍) button to separate them.
+- **Finish overnight from** (shown in both solar modes) — what completes the
+  runtime when the sun is gone:
+  - **Off** — nothing; the load waits for sun and may miss its target.
+  - **Battery** — drains the home battery down to the reserve floor.
+  - **Grid** — tops up from the grid during your cheap-tariff window (needs a
+    tariff/cheap window configured).
+
+  This is **axis 2** — independent of the daytime **Mode** (axis 1: Solar only vs
+  Solar + battery). Switching the picker also stops a load already running on the
+  source you moved away from.
+- **Stop when ≥ sensor** — pick any sensor with the entity search to end the run
+  early (e.g. water-temp ≥ 28 °C, tank ≥ full). Clear it with the picker's ✕.
+
+The runtime counter resets **after sunrise** (not midnight), so an overnight-eligible
+load isn't reset mid-night and re-drained. There is **no forced-grid deadline** — a
+missed target waits for tomorrow's sun, the overnight battery, or the cheap-grid
+window, per your picker choice. Full model: [`docs/LOAD_PRIORITY.md`](LOAD_PRIORITY.md).
 
 > EV chargers stay in this list for priority ordering, but they no longer show a
 > Mode dropdown — all EV charge-target controls live on the **EV charger card**
@@ -726,7 +916,7 @@ separate from EV night charging.
 
 The scheduler requires:
 
-- A solar forecast integration (Solcast or Forecast.Solar)
+- A solar forecast integration (Solcast, Forecast.Solar or Open-Meteo Solar Forecast)
 - An inverter that supports forced battery charging via a HA service or
   number entity
 - The battery charge scheduler enabled in the options flow
@@ -786,7 +976,22 @@ limit (if configured).
 
 ## 10. Heat Pump and Hot Water
 
-SEM can control a heat pump or hot water system using the SG-Ready standard.
+SEM can control a heat pump or hot water system using the SG-Ready standard,
+or — for pumps without relays (Nibe, Mitsubishi, Daikin, Viessmann…) — via
+their `climate` entity (setpoint boost on surplus).
+
+**Their place in the surplus order:** since v1.7.5 the heat pump and hot
+water device appear as **draggable rows in the ONE device-priority list** on
+the Control tab — their surplus priority is simply their list position
+(there is no separate priority slider anymore). See
+[LOAD_PRIORITY.md](LOAD_PRIORITY.md).
+
+**No power sensor?** Point the *Heat pump / Hot water energy sensor (kWh)*
+field at a cumulative energy counter (e.g. a Viessmann ViCare kWh total) —
+SEM derives a smooth live power signal from it, or autodetects a companion
+power sensor on the same device. Set *Rated power (W)* so surplus sizing
+works before the first live reading. Both fields live in the dashboard
+Configuration tab's Heat Pump / Hot Water sections.
 
 ### What is SG-Ready?
 
@@ -794,16 +999,29 @@ SG-Ready (Smart Grid Ready) is a German standard for heat pump control that
 uses two digital relay signals to communicate four operating states to the
 heat pump's internal controller:
 
-| SG State | Relays | What the heat pump does |
-|----------|--------|-------------------------|
-| 1 — Blocked | Off, Off | Reduces consumption on utility request |
-| 2 — Normal | Off, On | Standard operation (default) |
-| 3 — Boost | On, Off | Recommended to increase consumption — heat more now |
-| 4 — Force On | On, On | Maximum consumption — use available power |
+| SG State | Relay 1 | Relay 2 | What the heat pump does |
+|----------|---------|---------|-------------------------|
+| 1 — Blocked | **On** | Off | Reduces consumption on utility request (EVU block) |
+| 2 — Normal | Off | Off | Standard operation (default) |
+| 3 — Boost | Off | **On** | Recommended to increase consumption — heat more now |
+| 4 — Force On | **On** | **On** | Maximum consumption — use available power |
+
+> **This is not a 2-bit count.** State 1 is `1:0` and state 2 is `0:0` — the
+> standard puts the EVU-block on relay 1 alone, so the states do not run in
+> binary order. Until v1.7.5 this table showed a plain 00/01/10/11 count,
+> which is what the code did too until #523: SEM's Boost drove `1:0`, a
+> standard pump read that as EVU-block, and the pump switched **off** on
+> surplus instead of on. If you are verifying an install against an older
+> copy of this guide, use the table above.
 
 SEM sets State 3 (Boost) when moderate solar surplus is available, and
 State 4 (Force On) when surplus is high. The heat pump responds by heating
 more aggressively, using surplus solar instead of exporting it.
+
+**Contacts read inverted?** If SEM commands Boost and your pump blocks, the
+contacts are probably wired normally-closed rather than normally-open. Turn
+on *Invert SG-Ready* in the heat pump section — it flips both contacts —
+rather than rewiring or swapping the two relay entities.
 
 ### Relay configuration
 
@@ -893,16 +1111,16 @@ battery first, then heats water, then charges the car.
 
 ## 11. Language Support
 
-SEM supports 15 languages: English, German, Dutch, French, Spanish, Italian,
-Portuguese, Polish, Swedish, Czech, Danish, Finnish, Hungarian, Romanian, and
-Norwegian.
+SEM supports 16 languages: English, German, Dutch, French, Spanish, Italian,
+Portuguese, Polish, Swedish, Czech, Danish, Finnish, Hungarian, Romanian,
+Norwegian, and Simplified Chinese.
 
 Translation works in two layers:
 
 **Layer 1 — Dashboard labels (server-side):** Static card labels, axis titles,
 and section headers are translated at dashboard generation time using the
 server language set in **Settings > General**. All users see the same labels
-for mushroom and standard HA cards.
+for standard HA cards.
 
 **Layer 2 — Custom card text (per-user, runtime):** SEM's custom cards (system
 diagram, title cards, charger status card, period selector) call
@@ -924,7 +1142,7 @@ To change the server language (affects static labels for all users):
    with the new language
 
 The source of truth for all translations is `dashboard/translations.json`
-(1116 keys across 15 languages). If you want to contribute a translation
+(1166 keys across 16 languages). If you want to contribute a translation
 correction or add a new language, see
 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 
@@ -965,6 +1183,23 @@ dashboard, or call `solar_energy_management.update_device_config` with
 Enable Observer Mode on the secondary instance. Both instances can read
 sensors simultaneously without conflict. Toggle via `switch.sem_observer_mode`
 or the Configure screen — no reinstall needed.
+
+### Direct per-phase grid-current sensors
+
+The Observer Mode phase guard can use either a complete L1-L3 family of direct
+RMS grid-current sensors in amperes or signed per-phase power plus voltage. A
+direct family takes precedence and must contain all three phases from one
+coherent meter family. SEM rejects mixed, partial, unavailable, stale,
+wrong-unit, negative and non-finite readings instead of silently changing
+source. Radio, meter and field-bus pairing remain the responsibility of the
+hardware and its Home Assistant integration; SEM consumes only the resulting
+HA sensor entities.
+
+In Observer Mode SEM still runs its **full** decision logic against your live
+sensors every cycle — it just never actuates. It logs each command it *would*
+have sent (e.g. `OBSERVER · WOULD ACTIVATE Heizband @ 800W [source=solar]`), so
+you can watch exactly what SEM would do — and verify it's right — before you
+ever hand it control of your hardware.
 
 **How does SEM know which direction my grid power sensor reads?**
 
@@ -1028,12 +1263,13 @@ the `solar_energy_management.diagnose` action (section `tariff`):
 
 **My dashboard shows white tabs or "Custom element doesn't exist".**
 
-The `card-mod` HACS card is missing or not loaded, which causes white tabs
-on the whole dashboard. A "Custom element doesn't exist" error on a specific
-tab means that tab's required card is missing. See
-[DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full card list and
-troubleshooting steps. After installing missing cards, hard-refresh your
-browser (Ctrl+Shift+R on Windows/Linux, Cmd+Shift+R on Mac).
+Since v1.7.5 no HACS card is required, so this usually means SEM's own card
+bundle didn't load — most often a stale browser/service-worker cache after an
+update. Hard-refresh (Ctrl+Shift+R on Windows/Linux, Cmd+Shift+R on Mac); on
+the Companion app clear the frontend cache. A "Custom element doesn't exist"
+error naming `sem-*` means the bundle resource is missing — restart Home
+Assistant so SEM re-registers it. See
+[DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full card list.
 
 **How do I add a second EV charger?**
 
@@ -1063,7 +1299,7 @@ logger:
 
 View logs at **Settings > System > Logs** (filter for `solar_energy_management`).
 
-- Common issues: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- Common issues: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - Dashboard problems: [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md)
 - Multi-inverter and multi-charger: [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md)
 - Architecture and developer details: [ARCHITECTURE.md](ARCHITECTURE.md)

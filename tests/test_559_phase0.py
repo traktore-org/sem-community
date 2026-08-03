@@ -296,6 +296,33 @@ async def test_control_mode_update_persists_to_spec(registry):
     assert device.control_mode == DeviceControlMode.PEAK_ONLY
 
 
+@pytest.mark.asyncio
+async def test_mode_off_transition_releases_running_load(registry):
+    """(class-17 sibling, live PROD 2026-07-23) Setting mode → off must turn a
+    running load off ONCE — regardless of ownership (which a restart may have
+    wiped) — then leave it alone."""
+    await registry.async_register_service_device(dict(SPEC))
+    device = registry._surplus_controller.get_device("kia_socket")
+    device.observed_on = MagicMock(return_value=True)     # entity is ON
+    device._sem_owned = False                              # ownership lost (restart)
+    device._offpeak_forced = True                          # stale marker
+    device.deactivate = AsyncMock()
+    await registry.update_device_control_mode("kia_socket", "off")
+    device.deactivate.assert_awaited()
+    assert device._offpeak_forced is False
+    assert device._sem_owned is False
+
+
+@pytest.mark.asyncio
+async def test_mode_off_transition_leaves_off_load_alone(registry):
+    await registry.async_register_service_device(dict(SPEC))
+    device = registry._surplus_controller.get_device("kia_socket")
+    device.observed_on = MagicMock(return_value=False)     # entity already OFF
+    device.deactivate = AsyncMock()
+    await registry.update_device_control_mode("kia_socket", "off")
+    device.deactivate.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Surplus availability debounce
 # ---------------------------------------------------------------------------
@@ -380,3 +407,33 @@ async def test_register_with_depends_on(registry):
     registry._register_service_devices()
     device = registry._surplus_controller.get_device("kia_socket")
     assert device.depends_on == ["pool_pump"]
+
+
+# ---------------------------------------------------------------------------
+# #576 — the home-battery priority row is gated on the install having a battery
+# ---------------------------------------------------------------------------
+def test_battery_row_hidden_without_battery(registry):
+    registry.hass.states.get = lambda e: SimpleNamespace(state="0")
+    registry._devices = []
+    registry._service_registrations = {}
+    registry._has_battery = False
+    result = registry.get_devices_for_sensor()
+    assert "home_battery" not in result
+
+
+def test_battery_row_shown_with_battery(registry):
+    registry.hass.states.get = lambda e: SimpleNamespace(state="55")
+    registry._devices = []
+    registry._service_registrations = {}
+    registry._has_battery = True
+    result = registry.get_devices_for_sensor()
+    assert "home_battery" in result
+    row = result["home_battery"]
+    assert row["device_type"] == "battery"
+    assert row["priority"] == 100          # default bottom
+    assert row["soc"] == 55.0
+
+
+def test_battery_priority_reflects_override(registry):
+    registry._priority_overrides = {"home_battery": 3}
+    assert registry.battery_surplus_priority() == 3

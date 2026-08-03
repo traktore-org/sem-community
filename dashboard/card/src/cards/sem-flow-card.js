@@ -64,6 +64,11 @@ class SEMFlowCard extends SEMLitBase {
         this._showValues  = config.show_values  !== false;
         this._showGlow    = config.show_glow    !== false;
         this._showInverter = config.show_inverter !== false;
+        // #595 follow-up — generator injects show_ev:false on installs
+        // without a charger (same has_ev test that prunes the EV view).
+        this._showEv = config.show_ev !== false;
+        // #614 — battery sibling of the same ghost-node class.
+        this._showBattery = config.show_battery !== false;
         this.requestUpdate();
     }
 
@@ -120,8 +125,24 @@ class SEMFlowCard extends SEMLitBase {
             this._visible = entries[0].isIntersecting;
             const svg = this.renderRoot.querySelector('svg');
             if (svg) svg.style.animationPlayState = this._visible ? 'running' : 'paused';
+            // Back on-screen → refresh now: hass updates that arrived while
+            // hidden were dropped by the _visible gate in set hass.
+            if (this._visible && this._hass) this._updateFlowsImperative();
         }, { threshold: 0.01 });
         this._intersectionObserver.observe(this);
+
+        // Display-truth reconcile (same class as sem-system-diagram-card,
+        // PROD 2026-07-18 stale iOS nodes): iOS suspends/drops rAF in a
+        // backgrounded WebView, freezing value texts while the internal cache
+        // advances; a missed intersection transition can also leave _visible
+        // stuck false. Re-sync on every app resume.
+        this._onVisibility = () => {
+            if (document.visibilityState === 'visible' && this._hass) {
+                this._visible = true;
+                this._updateFlowsImperative();
+            }
+        };
+        document.addEventListener('visibilitychange', this._onVisibility);
     }
 
     disconnectedCallback() {
@@ -130,6 +151,10 @@ class SEMFlowCard extends SEMLitBase {
         if (this._intersectionObserver) { this._intersectionObserver.disconnect(); this._intersectionObserver = null; }
         clearTimeout(this._updateTimer);
         clearTimeout(this._resizeTimeout);
+        if (this._onVisibility) {
+            document.removeEventListener('visibilitychange', this._onVisibility);
+            this._onVisibility = null;
+        }
         for (const id of Object.keys(this._animFrames)) cancelAnimationFrame(this._animFrames[id]);
         this._animFrames = {};
     }
@@ -226,11 +251,6 @@ class SEMFlowCard extends SEMLitBase {
                         ${this._svgRaw(this._glowFilter('glowHome',       homeColor,       10))}
                         ${this._svgRaw(this._glowFilter('glowEV',         evColor,         8))}
                         ${this._svgRaw(this._glowFilter('glowInverter',   invColor,        6))}
-                        <path id="path-solar"   d="${L.paths.solar}"/>
-                        <path id="path-home"    d="${L.paths.home}"/>
-                        <path id="path-battery" d="${L.paths.battery}"/>
-                        <path id="path-grid"    d="${L.paths.grid}"/>
-                        <path id="path-ev"      d="${L.paths.ev}"/>
                     </defs>
 
                     <rect width="100%" height="100%" fill="url(#bgGrad)"/>
@@ -242,11 +262,11 @@ class SEMFlowCard extends SEMLitBase {
                     ${this._svgRaw(hasGrid ? `<path id="track-grid" d="${L.paths.grid}" fill="none" stroke="${gridImportColor}" stroke-width="1.5" stroke-dasharray="4,6" opacity="0.18"/>` : '')}
                     ${this._svgRaw(hasEv ? this._track(L.paths.ev, evColor) : '')}
 
-                    ${this._svgRaw(hasSolar ? `<g id="flow-solar" class="flow-group" style="opacity:0" data-path-id="path-solar" data-path-d="${L.paths.solar}" data-color="${solarColor}" data-count="2"></g>` : '')}
-                    ${this._svgRaw(hasBattery ? `<g id="flow-battery" class="flow-group" style="opacity:0" data-path-id="path-battery" data-path-d="${L.paths.battery}" data-color="${batteryColor}" data-count="3"></g>` : '')}
-                    ${this._svgRaw(hasGrid ? `<g id="flow-grid" class="flow-group" style="opacity:0" data-path-id="path-grid" data-path-d="${L.paths.grid}" data-color="${gridImportColor}" data-count="3"></g>` : '')}
-                    ${this._svgRaw(hasSolar || hasInverter ? `<g id="flow-home" class="flow-group" style="opacity:0" data-path-id="path-home" data-path-d="${L.paths.home}" data-color="${homeColor}" data-count="2"></g>` : '')}
-                    ${this._svgRaw(hasEv ? `<g id="flow-ev" class="flow-group" style="opacity:0" data-path-id="path-ev" data-path-d="${L.paths.ev}" data-color="${evColor}" data-count="3"></g>` : '')}
+                    ${this._svgRaw(hasSolar ? `<g id="flow-solar" class="flow-group" style="opacity:0" data-path-d="${L.paths.solar}" data-color="${solarColor}" data-count="2"></g>` : '')}
+                    ${this._svgRaw(hasBattery ? `<g id="flow-battery" class="flow-group" style="opacity:0" data-path-d="${L.paths.battery}" data-color="${batteryColor}" data-count="3"></g>` : '')}
+                    ${this._svgRaw(hasGrid ? `<g id="flow-grid" class="flow-group" style="opacity:0" data-path-d="${L.paths.grid}" data-color="${gridImportColor}" data-count="3"></g>` : '')}
+                    ${this._svgRaw(hasSolar || hasInverter ? `<g id="flow-home" class="flow-group" style="opacity:0" data-path-d="${L.paths.home}" data-color="${homeColor}" data-count="2"></g>` : '')}
+                    ${this._svgRaw(hasEv ? `<g id="flow-ev" class="flow-group" style="opacity:0" data-path-d="${L.paths.ev}" data-color="${evColor}" data-count="3"></g>` : '')}
 
                     ${this._svgRaw(hasSolar ? `
                     <g id="node-solar" filter="url(#glowSolar)">
@@ -378,12 +398,23 @@ class SEMFlowCard extends SEMLitBase {
     _updateFlowsImperative() {
         if (!this._hass) return;
 
-        let solar = this._getState('solar_power');
+        // (#699) In prefix mode, the whole balance set comes from the ONE
+        // atomic snapshot when the backend provides it — same coordinator
+        // cycle, so the flows always add up even mid-transient.
+        const snap = this._powerSnapshot();
+        const snapNum = (v) => {
+            const f = parseFloat(v);
+            return isNaN(f) ? 0 : f;
+        };
+
+        let solar = snap ? snapNum(snap.solar_w) : this._getState('solar_power');
         if (this._entities?.solar?.reverse) solar = -solar;
 
         let battery;
         if (this._mode === 'entities' && (this._entities?.battery?.charge || this._entities?.battery?.discharge)) {
             battery = this._getState('battery_charge_power') - this._getState('battery_discharge_power');
+        } else if (snap) {
+            battery = snapNum(snap.battery_w);
         } else {
             let raw = this._getState('battery_power');
             battery = this._entities?.battery?.reverse ? -raw : raw;
@@ -395,26 +426,33 @@ class SEMFlowCard extends SEMLitBase {
             const rev = this._entities.grid.reverse;
             gridImport = Math.max(0, rev ? -gp : gp);
             gridExport = Math.max(0, rev ? gp : -gp);
+        } else if (snap) {
+            gridImport = snapNum(snap.grid_import_w);
+            gridExport = snapNum(snap.grid_export_w);
         } else {
             gridImport = this._getState('grid_import_power');
             gridExport = this._getState('grid_export_power');
         }
 
-        let ev = this._getState('ev_power');
+        let ev = snap ? snapNum(snap.ev_w) : this._getState('ev_power');
         if (this._entities?.ev?.invert) ev = -ev;
-        const soc     = this._getState('battery_soc');
+        const soc     = snap ? snapNum(snap.battery_soc) : this._getState('battery_soc');
         const autarky = this._getState('autarky_rate');
 
         const battCharge    = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
 
-        const homeEId = this._getEntityId('home_consumption_power');
         let home;
-        if (homeEId && this._hass?.states[homeEId]) {
-            home = this._getState('home_consumption_power');
-            if (this._entities?.home?.invert) home = -home;
+        if (snap && snap.home_w !== null && snap.home_w !== undefined) {
+            home = snapNum(snap.home_w);
         } else {
-            home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
+            const homeEId = this._getEntityId('home_consumption_power');
+            if (homeEId && this._hass?.states[homeEId]) {
+                home = this._getState('home_consumption_power');
+                if (this._entities?.home?.invert) home = -home;
+            } else {
+                home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
+            }
         }
 
         const dailySolar      = this._getStateStr('daily_solar_energy');
@@ -548,16 +586,15 @@ class SEMFlowCard extends SEMLitBase {
         const color = dynamicColor || group.dataset.color;
         if (dynamicColor) group.dataset.color = dynamicColor;
 
-        const pathId = group.dataset.pathId;
         const pathD  = group.dataset.pathD;
         const count  = parseInt(group.dataset.count, 10) || 2;
         const newSig = `${reverse ? 'r' : 'f'}:${duration.toFixed(1)}:${color}`;
         if (group.dataset.sig === newSig) return;
         group.dataset.sig = newSig;
-        group.innerHTML = this._flowEffects(pathD, pathId, color, count, duration, reverse);
+        group.innerHTML = this._flowEffects(pathD, color, count, duration, reverse);
     }
 
-    _flowEffects(pathD, pathId, color, count, duration, reverse) {
+    _flowEffects(pathD, color, count, duration, reverse) {
         const dur = duration.toFixed(1);
         const dashOffset = reverse ? '32' : '-32';
         const reverseAttrs = reverse ? ' keyPoints="1;0" keyTimes="0;1"' : '';
@@ -566,18 +603,17 @@ class SEMFlowCard extends SEMLitBase {
                      <animate attributeName="stroke-dashoffset" from="0" to="${dashOffset}"
                               dur="${dur}s" repeatCount="indefinite"/>
                    </path>`;
+        // #591 — inline path= instead of an mpath href="#id" reference: WebKit (every iOS
+        // browser) only resolves xlink:href on mpath, so the plain-href
+        // reference never bound and the flow dots stood still on iOS.
         for (let i = 0; i < count; i++) {
             const delay = (i / count) * duration;
             svg += `
                 <circle r="5" fill="${color}" opacity="0.12">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>
                 <circle r="2.5" fill="${color}" opacity="0.9">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>`;
         }
         return svg;
@@ -675,7 +711,9 @@ class SEMFlowCard extends SEMLitBase {
 
             svgHtml += `<path id="dev-conn-${idx}" d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}" fill="none" stroke="${color}" stroke-width="1.2" stroke-dasharray="3,5" opacity="0.1"/>`;
             svgHtml += `<g id="dev-flow-${idx}"></g>`;
-            svgHtml += `<path id="dev-path-${idx}" d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}" fill="none" stroke="none"/>`;
+            // #591 — the flow dot now inlines its path (path=) instead of
+            // referencing this via an mpath href reference, so the invisible target path
+            // is no longer needed.
             const entityAttr = info.power_entity ? ` data-entity="${info.power_entity}"` : '';
             svgHtml += `<g id="dev-group-${idx}" class="device-clickable"${entityAttr} data-idx="${idx}">`;
             svgHtml += `<circle id="dev-circle-${idx}" cx="${cx}" cy="${cy}" r="${nodeR}" fill="rgba(128,128,128,0.03)" stroke="${color}" stroke-width="1.2" opacity="0.4"/>`;
@@ -740,9 +778,7 @@ class SEMFlowCard extends SEMLitBase {
                                 <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="${dur}s" repeatCount="indefinite"/>
                             </path>
                             <circle r="2" fill="${color}" opacity="0.8">
-                                <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s">
-                                    <mpath href="#dev-path-${idx}"/>
-                                </animateMotion>
+                                <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s"/>
                             </circle>`;
                     }
                 } else if (flowGroup.dataset.sig !== '') {
@@ -919,6 +955,17 @@ class SEMFlowCard extends SEMLitBase {
             else { delete this._animFrames[id]; }
         };
         this._animFrames[id] = requestAnimationFrame(animate);
+        // Settle fallback: rAF frames die silently on a backgrounded/resumed
+        // iOS WebView — guarantee the FINAL value lands. No-op when a newer
+        // target superseded this one.
+        setTimeout(() => {
+            if (this._currentValues[id] !== newVal) return;
+            if (this._animFrames[id]) {
+                cancelAnimationFrame(this._animFrames[id]);
+                delete this._animFrames[id];
+            }
+            el.textContent = fmt(newVal);
+        }, duration + 250);
     }
 
     _setText(id, text) {
@@ -935,6 +982,18 @@ class SEMFlowCard extends SEMLitBase {
         if (!entity) return 0;
         const val = parseFloat(entity.state);
         return isNaN(val) ? 0 : val;
+    }
+
+    // (#699) The coordinator's ATOMIC balance snapshot — all values from one
+    // cycle, carried as an attribute on the home sensor. Prefix mode only
+    // (entities mode reads user-supplied sensors that carry no snapshot);
+    // null when the backend predates #699, and callers fall back to the
+    // per-entity reads. See sem-system-diagram-card for the full rationale.
+    _powerSnapshot() {
+        if (this._mode !== 'prefix' || !this._hass) return null;
+        const st = this._hass.states[this._prefix + 'home_consumption_power'];
+        const snap = st && st.attributes && st.attributes.power_snapshot;
+        return (snap && typeof snap === 'object') ? snap : null;
     }
 
     _getStateStr(key) {
@@ -978,6 +1037,11 @@ class SEMFlowCard extends SEMLitBase {
     }
 
     _hasNode(node) {
+        // #595/#614 — honor show_ev/show_battery:false in BOTH modes
+        // (prefix mode used to return true unconditionally, so installs
+        // without the hardware still drew ghost branches).
+        if (node === 'ev' && !this._showEv) return false;
+        if (node === 'battery' && !this._showBattery) return false;
         if (this._mode === 'prefix') return true;
         const e = this._entities;
         if (!e) return false;

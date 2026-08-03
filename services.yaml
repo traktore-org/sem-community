@@ -258,6 +258,17 @@ register_surplus_device:
         entity:
           domain: sensor
           device_class: power
+    energy_entity_id:
+      name: Energy Sensor (kWh)
+      description: >-
+        Optional cumulative energy counter (kWh) for a device with no power
+        sensor (#600). SEM autodetects a companion power sensor first, else
+        derives live power from this counter.
+      required: false
+      selector:
+        entity:
+          domain: sensor
+          device_class: energy
     control_mode:
       name: Control Mode
       description: "How SEM controls the device: surplus (SEM switches it on solar surplus — the default), peak_only (your own automations run it, SEM only sheds it to protect the grid peak), off (monitor only)."
@@ -271,13 +282,36 @@ register_surplus_device:
             - "off"
     daily_min_runtime_min:
       name: Min Runtime per Day
-      description: Daily runtime target in minutes (e.g. 240 = pool pump runs at least 4h/day). SEM prefers solar surplus; the top-up policy decides what happens if the sun alone is not enough.
+      description: Daily runtime floor in minutes (e.g. 240 = pool pump runs at least 4h/day). SEM prefers solar surplus; a device is never fully starved behind higher-priority siblings. Not a hard guarantee.
       required: false
       selector:
         number:
           min: 0
           max: 1440
           unit_of_measurement: min
+    daily_max_runtime_min:
+      name: Max Runtime per Day
+      description: "(#620) Daily runtime CAP in minutes — the device never runs past this in a day (pump wear / waste). 0 = uncapped. Persisted across restarts."
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+    battery_assist_enabled:
+      name: Solar + battery (daytime assist)
+      description: "(#620) Tier 1 — let the home battery assist this device above the Buffer SoC when there is real solar surplus (self-consumption max, like the EV). Automatic; does not drain stored house energy. Off = Solar only (battery reserved for the house)."
+      required: false
+      default: false
+      selector:
+        boolean:
+    battery_eligible_overnight:
+      name: Use battery overnight (below buffer)
+      description: "(#620) Tier 2 — allow this device to draw the battery BELOW the buffer, down to the Reserve SoC, when there is no surplus (spends stored house energy at night). Off by default."
+      required: false
+      default: false
+      selector:
+        boolean:
     top_up_policy:
       name: Top-up Policy
       description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target on a dark day), cheap_hours (top up during cheap tariff windows)."
@@ -386,6 +420,17 @@ schedule_appliance:
           max: 10
           step: 1
 
+cancel_appliance_schedule:
+  name: Cancel Appliance Schedule
+  description: Cancel a pending appliance schedule created with schedule_appliance. The appliance is released from surplus control and will not be force-started at its deadline.
+  fields:
+    device_id:
+      name: Device ID
+      description: The identifier used when the appliance was scheduled (e.g., "dishwasher")
+      required: true
+      selector:
+        text:
+
 reset_sign_detection:
   name: Reset sign detection
   description: >
@@ -418,6 +463,130 @@ flip_grid_sign:
     entry_id:
       name: Config entry
       description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:
+
+flip_battery_sign:
+  name: Flip battery sign
+  description: >
+    Flip the battery charge/discharge convention by one tap and return a
+    support report. Toggles the persisted battery_sign_user_flip override
+    (sits on top of the auto-detect / brand-seed decision), reloads so the
+    corrected sign takes effect immediately, and returns a diagnostics
+    payload (raw battery value, configured counters, accumulator evidence)
+    that the Config-tab button copies for a GitHub issue. Use when battery
+    charge/discharge appears inverted and a re-learn can't fix it.
+    Calling it again flips back.
+  fields:
+    entry_id:
+      name: Config entry
+      description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:
+
+# --- #673: these four were registered in __init__.py but missing here for
+# releases. An undeclared service is still callable, so nothing errored — it
+# just lost its whole UI affordance (no description, no field pickers, no
+# validation in Developer Tools → Actions). Worst for `diagnose`, which
+# docs/SEM_TRACE.md explicitly tells users to call. Guarded by
+# tests/test_673_services_declared.py.
+
+diagnose:
+  name: Diagnose
+  description: >
+    Return SEM's current configuration, live state and recent log lines for
+    one area, as a service response. This is the "what does SEM actually
+    think right now" tool — use it before filing an issue, and paste the
+    result in.
+
+    Read-only. Never changes configuration or touches hardware.
+  fields:
+    section:
+      name: Section
+      description: >
+        Which area to report on. "all" returns the overview; "trace" returns
+        the layered per-cycle decision chain (management → process →
+        integration) plus any layer-boundary mismatch, which is the fastest
+        way to explain an unexpected EV or load decision.
+      required: false
+      default: "all"
+      example: "trace"
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - "all"
+            - "trace"
+            - "ev_chargers"
+            - "battery_zones"
+            - "battery_scheduler"
+            - "heat_pump"
+            - "hot_water"
+            - "tariff"
+            - "load_management"
+            - "forecast"
+            - "notifications"
+            - "advanced"
+
+remove_charger:
+  name: Remove EV Charger
+  description: >
+    Remove an EV charger from SEM by id. `update_device_config` merges the
+    charger list additively (so adding one never drops its siblings), which
+    means it cannot express a removal — this service can.
+  fields:
+    charger_id:
+      name: Charger ID
+      description: "The id of the charger to remove, as shown on its dashboard card"
+      required: true
+      example: "ev_charger"
+      selector:
+        text:
+    entry_id:
+      name: Config Entry ID
+      description: "Only needed if you run more than one SEM config entry"
+      required: false
+      selector:
+        text:
+
+get_config:
+  name: Get Configuration
+  description: >
+    Return SEM's merged configuration (setup data + options) as a service
+    response. Home Assistant's own `config_entries/get` strips both for
+    security, so this is the only way to read back option-only fields.
+
+    Used by the dashboard's Configuration tab. Read-only.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: "Only needed if you run more than one SEM config entry"
+      required: false
+      selector:
+        text:
+
+set_option:
+  name: Set Configuration Option
+  description: >
+    Write one or more configuration options, merging them into the SEM
+    config entry exactly as the Options flow does.
+
+    Used by the dashboard's Configuration tab. Prefer the UI — this service
+    does not validate the way the config flow does, and an unknown key is
+    stored rather than rejected.
+  fields:
+    options:
+      name: Options
+      description: "Mapping of option key to value"
+      required: true
+      example: '{"battery_priority_soc": 30}'
+      selector:
+        object:
+    entry_id:
+      name: Config Entry ID
+      description: "Only needed if you run more than one SEM config entry"
       required: false
       selector:
         text:

@@ -142,43 +142,52 @@ annotation at all — the lint only flags reads inside `ev_control.py`.
 
 ---
 
-## What the context manager owns
+## What the context manager owns (post-#589: NO swap remains)
 
 `coordinator/per_charger_context.py` ([source](../coordinator/per_charger_context.py)):
 
-| Coordinator attribute | Role |
-|---|---|
-| `_ev_device` | The active charger's `EVDevice` instance |
-| `_ev_stalled_since` | Per-charger stall detection state |
-| `_ev_enable_surplus_since` | Per-charger enable-surplus timer |
-| `_ev_charge_started_at` | Per-charger session start timestamp |
-| `_ev_last_change_time` | Per-charger ramp-rate gate |
-| `_ev_reenable_attempts` | Per-charger re-enable retry counter |
-| `_ev_charge_refused` | Per-charger "charger refused" flag |
-| `_current_charger_budget` | This charger's slice of `EVBudget.net_w` |
-| `_cycle_vehicle_soc` | This charger's vehicle SOC (per `vehicle_soc_entity`) |
-| `_current_pcc` | (v1.6.14) Pointer to the active `PerChargerContext` so `_this_charger_power` can return the cached `this_power_w` |
+The #589 swap retirement (v1.7.5) **deleted the snapshot/restore
+mechanism entirely.** Per-charger state now lives in exactly two places:
 
-The corresponding `_per_charger` dicts (e.g.
-`_ev_stalled_since_per_charger: Dict[str, datetime]`) are the **storage**;
-the context manager pushes from them on `__enter__` and saves back on
-`__exit__`.
+1. **Durable fields** — on `PerChargerState`, one instance per charger in
+   `coord._pcc_store[cid]`, held by the active context **by reference**:
+   `stalled_since`, `enable_surplus_since`, `charge_started_at`,
+   `last_change_time`, `reenable_attempts`, `charge_refused`,
+   `last_set_amps_ts`.
+2. **Cycle-scoped fields** — on the `PerChargerContext` object itself:
+   `budget_w`, `vehicle_soc`, `this_power_w`, `effective_state`,
+   `charger_name`.
+
+The coordinator's legacy attribute names (`self._ev_stalled_since`,
+`self._cycle_vehicle_soc`, `self._ev_device`, …) are **properties** that
+dispatch on `coord._current_pcc`: inside the per-charger loop they
+resolve to the active context's values, outside it to the
+primary/default backing. `__enter__` = bind store object + seed SOC +
+set the pointer; `__exit__` = persist `effective_state` + clear the
+pointer. There is no snapshot and no restore, so a forgotten write-back
+(the #284/#315/#318 leak) is **unrepresentable**.
+
+Retired outright as dead state during the retirement:
+`_ev_budget_history` (+ its `_per_charger` dict; consumer removed in
+#536) and `_current_charger_budget` (budget flows through
+`pcc.budget_w → build_charger_view`).
 
 ---
 
 ## How to add a new per-charger field
 
-1. Add it as a field on the `PerChargerContext` dataclass.
-2. Add a `_<field>_per_charger: Dict[str, ...]` to `SEMCoordinator`.
-3. Push/save in `__enter__`/`__exit__` — mirror the existing fields.
-4. Add a unit test in `tests/test_per_charger_context.py` asserting:
-   - In-context reads see this charger's value.
-   - Mutations persist to the per-charger dict after exit.
-   - Different chargers don't see each other's value.
+1. **Durable across cycles?** Add a field on `PerChargerState`. If
+   legacy code reads it as `self._ev_<x>`, add a coordinator property
+   pair dispatching on `_current_pcc` (mirror `_ev_stalled_since`).
+2. **Cycle-scoped?** Add a field on the `PerChargerContext` dataclass
+   (mirror `vehicle_soc`).
+3. Add a unit test asserting cross-charger isolation: divergent values
+   on two chargers, no bleed, out-of-loop reads see the default.
 
-That's it. **Don't** add a new `saved = {...}` dict in
-`coordinator.py`; the loop body already wraps everything in a `with`
-block.
+**Never** add a `saved = {...}` snapshot, a `coord._ev_* = …` assignment
+in `__enter__`/`__exit__`, or a parallel `_<x>_per_charger` dict — the
+AST guard at `tests/test_589_percharger_astguard.py` fails CI on all
+three shapes.
 
 ---
 
@@ -254,8 +263,7 @@ requiring explicit unwrap via `.as_fleet_total(reason: str)`. The
 lint then enforces the unwrap call instead of a comment annotation —
 structurally stronger.
 
-See [`/home/sem/.claude/plans/greedy-whistling-nebula.md`](../../.claude/plans/greedy-whistling-nebula.md)
-for the original plan.
+(The original planning notes were internal and are superseded by this document.)
 
 ---
 

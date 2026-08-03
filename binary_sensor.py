@@ -76,10 +76,14 @@ BINARY_SENSOR_TYPES = [
         key="heat_pump_registered",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
     ),
-    # Phase 7: Utility signal active
+    # #590 — layered-trace health: ON when a control OR perception layer-boundary
+    # fault has persisted (a subsystem decided to act but reality disagreed, or a
+    # sign reading contradicts its energy counters). The single surface for the
+    # trace + the retired sign-contradiction sensors; attributes name the fault.
     BinarySensorEntityDescription(
-        key="utility_signal_active",
+        key="layer_mismatch",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
 
@@ -116,12 +120,12 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
     # Disabled by default
     DISABLED_BY_DEFAULT = {
         "forecast_available", "tariff_is_dynamic",
-        "heat_pump_solar_boost", "utility_signal_active",
+        "heat_pump_solar_boost",
     }
 
     # Diagnostic sensors
     DIAGNOSTIC_SENSORS = {
-        "forecast_available", "tariff_is_dynamic", "utility_signal_active",
+        "forecast_available", "tariff_is_dynamic",
     }
 
     def __init__(
@@ -166,6 +170,18 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
         key = self.entity_description.key
         return self.coordinator.data.get(key, False)
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any] | None:
+        """#590 — for the layered-trace health sensor, name the persisted fault
+        (which subsystem, e.g. ``perception:battery_sign``, and for how many
+        cycles) so it's diagnosable without the diagnose dump."""
+        if self.entity_description.key != "layer_mismatch" or not self.coordinator.data:
+            return None
+        return {
+            "subsystem": self.coordinator.data.get("layer_mismatch_subsystem"),
+            "persisted_cycles": self.coordinator.data.get("layer_mismatch_cycles", 0),
+        }
 
     @property
     def device_info(self) -> Dict[str, Any]:

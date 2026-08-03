@@ -91,12 +91,15 @@ class TestGoalProperties:
         assert dev.stop_condition_met is False
 
     def test_speculative_surface_removed(self):
-        """Freeze guard: the deleted fields/props must not come back."""
+        """Freeze guard: the ENERGY / deadline surface stays deleted. The
+        runtime max cap (``daily_max_runtime_sec``) was legitimately restored
+        in #620 — correctly this time (persisted) — so it's excluded here and
+        covered by test_620_device_goal_model.py instead."""
         dev = _switch()
         for attr in (
-            "daily_max_runtime_sec", "daily_target_energy_kwh",
+            "daily_target_energy_kwh",
             "daily_max_energy_kwh", "_daily_energy_accumulated_kwh",
-            "daily_max_runtime_reached", "daily_max_energy_reached",
+            "daily_max_energy_reached",
             "deadline_pressure", "target_deadline", "_deadline_forced",
             "daily_energy_budget_kwh", "_seconds_until_deadline",
         ):
@@ -163,10 +166,15 @@ def _mock_device(**kw):
     device.status = MagicMock()
     device.control_mode = kw.get("control_mode", DeviceControlMode.SURPLUS)
     device._offpeak_forced = False
+    device._batt_overnight_forced = False
+    device._batt_overnight_forced_date = None
+    device.battery_assist_enabled = False
+    device.battery_eligible_overnight = False
     device.needs_offpeak_activation = kw.get("needs_offpeak", False)
     device.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
     device.daily_min_runtime_sec = 0
     device.daily_targets_met = kw.get("targets_met", False)
+    device.daily_max_runtime_reached = kw.get("max_reached", False)
     device.stop_condition_met = kw.get("stop_met", False)
     device.top_up_policy = kw.get("policy", "solar_only")
     device._offpeak_forced_date = None
@@ -183,12 +191,16 @@ def _mock_device(**kw):
 @pytest.mark.asyncio
 class TestControllerGoalGates:
 
-    async def test_target_met_device_deactivated(self, mock_hass):
+    async def test_target_met_device_keeps_free_surplus(self, mock_hass):
+        """(#688, was test_target_met_device_deactivated) The daily minimum is
+        a FLOOR, not a stop — with 5 kW of sun the load runs on toward its Max
+        cap. Reaching the floor only ends the PAID sources; the full contract
+        is pinned in test_688_runtime_floor_ceiling.py."""
         sc = SurplusController(mock_hass)
         dev = _mock_device(is_active=True, targets_met=True, consumption=800)
         sc.register_device(dev)
         await sc.update(5000.0)
-        dev.deactivate.assert_awaited()
+        dev.deactivate.assert_not_awaited()
 
     async def test_stop_condition_deactivates(self, mock_hass):
         sc = SurplusController(mock_hass)
@@ -265,6 +277,35 @@ async def test_goal_update_persists_and_applies(registry):
 
 
 @pytest.mark.asyncio
+async def test_concurrent_goal_writes_dont_clobber(registry):
+    """Two goal props written concurrently (the card writes stop_entity +
+    stop_at as separate calls) must BOTH persist. Reproduces the live Heizband
+    race: _save_storage snapshots the dict across an await, and a stale snapshot
+    reload dropped one value back to 0. The _goal_write_lock serializes them."""
+    import asyncio as _aio
+    await registry.async_register_service_device({
+        "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
+        "rated_power": 800, "priority": 5,
+    })
+
+    async def _clobbering_save():
+        # snapshot at call time, yield, then reassign — exactly the
+        # reload-from-storage clobber the lock must prevent.
+        snap = {k: dict(v) for k, v in registry._device_goals.items()}
+        await _aio.sleep(0)
+        registry._device_goals = snap
+
+    registry._save_storage = _clobbering_save
+    await _aio.gather(
+        registry.async_update_device_goal("pump", "stop_entity", "sensor.t"),
+        registry.async_update_device_goal("pump", "stop_at", "88"),
+    )
+    g = registry._device_goals["pump"]
+    assert g.get("stop_entity") == "sensor.t"
+    assert g.get("stop_at") == "88"   # not dropped/clobbered
+
+
+@pytest.mark.asyncio
 async def test_goals_survive_reregistration(registry):
     await registry.async_register_service_device({
         "device_id": "pump", "entity_id": "switch.pump", "name": "Pump",
@@ -312,7 +353,11 @@ def test_goal_payload_shape(registry):
     assert payload["progress"]["runtime_today_min"] == 0
     # deleted keys are gone from the payload
     assert "target_deadline" not in payload["goals"]
-    assert "daily_max_runtime_min" not in payload["goals"]
+    assert "daily_target_energy_kwh" not in payload["goals"]
+    # (#620) daily_max_runtime_min + battery flags are live keys again
+    assert payload["goals"]["daily_max_runtime_min"] == 0
+    assert payload["goals"]["battery_assist_enabled"] is False
+    assert payload["goals"]["battery_eligible_overnight"] is False
 
 
 @pytest.mark.asyncio
@@ -331,7 +376,9 @@ async def test_loads_goal_with_removed_keys(registry):
     registry._apply_goals(dev)  # must not raise on the extra keys
     assert dev.daily_min_runtime_sec == 240 * 60
     assert dev.top_up_policy == "solar_only"
-    assert not hasattr(dev, "daily_max_runtime_sec")
+    # (#620) daily_max_runtime_min is now a LIVE key again — applied to the
+    # restored device (the energy/deadline keys are still ignored).
+    assert dev.daily_max_runtime_sec == 120 * 60
 
 
 # ---------------------------------------------------------------------------
@@ -342,17 +389,21 @@ async def test_loads_goal_with_removed_keys(registry):
 class TestForceExpiry:
 
     async def test_cheap_force_expires_on_day_rollover_in_cheap_window(self, mock_hass):
+        # (#703) "day rollover" = the load's METER day moved on (sunrise
+        # boundary), not the calendar flip at midnight. Force stamped for the
+        # OLD meter day + meter day now advanced → stale → stop, and the
+        # re-force stamps the CURRENT meter day.
         from datetime import date as _date
-        from homeassistant.util import dt as dt_util
         sc = SurplusController(mock_hass)
         dev = _mock_device(is_active=True, policy="cheap_hours",
                            needs_offpeak=True, remaining_sec=3600)
         dev._offpeak_forced = True
-        dev._offpeak_forced_date = _date(2020, 1, 1)  # forced YESTERDAY
+        dev._offpeak_forced_date = _date(2020, 1, 1)      # the OLD meter day
+        dev._daily_runtime_meter_day = _date(2020, 1, 2)  # sunrise rolled over
         sc.register_device(dev)
         await sc.update(0.0, price_level="cheap")
         dev.deactivate.assert_awaited()
-        assert dev._offpeak_forced_date == dt_util.now().date()
+        assert dev._offpeak_forced_date == _date(2020, 1, 2)
 
     async def test_cheap_force_rollover_without_new_deficit_stays_off(self, mock_hass):
         from datetime import date as _date
@@ -368,11 +419,14 @@ class TestForceExpiry:
         dev.activate.assert_not_called()
 
     async def test_cheap_force_holds_same_day_in_cheap_window(self, mock_hass):
-        from homeassistant.util import dt as dt_util
+        # (#703) same METER day (even if the calendar flipped at midnight —
+        # the sunrise-held day is the boundary that matters) → NOT stale.
+        from datetime import date as _date
         sc = SurplusController(mock_hass)
         dev = _mock_device(is_active=True, policy="cheap_hours")
         dev._offpeak_forced = True
-        dev._offpeak_forced_date = dt_util.now().date()
+        dev._offpeak_forced_date = _date(2020, 1, 1)
+        dev._daily_runtime_meter_day = _date(2020, 1, 1)
         sc.register_device(dev)
         await sc.update(0.0, price_level="cheap")
         dev.deactivate.assert_not_called()

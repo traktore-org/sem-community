@@ -26,6 +26,14 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
     setConfig(config) {
         this.config = config;
+        // #595 follow-up — hide the EV charger node entirely on installs
+        // without a charger. The generator injects show_ev:false when
+        // neither ev_chargers nor ev_charging_power_sensor is configured
+        // (same test that prunes the EV view). Default true for
+        // backward compat with hand-written configs.
+        this._showEv = config.show_ev !== false;
+        // #614 — battery sibling of the same ghost-node class.
+        this._showBattery = config.show_battery !== false;
         // #455 — parity with sem-flow-card: explicit ``entities:`` config
         // points the card at arbitrary HA entities; ``entity_prefix``
         // stays the default/fallback. Same precedence as sem-flow-card:
@@ -105,8 +113,31 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             this._visible = entries[0].isIntersecting;
             const svg = this.shadowRoot.querySelector('svg');
             if (svg) svg.style.animationPlayState = this._visible ? 'running' : 'paused';
+            // Coming back on-screen: refresh immediately — a hass update that
+            // arrived while hidden was dropped by the _visible gate.
+            if (this._visible && this._hass && this._rendered) this._updateFlows();
         }, { threshold: 0.01 });
         this._intersectionObserver.observe(this);
+
+        // ── Display-truth reconcile (PROD 2026-07-18, iOS stale nodes) ──
+        // The value texts are written by rAF animations; iOS suspends rAF in a
+        // backgrounded WebView and can DROP the pending frames on resume — the
+        // internal value cache advances while the DISPLAYED text stays frozen
+        // at the pre-suspend value (observed: battery/grid showing last
+        // night's 2.5 kW / 1.9 kW for 6+ hours while every kWh label was
+        // live). Same failure class as any fire-and-forget write: the display
+        // must be RECONCILED against truth, not trusted from one write.
+        //   1. visibilitychange → re-run the full update on every app resume
+        //      (also re-arms a stuck _visible from a missed intersection).
+        //   2. A slow watchdog hard-sets any value text that drifted from the
+        //      cache — catches every other dead-rAF/stuck-observer shape.
+        this._onVisibility = () => {
+            if (document.visibilityState === 'visible' && this._hass && this._rendered) {
+                this._visible = true;
+                this._updateFlows();
+            }
+        };
+        document.addEventListener('visibilitychange', this._onVisibility);
     }
 
     disconnectedCallback() {
@@ -115,6 +146,10 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
         clearTimeout(this._updateTimer);
         clearTimeout(this._resizeTimeout);
+        if (this._onVisibility) {
+            document.removeEventListener('visibilitychange', this._onVisibility);
+            this._onVisibility = null;
+        }
         for (const id of Object.keys(this._animFrames)) {
             cancelAnimationFrame(this._animFrames[id]);
         }
@@ -152,6 +187,21 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         if (!entity) return 0;
         const val = parseFloat(entity.state);
         return isNaN(val) ? 0 : val;
+    }
+
+    // (#699) The coordinator's ATOMIC balance snapshot — every value from the
+    // SAME cycle, carried as one attribute on the home sensor. Reading the
+    // balance from five separate entities lets a render instant compose
+    // values from different moments (each entity commits on its own; EV even
+    // sub-cycle, #289) — a 15 s KEBA burst put 4.8 kW on the grid tile while
+    // the EV tile still read 0 and the card's books were 5 kW short. Prefix
+    // mode only: entities mode reads user-supplied sensors that carry no
+    // snapshot. Null when the backend predates #699 → per-entity fallback.
+    _powerSnapshot() {
+        if (this._mode === 'entities' || !this._hass) return null;
+        const st = this._hass.states[this._entityId('home_consumption_power')];
+        const snap = st && st.attributes && st.attributes.power_snapshot;
+        return (snap && typeof snap === 'object') ? snap : null;
     }
 
     _getStateStr(suffix) {
@@ -206,6 +256,18 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             }
         };
         this._animFrames[id] = requestAnimationFrame(animate);
+        // Settle fallback: rAF frames die silently in a backgrounded/resumed
+        // iOS WebView — make sure the FINAL value always lands (the animation
+        // is decoration; the number is the product). No-op when a newer
+        // target superseded this one.
+        setTimeout(() => {
+            if (this._currentValues[id] !== newWatts) return;
+            if (this._animFrames[id]) {
+                cancelAnimationFrame(this._animFrames[id]);
+                delete this._animFrames[id];
+            }
+            el.textContent = prefix + this._formatPower(newWatts);
+        }, duration + 250);
     }
 
     _setGlowIntensity(nodeId, watts, maxWatts) {
@@ -221,12 +283,25 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         // optional split battery (charge/discharge entities), combined
         // grid entity with reverse flag, and reverse/invert flags on
         // solar/battery/ev. Prefix mode is byte-identical to pre-#455.
-        let solar = this._getState('solar_power');
+        //
+        // (#699) In prefix mode, every balance value comes from the ONE
+        // atomic snapshot when the backend provides it — the whole set is
+        // from the same coordinator cycle, so the diagram's books always
+        // add up even mid-transient.
+        const snap = this._powerSnapshot();
+        const snapNum = (v) => {
+            const f = parseFloat(v);
+            return isNaN(f) ? 0 : f;
+        };
+
+        let solar = snap ? snapNum(snap.solar_w) : this._getState('solar_power');
         if (this._entities?.solar?.reverse) solar = -solar;
 
         let battery;
         if (this._mode === 'entities' && (this._entities?.battery?.charge || this._entities?.battery?.discharge)) {
             battery = this._getState('battery_charge_power') - this._getState('battery_discharge_power');
+        } else if (snap) {
+            battery = snapNum(snap.battery_w);
         } else {
             const raw = this._getState('battery_power');
             battery = this._entities?.battery?.reverse ? -raw : raw;
@@ -238,14 +313,17 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             const rev = this._entities.grid.reverse;
             gridImport = Math.max(0, rev ? -gp : gp);
             gridExport = Math.max(0, rev ? gp : -gp);
+        } else if (snap) {
+            gridImport = snapNum(snap.grid_import_w);
+            gridExport = snapNum(snap.grid_export_w);
         } else {
             gridImport = this._getState('grid_import_power');
             gridExport = this._getState('grid_export_power');
         }
 
-        let ev = this._getState('ev_power');
+        let ev = snap ? snapNum(snap.ev_w) : this._getState('ev_power');
         if (this._entities?.ev?.invert) ev = -ev;
-        const soc = this._getState('battery_soc');
+        const soc = snap ? snapNum(snap.battery_soc) : this._getState('battery_soc');
 
         const battCharge = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
@@ -255,19 +333,23 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         // update-cadence skew so the sensor doesn't flicker to 0 while
         // the EV charges; a raw recompute here did. Fall back to the
         // residual only when the sensor is unavailable.
-        const homeEid = this._entityId('home_consumption_power');
-        const homeSt = homeEid ? this._hass?.states[homeEid] : null;
         let home;
-        if (homeSt && homeSt.state !== 'unavailable' && homeSt.state !== 'unknown'
-            && !isNaN(parseFloat(homeSt.state))) {
-            home = this._getState('home_consumption_power');
-            if (this._entities?.home?.invert) home = -home;
-            home = Math.max(0, home);
+        if (snap && snap.home_w !== null && snap.home_w !== undefined) {
+            home = Math.max(0, snapNum(snap.home_w));
         } else {
-            home = Math.max(
-                0,
-                solar + gridImport + battDischarge - gridExport - battCharge - ev
-            );
+            const homeEid = this._entityId('home_consumption_power');
+            const homeSt = homeEid ? this._hass?.states[homeEid] : null;
+            if (homeSt && homeSt.state !== 'unavailable' && homeSt.state !== 'unknown'
+                && !isNaN(parseFloat(homeSt.state))) {
+                home = this._getState('home_consumption_power');
+                if (this._entities?.home?.invert) home = -home;
+                home = Math.max(0, home);
+            } else {
+                home = Math.max(
+                    0,
+                    solar + gridImport + battDischarge - gridExport - battCharge - ev
+                );
+            }
         }
 
         const vals = { solar, battery, gridImport, gridExport, home, ev, soc };
@@ -280,7 +362,15 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         // intentionally unmapped node (e.g. no EV) must not show as a
         // permanent "sensor unavailable" warning.
         const unavailable = [];
-        for (const suffix of ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'ev_power', 'battery_soc']) {
+        const trackedKeys = ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'battery_soc'];
+        if (this._showEv) trackedKeys.splice(4, 0, 'ev_power');
+        if (!this._showBattery) {
+            for (const k of ['battery_power', 'battery_soc']) {
+                const ix = trackedKeys.indexOf(k);
+                if (ix >= 0) trackedKeys.splice(ix, 1);
+            }
+        }
+        for (const suffix of trackedKeys) {
             const eid = this._entityId(suffix);
             if (!eid) {
                 if (this._mode === 'prefix') unavailable.push(suffix);
@@ -426,17 +516,16 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             return;
         }
 
-        const pathId = group.dataset.pathId;
         const pathD = group.dataset.pathD;
         const color = group.dataset.color;
         const count = parseInt(group.dataset.count, 10) || 2;
         const newSig = `${reverse ? 'r' : 'f'}:${duration.toFixed(1)}`;
         if (group.dataset.sig === newSig) return;
         group.dataset.sig = newSig;
-        group.innerHTML = this._flowEffects(pathD, pathId, color, count, duration, reverse);
+        group.innerHTML = this._flowEffects(pathD, color, count, duration, reverse);
     }
 
-    _flowEffects(pathD, pathId, color, count, duration, reverse) {
+    _flowEffects(pathD, color, count, duration, reverse) {
         const dur = duration.toFixed(1);
         const dashOffset = reverse ? '32' : '-32';
         const reverseAttrs = reverse ? ' keyPoints="1;0" keyTimes="0;1"' : '';
@@ -447,20 +536,20 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                               dur="${dur}s" repeatCount="indefinite"/>
                    </path>`;
 
+        // #591 — inline path= instead of an mpath href="#id" reference: WebKit (every iOS
+        // browser) only resolves xlink:href on mpath, so plain href never bound
+        // and the flow dots stood still on iOS. Inline path data is the SVG 1.1
+        // form supported everywhere.
         for (let i = 0; i < count; i++) {
             const delay = (i / count) * duration;
             svg += `
                 <circle r="5" fill="${color}" opacity="0.12">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite"
-                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite"
+                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>
                 <circle r="2.5" fill="${color}" opacity="0.9">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite"
-                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite"
+                        calcMode="paced"${reverseAttrs} begin="-${delay.toFixed(2)}s"/>
                 </circle>`;
         }
         return svg;
@@ -524,16 +613,15 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             // Animated flow when device is consuming
             if (power > 5) {
                 const dur = this._calcDuration(power).toFixed(1);
-                html += `<path d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}"
+                const devPathD = `M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}`;
+                html += `<path d="${devPathD}"
                                fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="8,16" opacity="0.4" stroke-linecap="round">
                              <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="${dur}s" repeatCount="indefinite"/>
                            </path>`;
+                // #591 — inline path= instead of an mpath href reference (iOS/WebKit).
                 html += `<circle r="2" fill="${color}" opacity="0.8">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s">
-                        <mpath href="#dev-path-${idx}"/>
-                    </animateMotion>
+                    <animateMotion path="${devPathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced" begin="-${(idx * 0.3).toFixed(1)}s"/>
                 </circle>`;
-                html += `<path id="dev-path-${idx}" d="M${H.cx},${H.cy + H.r} C${H.cx},${H.cy + H.r + 30} ${cx},${cy - 40} ${cx},${cy - nodeR}" fill="none" stroke="none"/>`;
             }
 
             // Device circle node
@@ -697,12 +785,6 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                         ${this._glowFilter('glowHome',    '#5BC8D8', 10)}
                         ${this._glowFilter('glowEV',      '#8DC892', 8)}
                         ${this._glowFilter('glowInverter','#96CAEE', 6)}
-
-                        <path id="path-solar"   d="${L.paths.solar}"/>
-                        <path id="path-home"    d="${L.paths.home}"/>
-                        <path id="path-battery" d="${L.paths.battery}"/>
-                        <path id="path-grid"    d="${L.paths.grid}"/>
-                        <path id="path-ev"      d="${L.paths.ev}"/>
                     </defs>
 
                     <rect width="100%" height="100%" fill="url(#bgGrad)"/>
@@ -711,21 +793,19 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <!-- Static flow tracks -->
                     ${this._track(L.paths.solar,   '#ff9800')}
                     ${this._track(L.paths.home,    '#5BC8D8')}
-                    ${this._track(L.paths.battery, '#4db6ac')}
+                    ${this._showBattery ? this._track(L.paths.battery, '#4db6ac') : ''}
                     ${this._track(L.paths.grid,    '#488fc2')}
-                    ${this._track(L.paths.ev,      '#8DC892')}
+                    ${this._showEv ? this._track(L.paths.ev, '#8DC892') : ''}
 
                     <!-- Animated flow groups -->
                     <g id="flow-solar" class="flow-group" style="opacity:0"
-                       data-path-id="path-solar" data-path-d="${L.paths.solar}" data-color="#ff9800" data-count="2"></g>
-                    <g id="flow-battery" class="flow-group" style="opacity:0"
-                       data-path-id="path-battery" data-path-d="${L.paths.battery}" data-color="#4db6ac" data-count="3"></g>
+                       data-path-d="${L.paths.solar}" data-color="#ff9800" data-count="2"></g>
+                    ${this._showBattery ? this._batteryFlowGroupMarkup(L) : ''}
                     <g id="flow-grid" class="flow-group" style="opacity:0"
-                       data-path-id="path-grid" data-path-d="${L.paths.grid}" data-color="#488fc2" data-count="3"></g>
+                       data-path-d="${L.paths.grid}" data-color="#488fc2" data-count="3"></g>
                     <g id="flow-home" class="flow-group" style="opacity:0"
-                       data-path-id="path-home" data-path-d="${L.paths.home}" data-color="#5BC8D8" data-count="2"></g>
-                    <g id="flow-ev" class="flow-group" style="opacity:0"
-                       data-path-id="path-ev" data-path-d="${L.paths.ev}" data-color="#8DC892" data-count="3"></g>
+                       data-path-d="${L.paths.home}" data-color="#5BC8D8" data-count="2"></g>
+                    ${this._showEv ? this._evFlowGroupMarkup(L) : ''}
 
                     <!-- SOLAR -->
                     <g id="node-solar" filter="url(#glowSolar)">
@@ -753,23 +833,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <text id="val-inverter-status" x="${I.cx}" y="${I.cy + I.r + 14}" text-anchor="middle" font-family="${F}" font-size="${this._compact ? 11 : 10}" fill="#5a7a9a" opacity="0.7"></text>
 
                     <!-- BATTERY -->
-                    <g id="node-battery" filter="url(#glowBattery)">
-                        ${this._glowRing(B, '#4db6ac')}
-                        <circle cx="${B.cx}" cy="${B.cy}" r="${B.r}" fill="rgba(77,182,172,0.07)" stroke="#4db6ac" stroke-width="1.8"/>
-                        <circle cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="rgba(77,182,172,0.1)" stroke-width="5"/>
-                        <circle id="soc-arc" cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="#4db6ac" stroke-width="5"
-                                stroke-dasharray="${socCirc}" stroke-dashoffset="${socCirc}"
-                                transform="rotate(-90 ${B.cx} ${B.cy})" stroke-linecap="round" opacity="0.75"/>
-                        <g transform="translate(${B.cx},${B.cy})" stroke="#4db6ac" fill="none" opacity="${this._compact ? 0.85 : 0.7}">
-                            <rect x="-8" y="-13" width="16" height="26" rx="3" stroke-width="${this._compact ? 2.2 : 1.8}"/>
-                            <rect x="-3" y="-16" width="6" height="4" rx="1.5" fill="#4db6ac" opacity="0.5" stroke="none"/>
-                        </g>
-                    </g>
-                    <text id="label-battery" x="${B.cx}" y="${B.cy + B.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#4db6ac">${this._t('battery')}</text>
-                    <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#4db6ac">0%</text>
-                    <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="#4db6ac" opacity="0.7">0 W</text>
-                    <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.5"></text>
-                    <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.4"></text>
+                    ${this._showBattery ? this._batteryNodeMarkup(B, L, F, fl, fv, fs, socCirc) : ''}
 
                     <!-- GRID -->
                     <g id="node-grid" filter="url(#glowGrid)">
@@ -813,21 +877,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <text id="val-autarky" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#5BC8D8" opacity="0.5"></text>
                     <text id="val-today-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs * 2 + 6}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#5BC8D8" opacity="0.4"></text>
 
-                    <!-- EV -->
-                    <g id="node-ev" filter="url(#glowEV)">
-                        ${this._glowRing(E, '#8DC892')}
-                        <circle cx="${E.cx}" cy="${E.cy}" r="${E.r}" fill="rgba(141,200,146,0.07)" stroke="#8DC892" stroke-width="1.8"/>
-                        <g transform="translate(${E.cx},${E.cy})" stroke="#8DC892" fill="none" opacity="${this._compact ? 0.85 : 0.7}" stroke-width="${this._compact ? 2.2 : 1.8}" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="-8" y="-13" width="16" height="22" rx="3"/>
-                            <rect x="-5" y="-9" width="10" height="8" rx="1.5"/>
-                            <path d="M-1,-1 L0,3 L1,-1"/>
-                            <line x1="0" y1="9" x2="0" y2="13"/>
-                            <circle cx="0" cy="15" r="1.5" fill="#8DC892" opacity="0.4" stroke="none"/>
-                        </g>
-                    </g>
-                    <text id="label-ev" x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#8DC892">${this._t('ev_charging')}</text>
-                    <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#8DC892">0 W</text>
-                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#8DC892" opacity="0.5"></text>
+                    <!-- EV (omitted entirely when show_ev: false, #595) -->
+                    ${this._showEv ? this._evNodeMarkup(E, F, fl, fv, fs) : ''}
 
                     <!-- Device labels -->
                     <g id="device-labels"></g>
@@ -842,6 +893,53 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                 </svg>
             </ha-card>
         `;
+    }
+
+    _evFlowGroupMarkup(L) {
+        return `<g id="flow-ev" class="flow-group" style="opacity:0"
+                       data-path-d="${L.paths.ev}" data-color="#8DC892" data-count="3"></g>`;
+    }
+
+    _evNodeMarkup(E, F, fl, fv, fs) {
+        return `<g id="node-ev" filter="url(#glowEV)">
+                        ${this._glowRing(E, '#8DC892')}
+                        <circle cx="${E.cx}" cy="${E.cy}" r="${E.r}" fill="rgba(141,200,146,0.07)" stroke="#8DC892" stroke-width="1.8"/>
+                        <g transform="translate(${E.cx},${E.cy})" stroke="#8DC892" fill="none" opacity="${this._compact ? 0.85 : 0.7}" stroke-width="${this._compact ? 2.2 : 1.8}" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="-8" y="-13" width="16" height="22" rx="3"/>
+                            <rect x="-5" y="-9" width="10" height="8" rx="1.5"/>
+                            <path d="M-1,-1 L0,3 L1,-1"/>
+                            <line x1="0" y1="9" x2="0" y2="13"/>
+                            <circle cx="0" cy="15" r="1.5" fill="#8DC892" opacity="0.4" stroke="none"/>
+                        </g>
+                    </g>
+                    <text id="label-ev" x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#8DC892">${this._t('ev_charging')}</text>
+                    <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#8DC892">0 W</text>
+                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#8DC892" opacity="0.5"></text>`;
+    }
+
+    _batteryFlowGroupMarkup(L) {
+        return `<g id="flow-battery" class="flow-group" style="opacity:0"
+                       data-path-d="${L.paths.battery}" data-color="#4db6ac" data-count="3"></g>`;
+    }
+
+    _batteryNodeMarkup(B, L, F, fl, fv, fs, socCirc) {
+        return `<g id="node-battery" filter="url(#glowBattery)">
+                        ${this._glowRing(B, '#4db6ac')}
+                        <circle cx="${B.cx}" cy="${B.cy}" r="${B.r}" fill="rgba(77,182,172,0.07)" stroke="#4db6ac" stroke-width="1.8"/>
+                        <circle cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="rgba(77,182,172,0.1)" stroke-width="5"/>
+                        <circle id="soc-arc" cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="#4db6ac" stroke-width="5"
+                                stroke-dasharray="${socCirc}" stroke-dashoffset="${socCirc}"
+                                transform="rotate(-90 ${B.cx} ${B.cy})" stroke-linecap="round" opacity="0.75"/>
+                        <g transform="translate(${B.cx},${B.cy})" stroke="#4db6ac" fill="none" opacity="${this._compact ? 0.85 : 0.7}">
+                            <rect x="-8" y="-13" width="16" height="26" rx="3" stroke-width="${this._compact ? 2.2 : 1.8}"/>
+                            <rect x="-3" y="-16" width="6" height="4" rx="1.5" fill="#4db6ac" opacity="0.5" stroke="none"/>
+                        </g>
+                    </g>
+                    <text id="label-battery" x="${B.cx}" y="${B.cy + B.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#4db6ac">${this._t('battery')}</text>
+                    <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#4db6ac">0%</text>
+                    <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="#4db6ac" opacity="0.7">0 W</text>
+                    <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.5"></text>
+                    <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.4"></text>`;
     }
 
     _glowFilter(id, color, blur) {

@@ -64,9 +64,13 @@ def generate_js(translations: dict) -> str:
     lines.append("")
     lines.append("  function semLocalize(key, lang) {")
     lines.append('    lang = lang || "en";')
-    lines.append(
-        '    const t = _semTranslations[lang] || _semTranslations["en"] || {};'
-    )
+    lines.append("    // Exact match first, then base language (zh-Hans → zh, de-CH → de).")
+    lines.append("    let t = _semTranslations[lang];")
+    lines.append("    if (!t) {")
+    lines.append('      const base = String(lang).toLowerCase().split("-")[0];')
+    lines.append("      t = _semTranslations[base];")
+    lines.append("    }")
+    lines.append('    t = t || _semTranslations["en"] || {};')
     lines.append('    const fallback = _semTranslations["en"] || {};')
     lines.append("    return t[key] || fallback[key] || key;")
     lines.append("  }")

@@ -104,7 +104,11 @@ NUMBER_TYPES = [
         key="battery_max_discharge_power",
         native_unit_of_measurement=UnitOfPower.WATT,
         native_min_value=500,
-        native_max_value=10000,
+        # (#689) 25 kW, matching the charge-power ceiling: an EG4 Flexboss 21
+        # discharges 12 kW from battery, parallel stacks more — a 10 kW cap
+        # made real hardware inexpressible (the #680 range-bug class). The
+        # adapters still clamp every command to the hardware's real limits.
+        native_max_value=25000,
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
@@ -126,7 +130,7 @@ NUMBER_TYPES = [
         key="battery_assist_max_power",
         native_unit_of_measurement=UnitOfPower.WATT,
         native_min_value=1000,
-        native_max_value=10000,
+        native_max_value=25000,   # (#689) match the discharge ceiling
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
@@ -384,7 +388,11 @@ async def async_setup_entry(
                     key=f"charger_{cid}_target_soc",
                     name=f"{cname} Target SOC",
                     native_unit_of_measurement=PERCENTAGE,
-                    native_min_value=50, native_max_value=100, native_step=5,
+                    # 0 = no overnight floor → never grid-charges at night (#680,
+                    # onkelfu #627). The "At least" floor is the single night-charge
+                    # intent signal; a slider that cannot reach 0 (was min=50) could
+                    # not express "no night charge". The Max ceiling matches (0–100).
+                    native_min_value=0, native_max_value=100, native_step=5,
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-80",
                 ), "ev_target_soc", full_config.get("ev_target_soc", 80)),
@@ -406,7 +414,10 @@ async def async_setup_entry(
                     key=f"charger_{cid}_target_soc_max",
                     name=f"{cname} Solar Max SOC",
                     native_unit_of_measurement=PERCENTAGE,
-                    native_min_value=50, native_max_value=100, native_step=5,
+                    # 0–100 on both handles, matching the kWh target (#680). The
+                    # runtime clamps the effective ceiling to >= floor
+                    # (_resolve_target), so a Max below the Min is harmless.
+                    native_min_value=0, native_max_value=100, native_step=5,
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-high",
                 ), "ev_target_soc_max",
@@ -446,35 +457,17 @@ async def async_setup_entry(
                     entity_category=EntityCategory.CONFIG,
                 ), "ev_phases",
                     charger_cfg.get("ev_phases", full_config.get("ev_phases", 3))),
-                # Surplus-allocation order (#470) — lower = charges first
-                # when solar surplus is distributed across the fleet.
-                (NumberEntityDescription(
-                    key=f"charger_{cid}_ev_surplus_priority",
-                    name=f"{cname} Surplus Priority",
-                    native_min_value=1, native_max_value=10, native_step=1,
-                    mode=NumberMode.SLIDER,
-                    icon="mdi:sort-numeric-ascending",
-                    entity_category=EntityCategory.CONFIG,
-                ), "ev_surplus_priority",
-                    charger_cfg.get("ev_surplus_priority", 5)),
-                # Load-shed order under peak (#470) — independent of surplus
-                # order; higher = shed first when grid import nears the peak
-                # limit. Defaults to the surplus priority.
-                (NumberEntityDescription(
-                    key=f"charger_{cid}_ev_shed_priority",
-                    name=f"{cname} Shed Priority",
-                    native_min_value=1, native_max_value=10, native_step=1,
-                    mode=NumberMode.SLIDER,
-                    icon="mdi:sort-numeric-descending",
-                    entity_category=EntityCategory.CONFIG,
-                ), "ev_shed_priority",
-                    charger_cfg.get("ev_shed_priority",
-                                    charger_cfg.get("ev_surplus_priority", 5))),
+                # (#576) The per-charger Surplus/Shed priority steppers were
+                # retired — the drag-orderable device-priority list is now the
+                # single editor (surplus order = list position, shed order = the
+                # reverse walk). The ``ev_surplus_priority`` CONFIG value is kept
+                # as the seed read at boot; ``ev_shed_priority`` is gone entirely
+                # (#604: config keys purged by the v15→v16 migration).
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
                     coordinator, base_desc, entry, cid, config_key,
-                    charger_cfg.get(config_key, default_val),
+                    charger_cfg.get(config_key, default_val), cname,
                 ))
 
     if per_charger_descriptions:
@@ -640,6 +633,12 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         if value is None:
             value = self._get_default_value(description.key)
         self._attr_native_value = value
+        # (#606) surface the FACTORY default so the dashboard Config card can
+        # show "Default: X" in each setting's help — single source of truth
+        # (the same lookup the entity itself falls back to), no card-side map.
+        self._attr_extra_state_attributes = {
+            "sem_default": self._get_default_value(description.key),
+        }
 
     def _get_default_value(self, key: str) -> float:
         """Get default value for a setting."""
@@ -742,7 +741,21 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
 
 
 class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
-    """Per-charger number entity that stores its value in the charger's config dict (#193)."""
+    """Per-charger number entity that stores its value in the charger's config dict (#193).
+
+    The translation key is the **bare** ``config_key``, not ``description.key``.
+    The description key carries the charger id (``charger_keba_target_soc``),
+    so it can never be declared in ``strings.json`` — HA looked it up, missed,
+    and silently fell back to ``entity_description.name``, which was a hardcoded
+    English f-string. Nine per-charger sliders therefore read English on every
+    install regardless of language (#677). The charger discriminator moved into
+    a ``{charger}`` placeholder in the translated name instead, which keeps both
+    properties at once.
+
+    ``entity_id`` and ``unique_id`` still derive from ``description.key`` and
+    are unchanged — this renames nothing on an existing install, it only makes
+    the friendly name translatable.
+    """
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
@@ -755,12 +768,14 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         charger_id: str,
         config_key: str,
         initial_value: float,
+        charger_name: str = "EV Charger",
     ) -> None:
         """Initialize per-charger number entity."""
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_translation_key = description.key
+        self._attr_translation_key = config_key
+        self._attr_translation_placeholders = {"charger": charger_name}
         self._attr_suggested_object_id = f"sem_{description.key}"
         self.entity_id = f"number.sem_{description.key}"
         self._entry = entry

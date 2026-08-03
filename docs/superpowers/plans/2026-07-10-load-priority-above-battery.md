@@ -8,7 +8,288 @@
 
 **Tech Stack:** Python 3.12+, Home Assistant custom integration, pytest (`-n 4` via pytest-xdist). Design spec: `docs/superpowers/specs/2026-07-10-load-priority-above-battery-design.md`.
 
-**Parked:** build after the v1.7.4 stable cut. Opt-in, default OFF.
+**Parked:** build after the v1.7.4 stable cut. ~~Opt-in, default OFF.~~ Superseded:
+the opt-in toggle was dropped — the concept is *device priority*, the battery is a
+draggable sink in the one priority list. See the Clear Path below.
+
+---
+
+## CLEAR PATH (updated 2026-07-11) — supersedes the task bodies below where they conflict
+
+**The whole point of #576:** one device-priority list, and where a device sits in it
+decides how the solar surplus is shared — including the power that would otherwise
+charge the home battery. The battery is a draggable **sink**; a device **above** it
+reclaims that charge power, a device **below** it yields. Gated only by the reserve
+floor (`battery_priority_soc`) and the commanded-charge guard. No toggle.
+
+### Implementation architecture — build it via the 3-layer arc (decided — Guido 2026-07-11)
+
+Implement #576 through the **management → process → integration** layered arc
+(`coordinator/cycle_trace.py`, 1.7.5-beta.1). Each device in the priority list is a
+`subsystem(key)` in the per-cycle `CycleTrace`, and its control is structured as the three
+layers — so the whole allocation is self-explaining and gets the layer-mismatch health
+signal for free:
+
+- **Management** (what policy wanted): the device's **list position**, above/below the
+  battery slot, reserve-zone state (SOC vs `battery_priority_soc`), battery mode, EV mode,
+  its device mode (off/peak_only/surplus) + goal. `status`: `blocked` when a gate stops it.
+- **Process** (what SEM decided + why): the `reclaim_w` and this device's **share** of the
+  pre-battery surplus at its position, the allocated W, the `reason`. `status`: `idle` when
+  surplus < its min, `ok` when it gets a share.
+- **Integration** (what it commanded + observed): the setpoint (switch on / current A /
+  battery charge-limit) vs the **observed** draw; `data["match"]` drives `has_mismatch`.
+
+This makes the priority walk debuggable top-down ("why didn't the pump run? management:
+below the battery, process: idle") and folds directly into the "all devices" observability
+and the Today's-Plan feature. **Every build step below emits its layer records**; the trace
+is read-only and never changes a decision. See
+`docs/superpowers/specs/2026-07-11-sem-layered-trace-observability-design.md`.
+
+### Where we are
+
+- **Phase 1 — loads ↔ battery: BUILT** (branch `release/1.7.5-beta.1`, at `1.7.5-beta.2`).
+  Pivoted from the original opt-in toggle to the battery-as-draggable-device model
+  (`energy_reclaim.reclaimable_battery_w` + `SurplusController` reclaim/hand-back at the
+  battery's slot + `device_registry` virtual battery row). Delivers U3/U4/U5/U6.
+- **Phase 2 — EV ↔ battery/loads: NOT built. THIS IS THE KEY, not an optional follow-up.**
+  Today the EV row is *in* the draggable list but its position is **inert**: the drag
+  writes a dead `_priority_overrides[ev_id]` key while the EV budget reads
+  `config.ev_surplus_priority`, and the EV's battery-charge reclaim is gated on
+  `auto_start_soc` (90 % cliff), not on its list slot vs the battery. So the list makes a
+  promise the backend ignores for the EV — the headline case (4 kW / 85 % SOC / car at 0 W).
+
+### Step 0 — verify what's actually built (do LATER, before merge, not now)
+
+The Phase-1 pivot diverged from the task bodies below and lacks a live-test record for
+the battery-as-device UI. Before this ships: full suite green; live HA-TEST U3/U4/U6 with
+the battery row rendering + drag persisting; confirm `battery_commanded` covers the
+*scheduled* night charge (not just force_charge/force_discharge) or U6 leaks.
+
+### Step 1 — P2.1 the device list is the SINGLE priority axis (retire multi-charger priority)
+
+**Decision (Guido, 2026-07-11): put every EV charger in the device list and use its list
+position as the priority — instead of the separate `ev_surplus_priority` knob.** One
+draggable list (loads + every charger + battery) is the one true ordering. This subsumes
+"unify the store" and goes further — it retires the parallel multi-charger priority as a
+user-facing concept.
+
+- **`_priority_overrides` becomes authoritative** for loads, the battery, AND each EV
+  charger. The coordinator reads `registry.priority_for(charger_id)` instead of
+  `config.ev_surplus_priority`.
+- **`distribute_ev_budget`** (multi-charger cascade) sorts chargers by their **list
+  position**, not `charger.priority` from config. Same cascade, one ordering source.
+- **`ev_surplus_priority` → seed/default only.** On upgrade, seed each charger's list
+  position from its current `ev_surplus_priority` so behaviour is byte-identical, then the
+  list is authoritative. Needs a clean migration (config schema bump).
+- **`ev_shed_priority` (#470) is RETIRED (decided).** No separate shed knob — shed order is
+  simply the **reverse of the list** (LIFO, latest-to-charge sheds first), exactly like the
+  loads' existing LIFO deactivation pass. One list order drives both charge order and shed
+  order (its reverse). The #470 surplus/shed split collapses back into a single ordering.
+  (The per-device peak-shaving `control_mode` off/peak_only/surplus from #470 is a separate
+  concept and stays.) Update/remove the #470 shed-priority tests accordingly.
+- **Boundary:** this shares the priority *number*, not the control stack. Chargers keep
+  their EVBudget / state-machine / reconciler; the list is a shared *ordering* consumed by
+  both the loads walk and the EV distribution — NOT a merge into `SurplusController.update()`.
+
+**UI de-dup (decided):** RETIRE the Config-tab EV priority steppers (#514) — the drag list
+is the single editor for priority. Confirm each charger row already drag-persists per-charger.
+
+### Step 2 — P2.2 position-based reclaim gate (`decide.py`)
+
+Replace the EV's `auto_start_soc` (90 %) redirect gate with the reserve-floor + position
+rule, identical to the loads:
+
+> reclaim battery-charge power to the EV **iff** `soc ≥ battery_priority_soc`
+> **and** `ev_priority < battery_priority`.
+
+Below the reserve zone → battery first (Zone 1, unchanged). A careful modification of the
+battle-tested `battery_redirect_w`, **not** a second parallel reclaim (double-count).
+
+**The two-mechanism reconciliation (discovered at build, 2026-07-11 — the crux):** the EV
+surplus is built from TWO reclaim sources that must not double-count:
+1. `self_consumption_surplus_w` (decide.py:103, ALL modes) subtracts `battery_charge_w`
+   **iff `soc < auto_start_soc`** — the subtract-skip *is* the reclaim above 90%.
+2. `SolarOnlyMode._decide_day` (decide.py:440) ADDS `battery_redirect_w` (forecast-scaled)
+   **on top** of bare surplus — solar_only only.
+Above ~80–90% both fire on the same watts (a latent overlap). Root-cause rule to replace
+both with ONE position-based gate:
+- Pure predicate `ev_reclaims_battery_charge(soc, priority_soc, ev_priority,
+  battery_priority, battery_commanded)` — **BUILT + 7 tests green** (`energy_reclaim.py`).
+- In `self_consumption_surplus_w`: subtract `battery_charge_w` **iff NOT `ev_reclaims`**
+  (was `soc < auto_start_soc`). When reclaiming, bare surplus already carries the full
+  battery-charge.
+- In `SolarOnlyMode._decide_day`: `redirect_w = 0 when ev_reclaims else _redirect(...)` —
+  so the forecast redirect only acts as the fallback when the position rule does NOT
+  reclaim (EV below battery / below reserve). Prevents the double-count.
+- **Scenario tests** (`2026-05-29_budget_unify_redirect.yaml`, `test_scenarios.py`
+  `_XFAIL_DRIFT`) pin the OLD auto_start redirect values — they encode the superseded 90%
+  behaviour. With the default order (EV above battery) the new rule is strictly MORE
+  generous, so these get **updated to the new expected budgets** (root-cause, not worked
+  around) — run them and re-pin deliberately.
+
+**Wiring (view fields to add):** `f.priority_soc` already exists (= reserve floor).
+Add `ev_priority` to `ChargerView` (per-charger, from `registry.priority_for(cid)`),
+`battery_priority` + `battery_commanded` to `FleetView` (from
+`registry.battery_surplus_priority()` and the battery decision intent). Set in
+`_build_fleet_cycle_state`. Below the reserve zone → battery first (Zone 1, unchanged);
+solar_only / min_plus_solar mechanics unchanged when the EV sits below the battery (only
+the reclaim amount follows the new rule, which is the feature).
+
+### Step 3 — P2.3 double-count coordination
+
+The unified integer order (loads + EV + battery) **is** the ordering. When the EV and a
+load both sit above the battery, walk in list order and share the one `reclaim_w`. Net the
+EV's taken share out of the loads walk (`_ev_reclaimed_w`) — OR rely on the §7 cross-cycle
+convergence if the rig shows the transient is negligible. **Decide with a live U2-with-a-
+load-above-the-EV test, not by assertion.**
+
+### Step 4 — acceptance (live HA-TEST, pre-merge)
+
+- Drag EV **above** battery, SOC 85 %, ~7 kW solar, car connected → **car charges, battery
+  takes the residual** (U2, the core win).
+- Drag EV **below** battery → battery charges first, car waits.
+- SOC < `battery_priority_soc` → battery first regardless of position (U4).
+- Toggle-free — position is the only control.
+
+### Default order & battery representation (decided with Guido 2026-07-11)
+
+- **Default seed order: EV chargers → home battery → loads.** REVERSES the current Phase-1
+  default (battery seeded at bottom, prio 100). Rationale: clearest mental model for new
+  users, and **safe on upgrade** — existing users' battery keeps charging before their
+  loads; "loads before battery" (the reporter's Victron ask) becomes **opt-in by dragging
+  a load above the battery**, not a silent default-on behaviour change. Still safe against
+  EV-hogs-all-solar because the reserve floor overrides order: below `battery_priority_soc`
+  the battery fills to the zone first, then the EV wins above it. Build task: change the
+  default seed so the battery slots just below the EV charger(s), loads below the battery.
+- **One battery row per inverter (aggregate), never per module.** Two batteries on one
+  inverter = ONE row — the list models the inverter-as-sink; packs fill together so their
+  split is irrelevant to priority. Already consistent: the virtual row reads the aggregate
+  `sensor.sem_battery_charge_power` / `sensor.sem_battery_soc` (SEM sums multi-battery
+  installs upstream). No per-module rows.
+
+### All controllable devices are first-class active participants (decided — Guido 2026-07-11)
+
+The single priority list governs **every** controllable device with an **active role** —
+not just the EV charger(s) and the battery. In scope, all in the one list, all allocated
+surplus by list position (and all subject to the same battery-reclaim rule above the zone):
+
+- EV charger(s) — modulating, own control stack (shared ordering only).
+- Home battery — the sink (one row per inverter).
+- Generic switches / pumps / heaters — discrete `SwitchDevice`.
+- Modulating loads — `CurrentControlDevice`.
+- Climate / AC — `ClimateDevice` (#569).
+- Heat pump (SG-Ready) and hot water — today partly steered by the #508 W2 peak-aware
+  path / their own controllers; they must become **positioned active participants** in the
+  same walk, not a side channel.
+
+**Requirement:** every device type appears as a draggable row (drag-persisted position) and
+the surplus walk — including the reclaimed battery-charge power above the reserve zone —
+allocates to it strictly by its list position. No device type is special-cased out of the
+ordering (the EV/HP/HW keep their own *actuators*, but consume the *shared ordering*). This
+is the generic-device arc's uniformity goal made concrete — see
+[[project_generic_device_arc]].
+
+**No double-add (Guido 2026-07-11 — critical):** if a device is ALREADY in the list —
+auto-discovered from the Energy Dashboard, service-registered, or manually mapped as a
+generic pump/switch — the HP/HW/climate integration must **not** add a second row or a
+second controller for the same physical device (two controllers on one entity WILL fight).
+Dedup by the underlying control entity (and power/energy sensor) — **reuse/extend the
+existing machinery**: `_drop_discovered_duplicates`, the `_service_registrations`
+entity-suppression in `_sync_to_surplus_controller` / `get_devices_for_sensor`. A heat pump
+a user already mapped as a "pump" stays ONE row (its native HP behaviour attaches to the
+existing row, it is not re-added). Add a regression test for the "already mapped as pump"
+collision.
+
+**Build task:** audit each device type's current path (esp. HP/HW SG-Ready and the W2 peak
+path) and route its surplus claim through the list position; enforce the no-double-add
+dedup; add a per-type acceptance case + the collision regression test.
+
+### Extend "Today's Plan" to all devices (decided — Guido 2026-07-11)
+
+The **Today's Plan** timeline (`coordinator/today_plan.py`, #282/#298 → `sensor.sem_charging_
+state.attributes.today_plan` → `sem-today-plan-card`) already shows, forward-looking, **when
+the home battery will be charged (full ETA) or drained (empty ETA)** and the EV rows
+(charge-start / Min / target / deadline / wait) plus the tariff / solar-peak / night
+transitions. **Guido wants the same "when will it be active" projection for the OTHER
+surplus devices** — pool pump, heat pump, hot water, climate, generic loads.
+
+**Requirement:** the plan composer emits forward-looking rows per surplus device — e.g.
+"pool pump runs ~12:00", "heat pump boost 13:00–14:00", "hot water reaches target ~11:30" —
+projected from the **solar forecast + the device's list position + its goal (daily_min_
+runtime / stop condition) + tariff**. A device higher in the list gets surplus earlier / for
+longer, so the plan is the *visible consequence* of the priority ordering across the day —
+the natural companion to the #576 list.
+
+- New `KIND_*` row kinds per device (e.g. `device_run_start` / `device_target_reached`),
+  values carry the device name; card maps to icon/color + `semLocalize` labels ×15.
+- Projection reuses the surplus forecast the battery/EV ETAs already use; ordering follows
+  the same list position (Step 1). Cap stays glanceable (today: 8 rows) — dedupe/summarise
+  when many devices qualify (log what's dropped, don't silently truncate).
+- Observability feature — **read-only, no control change.** Distinct from the priority
+  mechanics (Steps 1–3) but shares the ordering + surplus forecast.
+
+**Build task (own step):** extend `compose_today_plan` inputs with a per-device projected
+active window; wire the coordinator to compute it from forecast + position + goal; add
+kinds + translations + card rendering; unit-test the composer per device type.
+
+### Interaction rules (confirmed with Guido 2026-07-11 — build + test as acceptance cases)
+
+Layered gate order: **battery reserve zone → list position → EV mode.**
+
+- **Greedy top priority (U7).** A modulating device (EV) at the top of the list takes the
+  surplus **first**, up to whatever it draws — even 11 kW. Everything below it (pumps,
+  battery) sees only the remainder. To protect lower loads, the user **drags the EV down**.
+  The list order is the only control — no fair-share carve-out.
+- **EV mode is orthogonal to the list (U8).** List = *where* the EV sits in the queue;
+  mode = *if/how* it charges within its slot:
+  - `solar_only` — pure solar surplus, no grid, no battery-assist min. Off if the surplus
+    reaching it < its start minimum (Case 1: 5 kW < ~5.5 kW → off).
+  - `min_plus_solar` — **daytime**: minimum topped up by **battery discharge support**
+    (#537 battery-assist), gated by battery **≥ reserve zone**; **never grid during the
+    day**. Plus solar on top. (Grid-for-min is overnight charging only — out of scope here.)
+- **Reserve zone is the absolute override.** Below `battery_priority_soc` the battery jumps
+  to the top (charges first) regardless of drag position; and it will **not** discharge to
+  assist an EV. The one reserve floor governs both directions (yield-charge above / protect
+  below; assist-discharge above / protect below).
+
+### Battery mode → position (upgrades the U6 guard)
+
+The battery mode can override the dragged position. Full mapping (replaces the old
+"commanded charge = no reclaim" U6 with the complete picture):
+
+| Battery mode | Effect on the priority list |
+|---|---|
+| `auto` / `self_consumption`, SOC **≥** reserve zone | passive sink → **dragged position governs** |
+| `auto` / `self_consumption`, SOC **<** reserve zone | **jumps to the top** — reserve-floor override |
+| `force_charge` | **jumps to the top** — commanded charge gets solar first; loads/EV yield |
+| `force_discharge` / `arbitrage` | **leaves the charging walk** — it's a source, not drawing; position irrelevant, nothing to reclaim |
+
+Rule: **commanded-to-charge → top; commanded-to-discharge → out of the walk; passive →
+dragged position** (with the reserve floor as the absolute top-override). The battery row
+should reflect this — show **"charging first"** / **"discharging — feeding"** instead of a
+position number when a mode/floor makes the drag moot, so the user sees why. `reclaimable_
+battery_w`'s `battery_commanded` guard is extended to this full mapping (charge-commands →
+reclaim 0 AND battery-to-top; discharge-commands → battery out of the surplus walk).
+
+Worked example (6 kW solar, 1 kW house; list = EV(prio1, 8A/~5.5 kW min) → pump1(1.5 kW) →
+pump2(1.5 kW) → battery):
+- **5 kW surplus:** EV can't start (< 5.5 kW, `solar_only`) → pump1 on, pump2 on → battery 2 kW.
+- **7 kW surplus:** EV starts and ramps greedily → pumps/battery get only what the EV leaves.
+
+### Step 5 — docs + CHANGELOG + close the loop on #576
+
+Update `docs/LOAD_PRIORITY.md` (EV now honours its slot), CHANGELOG (beta entry), and post
+the resolved plan to #576.
+
+### Open decisions (carry into build)
+
+1. **Single priority axis — ALL DECIDED (Guido 2026-07-11):** device-list position replaces
+   `ev_surplus_priority`.
+   - ✅ **Migration** — seed each charger's list position from its current
+     `ev_surplus_priority` on upgrade (config schema bump); byte-identical behaviour after.
+   - ✅ **`ev_shed_priority` (#470) retired** — shed = reverse list position (LIFO), no knob.
+   - ✅ **Config-tab EV priority steppers (#514) retired** — drag list is the only editor.
+2. Confirm `battery_commanded` includes the scheduled night charge (Step 0).
 
 ---
 
@@ -329,7 +610,19 @@ git commit -m "test(#576): U3-U6 load scenarios (reserve floor, discrete thresho
 
 ---
 
-## PHASE 2 — EV (careful, NOT a merge)
+## PHASE 2 — EV (DEFERRED — re-spec needed)
+
+> **2026-07-11:** Tasks 5–7 below assumed `excess_solar` (coordinator ~4601)
+> drives the EV budget. It does **not** — it only feeds a debug log (ruflo
+> review B1). The real EV surplus is `decide.py:self_consumption_surplus_w`,
+> which already reclaims battery charge above `auto_start_soc` and adds
+> `flow_calculator.battery_redirect_w` in `solar_only`. Phase 2 must instead
+> **raise that existing redirect to full above `battery_priority_soc` when the
+> toggle is on** (not add a second reclaim — that double-counts). Tasks 5–7 as
+> written are void; Phase 2 needs its own design pass. **Phase 1 (Tasks 1–4,
+> 9–10) shipped standalone.**
+
+## PHASE 2 — EV (careful, NOT a merge) — ORIGINAL PLAN (void, see note above)
 
 ### Task 5: Determine cycle ordering + net the reclaimable
 

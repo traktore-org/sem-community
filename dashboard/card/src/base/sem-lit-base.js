@@ -14,6 +14,32 @@ import { semTheme } from './sem-shared.js';
 
 export { html, css, svg, nothing };
 
+/**
+ * #617 — the "glass card" chrome, formerly applied from the dashboard
+ * template via a card-mod ``*glass_card`` YAML anchor (the last thing
+ * that made card-mod a REQUIRED HACS download). Baked into the four
+ * consuming cards' own shadow styles instead: identical look, zero
+ * external dependency, works wherever the card is used.
+ */
+export const semGlassCss = css`
+    ha-card {
+        background-color: var(--card-background-color);
+        color: var(--primary-text-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 16px;
+        box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.08));
+        max-width: 900px;
+        font-family: 'Segoe UI', 'Roboto', sans-serif;
+        transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        --chip-background: var(--secondary-background-color);
+        --primary-font-family: 'Segoe UI', 'Roboto', sans-serif;
+    }
+    ha-card:hover {
+        box-shadow: var(--ha-card-box-shadow, 0 4px 16px rgba(0, 0, 0, 0.12));
+    }
+`;
+
 export class SEMLitBase extends LitElement {
     constructor() {
         super();
@@ -119,6 +145,7 @@ export class SEMLitBase extends LitElement {
         const LABELS = {
             solcast: 'Solcast',
             forecast_solar: 'Forecast.Solar',
+            open_meteo: 'Open-Meteo',
             custom: this._t('custom') || 'Custom',
         };
         return LABELS[raw] || raw;

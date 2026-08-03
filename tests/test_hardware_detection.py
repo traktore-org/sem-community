@@ -697,6 +697,36 @@ class TestDiscoverInverterFromRegistry:
             result = discover_inverter_from_registry(hass, cfg)
         assert result == "number.deye_battery_discharge_limit"
 
+    def test_solarman_deye_current_entity_is_not_power_control(self):
+        """Do not mistake Deye's ampere register for a watt setpoint."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        amp_state = MagicMock()
+        amp_state.state = "185"
+        amp_state.attributes = {
+            "unit_of_measurement": "A",
+            "min": 0,
+            "max": 350,
+        }
+        hass.states.get = MagicMock(return_value=amp_state)
+        entries = [
+            _make_registry_entry("sensor.inverter_battery_power", "solarman"),
+            _make_registry_entry(
+                "number.inverter_battery_max_discharging_current", "solarman"
+            ),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.inverter_battery_power"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+
+        assert result is None
+
     def test_growatt_discharge_entity(self):
         """Growatt discharge control entity should be detected."""
         from custom_components.solar_energy_management.hardware_detection import (
@@ -1107,6 +1137,38 @@ class TestDiscoverBatteryDetailsFromRegistry:
         assert result["battery_mos"] == "sensor.jk_bms_mos_temperature"
         assert result["battery_temp1"] == "sensor.jk_bms_battery_temperature_1"
         assert result["battery_temp2"] == "sensor.jk_bms_battery_temperature_2"
+
+    def test_enphase_encharge_battery_temperature(self):
+        """#583 — Enphase IQ 5P: the Encharge child device names its cell-temp
+        sensor ``encharge_<serial>_temperature`` with no battery/cell/bms token.
+        It must still be detected as battery_temp1, and it must NOT be mistaken
+        for the inverter temperature by the bare-temperature fallback."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        # A confirmed temperature state — proves that even when the bare-temp
+        # inverter fallback would otherwise consider this sensor, the battery
+        # bucket claims it first and the fallback is excluded.
+        hass.states.get = lambda e: SimpleNamespace(
+            state="24.0",
+            attributes={"device_class": "temperature", "unit_of_measurement": "°C"},
+        )
+        entries = [
+            _make_registry_entry("sensor.envoy_122210_battery_discharge", "enphase_envoy"),
+            _make_registry_entry("sensor.encharge_482412061726_temperature", "enphase_envoy"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.envoy_122210_battery_discharge"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result.get("battery_temp1") == "sensor.encharge_482412061726_temperature"
+        # An Encharge temp is never the inverter temp — the fallback must skip it.
+        assert "inv_temp" not in result
 
     def test_no_details_found(self):
         """Integration with no matching detail sensors returns empty dict."""

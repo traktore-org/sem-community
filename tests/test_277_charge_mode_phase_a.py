@@ -278,12 +278,12 @@ class TestMigrateEntryV5:
         captured = await self._run_migration_at_v4(options={
             "ev_chargers": [{"id": "ev_charger", "ev_charging_mode": "pv"}],
         })
-        assert captured["version"] == 14  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)
+        assert captured["version"] == 16  # bumped in v15→v16 (#604)  # bumped in v14→v15 (#576)  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)
 
     async def test_no_chargers_no_crash(self):
         """Pre-EV setups (no ev_chargers list) must still migrate."""
         captured = await self._run_migration_at_v4(options={})
-        assert captured["version"] == 14  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)
+        assert captured["version"] == 16  # bumped in v15→v16 (#604)  # bumped in v14→v15 (#576)  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)
         # No ev_chargers to seed, so the key may or may not be present —
         # the migration must not invent one.
         assert "ev_chargers" not in captured["options"] or \

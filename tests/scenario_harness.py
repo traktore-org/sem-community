@@ -292,17 +292,18 @@ def _build_coordinator(scenario: Dict[str, Any]):
             )
             coord._ev_devices[cid] = dev
 
-    # Real SurplusController for distribute_ev_budget — it's a small pure
-    # function on (budget_w, devices) so we want the production version,
-    # not a mock. Build with the minimal hass mock SurplusController needs.
+    # Real SurplusController (production version, not a mock) so the load
+    # side of the harness exercises real code.
     #
     # NOTE: SurplusController.__init__ signature is (hass, regulation_offset).
     # An earlier version of this harness passed ``coord.config`` (a dict)
     # as the second positional, which silently became ``regulation_offset``.
-    # That was a real bug — masked by the fact that ``distribute_ev_budget``
-    # doesn't read ``regulation_offset``, so the harness's only use of
-    # the controller wasn't affected. Future use of ``.update()`` would
-    # have crashed. Fixed: pass hass only and let regulation_offset default.
+    # That was a real bug, and the reason it stayed hidden is worth keeping
+    # on the record: the harness's only use of the controller was
+    # ``distribute_ev_budget``, which doesn't read ``regulation_offset``.
+    # #651 has since deleted that method — it allocated a fleet EV budget
+    # nothing downstream read. Fixed: pass hass only and let
+    # regulation_offset default.
     from custom_components.solar_energy_management.coordinator.surplus_controller import (
         SurplusController,
     )
@@ -410,9 +411,13 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
       * ``_flow_calculator.calculate_canonical_ev_budget`` (with the canonical
         strategy mapped from the legacy strategy string) → ``EVBudget``
         with ``net_w`` (setpoint watts) and ``current_a`` (setpoint amps)
-      * For multi-charger scenarios, ``EVBudget.net_w`` flows through
-        ``SurplusController.distribute_ev_budget`` — the exact production
-        path post-Phase B.5
+    (Until #651 there was a fourth step here: for multi-charger scenarios
+    ``EVBudget.net_w`` was pushed through
+    ``SurplusController.distribute_ev_budget``, described in this
+    docstring as "the exact production path post-Phase B.5". It was not a
+    production path at all — the allocations it produced were written to
+    ``pcc.budget_w`` and read by nothing. Both the step and the
+    ``expect.multi_charger`` assertions that consumed it are gone.)
 
     The actuator call is simulated by invoking ``coord.hass.services.async_call``
     with the chosen amps; the capture wrapper records it.
@@ -620,27 +625,97 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
                 )
             result["per_charger_effective_states"] = per_charger_states
 
-        # Multi-charger distribution (Phase B.5 / #284). The canonical
-        # ``ev_budget_obj`` computed above already represents the total
-        # fleet budget; we pass its ``net_w`` through the real
-        # ``SurplusController.distribute_ev_budget`` — the exact code path
-        # ``coordinator.py:966`` runs in production. This verifies the
-        # priority cascade splits the canonical budget sensibly across
-        # multiple chargers, without re-deriving a separate per-charger
-        # value (the divergence the canonical unification eliminated).
-        if len(coord._ev_devices) >= 2 and strategy is not None:
-            try:
-                allocations = coord._surplus_controller.distribute_ev_budget(
-                    ev_budget_obj.net_w, coord._ev_devices,
-                )
-            except Exception as e:  # pragma: no cover — defensive
-                allocations = {}
-                result["multi_charger_dist_error"] = f"{type(e).__name__}: {e}"
+        # ── #665: the allocator that ACTUALLY runs ───────────────────
+        #
+        # This drives the same three production calls, in the same order,
+        # that ``_async_update_data``'s per-charger loop drives:
+        #
+        #   _build_fleet_cycle_state  (once per cycle)
+        #   for each charger, in priority order:
+        #       build_charger_view(..., solar_committed_w=<running total>)
+        #       decide(view)
+        #       running_total += solar_commitment_w(decision, ...)
+        #
+        # Nothing here re-implements the cascade: the running total is
+        # accumulated through ``charger_types.solar_commitment_w``, the
+        # single function production also calls. A regression in that
+        # arithmetic breaks both sides at once, which is the point.
+        #
+        # What this does NOT cover is the coordinator forgetting to reset
+        # or to call it at all — a source-level guard, not a behavioural
+        # one. ``tests/test_665_allocator_coverage.py`` holds that half.
+        if len(ev_chargers_cfg) >= 2:
+            from custom_components.solar_energy_management.coordinator.build_view import (
+                build_charger_view,
+            )
+            from custom_components.solar_energy_management.coordinator.charger_types import (
+                solar_commitment_w,
+            )
+            from custom_components.solar_energy_management.coordinator.decide import (
+                decide,
+            )
 
-            result["canonical_net_w"] = ev_budget_obj.net_w
-            result["canonical_strategy"] = canonical_strat
-            result["ev_budget_per_charger"] = allocations
-            result["ev_budget_per_charger_total"] = sum(allocations.values())
+            fleet_state = coord._build_fleet_cycle_state(readings, energy)
+            committed_w = 0.0
+            decisions: Dict[str, Any] = {}
+            # Lower ``priority`` number = served first, matching
+            # ``_ev_priority_for`` / the one-list ordering (#576).
+            ordered = sorted(
+                ev_chargers_cfg,
+                key=lambda c: (int(c.get("priority", 3)), str(c.get("id", ""))),
+            )
+            for c in ordered:
+                cid = c.get("id") or "ev_charger"
+                per_mode = c.get("charge_mode") or coord.config.get(
+                    "charge_mode", "min_plus_solar",
+                )
+                view = build_charger_view(
+                    fleet_state,
+                    charger_id=cid,
+                    charger_cfg=c,
+                    mode=per_mode,
+                    daily_ev_kwh=0.0,
+                    ev_priority=int(c.get("priority", 3)),
+                    # #678 — the ceiling the adapter clamps to. The
+                    # scenario YAMLs express it as ``max_current`` on the
+                    # charger block; without threading it the view falls
+                    # back to decide's 32 A literal and the cascade
+                    # over-credits, which is how #678 surfaced.
+                    hardware_max_a=float(c.get("max_current", 16)),
+                    solar_committed_w=committed_w,
+                )
+                decision = decide(view)
+                claim = solar_commitment_w(
+                    decision,
+                    phases=int(c.get("phases", 3)),
+                    voltage=float(c.get("voltage", 230)),
+                    max_current_a=float(c.get("max_current", 16)),
+                )
+                committed_w += claim
+                decisions[cid] = {
+                    "intent": decision.intent.value,
+                    "amps": int(decision.commanded_amps),
+                    "budget_w": float(decision.budget_w),
+                    "reason": decision.reason,
+                    "solar_committed_w_seen": (
+                        float(view.fleet.solar_committed_w)
+                    ),
+                    "solar_claimed_w": claim,
+                }
+            result["per_charger_decisions"] = decisions
+            result["solar_committed_total_w"] = committed_w
+
+        # (Multi-charger distribution block removed in #651. It ran
+        # ``ev_budget_obj.net_w`` through
+        # ``SurplusController.distribute_ev_budget`` for any scenario with
+        # 2+ chargers and recorded the split as ``ev_budget_per_charger``.
+        # The comment here claimed it was "the exact code path
+        # coordinator.py:966 runs in production"; production wrote that
+        # split into ``pcc.budget_w``, which had no reader, so the harness
+        # was faithfully reproducing a path that decided nothing. The
+        # per-charger behaviour that DOES reach the charger — effective
+        # states and flow attribution — is still recorded above and still
+        # asserted.)
 
         cycles.append(CycleRecord(
             t_seconds=t,
@@ -737,72 +812,23 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
                 f"SEM allowed too much {base_key.replace('_to_', '→')} energy."
             )
 
-    # 4. Multi-charger assertions (#284 / Phase B.5). Only fire on scenarios
-    # that actually exercised the multi-charger distribution branch.
+    # 4. Multi-charger assertions.
+    #
+    # #651 removed three keys that used to live here —
+    # ``total_equals_canonical``, ``at_least_one_charger_gets_positive``
+    # and ``priority_order`` — along with the ``multi_cycles`` gate they
+    # shared. All three asserted over ``ev_budget_per_charger``, the
+    # output of a distributor whose result production never read.
+    #
+    # ``priority_order`` deserves its own epitaph: its loop body ended in
+    # a bare ``pass`` under a comment saying the check "can't reliably
+    # check from this side". It was a named, documented, scenario-selected
+    # assertion that could not fail. Two dead things stacked — an
+    # assertion with no teeth over an allocator with no reader.
+    #
+    # What remains asserts behaviour that reaches the charger.
     mc = expect.get("multi_charger") or {}
     if mc:
-        multi_cycles = [
-            c for c in run.cycles
-            if "ev_budget_per_charger" in c.result
-        ]
-        assert multi_cycles, (
-            "expect.multi_charger requires the scenario's `ev_chargers` "
-            "block to have 2+ entries — otherwise the distribution branch "
-            "never ran."
-        )
-
-        # `total_equals_canonical: true` — the per-charger budgets must sum
-        # to the canonical net_w (within a small rounding tolerance). This
-        # is the core Phase B.5 contract: distribute uses the canonical
-        # value, no clipping, no leakage to or from another formula.
-        if mc.get("total_equals_canonical"):
-            tol_w = float(mc.get("tolerance_w", 1.0))
-            for c in multi_cycles:
-                net = float(c.result.get("canonical_net_w", 0))
-                total = float(c.result.get("ev_budget_per_charger_total", 0))
-                # Distribution naturally drops the remainder when no
-                # charger can claim it (below min_power_threshold) — that
-                # part is correct, not a leak. Test: total ≤ net within
-                # tolerance, AND remainder explained by per-charger floors.
-                assert total <= net + tol_w, (
-                    f"Cycle t={c.t_seconds}: distributed {total:.0f} W exceeds "
-                    f"canonical net_w {net:.0f} W (tol {tol_w} W). The "
-                    f"distributor over-allocated — should never happen."
-                )
-                # Allocations: {cid: w}. Each non-zero allocation must be
-                # ≥ that charger's min_power_threshold (else the distributor
-                # bug-ed and gave a charger less than it can actually use).
-                allocs = c.result.get("ev_budget_per_charger") or {}
-                for cid, w in allocs.items():
-                    if w == 0:
-                        continue
-                    dev_min = (
-                        getattr(c, "_min_thresholds", {}).get(cid)
-                        or 4140  # default 6A * 3 * 230
-                    )
-                    assert w >= dev_min - 1, (
-                        f"Cycle t={c.t_seconds}: charger {cid} got {w:.0f} W "
-                        f"which is below its min_power_threshold {dev_min:.0f} W"
-                    )
-
-        # `at_least_one_charger_gets_positive: true` — for cycles where
-        # the canonical net_w exceeds the lowest charger's threshold,
-        # SOMETHING should be allocated. Catches a regression where the
-        # distributor silently returns all-zero.
-        if mc.get("at_least_one_charger_gets_positive"):
-            for c in multi_cycles:
-                net = float(c.result.get("canonical_net_w", 0))
-                if net < 4140:
-                    continue  # below 6A * 3 * 230 — no charger qualifies
-                allocs = c.result.get("ev_budget_per_charger") or {}
-                pos = sum(1 for w in allocs.values() if w > 0)
-                assert pos >= 1, (
-                    f"Cycle t={c.t_seconds}: net_w={net:.0f} W is above any "
-                    f"charger's minimum, yet zero chargers got a positive "
-                    f"budget. Distributor returned {allocs}. "
-                    f"Phase B.5 / #284 regression."
-                )
-
         # v1.6.12: per-charger effective state assertion. Pinning the
         # output of ``_apply_per_charger_off_override`` per charger
         # closes the gap the senior-engineer review flagged on the
@@ -877,30 +903,108 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
                             f"Full flows for charger: {flows}"
                         )
 
-        # `priority_order: true` — when budget can only feed N of M chargers,
-        # the N lower-numbered priority chargers must get the budget.
-        if mc.get("priority_order"):
-            for c in multi_cycles:
-                allocs = c.result.get("ev_budget_per_charger") or {}
-                if len(allocs) < 2:
-                    continue
-                # Get devices from the run's coord (preserved via cycles)
-                # — we don't have direct access here, but the cascade
-                # rule is: anything > 0 must come before the first 0
-                # in the priority-sorted ordering. We approximate by
-                # checking no zero is sandwiched between two positives.
-                vals = list(allocs.values())
-                seen_zero = False
-                for v in vals:
-                    if v == 0:
-                        seen_zero = True
-                    elif seen_zero and v > 0:
-                        # Positive after a zero — only valid if the
-                        # priority-sort happened differently than dict
-                        # order; can't reliably check from this side.
-                        # Skip — the distributor's own unit tests cover
-                        # priority cascade in detail.
-                        pass
+        # #665: assertions over the allocator that production actually
+        # runs — the priority cascade threading ``solar_committed_w``.
+        # These read ``per_charger_decisions``, recorded by driving
+        # build_charger_view → decide → solar_commitment_w per charger.
+        #
+        #   multi_charger:
+        #     per_charger_intents:
+        #       charger_left: charge_at_amps
+        #       charger_right: idle
+        #     solar_commitment_cascade: true   # seniors' claims are
+        #                                      # visible to juniors, and
+        #                                      # the total is bounded by
+        #                                      # the surplus on offer
+        pci = mc.get("per_charger_intents") or {}
+        cascade = bool(mc.get("solar_commitment_cascade"))
+        if pci or cascade:
+            cycles_with_dec = [
+                c for c in run.cycles if "per_charger_decisions" in c.result
+            ]
+            assert cycles_with_dec, (
+                "expect.multi_charger.per_charger_intents / "
+                "solar_commitment_cascade is set but no cycle recorded "
+                "per-charger decisions. The scenario's ``ev_chargers`` "
+                "block needs 2+ entries."
+            )
+
+        if pci:
+            last_dec = cycles_with_dec[-1].result["per_charger_decisions"]
+            for cid, expected in pci.items():
+                got = str((last_dec.get(cid) or {}).get("intent", ""))
+                assert got == str(expected), (
+                    f"per-charger intent mismatch: charger {cid!r} decided "
+                    f"{got!r}, expected {expected!r}. Full decisions: "
+                    f"{last_dec}"
+                )
+
+        if cascade:
+            for c in cycles_with_dec:
+                dec = c.result["per_charger_decisions"]
+                running = 0.0
+                for cid, d in dec.items():
+                    seen = float(d["solar_committed_w_seen"])
+                    assert abs(seen - running) < 0.5, (
+                        f"Cycle t={c.t_seconds}: charger {cid!r} saw "
+                        f"solar_committed_w={seen:.1f} W but the chargers "
+                        f"ahead of it had claimed {running:.1f} W. The "
+                        f"cascade is not threading. Decisions: {dec}"
+                    )
+                    running += float(d["solar_claimed_w"])
+                total = float(c.result["solar_committed_total_w"])
+                assert abs(total - running) < 0.5, (
+                    f"Cycle t={c.t_seconds}: accumulated commitment "
+                    f"{running:.1f} W != recorded total {total:.1f} W"
+                )
+
+        # A ceiling on what the fleet may commit, in watts. Deliberately
+        # opt-in per scenario rather than folded into the cascade check:
+        # ``always_max`` claims its full nameplate on purpose, grid-funded
+        # if need be, so "total ≤ solar produced" is NOT a fleet-wide
+        # invariant. It IS the invariant that matters in a solar-funded
+        # scenario, and that is where scenarios set it.
+        #   multi_charger:
+        #     solar_committed_total_max: 6000
+        cap = mc.get("solar_committed_total_max")
+        if cap is not None:
+            cycles_with_total = [
+                c for c in run.cycles if "solar_committed_total_w" in c.result
+            ]
+            assert cycles_with_total, (
+                "expect.multi_charger.solar_committed_total_max is set but "
+                "no cycle recorded a fleet commitment total."
+            )
+            for c in cycles_with_total:
+                total = float(c.result["solar_committed_total_w"])
+                assert total <= float(cap) + 0.5, (
+                    f"Cycle t={c.t_seconds}: fleet committed {total:.1f} W "
+                    f"of solar, above the {float(cap):.1f} W ceiling. Watts "
+                    f"credited as solar above what the house had spare are "
+                    f"grid or battery watts — that is how a second charger "
+                    f"ends up funded from the house battery. Decisions: "
+                    f"{c.result.get('per_charger_decisions')}"
+                )
+
+        # An unknown key here is a silently-ignored expectation, which is
+        # exactly how ``priority_order`` sat in six scenario files doing
+        # nothing. Fail loudly instead (#651).
+        unknown = set(mc) - {
+            "per_charger_effective_states",
+            "per_charger_flow_max",
+            "per_charger_intents",
+            "solar_commitment_cascade",
+            "solar_committed_total_max",
+        }
+        assert not unknown, (
+            f"expect.multi_charger has unsupported key(s): {sorted(unknown)}. "
+            "total_equals_canonical / at_least_one_charger_gets_positive / "
+            "priority_order / tolerance_w were removed in #651 — they "
+            "asserted over a budget split nothing in production read. "
+            "Supported keys: per_charger_effective_states, "
+            "per_charger_flow_max, per_charger_intents, "
+            "solar_commitment_cascade, solar_committed_total_max."
+        )
 
 
 def run_and_assert(yaml_path: Path) -> None:

@@ -13,10 +13,16 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .base import ScheduleDevice, DeviceState
 
 _LOGGER = logging.getLogger(__name__)
+
+# Finished runs kept for the "completed/missed today" counters (#653). Only
+# today's entries are ever read, so this is a generous ceiling — it exists to
+# bound the per-cycle scan, not to define the retention window.
+_HISTORY_LIMIT = 200
 
 
 @dataclass
@@ -51,6 +57,20 @@ class ApplianceScheduler:
         # Per-device transitions are silent today; this records which
         # branch of ``update_schedules`` fired for each device.
         self._last_transitions: Dict[str, str] = {}  # device_id → path string
+
+    def _record_history(self, schedule: ApplianceScheduleEntry) -> None:
+        """Append a finished run, keeping the list bounded (#653).
+
+        ``get_schedule_summary`` scans the whole history twice (completed
+        today, missed today) and — since the scheduler is now ticked from
+        the coordinator cycle — that summary is built every ~10 s. The
+        counters only ever look at TODAY, so nothing older than a day is
+        readable; the cap just stops an install with many appliances from
+        growing the scan without bound over a long uptime.
+        """
+        self._history.append(schedule)
+        if len(self._history) > _HISTORY_LIMIT:
+            del self._history[:-_HISTORY_LIMIT]
 
     def register_appliance(
         self,
@@ -155,7 +175,7 @@ class ApplianceScheduler:
                     if elapsed >= 5:  # At least 5 minutes run time
                         schedule.status = "completed"
                         schedule.completed_at = now
-                        self._history.append(schedule)
+                        self._record_history(schedule)
                         del self._schedules[device_id]
                         device.clear_schedule()
                         _LOGGER.info(
@@ -190,7 +210,7 @@ class ApplianceScheduler:
             # Check for missed deadlines (not started, past deadline)
             if schedule.status == "scheduled" and now > schedule.deadline:
                 schedule.status = "missed"
-                self._history.append(schedule)
+                self._record_history(schedule)
                 del self._schedules[device_id]
                 device.clear_schedule()
                 _LOGGER.warning(
@@ -232,11 +252,14 @@ class ApplianceScheduler:
             ],
             "next_appliance": next_sched.appliance_name if next_sched else None,
             "next_deadline": next_sched.deadline.isoformat() if next_sched else None,
+            # (#645) HA-local, not the OS clock: "today" here is shown to the
+            # user next to the rest of SEM's daily figures, which all roll over
+            # at HA-local midnight. A UTC container disagreed for hours.
             "completed_today": sum(
                 1 for h in self._history
                 if h.status == "completed"
                 and h.completed_at
-                and h.completed_at.date() == datetime.now().date()
+                and h.completed_at.date() == dt_util.now().date()
             ),
             # #426 — per-device transition paths from the last
             # ``update_schedules`` call. Surfaces silent state changes.
@@ -244,6 +267,6 @@ class ApplianceScheduler:
             "appliance_missed_today": sum(
                 1 for h in self._history
                 if h.status == "missed"
-                and h.deadline.date() == datetime.now().date()
+                and h.deadline.date() == dt_util.now().date()
             ),
         }

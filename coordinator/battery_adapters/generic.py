@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 
 from ..charger_types import BatteryIntent
+from ..power_control import async_write_power_setpoint
 from .base import BatteryControlAdapter
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         self._took_control: bool = False
         # Lazy import for delegate
         try:
-            from ..battery_charge_adapter import GenericChargeAdapter
+            from .force_charge import GenericChargeAdapter
             self._charge_adapter = GenericChargeAdapter(hass, config)
         except Exception:  # noqa: BLE001
             self._charge_adapter = None
@@ -236,24 +237,37 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if self._setpoint_bidirectional and self._force_discharge_entity:
             await self._enter_active_strategy()
             watts = max(0.0, min(float(charge_power_w), self.max_charge_power_w))
-            await self._write_force_discharge(-watts)
-            self._last_intent = BatteryIntent.FORCE_CHARGE
+            ok = await self._write_force_discharge(-watts)
+            if ok:
+                self._last_error = None
+                self._last_intent = BatteryIntent.FORCE_CHARGE
+            else:
+                self._last_error = "bidirectional charge write failed"
+                # _last_intent intentionally NOT updated — retry next cycle (#589)
             return
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        ok_zero = await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        if not ok_zero:
+            self._last_error = "mutual-exclusion zero-write failed"
+            return
         if self._charge_adapter is None:
             _LOGGER.warning(
                 "GenericBatteryAdapter: no forced-charge backend — "
                 "command_force_charge ignored",
             )
             return
-        from ..battery_charge_adapter import ChargeCommand
+        from .force_charge import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
             max_power_w=charge_power_w,
             duration_minutes=duration_min,
         )
-        await self._charge_adapter.start_forced_charge(cmd)
-        self._last_intent = BatteryIntent.FORCE_CHARGE
+        status = await self._charge_adapter.start_forced_charge(cmd)
+        if status.status is ChargeCommandStatus.FAILED:
+            self._last_error = f"start_forced_charge failed: {status.message}"
+            # _last_intent intentionally NOT updated — retry next cycle (#589)
+        else:
+            self._last_error = None
+            self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
@@ -267,21 +281,10 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if not self._discharge_control_entity:
             self._last_discharge_limit_w = watts
             return
-        # #531: domain-aware like _write_force_discharge — a user may point the
-        # discharge-limit at an ``input_number.*`` helper (common on HA-TEST
-        # rigs / DIY setups), which would 404 on the hardcoded ``number``
-        # domain. Both expose ``set_value``.
-        domain = self._discharge_control_entity.split(".", 1)[0]
-        if domain not in ("number", "input_number"):
-            domain = "number"
-        try:
-            await self._hass.services.async_call(
-                domain, "set_value",
-                {"entity_id": self._discharge_control_entity, "value": watts},
-                blocking=True,
-            )
+        if await async_write_power_setpoint(
+            self._hass,
+            self._discharge_control_entity,
+            watts,
+            context="Generic battery discharge limit",
+        ):
             self._last_discharge_limit_w = watts
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.warning(
-                "Generic battery: failed to set discharge limit: %s", e,
-            )

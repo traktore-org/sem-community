@@ -60,9 +60,12 @@ def _make_device(
     # (#559) goal-engine fields — pin to defaults (MagicMock auto-attrs are
     # truthy and would trip the goal gates)
     device.daily_targets_met = False
+    device.daily_max_runtime_reached = False
     device.stop_condition_met = False
     device.top_up_policy = "solar_only"
     device._offpeak_forced_date = None
+    device._batt_overnight_forced = False
+    device._batt_overnight_forced_date = None
     device.__class__ = MagicMock
     if antiflicker_blocks:
         device.deactivate = AsyncMock()  # is_active stays True
@@ -138,12 +141,16 @@ class TestPeakFreezeActivation:
 class TestPeakShed:
     async def test_shedding_backs_off_one_device(self, mock_hass):
         # SHEDDING sheds gently — one device per cycle, lowest priority first.
+        # The pool FUNDS both loads (#688): active draws are now debited from
+        # the pool, so an unfunded load at available=0 is stopped by the
+        # deficit LIFO before this pass even runs — the gentle cadence is a
+        # peak-posture contract for loads that still have their surplus.
         sc = SurplusController(mock_hass)
         hi = _make_device("hp", priority=1, is_active=True, consumption=1500.0)
         lo = _make_device("boiler", priority=5, is_active=True, consumption=2000.0)
         sc.register_device(hi)
         sc.register_device(lo)
-        await sc.update(0.0, peak_state=LoadManagementState.SHEDDING)
+        await sc.update(3650.0, peak_state=LoadManagementState.SHEDDING)
         # Lowest priority (highest number) sheds first; the other survives.
         lo.deactivate.assert_called_once()
         hi.deactivate.assert_not_called()
@@ -176,3 +183,21 @@ class TestPeakShed:
         sc.register_device(dev)
         await sc.update(0.0, peak_state=LoadManagementState.EMERGENCY)
         dev.deactivate.assert_not_called()
+
+    async def test_peak_only_active_draw_reduces_pool_but_is_never_stopped(
+            self, mock_hass):
+        """(#688) An active peak_only load consumes real power: its draw is
+        debited from the pool (a SURPLUS sibling can't be funded by power the
+        user's own load is already using), yet the load itself stays
+        user-managed — neither the deficit LIFO nor anything else stops it."""
+        sc = SurplusController(mock_hass)
+        po = _make_device("po", priority=1, is_active=True, consumption=2000.0,
+                          control_mode=DeviceControlMode.PEAK_ONLY)
+        po.adjust_power = AsyncMock(return_value=2000.0)
+        s = _make_device("s", priority=5, min_power=1000, is_active=False)
+        sc.register_device(po)
+        sc.register_device(s)
+        # pool 2450 after offset; the peak_only draw leaves 450 < 1000
+        await sc.update(2500.0)
+        s.activate.assert_not_called()
+        po.deactivate.assert_not_called()

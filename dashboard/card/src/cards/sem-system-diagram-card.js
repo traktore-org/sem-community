@@ -24,8 +24,8 @@
 
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import {
-    semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_COLORS,
-    semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey,
+    semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_ACCENT,
+    semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey, semTheme,
 } from '../base/sem-shared.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -80,6 +80,10 @@ class SEMSystemDiagramCard extends SEMLitBase {
         this._lastDiagKey = '';
         this._sunSparkProps = null;
         this._sunSparkSig = '';
+        // #591 — the sun-spark 'd' string, stashed by _sparkWavePath and read
+        // by _renderSunSpark (both gated on the same condition). Initialized
+        // here so the invariant is explicit even if template order ever drifts.
+        this._sparkWaveD = '';
     }
 
     setConfig(config) {
@@ -96,6 +100,15 @@ class SEMSystemDiagramCard extends SEMLitBase {
             this._entities = null;
         }
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
+        // #595 follow-up — the generator injects show_ev:false on installs
+        // without a charger (same has_ev test that prunes the EV view), so
+        // the diagram doesn't draw a ghost EV node. Default true for
+        // backward compat with hand-written configs.
+        this._showEv = config.show_ev !== false;
+        // #614 — the battery sibling of the same ghost-node class: installs
+        // without a battery drew a permanent "— W / sensor unavailable"
+        // battery node. Generator injects show_battery:false from has_battery.
+        this._showBattery = config.show_battery !== false;
     }
 
     /** Resolve a logical suffix to an entity id (#455).
@@ -229,10 +242,21 @@ class SEMSystemDiagramCard extends SEMLitBase {
             const eid = this._eid(suffix);
             return eid ? (hass?.states[eid]?.state || '') : '';
         };
-        let key = WATCHED_SUFFIXES.map(stateOf).join(',') + '|' + lang;
+        // #614 — hidden nodes' entities are excluded from the dirty-check
+        // key: a charger-less/battery-less install must not re-render on
+        // state changes of nodes it doesn't draw (beta.15 review INFO).
+        const watched = WATCHED_SUFFIXES.filter((s) => {
+            if (!this._showEv && s === 'ev_power') return false;
+            if (!this._showBattery && (s === 'battery_power' || s === 'battery_soc'
+                || s === 'battery_temperature')) return false;
+            return true;
+        });
+        let key = watched.map(stateOf).join(',') + '|' + lang;
         key += '|' + semPVStringStatesKey(hass, this._prefix);
-        key += '|' + (hass?.states['binary_sensor.sem_ev_connected']?.state || '');
-        key += '|' + (hass?.states['binary_sensor.sem_ev_charging']?.state || '');
+        if (this._showEv) {
+            key += '|' + (hass?.states['binary_sensor.sem_ev_connected']?.state || '');
+            key += '|' + (hass?.states['binary_sensor.sem_ev_charging']?.state || '');
+        }
         const sun = hass?.states['sun.sun'];
         key += '|' + (sun?.attributes?.elevation ?? '')
              + ':' + (sun?.attributes?.next_rising || '')
@@ -522,6 +546,20 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const sunRiseStr = sunAttrs?.next_rising ? semFormatTime(sunAttrs.next_rising, _tz) : '';
         const sunSetStr  = sunAttrs?.next_setting ? semFormatTime(sunAttrs.next_setting, _tz) : '';
 
+        // (#646) The pale label fills were designed for the dark glass theme
+        // and are illegible on light HA themes (the fills live inside this
+        // card's shadow-DOM SVG, so card_mod can't reach them). Switch the
+        // four low-contrast labels to darker, higher-opacity variants when
+        // the active theme is light.
+        const _dark = semTheme(this).isDark;
+        const sunLabelFill   = _dark ? '#FCD170' : '#a06a00';
+        const sunLabelOp     = _dark ? 0.45 : 0.8;
+        const fcstLabelFill  = _dark ? '#ff9800' : '#b35c00';
+        const fcstLabelOp    = _dark ? 0.4 : 0.8;
+        const invLabelFill   = _dark ? '#96CAEE' : '#3d6e94';
+        const invTempOp      = _dark ? 0.6 : 0.85;
+        const invStatusOp    = _dark ? 0.35 : 0.8;
+
         // Battery SOC geometry (mirrors _illustrationBattery scale)
         const battS = L.B.r / 50;
         const battBH = 64 * battS;
@@ -588,7 +626,10 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // keys count — an intentionally omitted node (no EV configured)
         // must not show as a permanent "sensor unavailable" warning.
         const unavailable = [];
-        for (const suffix of ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'ev_power', 'battery_soc']) {
+        const trackedSuffixes = ['solar_power', 'grid_import_power', 'grid_export_power'];
+        if (this._showBattery) trackedSuffixes.push('battery_power', 'battery_soc');
+        if (this._showEv) trackedSuffixes.push('ev_power');
+        for (const suffix of trackedSuffixes) {
             const eid = this._eid(suffix);
             if (!eid) {
                 if (this._mode === 'prefix') unavailable.push(suffix);
@@ -717,12 +758,6 @@ class SEMSystemDiagramCard extends SEMLitBase {
                             <stop offset="100%" stop-color="#F7941E"/>
                         </radialGradient>
 
-                        <path id="path-solar"   d="${L.paths.solar}"/>
-                        <path id="path-home"    d="${L.paths.home}"/>
-                        <path id="path-battery" d="${L.paths.battery}"/>
-                        <path id="path-grid"    d="${L.paths.grid}"/>
-                        <path id="path-ev"      d="${L.paths.ev}"/>
-
                         ${this._sunPtX != null && solar > 50 ? this._sparkWavePath(L) : nothing}
                     </defs>
 
@@ -735,10 +770,10 @@ class SEMSystemDiagramCard extends SEMLitBase {
                               stroke-width="2" stroke-dasharray="4,8"/>
                         <text x="${L.sunRisingX}" y="${L.sunLabelY}"
                               text-anchor="middle" font-family="${F}" font-size="${fs}"
-                              fill="#FCD170" opacity="0.45">${sunRiseStr}</text>
+                              fill="${sunLabelFill}" opacity="${sunLabelOp}">${sunRiseStr}</text>
                         <text x="${L.sunSettingX}" y="${L.sunLabelY}"
                               text-anchor="middle" font-family="${F}" font-size="${fs}"
-                              fill="#FCD170" opacity="0.45">${sunSetStr}</text>
+                              fill="${sunLabelFill}" opacity="${sunLabelOp}">${sunSetStr}</text>
 
                         <g filter="url(#glowSun)" style="opacity:${sunOpacity}"
                            transform="${this._sunTransform ?? ''}">
@@ -783,29 +818,29 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           stroke-dasharray="5,7" opacity="0.22"/>
                     <path d="${L.paths.home}"    fill="none" stroke="#5BC8D8" stroke-width="2"
                           stroke-dasharray="5,7" opacity="0.22"/>
-                    <path d="${L.paths.battery}" fill="none" stroke="#4db6ac" stroke-width="2"
-                          stroke-dasharray="5,7" opacity="0.22"/>
+                    ${this._showBattery ? svg`<path d="${L.paths.battery}" fill="none" stroke="#4db6ac" stroke-width="2"
+                          stroke-dasharray="5,7" opacity="0.22"/>` : nothing}
                     <path d="${L.paths.grid}"    fill="none" stroke="#488fc2" stroke-width="2"
                           stroke-dasharray="5,7" opacity="0.22"/>
-                    <path d="${L.paths.ev}"      fill="none" stroke="#8DC892" stroke-width="2"
-                          stroke-dasharray="5,7" opacity="0.22"/>
+                    ${this._showEv ? svg`<path d="${L.paths.ev}" fill="none" stroke="#8DC892" stroke-width="2"
+                          stroke-dasharray="5,7" opacity="0.22"/>` : nothing}
 
                     <!-- Flow animation groups -->
                     <g class="flow-group" style="opacity:${flowSolarActive ? 1 : 0}">
-                        ${this._renderFlow(false, '#ff9800', semCalcDuration(solar), 'path-solar', L.paths.solar, 2)}
+                        ${this._renderFlow(false, '#ff9800', semCalcDuration(solar), L.paths.solar, 2)}
                     </g>
-                    <g class="flow-group" style="opacity:${flowBattActive ? 1 : 0}">
-                        ${this._renderFlow(flowBattReverse, flowBattColor, semCalcDuration(battery), 'path-battery', L.paths.battery, 3)}
-                    </g>
+                    ${this._showBattery ? svg`<g class="flow-group" style="opacity:${flowBattActive ? 1 : 0}">
+                        ${this._renderFlow(flowBattReverse, flowBattColor, semCalcDuration(battery), L.paths.battery, 3)}
+                    </g>` : nothing}
                     <g class="flow-group" style="opacity:${flowGridActive ? 1 : 0}">
-                        ${this._renderFlow(flowGridReverse, flowGridColor, semCalcDuration(gridImport || gridExport), 'path-grid', L.paths.grid, 3)}
+                        ${this._renderFlow(flowGridReverse, flowGridColor, semCalcDuration(gridImport || gridExport), L.paths.grid, 3)}
                     </g>
                     <g class="flow-group" style="opacity:${flowHomeActive ? 1 : 0}">
-                        ${this._renderFlow(false, '#5BC8D8', semCalcDuration(home), 'path-home', L.paths.home, 2)}
+                        ${this._renderFlow(false, '#5BC8D8', semCalcDuration(home), L.paths.home, 2)}
                     </g>
-                    <g class="flow-group" style="opacity:${flowEvActive ? 1 : 0}">
-                        ${this._renderFlow(false, '#8DC892', semCalcDuration(ev), 'path-ev', L.paths.ev, 3)}
-                    </g>
+                    ${this._showEv ? svg`<g class="flow-group" style="opacity:${flowEvActive ? 1 : 0}">
+                        ${this._renderFlow(false, '#8DC892', semCalcDuration(ev), L.paths.ev, 3)}
+                    </g>` : nothing}
 
                     <!-- Solar panel -->
                     <g filter="url(#glowSolar)" class="clickable" @click=${() => this._showMoreInfo('solar_power')}>
@@ -825,7 +860,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <text x="${L.S.cx}" y="${L.S.labelY + fv * 1.1 + (fs + 3) * 2}" class="clickable"
                           @click=${() => this._showMoreInfo('forecast_today_kwh')}
                           text-anchor="middle" font-family="${F}" font-size="${fs}"
-                          fill="#ff9800" opacity="0.4" font-weight="500">${solarFcst}</text>
+                          fill="${fcstLabelFill}" opacity="${fcstLabelOp}" font-weight="500">${solarFcst}</text>
 
                     <!-- Inverter -->
                     <g filter="url(#glowInverter)">
@@ -833,21 +868,23 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     </g>
                     <text x="${L.I.cx}" y="${L.I.cy + L.I.r + 14}"
                           text-anchor="middle" font-family="${F}" font-size="${fs}"
-                          fill="#96CAEE" opacity="0.6" font-weight="600">${invTempStr}</text>
+                          fill="${invLabelFill}" opacity="${invTempOp}" font-weight="600">${invTempStr}</text>
                     <text x="${L.I.cx}" y="${L.I.cy + L.I.r + 14 + fs + 2}"
                           text-anchor="middle" font-family="${F}" font-size="${fs - 1}"
-                          fill="#96CAEE" opacity="0.35">${invStatusStr}</text>
+                          fill="${invLabelFill}" opacity="${invStatusOp}">${invStatusStr}</text>
 
-                    <!-- Battery — group opacity fades to 0.35 if both
+                    <!-- Battery (omitted entirely when show_battery: false,
+                         #614 — the ghost-node class's battery sibling).
+                         Group opacity fades to 0.35 if both
                          battery_soc and battery_power have been
                          unavailable for >60 s (Huawei modbus hard
                          dropout). Brief flickers (<60 s) are absorbed
                          by '_readWithHold' upstream so the user
                          doesn't see a visual emergency. (NEVER put
-                         backticks inside this lit template: they
-                         terminate the template literal and the whole
+                         backticks inside this lit template's COMMENTS:
+                         they terminate the template literal and the whole
                          card renders blank, #488.) -->
-                    <g filter="url(#glowBattery)" class="clickable"
+                    ${this._showBattery ? svg`<g filter="url(#glowBattery)" class="clickable"
                        opacity="${battSensorStale ? 0.35 : 1}"
                        @click=${() => this._showMoreInfo('battery_soc')}>
                         ${this._illustrationBattery(L.B.cx, L.B.cy, L.B.r, socFillH, socFillY, battFillColor, showBattBolt, soc)}
@@ -866,7 +903,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <text x="${L.B.cx}" y="${L.B.labelY + fv * 1.0 + fl + fs + 2}" class="clickable"
                           @click=${() => this._showMoreInfo('daily_battery_charge_energy')}
                           text-anchor="middle" font-family="${F}" font-size="${fs + 1}"
-                          fill="#4db6ac" opacity="0.6" font-weight="600">${battKwh}</text>
+                          fill="#4db6ac" opacity="0.6" font-weight="600">${battKwh}</text>` : nothing}
 
                     <!-- Grid -->
                     <g filter="url(#glowGrid)" class="clickable" @click=${() => this._showMoreInfo('grid_import_power')}>
@@ -903,8 +940,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           text-anchor="middle" font-family="${F}" font-size="${fs + 1}"
                           fill="#5BC8D8" opacity="0.6" font-weight="600">${homeKwh}</text>
 
-                    <!-- EV -->
-                    <g filter="url(#glowEV)" class="clickable" @click=${() => this._showMoreInfo('ev_power')}>
+                    <!-- EV (omitted entirely when show_ev: false, #595) -->
+                    ${this._showEv ? svg`<g filter="url(#glowEV)" class="clickable" @click=${() => this._showMoreInfo('ev_power')}>
                         ${this._illustrationEV(L.E.cx, L.E.cy, L.E.r)}
                     </g>
                     <text x="${L.E.cx}" y="${L.E.labelY}" text-anchor="middle"
@@ -920,7 +957,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <text x="${L.E.cx}" y="${L.E.labelY + fv * 1.0 + fl + fs + 2}" class="clickable"
                           @click=${() => this._showMoreInfo('daily_ev_energy')}
                           text-anchor="middle" font-family="${F}" font-size="${fs + 1}"
-                          fill="#8DC892" opacity="0.6" font-weight="600">${evKwh}</text>
+                          fill="#8DC892" opacity="0.6" font-weight="600">${evKwh}</text>` : nothing}
 
                     <!-- Device strip (desktop only) -->
                     ${!c ? this._renderDeviceStrip(L.H) : nothing}
@@ -937,6 +974,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           font-family="${F}" font-size="9" font-weight="300"
                           letter-spacing="2.5" fill="rgba(255,255,255,0.06)">SEM</text>
                 </svg>
+                ${c ? this._renderDeviceChips() : nothing}
             </ha-card>
         `;
     }
@@ -1322,7 +1360,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
      * Particle delays are deterministic (i/count*duration) so re-renders
      * don't restart SMIL animations.
      */
-    _renderFlow(reverse, color, durationSec, pathId, pathD, count) {
+    _renderFlow(reverse, color, durationSec, pathD, count) {
         const dur = durationSec.toFixed(1);
         const cycle = 28;
         const toOffset = reverse ? String(cycle) : String(-cycle);
@@ -1332,30 +1370,29 @@ class SEMSystemDiagramCard extends SEMLitBase {
         for (let i = 0; i < count; i++) {
             const delay = (i / count) * durationSec;
             const begin = `-${delay.toFixed(2)}s`;
+            // #591 — inline path= (not an mpath href reference): WebKit's SMIL resolver
+            // only matches xlink:href on mpath, so plain href never resolved
+            // and the dots stood still on every iOS browser. Inline path data is
+            // the SVG 1.1 form supported everywhere; the dots follow pathD, the
+            // same curve as the visible stroke below.
             particles.push(svg`
                 <circle r="5" fill="${color}" opacity="0.12">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"
                                    keyPoints=${reverseAttrs ? reverseAttrs.kp : nothing}
                                    keyTimes=${reverseAttrs ? reverseAttrs.kt : nothing}
-                                   begin="${begin}">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                                   begin="${begin}"/>
                 </circle>
                 <circle r="2.5" fill="${color}" opacity="0.95">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"
                                    keyPoints=${reverseAttrs ? reverseAttrs.kp : nothing}
                                    keyTimes=${reverseAttrs ? reverseAttrs.kt : nothing}
-                                   begin="${begin}">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                                   begin="${begin}"/>
                 </circle>
                 <circle r="1" fill="rgba(255,255,255,0.9)" opacity="0.85">
-                    <animateMotion dur="${dur}s" repeatCount="indefinite" calcMode="paced"
+                    <animateMotion path="${pathD}" dur="${dur}s" repeatCount="indefinite" calcMode="paced"
                                    keyPoints=${reverseAttrs ? reverseAttrs.kp : nothing}
                                    keyTimes=${reverseAttrs ? reverseAttrs.kt : nothing}
-                                   begin="${begin}">
-                        <mpath href="#${pathId}"/>
-                    </animateMotion>
+                                   begin="${begin}"/>
                 </circle>
             `);
         }
@@ -1381,7 +1418,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
     }
 
     /**
-     * Spark wave <path> in <defs> — referenced by the spark particles' mpath.
+     * Builds the sun→panel wave path. Returns a decorative stroke element and
+     * stashes its 'd' in this._sparkWaveD for _renderSunSpark to inline as the
+     * spark particles' animateMotion path= (#591 — no mpath reference).
      */
     _sparkWavePath(L) {
         const sx = this._sunPtX, sy = this._sunPtY;
@@ -1402,6 +1441,11 @@ class SEMSystemDiagramCard extends SEMLitBase {
             const wave = Math.sin(frac * waves * Math.PI * 2) * amp;
             d += ` L${(cx2 + perpX * wave).toFixed(1)},${(cy2 + perpY * wave).toFixed(1)}`;
         }
+        // #591 — stash the wave path so _renderSunSpark can inline it as
+        // animateMotion path= (WebKit ignores an mpath href reference). Both are gated on
+        // the same (_sunPtX != null && solar > 50) and evaluated in DOM order,
+        // so this is always set before the sparks render.
+        this._sparkWaveD = d;
         return svg`<path id="spark-wave" d="${d}" fill="none"
                          stroke="rgba(255,200,60,0.12)" stroke-width="2.5" stroke-linecap="round"
                          filter="url(#glowSun)"/>`;
@@ -1428,19 +1472,16 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 });
             }
         }
+        const waveD = this._sparkWaveD;  // #591 — inline path= instead of an mpath href reference (iOS/WebKit)
         return this._sunSparkProps.map(p => p.kind === 'gold' ? svg`
             <circle r="${p.r.toFixed(1)}" fill="rgba(255,220,60,${p.opacity.toFixed(2)})" filter="url(#glowSun)">
-                <animateMotion dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
-                               begin="-${p.delay.toFixed(1)}s">
-                    <mpath href="#spark-wave"/>
-                </animateMotion>
+                <animateMotion path="${waveD}" dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
+                               begin="-${p.delay.toFixed(1)}s"/>
             </circle>
         ` : svg`
             <circle r="${(p.r * 0.6).toFixed(1)}" fill="rgba(255,255,230,${p.opacity.toFixed(2)})">
-                <animateMotion dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
-                               begin="-${p.delay.toFixed(1)}s">
-                    <mpath href="#spark-wave"/>
-                </animateMotion>
+                <animateMotion path="${waveD}" dur="${p.dur.toFixed(1)}s" repeatCount="indefinite" calcMode="paced"
+                               begin="-${p.delay.toFixed(1)}s"/>
             </circle>
         `);
     }
@@ -1449,42 +1490,110 @@ class SEMSystemDiagramCard extends SEMLitBase {
      * Top-3 controllable devices strip (desktop only).
      * Returns an svg fragment positioned bottom-right of the diagram.
      */
-    _renderDeviceStrip(H) {
+    _collectDevices() {
+        // Shared by the desktop satellite strip and the #614 mobile chip
+        // row: up to 3 house-load devices, heaviest draw first.
         const devicesEid = this._eid('controllable_devices_count');
         const devicesEntity = devicesEid ? this._hass?.states[devicesEid] : undefined;
-        if (!devicesEntity?.attributes?.devices) return nothing;
+        if (!devicesEntity?.attributes?.devices) return [];
 
-        const devices = Object.entries(devicesEntity.attributes.devices)
-            .filter(([, info]) => info.device_type !== 'ev_charger')
+        return Object.entries(devicesEntity.attributes.devices)
+            // #587 — EV and the synthetic home battery each have their own node,
+            // so keep them out of the house-load device tiles (don't show twice).
+            .filter(([, info]) => info.device_type !== 'ev_charger'
+                && info.device_type !== 'battery')
             .map(([id, info]) => {
                 const powerEntity = info.power_entity ? this._hass.states[info.power_entity] : null;
                 const power = powerEntity ? parseFloat(powerEntity.state) || 0 : (info.current_power || 0);
-                return { id, ...info, power };
+                return { id, ...info, power, name: this._localizedDeviceName(id, info) };
             })
             .sort((a, b) => b.power - a.power)
             .slice(0, 3);
+    }
 
+    _localizedDeviceName(id, info) {
+        // #615 — SEM's own heat pump / hot water register with an English
+        // DEFAULT name ("Heat Pump" / "Hot Water"); localize it per-user so a
+        // Dutch dashboard shows "Warmtepomp", not "Heat Pump" (RienduPre).
+        // A user-renamed device (name ≠ the default) or any non-SEM device
+        // keeps its given name untouched.
+        const DEFAULTS = { heat_pump: 'Heat Pump', hot_water: 'Hot Water' };
+        const KEYS = { heat_pump: 'device_heat_pump', hot_water: 'device_hot_water' };
+        const def = DEFAULTS[id];
+        if (def && (info.name || '').trim() === def) {
+            const localized = this._t(KEYS[id]);
+            if (localized) return localized;
+        }
+        return info.name || id;
+    }
+
+    _renderDeviceChips() {
+        // #614 — mobile presentation of the controllable devices. The
+        // desktop satellite strip needs horizontal space the compact
+        // layout doesn't have, so phones got NOTHING; this renders the
+        // same up-to-3 devices as a chip row below the diagram (Option A,
+        // approved mockup 2026-07-19). Active devices show their color
+        // and live power; idle ones dim to "off". Tapping a chip opens
+        // more-info on the device's power entity when it has one.
+        const devices = this._collectDevices();
+        if (!devices.length) return nothing;
+        // #614 — one unified accent for all house-load devices (see sem-shared).
+        return html`
+            <div style="display:flex;gap:8px;padding:0 14px 14px;">
+                ${devices.map((dev, idx) => {
+                    const color = SEM_DEVICE_ACCENT;
+                    const isOn = dev.is_on || dev.power > 5;
+                    let name = dev.name || dev.id;
+                    if (name.length > 14) name = name.substring(0, 13) + '…';
+                    return html`
+                        <div class="${dev.power_entity ? 'clickable' : ''}"
+                             @click=${() => dev.power_entity && this._fireMoreInfo(dev.power_entity)}
+                             style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;
+                                    padding:7px 4px;border-radius:12px;
+                                    border:1px solid ${color}${isOn ? '' : '55'};
+                                    background:rgba(128,128,128,${isOn ? 0.07 : 0.03});">
+                            <svg viewBox="-16 -16 32 32" width="22" height="22" style="opacity:${isOn ? 1 : 0.55}">
+                                <g stroke="${color}" fill="none" stroke-width="1.6"
+                                   stroke-linecap="round" stroke-linejoin="round">
+                                    ${this._deviceIcon(dev.device_type, dev.name || dev.id)}
+                                </g>
+                            </svg>
+                            <div style="font-size:10px;color:${color};font-weight:600;opacity:${isOn ? 1 : 0.85};
+                                        white-space:nowrap;overflow:hidden;max-width:100%">${name}</div>
+                            <div style="font-size:11px;color:${color};font-weight:800;opacity:${isOn ? 1 : 0.85}">
+                                ${isOn ? semFormatPower(dev.power) : this._t('off')}</div>
+                        </div>`;
+                })}
+            </div>`;
+    }
+
+    _fireMoreInfo(entityId) {
+        this.dispatchEvent(new CustomEvent('hass-more-info', {
+            bubbles: true, composed: true,
+            detail: { entityId },
+        }));
+    }
+
+    _renderDeviceStrip(H) {
+        const devices = this._collectDevices();
         if (!devices.length) return nothing;
 
         const F = "'Segoe UI','Roboto',sans-serif";
-        const colors = SEM_DEVICE_COLORS;
+        // #614 — one unified accent for all house-load devices (see sem-shared).
         const baseX = 540, baseY = 310;
         const spacing = 50;
 
         return devices.map((dev, idx) => {
             let name = (dev.name || dev.id).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             if (name.length > 22) name = name.substring(0, 21) + '…';
-            const color = colors[idx % colors.length];
+            const color = SEM_DEVICE_ACCENT;
             const isOn = dev.is_on || dev.power > 5;
             const cy = baseY + idx * spacing;
             const cx = baseX;
             const pathD = `M${H.cx + H.r},${H.cy + 10 + idx * 8} C${H.cx + H.r + 40},${H.cy + 30 + idx * 15} ${cx - 30},${cy - 10} ${cx - 16},${cy}`;
             const flowDot = dev.power > 5 ? svg`
-                <path id="dev-path-${idx}" d="${pathD}" fill="none" stroke="none"/>
                 <circle r="1.5" fill="${color}" opacity="0.8">
-                    <animateMotion dur="${semCalcDuration(dev.power).toFixed(1)}s" repeatCount="indefinite" calcMode="paced">
-                        <mpath href="#dev-path-${idx}"/>
-                    </animateMotion>
+                    <animateMotion path="${pathD}" dur="${semCalcDuration(dev.power).toFixed(1)}s" repeatCount="indefinite" calcMode="paced"/>
                 </circle>
             ` : nothing;
             const r = 14;
@@ -1499,9 +1608,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     ${this._deviceIcon(dev.device_type, dev.name || dev.id)}
                 </g>
                 <text x="${cx + r + 6}" y="${cy - 2}" font-family="${F}" font-size="10"
-                      font-weight="500" fill="${color}" opacity="0.7">${name}</text>
+                      font-weight="500" fill="${color}" opacity="0.85">${name}</text>
                 <text x="${cx + r + 6}" y="${cy + 11}" font-family="${F}" font-size="10"
-                      font-weight="700" fill="${color}" opacity="${isOn ? 0.9 : 0.4}">${semFormatPower(dev.power)}</text>
+                      font-weight="700" fill="${color}" opacity="${isOn ? 0.95 : 0.75}">${semFormatPower(dev.power)}</text>
             `;
         });
     }

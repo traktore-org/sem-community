@@ -30,10 +30,9 @@ EV charger setup is optional. SEM works as a monitoring and battery management s
 
 1. Open **HACS** in the Home Assistant sidebar.
 2. Go to **Integrations**.
-3. Click the 3-dot menu in the top-right corner and select **Custom repositories**.
-4. Enter the URL: `https://github.com/traktore-org/sem-community` and set the category to **Integration**. Click **Add**.
-5. Search for **Solar Energy Management** and click **Download**.
-6. When prompted, restart Home Assistant: **Settings > System > Restart**.
+3. Search for **Solar Energy Management** (SEM is in the default HACS store — no
+   custom repository needed) and click **Download**.
+4. When prompted, restart Home Assistant: **Settings > System > Restart**.
 
 ![SEM on the HACS page](images/sem_hacs_page.png)
 
@@ -87,20 +86,19 @@ Click **Submit**.
 
 ---
 
-## Step 3: Install Required Dashboard Cards
+## Step 3: Dashboard cards (all bundled — optional extras only)
 
-The SEM dashboard requires these HACS frontend cards. Without them, tabs will appear blank or broken.
+**No extra HACS frontend cards are required** — every card the SEM dashboard
+uses is bundled with the integration or native Home Assistant.
 
-Go to **HACS > Frontend** and install each one:
+Optional (auto-detected if installed via **HACS > Frontend**):
 
-| Card | Why it is required |
-|------|--------------------|
-| **mushroom** | Used for chips, entity cards, and template cards throughout the dashboard |
-| **card-mod** | Applies the glass card styling -- without this, all tabs are blank |
-| **apexcharts-card** | Renders all power and energy charts |
-| **sankey-chart** | Energy flow diagram on the Energy tab |
+| Card | What it adds |
+|------|--------------|
+| **sankey-chart** | A richer SEM-entity energy-flow sankey on the Energy tab (native `energy-sankey` is used otherwise) |
+| **k-flow-card** | An animated flow visualization as an alternative Home-tab diagram (opt-in) |
 
-After installing all cards, hard-refresh your browser: **Ctrl+Shift+R** (Windows/Linux) or **Cmd+Shift+R** (Mac).
+After updating SEM or installing an optional card, hard-refresh your browser: **Ctrl+Shift+R** (Windows/Linux) or **Cmd+Shift+R** (Mac).
 
 **What you should see:** The SEM dashboard entry in the sidebar.
 
@@ -112,7 +110,7 @@ Click **Solar Energy Management** in the Home Assistant sidebar.
 
 ![SEM Home tab](images/sem_home_tab.png)
 
-The dashboard has 7 tabs:
+The dashboard has 8 tabs:
 
 | Tab | What it shows |
 |-----|---------------|
@@ -121,6 +119,7 @@ The dashboard has 7 tabs:
 | **Battery** | Battery state, charge/discharge charts, SOC trends |
 | **EV** | EV charging session, daily progress, charging history |
 | **Control** | All switches, sliders, and device priority settings |
+| **Configuration** | Guided access to every SEM setting, with per-row help and docs links |
 | **Costs** | Financial breakdown — savings, feed-in revenue, costs |
 | **System** | Integration health, sensor status, coordinator info |
 
@@ -163,7 +162,7 @@ Everything else is automatic.
 
 ## Language Support
 
-SEM supports 15 languages. The integration follows your Home Assistant language setting automatically. Each user sees the dashboard in their own profile language.
+SEM supports 16 languages. The integration follows your Home Assistant language setting automatically. Each user sees the dashboard in their own profile language.
 
 For details, see the [Dashboard Guide](DASHBOARD_GUIDE.md).
 
@@ -173,11 +172,11 @@ For details, see the [Dashboard Guide](DASHBOARD_GUIDE.md).
 
 **The dashboard is blank or shows white tabs**
 
-The `card-mod` HACS card is not installed or not loaded. Install it from HACS > Frontend and hard-refresh your browser (Ctrl+Shift+R).
+Usually a stale browser/service-worker cache after an update — hard-refresh (Ctrl+Shift+R), or clear the Companion app's frontend cache. No HACS card is required since v1.7.5.
 
 **Some tabs show an error card**
 
-A required HACS frontend card from Step 3 is missing. Check each card in the list and install any that are absent.
+If the error names a `sem-*` element, SEM's card bundle didn't register — restart Home Assistant and hard-refresh. If it names another custom card, you removed an optional card the dashboard was generated with — re-run the *generate dashboard* action to regenerate with fallbacks.
 
 **Sensors show `unavailable`**
 
@@ -196,4 +195,4 @@ Go to **Settings > Dashboards > Energy** and add your solar and grid sensors. Th
 ## Next Steps
 
 - [Setup Guide](SETUP_GUIDE.md) — detailed configuration for EV charging strategy, tariffs, notifications, and multi-charger setups
-- [Dashboard Guide](DASHBOARD_GUIDE.md) — all 7 tabs explained, language support, customization options
+- [Dashboard Guide](DASHBOARD_GUIDE.md) — all 8 tabs explained, language support, customization options

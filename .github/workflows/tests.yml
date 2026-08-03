@@ -54,13 +54,11 @@ jobs:
       - name: Coverage summary
         if: always()
         working-directory: /tmp/ha-config
-        env:
-          PYTHONPATH: /tmp/ha-config
         run: |
-          python -m pytest custom_components/solar_energy_management/tests/ \
-            --cov=custom_components.solar_energy_management \
-            --cov-report=term \
-            -q --no-header 2>&1 | tail -30 || true
+          # The preceding pytest run already created .coverage.  Re-running the
+          # entire suite here doubled CI time and could leave PR checks stuck in
+          # this informational step for hours.
+          python -m coverage report --format=markdown --skip-empty
 
   card-test:
     # Dashboard-card JS unit tests (no browser): guards the load-device

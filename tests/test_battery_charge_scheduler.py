@@ -1,8 +1,9 @@
 """Tests for battery charge scheduler and adapter.
 
 Covers:
-- Adapter factory and platform detection
 - Huawei/GoodWe/Generic adapter start/stop/status
+  (brand *selection* is not tested here — it lives in ``adapter_for``, see
+  test_inverter_battery_arch.py; the local factory went in #659)
 - Scheduler evaluation logic (deficit, break-even, SOC, thresholds)
 - Cheapest-hour selection with dynamic tariff
 - Update cycle (charge window, target reached, peak coordination)
@@ -14,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.solar_energy_management.coordinator.battery_charge_adapter import (
+from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
     BatteryChargeAdapter,
     ChargeCommand,
     ChargeCommandStatus,
@@ -22,7 +23,6 @@ from custom_components.solar_energy_management.coordinator.battery_charge_adapte
     GenericChargeAdapter,
     GoodWeChargeAdapter,
     HuaweiChargeAdapter,
-    create_charge_adapter,
 )
 from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
     BatteryChargeScheduler,
@@ -128,39 +128,19 @@ def mock_tariff_provider():
 # ---------------------------------------------------------------------------
 # Adapter Factory Tests
 # ---------------------------------------------------------------------------
-
-class TestAdapterFactory:
-    """Test create_charge_adapter factory."""
-
-    def test_explicit_huawei(self, mock_hass, huawei_config):
-        adapter = create_charge_adapter(mock_hass, huawei_config)
-        assert isinstance(adapter, HuaweiChargeAdapter)
-
-    def test_explicit_goodwe(self, mock_hass, goodwe_config):
-        adapter = create_charge_adapter(mock_hass, goodwe_config)
-        assert isinstance(adapter, GoodWeChargeAdapter)
-
-    def test_explicit_generic(self, mock_hass, generic_config):
-        adapter = create_charge_adapter(mock_hass, generic_config)
-        assert isinstance(adapter, GenericChargeAdapter)
-
-    def test_auto_detect_huawei(self, mock_hass):
-        mock_hass.config.components = {"huawei_solar", "homeassistant"}
-        config = {"battery_charge_platform": "auto", "inverter_device_id": "abc"}
-        adapter = create_charge_adapter(mock_hass, config)
-        assert isinstance(adapter, HuaweiChargeAdapter)
-
-    def test_auto_detect_goodwe(self, mock_hass):
-        mock_hass.config.components = {"goodwe", "homeassistant"}
-        config = {"battery_charge_platform": "auto"}
-        adapter = create_charge_adapter(mock_hass, config)
-        assert isinstance(adapter, GoodWeChargeAdapter)
-
-    def test_auto_detect_fallback_generic(self, mock_hass):
-        mock_hass.config.components = {"homeassistant"}
-        config = {"battery_charge_platform": "auto"}
-        adapter = create_charge_adapter(mock_hass, config)
-        assert isinstance(adapter, GenericChargeAdapter)
+#
+# ``TestAdapterFactory`` (6 tests over ``create_charge_adapter``) was deleted
+# in #659 along with the factory it exercised. It was the *second* brand
+# selector; the live one is ``battery_adapters.adapter_for``, covered by
+# ``test_inverter_battery_arch.py`` (explicit huawei / goodwe / generic + the
+# no-brand fallback).
+#
+# The two auto-detect tests here are worth a note, because they were worse
+# than merely redundant: they asserted detection via ``hass.config.components``,
+# which is what the DEAD factory read. The live ``_integration_loaded`` never
+# looks at ``config.components`` — it checks ``hass.data`` / ``hass.config_entries``
+# (covered by test_battery_arbitrage_523.py::test_adapter_for_detects_huawei_via_config_entries).
+# So these were green about a detection mechanism production does not use.
 
 
 # ---------------------------------------------------------------------------
@@ -251,18 +231,10 @@ class TestHuaweiAdapter:
         assert status.status == ChargeCommandStatus.CHARGING
         assert status.current_soc == 60.0
 
-    def test_should_stop(self, mock_hass, huawei_config):
-        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
-        adapter._active = True
-        adapter._target_soc = 80.0
-
-        assert not adapter.should_stop(75.0)
-        assert adapter.should_stop(80.0)
-        assert adapter.should_stop(85.0)
-
-    def test_should_stop_inactive(self, mock_hass, huawei_config):
-        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
-        assert not adapter.should_stop(100.0)
+    # ``test_should_stop`` / ``test_should_stop_inactive`` went with
+    # ``should_stop`` in #659. The live target-reached rule is the
+    # scheduler's own SOC comparison, covered by the "already at target"
+    # planning tests further down — not by anything on the adapter.
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +331,7 @@ class TestSchedulerEvaluation:
         if adapter is None:
             adapter = MagicMock(spec=BatteryChargeAdapter)
             adapter.is_active = False
-        return BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        return BatteryChargeScheduler(mock_hass, scheduler_config)
 
     def test_no_deficit_solar_covers_consumption(self, mock_hass, scheduler_config):
         """Solar forecast exceeds consumption — no charge needed."""
@@ -566,21 +538,21 @@ class TestSchedulerTrigger:
         scheduler_config.trigger_hour = 21
         scheduler_config.trigger_minute = 0
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is True
 
     def test_does_not_trigger_wrong_time(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         wrong_time = dt_util.now().replace(hour=15, minute=30, second=0)
         assert scheduler.should_trigger_evaluation(wrong_time) is False
 
     def test_triggers_only_once_per_day(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is True
@@ -601,7 +573,7 @@ class TestSchedulerReset:
     def test_reset_clears_state(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler._decision = SchedulerDecision(
             state=SchedulerState.CHARGING, target_soc=80.0
@@ -638,7 +610,13 @@ class TestSchedulerConfig:
             "battery_min_deficit_kwh": 3.0,
             "battery_forecast_confidence": 0.9,
             "battery_max_target_soc": 100.0,
-            "peak_limit_w": 9000.0,
+            # #693 — the key installs actually carry, in kW. The old
+            # ``peak_limit_w`` was written by nothing; feeding it here is how
+            # the dead read stayed green. A lingering value must be ignored.
+            "target_peak_limit": 9.0,
+            "peak_limit_w": 4000.0,
+            # #604: retired key — deleted by the v14→v15 migration and no
+            # longer read by from_config. A lingering value must be ignored.
             "ev_priority_over_battery": False,
         })
 
@@ -650,8 +628,11 @@ class TestSchedulerConfig:
         assert config.min_deficit_kwh == 3.0
         assert config.forecast_confidence == 0.9
         assert config.max_target_soc == 100.0
+        # 9.0 kW → 9000 W; the dead ``peak_limit_w: 4000`` above must lose.
         assert config.peak_limit_w == 9000.0
-        assert config.ev_priority is False
+        # #604: the legacy ev_priority_over_battery read is retired — the
+        # internal knob keeps its default regardless of the config key.
+        assert config.ev_priority is True
 
     def test_from_config_float_trigger_hour_from_options_flow(self, mock_hass):
         """#493: the options-flow NumberSelector stores floats (21.0).
@@ -687,7 +668,7 @@ class TestSchedulerConfig:
         assert config_str.trigger_minute == 30
 
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, config)
+        scheduler = BatteryChargeScheduler(mock_hass, config)
         # Must not raise — and inside the window it must trigger, so
         # the call demonstrably reached the production logic.
         in_window = dt_util.now().replace(hour=21, minute=5, second=0)
@@ -712,7 +693,7 @@ class TestSchedulerIntegration:
         adapter.start_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
         )
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         # Low forecast, poor correction factor (overcast history)
         decision = scheduler.evaluate(
@@ -732,9 +713,7 @@ class TestSchedulerIntegration:
     @pytest.mark.asyncio
     async def test_sunny_day_no_charge(self, mock_hass, scheduler_config):
         """Sunny forecast with good correction — no charge needed."""
-        scheduler = BatteryChargeScheduler(
-            mock_hass, MagicMock(spec=BatteryChargeAdapter), scheduler_config
-        )
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -870,7 +849,7 @@ class TestSchedulePlanning:
         if adapter is None:
             adapter = MagicMock(spec=BatteryChargeAdapter)
             adapter.is_active = False
-        return BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        return BatteryChargeScheduler(mock_hass, scheduler_config)
 
     def test_no_peak_limit_both_at_max(self, mock_hass, scheduler_config):
         """No peak limit — battery and EV charge simultaneously at full power."""
@@ -1073,7 +1052,7 @@ class TestFeatureToggle:
     def test_disabled_evaluate_returns_idle(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1089,18 +1068,18 @@ class TestFeatureToggle:
     def test_disabled_trigger_returns_false(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is False
 
     def test_enabled_property(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
         assert scheduler.enabled is True
 
         scheduler_config.enabled = False
-        scheduler2 = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler2 = BatteryChargeScheduler(mock_hass, scheduler_config)
         assert scheduler2.enabled is False
 
 
@@ -1115,7 +1094,7 @@ class TestCycleCost:
         """High cycle cost makes arbitrage unprofitable."""
         scheduler_config.battery_cycle_cost = 0.10
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1132,7 +1111,7 @@ class TestCycleCost:
         """Low cycle cost still allows profitable charging."""
         scheduler_config.battery_cycle_cost = 0.02
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1148,7 +1127,7 @@ class TestCycleCost:
         """Zero cycle cost = no degradation check (backward compat)."""
         scheduler_config.battery_cycle_cost = 0.0
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1171,7 +1150,7 @@ class TestNegativeTariff:
     def test_negative_price_forces_full_charge(self, mock_hass, scheduler_config):
         """Negative price -> charge to max SOC regardless of forecast."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -1189,7 +1168,7 @@ class TestNegativeTariff:
     def test_negative_price_respects_already_full(self, mock_hass, scheduler_config):
         """Already at max SOC -> no charge even with negative price."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=96.0,
@@ -1206,7 +1185,7 @@ class TestNegativeTariff:
         """Feature disabled -> no force charge on negative price."""
         scheduler_config.force_charge_on_negative_price = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -1230,7 +1209,7 @@ class TestForecastFallback:
     def test_no_forecast_charges_conservatively(self, mock_hass, scheduler_config):
         """No forecast -> deficit = full consumption."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1247,7 +1226,7 @@ class TestForecastFallback:
     def test_stale_forecast_increases_pessimism(self, mock_hass, scheduler_config):
         """Stale forecast (>6h) uses doubled pessimism weight."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision_fresh = scheduler.evaluate(
             current_soc=30.0,
@@ -1277,7 +1256,7 @@ class TestForecastFallback:
         """More pessimism -> higher deficit."""
         scheduler_config.pessimism_weight = 0.0
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision_optimistic = scheduler.evaluate(
             current_soc=30.0,
@@ -1289,7 +1268,7 @@ class TestForecastFallback:
 
         scheduler.reset()
         scheduler_config.pessimism_weight = 0.5
-        scheduler2 = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler2 = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision_pessimistic = scheduler2.evaluate(
             current_soc=30.0,
@@ -1311,7 +1290,7 @@ class TestReplanTriggers:
 
     def test_soc_deviation_triggers_replan(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(
             current_soc=40.0,
@@ -1326,7 +1305,7 @@ class TestReplanTriggers:
 
     def test_ev_connect_triggers_replan(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(
             current_soc=40.0,
@@ -1341,13 +1320,13 @@ class TestReplanTriggers:
 
     def test_no_replan_when_idle(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
         assert scheduler.should_replan(current_soc=50.0, ev_connected=True) is False
 
     def test_ev_replan_disabled(self, mock_hass, scheduler_config):
         scheduler_config.replan_on_ev_change = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(
             current_soc=40.0,
@@ -1394,3 +1373,115 @@ class TestSchedulerConfigExtended:
     def test_defaults_disabled(self):
         config = SchedulerConfig.from_config({})
         assert config.enabled is False
+
+
+# ── #624: shells retired — deletion guard + relocated startup restore ──────
+
+class TestShellRetirement624:
+    """Guards the #624 cleanup: the old coordinator-level shells stay gone."""
+
+    def test_old_module_paths_gone(self):
+        import importlib, pytest as _pytest
+        with _pytest.raises(ModuleNotFoundError):
+            importlib.import_module(
+                "custom_components.solar_energy_management.coordinator.battery_charge_adapter")
+        with _pytest.raises(ModuleNotFoundError):
+            importlib.import_module(
+                "custom_components.solar_energy_management.coordinator.battery_protection")
+
+    def test_scheduler_is_a_pure_planner(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            BatteryChargeScheduler)
+        params = list(inspect.signature(BatteryChargeScheduler.__init__).parameters)
+        assert "adapter" not in params          # no actuation dependency
+
+    def test_force_charge_impl_not_imported_outside_battery_adapters(self):
+        """The moved brand impls are internal to battery_adapters/ —
+        nothing in coordinator/ outside that package may import them."""
+        import pathlib, re
+        pkg = pathlib.Path(__file__).resolve().parents[1] / "coordinator"
+        offenders = []
+        for f in pkg.rglob("*.py"):
+            if "battery_adapters" in f.parts:
+                continue
+            txt = f.read_text(encoding="utf-8")
+            if re.search(r"from .*battery_adapters\.force_charge import|force_charge import", txt):
+                offenders.append(str(f))
+        assert not offenders, f"force_charge imported outside battery_adapters/: {offenders}"
+
+
+@pytest.mark.asyncio
+class TestStartupRestoreRelocated624:
+    """The BatteryProtectionMixin's one job, relocated to actuate_battery."""
+
+    async def _run(
+        self,
+        state_value,
+        control_entity="number.limit",
+        max_w=5000,
+        *,
+        attributes=None,
+        observer_mode=False,
+    ):
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            restore_discharge_limit_on_startup,
+        )
+        hass = MagicMock()
+        hass.services.async_call = AsyncMock()
+        st = MagicMock(); st.state = state_value
+        st.attributes = attributes or {}
+        hass.states.get = MagicMock(return_value=st if state_value is not None else None)
+        cfg = {"battery_discharge_control_entity": control_entity,
+               "battery_max_discharge_power": max_w,
+               "observer_mode": observer_mode}
+        await restore_discharge_limit_on_startup(hass, cfg)
+        return hass
+
+    async def test_stale_low_limit_restored_to_max(self):
+        hass = await self._run("1200")
+        hass.services.async_call.assert_awaited_once()
+        args = hass.services.async_call.await_args
+        assert args.args[0] == "number" and args.args[1] == "set_value"
+        assert args.args[2]["value"] == 5000
+
+    async def test_limit_already_at_max_no_call(self):
+        hass = await self._run("5000")
+        hass.services.async_call.assert_not_awaited()
+
+    async def test_no_control_entity_noop(self):
+        hass = await self._run("1200", control_entity="")
+        hass.services.async_call.assert_not_awaited()
+
+    async def test_unreadable_state_noop(self):
+        hass = await self._run("unavailable")
+        hass.services.async_call.assert_not_awaited()
+
+    async def test_observer_mode_never_writes_stale_limit(self):
+        """Observer mode is a hard read-only boundary, including startup."""
+        hass = await self._run(
+            "1200",
+            attributes={"unit_of_measurement": "W", "min": 0, "max": 12000},
+            observer_mode=True,
+        )
+        hass.services.async_call.assert_not_awaited()
+
+    async def test_ampere_entity_rejected_without_write(self):
+        """Deye max-discharging-current is A, never a watt setpoint."""
+        hass = await self._run(
+            "185",
+            control_entity="number.inverter_battery_max_discharging_current",
+            max_w=12000,
+            attributes={"unit_of_measurement": "A", "min": 0, "max": 350},
+        )
+        hass.services.async_call.assert_not_awaited()
+
+    async def test_kw_entity_scales_watts_and_checks_native_range(self):
+        hass = await self._run(
+            "1.2",
+            max_w=5000,
+            attributes={"unit_of_measurement": "kW", "min": 0, "max": 12},
+        )
+        hass.services.async_call.assert_awaited_once()
+        args = hass.services.async_call.await_args
+        assert args.args[2]["value"] == 5.0

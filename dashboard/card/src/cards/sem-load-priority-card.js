@@ -14,6 +14,8 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { repeat } from 'lit/directives/repeat.js';
+import { moveToIndex, regroupChildren, computeDropIndex } from '../util/drag-reorder.js';
 import { semTheme, semDefineCard, semFormatPower } from '../base/sem-shared.js';
 import {
     ENTITY_DOMAINS,
@@ -21,12 +23,12 @@ import {
     formValuesToServiceData,
     buildLoadConfigModalHTML,
     readFormValues,
+    findDeviceForConfig,
 } from './load-config-modal.js';
 
-/* ── SortableJS (inlined v1.15.6 MIT) ── */
-(function(){if(window.Sortable)return;/*! Sortable 1.15.6 - MIT | git://github.com/SortableJS/Sortable.git */
-!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e():"function"==typeof define&&define.amd?define(e):(t=t||self).Sortable=e()}(this,function(){"use strict";function e(e,t){var n,o=Object.keys(e);return Object.getOwnPropertySymbols&&(n=Object.getOwnPropertySymbols(e),t&&(n=n.filter(function(t){return Object.getOwnPropertyDescriptor(e,t).enumerable})),o.push.apply(o,n)),o}function I(o){for(var t=1;t<arguments.length;t++){var i=null!=arguments[t]?arguments[t]:{};t%2?e(Object(i),!0).forEach(function(t){var e,n;e=o,t=i[n=t],n in e?Object.defineProperty(e,n,{value:t,enumerable:!0,configurable:!0,writable:!0}):e[n]=t}):Object.getOwnPropertyDescriptors?Object.defineProperties(o,Object.getOwnPropertyDescriptors(i)):e(Object(i)).forEach(function(t){Object.defineProperty(o,t,Object.getOwnPropertyDescriptor(i,t))})}return o}function o(t){return(o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t})(t)}function a(){return(a=Object.assign||function(t){for(var e=1;e<arguments.length;e++){var n,o=arguments[e];for(n in o)Object.prototype.hasOwnProperty.call(o,n)&&(t[n]=o[n])}return t}).apply(this,arguments)}function i(t,e){if(null==t)return{};var n,o=function(t,e){if(null==t)return{};for(var n,o={},i=Object.keys(t),r=0;r<i.length;r++)n=i[r],0<=e.indexOf(n)||(o[n]=t[n]);return o}(t,e);if(Object.getOwnPropertySymbols)for(var i=Object.getOwnPropertySymbols(t),r=0;r<i.length;r++)n=i[r],0<=e.indexOf(n)||Object.prototype.propertyIsEnumerable.call(t,n)&&(o[n]=t[n]);return o}function r(t){return function(t){if(Array.isArray(t))return l(t)}(t)||function(t){if("undefined"!=typeof Symbol&&null!=t[Symbol.iterator]||null!=t["@@iterator"])return Array.from(t)}(t)||function(t,e){if(t){if("string"==typeof t)return l(t,e);var n=Object.prototype.toString.call(t).slice(8,-1);return"Map"===(n="Object"===n&&t.constructor?t.constructor.name:n)||"Set"===n?Array.from(t):"Arguments"===n||/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)?l(t,e):void 0}}(t)||function(){throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}()}function l(t,e){(null==e||e>t.length)&&(e=t.length);for(var n=0,o=new Array(e);n<e;n++)o[n]=t[n];return o}function t(t){if("undefined"!=typeof window&&window.navigator)return!!navigator.userAgent.match(t)}var y=t(/(?:Trident.*rv[ :]?11\.|msie|iemobile|Windows Phone)/i),w=t(/Edge/i),s=t(/firefox/i),u=t(/safari/i)&&!t(/chrome/i)&&!t(/android/i),c=t(/iP(ad|od|hone)/i),n=t(/chrome/i)&&t(/android/i),d={capture:!1,passive:!1};function h(t,e,n){t.addEventListener(e,n,!y&&d)}function p(t,e,n){t.removeEventListener(e,n,!y&&d)}function f(t,e){if(e&&(">"===e[0]&&(e=e.substring(1)),t))try{if(t.matches)return t.matches(e);if(t.msMatchesSelector)return t.msMatchesSelector(e);if(t.webkitMatchesSelector)return t.webkitMatchesSelector(e)}catch(t){return}}function g(t){return t.host&&t!==document&&t.host.nodeType?t.host:t.parentNode}function P(t,e,n,o){if(t){n=n||document;do{if(null!=e&&(">"!==e[0]||t.parentNode===n)&&f(t,e)||o&&t===n)return t}while(t!==n&&(t=g(t)))}return null}var m,v=/\s+/g;function k(t,e,n){var o;t&&e&&(t.classList?t.classList[n?"add":"remove"](e):(o=(" "+t.className+" ").replace(v," ").replace(" "+e+" "," "),t.className=(o+(n?" "+e:"")).replace(v," ")))}function R(t,e,n){var o=t&&t.style;if(o){if(void 0===n)return document.defaultView&&document.defaultView.getComputedStyle?n=document.defaultView.getComputedStyle(t,""):t.currentStyle&&(n=t.currentStyle),void 0===e?n:n[e];o[e=!(e in o||-1!==e.indexOf("webkit"))?"-webkit-"+e:e]=n+("string"==typeof n?"":"px")}}function b(t,e){var n="";if("string"==typeof t)n=t;else do{var o=R(t,"transform")}while(o&&"none"!==o&&(n=o+" "+n),!e&&(t=t.parentNode));var i=window.DOMMatrix||window.WebKitCSSMatrix||window.CSSMatrix||window.MSCSSMatrix;return i&&new i(n)}function D(t,e,n){if(t){var o=t.getElementsByTagName(e),i=0,r=o.length;if(n)for(;i<r;i++)n(o[i],i);return o}return[]}function O(){var t=document.scrollingElement;return t||document.documentElement}function X(t,e,n,o,i){if(t.getBoundingClientRect||t===window){var r,a,l,s,c,u,d=t!==window&&t.parentNode&&t!==O()?(a=(r=t.getBoundingClientRect()).top,l=r.left,s=r.bottom,c=r.right,u=r.height,r.width):(l=a=0,s=window.innerHeight,c=window.innerWidth,u=window.innerHeight,window.innerWidth);if((e||n)&&t!==window&&(i=i||t.parentNode,!y))do{if(i&&i.getBoundingClientRect&&("none"!==R(i,"transform")||n&&"static"!==R(i,"position"))){var h=i.getBoundingClientRect();a-=h.top+parseInt(R(i,"border-top-width")),l-=h.left+parseInt(R(i,"border-left-width")),s=a+r.height,c=l+r.width;break}}while(i=i.parentNode);return o&&t!==window&&(o=(e=b(i||t))&&e.a,t=e&&e.d,e&&(s=(a/=t)+(u/=t),c=(l/=o)+(d/=o))),{top:a,left:l,bottom:s,right:c,width:d,height:u}}}function Y(t,e,n){for(var o=M(t,!0),i=X(t)[e];o;){var r=X(o)[n];if(!("top"===n||"left"===n?r<=i:i<=r))return o;if(o===O())break;o=M(o,!1)}return!1}function B(t,e,n,o){for(var i=0,r=0,a=t.children;r<a.length;){if("none"!==a[r].style.display&&a[r]!==jt.ghost&&(o||a[r]!==jt.dragged)&&P(a[r],n.draggable,t,!1)){if(i===e)return a[r];i++}r++}return null}function F(t,e){for(var n=t.lastElementChild;n&&(n===jt.ghost||"none"===R(n,"display")||e&&!f(n,e));)n=n.previousElementSibling;return n||null}function j(t,e){var n=0;if(!t||!t.parentNode)return-1;for(;t=t.previousElementSibling;)"TEMPLATE"===t.nodeName.toUpperCase()||t===jt.clone||e&&!f(t,e)||n++;return n}function E(t){var e=0,n=0,o=O();if(t)do{var i=b(t),r=i.a,i=i.d}while(e+=t.scrollLeft*r,n+=t.scrollTop*i,t!==o&&(t=t.parentNode));return[e,n]}function M(t,e){if(!t||!t.getBoundingClientRect)return O();var n=t,o=!1;do{if(n.clientWidth<n.scrollWidth||n.clientHeight<n.scrollHeight){var i=R(n);if(n.clientWidth<n.scrollWidth&&("auto"==i.overflowX||"scroll"==i.overflowX)||n.clientHeight<n.scrollHeight&&("auto"==i.overflowY||"scroll"==i.overflowY)){if(!n.getBoundingClientRect||n===document.body)return O();if(o||e)return n;o=!0}}}while(n=n.parentNode);return O()}function S(t,e){return Math.round(t.top)===Math.round(e.top)&&Math.round(t.left)===Math.round(e.left)&&Math.round(t.height)===Math.round(e.height)&&Math.round(t.width)===Math.round(e.width)}function _(e,n){return function(){var t;m||(1===(t=arguments).length?e.call(this,t[0]):e.apply(this,t),m=setTimeout(function(){m=void 0},n))}}function H(t,e,n){t.scrollLeft+=e,t.scrollTop+=n}function C(t){var e=window.Polymer,n=window.jQuery||window.Zepto;return e&&e.dom?e.dom(t).cloneNode(!0):n?n(t).clone(!0)[0]:t.cloneNode(!0)}function T(t,e){R(t,"position","absolute"),R(t,"top",e.top),R(t,"left",e.left),R(t,"width",e.width),R(t,"height",e.height)}function x(t){R(t,"position",""),R(t,"top",""),R(t,"left",""),R(t,"width",""),R(t,"height","")}function L(n,o,i){var r={};return Array.from(n.children).forEach(function(t){var e;P(t,o.draggable,n,!1)&&!t.animated&&t!==i&&(e=X(t),r.left=Math.min(null!==(t=r.left)&&void 0!==t?t:1/0,e.left),r.top=Math.min(null!==(t=r.top)&&void 0!==t?t:1/0,e.top),r.right=Math.max(null!==(t=r.right)&&void 0!==t?t:-1/0,e.right),r.bottom=Math.max(null!==(t=r.bottom)&&void 0!==t?t:-1/0,e.bottom))}),r.width=r.right-r.left,r.height=r.bottom-r.top,r.x=r.left,r.y=r.top,r}var K="Sortable"+(new Date).getTime();function A(){var e,o=[];return{captureAnimationState:function(){o=[],this.options.animation&&[].slice.call(this.el.children).forEach(function(t){var e,n;"none"!==R(t,"display")&&t!==jt.ghost&&(o.push({target:t,rect:X(t)}),e=I({},o[o.length-1].rect),!t.thisAnimationDuration||(n=b(t,!0))&&(e.top-=n.f,e.left-=n.e),t.fromRect=e)})},addAnimationState:function(t){o.push(t)},removeAnimationState:function(t){o.splice(function(t,e){for(var n in t)if(t.hasOwnProperty(n))for(var o in e)if(e.hasOwnProperty(o)&&e[o]===t[n][o])return Number(n);return-1}(o,{target:t}),1)},animateAll:function(t){var c=this;if(!this.options.animation)return clearTimeout(e),void("function"==typeof t&&t());var u=!1,d=0;o.forEach(function(t){var e=0,n=t.target,o=n.fromRect,i=X(n),r=n.prevFromRect,a=n.prevToRect,l=t.rect,s=b(n,!0);s&&(i.top-=s.f,i.left-=s.e),n.toRect=i,n.thisAnimationDuration&&S(r,i)&&!S(o,i)&&(l.top-i.top)/(l.left-i.left)==(o.top-i.top)/(o.left-i.left)&&(t=l,s=r,r=a,a=c.options,e=Math.sqrt(Math.pow(s.top-t.top,2)+Math.pow(s.left-t.left,2))/Math.sqrt(Math.pow(s.top-r.top,2)+Math.pow(s.left-r.left,2))*a.animation),S(i,o)||(n.prevFromRect=o,n.prevToRect=i,e=e||c.options.animation,c.animate(n,l,i,e)),e&&(u=!0,d=Math.max(d,e),clearTimeout(n.animationResetTimer),n.animationResetTimer=setTimeout(function(){n.animationTime=0,n.prevFromRect=null,n.fromRect=null,n.prevToRect=null,n.thisAnimationDuration=null},e),n.thisAnimationDuration=e)}),clearTimeout(e),u?e=setTimeout(function(){"function"==typeof t&&t()},d):"function"==typeof t&&t(),o=[]},animate:function(t,e,n,o){var i,r;o&&(R(t,"transition",""),R(t,"transform",""),i=(r=b(this.el))&&r.a,r=r&&r.d,i=(e.left-n.left)/(i||1),r=(e.top-n.top)/(r||1),t.animatingX=!!i,t.animatingY=!!r,R(t,"transform","translate3d("+i+"px,"+r+"px,0)"),this.forRepaintDummy=t.offsetWidth,R(t,"transition","transform "+o+"ms"+(this.options.easing?" "+this.options.easing:"")),R(t,"transform","translate3d(0,0,0)"),"number"==typeof t.animated&&clearTimeout(t.animated),t.animated=setTimeout(function(){R(t,"transition",""),R(t,"transform",""),t.animated=!1,t.animatingX=!1,t.animatingY=!1},o))}}}var N=[],W={initializeByDefault:!0},z={mount:function(e){for(var t in W)!W.hasOwnProperty(t)||t in e||(e[t]=W[t]);N.forEach(function(t){if(t.pluginName===e.pluginName)throw"Sortable: Cannot mount plugin ".concat(e.pluginName," more than once")}),N.push(e)},pluginEvent:function(e,n,o){var t=this;this.eventCanceled=!1,o.cancel=function(){t.eventCanceled=!0};var i=e+"Global";N.forEach(function(t){n[t.pluginName]&&(n[t.pluginName][i]&&n[t.pluginName][i](I({sortable:n},o)),n.options[t.pluginName]&&n[t.pluginName][e]&&n[t.pluginName][e](I({sortable:n},o)))})},initializePlugins:function(n,o,i,t){for(var e in N.forEach(function(t){var e=t.pluginName;(n.options[e]||t.initializeByDefault)&&((t=new t(n,o,n.options)).sortable=n,t.options=n.options,n[e]=t,a(i,t.defaults))}),n.options){var r;n.options.hasOwnProperty(e)&&(void 0!==(r=this.modifyOption(n,e,n.options[e]))&&(n.options[e]=r))}},getEventProperties:function(e,n){var o={};return N.forEach(function(t){"function"==typeof t.eventProperties&&a(o,t.eventProperties.call(n[t.pluginName],e))}),o},modifyOption:function(e,n,o){var i;return N.forEach(function(t){e[t.pluginName]&&t.optionListeners&&"function"==typeof t.optionListeners[n]&&(i=t.optionListeners[n].call(e[t.pluginName],o))}),i}};function G(t){var e=t.sortable,n=t.rootEl,o=t.name,i=t.targetEl,r=t.cloneEl,a=t.toEl,l=t.fromEl,s=t.oldIndex,c=t.newIndex,u=t.oldDraggableIndex,d=t.newDraggableIndex,h=t.originalEvent,p=t.putSortable,f=t.extraEventProperties;if(e=e||n&&n[K]){var g,m=e.options,t="on"+o.charAt(0).toUpperCase()+o.substr(1);!window.CustomEvent||y||w?(g=document.createEvent("Event")).initEvent(o,!0,!0):g=new CustomEvent(o,{bubbles:!0,cancelable:!0}),g.to=a||n,g.from=l||n,g.item=i||n,g.clone=r,g.oldIndex=s,g.newIndex=c,g.oldDraggableIndex=u,g.newDraggableIndex=d,g.originalEvent=h,g.pullMode=p?p.lastPutMode:void 0;var v,b=I(I({},f),z.getEventProperties(o,e));for(v in b)g[v]=b[v];n&&n.dispatchEvent(g),m[t]&&m[t].call(e,g)}}function U(t,e){var n=(o=2<arguments.length&&void 0!==arguments[2]?arguments[2]:{}).evt,o=i(o,q);z.pluginEvent.bind(jt)(t,e,I({dragEl:Z,parentEl:$,ghostEl:Q,rootEl:J,nextEl:tt,lastDownEl:et,cloneEl:nt,cloneHidden:ot,dragStarted:mt,putSortable:ct,activeSortable:jt.active,originalEvent:n,oldIndex:it,oldDraggableIndex:at,newIndex:rt,newDraggableIndex:lt,hideGhostForTarget:Xt,unhideGhostForTarget:Yt,cloneNowHidden:function(){ot=!0},cloneNowShown:function(){ot=!1},dispatchSortableEvent:function(t){V({sortable:e,name:t,originalEvent:n})}},o))}var q=["evt"];function V(t){G(I({putSortable:ct,cloneEl:nt,targetEl:Z,rootEl:J,oldIndex:it,oldDraggableIndex:at,newIndex:rt,newDraggableIndex:lt},t))}var Z,$,Q,J,tt,et,nt,ot,it,rt,at,lt,st,ct,ut,dt,ht,pt,ft,gt,mt,vt,bt,yt,wt,Dt=!1,Et=!1,St=[],_t=!1,Ct=!1,Tt=[],xt=!1,Ot=[],Mt="undefined"!=typeof document,At=c,Nt=w||y?"cssFloat":"float",It=Mt&&!n&&!c&&"draggable"in document.createElement("div"),Pt=function(){if(Mt){if(y)return!1;var t=document.createElement("x");return t.style.cssText="pointer-events:auto","auto"===t.style.pointerEvents}}(),kt=function(t,e){var n=R(t),o=parseInt(n.width)-parseInt(n.paddingLeft)-parseInt(n.paddingRight)-parseInt(n.borderLeftWidth)-parseInt(n.borderRightWidth),i=B(t,0,e),r=B(t,1,e),a=i&&R(i),l=r&&R(r),s=a&&parseInt(a.marginLeft)+parseInt(a.marginRight)+X(i).width,t=l&&parseInt(l.marginLeft)+parseInt(l.marginRight)+X(r).width;if("flex"===n.display)return"column"===n.flexDirection||"column-reverse"===n.flexDirection?"vertical":"horizontal";if("grid"===n.display)return n.gridTemplateColumns.split(" ").length<=1?"vertical":"horizontal";if(i&&a.float&&"none"!==a.float){e="left"===a.float?"left":"right";return!r||"both"!==l.clear&&l.clear!==e?"horizontal":"vertical"}return i&&("block"===a.display||"flex"===a.display||"table"===a.display||"grid"===a.display||o<=s&&"none"===n[Nt]||r&&"none"===n[Nt]&&o<s+t)?"vertical":"horizontal"},Rt=function(t){function l(r,a){return function(t,e,n,o){var i=t.options.group.name&&e.options.group.name&&t.options.group.name===e.options.group.name;if(null==r&&(a||i))return!0;if(null==r||!1===r)return!1;if(a&&"clone"===r)return r;if("function"==typeof r)return l(r(t,e,n,o),a)(t,e,n,o);e=(a?t:e).options.group.name;return!0===r||"string"==typeof r&&r===e||r.join&&-1<r.indexOf(e)}}var e={},n=t.group;n&&"object"==o(n)||(n={name:n}),e.name=n.name,e.checkPull=l(n.pull,!0),e.checkPut=l(n.put),e.revertClone=n.revertClone,t.group=e},Xt=function(){!Pt&&Q&&R(Q,"display","none")},Yt=function(){!Pt&&Q&&R(Q,"display","")};Mt&&!n&&document.addEventListener("click",function(t){if(Et)return t.preventDefault(),t.stopPropagation&&t.stopPropagation(),t.stopImmediatePropagation&&t.stopImmediatePropagation(),Et=!1},!0);function Bt(t){if(Z){t=t.touches?t.touches[0]:t;var e=(i=t.clientX,r=t.clientY,St.some(function(t){var e=t[K].options.emptyInsertThreshold;if(e&&!F(t)){var n=X(t),o=i>=n.left-e&&i<=n.right+e,e=r>=n.top-e&&r<=n.bottom+e;return o&&e?a=t:void 0}}),a);if(e){var n,o={};for(n in t)t.hasOwnProperty(n)&&(o[n]=t[n]);o.target=o.rootEl=e,o.preventDefault=void 0,o.stopPropagation=void 0,e[K]._onDragOver(o)}}var i,r,a}function Ft(t){Z&&Z.parentNode[K]._isOutsideThisEl(t.target)}function jt(t,e){if(!t||!t.nodeType||1!==t.nodeType)throw"Sortable: `el` must be an HTMLElement, not ".concat({}.toString.call(t));this.el=t,this.options=e=a({},e),t[K]=this;var n,o,i={group:null,sort:!0,disabled:!1,store:null,handle:null,draggable:/^[uo]l$/i.test(t.nodeName)?">li":">*",swapThreshold:1,invertSwap:!1,invertedSwapThreshold:null,removeCloneOnHide:!0,direction:function(){return kt(t,this.options)},ghostClass:"sortable-ghost",chosenClass:"sortable-chosen",dragClass:"sortable-drag",ignore:"a, img",filter:null,preventOnFilter:!0,animation:0,easing:null,setData:function(t,e){t.setData("Text",e.textContent)},dropBubble:!1,dragoverBubble:!1,dataIdAttr:"data-id",delay:0,delayOnTouchOnly:!1,touchStartThreshold:(Number.parseInt?Number:window).parseInt(window.devicePixelRatio,10)||1,forceFallback:!1,fallbackClass:"sortable-fallback",fallbackOnBody:!1,fallbackTolerance:0,fallbackOffset:{x:0,y:0},supportPointer:!1!==jt.supportPointer&&"PointerEvent"in window&&(!u||c),emptyInsertThreshold:5};for(n in z.initializePlugins(this,t,i),i)n in e||(e[n]=i[n]);for(o in Rt(e),this)"_"===o.charAt(0)&&"function"==typeof this[o]&&(this[o]=this[o].bind(this));this.nativeDraggable=!e.forceFallback&&It,this.nativeDraggable&&(this.options.touchStartThreshold=1),e.supportPointer?h(t,"pointerdown",this._onTapStart):(h(t,"mousedown",this._onTapStart),h(t,"touchstart",this._onTapStart)),this.nativeDraggable&&(h(t,"dragover",this),h(t,"dragenter",this)),St.push(this.el),e.store&&e.store.get&&this.sort(e.store.get(this)||[]),a(this,A())}function Ht(t,e,n,o,i,r,a,l){var s,c,u=t[K],d=u.options.onMove;return!window.CustomEvent||y||w?(s=document.createEvent("Event")).initEvent("move",!0,!0):s=new CustomEvent("move",{bubbles:!0,cancelable:!0}),s.to=e,s.from=t,s.dragged=n,s.draggedRect=o,s.related=i||e,s.relatedRect=r||X(e),s.willInsertAfter=l,s.originalEvent=a,t.dispatchEvent(s),c=d?d.call(u,s,a):c}function Lt(t){t.draggable=!1}function Kt(){xt=!1}function Wt(t){return setTimeout(t,0)}function zt(t){return clearTimeout(t)}jt.prototype={constructor:jt,_isOutsideThisEl:function(t){this.el.contains(t)||t===this.el||(vt=null)},_getDirection:function(t,e){return"function"==typeof this.options.direction?this.options.direction.call(this,t,e,Z):this.options.direction},_onTapStart:function(e){if(e.cancelable){var n=this,o=this.el,t=this.options,i=t.preventOnFilter,r=e.type,a=e.touches&&e.touches[0]||e.pointerType&&"touch"===e.pointerType&&e,l=(a||e).target,s=e.target.shadowRoot&&(e.path&&e.path[0]||e.composedPath&&e.composedPath()[0])||l,c=t.filter;if(!function(t){Ot.length=0;var e=t.getElementsByTagName("input"),n=e.length;for(;n--;){var o=e[n];o.checked&&Ot.push(o)}}(o),!Z&&!(/mousedown|pointerdown/.test(r)&&0!==e.button||t.disabled)&&!s.isContentEditable&&(this.nativeDraggable||!u||!l||"SELECT"!==l.tagName.toUpperCase())&&!((l=P(l,t.draggable,o,!1))&&l.animated||et===l)){if(it=j(l),at=j(l,t.draggable),"function"==typeof c){if(c.call(this,e,l,this))return V({sortable:n,rootEl:s,name:"filter",targetEl:l,toEl:o,fromEl:o}),U("filter",n,{evt:e}),void(i&&e.preventDefault())}else if(c=c&&c.split(",").some(function(t){if(t=P(s,t.trim(),o,!1))return V({sortable:n,rootEl:t,name:"filter",targetEl:l,fromEl:o,toEl:o}),U("filter",n,{evt:e}),!0}))return void(i&&e.preventDefault());t.handle&&!P(s,t.handle,o,!1)||this._prepareDragStart(e,a,l)}}},_prepareDragStart:function(t,e,n){var o,i=this,r=i.el,a=i.options,l=r.ownerDocument;n&&!Z&&n.parentNode===r&&(o=X(n),J=r,$=(Z=n).parentNode,tt=Z.nextSibling,et=n,st=a.group,ut={target:jt.dragged=Z,clientX:(e||t).clientX,clientY:(e||t).clientY},ft=ut.clientX-o.left,gt=ut.clientY-o.top,this._lastX=(e||t).clientX,this._lastY=(e||t).clientY,Z.style["will-change"]="all",o=function(){U("delayEnded",i,{evt:t}),jt.eventCanceled?i._onDrop():(i._disableDelayedDragEvents(),!s&&i.nativeDraggable&&(Z.draggable=!0),i._triggerDragStart(t,e),V({sortable:i,name:"choose",originalEvent:t}),k(Z,a.chosenClass,!0))},a.ignore.split(",").forEach(function(t){D(Z,t.trim(),Lt)}),h(l,"dragover",Bt),h(l,"mousemove",Bt),h(l,"touchmove",Bt),a.supportPointer?(h(l,"pointerup",i._onDrop),this.nativeDraggable||h(l,"pointercancel",i._onDrop)):(h(l,"mouseup",i._onDrop),h(l,"touchend",i._onDrop),h(l,"touchcancel",i._onDrop)),s&&this.nativeDraggable&&(this.options.touchStartThreshold=4,Z.draggable=!0),U("delayStart",this,{evt:t}),!a.delay||a.delayOnTouchOnly&&!e||this.nativeDraggable&&(w||y)?o():jt.eventCanceled?this._onDrop():(a.supportPointer?(h(l,"pointerup",i._disableDelayedDrag),h(l,"pointercancel",i._disableDelayedDrag)):(h(l,"mouseup",i._disableDelayedDrag),h(l,"touchend",i._disableDelayedDrag),h(l,"touchcancel",i._disableDelayedDrag)),h(l,"mousemove",i._delayedDragTouchMoveHandler),h(l,"touchmove",i._delayedDragTouchMoveHandler),a.supportPointer&&h(l,"pointermove",i._delayedDragTouchMoveHandler),i._dragStartTimer=setTimeout(o,a.delay)))},_delayedDragTouchMoveHandler:function(t){t=t.touches?t.touches[0]:t;Math.max(Math.abs(t.clientX-this._lastX),Math.abs(t.clientY-this._lastY))>=Math.floor(this.options.touchStartThreshold/(this.nativeDraggable&&window.devicePixelRatio||1))&&this._disableDelayedDrag()},_disableDelayedDrag:function(){Z&&Lt(Z),clearTimeout(this._dragStartTimer),this._disableDelayedDragEvents()},_disableDelayedDragEvents:function(){var t=this.el.ownerDocument;p(t,"mouseup",this._disableDelayedDrag),p(t,"touchend",this._disableDelayedDrag),p(t,"touchcancel",this._disableDelayedDrag),p(t,"pointerup",this._disableDelayedDrag),p(t,"pointercancel",this._disableDelayedDrag),p(t,"mousemove",this._delayedDragTouchMoveHandler),p(t,"touchmove",this._delayedDragTouchMoveHandler),p(t,"pointermove",this._delayedDragTouchMoveHandler)},_triggerDragStart:function(t,e){e=e||"touch"==t.pointerType&&t,!this.nativeDraggable||e?this.options.supportPointer?h(document,"pointermove",this._onTouchMove):h(document,e?"touchmove":"mousemove",this._onTouchMove):(h(Z,"dragend",this),h(J,"dragstart",this._onDragStart));try{document.selection?Wt(function(){document.selection.empty()}):window.getSelection().removeAllRanges()}catch(t){}},_dragStarted:function(t,e){var n;Dt=!1,J&&Z?(U("dragStarted",this,{evt:e}),this.nativeDraggable&&h(document,"dragover",Ft),n=this.options,t||k(Z,n.dragClass,!1),k(Z,n.ghostClass,!0),jt.active=this,t&&this._appendGhost(),V({sortable:this,name:"start",originalEvent:e})):this._nulling()},_emulateDragOver:function(){if(dt){this._lastX=dt.clientX,this._lastY=dt.clientY,Xt();for(var t=document.elementFromPoint(dt.clientX,dt.clientY),e=t;t&&t.shadowRoot&&(t=t.shadowRoot.elementFromPoint(dt.clientX,dt.clientY))!==e;)e=t;if(Z.parentNode[K]._isOutsideThisEl(t),e)do{if(e[K])if(e[K]._onDragOver({clientX:dt.clientX,clientY:dt.clientY,target:t,rootEl:e})&&!this.options.dragoverBubble)break}while(e=g(t=e));Yt()}},_onTouchMove:function(t){if(ut){var e=this.options,n=e.fallbackTolerance,o=e.fallbackOffset,i=t.touches?t.touches[0]:t,r=Q&&b(Q,!0),a=Q&&r&&r.a,l=Q&&r&&r.d,e=At&&wt&&E(wt),a=(i.clientX-ut.clientX+o.x)/(a||1)+(e?e[0]-Tt[0]:0)/(a||1),l=(i.clientY-ut.clientY+o.y)/(l||1)+(e?e[1]-Tt[1]:0)/(l||1);if(!jt.active&&!Dt){if(n&&Math.max(Math.abs(i.clientX-this._lastX),Math.abs(i.clientY-this._lastY))<n)return;this._onDragStart(t,!0)}Q&&(r?(r.e+=a-(ht||0),r.f+=l-(pt||0)):r={a:1,b:0,c:0,d:1,e:a,f:l},r="matrix(".concat(r.a,",").concat(r.b,",").concat(r.c,",").concat(r.d,",").concat(r.e,",").concat(r.f,")"),R(Q,"webkitTransform",r),R(Q,"mozTransform",r),R(Q,"msTransform",r),R(Q,"transform",r),ht=a,pt=l,dt=i),t.cancelable&&t.preventDefault()}},_appendGhost:function(){if(!Q){var t=this.options.fallbackOnBody?document.body:J,e=X(Z,!0,At,!0,t),n=this.options;if(At){for(wt=t;"static"===R(wt,"position")&&"none"===R(wt,"transform")&&wt!==document;)wt=wt.parentNode;wt!==document.body&&wt!==document.documentElement?(wt===document&&(wt=O()),e.top+=wt.scrollTop,e.left+=wt.scrollLeft):wt=O(),Tt=E(wt)}k(Q=Z.cloneNode(!0),n.ghostClass,!1),k(Q,n.fallbackClass,!0),k(Q,n.dragClass,!0),R(Q,"transition",""),R(Q,"transform",""),R(Q,"box-sizing","border-box"),R(Q,"margin",0),R(Q,"top",e.top),R(Q,"left",e.left),R(Q,"width",e.width),R(Q,"height",e.height),R(Q,"opacity","0.8"),R(Q,"position",At?"absolute":"fixed"),R(Q,"zIndex","100000"),R(Q,"pointerEvents","none"),jt.ghost=Q,t.appendChild(Q),R(Q,"transform-origin",ft/parseInt(Q.style.width)*100+"% "+gt/parseInt(Q.style.height)*100+"%")}},_onDragStart:function(t,e){var n=this,o=t.dataTransfer,i=n.options;U("dragStart",this,{evt:t}),jt.eventCanceled?this._onDrop():(U("setupClone",this),jt.eventCanceled||((nt=C(Z)).removeAttribute("id"),nt.draggable=!1,nt.style["will-change"]="",this._hideClone(),k(nt,this.options.chosenClass,!1),jt.clone=nt),n.cloneId=Wt(function(){U("clone",n),jt.eventCanceled||(n.options.removeCloneOnHide||J.insertBefore(nt,Z),n._hideClone(),V({sortable:n,name:"clone"}))}),e||k(Z,i.dragClass,!0),e?(Et=!0,n._loopId=setInterval(n._emulateDragOver,50)):(p(document,"mouseup",n._onDrop),p(document,"touchend",n._onDrop),p(document,"touchcancel",n._onDrop),o&&(o.effectAllowed="move",i.setData&&i.setData.call(n,o,Z)),h(document,"drop",n),R(Z,"transform","translateZ(0)")),Dt=!0,n._dragStartId=Wt(n._dragStarted.bind(n,e,t)),h(document,"selectstart",n),mt=!0,window.getSelection().removeAllRanges(),u&&R(document.body,"user-select","none"))},_onDragOver:function(n){var o,i,r,t,e,a=this.el,l=n.target,s=this.options,c=s.group,u=jt.active,d=st===c,h=s.sort,p=ct||u,f=this,g=!1;if(!xt){if(void 0!==n.preventDefault&&n.cancelable&&n.preventDefault(),l=P(l,s.draggable,a,!0),O("dragOver"),jt.eventCanceled)return g;if(Z.contains(n.target)||l.animated&&l.animatingX&&l.animatingY||f._ignoreWhileAnimating===l)return A(!1);if(Et=!1,u&&!s.disabled&&(d?h||(i=$!==J):ct===this||(this.lastPutMode=st.checkPull(this,u,Z,n))&&c.checkPut(this,u,Z,n))){if(r="vertical"===this._getDirection(n,l),o=X(Z),O("dragOverValid"),jt.eventCanceled)return g;if(i)return $=J,M(),this._hideClone(),O("revert"),jt.eventCanceled||(tt?J.insertBefore(Z,tt):J.appendChild(Z)),A(!0);var m=F(a,s.draggable);if(m&&(S=n,c=r,x=X(F((E=this).el,E.options.draggable)),E=L(E.el,E.options,Q),!(c?S.clientX>E.right+10||S.clientY>x.bottom&&S.clientX>x.left:S.clientY>E.bottom+10||S.clientX>x.right&&S.clientY>x.top)||m.animated)){if(m&&(t=n,e=r,C=X(B((_=this).el,0,_.options,!0)),_=L(_.el,_.options,Q),e?t.clientX<_.left-10||t.clientY<C.top&&t.clientX<C.right:t.clientY<_.top-10||t.clientY<C.bottom&&t.clientX<C.left)){var v=B(a,0,s,!0);if(v===Z)return A(!1);if(D=X(l=v),!1!==Ht(J,a,Z,o,l,D,n,!1))return M(),a.insertBefore(Z,v),$=a,N(),A(!0)}else if(l.parentNode===a){var b,y,w,D=X(l),E=Z.parentNode!==a,S=(S=Z.animated&&Z.toRect||o,x=l.animated&&l.toRect||D,_=(e=r)?S.left:S.top,t=e?S.right:S.bottom,C=e?S.width:S.height,v=e?x.left:x.top,S=e?x.right:x.bottom,x=e?x.width:x.height,!(_===v||t===S||_+C/2===v+x/2)),_=r?"top":"left",C=Y(l,"top","top")||Y(Z,"top","top"),v=C?C.scrollTop:void 0;if(vt!==l&&(y=D[_],_t=!1,Ct=!S&&s.invertSwap||E),0!==(b=function(t,e,n,o,i,r,a,l){var s=o?t.clientY:t.clientX,c=o?n.height:n.width,t=o?n.top:n.left,o=o?n.bottom:n.right,n=!1;if(!a)if(l&&yt<c*i){if(_t=!_t&&(1===bt?t+c*r/2<s:s<o-c*r/2)?!0:_t)n=!0;else if(1===bt?s<t+yt:o-yt<s)return-bt}else if(t+c*(1-i)/2<s&&s<o-c*(1-i)/2)return function(t){return j(Z)<j(t)?1:-1}(e);if((n=n||a)&&(s<t+c*r/2||o-c*r/2<s))return t+c/2<s?1:-1;return 0}(n,l,D,r,S?1:s.swapThreshold,null==s.invertedSwapThreshold?s.swapThreshold:s.invertedSwapThreshold,Ct,vt===l)))for(var T=j(Z);(w=$.children[T-=b])&&("none"===R(w,"display")||w===Q););if(0===b||w===l)return A(!1);bt=b;var x=(vt=l).nextElementSibling,E=!1,S=Ht(J,a,Z,o,l,D,n,E=1===b);if(!1!==S)return 1!==S&&-1!==S||(E=1===S),xt=!0,setTimeout(Kt,30),M(),E&&!x?a.appendChild(Z):l.parentNode.insertBefore(Z,E?x:l),C&&H(C,0,v-C.scrollTop),$=Z.parentNode,void 0===y||Ct||(yt=Math.abs(y-X(l)[_])),N(),A(!0)}}else{if(m===Z)return A(!1);if((l=m&&a===n.target?m:l)&&(D=X(l)),!1!==Ht(J,a,Z,o,l,D,n,!!l))return M(),m&&m.nextSibling?a.insertBefore(Z,m.nextSibling):a.appendChild(Z),$=a,N(),A(!0)}if(a.contains(Z))return A(!1)}return!1}function O(t,e){U(t,f,I({evt:n,isOwner:d,axis:r?"vertical":"horizontal",revert:i,dragRect:o,targetRect:D,canSort:h,fromSortable:p,target:l,completed:A,onMove:function(t,e){return Ht(J,a,Z,o,t,X(t),n,e)},changed:N},e))}function M(){O("dragOverAnimationCapture"),f.captureAnimationState(),f!==p&&p.captureAnimationState()}function A(t){return O("dragOverCompleted",{insertion:t}),t&&(d?u._hideClone():u._showClone(f),f!==p&&(k(Z,(ct||u).options.ghostClass,!1),k(Z,s.ghostClass,!0)),ct!==f&&f!==jt.active?ct=f:f===jt.active&&ct&&(ct=null),p===f&&(f._ignoreWhileAnimating=l),f.animateAll(function(){O("dragOverAnimationComplete"),f._ignoreWhileAnimating=null}),f!==p&&(p.animateAll(),p._ignoreWhileAnimating=null)),(l===Z&&!Z.animated||l===a&&!l.animated)&&(vt=null),s.dragoverBubble||n.rootEl||l===document||(Z.parentNode[K]._isOutsideThisEl(n.target),t||Bt(n)),!s.dragoverBubble&&n.stopPropagation&&n.stopPropagation(),g=!0}function N(){rt=j(Z),lt=j(Z,s.draggable),V({sortable:f,name:"change",toEl:a,newIndex:rt,newDraggableIndex:lt,originalEvent:n})}},_ignoreWhileAnimating:null,_offMoveEvents:function(){p(document,"mousemove",this._onTouchMove),p(document,"touchmove",this._onTouchMove),p(document,"pointermove",this._onTouchMove),p(document,"dragover",Bt),p(document,"mousemove",Bt),p(document,"touchmove",Bt)},_offUpEvents:function(){var t=this.el.ownerDocument;p(t,"mouseup",this._onDrop),p(t,"touchend",this._onDrop),p(t,"pointerup",this._onDrop),p(t,"pointercancel",this._onDrop),p(t,"touchcancel",this._onDrop),p(document,"selectstart",this)},_onDrop:function(t){var e=this.el,n=this.options;rt=j(Z),lt=j(Z,n.draggable),U("drop",this,{evt:t}),$=Z&&Z.parentNode,rt=j(Z),lt=j(Z,n.draggable),jt.eventCanceled||(_t=Ct=Dt=!1,clearInterval(this._loopId),clearTimeout(this._dragStartTimer),zt(this.cloneId),zt(this._dragStartId),this.nativeDraggable&&(p(document,"drop",this),p(e,"dragstart",this._onDragStart)),this._offMoveEvents(),this._offUpEvents(),u&&R(document.body,"user-select",""),R(Z,"transform",""),t&&(mt&&(t.cancelable&&t.preventDefault(),n.dropBubble||t.stopPropagation()),Q&&Q.parentNode&&Q.parentNode.removeChild(Q),(J===$||ct&&"clone"!==ct.lastPutMode)&&nt&&nt.parentNode&&nt.parentNode.removeChild(nt),Z&&(this.nativeDraggable&&p(Z,"dragend",this),Lt(Z),Z.style["will-change"]="",mt&&!Dt&&k(Z,(ct||this).options.ghostClass,!1),k(Z,this.options.chosenClass,!1),V({sortable:this,name:"unchoose",toEl:$,newIndex:null,newDraggableIndex:null,originalEvent:t}),J!==$?(0<=rt&&(V({rootEl:$,name:"add",toEl:$,fromEl:J,originalEvent:t}),V({sortable:this,name:"remove",toEl:$,originalEvent:t}),V({rootEl:$,name:"sort",toEl:$,fromEl:J,originalEvent:t}),V({sortable:this,name:"sort",toEl:$,originalEvent:t})),ct&&ct.save()):rt!==it&&0<=rt&&(V({sortable:this,name:"update",toEl:$,originalEvent:t}),V({sortable:this,name:"sort",toEl:$,originalEvent:t})),jt.active&&(null!=rt&&-1!==rt||(rt=it,lt=at),V({sortable:this,name:"end",toEl:$,originalEvent:t}),this.save())))),this._nulling()},_nulling:function(){U("nulling",this),J=Z=$=Q=tt=nt=et=ot=ut=dt=mt=rt=lt=it=at=vt=bt=ct=st=jt.dragged=jt.ghost=jt.clone=jt.active=null,Ot.forEach(function(t){t.checked=!0}),Ot.length=ht=pt=0},handleEvent:function(t){switch(t.type){case"drop":case"dragend":this._onDrop(t);break;case"dragenter":case"dragover":Z&&(this._onDragOver(t),function(t){t.dataTransfer&&(t.dataTransfer.dropEffect="move");t.cancelable&&t.preventDefault()}(t));break;case"selectstart":t.preventDefault()}},toArray:function(){for(var t,e=[],n=this.el.children,o=0,i=n.length,r=this.options;o<i;o++)P(t=n[o],r.draggable,this.el,!1)&&e.push(t.getAttribute(r.dataIdAttr)||function(t){var e=t.tagName+t.className+t.src+t.href+t.textContent,n=e.length,o=0;for(;n--;)o+=e.charCodeAt(n);return o.toString(36)}(t));return e},sort:function(t,e){var n={},o=this.el;this.toArray().forEach(function(t,e){e=o.children[e];P(e,this.options.draggable,o,!1)&&(n[t]=e)},this),e&&this.captureAnimationState(),t.forEach(function(t){n[t]&&(o.removeChild(n[t]),o.appendChild(n[t]))}),e&&this.animateAll()},save:function(){var t=this.options.store;t&&t.set&&t.set(this)},closest:function(t,e){return P(t,e||this.options.draggable,this.el,!1)},option:function(t,e){var n=this.options;if(void 0===e)return n[t];var o=z.modifyOption(this,t,e);n[t]=void 0!==o?o:e,"group"===t&&Rt(n)},destroy:function(){U("destroy",this);var t=this.el;t[K]=null,p(t,"mousedown",this._onTapStart),p(t,"touchstart",this._onTapStart),p(t,"pointerdown",this._onTapStart),this.nativeDraggable&&(p(t,"dragover",this),p(t,"dragenter",this)),Array.prototype.forEach.call(t.querySelectorAll("[draggable]"),function(t){t.removeAttribute("draggable")}),this._onDrop(),this._disableDelayedDragEvents(),St.splice(St.indexOf(this.el),1),this.el=t=null},_hideClone:function(){ot||(U("hideClone",this),jt.eventCanceled||(R(nt,"display","none"),this.options.removeCloneOnHide&&nt.parentNode&&nt.parentNode.removeChild(nt),ot=!0))},_showClone:function(t){"clone"===t.lastPutMode?ot&&(U("showClone",this),jt.eventCanceled||(Z.parentNode!=J||this.options.group.revertClone?tt?J.insertBefore(nt,tt):J.appendChild(nt):J.insertBefore(nt,Z),this.options.group.revertClone&&this.animate(Z,nt),R(nt,"display",""),ot=!1)):this._hideClone()}},Mt&&h(document,"touchmove",function(t){(jt.active||Dt)&&t.cancelable&&t.preventDefault()}),jt.utils={on:h,off:p,css:R,find:D,is:function(t,e){return!!P(t,e,t,!1)},extend:function(t,e){if(t&&e)for(var n in e)e.hasOwnProperty(n)&&(t[n]=e[n]);return t},throttle:_,closest:P,toggleClass:k,clone:C,index:j,nextTick:Wt,cancelNextTick:zt,detectDirection:kt,getChild:B,expando:K},jt.get=function(t){return t[K]},jt.mount=function(){for(var t=arguments.length,e=new Array(t),n=0;n<t;n++)e[n]=arguments[n];(e=e[0].constructor===Array?e[0]:e).forEach(function(t){if(!t.prototype||!t.prototype.constructor)throw"Sortable: Mounted plugin must be a constructor function, not ".concat({}.toString.call(t));t.utils&&(jt.utils=I(I({},jt.utils),t.utils)),z.mount(t)})},jt.create=function(t,e){return new jt(t,e)};var Gt,Ut,qt,Vt,Zt,$t,Qt=[],Jt=!(jt.version="1.15.6");function te(){Qt.forEach(function(t){clearInterval(t.pid)}),Qt=[]}function ee(){clearInterval($t)}var ne,oe=_(function(n,t,e,o){if(t.scroll){var i,r=(n.touches?n.touches[0]:n).clientX,a=(n.touches?n.touches[0]:n).clientY,l=t.scrollSensitivity,s=t.scrollSpeed,c=O(),u=!1;Ut!==e&&(Ut=e,te(),Gt=t.scroll,i=t.scrollFn,!0===Gt&&(Gt=M(e,!0)));var d=0,h=Gt;do{var p=h,f=X(p),g=f.top,m=f.bottom,v=f.left,b=f.right,y=f.width,w=f.height,D=void 0,E=void 0,S=p.scrollWidth,_=p.scrollHeight,C=R(p),T=p.scrollLeft,f=p.scrollTop,E=p===c?(D=y<S&&("auto"===C.overflowX||"scroll"===C.overflowX||"visible"===C.overflowX),w<_&&("auto"===C.overflowY||"scroll"===C.overflowY||"visible"===C.overflowY)):(D=y<S&&("auto"===C.overflowX||"scroll"===C.overflowX),w<_&&("auto"===C.overflowY||"scroll"===C.overflowY)),T=D&&(Math.abs(b-r)<=l&&T+y<S)-(Math.abs(v-r)<=l&&!!T),f=E&&(Math.abs(m-a)<=l&&f+w<_)-(Math.abs(g-a)<=l&&!!f);if(!Qt[d])for(var x=0;x<=d;x++)Qt[x]||(Qt[x]={});Qt[d].vx==T&&Qt[d].vy==f&&Qt[d].el===p||(Qt[d].el=p,Qt[d].vx=T,Qt[d].vy=f,clearInterval(Qt[d].pid),0==T&&0==f||(u=!0,Qt[d].pid=setInterval(function(){o&&0===this.layer&&jt.active._onTouchMove(Zt);var t=Qt[this.layer].vy?Qt[this.layer].vy*s:0,e=Qt[this.layer].vx?Qt[this.layer].vx*s:0;"function"==typeof i&&"continue"!==i.call(jt.dragged.parentNode[K],e,t,n,Zt,Qt[this.layer].el)||H(Qt[this.layer].el,e,t)}.bind({layer:d}),24))),d++}while(t.bubbleScroll&&h!==c&&(h=M(h,!1)));Jt=u}},30),n=function(t){var e=t.originalEvent,n=t.putSortable,o=t.dragEl,i=t.activeSortable,r=t.dispatchSortableEvent,a=t.hideGhostForTarget,t=t.unhideGhostForTarget;e&&(i=n||i,a(),e=e.changedTouches&&e.changedTouches.length?e.changedTouches[0]:e,e=document.elementFromPoint(e.clientX,e.clientY),t(),i&&!i.el.contains(e)&&(r("spill"),this.onSpill({dragEl:o,putSortable:n})))};function ie(){}function re(){}ie.prototype={startIndex:null,dragStart:function(t){t=t.oldDraggableIndex;this.startIndex=t},onSpill:function(t){var e=t.dragEl,n=t.putSortable;this.sortable.captureAnimationState(),n&&n.captureAnimationState();t=B(this.sortable.el,this.startIndex,this.options);t?this.sortable.el.insertBefore(e,t):this.sortable.el.appendChild(e),this.sortable.animateAll(),n&&n.animateAll()},drop:n},a(ie,{pluginName:"revertOnSpill"}),re.prototype={onSpill:function(t){var e=t.dragEl,t=t.putSortable||this.sortable;t.captureAnimationState(),e.parentNode&&e.parentNode.removeChild(e),t.animateAll()},drop:n},a(re,{pluginName:"removeOnSpill"});var ae,le,se,ce,ue,de=[],he=[],pe=!1,fe=!1,ge=!1;function me(n,o){he.forEach(function(t,e){e=o.children[t.sortableIndex+(n?Number(e):0)];e?o.insertBefore(t,e):o.appendChild(t)})}function ve(){de.forEach(function(t){t!==se&&t.parentNode&&t.parentNode.removeChild(t)})}return jt.mount(new function(){function t(){for(var t in this.defaults={scroll:!0,forceAutoScrollFallback:!1,scrollSensitivity:30,scrollSpeed:10,bubbleScroll:!0},this)"_"===t.charAt(0)&&"function"==typeof this[t]&&(this[t]=this[t].bind(this))}return t.prototype={dragStarted:function(t){t=t.originalEvent;this.sortable.nativeDraggable?h(document,"dragover",this._handleAutoScroll):this.options.supportPointer?h(document,"pointermove",this._handleFallbackAutoScroll):t.touches?h(document,"touchmove",this._handleFallbackAutoScroll):h(document,"mousemove",this._handleFallbackAutoScroll)},dragOverCompleted:function(t){t=t.originalEvent;this.options.dragOverBubble||t.rootEl||this._handleAutoScroll(t)},drop:function(){this.sortable.nativeDraggable?p(document,"dragover",this._handleAutoScroll):(p(document,"pointermove",this._handleFallbackAutoScroll),p(document,"touchmove",this._handleFallbackAutoScroll),p(document,"mousemove",this._handleFallbackAutoScroll)),ee(),te(),clearTimeout(m),m=void 0},nulling:function(){Zt=Ut=Gt=Jt=$t=qt=Vt=null,Qt.length=0},_handleFallbackAutoScroll:function(t){this._handleAutoScroll(t,!0)},_handleAutoScroll:function(e,n){var o,i=this,r=(e.touches?e.touches[0]:e).clientX,a=(e.touches?e.touches[0]:e).clientY,t=document.elementFromPoint(r,a);Zt=e,n||this.options.forceAutoScrollFallback||w||y||u?(oe(e,this.options,t,n),o=M(t,!0),!Jt||$t&&r===qt&&a===Vt||($t&&ee(),$t=setInterval(function(){var t=M(document.elementFromPoint(r,a),!0);t!==o&&(o=t,te()),oe(e,i.options,t,n)},10),qt=r,Vt=a)):this.options.bubbleScroll&&M(t,!0)!==O()?oe(e,this.options,M(t,!1),!1):te()}},a(t,{pluginName:"scroll",initializeByDefault:!0})}),jt.mount(re,ie),jt.mount(new function(){function t(){this.defaults={swapClass:"sortable-swap-highlight"}}return t.prototype={dragStart:function(t){t=t.dragEl;ne=t},dragOverValid:function(t){var e=t.completed,n=t.target,o=t.onMove,i=t.activeSortable,r=t.changed,a=t.cancel;i.options.swap&&(t=this.sortable.el,i=this.options,n&&n!==t&&(t=ne,ne=!1!==o(n)?(k(n,i.swapClass,!0),n):null,t&&t!==ne&&k(t,i.swapClass,!1)),r(),e(!0),a())},drop:function(t){var e,n,o=t.activeSortable,i=t.putSortable,r=t.dragEl,a=i||this.sortable,l=this.options;ne&&k(ne,l.swapClass,!1),ne&&(l.swap||i&&i.options.swap)&&r!==ne&&(a.captureAnimationState(),a!==o&&o.captureAnimationState(),n=ne,t=(e=r).parentNode,l=n.parentNode,t&&l&&!t.isEqualNode(n)&&!l.isEqualNode(e)&&(i=j(e),r=j(n),t.isEqualNode(l)&&i<r&&r++,t.insertBefore(n,t.children[i]),l.insertBefore(e,l.children[r])),a.animateAll(),a!==o&&o.animateAll())},nulling:function(){ne=null}},a(t,{pluginName:"swap",eventProperties:function(){return{swapItem:ne}}})}),jt.mount(new function(){function t(o){for(var t in this)"_"===t.charAt(0)&&"function"==typeof this[t]&&(this[t]=this[t].bind(this));o.options.avoidImplicitDeselect||(o.options.supportPointer?h(document,"pointerup",this._deselectMultiDrag):(h(document,"mouseup",this._deselectMultiDrag),h(document,"touchend",this._deselectMultiDrag))),h(document,"keydown",this._checkKeyDown),h(document,"keyup",this._checkKeyUp),this.defaults={selectedClass:"sortable-selected",multiDragKey:null,avoidImplicitDeselect:!1,setData:function(t,e){var n="";de.length&&le===o?de.forEach(function(t,e){n+=(e?", ":"")+t.textContent}):n=e.textContent,t.setData("Text",n)}}}return t.prototype={multiDragKeyDown:!1,isMultiDrag:!1,delayStartGlobal:function(t){t=t.dragEl;se=t},delayEnded:function(){this.isMultiDrag=~de.indexOf(se)},setupClone:function(t){var e=t.sortable,t=t.cancel;if(this.isMultiDrag){for(var n=0;n<de.length;n++)he.push(C(de[n])),he[n].sortableIndex=de[n].sortableIndex,he[n].draggable=!1,he[n].style["will-change"]="",k(he[n],this.options.selectedClass,!1),de[n]===se&&k(he[n],this.options.chosenClass,!1);e._hideClone(),t()}},clone:function(t){var e=t.sortable,n=t.rootEl,o=t.dispatchSortableEvent,t=t.cancel;this.isMultiDrag&&(this.options.removeCloneOnHide||de.length&&le===e&&(me(!0,n),o("clone"),t()))},showClone:function(t){var e=t.cloneNowShown,n=t.rootEl,t=t.cancel;this.isMultiDrag&&(me(!1,n),he.forEach(function(t){R(t,"display","")}),e(),ue=!1,t())},hideClone:function(t){var e=this,n=(t.sortable,t.cloneNowHidden),t=t.cancel;this.isMultiDrag&&(he.forEach(function(t){R(t,"display","none"),e.options.removeCloneOnHide&&t.parentNode&&t.parentNode.removeChild(t)}),n(),ue=!0,t())},dragStartGlobal:function(t){t.sortable;!this.isMultiDrag&&le&&le.multiDrag._deselectMultiDrag(),de.forEach(function(t){t.sortableIndex=j(t)}),de=de.sort(function(t,e){return t.sortableIndex-e.sortableIndex}),ge=!0},dragStarted:function(t){var e,n=this,t=t.sortable;this.isMultiDrag&&(this.options.sort&&(t.captureAnimationState(),this.options.animation&&(de.forEach(function(t){t!==se&&R(t,"position","absolute")}),e=X(se,!1,!0,!0),de.forEach(function(t){t!==se&&T(t,e)}),pe=fe=!0)),t.animateAll(function(){pe=fe=!1,n.options.animation&&de.forEach(function(t){x(t)}),n.options.sort&&ve()}))},dragOver:function(t){var e=t.target,n=t.completed,t=t.cancel;fe&&~de.indexOf(e)&&(n(!1),t())},revert:function(t){var n,o,e=t.fromSortable,i=t.rootEl,r=t.sortable,a=t.dragRect;1<de.length&&(de.forEach(function(t){r.addAnimationState({target:t,rect:fe?X(t):a}),x(t),t.fromRect=a,e.removeAnimationState(t)}),fe=!1,n=!this.options.removeCloneOnHide,o=i,de.forEach(function(t,e){e=o.children[t.sortableIndex+(n?Number(e):0)];e?o.insertBefore(t,e):o.appendChild(t)}))},dragOverCompleted:function(t){var e,n=t.sortable,o=t.isOwner,i=t.insertion,r=t.activeSortable,a=t.parentEl,l=t.putSortable,t=this.options;i&&(o&&r._hideClone(),pe=!1,t.animation&&1<de.length&&(fe||!o&&!r.options.sort&&!l)&&(e=X(se,!1,!0,!0),de.forEach(function(t){t!==se&&(T(t,e),a.appendChild(t))}),fe=!0),o||(fe||ve(),1<de.length?(o=ue,r._showClone(n),r.options.animation&&!ue&&o&&he.forEach(function(t){r.addAnimationState({target:t,rect:ce}),t.fromRect=ce,t.thisAnimationDuration=null})):r._showClone(n)))},dragOverAnimationCapture:function(t){var e=t.dragRect,n=t.isOwner,t=t.activeSortable;de.forEach(function(t){t.thisAnimationDuration=null}),t.options.animation&&!n&&t.multiDrag.isMultiDrag&&(ce=a({},e),e=b(se,!0),ce.top-=e.f,ce.left-=e.e)},dragOverAnimationComplete:function(){fe&&(fe=!1,ve())},drop:function(t){var o,i,r,a,n,e,l,s=t.originalEvent,c=t.rootEl,u=t.parentEl,d=t.sortable,h=t.dispatchSortableEvent,p=t.oldIndex,t=t.putSortable,f=t||this.sortable;s&&(o=this.options,i=u.children,ge||(o.multiDragKey&&!this.multiDragKeyDown&&this._deselectMultiDrag(),k(se,o.selectedClass,!~de.indexOf(se)),~de.indexOf(se)?(de.splice(de.indexOf(se),1),ae=null,G({sortable:d,rootEl:c,name:"deselect",targetEl:se,originalEvent:s})):(de.push(se),G({sortable:d,rootEl:c,name:"select",targetEl:se,originalEvent:s}),s.shiftKey&&ae&&d.el.contains(ae)?(r=j(ae),a=j(se),~r&&~a&&r!==a&&function(){for(var e,t=r<a?(e=r,a):(e=a,r+1),n=o.filter;e<t;e++)~de.indexOf(i[e])||P(i[e],o.draggable,u,!1)&&(n&&("function"==typeof n?n.call(d,s,i[e],d):n.split(",").some(function(t){return P(i[e],t.trim(),u,!1)}))||(k(i[e],o.selectedClass,!0),de.push(i[e]),G({sortable:d,rootEl:c,name:"select",targetEl:i[e],originalEvent:s})))}()):ae=se,le=f)),ge&&this.isMultiDrag&&(fe=!1,(u[K].options.sort||u!==c)&&1<de.length&&(n=X(se),e=j(se,":not(."+this.options.selectedClass+")"),!pe&&o.animation&&(se.thisAnimationDuration=null),f.captureAnimationState(),pe||(o.animation&&(se.fromRect=n,de.forEach(function(t){var e;t.thisAnimationDuration=null,t!==se&&(e=fe?X(t):n,t.fromRect=e,f.addAnimationState({target:t,rect:e}))})),ve(),de.forEach(function(t){i[e]?u.insertBefore(t,i[e]):u.appendChild(t),e++}),p===j(se)&&(l=!1,de.forEach(function(t){t.sortableIndex!==j(t)&&(l=!0)}),l&&(h("update"),h("sort")))),de.forEach(function(t){x(t)}),f.animateAll()),le=f),(c===u||t&&"clone"!==t.lastPutMode)&&he.forEach(function(t){t.parentNode&&t.parentNode.removeChild(t)}))},nullingGlobal:function(){this.isMultiDrag=ge=!1,he.length=0},destroyGlobal:function(){this._deselectMultiDrag(),p(document,"pointerup",this._deselectMultiDrag),p(document,"mouseup",this._deselectMultiDrag),p(document,"touchend",this._deselectMultiDrag),p(document,"keydown",this._checkKeyDown),p(document,"keyup",this._checkKeyUp)},_deselectMultiDrag:function(t){if(!(void 0!==ge&&ge||le!==this.sortable||t&&P(t.target,this.options.draggable,this.sortable.el,!1)||t&&0!==t.button))for(;de.length;){var e=de[0];k(e,this.options.selectedClass,!1),de.shift(),G({sortable:this.sortable,rootEl:this.sortable.el,name:"deselect",targetEl:e,originalEvent:t})}},_checkKeyDown:function(t){t.key===this.options.multiDragKey&&(this.multiDragKeyDown=!0)},_checkKeyUp:function(t){t.key===this.options.multiDragKey&&(this.multiDragKeyDown=!1)}},a(t,{pluginName:"multiDrag",utils:{select:function(t){var e=t.parentNode[K];e&&e.options.multiDrag&&!~de.indexOf(t)&&(le&&le!==e&&(le.multiDrag._deselectMultiDrag(),le=e),k(t,e.options.selectedClass,!0),de.push(t))},deselect:function(t){var e=t.parentNode[K],n=de.indexOf(t);e&&e.options.multiDrag&&~n&&(k(t,e.options.selectedClass,!1),de.splice(n,1))}},eventProperties:function(){var n=this,o=[],i=[];return de.forEach(function(t){var e;o.push({multiDragElement:t,index:t.sortableIndex}),e=fe&&t!==se?-1:fe?j(t,":not(."+n.options.selectedClass+")"):j(t),i.push({multiDragElement:t,index:e})}),{items:r(de),clones:[].concat(he),oldIndicies:o,newIndicies:i}},optionListeners:{multiDragKey:function(t){return"ctrl"===(t=t.toLowerCase())?t="Control":1<t.length&&(t=t.charAt(0).toUpperCase()+t.substr(1)),t}}})}),jt});})();
-const _sortableReady = Promise.resolve(window.Sortable);
+/* Drag-and-drop is Lit-native (pointer events) — see _dragStart/_dragMove/
+   _dragEnd. SortableJS was removed (#576): an imperative DOM library and
+   Lit fought over DOM ownership, causing the reorder/badge desync.  */
 
 class SEMLoadPriorityCard extends SEMLitBase {
     constructor() {
@@ -67,6 +69,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // Skip while frozen (optimistic update in progress)
         if (this._isFrozen()) return;
 
+        // Hold a just-dragged priority order until the backend refreshes the
+        // sensor (~1 coordinator cycle), so a stale sensor push doesn't snap
+        // the reorder back before it lands.
+        if (this._priorityFrozenUntil && Date.now() < this._priorityFrozenUntil) return;
+
         const devState  = hass?.states[`${this.entityPrefix}controllable_devices_count`];
         const peakState = hass?.states[`${this.entityPrefix}consecutive_peak_15min`];
         const lmState   = hass?.states[`${this.entityPrefix}load_management_status`];
@@ -83,22 +90,32 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        if (this._sortable) { this._sortable.destroy(); this._sortable = null; }
+        // A drag attaches window-level pointer listeners (_dragStart) that a
+        // normal drop removes. If the card is torn down MID-drag (HA tab nav),
+        // the drop never fires — remove them here so the card can be GC'd
+        // instead of pinned until the next stray pointer event (ruflo LOW).
+        if (this._drag) {
+            window.removeEventListener('pointermove', this._dragMoveBound);
+            window.removeEventListener('pointerup', this._dragEndBound);
+            window.removeEventListener('pointercancel', this._dragEndBound);
+            this._drag = null;
+            this._interacting = false;
+        }
     }
 
-    // ── Initialise Sortable after first render ──
+    // ── Bind delegated handlers after first render ──
     async firstUpdated() {
-        await this._initSortable();
         this._bindEvents();
+        // Load <ha-entity-picker> early so the stop-condition entity search is
+        // ready the moment a goal editor opens (reuses the config-modal loader).
+        this._ensureEntityPicker();
     }
 
-    // ── After each Lit render: reinitialise Sortable if device list changed ──
+    // ── Re-bind the delegated arrow/goal handlers when the list changes ──
     async updated(changedProps) {
         const sig = this.devices.map(d => d.id).join(',');
         if (sig !== this._lastDeviceSig) {
             this._lastDeviceSig = sig;
-            if (this._sortable) { this._sortable.destroy(); this._sortable = null; }
-            await this._initSortable();
             this._bindEvents();
         }
     }
@@ -134,10 +151,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .section-label { font-size:0.95em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
             .device-list { min-height:40px; }
             .device { display:flex; align-items:stretch; background:var(--secondary-background-color, rgba(255,255,255,0.04)); border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:12px; margin-bottom:6px; transition:transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; overflow:hidden; backdrop-filter:blur(8px); }
-            .device.ghost { opacity:0.3; }
-            .device.chosen { box-shadow:0 4px 20px rgba(0,0,0,0.15); border-color:#ff9800; z-index:10; }
-            .device.dragging { opacity:0; }
-            .device.moved { border-color:#ff9800; transition:border-color 0.1s ease; }
+            /* Pointer-drag (Lit-native): the lifted row follows the finger,
+               a bright line shows where it will drop. box-shadow is not
+               clipped by the row's overflow, so the drop-line always shows. */
+            .device.dragging-row { opacity:0.95; z-index:20; position:relative; border-color:#ff9800; box-shadow:0 10px 26px rgba(0,0,0,0.45); cursor:grabbing; }
+            .device.drop-above { box-shadow:0 -3px 0 0 #ff9800; }
+            .device.drop-below { box-shadow:0 3px 0 0 #ff9800; }
             .drag-handle { display:flex; align-items:center; justify-content:center; width:32px; min-width:32px; cursor:grab; font-size:16px; opacity:0.3; user-select:none; touch-action:none; border-right:1px solid var(--divider-color, rgba(128,128,128,0.12)); }
             .drag-handle:hover { opacity:0.6; }
             .drag-handle:active { cursor:grabbing; }
@@ -220,13 +239,27 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .range-fill {
                 position:absolute; top:0; height:100%; border-radius:3px;
                 background:linear-gradient(90deg, #8DC892, #ff9800);
+                pointer-events:none;  /* never swallow the handle grab */
             }
             .range-handle {
                 position:absolute; top:50%; width:18px; height:18px;
                 border-radius:50%; transform:translate(-50%, -50%);
                 background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.5);
-                cursor:grab; touch-action:none; pointer-events:none;
+                cursor:grab; touch-action:none; pointer-events:auto;
+                z-index:2;  /* sit above the fill so pointerdown lands */
             }
+            .range-handle:active { cursor:grabbing; }
+            /* #355-style split affordance: sits ABOVE the stacked handles so a
+               tap can separate them when Min and Max share a spot. */
+            .range-split {
+                position:absolute; top:50%; transform:translate(-50%,-50%);
+                width:22px; height:22px; border-radius:50%;
+                display:flex; align-items:center; justify-content:center;
+                background:rgba(0,0,0,0.55); color:#fff; cursor:pointer;
+                box-shadow:0 1px 3px rgba(0,0,0,0.5);
+                pointer-events:auto; z-index:3;
+            }
+            .range-split:hover { background:rgba(0,0,0,0.75); }
             .range-handle-min { border:3px solid #8DC892; }
             .range-handle-max { border:3px solid #ff9800; }
             /* EV charge-target look (#559 UI merge) */
@@ -278,8 +311,30 @@ class SEMLoadPriorityCard extends SEMLitBase {
             }
             .ge-hint {
                 display:flex; align-items:center; gap:6px;
-                font-size:12px; color:#ff9800; padding:4px 0 6px;
+                font-size:12px; color:var(--secondary-text-color,#999); padding:4px 0 6px;
             }
+            /* (#620) battery-overnight toggle switch */
+            .batt-toggle {
+                width:34px; height:19px; border-radius:11px; border:none; padding:0;
+                position:relative; cursor:pointer; background:rgba(255,255,255,0.15);
+                transition:background .2s;
+            }
+            .batt-toggle.on { background:#4db6ac; }
+            .batt-toggle .knob {
+                position:absolute; top:2px; left:2px; width:15px; height:15px;
+                border-radius:50%; background:#fff; transition:left .2s;
+            }
+            .batt-toggle.on .knob { left:17px; }
+            /* (#620) "Finish overnight from" segmented picker */
+            .ov-picker { gap:0; border-radius:8px; overflow:hidden;
+                border:1px solid var(--divider-color, rgba(128,128,128,0.25)); }
+            .ov-opt {
+                border:none; padding:5px 12px; cursor:pointer; font-size:12px;
+                background:rgba(255,255,255,0.06); color:var(--primary-text-color,#e0e0e0);
+                border-right:1px solid var(--divider-color, rgba(128,128,128,0.25));
+            }
+            .ov-opt:last-child { border-right:none; }
+            .ov-opt.on { background:#4db6ac; color:#fff; font-weight:600; }
             .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `;
     }
@@ -324,6 +379,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     goals: info.goals || null,
                     progress: info.progress || null,
                     blockedBy: info.blocked_by || null,
+                    soc: info.soc,   // (#576) battery row only
                     icon: this._resolveDeviceIcon(info),
                 }))
                 .sort((a, b) => a.priority - b.priority);
@@ -383,7 +439,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="help-panel">
                         <div class="help-item"><b>${this._t('off')}</b> — ${this._t('help_mode_off')}</div>
                         <div class="help-item"><b>${this._t('peak_only')}</b> — ${this._t('help_mode_peak_only')}</div>
-                        <div class="help-item"><b>${this._t('mode_surplus')}</b> — ${this._t('help_mode_surplus')}</div>
+                        <div class="help-item"><b>${this._t('mode_solar_only')}</b> — ${this._t('help_mode_surplus')}</div>
+                        <div class="help-item"><b>${this._t('mode_solar_battery')}</b> — ${this._t('battery_overnight_hint')}</div>
                         <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
                         <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
                         <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
@@ -399,7 +456,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div id="device-list" class="device-list">
                         ${this.devices.length === 0
                             ? html`<div class="empty">${this._t('no_devices_yet')}</div>`
-                            : this.devices.map((d, i) => this._renderDevice(d, i + 1))}
+                            : repeat(
+                                this.devices,
+                                (d) => d.id,   // KEY by stable id so Lit tracks
+                                // each row by identity, not position — else it
+                                // desyncs with SortableJS's DOM moves (the
+                                // "device in the wrong spot" bug).
+                                (d, i) => this._renderDevice(d, i + 1),
+                              )}
                     </div>
 
                     ${this.devices.length > 0
@@ -417,6 +481,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     _renderDevice(device, priority) {
         // Power-aware ON detection: if the switch reports OFF but the device draws > 10W, it's clearly on
         const onOff  = device.isOn || device.power > 0.01;
+        // (#576) the home battery is a positioned sink — draggable, but no
+        // on/off, no mode, no dependencies, no goals. Its position (and SOC)
+        // are the whole story.
+        const isBattery = device.deviceType === 'battery';
         const isChild = device.dependsOn.length > 0;
         const depth  = this._getDependencyDepth(device);
         const indentStyle = depth > 0
@@ -427,6 +495,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         <div class="device${isChild ? ' is-child' : ''}" data-id="${device.id}" style="${indentStyle}">
             <div class="drag-handle"
                  title="${isChild ? this._t('locked_under_parent') : this._t('drag_to_reorder')}"
+                 @pointerdown=${isChild ? null : (e) => this._dragStart(e, device.id)}
                  style="${isChild ? 'opacity:0.3;cursor:default' : ''}">${isChild ? '\u00B7' : '\u2261'}</div>
             <div class="device-body">
                 <div class="device-top">
@@ -434,18 +503,21 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         ${isChild ? html`<span style="color:#ff9800;font-size:12px;margin-right:4px">&#8618;</span>` : nothing}
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
-                        <span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}">
+                        ${isBattery ? nothing : html`
+                        <span class="configure-btn" data-action="configure" data-device="${device.id}" data-name="${device.name}">
                             <ha-icon icon="mdi:${device.hasManualMapping ? 'wrench' : 'cog'}" style="--mdc-icon-size:14px"></ha-icon> ${device.isControllable ? this._t('configure_device') : this._t('configure')}
-                        </span>
+                        </span>`}
                     </div>
                     <div class="device-power" data-field="power-${device.id}">
-                        ${onOff
-                            ? semFormatPower(device.power * 1000)
-                            : (device.isShed
-                                ? this._t('shed_label')
-                                : (device.rating > 0
-                                    ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
-                                    : this._t('off')))}
+                        ${isBattery
+                            ? html`<span style="opacity:0.7">${device.soc != null ? device.soc + '% · ' : ''}${onOff ? semFormatPower(device.power * 1000) : this._t('off')}</span>`
+                            : (onOff
+                                ? semFormatPower(device.power * 1000)
+                                : (device.isShed
+                                    ? this._t('shed_label')
+                                    : (device.rating > 0
+                                        ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
+                                        : this._t('off'))))}
                     </div>
                 </div>
                 ${device.blockedBy ? html`<div style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}
@@ -456,15 +528,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
-                    ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
+                    ${isBattery ? html`<span class="dim" title="${this._t('battery_role_help')}">${this._t('battery_role_label')}</span>` : nothing}
+                    ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
                     <label class="toggle-label" title="${this._t('mode_tooltip')}">
                         <span class="dim">${this._t('mode')}</span>
                         <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
                             <option value="off" ?selected="${this._mergedMode(device) === 'off'}">${this._t('off')}</option>
                             <option value="peak_only" ?selected="${this._mergedMode(device) === 'peak_only'}">${this._t('peak_only')}</option>
-                            <option value="surplus" ?selected="${this._mergedMode(device) === 'surplus'}">${this._t('mode_surplus')}</option>
+                            <option value="solar_only" ?selected="${this._mergedMode(device) === 'solar_only'}">${this._t('mode_solar_only')}</option>
+                            <option value="solar_battery" ?selected="${this._mergedMode(device) === 'solar_battery'}">${this._t('mode_solar_battery')}</option>
                         </select>
                     </label>`}
+                    ${isBattery ? nothing : html`
                     <label class="toggle-label" title="${this._t('requires_tooltip')}">
                         <span class="dim">${this._t('requires')}</span>
                         <select class="mode-select" data-action="depends_on" data-device="${device.id}">
@@ -473,13 +548,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
                                 html`<option value="${d.id}" ?selected="${device.dependsOn.includes(d.id)}">${d.name}</option>`
                             )}
                         </select>
-                    </label>
+                    </label>`}
                     <div class="arrows">
                         <button class="arrow-btn" data-action="move-up"   data-device="${device.id}" title="${this._t('move_up')}">&#9650;</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">&#9660;</button>
                     </div>
-                    ${(device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging'
-                       || this._mergedMode(device) !== 'surplus') ? nothing : html`
+                    ${(device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery
+                       || (this._mergedMode(device) !== 'solar_only'
+                           && this._mergedMode(device) !== 'solar_battery')) ? nothing : html`
                     <button class="goal-btn ${this._goalOpen[device.id] ? 'active' : ''}"
                             data-action="toggle-goal" data-device="${device.id}"
                             title="${this._t('daily_target')}">
@@ -495,35 +571,39 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── (#559) goal engine UI — EV-charger look (one merged mode picker) ──
 
     _mergedMode(device) {
-        // (#559 beta.19 freeze) three modes only — off / peak_only / surplus.
-        // Surplus = solar_only (never imports). cheap_hours stays a backend
-        // option for HW/HP but isn't surfaced here; the deadline/always mode
-        // was deleted.
+        // (#620) four modes — off / peak_only / solar_only / solar_battery.
+        // control_mode=surplus splits on battery_assist_enabled: with it on the
+        // battery assists above the buffer (solar_battery); off = solar_only
+        // (battery reserved for the house). off/peak_only unchanged.
         const cm = device.controlMode || 'peak_only';
-        return cm === 'surplus' ? 'surplus' : cm;
+        if (cm !== 'surplus') return cm;
+        return (device.goals || {}).battery_assist_enabled ? 'solar_battery' : 'solar_only';
     }
 
     _mergedModeLabel(device) {
         const m = this._mergedMode(device);
         const key = { off: 'off', peak_only: 'peak_only',
-                      surplus: 'mode_surplus' }[m] || m;
+                      solar_only: 'mode_solar_only',
+                      solar_battery: 'mode_solar_battery' }[m] || m;
         return this._t(key);
     }
 
     _applyMergedMode(device, merged) {
-        const map = {
-            off:       { control_mode: 'off' },
-            peak_only: { control_mode: 'peak_only' },
-            surplus:   { control_mode: 'surplus' },
-        }[merged];
-        if (!map) return;
-        device.controlMode = map.control_mode;
-        this._sendDeviceUpdate(device.id, 'control_mode', map.control_mode);
-        // migrate a legacy 'always' policy off the removed value
-        if (map.control_mode === 'surplus'
-            && device.goals?.top_up_policy === 'always') {
-            device.goals.top_up_policy = 'solar_only';
-            this._sendDeviceUpdate(device.id, 'top_up_policy', 'solar_only');
+        // Both solar modes are control_mode=surplus; battery_assist_enabled is
+        // the discriminator (Tier-1 daytime assist, #620).
+        const controlMode = (merged === 'off' || merged === 'peak_only') ? merged : 'surplus';
+        device.controlMode = controlMode;
+        this._sendDeviceUpdate(device.id, 'control_mode', controlMode);
+        if (controlMode === 'surplus') {
+            const assist = merged === 'solar_battery';
+            device.goals = device.goals || {};
+            device.goals.battery_assist_enabled = assist;
+            this._sendDeviceUpdate(device.id, 'battery_assist_enabled', String(assist));
+            // migrate a legacy 'always' policy off the removed value
+            if (device.goals.top_up_policy === 'always') {
+                device.goals.top_up_policy = 'solar_only';
+                this._sendDeviceUpdate(device.id, 'top_up_policy', 'solar_only');
+            }
         }
         this.requestUpdate();
     }
@@ -540,45 +620,93 @@ class SEMLoadPriorityCard extends SEMLitBase {
         return Math.min(100, (p.runtime_today_min / target) * 100);
     }
 
-    // Single "at least" runtime slider, in hours (0 = no target, max 12h).
+    // Dual-handle Min/Max runtime slider in hours (#620) — mirrors the EV
+    // charge-target range. Green handle = Minimum (floor, daily_min_runtime_min),
+    // orange handle = Maximum (cap, daily_max_runtime_min; full scale = uncapped).
     _renderGoalSlider(device) {
         const SCALE_H = 12;
         const g = device.goals || {};
         const drag = this._goalDrag;
-        let hours = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
-        if (drag && drag.id === device.id) hours = drag.value;
-        const pct = Math.min(100, (hours / SCALE_H) * 100);
+        let minH = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
+        let maxRaw = parseFloat(g.daily_max_runtime_min) || 0;
+        let maxH = maxRaw > 0 ? maxRaw / 60 : SCALE_H;  // 0 = uncapped = full scale
+        if (drag && drag.id === device.id) {
+            if (drag.handle === 'min') minH = drag.value;
+            else maxH = drag.value;
+        }
+        if (maxH < minH) maxH = minH;
+        const minPct = Math.min(100, (minH / SCALE_H) * 100);
+        const maxPct = Math.min(100, (maxH / SCALE_H) * 100);
+        const atFull = maxH >= SCALE_H - 1e-6;
         const fmt = (h) => (h % 1 === 0 ? String(h) : h.toFixed(1));
+        // Split affordance (mirrors the EV charge-target slider, #355): when the
+        // two handles land on the same spot (e.g. Min 12 h + Max Uncapped both at
+        // 100%) the top one eats every grab and the other is stuck. Show a split
+        // button that nudges Min down one step so both become grabbable again.
+        const STEP_H = 0.5;
+        const stacked = (maxH - minH) < STEP_H - 1e-6;
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
-                    <span>${this._t('run_up_to')}
-                        <b style="color:#8DC892">${hours <= 0 ? this._t('no_target') : fmt(hours) + ' h'}</b>
-                    </span>
-                    <span style="color:var(--secondary-text-color,#999)">${this._t('goal_zero_hint')}</span>
+                    <span>${this._t('at_least')} <b style="color:#8DC892">${minH <= 0 ? this._t('no_target') : fmt(minH) + ' h'}</b></span>
+                    <span>${this._t('up_to')} <b style="color:#ff9800">${atFull ? this._t('uncapped') : fmt(maxH) + ' h'}</b></span>
                 </div>
-                <div class="range-track"
-                     @pointerdown=${(e) => this._goalSliderStart(e, device)}>
-                    <div class="range-fill" style="left:0;width:${pct}%;background:#8DC892"></div>
-                    <div class="range-handle range-handle-min" style="left:${pct}%"></div>
+                <div class="range-track">
+                    <div class="range-fill" style="left:${minPct}%;width:${Math.max(0, maxPct - minPct)}%;background:linear-gradient(90deg,#8DC892,#ff9800)"></div>
+                    <div class="range-handle range-handle-min" style="left:${minPct}%"
+                         @pointerdown=${(e) => this._goalSliderStart(e, device, 'min')}></div>
+                    <div class="range-handle range-handle-max" style="left:${maxPct}%"
+                         @pointerdown=${(e) => this._goalSliderStart(e, device, 'max')}></div>
+                    ${stacked ? html`
+                        <span class="range-split" style="left:${minPct}%"
+                              title="${this._t('separate_handles')}"
+                              @click=${(ev) => this._splitGoalHandles(ev, device, minH, maxH)}>
+                            <ha-icon icon="mdi:arrow-split-vertical" style="--mdc-icon-size:14px"></ha-icon>
+                        </span>` : nothing}
                 </div>
             </div>`;
     }
 
-    _goalSliderStart(e, device) {
+    _splitGoalHandles(ev, device, minH, maxH) {
+        ev.stopPropagation();
+        const SCALE_H = 12, STEP_H = 0.5;
+        // Drop Min by a step so the handles separate; if Min is already at the
+        // floor, push Max down off full-scale instead so it becomes a real cap.
+        const g = device.goals = device.goals || {};
+        if (minH - STEP_H >= 0) {
+            const minutes = Math.round((minH - STEP_H) * 60);
+            g.daily_min_runtime_min = minutes;
+            this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
+        } else {
+            const capH = Math.min(SCALE_H - STEP_H, maxH - STEP_H);
+            const minutes = Math.round(capH * 60);
+            g.daily_max_runtime_min = minutes;
+            this._sendDeviceUpdate(device.id, 'daily_max_runtime_min', String(minutes));
+        }
+        this.requestUpdate();
+    }
+
+    _goalSliderStart(e, device, handle) {
         e.stopPropagation();
         e.preventDefault();
         const SCALE_H = 12, STEP_H = 0.5;
-        const track = e.currentTarget;
+        const track = e.currentTarget.parentElement;  // handle → .range-track
         const g = device.goals = device.goals || {};
         const rect = track.getBoundingClientRect();
+        const curMinH = (parseFloat(g.daily_min_runtime_min) || 0) / 60;
+        const rawMax = parseFloat(g.daily_max_runtime_min) || 0;
+        const curMaxH = rawMax > 0 ? rawMax / 60 : SCALE_H;
         const toVal = (clientX) => {
             let frac = (clientX - rect.left) / (rect.width || 1);
             frac = Math.max(0, Math.min(1, frac));
-            return Math.round((frac * SCALE_H) / STEP_H) * STEP_H;
+            let v = Math.round((frac * SCALE_H) / STEP_H) * STEP_H;
+            // Clamp so the handles can't cross.
+            if (handle === 'min') v = Math.min(v, curMaxH);
+            else v = Math.max(v, curMinH);
+            return v;
         };
         const apply = (clientX) => {
-            this._goalDrag = { id: device.id, value: toVal(clientX) };
+            this._goalDrag = { id: device.id, handle, value: toVal(clientX) };
             this.requestUpdate();
         };
         apply(e.clientX);
@@ -587,10 +715,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
             window.removeEventListener('pointercancel', onUp);
-            const minutes = Math.round(toVal(ev.clientX) * 60);
+            const hours = toVal(ev.clientX);
             this._goalDrag = null;
-            g.daily_min_runtime_min = minutes;
-            this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
+            if (handle === 'min') {
+                const minutes = Math.round(hours * 60);
+                g.daily_min_runtime_min = minutes;
+                this._sendDeviceUpdate(device.id, 'daily_min_runtime_min', String(minutes));
+            } else {
+                // Full scale = uncapped (store 0); otherwise the cap in minutes.
+                const minutes = hours >= SCALE_H - 1e-6 ? 0 : Math.round(hours * 60);
+                g.daily_max_runtime_min = minutes;
+                this._sendDeviceUpdate(device.id, 'daily_max_runtime_min', String(minutes));
+            }
             this.requestUpdate();
         };
         window.addEventListener('pointermove', onMove);
@@ -598,11 +734,66 @@ class SEMLoadPriorityCard extends SEMLitBase {
         window.addEventListener('pointercancel', onUp);
     }
 
+    _onStopEntity(device, e) {
+        // <ha-entity-picker> fires value-changed (not change) with the chosen
+        // entity in e.detail.value. Persist via the same goal path as the text
+        // input — the backend _goal_write_lock makes the entity + threshold
+        // writes atomic even though they arrive as two calls.
+        e.stopPropagation();
+        const v = (e.detail && e.detail.value) || '';
+        device.goals = device.goals || {};
+        device.goals.stop_entity = v;
+        this._sendDeviceUpdate(device.id, 'stop_entity', v);
+    }
+
+    // (#620) "Finish overnight from" — one picker over the two independent
+    // axes: battery (Tier-2 overnight drain) vs grid (cheap_hours top-up) vs
+    // off. Daytime surplus assist stays on the Mode selector (Solar + battery).
+    _overnightSource(device) {
+        const g = device.goals || {};
+        if (g.battery_eligible_overnight) return 'battery';
+        if (g.top_up_policy === 'cheap_hours') return 'grid';
+        return 'off';
+    }
+
+    _renderOvernightPicker(device) {
+        const src = this._overnightSource(device);
+        const opt = (val, label) => html`
+            <button class="ov-opt ${src === val ? 'on' : ''}"
+                    data-action="set-overnight" data-overnight="${val}"
+                    data-device="${device.id}">${label}</button>`;
+        return html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('finish_overnight_from')}</span>
+                <span class="ge-ctl ov-picker">
+                    ${opt('off', this._t('overnight_off'))}
+                    ${opt('battery', this._t('overnight_battery'))}
+                    ${opt('grid', this._t('overnight_grid'))}
+                </span>
+            </div>
+            <div class="ge-hint">${this._t('overnight_' + src + '_hint')}</div>`;
+    }
+
+    _setOvernightSource(device, val) {
+        // Maps the single picker onto the two backend flags. Mutually exclusive:
+        // battery = Tier-2 battery; grid = cheap_hours grid; off = neither. The
+        // goal-write lock makes the two writes atomic.
+        const g = device.goals = device.goals || {};
+        const battery = val === 'battery';
+        const policy = val === 'grid' ? 'cheap_hours' : 'solar_only';
+        g.battery_eligible_overnight = battery;
+        g.top_up_policy = policy;
+        this._sendDeviceUpdate(device.id, 'battery_eligible_overnight', String(battery));
+        this._sendDeviceUpdate(device.id, 'top_up_policy', policy);
+        this.requestUpdate();
+    }
+
     _renderGoalProgress(device) {
-        // Only meaningful when SEM manages the device (Surplus). In Off /
-        // Peak-only the daily solar budget doesn't apply, so hide the row
-        // rather than show a stale/counting timer (#559 alex "Issue 6").
-        if (this._mergedMode(device) !== 'surplus') return nothing;
+        // Only meaningful in the two solar modes (#620) — in Off / Peak-only
+        // the daily solar budget doesn't apply, so hide the row rather than
+        // show a stale/counting timer (#559 alex "Issue 6").
+        const _m = this._mergedMode(device);
+        if (_m !== 'solar_only' && _m !== 'solar_battery') return nothing;
         const pct = this._goalPct(device);
         if (pct === null) return nothing;
         const g = device.goals, p = device.progress;
@@ -618,8 +809,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderGoalEditor(device) {
-        // Only meaningful in surplus mode — mode-gated disclosure.
-        if (this._mergedMode(device) !== 'surplus') return nothing;
+        // Mode-gated disclosure — shown in the two solar modes (#620).
+        const mode = this._mergedMode(device);
+        if (mode !== 'solar_only' && mode !== 'solar_battery') return nothing;
         const g = device.goals || {};
         return html`
             <div class="goal-editor">
@@ -628,63 +820,146 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._t('daily_target')}
                 </div>
                 ${this._renderGoalSlider(device)}
+                ${this._renderOvernightPicker(device)}
+                ${this._renderAntiCycle(device)}
                 <div class="ge-row">
                     <span class="ge-label">${this._t('stop_condition')}</span>
                     <span class="ge-ctl">
+                        ${this.hass && customElements.get('ha-entity-picker') ? html`
+                        <ha-entity-picker class="ge-entity"
+                               .hass=${this.hass}
+                               .value=${g.stop_entity || ''}
+                               .includeDomains=${['sensor', 'number', 'input_number']}
+                               .placeholder=${this._t('stop_entity_placeholder')}
+                               allow-custom-entity
+                               @value-changed=${(e) => this._onStopEntity(device, e)}
+                               @click=${(e) => e.stopPropagation()}></ha-entity-picker>
+                        ` : html`
                         <input type="text" class="ge-entity" placeholder="${this._t('stop_entity_placeholder')}"
                                .value="${g.stop_entity || ''}"
-                               data-goal="stop_entity" data-device="${device.id}">
+                               data-goal="stop_entity" data-device="${device.id}">`}
                         <span class="ge-unit">≥</span>
                         <input type="number" min="0" step="1" style="width:56px"
                                .value="${String(g.stop_at || 0)}"
                                data-goal="stop_at" data-device="${device.id}">
                     </span>
                 </div>
+                <div class="ge-hint">${this._t('stop_condition_hint')}</div>
             </div>`;
     }
 
-    // ── SortableJS initialisation ──
-    async _initSortable() {
-        if (!this.devices.length) return;
-        try {
-            const Sortable = await _sortableReady;
-            const list = this.renderRoot.getElementById('device-list');
-            if (!list) return;
-            if (this._sortable) this._sortable.destroy();
-            this._sortable = Sortable.create(list, {
-                handle: '.drag-handle',
-                filter: '.is-child',
-                preventOnFilter: false,
-                animation: 200,
-                easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
-                ghostClass: 'ghost', chosenClass: 'chosen', dragClass: 'dragging',
-                forceFallback: true, fallbackTolerance: 3,
-                onStart: () => { this._interacting = true; },
-                onEnd: (evt) => {
-                    this._interacting = false;
-                    if (evt.oldIndex !== evt.newIndex) {
-                        this._applyReorder();
-                        this._regroupChildren();
-                        this.requestUpdate();
-                    }
-                },
-            });
-        } catch (e) {
-            console.warn('SEM: SortableJS not available, drag disabled:', e.message);
+    _renderAntiCycle(device) {
+        // (#688) per-load anti-cycling — minutes, next to Min/Max/Mode (the
+        // "well-placed" home the cycling report asked for). Blank ⇒ the solid
+        // backend default (5 min each); a value overrides the min run / pause
+        // window. min_on holds the load through a passing cloud; min_off blocks
+        // a too-soon restart — together they cap cycling at a ~10-min period.
+        const g = device.goals || {};
+        const onChange = (key) => (e) => {
+            const v = e.target.value;
+            // Clearing the field must not send '' (a service error) or 0 (the
+            // disabled sentinel) — leave the prior value / default untouched.
+            if (v === '' || v == null || Number(v) < 1) return;
+            device.goals = { ...(device.goals || {}), [key]: v };
+            this._sendDeviceUpdate(device.id, key, String(v));
+        };
+        const box = (key, ph) => html`
+            <input type="number" min="1" max="120" step="1" style="width:56px"
+                   .value="${g[key] != null && g[key] !== '' ? String(g[key]) : ''}"
+                   placeholder="${ph}"
+                   @change=${onChange(key)}
+                   @click=${(e) => e.stopPropagation()}>`;
+        return html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('anti_cycle_min_run')}</span>
+                <span class="ge-ctl">
+                    ${box('min_on_time_min', '5')}
+                    <span class="ge-unit">${this._t('minutes_short')}</span>
+                </span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('anti_cycle_min_pause')}</span>
+                <span class="ge-ctl">
+                    ${box('min_off_time_min', '5')}
+                    <span class="ge-unit">${this._t('minutes_short')}</span>
+                </span>
+            </div>
+            <div class="ge-hint">${this._t('anti_cycle_hint')}</div>`;
+    }
+
+    // ── Lit-native pointer-drag reorder (no SortableJS) ──
+    // Only DATA (this.devices) is reordered, and only on DROP — then Lit
+    // re-renders. One DOM owner, so the row can never desync from its badge.
+    // During the gesture only transient visuals are applied (a lifted row +
+    // a drop-line) and Lit is paused (_interacting), so nothing fights it.
+    _dragStart(e, deviceId) {
+        const dev = this.devices.find(d => d.id === deviceId);
+        if (!dev || (dev.dependsOn && dev.dependsOn.length)) return;  // children locked
+        if (e.button != null && e.button !== 0) return;
+        e.preventDefault();
+        const handle = e.currentTarget;
+        const row = handle.closest('.device');
+        const list = this.renderRoot.getElementById('device-list');
+        if (!row || !list) return;
+        const rows = Array.from(list.querySelectorAll('.device'));
+        // Snapshot original row centres — only the dragged row moves, so these
+        // stay valid for a stable drop-target computation.
+        const centres = rows.map(r => { const b = r.getBoundingClientRect(); return b.top + b.height / 2; });
+        this._interacting = true;
+        const fromIndex = rows.indexOf(row);
+        this._drag = { id: deviceId, handle, row, rows, centres, pointerY0: e.clientY,
+                       fromIndex, dropIndex: fromIndex, pointerId: e.pointerId };
+        row.classList.add('dragging-row');
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        this._dragMoveBound = this._dragMoveBound || this._dragMove.bind(this);
+        this._dragEndBound = this._dragEndBound || this._dragEnd.bind(this);
+        // Listen on window so the drag tracks the pointer anywhere, independent
+        // of pointer-capture support (robust + testable).
+        window.addEventListener('pointermove', this._dragMoveBound);
+        window.addEventListener('pointerup', this._dragEndBound);
+        window.addEventListener('pointercancel', this._dragEndBound);
+    }
+
+    _dragMove(e) {
+        const d = this._drag;
+        if (!d) return;
+        e.preventDefault();
+        d.row.style.transform = `translateY(${e.clientY - d.pointerY0}px)`;
+        const idx = computeDropIndex(d.centres, d.fromIndex, e.clientY);
+        if (idx !== d.dropIndex) { d.dropIndex = idx; this._paintDropLine(d, idx); }
+    }
+
+    _paintDropLine(d, idx) {
+        d.rows.forEach(r => r.classList.remove('drop-above', 'drop-below'));
+        // Map the reduced-array insertion index back to a full-list row.
+        const target = d.rows[idx < d.fromIndex ? idx : idx + 1];
+        if (target && target !== d.row) target.classList.add('drop-above');
+        else d.rows[d.rows.length - 1]?.classList.add('drop-below');
+    }
+
+    _dragEnd(e) {
+        const d = this._drag;
+        if (!d) return;
+        window.removeEventListener('pointermove', this._dragMoveBound);
+        window.removeEventListener('pointerup', this._dragEndBound);
+        window.removeEventListener('pointercancel', this._dragEndBound);
+        try { d.handle.releasePointerCapture(d.pointerId); } catch (_) {}
+        d.row.style.transform = '';
+        d.row.classList.remove('dragging-row');
+        d.rows.forEach(r => r.classList.remove('drop-above', 'drop-below'));
+        this._interacting = false;
+        this._drag = null;
+        if (e.type !== 'pointercancel' && d.dropIndex !== d.fromIndex) {
+            this._moveDeviceToIndex(d.id, d.dropIndex);
         }
     }
 
-    _applyReorder() {
-        const list = this.renderRoot.getElementById('device-list');
-        if (!list) return;
-        const orderedIds = Array.from(list.querySelectorAll('.device')).map(el => el.dataset.id);
-        const byId = {};
-        this.devices.forEach(d => { byId[d.id] = d; });
-        this.devices = orderedIds.map((id, i) => {
-            const d = byId[id];
-            if (d) d.priority = i + 1;
-            return d;
-        }).filter(Boolean);
+    // Move a device to an arbitrary slot, regroup children, renumber, render,
+    // send. Shared contract with the ▲▼ arrows (_moveDevice): the badge is
+    // always the row's position, so number and order cannot disagree.
+    _moveDeviceToIndex(deviceId, targetIndex) {
+        this.devices = moveToIndex(this.devices, deviceId, targetIndex);
+        this.requestUpdate();
         this._sendPriorityUpdate();
     }
 
@@ -721,13 +996,16 @@ class SEMLoadPriorityCard extends SEMLitBase {
             } else if (action === 'move-up' || action === 'move-down') {
                 this._moveDevice(deviceId, action === 'move-up' ? -1 : 1);
             } else if (action === 'configure') {
-                this._showConfigureModal(target.dataset.energy, target.dataset.name);
+                this._showConfigureModal(deviceId, target.dataset.name);
             } else if (action === 'toggle-help') {
                 this._showHelp = !this._showHelp;
                 this.requestUpdate();
             } else if (action === 'toggle-goal') {
                 this._goalOpen[deviceId] = !this._goalOpen[deviceId];
                 this.requestUpdate();
+            } else if (action === 'set-overnight') {
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) this._setOvernightSource(device, target.dataset.overnight);
             }
         };
 
@@ -774,20 +1052,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
         }
     }
 
-    // ── Device movement ──
+    // ── Device movement (arrows share moveToIndex with the pointer-drag) ──
     _moveDevice(deviceId, direction) {
         const idx = this.devices.findIndex(d => d.id === deviceId);
         if (idx === -1) return;
         const newIdx = idx + direction;
         if (newIdx < 0 || newIdx >= this.devices.length) return;
-        const device = this.devices[idx];
-        if (device.dependsOn.length) return; // Children can't be moved via arrows
-
-        [this.devices[idx], this.devices[newIdx]] = [this.devices[newIdx], this.devices[idx]];
-        this._regroupChildren();
-        this.devices.forEach((d, i) => { d.priority = i + 1; });
-        this.requestUpdate();
-        this._sendPriorityUpdate();
+        if (this.devices[idx].dependsOn.length) return; // children locked
+        this._moveDeviceToIndex(deviceId, newIdx);
     }
 
     // ── Dependency grouping ──
@@ -807,18 +1079,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _regroupChildren() {
-        const result = [], placed = new Set();
-        const addWithChildren = (device) => {
-            if (placed.has(device.id)) return;
-            result.push(device);
-            placed.add(device.id);
-            this.devices
-                .filter(d => d.dependsOn.includes(device.id) && !placed.has(d.id))
-                .forEach(child => addWithChildren(child));
-        };
-        this.devices.filter(d => !d.dependsOn.length).forEach(d => addWithChildren(d));
-        this.devices.forEach(d => { if (!placed.has(d.id)) result.push(d); });
-        this.devices = result;
+        this.devices = regroupChildren(this.devices);
     }
 
     // ── Service calls ──
@@ -827,6 +1088,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._hass.callService('solar_energy_management', 'update_device_priorities', {
             priorities: this.devices.map(d => ({ device_id: d.id, priority: d.priority })),
         });
+        // Hold the just-dragged order until the backend re-emits the sensor
+        // (~1 coordinator cycle). Without this the next hass push re-renders
+        // the STALE sensor order and the drag snaps back — the "not taking it"
+        // symptom. 15 s comfortably covers the ~10 s cycle; a fresh drag resets
+        // it, and the sensor (now with the new order) takes over on expiry.
+        this._priorityFrozenUntil = Date.now() + 15000;
     }
 
     _sendDeviceUpdate(deviceId, property, value) {
@@ -863,10 +1130,19 @@ class SEMLoadPriorityCard extends SEMLitBase {
         }
     }
 
-    async _showConfigureModal(energySensor, deviceName) {
+    async _showConfigureModal(deviceId, deviceName) {
         const existing = this.renderRoot.getElementById('sem-config-modal');
         if (existing) existing.remove();
-        const dev = this.devices.find(d => d.energySensor === energySensor);
+        // Resolve by the row's UNIQUE id — NOT by energySensor, which is
+        // null/'' for every device without an Energy-Dashboard energy counter
+        // (service-registered loads, direct heat-pump/hot-water, the battery
+        // row). Keying on energySensor collided all such rows onto the FIRST
+        // empty-key device, so opening the config card for one showed a
+        // sibling's control entity (#621 — car socket showed the pool pump's
+        // switch). The mapping service is still keyed by energy_sensor, taken
+        // from the resolved device below.
+        const dev = findDeviceForConfig(this.devices, deviceId);
+        const energySensor = dev?.energySensor || '';
         const values = controlToFormValues(dev?.control);
         const hasManual = dev?.control?.discovered_via === 'manual_mapping';
         await this._ensureEntityPicker();
@@ -978,6 +1254,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // Fall back to device_type mapping
         const map = {
             ev_charger: 'mdi:ev-station', ev_charging: 'mdi:ev-station',
+            battery: 'mdi:home-battery',
             heating: 'mdi:radiator', heat_pump: 'mdi:heat-pump',
             water_heater: 'mdi:water-boiler', hot_water: 'mdi:water-boiler',
             pool_pump: 'mdi:pool', appliance: 'mdi:washing-machine',

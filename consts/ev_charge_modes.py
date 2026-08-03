@@ -90,3 +90,72 @@ def effective_charge_mode_for(
     if stored in EV_CHARGE_MODES:
         return stored
     return DEFAULT_EV_CHARGE_MODE
+
+
+def mode_allows_night_charging(
+    full_config: Mapping[str, Any],
+    charger_cfg: Any,
+) -> bool:
+    """Does this charger's mode permit night/grid charging at all? (#679)
+
+    #634 settled the axis with Guido: the mode is the *daytime* axis and the
+    "At least" floor is the overnight guarantee, in every mode — ``solar_only``
+    included. The safety half of that deal is ``floor 0 = never``, which is how
+    the #346 "solar_only never grids at night" contract survives as the default.
+
+    The deal only holds if an *unset* floor reads as 0. It did not:
+
+    * ``config_flow._install_defaults()`` persists ``daily_ev_target: 10`` into
+      the entry on **every** install (``consts/core.py:DEFAULT_DAILY_EV_TARGET``).
+    * An absent ``ev_target_soc`` resolves to **80** at read time.
+
+    So the global value cannot distinguish "the user asked for an overnight
+    guarantee" from "the installer filled the box in", and floor 0 was not a
+    state a real install could be in. Every ``solar_only`` charger joined the
+    night lane by default — which made it behaviourally identical to
+    ``min_plus_solar``, i.e. not a distinct mode at all. onkelfu's install
+    (#627) is the live case: charger 1 had no per-charger floor, inherited the
+    seeded 10, and grid/battery-charged overnight under "Solar only".
+
+    The floor therefore has to carry *intent*, so for ``solar_only`` it must be
+    set **on this charger**, in the basis this charger actually targets — a
+    global default is not an opt-in. The other night modes keep the global
+    fallback: for them the overnight top-up is the point of the mode, not
+    something to opt into, and reading a defaulted floor there is correct.
+
+    Kept in ``consts/`` next to the mode resolver because
+    ``SEMCoordinator._mode_allows_night_charging`` and
+    ``ChargingStateMachine._night_capable`` were two hand-copied twins whose
+    docstrings each said "keep in sync" — the standing invitation to drift that
+    this module exists to remove.
+    """
+    mode = effective_charge_mode_for(None, full_config, charger_cfg)  # type: ignore[arg-type]
+    if mode in MODE_NIGHT_ALLOWED:
+        return True
+    if mode != "solar_only":
+        return False
+    return solar_only_night_floor(charger_cfg) > 0.1
+
+
+def solar_only_night_floor(charger_cfg: Any) -> float:
+    """The explicitly-set overnight floor for a ``solar_only`` charger (#679).
+
+    Per-charger only, and in the charger's own target basis — a ``%`` target
+    stores its floor in ``ev_target_soc``, a kWh target in ``daily_ev_target``.
+    The old gate read ``daily_ev_target`` regardless of ``ev_target_type``, so
+    on an SOC-targeted charger it consulted a key the charger does not use.
+
+    Returns 0.0 for anything unset or unparseable — the never-grids default.
+    """
+    if not isinstance(charger_cfg, dict):
+        return 0.0
+    target_type = str(charger_cfg.get("ev_target_type")
+                      or charger_cfg.get("ev_target_mode") or "kwh").lower()
+    key = "ev_target_soc" if target_type == "soc" else "daily_ev_target"
+    raw = charger_cfg.get(key)
+    if raw is None:
+        return 0.0
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return 0.0

@@ -83,3 +83,19 @@ setup and your box supports disabling its failsafe at the hardware level.
 ---
 References: [evcc — KEBA failsafe out-of-sync](https://github.com/evcc-io/evcc/discussions/21093) ·
 [KEBA P30 Modbus/UDP programmers guide](https://www.keba.com)
+
+## Post-stop auto-start retries (vehicle-driven, bounded)
+
+Observed live (2026-07-23 overnight, KEBA P30 + Renault Zoe): after SEM
+ends a session via `keba.disable` (e.g. night target reached), the vehicle
+re-requests charging every ~11 minutes and the KEBA auto-authorizes it.
+SEM's session-ownership guard (#552) kills each rogue session **within one
+coordinator cycle** (≤10 s command latency; the 20–40 s power tail is
+KEBA reading decay), and the #553 runaway cap bounds each at 1 kWh.
+
+Measured cost: ~0.03–0.05 kWh per retry, +0.38 kWh over a full retry
+window. The energy lands on the daily counter, so kWh-mode night targets
+self-correct. SEM deliberately does **not** engage the KEBA
+authentication lock to refuse the retries: a failure while locked would
+strand the vehicle unable to charge at all (see the reverted 2026-06-02
+`keba.authorize` experiment) — a worse failure mode than a bounded leak.

@@ -34,10 +34,13 @@ def build_charger_view(
     target_kwh: Optional[float] = None,
     target_soc: Optional[float] = None,
     deadline_amps: int = 0,
+    top_up_amps: int = 0,
     tariff_wait: bool = False,
     solar_committed_w: float = 0.0,
     night_deliverable_kwh: float = float("inf"),
     soc_ceiling_reached: bool = False,
+    ev_priority: int = 999,
+    hardware_max_a: Optional[float] = None,
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -80,12 +83,14 @@ def build_charger_view(
     power_reading = fleet_state.power
     config = fleet_state.config
 
-    # Per-charger power slice. ``ev_power_per_charger`` is only populated for
-    # MULTI-charger fleets (sensor_reader.py only splits when len > 1). For a
-    # single charger it's empty, so fall back to the fleet ``ev_power`` — which
-    # IS this charger's draw, in watts. Without this fallback ``this_charger_w``
-    # was always 0 on single-charger setups, so ``actual_charging`` never saw
-    # the car drawing and the start escalation never settled (#536).
+    # Per-charger power slice. ``ev_power_per_charger`` is populated by
+    # ``_read_ev_fleet_power`` for every charger that has its own power sensor
+    # — single-charger installs included (#642 removed the old ``len > 1``
+    # split). It is empty only when no charger carries a nested sensor; then
+    # the fleet ``ev_power`` IS this charger's draw, in watts. Without this
+    # fallback ``this_charger_w`` was always 0 on such setups, so
+    # ``actual_charging`` never saw the car drawing and the start escalation
+    # never settled (#536).
     ev_power_per_charger = getattr(power_reading, "ev_power_per_charger", None) or {}
     if charger_id in ev_power_per_charger:
         this_charger_w = float(ev_power_per_charger[charger_id])
@@ -161,12 +166,67 @@ def build_charger_view(
             config.get("minimum_solar_power",
                        config.get("min_solar_power", 1000))
         ),
+        # #576 — the one priority list: the battery's slot + command state
+        # (fleet-level; one home battery). The per-charger ``ev_priority``
+        # is compared against ``battery_priority`` in decide's reclaim gate.
+        battery_priority=fleet_state.battery_priority,
+        battery_commanded=fleet_state.battery_commanded,
     )
 
     # Merge per-charger config with the tariff_wait flag so
     # SolarPlusCheapMode can consult it. Avoids extending the
     # ChargerView signature with an opaque kwarg.
     cfg_with_wait = dict(charger_cfg) if isinstance(charger_cfg, dict) else {}
+
+    # #678 — fill the hardware keys the per-charger dict does not carry.
+    #
+    # ``decide()`` reads all four of these off ``view.config``, i.e. the
+    # raw ``ev_chargers[i]`` entry. Nothing writes ``ev_max_current`` or
+    # ``ev_voltage`` into that entry — there is no config-flow field for
+    # either, and ``__init__._SEED_KEYS`` covers only ``ev_min_current``
+    # and ``ev_phases``, and only for entries migrated from schema v3.
+    # A fresh install carries NONE of them, so decide fell back to its
+    # own literals: 32 A, 230 V, 6 A, 3 phases. Verified live on HA-TEST
+    # — all four read as None on a normally-installed entry, top-level
+    # config included.
+    #
+    # The adapters clamp before the write (``min(amps, max_current_a)``),
+    # so no over-current ever reached hardware — which is exactly why
+    # this stayed invisible. What it DID do is over-credit the priority
+    # cascade: a 16 A charger commanded at 32 claims 22 kW of solar it
+    # cannot draw, and the difference is taken off what the next charger
+    # in the list is allowed to see.
+    for _key in ("ev_max_current", "ev_min_current", "ev_phases", "ev_voltage"):
+        if cfg_with_wait.get(_key) is None:
+            _fleet_val = config.get(_key)
+            if _fleet_val is not None:
+                cfg_with_wait[_key] = _fleet_val
+
+    # ``hardware_max_a`` is the adapter's ``max_current_a`` — the SAME
+    # value the adapter clamps every command to, and the only ceiling
+    # that is true regardless of whether anyone filled in a config key.
+    # For an entity-controlled charger it already folds in the control
+    # number's own max (``devices.base.effective_max_current``, #536).
+    #
+    # Take the MINIMUM of it and any configured value: a config key can
+    # ask for less than the hardware allows (a user throttling a shared
+    # supply), never for more. Deciding above the clamp is precisely the
+    # drift that over-credits the cascade — same principle as #627's
+    # ``can_stop_charging``, where the probe ends at the predicate the
+    # action dispatches on so the two cannot disagree.
+    if hardware_max_a is not None:
+        try:
+            _hw = float(hardware_max_a)
+        except (TypeError, ValueError):
+            _hw = None
+        if _hw is not None and _hw > 0:
+            _cfg_max = cfg_with_wait.get("ev_max_current")
+            try:
+                _hw = min(_hw, float(_cfg_max)) if _cfg_max is not None else _hw
+            except (TypeError, ValueError):
+                pass
+            cfg_with_wait["ev_max_current"] = int(_hw)
+
     cfg_with_wait["_tariff_wait"] = tariff_wait
 
     return ChargerView(
@@ -178,6 +238,8 @@ def build_charger_view(
         target_kwh=target_kwh,
         target_soc=target_soc,
         deadline_amps=deadline_amps,
+        top_up_amps=top_up_amps,
         night_deliverable_kwh=night_deliverable_kwh,
         soc_ceiling_reached=soc_ceiling_reached,
+        ev_priority=ev_priority,
     )

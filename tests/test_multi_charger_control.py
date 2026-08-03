@@ -8,6 +8,8 @@ Tests the multi-EV charger architecture:
 - Session tracking: per-charger isolation
 - Backward compatibility: single-charger works identically
 """
+import re
+
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
@@ -19,7 +21,6 @@ from custom_components.solar_energy_management.coordinator.types import (
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
 )
-from custom_components.solar_energy_management.consts.sensors import SEM_SENSORS
 from custom_components.solar_energy_management.hardware_detection import (
     _discover_wallbox,
     _discover_keba,
@@ -50,7 +51,6 @@ def make_mock_charger(charger_id: str, name: str, priority: int = 3,
     device.stop_session = AsyncMock()
     device._set_current = AsyncMock()
     device.watts_to_current = lambda w: w / (phases * 230)
-    device.check_phase_switch = AsyncMock()
     return device
 
 
@@ -245,194 +245,27 @@ class TestMultiChargerDetection:
 
 
 # ============================================================
-# Tests: Surplus distribution (multi-charger)
+# Surplus distribution — REMOVED in #651
+#
+# Two classes lived here: TestMultiChargerSurplusDistribution (8 tests,
+# arithmetic on mock attributes, never touching production code at all)
+# and TestSurplusControllerDistribution (9 tests against
+# ``SurplusController.distribute_ev_budget``). Both described a priority
+# cascade that allocated a fleet budget charger-by-charger.
+#
+# No such cascade ran in a shipped install. Its only caller wrote the
+# result into ``pcc.budget_w``, which nothing downstream read — see #651.
+# The live allocator is ``decide.self_consumption_surplus_w``, which
+# subtracts ``_solar_committed_w_per_cycle`` (accumulated from each
+# charger's ACTUAL decision as the priority loop walks it) rather than
+# pre-dividing a pot.
+#
+# The surviving coverage for real multi-charger sharing is
+# tests/test_step6_multi_charger_surplus_sharing.py —
+# TestSolarCommittedReducesSurplus and TestMultiChargerSurplusOrdering
+# cover the two-charger priority split, the three-charger
+# first-two-charge case, and both-charge.
 # ============================================================
-
-class TestMultiChargerSurplusDistribution:
-    """Test priority-based surplus distribution across multiple chargers."""
-
-    def test_priority_order_highest_first(self):
-        """Higher priority charger (lower number) should get budget first."""
-        charger_1 = make_mock_charger("wb_1", "Wallbox 1", priority=3)
-        charger_2 = make_mock_charger("wb_2", "Wallbox 2", priority=5)
-
-        chargers = {"wb_1": charger_1, "wb_2": charger_2}
-        sorted_chargers = sorted(chargers.items(), key=lambda x: x[1].priority)
-
-        assert sorted_chargers[0][0] == "wb_1"
-        assert sorted_chargers[1][0] == "wb_2"
-
-    def test_budget_8kw_two_3phase_chargers(self):
-        """8kW budget: P3 charger gets full 4.6kW, P5 gets remainder 3.4kW."""
-        budget_w = 8000
-        charger_1 = make_mock_charger("wb_1", "Wallbox 1", priority=3, phases=3)
-        charger_2 = make_mock_charger("wb_2", "Wallbox 2", priority=5, phases=3)
-
-        # Distribute: P3 first
-        alloc_1 = min(budget_w, charger_1.max_current * charger_1.phases * charger_1.voltage)
-        remaining = budget_w - alloc_1
-
-        # P5 gets remainder if ≥ min threshold
-        min_threshold = charger_2.min_power_threshold  # 4140W
-        alloc_2 = remaining if remaining >= min_threshold else 0
-
-        # With 8kW and max 32A × 3 × 230V = 22080W, P3 gets all 8kW
-        # Remainder = 0 → P5 gets nothing
-        assert alloc_1 == 8000
-        assert alloc_2 == 0
-
-    def test_budget_10kw_two_3phase_chargers(self):
-        """10kW budget with max 16A charger: P3 gets 11040W cap → gets 10000W, P5 gets 0."""
-        budget_w = 10000
-        charger_1 = make_mock_charger("wb_1", "Wallbox 1", priority=3, max_current=16)
-        max_1 = charger_1.max_current * charger_1.phases * charger_1.voltage  # 11040W
-
-        alloc_1 = min(budget_w, max_1)  # 10000W
-        remaining = budget_w - alloc_1  # 0W
-
-        assert alloc_1 == 10000
-        assert remaining == 0
-
-    def test_budget_15kw_two_chargers_both_get_power(self):
-        """15kW budget with 16A max: P3 gets 11040W, P5 gets 3960W (< 4140W threshold → 0)."""
-        budget_w = 15000
-        charger_1 = make_mock_charger("wb_1", "Wallbox 1", priority=3, max_current=16)
-        charger_2 = make_mock_charger("wb_2", "Wallbox 2", priority=5, phases=3)
-
-        max_1 = charger_1.max_current * charger_1.phases * charger_1.voltage  # 11040W
-        alloc_1 = min(budget_w, max_1)  # 11040W
-        remaining = budget_w - alloc_1  # 3960W
-
-        min_threshold_2 = charger_2.min_power_threshold  # 4140W
-        alloc_2 = remaining if remaining >= min_threshold_2 else 0
-
-        assert alloc_1 == 11040
-        assert remaining == 3960
-        assert alloc_2 == 0  # Below 3-phase minimum
-
-    def test_budget_16kw_both_chargers_active(self):
-        """16kW budget: P3 gets 11040W, P5 gets 4960W (above 4140W threshold)."""
-        budget_w = 16000
-        charger_1 = make_mock_charger("wb_1", "Wallbox 1", priority=3, max_current=16)
-        charger_2 = make_mock_charger("wb_2", "Wallbox 2", priority=5, phases=3)
-
-        max_1 = charger_1.max_current * charger_1.phases * charger_1.voltage
-        alloc_1 = min(budget_w, max_1)
-        remaining = budget_w - alloc_1
-
-        min_threshold_2 = charger_2.min_power_threshold
-        alloc_2 = remaining if remaining >= min_threshold_2 else 0
-
-        assert alloc_1 == 11040
-        assert alloc_2 == 4960
-
-    def test_1phase_charger_lower_threshold(self):
-        """1-phase charger has 1380W threshold instead of 4140W."""
-        charger = make_mock_charger("ev", "EV", priority=3, phases=1)
-        assert charger.min_power_threshold == 1380
-
-    def test_disconnect_frees_budget(self):
-        """When P3 disconnects, P5 should get full budget."""
-        budget_w = 8000
-        charger_1 = make_mock_charger("wb_1", "Wallbox 1", priority=3, connected=False)
-        charger_2 = make_mock_charger("wb_2", "Wallbox 2", priority=5)
-
-        # Skip disconnected chargers
-        active_chargers = {"wb_2": charger_2}  # Only connected
-        max_2 = charger_2.max_current * charger_2.phases * charger_2.voltage
-        alloc_2 = min(budget_w, max_2)
-
-        assert alloc_2 == 8000
-
-
-# ============================================================
-# Tests: SurplusController.distribute_ev_budget
-# ============================================================
-
-class TestSurplusControllerDistribution:
-    """Test the actual distribute_ev_budget method."""
-
-    def _make_controller(self):
-        hass = MagicMock()
-        return SurplusController(hass)
-
-    def test_single_charger_gets_full_budget(self):
-        """Single charger should get entire budget."""
-        sc = self._make_controller()
-        charger = make_mock_charger("ev", "EV", priority=3)
-        result = sc.distribute_ev_budget(8000, {"ev": charger})
-        assert result["ev"] == 8000
-
-    def test_two_chargers_priority_order(self):
-        """Higher priority charger gets budget first."""
-        sc = self._make_controller()
-        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
-        c2 = make_mock_charger("wb_2", "WB2", priority=5)
-        result = sc.distribute_ev_budget(16000, {"wb_1": c1, "wb_2": c2})
-        # P3 (max 11040W) gets 11040, P5 gets 4960 (≥ 4140 threshold)
-        assert result["wb_1"] == 11040
-        assert result["wb_2"] == 4960
-
-    def test_remainder_below_threshold_gives_zero(self):
-        """If remainder < min_power_threshold, second charger gets 0."""
-        sc = self._make_controller()
-        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
-        c2 = make_mock_charger("wb_2", "WB2", priority=5, phases=3)
-        result = sc.distribute_ev_budget(15000, {"wb_1": c1, "wb_2": c2})
-        # P3 gets 11040, remainder 3960 < 4140 threshold → P5 gets 0
-        assert result["wb_1"] == 11040
-        assert result["wb_2"] == 0
-
-    def test_zero_budget(self):
-        """Zero budget gives zero to all chargers."""
-        sc = self._make_controller()
-        c1 = make_mock_charger("wb_1", "WB1", priority=3)
-        c2 = make_mock_charger("wb_2", "WB2", priority=5)
-        result = sc.distribute_ev_budget(0, {"wb_1": c1, "wb_2": c2})
-        assert result["wb_1"] == 0
-        assert result["wb_2"] == 0
-
-    def test_empty_chargers(self):
-        """No chargers gives empty result."""
-        sc = self._make_controller()
-        result = sc.distribute_ev_budget(8000, {})
-        assert result == {}
-
-    def test_1phase_charger_lower_threshold(self):
-        """1-phase charger can receive lower budget."""
-        sc = self._make_controller()
-        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
-        c2 = make_mock_charger("wb_2", "WB2", priority=5, phases=1)
-        # 1-phase min = 1380W
-        result = sc.distribute_ev_budget(13000, {"wb_1": c1, "wb_2": c2})
-        # P3 gets 11040, remainder 1960 ≥ 1380 → P5 gets 1960
-        assert result["wb_1"] == 11040
-        assert result["wb_2"] == 1960
-
-    def test_hysteresis_prevents_rapid_reallocation(self):
-        """Budget change < 500W within 60s should keep previous allocation."""
-        sc = self._make_controller()
-        c1 = make_mock_charger("wb_1", "WB1", priority=3)
-        c2 = make_mock_charger("wb_2", "WB2", priority=5)
-
-        # First call: establishes allocation
-        result1 = sc.distribute_ev_budget(8000, {"wb_1": c1, "wb_2": c2})
-        # Second call: small change (< 500W) within 60s
-        result2 = sc.distribute_ev_budget(8300, {"wb_1": c1, "wb_2": c2})
-        # Should keep previous allocation due to hysteresis
-        assert result2 == result1
-
-    def test_large_budget_change_overrides_hysteresis(self):
-        """Budget change > 500W should reallocate even within 60s."""
-        sc = self._make_controller()
-        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
-        c2 = make_mock_charger("wb_2", "WB2", priority=5)
-
-        result1 = sc.distribute_ev_budget(8000, {"wb_1": c1, "wb_2": c2})
-        # Large change: +8kW
-        result2 = sc.distribute_ev_budget(16000, {"wb_1": c1, "wb_2": c2})
-        assert result2["wb_1"] == 11040  # max for 16A charger
-        assert result2["wb_2"] == 4960  # remainder
 
 
 # ============================================================
@@ -512,11 +345,30 @@ class TestSingleChargerBackwardCompat:
         assert primary.device_id == "ev_charger"
 
     def test_sensor_names_unchanged(self):
-        """Primary charger sensors should keep existing names (no _0 suffix)."""
-        # SEM_SENSORS imported at module level
-        assert SEM_SENSORS["ev_power"] == "sensor.sem_ev_power"
-        # New aggregate sensor exists
-        assert SEM_SENSORS["ev_charger_count"] == "sensor.sem_ev_charger_count"
+        """Primary charger sensors keep their existing names (no _0 suffix).
+
+        (#669) This used to assert ``SEM_SENSORS["ev_power"] ==
+        "sensor.sem_ev_power"`` — a dict literal against itself, in a registry
+        no production code read. It could not fail, and it made a 180-line dead
+        file read as covered. The guarantee is real, so it is now checked
+        against the platform that actually creates the entity: ``sensor.py``
+        declares the key and ``SEMSensor`` builds
+        ``sensor.sem_{description.key}`` from it (sensor.py:1942). Rename the
+        key to ``ev_power_0`` and this fails, which is the whole point.
+        """
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parent.parent / "sensor.py").read_text()
+        keys = set(re.findall(r'key="([a-z0-9_]+)"', src))
+
+        # Guard the guard: a broken regex would pass every assert below.
+        assert len(keys) > 150, f"only found {len(keys)} keys — the scan broke"
+
+        assert "ev_power" in keys, "primary EV power sensor lost its unsuffixed key"
+        assert "ev_charger_count" in keys, "aggregate charger-count sensor missing"
+        assert not [k for k in keys if re.match(r"^ev_power_\d+$", k)], (
+            "primary charger sensors must not gain a numeric suffix"
+        )
 
 
 # ============================================================

@@ -724,9 +724,18 @@ def discover_all_ev_chargers_from_registry(
     chargers: List[Dict[str, str]] = []
 
     for platform, discover_fn in _EV_CHARGER_PLATFORMS:
+        def _matches_platform(entry_platform: str) -> bool:
+            # Some HACS/custom Zaptec builds expose a domain such as
+            # ``zaptec_custom`` while keeping the same entity model. Restrict
+            # the tolerant match to the Zaptec prefix; every other integration
+            # remains exact to avoid broad accidental charger discovery.
+            if platform == "zaptec":
+                return entry_platform == "zaptec" or entry_platform.startswith("zaptec_")
+            return entry_platform == platform
+
         entities = [
             e for e in entity_reg.entities.values()
-            if e.platform == platform and not e.disabled_by
+            if _matches_platform(str(e.platform or "")) and not e.disabled_by
         ]
         if not entities:
             continue
@@ -740,7 +749,10 @@ def discover_all_ev_chargers_from_registry(
         for device_id, device_entities in devices.items():
             result = discover_fn(device_entities)
             if result:
-                result["_platform"] = platform
+                # Preserve the registry's real domain for diagnostics/stable
+                # migration metadata (e.g. zaptec_custom), not just the
+                # canonical matcher name.
+                result["_platform"] = str(device_entities[0].platform or platform)
                 if device_id:
                     result["_device_id"] = device_id
                 _LOGGER.info(
@@ -875,38 +887,71 @@ def _discover_wallbox(entities) -> Dict[str, str]:
 
 
 def _discover_zaptec(entities) -> Dict[str, str]:
-    """Discover EV charger config from Zaptec integration."""
+    """Discover one control-capable Zaptec charger device.
+
+    Zaptec also exposes installation/site aggregate devices. Those may have a
+    total-power sensor but are not chargers and must not seed ``ev_chargers``.
+    Some custom integration versions omit ``original_device_class``; only
+    Zaptec-scoped, explicit entity-id patterns are used as fallback.
+    """
     result: Dict[str, str] = {}
     device_id = None
     for entry in entities:
         eid = entry.entity_id
+        if entry.device_id and not device_id:
+            device_id = entry.device_id
         dc = entry.original_device_class
-        if eid.startswith("binary_sensor.") and ("cable" in eid or "connect" in eid):
+        eid_lower = eid.lower()
+        if eid.startswith("binary_sensor.") and ("cable" in eid_lower or "connect" in eid_lower):
             result["ev_connected_sensor"] = eid
-        if eid.startswith("binary_sensor.") and "charg" in eid:
+        if eid.startswith("binary_sensor.") and "charg" in eid_lower:
             result["ev_charging_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "power":
+        if eid.startswith("sensor.") and (
+            dc == "power"
+            or ("power" in eid_lower and "energy" not in eid_lower and "kwh" not in eid_lower)
+        ):
             result["ev_charging_power_sensor"] = eid
             if entry.device_id:
                 device_id = entry.device_id
-        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
-            result["ev_total_energy_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
-            result["ev_session_energy_sensor"] = eid
-        if eid.startswith("number.") and "current" in eid:
+        if eid.startswith("sensor.") and (
+            (dc == "energy" and ("total" in eid_lower or "session" in eid_lower))
+            or "meter_value_kwh" in eid_lower
+            or "signed_meter_value_kwh" in eid_lower
+            or "total_charge_energy" in eid_lower
+        ):
+            if "session" in eid_lower:
+                result["ev_session_energy_sensor"] = eid
+            else:
+                result["ev_total_energy_sensor"] = eid
+        if eid.startswith("number.") and (
+            "current" in eid_lower or "available_current" in eid_lower
+        ):
             result["ev_current_control_entity"] = eid
-    if result:
-        # Prefer number entity control if found, otherwise use service
-        if "ev_current_control_entity" not in result:
-            result["ev_charger_service"] = "zaptec.limit_current"
-            result["ev_service_param_name"] = "available_current"
-            if device_id:
-                result["ev_service_device_id"] = device_id
-        # Discover resume/stop button entities
-        for entry in entities:
-            eid = entry.entity_id
-            if eid.startswith("button.") and "resume" in eid:
-                result["ev_start_stop_entity"] = eid  # button for start
+        if eid.startswith("button.") and "resume" in eid_lower:
+            result["ev_start_stop_entity"] = eid
+
+    # Site/installation aggregates commonly contain only power/energy. A real
+    # charger must expose at least one charger-identity/control entity — and
+    # at least one STATE sensor: a resume button alone would register a
+    # charger SEM can command but never read (#695/#698 discovery class).
+    identity_keys = {
+        "ev_connected_sensor",
+        "ev_charging_sensor",
+        "ev_current_control_entity",
+        "ev_start_stop_entity",
+    }
+    state_keys = {"ev_connected_sensor", "ev_charging_sensor"}
+    if not identity_keys.intersection(result):
+        return {}
+    if not state_keys.intersection(result):
+        return {}
+
+    # Prefer number entity control if found, otherwise use Zaptec's service.
+    if "ev_current_control_entity" not in result:
+        result["ev_charger_service"] = "zaptec.limit_current"
+        result["ev_service_param_name"] = "available_current"
+        if device_id:
+            result["ev_service_device_id"] = device_id
     return result
 
 
@@ -1341,6 +1386,22 @@ def discover_inverter_from_registry(
     if not same_integration:
         return None
 
+    # A name match is not sufficient: Deye/ha-solarman exposes e.g.
+    # ``number.inverter_battery_max_discharging_current`` in amperes. Older
+    # discovery treated that as a watt setpoint and startup could write a
+    # configured watt maximum into a 0..350 A register. Auto-detection must
+    # therefore require a live W/kW control entity.
+    from .coordinator.power_control import is_valid_power_control_entity
+
+    same_integration = [
+        eid for eid in same_integration
+        if is_valid_power_control_entity(
+            hass, eid, require_explicit_unit=True
+        )
+    ]
+    if not same_integration:
+        return None
+
     # Score each candidate against the patterns; first hit wins. Prefer
     # entity IDs containing "batter" when multiple match the same pattern.
     def _score(eid: str) -> int:
@@ -1694,6 +1755,11 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
         re.compile(r"temp\w*[_\s]*cell(?!.*2)", re.IGNORECASE),
         # BYD battery-management-unit temperature: ``bmu_temp`` (#564).
         re.compile(r"bmu[_\s]*temp", re.IGNORECASE),
+        # Enphase IQ Battery — each IQ Battery is exposed by the enphase_envoy
+        # integration as a child "Encharge {serial}" device whose cell-temp
+        # sensor is ``encharge_<serial>_temperature`` (#583). It carries no
+        # battery/cell/bms token, so the patterns above miss it entirely.
+        re.compile(r"encharge.*temp", re.IGNORECASE),
     ],
     # Battery temperature (secondary)
     "battery_temp2": [
@@ -1834,7 +1900,7 @@ def discover_battery_details_from_registry(
 # the INVERTER temperature (they belong to the battery, a cell, an ambient/room
 # probe, water/boiler, the grid meter, or a PV string).
 _NON_INVERTER_TEMP_TOKENS = re.compile(
-    r"batter|\bbat\b|_bat_|cell|bms|bmu|\bmos\b|\bair\b|ambient|environ|indoor|"
+    r"batter|\bbat\b|_bat_|encharge|cell|bms|bmu|\bmos\b|\bair\b|ambient|environ|indoor|"
     r"outdoor|outside|room|water|boiler|hot[_\s]*water|weather|dew|humid|grid|"
     r"meter|\bpv\d|string|module|panel|heatpump|heat[_\s]*pump|cpu|freezer|fridge",
     re.IGNORECASE,

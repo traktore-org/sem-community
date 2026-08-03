@@ -35,7 +35,7 @@ we **think** it behaves. Patterns by data location:
 |---|---|
 | Coordinator daily storage | `ssh ha-prod cat /config/.storage/solar_energy_management_<entry>_daily` then `python3 -c 'import json; …'` |
 | Energy totals storage | `ssh ha-prod cat /config/.storage/solar_energy_management_<entry>_energy` |
-| Live sensor attributes | `curl -sH "Authorization: Bearer $HA_PROD_TOKEN" http://10.10.20.150:8123/api/states/sensor.sem_<name>` (mind the [login_attempts_threshold](../CLAUDE.md#ha-test-machine) ban — prefer SSH) |
+| Live sensor attributes | `curl -sH "Authorization: Bearer $HA_PROD_TOKEN" http://10.10.20.150:8123/api/states/sensor.sem_<name>` (mind HA's `login_attempts_threshold` IP ban during restarts — prefer SSH polling) |
 | Config-entry options | `ssh ha-prod cat /config/.storage/core.config_entries | jq` |
 | HA validation report | `~/bin/validate-sem.sh` |
 
@@ -161,7 +161,7 @@ Run in order. Each gate must pass before the next.
 | 5 | HA-TEST deploy | `~/bin/deploy-test.sh --code-only` | exits 0, 6+ validation passes |
 | 6 | Live attribute check | `curl /api/states/sensor.sem_<name>` | new attributes visible, no `null`s where data should exist |
 | 7 | Push | `git push origin develop` | CI 4 checks green |
-| 8 | Tag | **never auto-tag** ([memory](../../.claude/projects/-home-sem-sem-community/memory/feedback_no_auto_release_tags.md)) — wait for explicit "tag it" from user |
+| 8 | Tag | **never auto-tag** (standing rule) — wait for explicit "tag it" from user |
 
 ---
 
@@ -216,7 +216,7 @@ The audit issue closes when:
 
 When all umbrella checkboxes are ticked: bump `manifest.json` to
 `1.7.0` (no beta suffix), CHANGELOG block in
-[music-assistant style](../../.claude/projects/-home-sem-sem-community/memory/feedback_release_notes_format.md),
+music-assistant style,
 push to develop, ask user "tag it?".
 
 ---
@@ -235,7 +235,7 @@ push to develop, ask user "tag it?".
 - Research: `ruflo-goals:deep-researcher`
 - Review: `ruflo-core:reviewer`
 - Release notes:
-  [music-assistant addon style](../../.claude/projects/-home-sem-sem-community/memory/feedback_release_notes_format.md)
+  music-assistant addon style
 
 ---
 

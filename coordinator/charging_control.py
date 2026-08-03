@@ -82,6 +82,12 @@ class ChargingContext:
     calculated_current: float = 0.0
     excess_solar: float = 0.0
     available_power: float = 0.0
+    # (#657) Is there meaningful sun right now — the same
+    # ``solar_w >= min_solar_w`` threshold ``decide.py`` uses to call the sun
+    # gone. The state machine doesn't read it; it exists so the EV status
+    # sensor can say WHY charging is or isn't happening. That attribute used
+    # to read a ``coordinator.data`` key nothing ever wrote.
+    solar_sufficient: bool = False
 
     # Targets
     daily_target_reached: bool = False
@@ -117,6 +123,8 @@ class ChargingContext:
     # night_tariff_wait: tariff mode wants to idle now and charge in a cheaper window.
     # night_deadline_reachable: Min can still be met by the deadline at max current.
     night_deadline_amps: int = 0
+    # (#630) peak-managed plain top-up rate (0 = fall back to Min floor).
+    night_top_up_amps: int = 0
     night_deadline_active: bool = False
     night_tariff_wait: bool = False
     night_deadline_reachable: bool = True
@@ -353,10 +361,7 @@ class ChargingStateMachine:
         logic in the latter can call this without recursion, and so unit
         tests can drive each path independently.
         """
-        from ..consts.ev_charge_modes import (
-            MODE_NIGHT_ALLOWED,
-            effective_charge_mode_for,
-        )
+        from ..consts.ev_charge_modes import mode_allows_night_charging
 
         chargers = self.config.get("ev_chargers") or []
         if not chargers:
@@ -364,11 +369,15 @@ class ChargingStateMachine:
             # legacy global ``switch.sem_night_charging`` was removed
             # in #277 Phase C, so there is no fallback to consult.
             return False
+
+        # (#634) solar_only joins the night lane ONLY when its "At least" floor
+        # is set — the floor is the mode-independent guarantee (overnight source
+        # auto-derives to GRID; floor 0 = classic never-grids-at-night).
+        # (#679) This used to be a hand-copy of the coordinator's gate, with a
+        # "keep in sync" note on both. Shared now, so they cannot disagree.
         return any(
-            effective_charge_mode_for(self.hass, self.config, c)
-            in MODE_NIGHT_ALLOWED
-            for c in chargers
-            if isinstance(c, dict)
+            mode_allows_night_charging(self.config, c)
+            for c in chargers if isinstance(c, dict)
         )
 
     def _night_state_machine(self, ctx: ChargingContext) -> str:

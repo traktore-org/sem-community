@@ -142,13 +142,26 @@ def test_always_max_mode_charges_max_when_connected(zone, is_night, solar_w):
 # Solar-only: charge only from real solar surplus.
 class TestSolarOnlyModeAcrossZones:
     @pytest.mark.parametrize("zone", [1, 2, 3, 4])
-    def test_solar_only_at_night_always_idles(self, zone):
-        """The #346 invariant — solar_only at night must never charge."""
+    def test_solar_only_at_night_idles_with_no_floor(self, zone):
+        """The #346 invariant, floor-scoped by #634: with NO "At least" floor
+        (target 0), solar_only at night never charges — the classic contract."""
         d = decide(_ev_view(
             mode="solar_only", solar_w=0.0, soc=_zone_to_soc(zone),
-            is_night=True,
+            is_night=True, target_kwh=0.0,
         ))
         assert d.intent is ChargerIntent.IDLE
+
+    @pytest.mark.parametrize("zone", [1, 2, 3, 4])
+    def test_solar_only_at_night_tops_up_the_floor_difference(self, zone):
+        """(#634) With an "At least" floor outstanding, solar_only tops up the
+        difference overnight from grid — the floor is the mode-independent
+        guarantee; the mode is the daytime axis."""
+        d = decide(_ev_view(
+            mode="solar_only", solar_w=0.0, soc=_zone_to_soc(zone),
+            is_night=True, target_kwh=1.5,
+        ))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert "solar_only night" in d.reason
 
     @pytest.mark.parametrize("zone", [1, 2, 3, 4])
     def test_solar_only_no_solar_idles(self, zone):
@@ -340,7 +353,9 @@ class TestSurplusChargingTimeline:
         ("noon",        10000.0, 80.0, ChargerIntent.CHARGE_AT_AMPS),
         ("afternoon",    7000.0, 90.0, ChargerIntent.CHARGE_AT_AMPS),
         ("evening",       800.0, 95.0, ChargerIntent.IDLE),         # 800-500=300<4140
-        ("dusk",            0.0, 92.0, ChargerIntent.IDLE),
+        # (#634) dusk WITH the default 8 kWh floor outstanding → the
+        # overnight top-up engages (the floor is the guarantee).
+        ("dusk",            0.0, 92.0, ChargerIntent.CHARGE_AT_AMPS),
     ])
     def test_solar_only_full_day_timeline(
         self, phase, solar_w, soc, expected_intent,
@@ -416,8 +431,9 @@ class TestEndToEndActuation:
         # ALWAYS_MAX: CHARGE_MAX → reconciler START_AND_WRITE → command_current(max).
         ("always_max",        0.0, 50.0, True,  False, ChargerIntent.CHARGE_MAX,    "command_current"),
         ("always_max",    10000.0, 50.0, False, False, ChargerIntent.CHARGE_MAX,    "command_current"),
-        # SOLAR_ONLY no surplus → IDLE intent → reconciler NONE (open contactor).
-        ("solar_only",        0.0, 50.0, True,  False, ChargerIntent.IDLE,          None),
+        # SOLAR_ONLY night with the 10 kWh floor outstanding (#634) → the
+        # overnight top-up engages exactly like min_plus_solar night.
+        ("solar_only",        0.0, 50.0, True,  False, ChargerIntent.CHARGE_AT_AMPS, "command_current"),
         # SOLAR_ONLY strong surplus → CHARGE_AT_AMPS → command_current.
         ("solar_only",       10000.0, 95.0, False, False, ChargerIntent.CHARGE_AT_AMPS, "command_current"),
         # MIN_PLUS_SOLAR night top-up → CHARGE_AT_AMPS at min → command_current.

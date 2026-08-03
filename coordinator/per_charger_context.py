@@ -31,6 +31,30 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class PerChargerState:
+    """Durable per-charger state (#589 Surface-A migration).
+
+    ONE instance per charger id, held on ``coord._pcc_store[cid]``. The
+    per-charger loop's ``PerChargerContext`` holds it **by reference** (``.state``),
+    so the ``ev_control`` read sites — via the coordinator's ``_ev_*`` PROPERTIES
+    — read and MUTATE the stored object directly. There is no snapshot/restore
+    and no write-back, so a field added here CANNOT leak charger[0]'s value into
+    charger[1] the way the old primary-scalar swap could when a write-back was
+    forgotten (#284/#315/#318 class). Fields are migrated off the swap one at a
+    time; each lands here + a coordinator property + a cross-charger isolation
+    test.
+    """
+
+    stalled_since: Optional[float] = None
+    enable_surplus_since: Optional[float] = None
+    charge_started_at: Optional[float] = None
+    last_change_time: Optional[Any] = None
+    reenable_attempts: int = 0
+    charge_refused: bool = False
+    last_set_amps_ts: Optional[float] = None
+
+
+@dataclass
 class PerChargerContext:
     """Per-charger state for ONE iteration of the multi-charger loop.
 
@@ -84,12 +108,16 @@ class PerChargerContext:
     """The per-charger config dict from ``ev_chargers`` (or ``{}``)."""
 
     # ------------------------------------------------------------------
-    # Budget + skip flag (set by ``for_charger``)
+    # Skip flag (set by ``for_charger``)
     # ------------------------------------------------------------------
-    budget_w: Optional[float] = None
-    """Per-charger surplus budget in watts, or ``None`` outside a solar
-    state (matches ``self._current_charger_budget`` semantics)."""
-
+    # There was a ``budget_w`` here until #651. Its docstring said it was
+    # "the single source for this charger's budget — flows into
+    # build_charger_view → decide"; ``build_charger_view`` takes no budget
+    # argument and never did. Nothing outside the writer and its own unit
+    # tests ever read it. The real per-charger solar allocation is
+    # ``decide.self_consumption_surplus_w`` subtracting
+    # ``fleet.solar_committed_w``, which the coordinator accumulates from
+    # each charger's ACTUAL decision as it walks the priority loop.
     skipped_for_night: bool = False
     """``True`` when the charger's mode opts it out of the current night
     state (set during ``for_charger`` based on ``_mode_allows_night_charging``)."""
@@ -133,23 +161,33 @@ class PerChargerContext:
     ``effective_state``. Falls back to ``cid`` if the config omits
     a ``name`` key."""
 
+    vehicle_soc: Optional[float] = None
+    """#589 swap retirement — THIS charger's vehicle SOC for the current
+    cycle. Seeded in ``__enter__`` from the coordinator's global
+    (primary-entity) cycle SOC, then overridden by the loop body when the
+    charger has its own ``vehicle_soc_entity``. The coordinator's
+    ``_cycle_vehicle_soc`` property resolves to this field while the
+    context is active, so the per-charger override can no longer leak
+    into the next charger via a forgotten restore (the old
+    ``_saved_vehicle_soc`` snapshot path). Cycle-scoped: lives on the
+    context, not on the durable ``PerChargerState``."""
+
     # ------------------------------------------------------------------
     # Internal: references + the swap snapshot.
     # ------------------------------------------------------------------
     _coord: "Optional[SEMCoordinator]" = field(default=None, repr=False)
     """The coordinator. Held so ``__enter__/__exit__`` can mutate it."""
 
-    _saved: dict = field(default_factory=dict, repr=False)
-    """Coordinator attributes captured at ``__enter__``, restored at
-    ``__exit__``. Mirrors the pre-v1.6.7 ``saved = {...}`` dict."""
-
-    _saved_vehicle_soc: Any = field(default=None, repr=False)
-    """``_cycle_vehicle_soc`` captured separately because it has its own
-    legacy save path (``saved_vehicle_soc_ctrl`` in the old code)."""
+    state: "Optional[PerChargerState]" = field(default=None, repr=False)
+    """#589 Surface-A — this charger's DURABLE state object (``_pcc_store[cid]``),
+    held by reference. Migrated ``_ev_*`` fields read/write it via coordinator
+    properties; no snapshot/write-back, so they can't leak between chargers."""
 
     _entered: bool = field(default=False, repr=False)
     """Guard against nested entry. The coordinator loop is single-threaded
-    per cycle; nesting would corrupt the swap snapshot."""
+    per cycle; nesting would clobber ``_current_pcc``. (The ``_saved``
+    snapshot dict is GONE — #589 swap retirement; there is nothing left
+    to capture or restore.)"""
 
     # ------------------------------------------------------------------
     # Factory
@@ -160,14 +198,12 @@ class PerChargerContext:
         coordinator: "SEMCoordinator",
         cid: str,
         ev_dev: Any,
-        ev_budget_per_charger: dict,
         chargers_by_id: Optional[dict] = None,
         power: Any = None,
     ) -> "PerChargerContext":
         """Build a per-charger context.
 
-        Looks up the per-charger config dict and the per-charger budget
-        from the cycle-level distribution. Computes ``skipped_for_night``
+        Looks up the per-charger config dict. Computes ``skipped_for_night``
         based on the charger's mode and the current global charging
         state — but only when the global state is a night state; for
         solar states, ``skipped_for_night`` stays ``False`` and the
@@ -178,10 +214,6 @@ class PerChargerContext:
                 can mutate it in ``__enter__``).
             cid: this charger's id.
             ev_dev: this charger's ``EVDevice`` instance.
-            ev_budget_per_charger: the per-charger budget dict from
-                ``self._surplus_controller.distribute_ev_budget``. May
-                contain a value for ``cid`` (solar state) or be empty
-                (night state).
             chargers_by_id: optional pre-built ``{cid: cfg}`` lookup the
                 caller can pass to avoid rebuilding it inside the loop.
                 If ``None``, this method rebuilds it from
@@ -201,12 +233,10 @@ class PerChargerContext:
                 if isinstance(c, dict)
             }
         charger_cfg = chargers_by_id.get(cid, {})
-        budget_w = ev_budget_per_charger.get(cid) if ev_budget_per_charger else None
         return cls(
             cid=cid,
             ev_dev=ev_dev,
             charger_cfg=charger_cfg,
-            budget_w=budget_w,
             charger_name=charger_cfg.get("name") or cid,
             power=power,
             _coord=coordinator,
@@ -216,18 +246,19 @@ class PerChargerContext:
     # Context manager protocol
     # ------------------------------------------------------------------
     def __enter__(self) -> "PerChargerContext":
-        """Push this charger's state onto the coordinator.
+        """Bind this charger's state — NO primary-scalar swap remains.
 
-        Captures the coordinator's primary-charger attributes into
-        ``_saved`` so ``__exit__`` can restore them; then writes this
-        charger's per-charger state (read from the coordinator's
-        ``_ev_*_per_charger`` dicts) into the primary attributes so
-        downstream methods that still read ``self._ev_*`` see THIS
-        charger's view.
+        #589 swap retirement complete: every per-charger field lives
+        either on the durable ``PerChargerState`` (``_pcc_store[cid]``,
+        held by reference) or on this context object. The coordinator's
+        ``_ev_*`` / ``_cycle_vehicle_soc`` / ``_ev_device`` reads resolve
+        through PROPERTIES that dispatch on ``_current_pcc`` — there is
+        nothing to snapshot and nothing to restore, so a forgotten
+        write-back (the #284/#315/#318 leak class) is unrepresentable.
 
         Raises:
             RuntimeError: on nested entry. The per-charger loop is
-                strictly serial; nesting would clobber ``_saved``.
+                strictly serial; nesting would clobber ``_current_pcc``.
         """
         if self._entered:
             raise RuntimeError(
@@ -239,72 +270,54 @@ class PerChargerContext:
         coord = self._coord
         assert coord is not None, "PerChargerContext._coord must be set"
 
-        # Snapshot the primary attributes BEFORE swapping in this charger's
-        # values. The same set of fields the legacy ``saved = {...}`` dict
-        # captured at coordinator.py:1136-1144 in the pre-v1.6.7 code.
-        self._saved = {
-            "dev": coord._ev_device,
-            "stalled": coord._ev_stalled_since,
-            "enable": coord._ev_enable_surplus_since,
-            "started": coord._ev_charge_started_at,
-            "change": coord._ev_last_change_time,
-            "reenable_attempts": coord._ev_reenable_attempts,
-            "charge_refused": coord._ev_charge_refused,
-            "current_charger_budget": coord._current_charger_budget,
-            # v1.7.1-beta.14 — solar stability layer per-charger state.
-            "last_set_amps_ts": coord._ev_last_set_amps_ts,
-            "budget_history": coord._ev_budget_history,
-        }
-        self._saved_vehicle_soc = coord._cycle_vehicle_soc
+        # #589 Surface-A — bind this charger's DURABLE state object by reference.
+        # Migrated fields (``stalled_since`` …) live here; reads/writes via the
+        # coordinator properties mutate this object directly — no swap, no
+        # write-back to forget.
+        self.state = coord._pcc_store.setdefault(self.cid, PerChargerState())
 
-        # Push this charger's state onto the coordinator.
-        coord._ev_device = self.ev_dev
-        coord._ev_stalled_since = coord._ev_stalled_since_per_charger.get(self.cid)
-        coord._ev_enable_surplus_since = coord._ev_enable_surplus_per_charger.get(self.cid)
-        coord._ev_charge_started_at = coord._ev_charge_started_per_charger.get(self.cid)
-        coord._ev_last_change_time = coord._ev_last_change_per_charger.get(self.cid)
-        coord._ev_reenable_attempts = coord._ev_reenable_attempts_per_charger.get(self.cid, 0)
-        coord._ev_charge_refused = coord._ev_charge_refused_per_charger.get(self.cid, False)
-        coord._current_charger_budget = self.budget_w
-        coord._ev_last_set_amps_ts = coord._ev_last_set_amps_ts_per_charger.get(self.cid)
-        # Budget history list is mutated in place by the actuator (appends
-        # the cycle's budget_w sample, pops the oldest). Setdefault keeps
-        # the same list reference across __enter__/__exit__ cycles so the
-        # rolling window survives.
-        coord._ev_budget_history = coord._ev_budget_history_per_charger.setdefault(
-            self.cid, [],
-        )
+        # Seed this charger's cycle SOC from the global (primary-entity)
+        # value. Must read BEFORE ``_current_pcc`` is bound below: the
+        # coordinator property resolves to the pcc field once the pointer
+        # is set. Chargers without their own ``vehicle_soc_entity`` keep
+        # seeing the global SOC (legacy semantics); the loop body's
+        # per-charger override lands on this context only and dies with
+        # it — nothing to restore.
+        self.vehicle_soc = coord._cycle_vehicle_soc
+
+        # Bind the context pointer. From here on the coordinator's
+        # ``_ev_device`` property resolves to ``self.ev_dev``, so the
+        # ``_this_charger_power`` precompute below (which reads
+        # ``self._ev_device`` indirectly via ``_get_active_charger_config``)
+        # sees THIS charger's config — the ordering role the retired
+        # ``coord._ev_device = self.ev_dev`` swap used to carry.
+        coord._current_pcc = self
 
         # v1.6.14: precompute this charger's draw via the coordinator's
-        # kW-aware helper. Reads ``self._ev_device`` indirectly via
-        # ``_get_active_charger_config`` — must happen AFTER the swap
-        # above so the helper sees THIS charger's config. Power is
-        # optional (legacy unit tests) — without it the helper falls
-        # back to ``power.ev_power`` which is 0 for a None power object.
+        # kW-aware helper. Power is optional (legacy unit tests) — without
+        # it the helper falls back to ``power.ev_power`` which is 0 for a
+        # None power object. The helper's cache branch is a no-op at this
+        # point (``this_power_w`` still None) so it direct-computes.
         if self.power is not None and hasattr(coord, "_this_charger_power"):
             try:
                 self.this_power_w = coord._this_charger_power(self.ev_dev, self.power)
             except Exception:  # noqa: BLE001
-                # Helper failures shouldn't break the swap; fall back to
+                # Helper failures shouldn't break the loop; fall back to
                 # method-local recompute (the legacy path).
                 self.this_power_w = None
-
-        # v1.6.14: stash on the coordinator so ``_this_charger_power``
-        # can return the cached value to in-loop callers (replaces
-        # per-method ``this_power_w = ...`` locals in ev_control.py
-        # without changing those callsites).
-        coord._current_pcc = self
 
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:
-        """Pop this charger's state back into per-charger dicts and
-        restore the primary view.
+        """Persist the effective state and unbind the context pointer.
 
         Always runs (including on exceptions raised by
-        ``decide`` / ``actuate``) so the coordinator's primary view is
-        never left mid-swap. Mirrors the ``finally:`` block at the
-        coordinator.py:1242-1258 in the pre-v1.6.7 code.
+        ``decide`` / ``actuate``) so the coordinator is never left with a
+        stale ``_current_pcc``. Per-charger state needs no write-back:
+        the durable fields live on ``self.state`` (held by reference in
+        ``_pcc_store``), the cycle-scoped fields die with this object,
+        and the coordinator properties fall back to the primary defaults
+        the moment the pointer clears.
 
         Returns:
             ``False`` so exceptions propagate to the caller (matching
@@ -314,20 +327,6 @@ class PerChargerContext:
         coord = self._coord
         assert coord is not None, "PerChargerContext._coord must be set"
         try:
-            # Save back this charger's per-charger state.
-            coord._ev_stalled_since_per_charger[self.cid] = coord._ev_stalled_since
-            coord._ev_enable_surplus_per_charger[self.cid] = coord._ev_enable_surplus_since
-            coord._ev_charge_started_per_charger[self.cid] = coord._ev_charge_started_at
-            coord._ev_last_change_per_charger[self.cid] = coord._ev_last_change_time
-            coord._ev_reenable_attempts_per_charger[self.cid] = coord._ev_reenable_attempts
-            coord._ev_charge_refused_per_charger[self.cid] = coord._ev_charge_refused
-            # v1.7.1-beta.14 — solar stability layer per-charger state.
-            coord._ev_last_set_amps_ts_per_charger[self.cid] = coord._ev_last_set_amps_ts
-            # ``budget_history`` is the same list reference setdefault returned
-            # at __enter__; mutations done by the actuator persist naturally,
-            # so no explicit write-back is needed. The setdefault on the next
-            # __enter__ rebinds the primary view to the same list.
-
             # v1.6.14: persist effective state for the post-loop
             # notification dispatcher. The dict on the coordinator
             # remains the storage; pcc is the write path.
@@ -336,29 +335,14 @@ class PerChargerContext:
                     self.effective_state,
                     self.charger_name or self.cid,
                 )
-
-            # v1.6.14: clear the cache pointer so out-of-loop reads
-            # (single-charger fallback path, post-loop helpers) hit the
-            # direct-compute branch in ``_this_charger_power``.
+        finally:
+            # Unbind UNCONDITIONALLY (review: the pointer is now the SOLE
+            # per-charger dispatch mechanism — a stale binding would make
+            # every property read the wrong charger, so it must clear even
+            # if the persist above raises). Out-of-loop reads then fall
+            # back to the primary/default view in every property and to
+            # direct-compute in _this_charger_power.
             if getattr(coord, "_current_pcc", None) is self:
                 coord._current_pcc = None
-
-            # Restore primary view.
-            coord._ev_device = self._saved["dev"]
-            coord._ev_stalled_since = self._saved["stalled"]
-            coord._ev_enable_surplus_since = self._saved["enable"]
-            coord._ev_charge_started_at = self._saved["started"]
-            coord._ev_last_change_time = self._saved["change"]
-            coord._ev_reenable_attempts = self._saved["reenable_attempts"]
-            coord._ev_charge_refused = self._saved["charge_refused"]
-            coord._ev_last_set_amps_ts = self._saved["last_set_amps_ts"]
-            coord._ev_budget_history = self._saved["budget_history"]
-            # ``_current_charger_budget`` is cleared to ``None`` in the
-            # legacy code rather than restored to its pre-loop value —
-            # preserve that semantic (the post-loop reader treats
-            # non-None as "I'm currently inside a per-charger iteration").
-            coord._current_charger_budget = None
-            coord._cycle_vehicle_soc = self._saved_vehicle_soc
-        finally:
             self._entered = False
         return False  # never swallow exceptions

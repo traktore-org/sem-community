@@ -40,6 +40,7 @@ class ActionKind(Enum):
     START_AND_WRITE = auto()  # open a session + arm failsafe + write (amps)
     ENABLE = auto()         # re-assert the start/stop switch ON (#536 — Wallbox)
     REPORT_ENABLE_BLOCKED = auto()  # enable switch unavailable/locked — surface it (#536)
+    REPORT_STOP_UNENFORCEABLE = auto()  # no mechanism can open the contactor (#627)
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,15 @@ class ObservedState:
     """False when the charger HAS an enable switch but its state is
     unavailable/unknown (Wallbox locked / eco-smart) — SEM can't drive
     it, so charging is silently impossible until surfaced (#536)."""
+    stop_controllable: bool = True
+    """False when NO configured mechanism can open the contactor (#627):
+    no stop service, no charge-mode select, no start/stop entity, no
+    ``<domain>.disable``, and a current entity whose ``min`` is above 0 so
+    the 0 A fallback is unwritable. Deliberately separate from
+    ``enable_controllable`` — that one gates the CHARGE rows, and a charger
+    SEM can start but not stop must keep charging normally while the
+    un-stoppability is surfaced. Conflating them would turn a reporting
+    gap into a total loss of surplus charging."""
 
 
 def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]:
@@ -175,6 +185,15 @@ class ChargerReconciler:
                 self._consecutive_idle_count = 0
                 self._idle_settled = True  # #552 — wind-down complete
                 return [Action(ActionKind.NONE)]
+            if not observed.stop_controllable:
+                # #627 — SEM has no mechanism that can open this contactor.
+                # Still issue the DISABLE (it costs nothing and starts
+                # working the moment a stop entity is configured), but say so
+                # instead of counting failures into a log line nobody reads.
+                # Applies to IDLE as well as OFF: the reporter's 4.1 kW came
+                # out of the house batteries either way.
+                return [Action(ActionKind.DISABLE),
+                        Action(ActionKind.REPORT_STOP_UNENFORCEABLE)]
             if desired is DesiredState.OFF:
                 if not observed.enable_controllable:
                     # #548 — the contactor is app/cloud-locked (Wallbox
@@ -308,6 +327,9 @@ class ChargerReconciler:
                 )
         elif not _drawing:
             self._stop_commanded_while_drawing = 0
+            # #627 — the contactor is open again (user unplugged, car
+            # finished, or a stop entity got configured): retire the repair.
+            self._clear_stop_unenforceable(adapter)
 
         # ── #546 OFFER-STEADINESS PROBE (observe-only, DEBUG) ────────────
         # Diagnostic that pinned the 6↔9 A KEBA flap (#546, now resolved by
@@ -358,9 +380,19 @@ class ChargerReconciler:
             except Exception:  # the probe must never break actuation
                 pass
 
+        await self._apply_actions(actions, adapter, decision, power)
+
+    async def _apply_actions(self, actions, adapter, decision, power) -> None:
+        """Execute the reconcile actions. Extracted (#700) so the one-shot
+        warning behaviour is testable against the real action loop."""
         for action in actions:
             if action.kind is ActionKind.NONE:
                 continue
+            # (#700) any action other than the unenforceable-report means the
+            # intent moved or a mechanism appeared — re-arm the one-shot
+            # warning so the NEXT unenforceable episode warns again.
+            if action.kind is not ActionKind.REPORT_STOP_UNENFORCEABLE:
+                self._stop_unenforceable_warned = False
             if action.kind is ActionKind.ENABLE:
                 # #536 — re-assert the start/stop switch (idempotent).
                 await adapter.ensure_enabled()
@@ -375,6 +407,39 @@ class ChargerReconciler:
                 report = getattr(adapter, "report_enable_blocked", None)
                 if report is not None:
                     await report()
+            elif action.kind is ActionKind.REPORT_STOP_UNENFORCEABLE:
+                # #627 — the stop is structurally impossible on this config.
+                # (#700) Once per ONSET, not per cycle: the condition persists
+                # for as long as the config lacks a stop mechanism, and at a
+                # 10 s cadence the repeat wiped out days of log history on a
+                # real install (8000+ entries). The first occurrence carries
+                # the full instruction at WARNING; repeats drop to debug; the
+                # flag re-arms when any other action lands (the intent moved
+                # or a mechanism appeared), so a NEW unenforceable episode
+                # warns again.
+                if not getattr(self, "_stop_unenforceable_warned", False):
+                    self._stop_unenforceable_warned = True
+                    _LOGGER.warning(
+                        "reconcile(%s): STOP is unenforceable — no stop service, "
+                        "no charge-mode select, no start/stop entity, no "
+                        "<domain>.disable, and the current entity cannot express "
+                        "0 A. The car keeps drawing %.0f W against SEM's intent "
+                        "(and on a battery install that power comes out of the "
+                        "house battery). Configure a start/stop switch for this "
+                        "charger. (Logged once — repeats at debug level until "
+                        "the condition clears.) — %s",
+                        self.charger_id,
+                        float(getattr(power, "power_w", 0.0) or 0.0),
+                        decision.reason,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "reconcile(%s): STOP still unenforceable (%.0f W) — %s",
+                        self.charger_id,
+                        float(getattr(power, "power_w", 0.0) or 0.0),
+                        decision.reason,
+                    )
+                self._report_stop_unenforceable(adapter, power)
             elif action.kind is ActionKind.DISABLE:
                 await adapter.command_disable()
                 _LOGGER.info("reconcile(%s): DISABLE — %s",
@@ -389,6 +454,31 @@ class ChargerReconciler:
                 await adapter.command_current(action.amps)
                 _LOGGER.debug("reconcile(%s): WRITE %dA — %s",
                               self.charger_id, action.amps, decision.reason)
+
+    # ── #627 stop-unenforceable repair plumbing ──────────────────────────
+    def _device_and_hass(self, adapter):
+        dev = getattr(adapter, "_device", None)
+        hass = getattr(dev, "hass", None)
+        return dev, hass
+
+    def _report_stop_unenforceable(self, adapter, power) -> None:
+        dev, hass = self._device_and_hass(adapter)
+        if dev is None or hass is None:
+            return
+        from .repair_issues import raise_charger_stop_unenforceable
+        raise_charger_stop_unenforceable(
+            hass, self.charger_id,
+            name=str(getattr(dev, "name", self.charger_id)),
+            power_w=float(getattr(power, "power_w", 0.0) or 0.0),
+            entity=str(getattr(dev, "current_entity_id", "") or "—"),
+        )
+
+    def _clear_stop_unenforceable(self, adapter) -> None:
+        dev, hass = self._device_and_hass(adapter)
+        if dev is None or hass is None:
+            return
+        from .repair_issues import clear_charger_stop_unenforceable
+        clear_charger_stop_unenforceable(hass, self.charger_id)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -408,6 +498,16 @@ def observe(adapter, power) -> ObservedState:
             enabled, controllable = _enable_state()
         except Exception as exc:  # noqa: BLE001 — never let observe() throw
             _LOGGER.debug("enable_state() failed: %s", exc)
+    # #627 — can ANY configured mechanism open the contactor? Unknown
+    # (no device / probe raised) defaults True: a false alarm here would
+    # raise a repair on every working install.
+    stop_ok = True
+    _can_stop = getattr(getattr(adapter, "_device", None), "can_stop_charging", None)
+    if callable(_can_stop):
+        try:
+            stop_ok = bool(_can_stop())
+        except Exception as exc:  # noqa: BLE001 — never let observe() throw
+            _LOGGER.debug("can_stop_charging() failed: %s", exc)
     return ObservedState(
         charging=adapter.actual_charging(power),
         setpoint_a=setpoint,
@@ -415,4 +515,5 @@ def observe(adapter, power) -> ObservedState:
         power_w=float(getattr(power, "power_w", 0.0) or 0.0),
         enabled=enabled,
         enable_controllable=controllable,
+        stop_controllable=stop_ok,
     )

@@ -67,6 +67,7 @@ class HotWaterController(SwitchDevice):
         min_on_time: int = 300,
         min_off_time: int = 60,
         daily_min_runtime_sec: int = 0,
+        energy_entity_id: Optional[str] = None,
     ):
         super().__init__(
             hass=hass,
@@ -79,6 +80,7 @@ class HotWaterController(SwitchDevice):
             min_on_time=min_on_time,
             min_off_time=min_off_time,
             daily_min_runtime_sec=daily_min_runtime_sec,
+            energy_entity_id=energy_entity_id,  # #600 — DHW kWh counter → derived power
         )
         self.temperature_entity_id = temperature_entity_id
         self.max_temperature = max_temperature
@@ -96,6 +98,17 @@ class HotWaterController(SwitchDevice):
         self._last_legionella_time: Optional[datetime] = None
         self._legionella_cycle_active: bool = False
         self._legionella_hold_start: Optional[datetime] = None
+
+        # #594 — vacation mode. Both set each cycle by the coordinator.
+        # While ``vacation`` is True there is no comfort heating (no solar-
+        # target boost, no cheap-tariff force) and legionella cycles are
+        # PAUSED — ``_last_legionella_time`` keeps aging, so a cycle that
+        # falls due while away runs promptly on return. When
+        # ``vacation_dhw_surplus`` is also True the tank may still soak up
+        # solar surplus, but only to ``min_temperature`` (free energy
+        # without comfort heating).
+        self.vacation: bool = False
+        self.vacation_dhw_surplus: bool = False
 
         # #420 — telemetry surface mirroring #359/#416 classifier_path
         # pattern. Each decision branch sets the corresponding ``*_path``
@@ -143,6 +156,21 @@ class HotWaterController(SwitchDevice):
             if target <= temp:
                 return LEGIONELLA_HOLD_MINUTES[temp]
         return 3  # 80°C+ = 3 minutes
+
+    def _active_target_temp(self) -> float:
+        """The temperature target for the CURRENT operating context (#594).
+
+        Legionella cycle → ``legionella_target_temp`` (disinfection is never
+        run during vacation — the coordinator pauses cycles, see
+        ``check_legionella_cycle``). Vacation surplus dump →
+        ``min_temperature`` (free solar energy without comfort heating).
+        Normal solar boost → ``solar_target_temp``.
+        """
+        if self._legionella_cycle_active:
+            return self.legionella_target_temp
+        if self.vacation and self.vacation_dhw_surplus:
+            return self.min_temperature
+        return self.solar_target_temp
 
     def get_current_temperature(self) -> Optional[float]:
         """Read water temperature from sensor or entity attributes.
@@ -241,6 +269,14 @@ class HotWaterController(SwitchDevice):
                 return True
             self._last_temperature_safety_path = "in_legionella_cycle_at_target"
             return False
+        if self.vacation and self.vacation_dhw_surplus:
+            # #594 — surplus dump caps at the MINIMUM temperature target,
+            # not the solar comfort target.
+            if temp < self.min_temperature:
+                self._last_temperature_safety_path = "vacation_below_min_target"
+                return True
+            self._last_temperature_safety_path = "vacation_at_min_target"
+            return False
         if temp < self.solar_target_temp:
             self._last_temperature_safety_path = "normal_below_solar_target"
             return True
@@ -257,6 +293,10 @@ class HotWaterController(SwitchDevice):
     @property
     def needs_offpeak_activation(self) -> bool:
         """Temperature-aware override: don't force-heat if already at max temp."""
+        if self.vacation:
+            # #594 — no cheap-tariff comfort forcing while away (the optional
+            # surplus dump is solar-surplus-only by design).
+            return False
         if not super().needs_offpeak_activation:
             return False
         if not self.is_temperature_safe():
@@ -267,8 +307,17 @@ class HotWaterController(SwitchDevice):
         """Activate hot water heating with temperature safety check.
 
         Records the activation branch on ``self._last_activation_path`` (#420):
-        ``blocked_unsafe`` / ``water_heater`` / ``climate`` / ``switch_fallback``.
+        ``blocked_unsafe`` / ``water_heater`` / ``climate`` / ``switch_fallback``
+        / ``vacation_blocked`` (#594).
+
+        #594: while vacation mode is active there is no comfort heating.
+        With the opt-in ``vacation_dhw_surplus`` the tank may still take
+        surplus, capped at ``min_temperature`` (see ``_active_target_temp``
+        and the vacation branch in ``is_temperature_safe``).
         """
+        if self.vacation and not self.vacation_dhw_surplus:
+            self._last_activation_path = "vacation_blocked"
+            return 0.0
         if not self.is_temperature_safe():
             _LOGGER.info(
                 "Hot water at %.1f°C — above max %.1f°C, skipping",
@@ -308,7 +357,7 @@ class HotWaterController(SwitchDevice):
     async def _activate_water_heater(self) -> float:
         """Activate via water_heater domain."""
         try:
-            target = self.legionella_target_temp if self._legionella_cycle_active else self.solar_target_temp
+            target = self._active_target_temp()
             await self.hass.services.async_call(
                 "water_heater", "set_temperature",
                 {"entity_id": self.entity_id, "temperature": target},
@@ -355,7 +404,7 @@ class HotWaterController(SwitchDevice):
     async def _activate_climate(self) -> float:
         """Activate via climate domain."""
         try:
-            target = self.legionella_target_temp if self._legionella_cycle_active else self.solar_target_temp
+            target = self._active_target_temp()
             await self.hass.services.async_call(
                 "climate", "set_temperature",
                 {"entity_id": self.entity_id, "temperature": target},
@@ -402,7 +451,16 @@ class HotWaterController(SwitchDevice):
         Records which branch fired on ``self._last_legionella_path`` (#420):
         ``natural_achievement`` / ``hold_reached_target`` /
         ``hold_in_progress`` / ``heating_to_target`` / ``overdue_start`` /
-        ``overdue_no_sensor`` / ``idle``.
+        ``overdue_no_sensor`` / ``idle`` / ``vacation_paused`` /
+        ``vacation_aborted`` (#594).
+
+        #594 vacation: cycles are PAUSED — no disinfection activation while
+        away. ``_last_legionella_time`` is deliberately NOT touched, so
+        ``hours_since_legionella`` keeps accumulating; when the interval
+        elapses during the vacation, the normal overdue branch fires on the
+        first post-vacation cycle (run-on-return). An in-flight cycle is
+        aborted cleanly once (deactivate, clear hold) and re-runs on return
+        via the same overdue path.
         """
         temp = self.get_current_temperature()
 
@@ -411,6 +469,23 @@ class HotWaterController(SwitchDevice):
             self._last_legionella_time = dt_util.now()
             self._last_legionella_path = "natural_achievement"
             return None
+
+        # 1b. Vacation pause (#594) — after the natural-achievement record
+        # (a tank that reached 60°C anyway IS disinfected), before any
+        # forced heating.
+        if self.vacation:
+            if self._legionella_cycle_active:
+                self._legionella_cycle_active = False
+                self._legionella_hold_start = None
+                await self.deactivate()
+                _LOGGER.info(
+                    "Legionella cycle aborted: vacation mode active — "
+                    "will re-run when vacation ends"
+                )
+                self._last_legionella_path = "vacation_aborted"
+                return "legionella_vacation_paused"
+            self._last_legionella_path = "vacation_paused"
+            return "legionella_vacation_paused" if self.legionella_overdue else None
 
         # 2. Cycle in progress — check hold
         if self._legionella_cycle_active:
@@ -512,6 +587,8 @@ class HotWaterController(SwitchDevice):
             "legionella_interval_hours": self.legionella_interval_hours,
             "legionella_overdue": self.legionella_overdue,
             "legionella_cycle_active": self._legionella_cycle_active,
+            "vacation": self.vacation,  # #594
+            "vacation_dhw_surplus": self.vacation_dhw_surplus,  # #594
             "hours_since_legionella": round(self.hours_since_legionella, 1),
             "hours_since_legionella_or_none": self.hours_since_legionella_or_none,
             "legionella_hold_elapsed_minutes": self.legionella_hold_elapsed_minutes,

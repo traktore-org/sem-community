@@ -29,7 +29,6 @@ from .types import (
     HeatPumpSensorData,
     PVAnalyticsData,
     EnergyAssistantSensorData,
-    UtilitySignalSensorData,
     SEMData,
 )
 from .sensor_reader import SensorReader
@@ -57,7 +56,6 @@ __all__ = [
     "HeatPumpSensorData",
     "PVAnalyticsData",
     "EnergyAssistantSensorData",
-    "UtilitySignalSensorData",
     "SEMData",
     "SensorReader",
     "EnergyCalculator",

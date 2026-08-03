@@ -3,6 +3,8 @@
 Reads forecast data from existing HA integrations:
 - Solcast PV Solar (HACS) — sensor.solcast_pv_forecast_*
 - Forecast.Solar (built-in) — sensor.energy_production_*
+- Open-Meteo Solar Forecast (HACS, #687) — same sensor scheme as
+  Forecast.Solar under platform ``open_meteo_solar_forecast``
 - Custom sensors via configuration
 
 Provides remaining-today and tomorrow forecasts for:
@@ -20,6 +22,8 @@ from typing import Any, Dict, List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 from homeassistant.util import dt as dt_util
+
+from .units import power_state_to_watts, power_unit_scale
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,6 +76,15 @@ FORECAST_SOLAR_UNIQUE_SUFFIXES = {
     "forecast_remaining": "_energy_production_today_remaining",
     "power_now": "_power_production_now",
 }
+# (#687) Open-Meteo Solar Forecast (rany2/ha-open-meteo-solar-forecast)
+# deliberately mirrors core Forecast.Solar: unique_id = ``{entry_id}_{key}``
+# with the SAME sensor keys (verified against its sensor.py), so the
+# suffix map above is reused verbatim. Only the platform differs. Its
+# entity_ids are device-prefixed (``sensor.<device>_energy_production_
+# today``), so there is NO reliable hardcoded entity fallback — the
+# registry path is the only detection route (an empty fallback dict is
+# passed to _locate_integration).
+OPEN_METEO_SOLAR_PLATFORM = "open_meteo_solar_forecast"
 
 
 @dataclass
@@ -144,7 +157,7 @@ class ForecastReader:
         self._last_source_detection_path: str = "uninitialized"
         self._last_read_path: str = "uninitialized"
         self._last_recommendation_path: str = "uninitialized"
-        self._last_unit_conversion_count: int = 0  # Solcast kW→W bumps
+        self._last_unit_conversion_count: int = 0  # kW→W conversions (by declared unit)
 
     @property
     def forecast_data(self) -> ForecastData:
@@ -263,6 +276,17 @@ class ForecastReader:
             self._clear_no_forecast_repair()
             return self._source
 
+        # Check Open-Meteo Solar Forecast (#687) — registry-only: its
+        # entity_ids are device-prefixed, so no hardcoded fallback exists.
+        entities = self._locate_integration(OPEN_METEO_SOLAR_PLATFORM, {})
+        if entities:
+            self._entities = entities
+            self._source = "open_meteo"
+            self._last_source_detection_path = "open_meteo"
+            _LOGGER.info("Detected Open-Meteo Solar Forecast integration")
+            self._clear_no_forecast_repair()
+            return self._source
+
         self._last_source_detection_path = "none_available"
         # Log once per outage; subsequent cycles stay silent.
         if not self._no_forecast_logged:
@@ -373,30 +397,17 @@ class ForecastReader:
                 0, data.forecast_today_kwh * self._remaining_day_fraction()
             )
 
-        # Read power now
-        data.power_now_w = self._read_float(
+        # Read power now / next hour / peak — normalized to Watts off the
+        # sensor's declared unit (see _read_power_w).
+        data.power_now_w = self._read_power_w(
             self._entities.get("power_now"), 0.0
         )
-        # Solcast reports in kW, convert if needed
-        if self._source == "solcast" and data.power_now_w < 100:
-            data.power_now_w *= 1000
-            self._last_unit_conversion_count += 1
-
-        # Read power next hour
-        data.power_next_hour_w = self._read_float(
+        data.power_next_hour_w = self._read_power_w(
             self._entities.get("power_next_hour"), 0.0
         )
-        if self._source == "solcast" and data.power_next_hour_w < 100:
-            data.power_next_hour_w *= 1000
-            self._last_unit_conversion_count += 1
-
-        # Peak power
-        data.peak_power_today_w = self._read_float(
+        data.peak_power_today_w = self._read_power_w(
             self._entities.get("peak_power_today"), 0.0
         )
-        if self._source == "solcast" and data.peak_power_today_w < 100:
-            data.peak_power_today_w *= 1000
-            self._last_unit_conversion_count += 1
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
         # and dashboard consumers expect "HH:MM" local time.
@@ -429,6 +440,38 @@ class ForecastReader:
             except (ValueError, TypeError):
                 pass
         return default
+
+    def _read_power_w(self, entity_id: Optional[str], default: float) -> float:
+        """Read a forecast power sensor and normalize it to Watts.
+
+        Solcast (``UnitOfPower.WATT``) and Forecast.Solar both publish their
+        power sensors in Watts natively. SEM historically assumed Solcast was
+        kW and multiplied any reading < 100 by 1000 (a magnitude heuristic).
+        That silently inflated every genuine sub-100 W value — most visibly the
+        near-zero dawn/dusk readings, which it blew up into ~80 kW spikes on the
+        "Forecast vs Actual" chart (#575). Convert off the *declared* unit
+        instead: only kW → ×1000; W (or a missing/other unit) passes through
+        unchanged, so a real 80 W dawn reading stays 80 W.
+        """
+        if not entity_id:
+            return default
+        state = self.hass.states.get(entity_id)
+        if not state or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
+            return default
+        try:
+            # Load-bearing: a non-numeric state must return the CALLER's
+            # default, which units.py can't know. Once this succeeds the
+            # ``default=`` below is unreachable (#641).
+            value = float(state.state)
+        except (ValueError, TypeError):
+            return default
+        # #641 — this rule (strip + lower + long-form synonyms) was the most
+        # robust of the five inline copies, so it became the shared one in
+        # units.py. The conversion counter is kept: it is the diagnostic that
+        # proved #575.
+        if power_unit_scale(state) != 1.0:
+            self._last_unit_conversion_count += 1
+        return power_state_to_watts(state, default=value)
 
     def _remaining_day_fraction(self) -> float:
         """Estimate fraction of daylight remaining (rough)."""

@@ -2,8 +2,11 @@ name: "2026-06-02 multi-charger priority cascade with mixed modes"
 
 coverage:
   - mode: multi_charger
-    regime: priority_cascade_with_mixed_modes
-    issue: "Mixed-mode multi-charger"
+    regime: fleet_cycle_with_multiple_chargers
+    issue: "Mixed-mode multi-charger"   # was priority_cascade_with_mixed_modes until #651
+  - mode: multi_charger
+    regime: mixed_mode_cascade_ordering
+    issue: "#665"   # ordering asserted, not just described
 
 description: |
   Three chargers, three different modes, three priorities. The
@@ -96,14 +99,34 @@ expect:
   # canonical strategy → NOW intent → EVBudgetStrategy.NOW.
   strategy_substring: "now"
 
+  # #651 removed total_equals_canonical + at_least_one_charger_gets_positive
+  # from here — they asserted over SurplusController.distribute_ev_budget,
+  # whose output went to pcc.budget_w and was read by nothing, so this
+  # scenario had never verified the ordering it is named after. #665
+  # points it at the mechanism that DOES order the fleet: the per-charger
+  # loop accumulating _solar_committed_w_per_cycle from each charger's
+  # ACTUAL decision, so charger N+1 sees a smaller surplus rather than a
+  # pre-divided slice.
   multi_charger:
-    # The same conservation invariant from #284 Phase B.5 must hold:
-    # per-charger budgets sum to <= canonical net_w.
-    total_equals_canonical: true
-    tolerance_w: 1.0
+    # The outcome is blunter than the description above hoped for, and
+    # it is the correct one: always_max means "my nameplate, grid-funded
+    # if the sun is short". Priority 1 claims all 11040 W it can draw;
+    # with ~9000 W of true house surplus (20 kW solar − 11 kW implied
+    # home) there is nothing behind it, so both juniors idle. A cascade
+    # that let priority 2 charge here would be funding it from grid or
+    # battery — the "I never want EV from battery" rule, per-charger.
+    #
+    # This is also the case that says the ordering is real rather than
+    # coincidental: swap the priorities and the answer changes.
+    per_charger_intents:
+      charger_priority1: charge_max
+      charger_priority2: idle
+      charger_priority3: idle
 
-    # With 20 kW solar and 3 chargers needing up to 11 kW each, at
-    # least one must get a positive allocation — the failure mode this
-    # catches is "everything gets 0 because the cascade subtracted too
-    # eagerly".
-    at_least_one_charger_gets_positive: true
+    solar_commitment_cascade: true
+
+    # Deliberately NO solar_committed_total_max: always_max legitimately
+    # claims more than the sun is offering. The ceiling belongs in
+    # solar-funded scenarios (see 2026-05-29_multi_charger_split), not
+    # here — asserting it would encode a bound this mode is defined to
+    # break.

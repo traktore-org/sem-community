@@ -156,15 +156,16 @@ class TestDualStateMachine:
     def test_night_charging_disabled(self, state_machine, mock_time_night):
         """Test night charging when no charger's mode permits it.
 
-        Post-#277 Phase C the night gate reads ``charge_mode``. Flip
-        the per-charger mode in the fixture's config to ``solar_only``
-        (not in MODE_NIGHT_ALLOWED) — that disables the gate."""
+        Post-#277 Phase C the night gate reads ``charge_mode``; post-#634
+        a solar_only charger joins the night lane when its "At least" floor
+        is set — so the disabled case is solar_only WITH floor 0."""
         ctx = ChargingContext(
             ev_connected=True,
             daily_ev_energy=4.0,
         )
 
         state_machine.config["ev_chargers"][0]["charge_mode"] = "solar_only"
+        state_machine.config["ev_chargers"][0]["daily_ev_target"] = 0
         state_machine._night_enabled_cached = None
         state_machine._night_enabled_pending = None
         state_machine._night_enabled_pending_cycles = 0

@@ -29,8 +29,10 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 
 from .const import DOMAIN, STATUS_MESSAGES, ChargingState, SENSOR_LABEL_MAPPING
+from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -38,6 +40,25 @@ type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
+
+
+def _phase_guard_current_description(*, key: str) -> SensorEntityDescription:
+    """Create one translated read-only phase-current diagnostic.
+
+    Disabled by default: these only carry data once the phase guard is
+    configured, and registering 12 permanently-unavailable entities on
+    every unconfigured install is registry churn (repo pattern for
+    rarely-used diagnostics)."""
+    return SensorEntityDescription(
+        key=key,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+        entity_registry_enabled_default=False,
+    )
+
 
 SENSOR_TYPES = [
 
@@ -336,6 +357,15 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
+    # #666 — the last of its label-registry siblings to get an entity. The
+    # monthly EV accumulator was always written and ``consts/labels.py``
+    # always declared ``monthly_ev_consumption``; only this was missing.
+    SensorEntityDescription(
+        key="monthly_ev_consumption_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
     # Removed: Redundant (use monthly_home_consumption_energy instead)
     # monthly_home_consumption_actual_energy
 
@@ -481,7 +511,9 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="roi_annual_savings",
         device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.MEASUREMENT,
+        # (#646) monetary permits only state_class None/TOTAL — MEASUREMENT
+        # was invalid and broke long-term statistics.
+        state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="CHF",
         icon="mdi:cash-fast",
         suggested_display_precision=0,
@@ -501,7 +533,9 @@ SENSOR_TYPES = [
     # (#544) forecast_deviation_kwh removed — dead.
     SensorEntityDescription(
         key="forecast_corrected_today",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646) no ENERGY device_class — this is a *prediction* that moves
+        # up and down, not measured energy accumulation; energy permits only
+        # TOTAL/TOTAL_INCREASING, so the pairing was invalid.
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         icon="mdi:crystal-ball",
@@ -954,7 +988,9 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="forecast_surplus_kwh",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646 sweep) no ENERGY device_class — a forecast fluctuates; the
+        # energy+MEASUREMENT pairing was invalid (4th sibling, found by the
+        # whole-table guard).
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -973,6 +1009,14 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="charging_recommendation",
         entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+
+    # ============================================================================
+    # VPP GRID-EVENT DISPATCH (#580)
+    # ============================================================================
+    SensorEntityDescription(
+        key="vpp_event",
+        icon="mdi:transmission-tower",
     ),
 
     # ============================================================================
@@ -1095,22 +1139,6 @@ SENSOR_TYPES = [
     ),
 
     # ============================================================================
-    # UTILITY SIGNALS (Phase 7)
-    # ============================================================================
-
-    SensorEntityDescription(
-        key="utility_signal_source",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-    SensorEntityDescription(
-        key="utility_signal_count_today",
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-
-    # ============================================================================
     # CONSUMPTION/SOLAR PREDICTOR (Phase 8, #3)
     # ============================================================================
 
@@ -1148,7 +1176,8 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="battery_scheduler_deficit_kwh",
-        device_class=SensorDeviceClass.ENERGY,
+        # (#646) no ENERGY device_class — a computed deficit fluctuates;
+        # the energy+MEASUREMENT pairing was invalid.
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=1,
@@ -1317,6 +1346,13 @@ SENSOR_TYPES = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
+        key="diag_battery_sign",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # #590 — diag_grid_sign_contradiction / diag_battery_sign_contradiction
+    # retired into the one perception health surface (binary_sensor.sem_layer_
+    # _mismatch, tagged perception:<signal>) + the diagnose cross_checks dump.
+    SensorEntityDescription(
         key="diag_charger_control",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -1332,6 +1368,40 @@ SENSOR_TYPES = [
         key="diag_observer_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # Read-only diagnostics for independent grid and inverter/Load lanes.
+    # Disabled by default — only meaningful once the phase guard is configured.
+    SensorEntityDescription(
+        key="diag_phase_guard_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    SensorEntityDescription(
+        key="diag_phase_guard_safe",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    SensorEntityDescription(
+        key="diag_phase_guard_data_fresh",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    SensorEntityDescription(
+        key="diag_phase_guard_stop_reason",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    _phase_guard_current_description(key="diag_grid_l1_current_a"),
+    _phase_guard_current_description(key="diag_grid_l1_margin_a"),
+    _phase_guard_current_description(key="diag_grid_l2_current_a"),
+    _phase_guard_current_description(key="diag_grid_l2_margin_a"),
+    _phase_guard_current_description(key="diag_grid_l3_current_a"),
+    _phase_guard_current_description(key="diag_grid_l3_margin_a"),
+    _phase_guard_current_description(key="diag_inverter_l1_current_a"),
+    _phase_guard_current_description(key="diag_inverter_l1_margin_a"),
+    _phase_guard_current_description(key="diag_inverter_l2_current_a"),
+    _phase_guard_current_description(key="diag_inverter_l2_margin_a"),
+    _phase_guard_current_description(key="diag_inverter_l3_current_a"),
+    _phase_guard_current_description(key="diag_inverter_l3_margin_a"),
     # diag_ev_assist_headroom removed — observe-only instrumentation for #545
     # (the Zone-4 chicken-and-egg), now fixed + closed.
     SensorEntityDescription(
@@ -1346,8 +1416,58 @@ SENSOR_TYPES = [
 
 
 
+def _ensure_labels_registered(hass: HomeAssistant) -> None:
+    """Create SEM's labels in HA's label registry (#670).
+
+    ``async_update_entity(labels=...)`` stores label **IDs** verbatim: it does
+    not validate them and it does not create them. SEM never touched the label
+    registry, so for years it wrote ids HA had never heard of — the forward
+    lookup worked (``labels(entity)`` returned them) while every reverse lookup
+    returned nothing. ``label_entities('sem_monthly')`` -> 0, which is the
+    entire point of the feature and everything the HA UI's label filter uses.
+
+    That silence is also why the #667 drift went unnoticed for so long: with
+    the registry side missing, a correct label and a typo'd one behaved
+    identically.
+
+    ``label_id`` is ``slugify(name)``, so creating a label *named* ``sem_daily``
+    yields exactly the id ``SENSOR_LABEL_MAPPING`` already uses — no mapping
+    layer. Create-only: an id that already exists is left completely alone, so
+    a user who renamed or recoloured a SEM label keeps their change, and their
+    own labels are never touched.
+
+    Labels are cosmetic: nothing here may break sensor setup. The whole pass
+    is wrapped, not just the write — reading an *unloaded* registry raises too
+    (``AttributeError: no attribute '_label_data'``), which took the entire
+    sensor platform down with it before this guard.
+    """
+    try:
+        label_registry = lr.async_get(hass)
+    except Exception as err:  # pragma: no cover - defensive
+        _LOGGER.debug("Label registry unavailable — skipping registration: %s", err)
+        return
+
+    for label_id, description in SEM_LABELS.items():
+        try:
+            if label_registry.async_get_label(label_id) is not None:
+                continue
+            label_registry.async_create(name=label_id, description=description)
+        except ValueError:
+            # A label of that *name* exists under a different id — only
+            # reachable if a user renamed one of their own labels to ours.
+            # Theirs wins; we do not rename or delete user labels.
+            _LOGGER.debug("Label name %s already in use — not creating", label_id)
+        except Exception as err:
+            _LOGGER.debug("Could not register label %s: %s", label_id, err)
+            return
+
+
 async def _apply_labels_to_sensors(hass: HomeAssistant, sensors) -> None:
     """Apply labels to SEM sensors for dynamic dashboard support."""
+    # Must come first: applying an id that does not exist in the label
+    # registry is accepted without complaint and resolves to nothing (#670).
+    _ensure_labels_registered(hass)
+
     entity_registry = er.async_get(hass)
 
     for sensor in sensors:
@@ -1815,8 +1935,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "schedule_ev_hours",
         "energy_dashboard",
         "schedule",
-        "top_5_peaks",
-        "top_5_peaks_formatted",
+        # (#657) ``top_5_peaks`` / ``top_5_peaks_formatted`` were dropped —
+        # they were built from a coordinator key no producer ever wrote, so
+        # neither attribute ever reached a state to be recorded.
+        # #580 — VPP event history (UI/accounting helper, no charting value)
+        "events",
+        "last_event",
+        # (#699) atomic balance snapshot for the cards — every value is
+        # already recorded via its own sensor; recording the bundle again
+        # would double the write volume for zero charting value.
+        "power_snapshot",
     })
 
     # Sensors disabled by default (not used by dashboard template)
@@ -1833,7 +1961,6 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "tariff_price_level", "tariff_provider", "tariff_next_cheap_start",
         "heat_pump_mode", "heat_pump_sg_ready_state", "heat_pump_registration_status",
         "pv_degradation_trend", "energy_tip", "energy_tip_category",
-        "utility_signal_source",
         "ev_taper_trend",
     }
 
@@ -2193,6 +2320,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # Per-charger plan rows (#464) — {cid: [rows…]}.
                 "per_charger_plans": _per_charger_plans,
             })
+        elif self.entity_description.key == "vpp_event":
+            # #580 — per-event accounting for payment reconciliation.
+            d = self.coordinator.data
+            attrs.update({
+                "direction": d.get("vpp_event_direction"),
+                "started": d.get("vpp_event_started"),
+                "delivered_kwh_so_far": d.get("vpp_event_delivered_kwh"),
+                "observer": d.get("vpp_event_observer"),
+                "reason": d.get("vpp_event_reason"),
+                "last_event": d.get("vpp_last_event"),
+                "events": d.get("vpp_events") or [],
+            })
         elif self.entity_description.key == "charging_strategy":
             attrs.update({
                 "reason": self.coordinator.data.get("charging_strategy_reason"),
@@ -2205,10 +2344,24 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         elif self.entity_description.key == "available_power":
             attrs.update({
                 "solar_production": self.coordinator.data.get("solar_production_total"),
-                "home_consumption": self.coordinator.data.get("home_consumption_total"),
+                # (#657) ``home_consumption_total`` was never published — the
+                # coordinator's key is ``home_consumption_power``.
+                "home_consumption": self.coordinator.data.get("home_consumption_power"),
                 "safe_discharge_power": self.coordinator.data.get("safe_discharge_power"),
                 "excess_solar": self.coordinator.data.get("excess_solar"),
             })
+        elif self.entity_description.key == "home_consumption_power":
+            # (#699) The ATOMIC balance snapshot for the cards, built by the
+            # coordinator (which owns the #237/#444 home-hold state): a
+            # known-incoherent cycle carries the LAST COHERENT set forward
+            # (flagged ``held``) instead of a chimera of fresh and
+            # substituted values — the cards' books add up at every render
+            # by construction. Home is the carrier because it is the last
+            # value computed FROM the others. Unrecorded — every value
+            # already has its own recorded sensor.
+            snap = self.coordinator.data.get("power_snapshot")
+            if snap:
+                attrs["power_snapshot"] = snap
         elif self.entity_description.key == "tariff_current_import_rate":
             # Rich price data for the price card (#257): level, summary, next
             # cheap window, and the upcoming hourly curve.
@@ -2288,6 +2441,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # Add device list details for dashboard table
             devices = self.coordinator.data.get("load_management_devices", {})
             if devices:
+                # Attribute is ``devices``; the coordinator key it comes from
+                # is ``load_management_devices`` (both are in
+                # ``_unrecorded_attributes`` under the ATTRIBUTE name).
                 attrs["devices"] = devices
                 # Also add a formatted list for easy display
                 device_list = []
@@ -2332,15 +2488,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             except Exception:
                 pass
         elif self.entity_description.key == "monthly_consecutive_peak":
-            # Add historical top 5 peaks from HA statistics
-            peak_history = self.coordinator.data.get("peak_history_top5", [])
-            if peak_history:
-                attrs["top_5_peaks"] = peak_history
-                # Also format as readable strings
-                attrs["top_5_peaks_formatted"] = [
-                    f"{p['value']} kW ({p['date']} {p['time']})"
-                    for p in peak_history
-                ]
+            # (#657) The ``top_5_peaks`` / ``top_5_peaks_formatted`` pair used
+            # to be built here from ``peak_history_top5`` — a key no producer
+            # was ever written for, in this repo's whole history. The
+            # formatter ran on an empty list every cycle and the attributes
+            # never appeared. Removed rather than invented: a real top-5 peak
+            # history means querying recorder statistics, which is a feature,
+            # not a bug fix. ``monthly_consecutive_peak`` (the state) and the
+            # three attributes below are unaffected.
             attrs["target_peak_limit"] = self.coordinator.data.get("target_peak_limit", 5.0)
             attrs["peak_trend"] = self.coordinator.data.get("peak_trend", "Unknown")
             attrs["tariff_type"] = self.coordinator.data.get("tariff_type", "unknown")

@@ -133,6 +133,19 @@ START_KICK_MAX_A = 10
 # refusal instead of holding a high current forever.
 START_KICK_GIVEUP_S = 90.0
 
+# #610 — full-car offer backoff. A single give-up re-armed as soon as the
+# surplus persisted again, which against a genuinely-full car produced
+# continuous kick-ladder chatter all afternoon (PROD 2026-07-18: car at
+# 100 %, kWh-target mode, no vehicle SOC sensor — UDP set_current noise
+# against a BMS that kept declining). After this many CONSECUTIVE
+# no-latch give-ups the offers stop for FULL_CAR_BACKOFF_S, ended early
+# by a real draw (car accepts again, e.g. after preconditioning) or by
+# an unplug / mode change / DISABLE. Per the #440 truth model the
+# estimated SOC still never gates charging — this tunes the RETRY
+# CADENCE only.
+FULL_CAR_GIVEUP_STREAK = 3
+FULL_CAR_BACKOFF_S = 1200.0
+
 # Once a car has drawn, treat a low/zero power reading as a transient and
 # HOLD the steady current for this long before concluding it really stopped.
 # Bridges the brief 0 W blips that would otherwise trigger a re-start at a
@@ -163,6 +176,13 @@ class ChargeStability:
         self._start_offer: Dict[str, int] = {}
         # Last time the car was observed drawing — latch hysteresis.
         self._latched: Dict[str, float] = {}
+        # #610 — consecutive no-latch give-ups and the full-car backoff
+        # deadline (monotonic). Deliberately NOT cleared by _reset(): the
+        # give-up path itself calls _reset, and the whole point is that
+        # the streak/backoff survive it. Cleared by a real draw, by the
+        # out-of-scope branch (unplug / mode change / DISABLE), or expiry.
+        self._giveup_streak: Dict[str, int] = {}
+        self._giveup_backoff_until: Dict[str, float] = {}
         # Set when the disable-bridge STOPS. While present, an IDLE decision is
         # honoured as-is and the bridge does NOT re-engage even if the car is
         # still drawing (actuator lag) — closes the bounded re-engagement the
@@ -181,6 +201,130 @@ class ChargeStability:
         # that lands while the car happens to blip 0 W never reaches the
         # adapter, leaving last_intent=CHARGE forever).
         self._sem_session: set[str] = set()
+
+    # ------------------------------------------------------------------ #
+    # Restart-safe timer persistence (#589)                               #
+    # ------------------------------------------------------------------ #
+
+    def snapshot_timers(self, now_mono: float) -> dict:
+        """Return elapsed-seconds for each per-charger timer dict.
+
+        Encodes the ELAPSED time (``now_mono - stamp``) rather than the
+        raw monotonic stamp so the snapshot is clock-independent — it
+        survives an HA restart whose ``time.monotonic()`` begins near 0.
+
+        Only finite, non-negative elapsed values are emitted; negative
+        values (clock skew / future stamp) are silently dropped so a
+        corrupt snapshot cannot mis-arm a stop on restore.
+
+        The six timer dicts covered: ``deficit``, ``deep_deficit``,
+        ``surplus``, ``start``, ``latched``, ``stopped_at``.
+        """
+        def _elapsed(d: Dict[str, float]) -> Dict[str, float]:
+            out = {}
+            for cid, stamp in d.items():
+                elapsed = now_mono - stamp
+                if 0.0 <= elapsed < float("inf"):
+                    out[cid] = elapsed
+            return out
+
+        return {
+            "deficit": _elapsed(self._deficit_since),
+            "deep_deficit": _elapsed(self._deep_deficit_since),
+            "surplus": _elapsed(self._surplus_since),
+            "start": _elapsed(self._start_since),
+            "latched": _elapsed(self._latched),
+            "stopped_at": _elapsed(self._stopped_at),
+            # #610 — full-car backoff survives a restart: the streak as-is,
+            # the deadline as REMAINING seconds (it's a future deadline, not
+            # an elapsed timer, so the _elapsed shape doesn't fit).
+            "giveup_streak": dict(self._giveup_streak),
+            "giveup_backoff_remaining": {
+                cid: bu - now_mono
+                for cid, bu in self._giveup_backoff_until.items()
+                if bu - now_mono > 0.0
+            },
+        }
+
+    def restore_timers(self, saved: dict, now_mono: float) -> None:
+        """Rebase persisted elapsed-seconds back onto the current monotonic clock.
+
+        The rebase formula is: ``stamp = now_mono - elapsed``, so that
+        ``now_mono - stamp == elapsed`` — the countdown resumes from
+        exactly where it was at snapshot time.  We deliberately do NOT
+        add downtime (the HA restart gap) — a deep-deficit countdown
+        that was 40 s old before restart is still 40 s old after, which
+        means a charger that was about to be stopped will be stopped
+        promptly rather than being granted a full fresh grace window that
+        would drain the battery.
+
+        Guards:
+        * ``elapsed < 0`` — impossible (clock moved backward), skip.
+        * ``elapsed > 86400`` (24 h) — stale blob or clock jump; skip to
+          avoid mis-arming a stop that should have resolved long ago.
+        * Malformed input (non-dict, missing keys, non-numeric values) —
+          logged at DEBUG and silently ignored; never raises.
+        """
+        _MAX_ELAPSED_S = 86_400.0
+
+        if not isinstance(saved, dict):
+            _LOGGER.debug("restore_timers: saved is not a dict (%r), skipping", type(saved))
+            return
+
+        _map: dict[str, Dict[str, float]] = {
+            "deficit": self._deficit_since,
+            "deep_deficit": self._deep_deficit_since,
+            "surplus": self._surplus_since,
+            "start": self._start_since,
+            "latched": self._latched,
+            "stopped_at": self._stopped_at,
+        }
+
+        for key, target in _map.items():
+            blob = saved.get(key)
+            if not isinstance(blob, dict):
+                continue
+            for cid, elapsed in blob.items():
+                try:
+                    elapsed_f = float(elapsed)
+                except (TypeError, ValueError):
+                    _LOGGER.debug(
+                        "restore_timers[%s][%s]: non-numeric elapsed %r, skipping",
+                        key, cid, elapsed,
+                    )
+                    continue
+                if elapsed_f < 0.0 or elapsed_f >= _MAX_ELAPSED_S:
+                    _LOGGER.debug(
+                        "restore_timers[%s][%s]: elapsed %.1f s outside valid range "
+                        "[0, %.0f], skipping",
+                        key, cid, elapsed_f, _MAX_ELAPSED_S,
+                    )
+                    continue
+                target[cid] = now_mono - elapsed_f
+
+        # #610 — full-car backoff round-trip. Streak: plain ints. Deadline:
+        # persisted as REMAINING seconds, rebased to now + remaining (same
+        # no-downtime-credit philosophy as the elapsed timers — a backoff
+        # with 10 min left before restart has 10 min left after). Bounds
+        # guard against stale/corrupt blobs.
+        streaks = saved.get("giveup_streak")
+        if isinstance(streaks, dict):
+            for cid, n in streaks.items():
+                try:
+                    n_i = int(n)
+                except (TypeError, ValueError):
+                    continue
+                if 0 < n_i <= 1000:
+                    self._giveup_streak[str(cid)] = n_i
+        remaining = saved.get("giveup_backoff_remaining")
+        if isinstance(remaining, dict):
+            for cid, rem in remaining.items():
+                try:
+                    rem_f = float(rem)
+                except (TypeError, ValueError):
+                    continue
+                if 0.0 < rem_f <= FULL_CAR_BACKOFF_S:
+                    self._giveup_backoff_until[str(cid)] = now_mono + rem_f
 
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
@@ -263,6 +407,11 @@ class ChargeStability:
             or decision.intent is ChargerIntent.DISABLE
         ):
             self._reset(cid)
+            # #610 — an unplug / mode change / DISABLE ends the full-car
+            # backoff: a plug or user status change is exactly the signal
+            # that should re-open start offers.
+            self._giveup_streak.pop(cid, None)
+            self._giveup_backoff_until.pop(cid, None)
             return decision
 
         cfg = view.config if isinstance(view.config, dict) else {}
@@ -298,13 +447,59 @@ class ChargeStability:
             getattr(adapter, "last_intent", None) in _CHARGE_INTENTS
             or adapter.actual_charging(view.power)
         )
+        drawing = adapter.actual_charging(view.power)
+        if drawing:
+            # #610 — the car accepted current again (e.g. after
+            # preconditioning freed BMS headroom): end the backoff.
+            self._giveup_streak.pop(cid, None)
+            self._giveup_backoff_until.pop(cid, None)
+
+        # #610 — full-car backoff gate. MUST sit ABOVE the ``charge_wanted``
+        # split, not inside it. It has now moved twice, for two different
+        # bypasses of the same shape (a guard on one branch, an unguarded
+        # passthrough on the other):
+        #   1. fresh-start-only → the ladder block bypassed it, because
+        #      ``adapter.last_intent`` stays CHARGE_AT_AMPS across a give-up
+        #      (the IDLE actuation is debounced), so the next cycle re-entered
+        #      the ladder with freshly-reset state and climbed again.
+        #      PROD 2026-07-19: armed 11:10:12, ladder restarted 11:10:42.
+        #   2. inside ``charge_wanted`` → the NOT-wanted branch bypassed it.
+        #      ``charge_wanted`` is the MEDIAN, which lags the raw decision by
+        #      up to ``smooth_window - 1`` cycles: after two low-budget cycles
+        #      the median reads below the floor while THIS cycle's decision is
+        #      a real CHARGE, so control fell through to one of the three
+        #      ``return decision`` passthroughs below (night / post-stop /
+        #      #552 ownership) and the raw offer reached the charger unfiltered.
+        #      PROD 2026-07-26, window armed 17:35:15-17:55:15: five decisions
+        #      escaped (17:41:54 12A, 17:49:36 12A, 17:50:37 12A, 17:52:37 11A,
+        #      17:52:47 11A) — recognisable in the log because their reason has
+        #      NO ``stability:`` prefix. Trigger was the Huawei grid meter's
+        #      single-sample dropouts oscillating the budget.
+        # Gating on the RAW state (armed + not drawing) rather than on a
+        # smoothed or branch-local one is what closes the class: there is no
+        # longer a path from here to an actuation that skips it.
+        backoff_until = self._giveup_backoff_until.get(cid)
+        if backoff_until is not None and not drawing:
+            if now < backoff_until:
+                return replace(
+                    decision,
+                    intent=ChargerIntent.IDLE,
+                    commanded_amps=0,
+                    reason=(
+                        f"stability: full-car backoff — car declined "
+                        f"{self._giveup_streak.get(cid, 0)} start "
+                        f"ladders; next offer in "
+                        f"{max(0.0, backoff_until - now) / 60.0:.0f} min "
+                        f"— {decision.reason}"
+                    ),
+                )
+            self._giveup_backoff_until.pop(cid, None)
 
         if charge_wanted:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
             self._stopped_at.pop(cid, None)  # a real charge ends the stop-settle
             target = max(min_amps, min(max_amps, med_amps))
-            drawing = adapter.actual_charging(view.power)
             if drawing:
                 self._latched[cid] = now
             # Latch hysteresis: once a car has drawn, a single low/zero power
@@ -337,6 +532,8 @@ class ChargeStability:
                     ramp_amps=ramp_amps,
                 )
             if not charging:
+                # (#610 backoff is gated ABOVE, outside the charge_wanted
+                # split — see the two-bypass note there.)
                 # Fresh start (no prior charge command). Day waits for the
                 # surplus to persist enable_delay_s (anti-flap); night starts
                 # at once (the planner already decided). Begin gently at min;
@@ -390,13 +587,27 @@ class ChargeStability:
                 # Stop offering (don't sit at a high current); the stall
                 # detector / planner own the refusal.
                 self._reset(cid)
+                # #610 — count consecutive give-ups; enough in a row means
+                # the car is genuinely full/refusing → long backoff before
+                # the next ladder (streak survives expiry, so a still-full
+                # car re-arms after ONE further ladder, not three).
+                streak = self._giveup_streak.get(cid, 0) + 1
+                self._giveup_streak[cid] = streak
+                backoff_note = ""
+                if streak >= FULL_CAR_GIVEUP_STREAK:
+                    self._giveup_backoff_until[cid] = now + FULL_CAR_BACKOFF_S
+                    backoff_note = (
+                        f" — backing off {FULL_CAR_BACKOFF_S / 60.0:.0f} min "
+                        f"after {streak} declined ladders"
+                    )
                 return replace(
                     decision,
                     intent=ChargerIntent.IDLE,
                     commanded_amps=0,
                     reason=(
                         f"stability: no draw at {offer}A after escalation "
-                        f"— car not latching (full/refusing) — "
+                        f"— car not latching (full/refusing)"
+                        f"{backoff_note} — "
                         f"{decision.reason}"
                     ),
                 )

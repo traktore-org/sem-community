@@ -13,10 +13,11 @@ from custom_components.solar_energy_management.coordinator.forecast_reader impor
 DT_UTIL_PATH = "custom_components.solar_energy_management.coordinator.forecast_reader.dt_util"
 
 
-def _make_state(value):
-    """Create a mock HA state with the given value."""
+def _make_state(value, unit=None):
+    """Create a mock HA state with the given value (and optional unit)."""
     s = MagicMock()
     s.state = str(value)
+    s.attributes = {"unit_of_measurement": unit} if unit is not None else {}
     return s
 
 
@@ -111,9 +112,10 @@ class TestReadForecast:
             SOLCAST_ENTITIES["forecast_today"]: _make_state("25.5"),
             SOLCAST_ENTITIES["forecast_tomorrow"]: _make_state("20.0"),
             SOLCAST_ENTITIES["forecast_remaining"]: _make_state("15.0"),
-            SOLCAST_ENTITIES["power_now"]: _make_state("5.2"),  # kW for solcast
-            SOLCAST_ENTITIES["power_next_hour"]: _make_state("6.0"),
-            SOLCAST_ENTITIES["peak_power_today"]: _make_state("8.5"),
+            # kW-declared source → converted to W by declared unit (#575)
+            SOLCAST_ENTITIES["power_now"]: _make_state("5.2", unit="kW"),
+            SOLCAST_ENTITIES["power_next_hour"]: _make_state("6.0", unit="kW"),
+            SOLCAST_ENTITIES["peak_power_today"]: _make_state("8.5", unit="kW"),
             SOLCAST_ENTITIES["peak_time_today"]: _make_state("13:30"),
         }
 
@@ -129,7 +131,7 @@ class TestReadForecast:
         assert data.forecast_today_kwh == 25.5
         assert data.forecast_tomorrow_kwh == 20.0
         assert data.forecast_remaining_today_kwh == 15.0
-        # Solcast reports kW, values < 100 get *1000
+        # kW-declared readings convert to W by unit, not magnitude (#575)
         assert data.power_now_w == 5200.0
         assert data.power_next_hour_w == 6000.0
         assert data.peak_power_today_w == 8500.0
@@ -149,7 +151,7 @@ class TestReadForecast:
         assert data.source == "forecast_solar"
         assert data.forecast_today_kwh == 18.0
         assert data.forecast_tomorrow_kwh == 22.0
-        # forecast.solar reports W directly (3500 > 100, no conversion)
+        # forecast.solar reports W (no kW unit declared → no conversion)
         assert data.power_now_w == 3500.0
 
     def test_read_forecast_no_source(self, mock_hass):

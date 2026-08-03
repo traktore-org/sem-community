@@ -107,7 +107,7 @@ Each configured charger creates its own sensor entities:
 
 ### Surplus Priority
 
-Set a priority per charger (1 = highest). The highest-priority charger gets surplus power first. When it's full or at minimum power, remaining surplus flows to the next charger.
+Each charger's surplus priority is its position in the **unified priority list** on the Control tab — drag its row up or down relative to loads and the battery (#576). The highest-priority charger gets surplus first; when it's full or at minimum power, the remainder flows down the list.
 
 ### Night Charging
 
@@ -308,7 +308,7 @@ data:
 
 | Field | Meaning |
 |---|---|
-| `daily_min_runtime_min` | Daily solar-runtime budget in minutes — the device rests once it has run this long today (the green slider handle) |
+| `daily_min_runtime_min` | Daily runtime *floor* in minutes (the green slider handle) — reaching it ends only the paid top-ups (overnight battery / cheap grid, where enabled); free solar surplus may carry the device on, up to the Max handle |
 | `top_up_policy` | `solar_only` (default, never grid) or `cheap_hours` (HW/HP off-peak top-up) |
 | `stop_entity` + `stop_at` | External completion condition |
 
@@ -320,19 +320,33 @@ data:
 #### What happens when the budget is NOT reached?
 
 **Surplus (solar only):** nothing is forced. On a dark day the device
-simply runs less than its budget and progress resets at midnight — this
-mode **never draws grid power**. The budget is a *ceiling*, not a floor:
-SEM will not run the device from grid to "catch up." If you need a
+simply runs less than its budget and progress resets at the day boundary —
+this mode **never draws grid power**. The budget is a *ceiling*, not a
+floor: SEM will not run the device from grid to "catch up." If you need a
 *guaranteed* minimum runtime even on cloudy days, run the device from your
 own automation triggered on `binary_sensor.sem_surplus_available` (see
 above), where you control the grid-vs-solar trade-off.
 
+**Cheap hours / "Finish overnight from" (#688):** the day's runtime target
+can be completed from the paid source during **tonight's** cheap windows —
+and "tonight" genuinely spans midnight: a load's runtime day is held
+through the night and rolls over at **sunrise**, so a cheap window at
+02:00 still fills *yesterday evening's* remaining minutes and books them
+to that day. What never happens is carry-over **across the sunrise
+boundary**: if the tariff offers no cheap window at all before sunrise,
+the day simply ends short and the new day starts at zero. This is
+deliberate — carried-over debt would compound across a cloudy or expensive
+week and force ever-longer grid runs to "repay" it.
+
 In every mode: **peak protection outranks the goal** (a device chasing
 its target still sheds for a grid peak), the anti-flicker minimums (5 min
-on / 1 min off) shape the switching, and once the target or the stop
-condition is reached the device is done for the day. A restart never
-orphans a device SEM switched on — running surplus devices are re-owned
-at boot.
+on / 1 min off) shape the switching, and once the daily **Max** cap or the
+stop condition is reached the device is done for the day. The **Min** is a
+floor, not a stop: reaching it ends the battery/grid top-ups, but free
+solar surplus may run the device on up to the Max — and when the surplus
+disappears, a load with its floor met stops instead of riding grid or
+battery (#688). A restart never orphans a device SEM switched on — running
+surplus devices are re-owned at boot.
 
 ## Appliance Dependencies
 
@@ -409,4 +423,4 @@ data:
 5. **Dashboard**: blocked devices show "⏳ Waiting for: {device}" and are visually indented
 6. **Drag protection**: children can't be dragged — they stay locked under their parent. Only parents can be reordered
 7. **Persistence**: dependency settings survive HA restarts
-8. **Circular detection**: SEM validates that dependencies don't form circular chains (A→B→A)
+8. **Circular protection**: a link that would form a loop (A→B→A, or a longer chain) is **rejected when you set it** — from the dashboard, from `set_device_property` and from `register_surplus_device` alike. SEM keeps your existing link and logs a warning naming the rejected one; there is no separate validation report to run. A loop already sitting in storage from an older version is broken automatically on the next restart, again with a warning naming the dropped link.

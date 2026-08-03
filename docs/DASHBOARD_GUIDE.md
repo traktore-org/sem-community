@@ -4,7 +4,7 @@
 
 # Solar Energy Management - Dashboard Guide
 
-Complete guide for the SEM dashboard — a 7-tab glassmorphism interface with animated system diagram, real-time energy flows, cost tracking, and environmental impact.
+Complete guide for the SEM dashboard — an 8-tab glassmorphism interface with animated system diagram, real-time energy flows, cost tracking, and environmental impact.
 
 ![Dashboard Home](images/sem_home_tab.png)
 
@@ -175,7 +175,7 @@ Entity types use a searchable entity picker filtered to the right domain. **Rese
 ![Configuration Tab](images/sem_config_tab.png)
 
 The single home for **every changeable setting** (`sem-config-card`),
-organized in collapsible sections: Setup overview, EV chargers, Battery
+organized in collapsible sections: Setup overview, Sensor sources (power-source overrides for grid / solar / battery, #628), EV chargers, Battery zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load management, Solar forecast, PV strings (when 2+ strings are detected), Notifications, and Advanced
 zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load
 management, Solar forecast, Notifications, and Advanced (update
 interval, deltas, min solar power, regulation offset, Observer Mode).
@@ -222,16 +222,22 @@ Diagnostics and health monitoring.
 
 ## Required HACS Cards
 
-Install these via HACS > Frontend before the dashboard will render:
+**None** (#617 — zero-prerequisite dashboard). Everything on the dashboard is
+a bundled `sem-*` card or a native HA type; the glass styling is baked into the
+SEM cards themselves and the charts use a locally vendored Chart.js.
 
-| Card | HACS Repository | Purpose |
-|------|-----------------|---------|
-| `card-mod` | `thomasloven/lovelace-card-mod` | Glass card styling via `*glass_card` anchor. **Missing = blank tabs.** |
-| `mushroom` | `piitaya/lovelace-mushroom` | Chips, entity, template, number, and title sub-cards used inside SEM cards |
-| `apexcharts-card` | `RomRider/apexcharts-card` | All trend, power, and cost charts |
-| `sankey-chart` | `MindFreeze/sankey-chart` | Energy flow diagram on the Energy tab |
+Optional, auto-detected by the dashboard generator:
 
-**4 required HACS cards** (card-mod, mushroom, apexcharts-card, sankey-chart). Everything else on the dashboard is a bundled `sem-*` card or a native HA type. Optional: `k-flow-card` for the animated flow diagram on the Home tab (SEM falls back to its built-in system diagram if absent).
+| Card | HACS Repository | What it adds when installed |
+|------|-----------------|------------------------------|
+| `sankey-chart` | `MindFreeze/ha-sankey-chart` | Richer SEM-entity energy-flow sankey on the Energy tab; HA's native `energy-sankey` card is used otherwise |
+| `k-flow-card` | — | Animated flow visualization replacing the built-in system diagram (opt-in via *Diagram style*) |
+
+History: until v1.7.5 the docs listed 4 required cards (card-mod, mushroom,
+apexcharts-card, sankey-chart). A 2026-07 audit found mushroom and apexcharts
+had **zero remaining uses**, card-mod styled only five SEM-owned cards (now
+self-styled), and sankey gained the native fallback — so the requirement list
+went to zero. Installs that already have those cards are unaffected.
 
 ---
 
@@ -243,7 +249,7 @@ These ship with the integration — no HACS installation needed:
 |------|---------|
 | `sem-flow-card` | Animated SVG power flow with daily energy, autarky gauge, visual config editor, tap actions, up to 6 individual devices |
 | `sem-system-diagram-card` | Illustrated SVG energy system diagram with detailed component drawings, animated spark flows, time-based sun arc, clickable nodes, responsive layouts |
-| `sem-solar-summary-card` | Solar production metrics with animated glow ring and forecast |
+| `sem-solar-card` | Solar production metrics with animated glow ring and forecast |
 | `sem-weather-card` | Live clock, weather conditions, colored temperature forecast bars |
 | `sem-chart-card` | Chart.js-powered charts with 6 presets (costs, savings, energy, power, battery, EV) |
 | `sem-period-selector-card` | Date range picker controlling all chart cards |
@@ -350,7 +356,7 @@ ha-card {
 
 ## Multi-Language Support
 
-SEM supports 15 languages: Czech, Danish, German, English, Spanish, Finnish, French, Hungarian, Italian, Dutch, Norwegian, Polish, Portuguese, Romanian, and Swedish.
+SEM supports 16 languages: Czech, Danish, German, English, Spanish, Finnish, French, Hungarian, Italian, Dutch, Norwegian, Polish, Portuguese, Romanian, Swedish, and Simplified Chinese (`zh` — also used when Home Assistant reports `zh-Hans`).
 
 ### How Translation Works — Two Language Settings
 
@@ -358,14 +364,14 @@ Home Assistant has two independent language settings. SEM uses both:
 
 | Setting | Where to change | What it affects in the dashboard |
 |---------|----------------|----------------------------------|
-| **System language** | Settings → General → Language | Mushroom card titles and labels, section headers, chart titles from ApexCharts/Sankey, all static YAML-based text |
+| **System language** | Settings → General → Language | Section headers, native/optional card titles and all static YAML-based text baked in at dashboard generation |
 | **User profile language** | Your profile → Language | SEM custom cards: flow card, chart card, battery card, EV status, period selector, solar summary, weather card |
 
 #### What this means in practice
 
-- **Same language for everyone:** If the system language is German, all mushroom cards, chart labels, and static text appear in German for every user.
+- **Same language for everyone:** If the system language is German, all generation-time text (section headers, static labels) appears in German for every user.
 - **Per-user SEM cards:** If one user sets their profile to English and another to French, the SEM flow card, chart card, and other SEM cards will show each user's chosen language.
-- **Mixed-language scenario:** System = German, user profile = English → mushroom cards show German, SEM cards show English. This is by design, not a bug.
+- **Mixed-language scenario:** System = German, user profile = English → generation-time text shows German, SEM cards show English. This is by design, not a bug.
 
 #### How to ensure consistent language
 
@@ -382,7 +388,7 @@ For all text to appear in the same language:
 
 | Action | What changes |
 |--------|-------------|
-| Change **system language** + regenerate dashboard | Mushroom cards, chart labels, section headers, tab names (reloads live, no HA restart) |
+| Change **system language** + regenerate dashboard | Section headers, static labels, tab names (reloads live, no HA restart) |
 | Change **user profile language** | SEM custom cards update immediately (no regeneration needed) |
 | Add new translations to `translations.json` | Must regenerate `sem-localize.js` + redeploy + regenerate dashboard (hard-refresh after — browser-cached `sem-localize.js`) |
 
@@ -395,10 +401,10 @@ For all text to appear in the same language:
 2. Hard-refresh your browser (Ctrl+Shift+R)
 
 ### Cards showing "Custom element doesn't exist"
-A required HACS card is missing. Check the browser console for the card name, install it via HACS, and hard-refresh.
+If the element name starts with `sem-`, SEM's card bundle didn't register — restart Home Assistant and hard-refresh. Any other name means the dashboard was generated while an *optional* card (sankey-chart, k-flow) was installed and it has since been removed — re-run *generate dashboard* to regenerate with the built-in fallbacks. No card install is required since v1.7.5 (#617).
 
 ### Blank Home tab
-Missing `card-mod` — the `*glass_card` styling anchor requires it. Install via HACS.
+Should not occur since v1.7.5 (styling is built into the SEM cards; card-mod is no longer used). A blank tab is almost always a stale browser/service-worker cache after an update — hard-refresh (Ctrl+Shift+R) or clear the Companion app's frontend cache.
 
 ### Entity not found errors
 The dashboard references SEM sensors that may not exist yet. Wait for the first coordinator cycle (10 seconds after restart) and refresh.

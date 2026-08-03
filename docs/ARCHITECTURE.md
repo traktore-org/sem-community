@@ -8,7 +8,7 @@ This document covers the internal architecture of Solar Energy Management (SEM) 
 >   OFF/IDLE/CHARGE → ActionKind) drives an observe/apply layer that issues the
 >   minimum commands to converge, then leaves the charger alone (idempotent idle,
 >   heartbeat re-writes, failsafe armed once, enable-switch reconciliation + backoff
->   #392/#536). It replaces the legacy per-cycle imperative `actuate()`.
+>   #392/#536). It replaces the legacy per-cycle imperative `actuate()` *body* (the wrapper function remains as a thin delegation).
 > - **Pure battery decision** — `coordinator/decide_battery.py`
 >   (`decide_battery(view) → BatteryDecision`, precedence FORCE_CHARGE →
 >   STOP_FORCE_CHARGE → LIMIT_DISCHARGE → NORMAL). The LIMIT_DISCHARGE clamp now
@@ -148,6 +148,64 @@ intents (`NORMAL`, `LIMIT_DISCHARGE`, `FORCE_CHARGE`,
 that pre-v1.7.0 lived alongside is preserved verbatim — it
 produces the `SchedulerDecision` that feeds `BatteryView.scheduler_decision`.
 
+### Compute intent → reconcile (load side)
+
+Surplus loads (switches, climate, heat pump, hot water) follow the **same
+decide → actuate shape**, expressed as three clean layers. This is the arc
+every load feature docks onto — get the layer right and observer mode, the
+tests, and the anti-cycle all come for free.
+
+```
+   sensors + config
+         │
+   ┌─────▼──────────────────────────────────┐
+   │ 1. MANAGEMENT   compute_load_intent()   │  pure — decide policy for ONE device
+   │    per device → LoadIntent(on, power_w, │  (never touches hardware or the clock)
+   │                 source, reason)         │
+   └─────┬──────────────────────────────────┘
+   ┌─────▼──────────────────────────────────┐
+   │ 2. DECISION     _desired_intents()      │  pure — the whole-set priority walk:
+   │    surplus accounting, reclaim handoff, │  surplus/reclaim/peak-shed → one intent
+   │    peak-shed set → {device_id: intent}  │  per device (no hardware, no clock)
+   └─────┬──────────────────────────────────┘
+   ┌─────▼──────────────────────────────────┐
+   │ 3. EXECUTION    reconcile_load(intent)  │  THE ONLY place a load is actuated.
+   │    activate / deactivate / adjust_power │  Anti-cycle (min_on/min_off) lives here.
+   │    ── observer? → LOG "WOULD …", return │  ← the single trigger, cut in one branch
+   └─────────────────────────────────────────┘
+```
+
+- **Layers 1 + 2 never touch hardware** — they read the live sensors and emit
+  intents. On HA-TEST (shared real hardware, observer mode) they run *for real*
+  against live data.
+- **Layer 3 is the single seam.** `reconcile_load(device, intent, observer=)`
+  is the *only* function that flips a load. Observer mode is one branch inside
+  it: log the command it would send (`WOULD ACTIVATE …`), actuate nothing. There
+  is **no separate `observe_only` path** — a clean layer cut makes observation a
+  one-flag branch, so HA-TEST gets the full real decision trace with zero
+  hardware risk. (The existence of a parallel "observe" implementation was the
+  smell that the layers weren't cut; removed in the desired-state arc.)
+- `compute_load_intent`'s `source` (`solar` / `tier1_battery` / `tier2_battery`
+  / `cheap_grid` / `None`) is the whole vocabulary — it drives the anti-cycle
+  markers (`_batt_overnight_forced`, `_offpeak_forced`) and the "not-SEM-driven"
+  guard (`source is None` ⇒ never re-tune a load SEM isn't driving).
+
+**Where the next extension docks** — attach at the layer that matches the change,
+never spread across them:
+
+| You are adding… | Dock at | Do NOT |
+|---|---|---|
+| a new reason a load turns on/off (deadline, price, comfort) | **layer 1** — a new precedence branch + `source` in `compute_load_intent` | add an `if` next to an `activate()` call |
+| a new whole-set rule (a new shed policy, a fairness split) | **layer 2** — `_desired_intents` walk | mutate device state mid-walk |
+| a new actuation target (a new device kind, a dimmer) | **layer 3** — one new branch in `reconcile_load` | add a second actuation site |
+| observer/dry-run behaviour for the above | nothing — it's already free at the seam | re-add a parallel read-only path |
+
+Rule of thumb: **if a change needs to touch both a decision and an `activate()`
+call, it's docking at the wrong layer.** Decisions produce intents; only
+`reconcile_load` acts. This is what keeps the "gate blocks activation but doesn't
+stop a running device" bug class (BUG_CLASSES #17) structurally impossible — the
+stop path *is* the intent, not a separate branch someone can forget.
+
 ### Invariant suite — the safety net
 
 `tests/test_step8_invariants.py` pins 233 architectural contracts
@@ -166,16 +224,16 @@ deploying to HA-TEST and watching log lines for the rare combination
 that triggered a bug. The deterministic CI scenarios run in under a
 second.
 
-### What's queued for v1.7.1
+### Delivered during the v1.7.x line
 
-- Per-inverter / per-battery dashboard sensors (gated on `len(...) >= 2`)
-- Per-inverter / per-battery flow attribution in `flow_calculator`
-- `sensor_reader` migration to populate `EnergyTotals.per_inverter` /
-  `per_battery` each cycle
-- Delete the `BatteryProtectionMixin` + `BatteryChargeAdapter` shells
-  (currently left in the tree as backward-compat wrappers; the
-  new `BatteryControlAdapter` already supersedes them)
-- Per-string-to-destination attribution (#312 deferred work)
+- Per-inverter / per-battery dashboard sensors + flow attribution (#623,
+  v1.7.2–v1.7.5) and the `sensor_reader` per-unit population
+- `BatteryProtectionMixin` / `BatteryChargeAdapter` shells deleted (#624);
+  `BatteryControlAdapter` is the only battery control surface
+- Unit-safe, fail-closed battery power writes centralized in
+  `power_control.py` (#702)
+
+Still deferred: per-string-to-destination attribution (#312).
 
 ---
 
@@ -195,7 +253,25 @@ coordinator/
 ├── decide_battery.py       — Pure decide_battery(view) → BatteryDecision
 ├── actuate.py              — Thin delegation of ChargerDecision to ChargerReconciler
 ├── actuate_battery.py      — Intent dispatch onto BatteryControlAdapter
+├── power_control.py        — Unit-safe battery power setpoint writes (#702):
+│                             fail-closed validation + W↔kW conversion; rejects
+│                             current/percent/unitless-unknown/out-of-range controls
 ├── build_view.py           — Builds ChargerView from PowerReadings + config
+├── charge_stability.py     — Stability filter between decide() and actuate():
+│                             median smoothing, enable/disable delays, start-kick
+│                             ladder, full-car backoff (#610), restart-safe timers
+├── charger_reconciler.py   — Desired-vs-observed charger convergence (#392);
+│                             minimum commands, enable-switch backoff
+├── device_reconciler.py    — Observe-only reconcile for generic surplus devices
+├── per_charger_context.py  — PerChargerContext/PerChargerState — per-charger state
+│                             via property dispatch; swap surface fully retired (#589)
+├── ev_control.py           — EVControlMixin: per-charger helpers (this-charger power,
+│                             config resolution) under the FLEET-READ lint
+├── battery_charge_scheduler.py — Cheap-window battery charging + (deactivated)
+│                             export arbitrage (#523/#533)
+├── cycle_trace.py          — Perception/trace layer: cross-checks, sign-contradiction
+│                             audits, health alarms (#589/#590, docs/SEM_TRACE.md)
+├── vpp_dispatch.py         — Grid/VPP event dispatch, observer-first (#580)
 ├── charging_control.py     — ChargingStateMachine (legacy; produces sensor display
 │                             state, no longer authoritative for control)
 ├── ev_taper_detector.py    — EVTaperDetector (taper detection, virtual SOC, skip logic)
@@ -429,7 +505,7 @@ The schedule adapts at runtime when actual EV power differs from planned.
 | `battery_min_deficit_kwh` | 2.0 | Minimum deficit to bother charging |
 | `battery_pessimism_weight` | 0.3 | Forecast pessimism (0=trust, 1=worst case) |
 | `battery_force_charge_negative_price` | `true` | Charge during negative prices |
-| `peak_limit_w` | 0 | House connection peak limit |
+| `target_peak_limit` | 5.0 kW | House peak limit the night schedule respects (shared with load management, #693) |
 | `battery_max_grid_import_w` | 0 | Max grid draw during charging |
 
 ### Sensors
@@ -867,7 +943,6 @@ Each charger has independent:
 tariff/tariff_provider.py       — StaticTariffProvider, DynamicTariffProvider
 analytics/pv_performance.py     — PVPerformanceAnalyzer
 analytics/energy_assistant.py   — EnergyAssistant (tips, optimization score)
-utility_signals.py              — UtilitySignalMonitor (ripple control signal)
 utils/time_manager.py           — TimeManager (sunrise, night mode/end, meter day)
 utils/helpers.py                — safe_float, safe_format, convert_power_to_watts
 ha_energy_reader.py             — Read HA Energy Dashboard config
@@ -898,7 +973,7 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All YAML-based card content — mushroom titles, labels, tab names, template strings
 
 **How it works:**
-1. Loads `dashboard/translations.json` (single source of truth, 1116 keys × 15 languages)
+1. Loads `dashboard/translations.json` (single source of truth, 1166 keys × 16 languages)
 2. Builds a reverse lookup: English text → translated text
 3. Walks the entire dashboard YAML tree
 4. Replaces exact-match English strings in translatable fields: `title`, `subtitle`, `primary`, `secondary`, `name`, `label`, `content`
@@ -919,7 +994,7 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All SEM custom card content (labels, status text, error messages)
 
 **How it works:**
-1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1116 keys × 15 languages as a JS object
+1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1166 keys × 16 languages as a JS object
 2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`
 3. Fires `sem-localize-ready` CustomEvent when loaded
 4. SEM cards extend `SEMBaseCard` (in `sem-shared.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
@@ -957,7 +1032,7 @@ A household may have the system set to German, but one user's profile set to Eng
 Both layers read from the same file: **`dashboard/translations.json`**
 
 ```
-dashboard/translations.json          ← single source (1116 keys × 15 languages)
+dashboard/translations.json          ← single source (1166 keys × 16 languages)
     │
     ├──→ dashboard_generator.py      reads at generation time (server-side)
     │
@@ -979,6 +1054,6 @@ Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), 
 
 ### Adding a New Translation Key
 
-1. Add the key to **all 15 languages** in `translations.json`
+1. Add the key to **all 16 languages** in `translations.json`
 2. Regenerate `sem-localize.js`
 3. Use `_t('key_name')` in custom card JS, or use the English text directly in dashboard template YAML (server-side translation handles the lookup)

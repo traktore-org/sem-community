@@ -54,6 +54,7 @@ which service live here.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -158,6 +159,14 @@ class KebaAdapter(ChargerAdapter):
         # Ensure a session is open so ``set_current`` is meaningful.
         if not getattr(self._device, "_session_active", False):
             await self._device.start_session(energy_target_kwh=0)
+        # (#553 follow-up) Verify the runaway-cap energy target is actually
+        # RELEASED at the box — KEBA is lossy UDP, and a dropped release left
+        # the box killing every session at its armed 1 kWh guard while SEM
+        # kept writing currents (PROD 2026-07-17 burst-cycling). Reconcile the
+        # guard register like the current: cheap no-op when already clear.
+        _ensure = getattr(self._device, "ensure_energy_guard_released", None)
+        if _ensure is not None and inspect.iscoroutinefunction(_ensure):
+            await _ensure()
 
         await self._device._set_current(amps)
         self._last_intent = ChargerIntent.CHARGE_AT_AMPS
