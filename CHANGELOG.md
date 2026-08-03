@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.1] — 03.08.2026 *(unreleased — entries land at merge; header renumbers at tag if the 1.8 line opens first)*
+
+### ✨ Features
+
+- ⚡ **Dual-source phase guard now enforces in the EV write path** (by @tintinz in #712) —
+  the read-only per-phase diagnostics from #707 gain an opt-in enforcement mode: every
+  non-DISABLE charging intent is clamped to the measured per-phase headroom before it
+  reaches the charger, fail-closed on missing/stale/invalid readings, fully gated in
+  observer mode, wired into both the multi-charger and legacy single actuation paths.
+  All five config keys editable in the options flow; disabled by default.
+- 💶 **Variable grid import surcharge for dynamic tariffs** (by @tintinz in #710) — a
+  configurable surcharge (grid fees, taxes) is added on top of the raw dynamic price at
+  every import-cost site, applied exactly once (the `effective_import_floor` double-count
+  trap is test-pinned), export/feed-in untouched. Translations complete across all 16
+  languages.
+
 # [1.7.5] — 03.08.2026
 
 > **Stable release.** Consolidates the 1.7.5 beta line (beta.1 → beta.38, detailed
