@@ -822,6 +822,14 @@ class NotificationManager:
         if flag in self._notified_flags:
             return
         self._notified_flags.add(flag)
+        # The opposite (stop) flag is released too — mirrors notify_ev_estimate_stop
+        # releasing resume — so a second estimate-based stop later in the SAME
+        # session (e.g. the resumed top-up itself re-crosses the ceiling while
+        # the sensor is still stale) can announce itself instead of being
+        # silently swallowed.
+        self._notified_flags.discard(
+            f"ev_estimate_stop_{key}" if key else "ev_estimate_stop"
+        )
 
         label = charger_name or "EV"
         self.hass.bus.async_fire(f"{DOMAIN}_notification", {
@@ -886,6 +894,25 @@ class NotificationManager:
         key = flag_key or charger_name
         flag = f"ev_deadline_unreachable_{key}" if key else "ev_deadline_unreachable"
         self._notified_flags.discard(flag)
+
+    def clear_estimate_flags(
+        self, charger_name: str | None = None, flag_key: str | None = None,
+    ) -> None:
+        """Clear both #708 estimate flags on disconnect.
+
+        ``reset()`` (below) exists but is never called in the running
+        coordinator, so without this the stop/resume flags never clear on
+        their own — call this at the same per-charger disconnect
+        transition that resets the taper detector's session anchor, so a
+        NEW session can announce its own stop/resume from a clean slate.
+        """
+        key = flag_key or charger_name
+        self._notified_flags.discard(
+            f"ev_estimate_stop_{key}" if key else "ev_estimate_stop"
+        )
+        self._notified_flags.discard(
+            f"ev_estimate_resume_{key}" if key else "ev_estimate_resume"
+        )
 
     def reset(self) -> None:
         """Reset notification state."""

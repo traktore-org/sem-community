@@ -289,3 +289,127 @@ class TestRestartSafety:
         fresh.restore_state(state)
         assert fresh._soc_anchor_value is None
         assert fresh.energy_accounted_soc() is None
+
+
+# ──────────────────────────────────────────────
+# Multi-charger disconnect reset (review BLOCKER)
+# ──────────────────────────────────────────────
+#
+# ``_update_ev_intelligence`` resets a taper detector's session on
+# disconnect, but that reset only ever reaches the PRIMARY charger — it
+# reads ``self._ev_taper_detector``, a computed property that resolves to
+# ``_ev_taper_detectors[primary_id]``, gated on the fleet-wide OR of every
+# charger's connection state. #708 put steering-critical session state (the
+# SOC anchor) on the same detector class, so a SECONDARY charger's stale
+# anchor from a finished session could survive into its own next session
+# and falsely report the SOC target already met on the very first cycle.
+# ``_reset_per_charger_estimate_state`` closes the gap: called from inside
+# the per-charger loop with THIS charger's own before/after connected
+# state, so it resets the correct detector regardless of which charger is
+# primary.
+
+class TestMultiChargerSessionReset:
+    def _coord_with_notifier(self, detectors):
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord._ev_taper_detectors = detectors
+        coord._notification_manager = MagicMock()
+        return coord
+
+    def test_secondary_charger_disconnect_resets_only_its_own_detector(self):
+        """The BLOCKER scenario: 'b' is NOT primary. Its stale anchor must
+        not survive its own disconnect just because the fleet-scoped path
+        only ever touches 'a' (the primary)."""
+        det_a = _detector()
+        det_a.get_virtual_soc(55.0)
+        det_b = _detector()
+        det_b.get_virtual_soc(55.0)
+        _feed_energy(det_b, 4.7)  # b's stale session reached target
+        coord = self._coord_with_notifier({"a": det_a, "b": det_b})
+        coord._last_ev_connected = False  # b just disconnected
+
+        coord._reset_per_charger_estimate_state("b", was_connected=True)
+
+        assert det_b._soc_anchor_value is None
+        assert det_b.energy_accounted_soc() is None
+        # 'a' (primary) untouched by a reset scoped to 'b'.
+        assert det_a._soc_anchor_value == 55.0
+
+    def test_reconnect_after_reset_does_not_falsely_cap_new_session(self):
+        """After the fix, 'b' reconnects with a real lower SOC — remaining
+        need must reflect the NEW reading, not the stale estimate."""
+        det_b = _detector()
+        det_b.get_virtual_soc(55.0)
+        _feed_energy(det_b, 4.7)  # old session's estimate reached 60 target
+        coord = self._coord_with_notifier({"b": det_b})
+        coord._last_ev_connected = False
+        coord._reset_per_charger_estimate_state("b", was_connected=True)
+
+        # New session: car reconnects, sensor reports a real (lower) SOC.
+        det_b.get_virtual_soc(40.0)
+        coord.config = {"ev_target_type": "soc", "ev_target_soc": 60,
+                         "ev_battery_capacity_kwh": CAPACITY, "daily_ev_target": 10}
+        cfg = {"id": "b", "ev_target_type": "soc", "ev_target_soc": 60,
+               "ev_battery_capacity_kwh": CAPACITY}
+        remaining = _floor(coord, vehicle_soc=40.0, charger_cfg=cfg)
+        assert remaining == pytest.approx((60 - 40) / 100 * CAPACITY)
+
+    def test_still_connected_does_not_reset(self):
+        """No transition (still connected) → anchor must survive untouched."""
+        det = _detector()
+        det.get_virtual_soc(55.0)
+        _feed_energy(det, 2.0)
+        anchor_before = det._soc_anchor_value
+        coord = self._coord_with_notifier({"c1": det})
+        coord._last_ev_connected = True  # still connected this cycle
+
+        coord._reset_per_charger_estimate_state("c1", was_connected=True)
+
+        assert det._soc_anchor_value == anchor_before
+
+    def test_fresh_connect_does_not_reset(self):
+        """False→True (a fresh connect, not a disconnect) must not reset."""
+        det = _detector()
+        det.get_virtual_soc(55.0)
+        coord = self._coord_with_notifier({"c1": det})
+        coord._last_ev_connected = True
+
+        coord._reset_per_charger_estimate_state("c1", was_connected=False)
+
+        assert det._soc_anchor_value == 55.0
+
+    def test_clears_this_chargers_notification_flags(self):
+        det = _detector()
+        coord = self._coord_with_notifier({"c1": det})
+        coord._last_ev_connected = False
+
+        coord._reset_per_charger_estimate_state("c1", was_connected=True)
+
+        coord._notification_manager.clear_estimate_flags.assert_called_once_with(
+            flag_key="c1"
+        )
+
+    def test_unknown_charger_id_is_a_safe_noop(self):
+        coord = self._coord_with_notifier({"a": _detector()})
+        coord._last_ev_connected = False
+        coord._reset_per_charger_estimate_state("nonexistent", was_connected=True)
+        # no exception; the notification manager is still consulted
+        coord._notification_manager.clear_estimate_flags.assert_called_once_with(
+            flag_key="nonexistent"
+        )
+
+    def test_missing_detectors_attr_is_safe(self):
+        """The bare __new__ harness coordinator without _ev_taper_detectors
+        set at all must not raise (mirrors test_bare_coordinator_* above)."""
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord._notification_manager = MagicMock()
+        coord._last_ev_connected = False
+        coord._reset_per_charger_estimate_state("c1", was_connected=True)  # no raise
+
+    def test_missing_notification_manager_is_safe(self):
+        det = _detector()
+        det.get_virtual_soc(55.0)
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord._ev_taper_detectors = {"c1": det}
+        coord._last_ev_connected = False
+        coord._reset_per_charger_estimate_state("c1", was_connected=True)  # no raise
+        assert det._soc_anchor_value is None

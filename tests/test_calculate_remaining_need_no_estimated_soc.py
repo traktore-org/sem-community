@@ -81,10 +81,16 @@ def test_detector_access_is_energy_accounted_only():
     """#708 — detector access exists solely to call ``energy_accounted_soc``.
 
     Collects every name bound from ``self._ev_taper_detector[s]`` and
-    asserts that any method invoked on such a name (or directly on the
-    detector attribute) is in the allowlist. A future edit that pulls
-    anything else off the detector — the virtual SOC, taper state,
-    session internals — fails here with the #446 history attached.
+    asserts that every ATTRIBUTE reached on such a name (or directly on the
+    detector attribute) is in the allowlist — whether it's called as a
+    method or just read bare. A future edit that pulls anything else off
+    the detector — the virtual SOC, taper state, session internals — fails
+    here with the #446 history attached.
+
+    (Reviewed 2026-08-03: an earlier version of this test only walked
+    ``ast.Call`` nodes, so a bare attribute read like ``det._soc_anchor_value``
+    — no call, just a lookup — slipped through unnoticed. Walking every
+    ``ast.Attribute`` node closes that gap.)
     """
     fn = _load_fn()
 
@@ -99,21 +105,18 @@ def test_detector_access_is_energy_accounted_only():
                         detector_names.add(target.id)
 
     for node in ast.walk(fn):
-        if not isinstance(node, ast.Call):
+        if not isinstance(node, ast.Attribute):
             continue
-        func = node.func
-        if not isinstance(func, ast.Attribute):
-            continue
-        base = func.value
-        is_detector_method = (
+        base = node.value
+        is_detector_attr = (
             (isinstance(base, ast.Name) and base.id in detector_names)
             or (isinstance(base, ast.Attribute) and base.attr in _DETECTOR_ATTRS)
         )
-        if is_detector_method and func.attr not in _ALLOWED_DETECTOR_METHODS:
+        if is_detector_attr and node.attr not in _ALLOWED_DETECTOR_METHODS:
             raise AssertionError(
-                f"_calculate_remaining_need calls detector method "
-                f"{func.attr!r} at line {node.lineno}. Only "
+                f"_calculate_remaining_need reaches detector attribute "
+                f"{node.attr!r} at line {node.lineno}. Only "
                 f"{sorted(_ALLOWED_DETECTOR_METHODS)} are sanctioned (#708); "
                 "everything else on the detector is the speculative surface "
-                "#446 banned from budgets."
+                "#446 banned from budgets — whether called or just read."
             )

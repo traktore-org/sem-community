@@ -1640,6 +1640,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # detectors exist the getter still resolves the primary from them.
         self._ev_taper_detector_default = value
 
+    def _reset_per_charger_estimate_state(self, cid: str, was_connected: bool) -> None:
+        """#708 — clear THIS charger's energy-accounted-SOC anchor and
+        estimate-stop/resume flags on ITS OWN disconnect transition.
+
+        ``_update_ev_intelligence`` resets the taper detector too, but only
+        the PRIMARY charger's (``self._ev_taper_detector`` is computed from
+        ``_ev_taper_detectors[primary_id]``), gated on the fleet-wide OR of
+        every charger's connection state. #708 added steering-critical
+        session fields (the SOC anchor) to the same detector class, so a
+        secondary charger's stale anchor could otherwise survive into its
+        next session and falsely cap the SOC target as already met. Call
+        this from inside the per-charger loop, where ``was_connected`` /
+        ``self._last_ev_connected`` are already swapped to THIS charger's
+        values, so the reset is scoped correctly regardless of which
+        charger is primary.
+        """
+        if not (was_connected and not self._last_ev_connected):
+            return
+        det = (getattr(self, "_ev_taper_detectors", None) or {}).get(cid)
+        if det is not None:
+            det.reset_session()
+        nm = getattr(self, "_notification_manager", None)
+        if nm is not None:
+            nm.clear_estimate_flags(flag_key=cid)
+
     @property
     def _ev_stalled_since(self) -> Optional[float]:
         """#589 Surface-A — this charger's stall timestamp, backed by the
@@ -2561,7 +2586,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         pc_chg_map = getattr(power, "ev_charging_per_charger", None) or {}
                         if cid in pc_chg_map:
                             power.ev_charging = bool(pc_chg_map[cid])
+                    was_connected_this_cid = self._last_ev_connected
                     self._update_session_tracking(power, charger_flows)
+                    self._reset_per_charger_estimate_state(cid, was_connected_this_cid)
                     # Save back per-charger state
                     self._session_data_per_charger[cid] = self._session_data
                     self._last_ev_connected_per_charger[cid] = self._last_ev_connected
