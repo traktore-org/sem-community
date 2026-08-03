@@ -769,6 +769,78 @@ class NotificationManager:
     # longer load-bearing in any decision path. Tests of the old
     # behaviour are updated to assert the methods are absent.
 
+    async def notify_ev_estimate_stop(
+        self, target_soc: float, sensor_soc: float, sensor_age_min: float,
+        *, charger_name: str | None = None, flag_key: str | None = None,
+    ) -> None:
+        """The energy-accounted estimate ended a charge the stale sensor
+        would have run on (#708). Explains "why did SEM stop before my
+        target shows reached" before it becomes an issue report. Fires
+        once per session per charger; the opposite (resume) flag is
+        released so a later resume may announce itself.
+        """
+        key = flag_key or charger_name
+        flag = f"ev_estimate_stop_{key}" if key else "ev_estimate_stop"
+        if flag in self._notified_flags:
+            return
+        self._notified_flags.add(flag)
+        self._notified_flags.discard(
+            f"ev_estimate_resume_{key}" if key else "ev_estimate_resume"
+        )
+
+        label = charger_name or "EV"
+        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+            "category": "charging",
+            "event": "ev_estimate_stop",
+            "charger_name": label,
+            "target_soc": round(target_soc),
+            "sensor_soc": round(sensor_soc),
+            "sensor_age_min": round(sensor_age_min),
+        })
+        from ..utils.translate import get_text
+        await self._send_mobile_notification(
+            get_text(self.hass, "notif_ev_estimate_stop",
+                "{name}: stopped at ~{target:.0f}% (estimated) — car sensor is "
+                "{age:.0f} min old (last: {sensor:.0f}%). SEM measured the "
+                "delivered energy and stopped to protect your target.",
+                name=label, target=target_soc, sensor=sensor_soc,
+                age=sensor_age_min),
+            channel=_CHANNEL_CHARGING,
+            group="sem_charging",
+        )
+
+    async def notify_ev_estimate_resume(
+        self, sensor_soc: float, target_soc: float,
+        *, charger_name: str | None = None, flag_key: str | None = None,
+    ) -> None:
+        """A fresh sensor reading landed below target after an
+        estimate-based stop — SEM auto-resumes for the difference (#708).
+        Fires once per session per charger.
+        """
+        key = flag_key or charger_name
+        flag = f"ev_estimate_resume_{key}" if key else "ev_estimate_resume"
+        if flag in self._notified_flags:
+            return
+        self._notified_flags.add(flag)
+
+        label = charger_name or "EV"
+        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+            "category": "charging",
+            "event": "ev_estimate_resume",
+            "charger_name": label,
+            "target_soc": round(target_soc),
+            "sensor_soc": round(sensor_soc),
+        })
+        from ..utils.translate import get_text
+        await self._send_mobile_notification(
+            get_text(self.hass, "notif_ev_estimate_resume",
+                "{name}: car reported {sensor:.0f}% — topping up to your "
+                "{target:.0f}% target.",
+                name=label, sensor=sensor_soc, target=target_soc),
+            channel=_CHANNEL_CHARGING,
+            group="sem_charging",
+        )
+
     async def notify_ev_deadline_unreachable(
         self, remaining_kwh: float, hours_left: float, deadline: str,
         *, charger_name: str | None = None, flag_key: str | None = None,

@@ -1241,7 +1241,12 @@
     "config_help_grid_power_sensor": "Overrides the auto-detected grid power sensor. The import/export sign convention is detected automatically on the chosen sensor. Leave empty for auto (Energy Dashboard).",
     "config_sources_all_auto": "all auto (Energy Dashboard)",
     "config_sources_overridden": "overridden",
-    "config_source_unavailable": "override sensor unavailable — SEM keeps reading it (no silent fallback). Fix the sensor or clear the override."
+    "config_source_unavailable": "override sensor unavailable — SEM keeps reading it (no silent fallback). Fix the sensor or clear the override.",
+    "notif_ev_estimate_stop": "{name}: stopped at ~{target:.0f}% (estimated) — car sensor is {age:.0f} min old (last: {sensor:.0f}%). SEM measured the delivered energy and stopped to protect your target.",
+    "notif_ev_estimate_resume": "{name}: car reported {sensor:.0f}% — topping up to your {target:.0f}% target.",
+    "soc_info_line": "Car: {soc}% ({age} min ago) · est. now ~{est}%",
+    "soc_target_reached_est": "Target reached — ~{est}% estimated",
+    "soc_confirms_next_update": "car sensor {age} min old; confirms on next update"
   },
   "de": {
     "charging": "Laden",
@@ -2485,7 +2490,12 @@
     "config_help_grid_power_sensor": "Überschreibt den automatisch erkannten Netzleistungssensor. Die Import/Export-Vorzeichenkonvention wird am gewählten Sensor automatisch erkannt. Leer lassen für Auto (Energie-Dashboard).",
     "config_sources_all_auto": "alles auto (Energie-Dashboard)",
     "config_sources_overridden": "überschrieben",
-    "config_source_unavailable": "Override-Sensor nicht verfügbar — SEM liest ihn weiter (kein stiller Fallback). Sensor reparieren oder Override entfernen."
+    "config_source_unavailable": "Override-Sensor nicht verfügbar — SEM liest ihn weiter (kein stiller Fallback). Sensor reparieren oder Override entfernen.",
+    "notif_ev_estimate_stop": "{name}: gestoppt bei ~{target:.0f}% (geschätzt) — der Fahrzeugsensor ist {age:.0f} Min. alt (zuletzt: {sensor:.0f}%). SEM hat die gelieferte Energie gemessen und gestoppt, um dein Ziel zu schützen.",
+    "notif_ev_estimate_resume": "{name}: Fahrzeug meldet {sensor:.0f}% — lädt nach bis zum Ziel von {target:.0f}%.",
+    "soc_info_line": "Auto: {soc}% (vor {age} Min.) · jetzt geschätzt ~{est}%",
+    "soc_target_reached_est": "Ziel erreicht — ~{est}% geschätzt",
+    "soc_confirms_next_update": "Fahrzeugsensor {age} Min. alt; Bestätigung beim nächsten Update"
   },
   "fr": {
     "charging": "En charge",
@@ -3729,7 +3739,12 @@
     "config_help_grid_power_sensor": "Remplace le capteur de puissance réseau détecté automatiquement. La convention de signe import/export est détectée automatiquement sur le capteur choisi. Laisser vide pour Auto (tableau de bord Énergie).",
     "config_sources_all_auto": "tout auto (tableau Énergie)",
     "config_sources_overridden": "remplacé(s)",
-    "config_source_unavailable": "capteur de remplacement indisponible — SEM continue de le lire (pas de repli silencieux). Réparez le capteur ou effacez le remplacement."
+    "config_source_unavailable": "capteur de remplacement indisponible — SEM continue de le lire (pas de repli silencieux). Réparez le capteur ou effacez le remplacement.",
+    "notif_ev_estimate_stop": "{name} : arrêt à ~{target:.0f}% (estimé) — le capteur du véhicule date de {age:.0f} min (dernier : {sensor:.0f}%). SEM a mesuré l'énergie livrée et s'est arrêté pour protéger votre cible.",
+    "notif_ev_estimate_resume": "{name} : le véhicule indique {sensor:.0f}% — recharge jusqu'à votre cible de {target:.0f}%.",
+    "soc_info_line": "Voiture : {soc}% (il y a {age} min) · est. actuelle ~{est}%",
+    "soc_target_reached_est": "Cible atteinte — ~{est}% estimé",
+    "soc_confirms_next_update": "capteur véhicule vieux de {age} min ; confirmation à la prochaine mise à jour"
   },
   "es": {
     "charging": "Cargando",
@@ -4973,7 +4988,12 @@
     "config_help_grid_power_sensor": "Anula el sensor de potencia de red autodetectado. La convención de signo import/export se detecta automáticamente en el sensor elegido. Dejar vacío para Auto (panel de Energía).",
     "config_sources_all_auto": "todo auto (panel de Energía)",
     "config_sources_overridden": "anulado(s)",
-    "config_source_unavailable": "sensor de anulación no disponible — SEM sigue leyéndolo (sin respaldo silencioso). Repare el sensor o borre la anulación."
+    "config_source_unavailable": "sensor de anulación no disponible — SEM sigue leyéndolo (sin respaldo silencioso). Repare el sensor o borre la anulación.",
+    "notif_ev_estimate_stop": "{name}: detenido en ~{target:.0f}% (estimado) — el sensor del coche tiene {age:.0f} min (último: {sensor:.0f}%). SEM midió la energía entregada y se detuvo para proteger tu objetivo.",
+    "notif_ev_estimate_resume": "{name}: el coche informa {sensor:.0f}% — recargando hasta tu objetivo de {target:.0f}%.",
+    "soc_info_line": "Coche: {soc}% (hace {age} min) · est. ahora ~{est}%",
+    "soc_target_reached_est": "Objetivo alcanzado — ~{est}% estimado",
+    "soc_confirms_next_update": "sensor del coche de hace {age} min; se confirma en la próxima actualización"
   },
   "it": {
     "charging": "In carica",
@@ -6217,7 +6237,12 @@
     "config_help_grid_power_sensor": "Sovrascrive il sensore di potenza di rete rilevato automaticamente. La convenzione di segno import/export viene rilevata automaticamente sul sensore scelto. Lasciare vuoto per Auto (dashboard Energia).",
     "config_sources_all_auto": "tutto auto (dashboard Energia)",
     "config_sources_overridden": "sovrascritti",
-    "config_source_unavailable": "sensore di override non disponibile — SEM continua a leggerlo (nessun fallback silenzioso). Riparare il sensore o rimuovere l'override."
+    "config_source_unavailable": "sensore di override non disponibile — SEM continua a leggerlo (nessun fallback silenzioso). Riparare il sensore o rimuovere l'override.",
+    "notif_ev_estimate_stop": "{name}: fermato a ~{target:.0f}% (stimato) — il sensore dell'auto è vecchio di {age:.0f} min (ultimo: {sensor:.0f}%). SEM ha misurato l'energia erogata e si è fermato per proteggere il tuo obiettivo.",
+    "notif_ev_estimate_resume": "{name}: l'auto segnala {sensor:.0f}% — ricarica fino al tuo obiettivo di {target:.0f}%.",
+    "soc_info_line": "Auto: {soc}% ({age} min fa) · stima attuale ~{est}%",
+    "soc_target_reached_est": "Obiettivo raggiunto — ~{est}% stimato",
+    "soc_confirms_next_update": "sensore auto di {age} min fa; conferma al prossimo aggiornamento"
   },
   "nl": {
     "charging": "Laden",
@@ -7461,7 +7486,12 @@
     "config_help_grid_power_sensor": "Overschrijft de automatisch gedetecteerde netvermogenssensor. De import/export-tekenconventie wordt automatisch gedetecteerd op de gekozen sensor. Leeg laten voor Auto (Energiedashboard).",
     "config_sources_all_auto": "alles auto (Energiedashboard)",
     "config_sources_overridden": "overschreven",
-    "config_source_unavailable": "override-sensor niet beschikbaar — SEM blijft hem lezen (geen stille terugval). Repareer de sensor of wis de override."
+    "config_source_unavailable": "override-sensor niet beschikbaar — SEM blijft hem lezen (geen stille terugval). Repareer de sensor of wis de override.",
+    "notif_ev_estimate_stop": "{name}: gestopt op ~{target:.0f}% (geschat) — de autosensor is {age:.0f} min oud (laatst: {sensor:.0f}%). SEM heeft de geleverde energie gemeten en is gestopt om je doel te beschermen.",
+    "notif_ev_estimate_resume": "{name}: auto meldt {sensor:.0f}% — bijladen tot je doel van {target:.0f}%.",
+    "soc_info_line": "Auto: {soc}% ({age} min geleden) · nu geschat ~{est}%",
+    "soc_target_reached_est": "Doel bereikt — ~{est}% geschat",
+    "soc_confirms_next_update": "autosensor {age} min oud; bevestiging bij volgende update"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -8705,7 +8735,12 @@
     "config_help_grid_power_sensor": "Přepíše automaticky detekovaný senzor výkonu sítě. Znaménková konvence import/export se na zvoleném senzoru detekuje automaticky. Ponechte prázdné pro Auto (energetický panel).",
     "config_sources_all_auto": "vše auto (energetický panel)",
     "config_sources_overridden": "přepsáno",
-    "config_source_unavailable": "přepisový senzor nedostupný — SEM jej dále čte (žádný tichý fallback). Opravte senzor nebo přepis odstraňte."
+    "config_source_unavailable": "přepisový senzor nedostupný — SEM jej dále čte (žádný tichý fallback). Opravte senzor nebo přepis odstraňte.",
+    "notif_ev_estimate_stop": "{name}: zastaveno na ~{target:.0f}% (odhad) — senzor vozu je {age:.0f} min starý (naposledy: {sensor:.0f}%). SEM změřil dodanou energii a zastavil, aby ochránil váš cíl.",
+    "notif_ev_estimate_resume": "{name}: vůz hlásí {sensor:.0f}% — dobíjí se na váš cíl {target:.0f}%.",
+    "soc_info_line": "Vůz: {soc}% (před {age} min) · odhad nyní ~{est}%",
+    "soc_target_reached_est": "Cíl dosažen — ~{est}% odhad",
+    "soc_confirms_next_update": "senzor vozu {age} min starý; potvrzení při další aktualizaci"
   },
   "da": {
     "charging": "Oplader",
@@ -9949,7 +9984,12 @@
     "config_help_grid_power_sensor": "Tilsidesætter den autodetekterede neteffektsensor. Import/eksport-fortegnskonventionen registreres automatisk på den valgte sensor. Lad stå tom for Auto (energidashboard).",
     "config_sources_all_auto": "alt auto (energidashboard)",
     "config_sources_overridden": "tilsidesat",
-    "config_source_unavailable": "tilsidesættelsessensor utilgængelig — SEM læser den fortsat (ingen stille fallback). Reparer sensoren eller ryd tilsidesættelsen."
+    "config_source_unavailable": "tilsidesættelsessensor utilgængelig — SEM læser den fortsat (ingen stille fallback). Reparer sensoren eller ryd tilsidesættelsen.",
+    "notif_ev_estimate_stop": "{name}: stoppet ved ~{target:.0f}% (estimeret) — bilens sensor er {age:.0f} min gammel (senest: {sensor:.0f}%). SEM målte den leverede energi og stoppede for at beskytte dit mål.",
+    "notif_ev_estimate_resume": "{name}: bilen melder {sensor:.0f}% — lader op til dit mål på {target:.0f}%.",
+    "soc_info_line": "Bil: {soc}% ({age} min siden) · est. nu ~{est}%",
+    "soc_target_reached_est": "Mål nået — ~{est}% estimeret",
+    "soc_confirms_next_update": "bilsensor {age} min gammel; bekræftes ved næste opdatering"
   },
   "fi": {
     "charging": "Lataus",
@@ -11193,7 +11233,12 @@
     "config_help_grid_power_sensor": "Ohittaa automaattisesti tunnistetun verkkotehon anturin. Tuonti/vienti-etumerkkikäytäntö tunnistetaan valitusta anturista automaattisesti. Jätä tyhjäksi (Auto, energiapaneeli).",
     "config_sources_all_auto": "kaikki auto (energiapaneeli)",
     "config_sources_overridden": "ohitettu",
-    "config_source_unavailable": "ohitusanturi ei saatavilla — SEM lukee sitä edelleen (ei hiljaista varasiirtymää). Korjaa anturi tai poista ohitus."
+    "config_source_unavailable": "ohitusanturi ei saatavilla — SEM lukee sitä edelleen (ei hiljaista varasiirtymää). Korjaa anturi tai poista ohitus.",
+    "notif_ev_estimate_stop": "{name}: pysäytetty ~{target:.0f}%:iin (arvio) — auton anturi on {age:.0f} min vanha (viimeisin: {sensor:.0f}%). SEM mittasi toimitetun energian ja pysähtyi suojatakseen tavoitteesi.",
+    "notif_ev_estimate_resume": "{name}: auto ilmoittaa {sensor:.0f}% — ladataan tavoitteeseesi {target:.0f}%.",
+    "soc_info_line": "Auto: {soc}% ({age} min sitten) · arvio nyt ~{est}%",
+    "soc_target_reached_est": "Tavoite saavutettu — ~{est}% arvioitu",
+    "soc_confirms_next_update": "auton anturi {age} min vanha; vahvistuu seuraavassa päivityksessä"
   },
   "hu": {
     "charging": "Töltés",
@@ -12437,7 +12482,12 @@
     "config_help_grid_power_sensor": "Felülírja az automatikusan észlelt hálózati teljesítményszenzort. Az import/export előjel-konvenció a kiválasztott szenzoron automatikusan felismerésre kerül. Hagyja üresen az Auto módhoz (Energia irányítópult).",
     "config_sources_all_auto": "minden auto (Energia irányítópult)",
     "config_sources_overridden": "felülírva",
-    "config_source_unavailable": "a felülíró szenzor nem elérhető — a SEM továbbra is azt olvassa (nincs csendes tartalék). Javítsa a szenzort vagy törölje a felülírást."
+    "config_source_unavailable": "a felülíró szenzor nem elérhető — a SEM továbbra is azt olvassa (nincs csendes tartalék). Javítsa a szenzort vagy törölje a felülírást.",
+    "notif_ev_estimate_stop": "{name}: leállítva ~{target:.0f}%-nál (becsült) — az autó szenzora {age:.0f} perc régi (utolsó: {sensor:.0f}%). A SEM megmérte a leadott energiát, és leállt, hogy védje a célodat.",
+    "notif_ev_estimate_resume": "{name}: az autó {sensor:.0f}%-ot jelez — töltés a {target:.0f}%-os célodig.",
+    "soc_info_line": "Autó: {soc}% ({age} perce) · becslés most ~{est}%",
+    "soc_target_reached_est": "Cél elérve — ~{est}% becsült",
+    "soc_confirms_next_update": "az autó szenzora {age} perc régi; a következő frissítés megerősíti"
   },
   "no": {
     "charging": "Lader",
@@ -13681,7 +13731,12 @@
     "config_help_grid_power_sensor": "Overstyrer den autodetekterte netteffektsensoren. Import/eksport-fortegnskonvensjonen oppdages automatisk på valgt sensor. La stå tom for Auto (energidashbord).",
     "config_sources_all_auto": "alt auto (energidashbord)",
     "config_sources_overridden": "overstyrt",
-    "config_source_unavailable": "overstyringssensor utilgjengelig — SEM fortsetter å lese den (ingen stille fallback). Reparer sensoren eller fjern overstyringen."
+    "config_source_unavailable": "overstyringssensor utilgjengelig — SEM fortsetter å lese den (ingen stille fallback). Reparer sensoren eller fjern overstyringen.",
+    "notif_ev_estimate_stop": "{name}: stoppet på ~{target:.0f}% (estimert) — bilens sensor er {age:.0f} min gammel (sist: {sensor:.0f}%). SEM målte levert energi og stoppet for å beskytte målet ditt.",
+    "notif_ev_estimate_resume": "{name}: bilen melder {sensor:.0f}% — lader opp til målet ditt på {target:.0f}%.",
+    "soc_info_line": "Bil: {soc}% ({age} min siden) · est. nå ~{est}%",
+    "soc_target_reached_est": "Mål nådd — ~{est}% estimert",
+    "soc_confirms_next_update": "bilsensor {age} min gammel; bekreftes ved neste oppdatering"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -14925,7 +14980,12 @@
     "config_help_grid_power_sensor": "Nadpisuje automatycznie wykryty czujnik mocy sieci. Konwencja znaku import/eksport jest wykrywana automatycznie na wybranym czujniku. Pozostaw puste dla Auto (Panel Energii).",
     "config_sources_all_auto": "wszystko auto (Panel Energii)",
     "config_sources_overridden": "nadpisane",
-    "config_source_unavailable": "czujnik nadpisania niedostępny — SEM nadal go odczytuje (brak cichego fallbacku). Napraw czujnik lub usuń nadpisanie."
+    "config_source_unavailable": "czujnik nadpisania niedostępny — SEM nadal go odczytuje (brak cichego fallbacku). Napraw czujnik lub usuń nadpisanie.",
+    "notif_ev_estimate_stop": "{name}: zatrzymano na ~{target:.0f}% (szacowane) — czujnik auta ma {age:.0f} min (ostatnio: {sensor:.0f}%). SEM zmierzył dostarczoną energię i zatrzymał ładowanie, aby chronić Twój cel.",
+    "notif_ev_estimate_resume": "{name}: auto zgłasza {sensor:.0f}% — doładowywanie do celu {target:.0f}%.",
+    "soc_info_line": "Auto: {soc}% ({age} min temu) · szac. teraz ~{est}%",
+    "soc_target_reached_est": "Cel osiągnięty — ~{est}% szacowane",
+    "soc_confirms_next_update": "czujnik auta sprzed {age} min; potwierdzenie przy następnej aktualizacji"
   },
   "pt": {
     "charging": "A carregar",
@@ -16169,7 +16229,12 @@
     "config_help_grid_power_sensor": "Substitui o sensor de potência da rede autodetetado. A convenção de sinal import/export é detetada automaticamente no sensor escolhido. Deixar vazio para Auto (painel de Energia).",
     "config_sources_all_auto": "tudo auto (painel de Energia)",
     "config_sources_overridden": "substituído(s)",
-    "config_source_unavailable": "sensor de substituição indisponível — o SEM continua a lê-lo (sem recurso silencioso). Repare o sensor ou limpe a substituição."
+    "config_source_unavailable": "sensor de substituição indisponível — o SEM continua a lê-lo (sem recurso silencioso). Repare o sensor ou limpe a substituição.",
+    "notif_ev_estimate_stop": "{name}: parado em ~{target:.0f}% (estimado) — o sensor do carro tem {age:.0f} min (último: {sensor:.0f}%). O SEM mediu a energia entregue e parou para proteger o teu objetivo.",
+    "notif_ev_estimate_resume": "{name}: o carro reporta {sensor:.0f}% — a carregar até ao teu objetivo de {target:.0f}%.",
+    "soc_info_line": "Carro: {soc}% (há {age} min) · est. agora ~{est}%",
+    "soc_target_reached_est": "Objetivo atingido — ~{est}% estimado",
+    "soc_confirms_next_update": "sensor do carro com {age} min; confirma na próxima atualização"
   },
   "ro": {
     "charging": "Încărcare",
@@ -17413,7 +17478,12 @@
     "config_help_grid_power_sensor": "Suprascrie senzorul de putere de rețea autodetectat. Convenția de semn import/export este detectată automat pe senzorul ales. Lăsați gol pentru Auto (panoul Energie).",
     "config_sources_all_auto": "totul auto (panoul Energie)",
     "config_sources_overridden": "suprascrise",
-    "config_source_unavailable": "senzorul de suprascriere indisponibil — SEM continuă să îl citească (fără revenire silențioasă). Reparați senzorul sau ștergeți suprascrierea."
+    "config_source_unavailable": "senzorul de suprascriere indisponibil — SEM continuă să îl citească (fără revenire silențioasă). Reparați senzorul sau ștergeți suprascrierea.",
+    "notif_ev_estimate_stop": "{name}: oprit la ~{target:.0f}% (estimat) — senzorul mașinii are {age:.0f} min (ultimul: {sensor:.0f}%). SEM a măsurat energia livrată și s-a oprit pentru a-ți proteja ținta.",
+    "notif_ev_estimate_resume": "{name}: mașina raportează {sensor:.0f}% — se încarcă până la ținta ta de {target:.0f}%.",
+    "soc_info_line": "Mașină: {soc}% (acum {age} min) · est. acum ~{est}%",
+    "soc_target_reached_est": "Țintă atinsă — ~{est}% estimat",
+    "soc_confirms_next_update": "senzorul mașinii vechi de {age} min; se confirmă la următoarea actualizare"
   },
   "sv": {
     "charging": "Laddar",
@@ -18657,7 +18727,12 @@
     "config_help_grid_power_sensor": "Åsidosätter den autodetekterade näteffektsensorn. Import/export-teckenkonventionen identifieras automatiskt på vald sensor. Lämna tomt för Auto (energipanel).",
     "config_sources_all_auto": "allt auto (energipanel)",
     "config_sources_overridden": "åsidosatta",
-    "config_source_unavailable": "åsidosättningssensor otillgänglig — SEM fortsätter läsa den (ingen tyst reserv). Reparera sensorn eller rensa åsidosättningen."
+    "config_source_unavailable": "åsidosättningssensor otillgänglig — SEM fortsätter läsa den (ingen tyst reserv). Reparera sensorn eller rensa åsidosättningen.",
+    "notif_ev_estimate_stop": "{name}: stoppad vid ~{target:.0f}% (uppskattat) — bilens sensor är {age:.0f} min gammal (senast: {sensor:.0f}%). SEM mätte den levererade energin och stoppade för att skydda ditt mål.",
+    "notif_ev_estimate_resume": "{name}: bilen rapporterar {sensor:.0f}% — laddar upp till ditt mål på {target:.0f}%.",
+    "soc_info_line": "Bil: {soc}% ({age} min sedan) · uppskattat nu ~{est}%",
+    "soc_target_reached_est": "Mål uppnått — ~{est}% uppskattat",
+    "soc_confirms_next_update": "bilsensor {age} min gammal; bekräftas vid nästa uppdatering"
   },
   "zh": {
     "charging": "充电中",
@@ -19901,6 +19976,11 @@
     "config_help_grid_power_sensor": "覆盖自动检测的电网功率传感器。所选传感器的输入/输出符号约定会自动检测。留空则使用自动（能源仪表板）。",
     "config_sources_all_auto": "全部自动（能源仪表板）",
     "config_sources_overridden": "已覆盖",
-    "config_source_unavailable": "覆盖传感器不可用 — SEM 仍在读取它（不会静默回退）。请修复传感器或清除覆盖。"
+    "config_source_unavailable": "覆盖传感器不可用 — SEM 仍在读取它（不会静默回退）。请修复传感器或清除覆盖。",
+    "notif_ev_estimate_stop": "{name}：已在约 {target:.0f}%（估算）停止 — 车辆传感器数据已有 {age:.0f} 分钟（最近:{sensor:.0f}%）。SEM 根据实测充入电量停止充电，以保护你的目标。",
+    "notif_ev_estimate_resume": "{name}：车辆报告 {sensor:.0f}% — 正在补充至你的 {target:.0f}% 目标。",
+    "soc_info_line": "车辆:{soc}%（{age} 分钟前）· 当前估算 ~{est}%",
+    "soc_target_reached_est": "已达目标 — 估算约 {est}%",
+    "soc_confirms_next_update": "车辆传感器数据 {age} 分钟前;下次更新时确认"
   }
 }

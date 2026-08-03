@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.6-beta.1] — 03.08.2026 *(unreleased — entries land at merge; header renumbers at tag if the 1.8 line opens first)*
 
+### 🐛 Fixes
+
+- 🚗 **EV no longer overshoots the SOC target on slow/polled car sensors** (#708, reported by
+  @Azlinon) — OnStar-class integrations poll the vehicle SOC as rarely as every 30 minutes, and
+  SEM steered on the last value as if it were live: overshoot = sensor lag × charge power (60 %
+  target → 67 % on an 85 kWh pack at 11.5 kW). The stop decision now uses an energy-accounted
+  ceiling beside the sensor: the pack cannot be emptier than the last reading plus what the
+  session measurably delivered (× 0.92 charge efficiency), so the charge stops at the target even
+  while the sensor sleeps. The sensor stays primary — every fresh reading re-anchors and wins,
+  and if it lands below target SEM auto-resumes for the difference (resumes are spaced by the
+  sensor's own update interval and shrink each round). A mobile notification and a card info line
+  ("Car: 55 % (28 min ago) · est. now ~59 %") explain both the early stop and any resume. The
+  virtual/estimated SOC display is untouched, and the #446 wall (no speculative SOC in budgets)
+  is re-pinned by an extended AST guard. Zero new config keys.
+
 ### ✨ Features
 
 - ⚡ **Dual-source phase guard now enforces in the EV write path** (by @tintinz in #712) —

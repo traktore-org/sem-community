@@ -5665,6 +5665,55 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         mins_to_full, charger_name=charger_name
                     )
 
+                # #708 — estimate-stop / auto-resume announcements. The
+                # decision itself lives in _calculate_remaining_need
+                # (effective SOC = max(sensor, energy-accounted)); this
+                # block only detects the two user-visible transitions:
+                # the estimate ends a charge the stale sensor would have
+                # kept running, and a fresh reading below target makes
+                # SEM resume. Latch lives on the per-charger detector
+                # (session-scoped, cleared on disconnect).
+                det_708 = self._ev_taper_detectors.get(cid)
+                cfg_708 = cfg_for_cid or {}
+                type_708 = (
+                    cfg_708.get("ev_target_type") or cfg_708.get("ev_target_mode")
+                    or self.config.get("ev_target_type")
+                    or self.config.get("ev_target_mode", "kwh")
+                )
+                ea_708 = intel.get("energy_accounted_soc")
+                soc_708 = intel.get("vehicle_soc")
+                if (det_708 is not None and charger_connected
+                        and type_708 == "soc"
+                        and ea_708 is not None and soc_708 is not None):
+                    cap_708 = (
+                        cfg_708.get("ev_battery_capacity_kwh")
+                        or self.config.get("ev_battery_capacity_kwh", 40)
+                    )
+                    for bound_708 in ("min", "max"):
+                        tgt = self._resolve_target(
+                            cfg_708, "ev_target_soc", bound_708, 80, 100
+                        )
+                        sensor_rem = max(0.0, (tgt - soc_708) / 100 * cap_708)
+                        eff_rem = max(
+                            0.0, (tgt - max(soc_708, ea_708)) / 100 * cap_708
+                        )
+                        if (not det_708._estimate_stop_active
+                                and sensor_rem > 0.1 and eff_rem <= 0.1):
+                            det_708._estimate_stop_active = True
+                            await self._notification_manager.notify_ev_estimate_stop(
+                                target_soc=tgt, sensor_soc=soc_708,
+                                sensor_age_min=intel.get("vehicle_soc_age_min") or 0,
+                                charger_name=charger_name, flag_key=cid,
+                            )
+                            break
+                        if det_708._estimate_stop_active and eff_rem > 0.1:
+                            det_708._estimate_stop_active = False
+                            await self._notification_manager.notify_ev_estimate_resume(
+                                sensor_soc=soc_708, target_soc=tgt,
+                                charger_name=charger_name, flag_key=cid,
+                            )
+                            break
+
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Event notification failed: %s", e)
         except HomeAssistantError as e:
@@ -5900,14 +5949,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if ev_target_type == "soc":
             # Pre-condition guaranteed by GUI gate + v10→v11 migration:
             # a real ``vehicle_soc_entity`` is configured for this charger.
-            # If its current value is unavailable (network blip etc.),
-            # return the full capacity so SEM keeps charging — taper
-            # detection will eventually stop it on car-full. Never use
-            # estimated_soc.
+            #
+            # #708 — the sensor value may be MINUTES old (OnStar polls every
+            # 30; overshoot = lag × power). The pack cannot be emptier than
+            # the last reading plus what this session measurably delivered
+            # since, so the effective SOC is ``max(sensor, energy-accounted)``.
+            # The sensor stays primary: every fresh value re-anchors the
+            # estimate and wins (this is a CAP, not the #446-forbidden
+            # substitution — the virtual/estimated SOC is still never used
+            # here). When a later reading lands below target, the need goes
+            # positive again and charging auto-resumes — the resumes are
+            # spaced by the sensor's own update interval, and each round
+            # shrinks, so the floor promise is kept without flapping.
+            ceiling_soc = None
+            detectors = getattr(self, "_ev_taper_detectors", None)
+            det = detectors.get(cfg.get("id")) if (detectors and cfg) else None
+            if det is None and detectors:
+                det = self._ev_taper_detector  # primary (single-charger installs)
+            if det is not None:
+                ceiling_soc = det.energy_accounted_soc()
             if vehicle_soc is None:
-                return float(ev_capacity)
+                # Sensor momentarily unavailable: pre-#708 this returned the
+                # full capacity (keep charging until taper). With an anchor
+                # from earlier in the session the estimate keeps counting —
+                # strictly better than charging blind. Never estimated_soc.
+                if ceiling_soc is None:
+                    return float(ev_capacity)
+                soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
+                return max(0, (soc_target - ceiling_soc) / 100 * ev_capacity)
             soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
-            return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
+            effective_soc = (
+                max(vehicle_soc, ceiling_soc) if ceiling_soc is not None else vehicle_soc
+            )
+            return max(0, (soc_target - effective_soc) / 100 * ev_capacity)
 
         # kWh branch — the default mode for installs without a SOC sensor.
         daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
@@ -6971,6 +7045,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#440) Per-charger skip-decision latch removed alongside the
             # skip-decision wiring — charge mode is the sole authority
             # on whether to charge at night now.
+            # #708 — sensor age for the card's staleness display. From
+            # ``last_changed`` deliberately: a poll that re-publishes the
+            # same value bumps only ``last_reported``, and for steering a
+            # value that hasn't CHANGED in 28 minutes of charging is
+            # exactly as stale as one that wasn't re-published.
+            soc_age_min: Optional[float] = None
+            if per_charger_soc_entity:
+                _soc_state = self.hass.states.get(per_charger_soc_entity)
+                if _soc_state is not None and _soc_state.last_changed is not None:
+                    soc_age_min = round(
+                        (dt_util.utcnow() - _soc_state.last_changed).total_seconds() / 60
+                    )
+
             result[cid] = {
                 "estimated_soc": round(soc, 1) if soc is not None else None,
                 # #383: surface the real per-charger vehicle SOC reading
@@ -6985,6 +7072,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ),
                 "minutes_to_full": taper_data.minutes_to_full if taper_data else None,
                 "battery_health": detector.battery_health_pct,
+                # #708 — measurement-only session estimate + sensor age,
+                # for the charger card's stale-sensor info line. NOT a
+                # SOC display value: the gauge keeps showing the sensor.
+                "energy_accounted_soc": (
+                    round(det_ea, 1)
+                    if (det_ea := detector.energy_accounted_soc()) is not None
+                    else None
+                ),
+                "vehicle_soc_age_min": soc_age_min,
+                "estimate_stop_active": detector._estimate_stop_active,
             }
 
         return result
