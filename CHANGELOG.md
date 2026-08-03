@@ -11,6 +11,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.5] — 03.08.2026
+
+> **Stable release.** Consolidates the 1.7.5 beta line (beta.1 → beta.38, detailed
+> below). Headline: the **#628 meter-reconciliation arc** — SEM's seven daily
+> numbers now ADD UP, each pinned to your own hardware counters and home derived
+> as their exact residual — plus the **per-charger state retirement** (#589), the
+> **device goal model** for surplus loads (#620), a **zero-HACS-prerequisites
+> dashboard** (#617), a full **docs overhaul** (#618), and fail-closed community
+> hardware support for Deye, Zaptec and per-phase grid limits (by @tintinz).
+
+### 📏 Daily numbers that add up (#628)
+- ✨ **Daily home consumption is now the reconciled residual, not a stopwatch.**
+  Home is the one row nothing meters; SEM used to evaluate the energy balance
+  instantaneously in watts and integrate it, which magnifies every sensor's
+  small error into ±3–15 % on the home row (confirmed on two independent
+  installs). The daily row is now derived from the day's reconciled counters —
+  `solar + import − export + discharge − charge − EV` — exactly as lifetime and
+  yearly home always were. The integrator stays as the fallback whenever a
+  flowing term is not counter-backed. On the day you upgrade, the row keeps the
+  old behaviour for one calendar day (the EV midnight mirror needs a full day of
+  history first); it derives from the following midnight. (reported by
+  @jappish84 in #628)
+- ✨ **Solar, grid and battery daily rows reconcile against your own counters**
+  (beta.13 →): daily totals are cross-checked and corrected against the hardware
+  counters configured in your Energy Dashboard, so polling gaps and power blips
+  no longer drift the day. Night-time yield-counter movement on DC-coupled
+  hybrids is ignored (#681) — battery discharge in the dark is not solar.
+- 🛠️ **Sensor overrides on the Config card** (#628/#696): battery, grid and
+  solar power sources can be overridden per-install when autodetection picks the
+  wrong entity.
+
+### ⚡ EV charging: structural per-charger state (#589 arc)
+- 🏗️ Per-charger state lives on `PerChargerState` by reference — the legacy
+  snapshot/restore swap is gone, closing the whole reads-fleet-total-instead-of-
+  this-charger bug class structurally (beta.15). Ghost EV rows no longer appear
+  after a charger is removed (#595), and a charger that gives up re-offers on a
+  countdown instead of silently never trying again (#610, live-proven).
+- 🐛 KEBA UDP resilience: lost-datagram guard, ~1 Wh idle-session guard, and a
+  median-of-3 `ev_power` pre-filter absorb transport blips instead of flapping
+  the charger (beta.11 →).
+
+### 🎛️ Surplus loads: the device goal model (#620)
+- ✨ Every managed load gets Min/Max daily runtime, a daytime Mode, and a
+  "Finish overnight from" picker (Off / Battery / Grid) — live-proven on real
+  hardware (beta.22). The loads' day rolls on the same meter-day class the EV
+  uses (#704), and the goal engine is pinned by an invariant harness over the
+  full contract (#703).
+
+### 🖥️ Dashboard: zero HACS prerequisites (#617) + config redesign (#605/#606)
+- ✨ SEM's dashboard no longer requires mushroom, apexcharts, card-mod or
+  sankey-chart — glass styling is baked in, Chart.js is vendored, and the energy
+  flow falls back to the native sankey. Fresh installs render complete with zero
+  HACS cards.
+- ✨ Configuration tab redesigned around grouped cards with per-key help anchors
+  (#605/#606, reported by @tlinnet); device names localize per-user in the
+  system diagram (#615).
+
+### 🧹 Coherence audit + dead code (16 confirmed findings)
+- 🏗️ A systematic audit of decision coherence closed #639–#655: dead features
+  that could never run were removed (#651/#659/#664), the EV orchestration was
+  decomposed (#629), and the second (dead) EV surplus allocator was deleted with
+  coverage restored on the one that runs (#665).
+
+### 🔌 Community hardware (by @tintinz, @onkelfu and reporters)
+- ✨ Fail-closed Deye battery adapter with transactional TOU-register writes
+  (#709); read-only per-phase grid diagnostics with sign-safe current derivation
+  (#707, freshness fix in beta.38); Zaptec discovery persistence + phantom-plan
+  suppression (#706); JuiceBox EVSE no longer double-detected (#698); Open-Meteo
+  Solar Forecast autodetected (#687); fail-closed battery discharge controls
+  from the #702 review; Enphase IQ battery temperature (#583).
+
+### 🧪 Correctness & hardening across the line
+- 🐛 Atomic `power_snapshot` for coherent card rendering (#699), rate-limited
+  STOP-unenforceable warnings (#700), load-management day-boundary fixes
+  (#703/#704), pool-filter/load goal fixes from live soaks, and the full
+  pipeline-test matrix extended to every newly supported brand.
+
 # [1.7.5-beta.38] — 02.08.2026
 
 ### 🐛 Fixes

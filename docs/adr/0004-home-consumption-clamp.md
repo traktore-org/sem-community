@@ -50,3 +50,13 @@ real bugs upstream.
 Code path: `coordinator/types.py:PowerReadings.calculate_derived` (line 206).
 Do **not** add a `if balance < 0: return None` branch — that
 explicitly inverts this decision.
+
+## Scope note (v1.7.5, #628)
+
+This ADR covers the **instantaneous power sensor** only. Since v1.7.5 the
+**daily energy row** for home is no longer the integral of this sensor — it is
+derived from the day's reconciled counters
+(`coordinator/energy_calculator.py:_reconcile_home_energy`), with the integral
+kept as fallback and anchor. The daily clamp there records what it removed
+(`daily_home_balance` clamp telemetry, #660) instead of hiding it. Neither
+change touches this sensor's behaviour.

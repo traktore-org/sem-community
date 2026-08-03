@@ -61,6 +61,11 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     "ev_counter_baselines",
     # (#628) grid/battery meter baselines, keyed by category
     "meter_baselines",
+    # (#628) the CALENDAR-day EV mirror the home balance subtracts, and the
+    # first day it was tracking. The latter must persist, or every restart
+    # would look like the upgrade day and suppress the balance for good.
+    "midnight_ev_baselines",
+    "midnight_ev_since",
     # (#668) lifetime running totals, summed at each day rollover. Dropped
     # since they were introduced, so ``lifetime_total_savings`` fell back to a
     # 7-day-average-rate ESTIMATE of the entire history after every restart
