@@ -209,6 +209,7 @@
         "description": "Tarifs d'électricité et paramètres de réglage avancés.",
         "data": {
           "electricity_import_rate": "Tarif d'import",
+          "grid_import_surcharge": "Frais variables d'utilisation du réseau (devise/kWh)",
           "electricity_off_peak_rate": "Tarif de nuit (si différent)",
           "electricity_export_rate": "Tarif d'export",
           "demand_charge_rate": "Tarif de puissance souscrite",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Tarif d'import jour/forfaitaire (devise/kWh, TVA incluse). Utilisé en secours lorsque la tarification dynamique est indisponible.",
+          "grid_import_surcharge": "Frais variables totaux facultatifs du gestionnaire de réseau ajoutés à chaque kWh importé. Peuvent combiner l'acheminement et la taxe sur l'énergie. Pas d'abonnement fixe; sans effet sur l'exportation.",
           "electricity_off_peak_rate": "Tarif d'import nuit/heures creuses (devise/kWh). Réglez-le sur la même valeur que le tarif d'import si vous avez un tarif unique.",
           "electricity_export_rate": "Tarif de rachat payé par le fournisseur (devise/kWh).",
           "demand_charge_rate": "Tarif mensuel de puissance souscrite (devise/kW/mois). Réglez sur 0 si votre contrat n'en comporte pas.",

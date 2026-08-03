@@ -825,7 +825,7 @@ def test_effective_import_floor_scales_raw_up_to_all_in():
     )
     p = DynamicTariffProvider.__new__(DynamicTariffProvider)
     # state all-in (0.30) vs current raw curve slot (0.10) → factor 3.0.
-    p.get_current_import_rate = lambda: 0.30
+    p._read_current_price = lambda: 0.30
     p._cached_price_for = lambda when: 0.10
     assert p.effective_import_floor(0.05) == pytest.approx(0.15)  # 0.05 * 3.0
 
@@ -835,7 +835,7 @@ def test_effective_import_floor_noop_when_curve_matches_state():
         DynamicTariffProvider,
     )
     p = DynamicTariffProvider.__new__(DynamicTariffProvider)
-    p.get_current_import_rate = lambda: 0.20
+    p._read_current_price = lambda: 0.20
     p._cached_price_for = lambda when: 0.20   # all-in provider (Tibber): equal
     assert p.effective_import_floor(0.12) == pytest.approx(0.12)
 
@@ -845,7 +845,7 @@ def test_effective_import_floor_never_scales_down():
         DynamicTariffProvider,
     )
     p = DynamicTariffProvider.__new__(DynamicTariffProvider)
-    p.get_current_import_rate = lambda: 0.10
+    p._read_current_price = lambda: 0.10
     p._cached_price_for = lambda when: 0.20   # factor 0.5 → keep raw min
     assert p.effective_import_floor(0.12) == pytest.approx(0.12)
 

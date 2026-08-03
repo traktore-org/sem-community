@@ -409,6 +409,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 fallback_price=_cfg_rate(
                     config, "electricity_import_rate", default=0.30,
                 ),
+                # Grid import surcharge: explicit constant
+                # per-kWh network fee added to every IMPORTED kWh for
+                # dynamic tariffs. 0 disables it. Defaults to 0.0 so an
+                # existing config without the key is unaffected.
+                grid_import_surcharge=config.get("grid_import_surcharge", 0.0),
             )
         elif tariff_mode == "calendar":
             schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI
@@ -7499,6 +7504,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     tp.fallback_price = _cfg_rate(
                         cfg, "electricity_import_rate", default=0.30
+                    )
+                    # #710: cached at construction, so options updates must
+                    # push this live like the thresholds above. An absent key
+                    # (upgraded install) preserves the current/legacy value.
+                    tp.grid_import_surcharge = (
+                        DynamicTariffProvider.normalize_grid_import_surcharge(
+                            cfg.get(
+                                "grid_import_surcharge",
+                                tp.grid_import_surcharge,
+                            )
+                        )
                     )
                 else:
                     # Static / Calendar share peak/off-peak rate fields. Fall

@@ -209,6 +209,7 @@
         "description": "Stawki za energię elektryczną i zaawansowane parametry dostrajania.",
         "data": {
           "electricity_import_rate": "Stawka importu",
+          "grid_import_surcharge": "Zmienna opłata operatora sieci (waluta/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Stawka eksportu",
           "demand_charge_rate": "Stawka opłaty mocowej",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Dzienna/jednostrefowa stawka importu (waluta/kWh z VAT). Używana zapasowo, gdy ceny dynamiczne są niedostępne.",
+          "grid_import_surcharge": "Opcjonalna całkowita zmienna opłata operatora sieci dodawana do każdej importowanej kWh. Może łączyć przesył energii i podatek energetyczny. Bez stałej opłaty; nie wpływa na eksport.",
           "electricity_off_peak_rate": "Nocna/pozaszczytowa stawka importu (waluta/kWh). Ustaw ją równą stawce importu, jeśli masz taryfę jednostrefową.",
           "electricity_export_rate": "Stawka za oddanie energii do sieci wypłacana przez operatora (waluta/kWh).",
           "demand_charge_rate": "Miesięczna opłata za moc szczytową (waluta/kW/miesiąc). Ustaw 0, jeśli Twoja umowa jej nie przewiduje.",

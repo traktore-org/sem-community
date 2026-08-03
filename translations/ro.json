@@ -209,6 +209,7 @@
         "description": "Tarifele de energie electrică și parametrii avansați de reglare.",
         "data": {
           "electricity_import_rate": "Tarif import",
+          "grid_import_surcharge": "Taxă variabilă de rețea (monedă/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Tarif export",
           "demand_charge_rate": "Tarif pentru putere contractată",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Tarif de import de zi/unic (monedă/kWh, cu TVA inclus). Folosit ca rezervă atunci când prețul dinamic este indisponibil.",
+          "grid_import_surcharge": "Taxă variabilă totală opțională de rețea adăugată la fiecare kWh importat. Poate combina transportul de electricitate și impozitul pe energie. Fără abonament fix; fără efect asupra exportului.",
           "electricity_off_peak_rate": "Tarif de import de noapte/în afara vârfului (monedă/kWh). Setați-l egal cu tariful de import dacă aveți un tarif unic.",
           "electricity_export_rate": "Tariful de injecție plătit de furnizor (monedă/kWh).",
           "demand_charge_rate": "Taxa lunară pentru puterea de vârf (monedă/kW/lună). Setați 0 dacă în contractul dumneavoastră nu există.",

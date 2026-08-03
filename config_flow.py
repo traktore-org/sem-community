@@ -838,6 +838,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_total_energy_sensor",
     "grid_export_power_entity",
     "grid_import_power_entity",
+    "grid_import_surcharge",
     "grid_sign_invert",
     "heat_pump_boost_offset",
     "heat_pump_climate_entity",
@@ -1897,6 +1898,22 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Tariff & Advanced settings."""
         if user_input is not None:
+            # The surcharge field is hidden outside dynamic mode, but it is
+            # still an options-flow-owned key. Preserve an existing value
+            # while static/calendar is selected so a temporary mode switch
+            # cannot silently erase the user's dynamic-tariff configuration.
+            current_config = {
+                **self.config_entry.data,
+                **self.config_entry.options,
+            }
+            if (
+                user_input.get("tariff_mode") != "dynamic"
+                and "grid_import_surcharge" not in user_input
+                and "grid_import_surcharge" in current_config
+            ):
+                user_input["grid_import_surcharge"] = current_config[
+                    "grid_import_surcharge"
+                ]
             # Auto-detect dynamic tariff provider entity if mode=dynamic
             if user_input.get("tariff_mode") == "dynamic" and not user_input.get("dynamic_tariff_entity"):
                 # Shared candidate matcher (#485 K5): the flow used to
@@ -1998,6 +2015,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=100000.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")  # #549 currency-agnostic
                 ),
+                # Grid import surcharge is meaningful only for dynamic
+                # tariffs. Static/calendar providers never consume it, so
+                # hiding it there avoids a silent no-op configuration.
+                **({
+                    vol.Optional(
+                        "grid_import_surcharge",
+                        default=_c("grid_import_surcharge", 0.0),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic / SEK/NOK/HUF-safe
+                    ),
+                } if _c("tariff_mode", "static") == "dynamic" else {}),
                 vol.Optional(
                     "update_interval",
                     default=_c("update_interval", DEFAULT_UPDATE_INTERVAL),

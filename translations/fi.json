@@ -209,6 +209,7 @@
         "description": "Sähkön hinnat ja edistyneet säätöparametrit.",
         "data": {
           "electricity_import_rate": "Ostohinta",
+          "grid_import_surcharge": "Muuttuva verkonhaltijan maksu (valuutta/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Vientihinta",
           "demand_charge_rate": "Tehomaksun hinta",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Päivä- tai kiinteä ostohinta (valuutta/kWh sis. alv). Käytetään varalla, kun dynaaminen hinnoittelu ei ole käytettävissä.",
+          "grid_import_surcharge": "Valinnainen kokonaismuuttuva verkonhaltijan maksu lisättynä jokaiseen tuotuun kWh:hen. Voi yhdistää sähkönsiirron ja energiaveron. Ei kiinteää liittymää; ei vaikuta vientiin.",
           "electricity_off_peak_rate": "Yö- tai halvan ajan ostohinta (valuutta/kWh). Aseta samaksi kuin ostohinta, jos sinulla on kiinteä tariffi.",
           "electricity_export_rate": "Verkkoyhtiön maksama syöttötariffi (valuutta/kWh).",
           "demand_charge_rate": "Kuukausittainen huipputehomaksu (valuutta/kW/kk). Aseta arvoon 0, jos sopimuksessasi ei ole sellaista.",

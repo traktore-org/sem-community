@@ -209,6 +209,7 @@
         "description": "Tarifas de eletricidade e parâmetros de afinação avançados.",
         "data": {
           "electricity_import_rate": "Taxa de importação",
+          "grid_import_surcharge": "Taxa variável do gestor de rede (moeda/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Taxa de exportação",
           "demand_charge_rate": "Tarifa de potência contratada",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Taxa de importação diurna/simples (moeda/kWh, com IVA). Usada como recurso quando o preço dinâmico não está disponível.",
+          "grid_import_surcharge": "Taxa variável total opcional do gestor de rede adicionada a cada kWh importado. Pode combinar transporte de eletricidade e imposto sobre energia. Sem assinatura fixa; sem efeito na exportação.",
           "electricity_off_peak_rate": "Taxa de importação noturna/vazio (moeda/kWh). Defina igual à taxa de importação se tiver uma tarifa simples.",
           "electricity_export_rate": "Tarifa de injeção paga pelo comercializador (moeda/kWh).",
           "demand_charge_rate": "Encargo mensal de potência de pico (moeda/kW/mês). Defina 0 se o seu contrato não tiver nenhum.",

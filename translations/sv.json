@@ -209,6 +209,7 @@
         "description": "Elpriser och avancerade justeringsparametrar.",
         "data": {
           "electricity_import_rate": "Importpris",
+          "grid_import_surcharge": "Rörlig avgift från nätägaren (valuta/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Exportpris",
           "demand_charge_rate": "Effektavgift",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Dag-/enhetstariff för import (valuta/kWh inkl. moms). Används som reserv när dynamisk prissättning inte är tillgänglig.",
+          "grid_import_surcharge": "Valfri total rörlig nätägaravgift som läggs till varje importerad kWh. Kan kombinera elöverföringsavgift och energiskatt. Använd bara när den dynamiska prisentiteten inte redan innehåller avgifterna. Ingen fast abonnemangsavgift; påverkar inte export.",
           "electricity_off_peak_rate": "Importpris natt/lågtariff (valuta/kWh). Sätt lika med importpriset om du har en enhetstariff.",
           "electricity_export_rate": "Ersättning för överskottsel som betalas av elhandlaren (valuta/kWh).",
           "demand_charge_rate": "Månatlig effektavgift för effekttopp (valuta/kW/månad). Sätt till 0 om ditt avtal inte har någon.",

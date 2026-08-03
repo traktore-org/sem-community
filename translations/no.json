@@ -209,6 +209,7 @@
         "description": "Strømpriser og avanserte innstillinger.",
         "data": {
           "electricity_import_rate": "Importpris",
+          "grid_import_surcharge": "Variabel nettleie (valuta/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Eksportpris",
           "demand_charge_rate": "Effekttariffsats",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Dag-/fastpris for import (valuta/kWh inkl. mva.). Brukes som reserve når dynamisk prising ikke er tilgjengelig.",
+          "grid_import_surcharge": "Valgfritt totalt variabelt nettleie lagt til hver importert kWh. Kan kombinere strømoverføring og energiskatt. Ingen fast abonnement; påvirker ikke eksport.",
           "electricity_off_peak_rate": "Importpris natt/lavlast (valuta/kWh). Sett den lik importprisen hvis du har fastpristariff.",
           "electricity_export_rate": "Innmatingspris betalt av nettselskapet (valuta/kWh).",
           "demand_charge_rate": "Månedlig effektledd for topplast (valuta/kW/måned). Sett til 0 hvis avtalen din ikke har det.",
