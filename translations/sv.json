@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hårdvara",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Husbatteriets kapacitet (kWh)",
-          "target_peak_limit": "Effekttoppsgräns (kW)",
           "generate_dashboard_on_install": "Skapa SEM-instrumentpanelen nu (startar om HA)",
           "diagram_style": "Systemdiagram stil"
         },
         "data_description": {
           "battery_capacity_kwh": "Total användbar kapacitet i ditt husbatteri (INTE elbilens) i kWh. Används av den prognosstyrda laddningsstrategin för att uppskatta hur mycket batteriet kan överbrygga ett solunderskott. Se växelriktarens specifikation.",
-          "target_peak_limit": "Maximalt antal kW som ditt nätavtal tillåter innan SEM börjar koppla bort last. För effekttariffer vanligtvis 3–5 kW; annars sätt din huvudsäkrings märkström delat med 4 för att lämna marginal.",
           "generate_dashboard_on_install": "När detta är aktiverat skapar SEM Lovelace-instrumentpanelen direkt efter att det här steget är klart och startar sedan om Home Assistant ca 5 s senare så att den nya instrumentpanelen blir synlig. Du kan alltid köra det manuellt igen senare via tjänsten solar_energy_management.generate_dashboard.",
           "diagram_style": "Välj systemdiagram på fliken Hem. 'SEM' använder det inbyggda animerade diagrammet. 'K-Flow' använder K-Flow HACS-kortet (måste installeras separat)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Ett oväntat fel uppstod. Försök igen.",
       "entity_not_found": "Entiteten hittades inte. Kontrollera att entitets-ID:t finns.",
-      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge.",
-      "deye_program_groups_incomplete": "Alla sex Deye-programgrupper måste ha entiteter för tid, SOC och nätladdning."
+      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management är redan konfigurerat. Bara en instans tillåts.",
@@ -241,6 +237,7 @@
         "description": "Uppdatera konfigurationen för lasthantering",
         "data": {
           "load_management_enabled": "Aktivera lasthantering",
+          "peak_limit_unlimited": "Ingen nätgräns",
           "target_peak_limit": "Måleffekttoppsgräns (kW)",
           "warning_peak_level": "Varningsnivå för effekttopp (kW)",
           "emergency_peak_level": "Nödnivå för effekttopp (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Aktivera/inaktivera SEM:s automatiska lastbortkoppling för att hålla dig under din effekttoppsgräns.",
+          "peak_limit_unlimited": "Stänger av toppeffekthanteringen helt: SEM dimensionerar inte längre laster efter den målsatta toppgränsen och kopplar aldrig bort för att hålla den. Endast för anslutningar som ingen hushållslast kan hota. Detta är något annat än ”Aktivera lasthantering”, som bara stoppar bortkopplingen men behåller gränsen som dimensioneringstak.",
           "target_peak_limit": "Maximal näteffekt (kW) innan SEM börjar koppla bort styrbara laster.",
-          "warning_peak_level": "Effektnivå (kW) vid vilken SEM utfärdar en varning innan åtgärd vidtas.",
-          "emergency_peak_level": "Effektnivå (kW) vid vilken SEM aggressivt kopplar bort laster för att undvika effektavgifter.",
+          "warning_peak_level": "Effektnivå (kW) vid vilken SEM utfärdar en varning innan åtgärd vidtas. Måste ligga under den målsatta toppgränsen.",
+          "emergency_peak_level": "Effektnivå (kW) vid vilken SEM aggressivt kopplar bort laster för att undvika effektavgifter. Måste ligga över den målsatta toppgränsen.",
           "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh.",
           "ev_target_soc": "Mål-SOC (%) vid vilken SEM betraktar elbilen som fulladdad."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Icke-negativ RMS-ström för inverter Load/EPS L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Varningsnivån måste ligga under den målsatta toppgränsen – den är den tidiga varningen om att målet närmar sig.",
+      "peak_emergency_not_above_target": "Nödnivån måste ligga över den målsatta toppgränsen – annars kopplar SEM bort laster innan gränsen den skyddar ens nås.",
+      "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge.",
+      "deye_program_groups_incomplete": "Alla sex Deye-programgrupper måste ha entiteter för tid, SOC och nätladdning.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode-styrning kräver två olika alternativ – ett för Load First och ett för Battery First. Välj båda, och inte samma två gånger.",
+      "deye_force_charge_work_mode_invalid": "Välj vilket Work Mode SEM ska använda för att tvångsladda batteriet: Load First eller Battery First."
     }
   },
   "entity": {

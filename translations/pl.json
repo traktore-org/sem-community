@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Sprzęt",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Pojemność baterii domowej (kWh)",
-          "target_peak_limit": "Limit mocy szczytowej (kW)",
           "generate_dashboard_on_install": "Wygeneruj teraz pulpit SEM (restartuje HA)",
           "diagram_style": "Styl diagramu systemowego"
         },
         "data_description": {
           "battery_capacity_kwh": "Całkowita użyteczna pojemność baterii domowej (NIE pojazdu EV) w kWh. Używana przez strategię ładowania opartą na prognozie do oszacowania, jak duży deficyt słoneczny bateria może zmostkować. Sprawdź specyfikację falownika.",
-          "target_peak_limit": "Maksymalna moc w kW, na jaką pozwala Twoja umowa z operatorem sieci, zanim SEM zacznie zrzucać obciążenia. Dla taryf z opłatą mocową zwykle 3–5 kW; w przeciwnym razie ustaw wartość znamionową bezpiecznika podzieloną przez 4, aby zostawić zapas.",
           "generate_dashboard_on_install": "Gdy opcja jest włączona, SEM tworzy pulpit Lovelace natychmiast po zakończeniu tego kroku, a następnie ok. 5 s później restartuje Home Assistant, aby nowy pulpit stał się widoczny. Zawsze możesz uruchomić to ponownie ręcznie usługą solar_energy_management.generate_dashboard.",
           "diagram_style": "Wybierz styl diagramu systemowego na karcie Strona główna. 'SEM' używa wbudowanego animowanego diagramu. 'K-Flow' używa karty K-Flow HACS (wymaga osobnej instalacji)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Wystąpił nieoczekiwany błąd. Spróbuj ponownie.",
       "entity_not_found": "Nie znaleziono encji. Sprawdź, czy podany identyfikator encji istnieje.",
-      "service_not_found": "Nie znaleziono usługi powiadomień. Sprawdź nazwę usługi (np. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready wymaga OBU encji przekaźników. Ustaw oba przekaźniki — albo pozostaw oba puste i skonfiguruj tylko encję climate, aby korzystać z podbicia nastawy w trybie climate-only.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Nie znaleziono usługi powiadomień. Sprawdź nazwę usługi (np. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management jest już skonfigurowany. Dozwolona jest tylko jedna instancja.",
@@ -241,6 +237,7 @@
         "description": "Zaktualizuj konfigurację zarządzania obciążeniem",
         "data": {
           "load_management_enabled": "Włącz zarządzanie obciążeniem",
+          "peak_limit_unlimited": "Brak limitu sieci",
           "target_peak_limit": "Docelowy limit szczytu (kW)",
           "warning_peak_level": "Ostrzegawczy poziom szczytu (kW)",
           "emergency_peak_level": "Awaryjny poziom szczytu (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Włącz/wyłącz automatyczne zrzucanie obciążeń przez SEM, aby utrzymać się poniżej limitu szczytu sieci.",
+          "peak_limit_unlimited": "Całkowicie wyłącza zarządzanie szczytem: SEM przestaje dobierać moc odbiorników do docelowego limitu szczytu i nigdy nie odłącza, aby go bronić. Tylko dla przyłączy, których żaden odbiornik domowy nie jest w stanie zagrozić. To co innego niż „Włącz zarządzanie obciążeniem”, które zatrzymuje samo odłączanie, ale zachowuje limit jako pułap doboru mocy.",
           "target_peak_limit": "Maksymalna moc z sieci (kW), po przekroczeniu której SEM zaczyna zrzucać sterowalne obciążenia.",
-          "warning_peak_level": "Poziom mocy (kW), przy którym SEM wystawia ostrzeżenie, zanim podejmie działanie.",
-          "emergency_peak_level": "Poziom mocy (kW), przy którym SEM agresywnie zrzuca obciążenia, aby uniknąć opłat mocowych.",
+          "warning_peak_level": "Poziom mocy (kW), przy którym SEM wystawia ostrzeżenie, zanim podejmie działanie. Musi być niższy niż docelowy limit szczytu.",
+          "emergency_peak_level": "Poziom mocy (kW), przy którym SEM agresywnie zrzuca obciążenia, aby uniknąć opłat mocowych. Musi być wyższy niż docelowy limit szczytu.",
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh.",
           "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Nie znaleziono usługi powiadomień. Sprawdź nazwę usługi (np. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Poziom ostrzeżenia musi być niższy niż docelowy limit szczytu — to wczesne ostrzeżenie, że cel jest osiągany.",
+      "peak_emergency_not_above_target": "Poziom awaryjny musi być wyższy niż docelowy limit szczytu — w przeciwnym razie SEM odłączy odbiorniki, zanim chroniony limit zostanie w ogóle osiągnięty.",
+      "heat_pump_partial_relays": "SG-Ready wymaga OBU encji przekaźników. Ustaw oba przekaźniki — albo pozostaw oba puste i skonfiguruj tylko encję climate, aby korzystać z podbicia nastawy w trybie climate-only.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Sterowanie Work Mode wymaga dwóch różnych opcji — jednej dla Load First i jednej dla Battery First. Wybierz obie i nie dwa razy tej samej.",
+      "deye_force_charge_work_mode_invalid": "Wybierz, którego trybu Work Mode SEM ma używać do wymuszonego ładowania akumulatora: Load First czy Battery First."
     }
   },
   "entity": {

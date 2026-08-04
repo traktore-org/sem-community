@@ -18,6 +18,9 @@ from ..const import (
     DEFAULT_WARNING_PEAK_LEVEL,
     DEFAULT_EMERGENCY_PEAK_LEVEL,
     DEFAULT_PEAK_HYSTERESIS,
+    DEFAULT_PEAK_LIMIT_UNLIMITED,
+    WARNING_PEAK_RATIO,
+    EMERGENCY_PEAK_RATIO,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     DEFAULT_CRITICAL_DEVICE_PROTECTION,
     DEFAULT_LOAD_SHEDDING_DELAY,
@@ -78,6 +81,15 @@ class LoadManagementCoordinator:
         self._hysteresis = _cfg.get(
             "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS
         )
+        # (#716) Explicit "this install has no grid ceiling". Peak shedding
+        # never escalates above NORMAL while this is set. Deliberately NOT
+        # inferred from ``load_management_enabled`` or from a 0 limit: an
+        # unlimited that can be reached by accident is how a 5 kW house got
+        # handed a 10 kW EV slot (#638 finding #5). One boolean, one meaning.
+        self._peak_unlimited = bool(
+            _cfg.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
+        )
+        self._logged_ladder_repair = False
 
         # Device management
         self._device_discovery = LoadDeviceDiscovery(hass)
@@ -395,11 +407,67 @@ class LoadManagementCoordinator:
             except Exception as e:
                 _LOGGER.error("Error in load management callback: %s", e)
 
-    async def update_target_peak_limit(self, new_limit: float):
-        """Update the target peak limit and persist to config entry."""
+    def _effective_levels(self) -> Tuple[float, float]:
+        """Warning/emergency levels, repaired into order at READ time (#717).
+
+        The ladder must be ``warning < target < emergency``. The options flow
+        rejects anything else, but that is not the only writer: the
+        ``set_option`` service writes arbitrary keys with no validation, and
+        entries created before the flow validated could already hold an
+        inverted ladder. Repairing here covers every writer plus stored
+        history, and leaves the user's numbers untouched so they can put them
+        back in order themselves.
+
+        The dangerous end is a LOW emergency: ``emergency <= target`` makes the
+        EMERGENCY branch win before SHEDDING is ever considered, so SEM dumps
+        loads the moment the target is touched. A HIGH warning is merely a lost
+        stage (the target check fires first), repaired for symmetry.
+
+        Repair falls back on the same ratios the install flow derives from
+        (#717), not on the target itself: clamping *to* the target would leave
+        ``emergency == target``, and the EMERGENCY branch — which tests ``>=`` —
+        would still win at the target, making SHEDDING unreachable. The ratios
+        put each level back on its own side with a stage's worth of room.
+        """
+        warning = self._warning_level
+        emergency = self._emergency_level
+        if warning >= self._target_peak_limit:
+            warning = round(self._target_peak_limit * WARNING_PEAK_RATIO, 1)
+        if emergency <= self._target_peak_limit:
+            emergency = round(self._target_peak_limit * EMERGENCY_PEAK_RATIO, 1)
+        if not self._logged_ladder_repair and (
+            warning != self._warning_level or emergency != self._emergency_level
+        ):
+            self._logged_ladder_repair = True
+            _LOGGER.warning(
+                "Peak levels out of order (warning %.1f / target %.1f / emergency "
+                "%.1f kW) — using %.1f / %.1f / %.1f for shedding decisions. "
+                "Warning must be below the target and emergency above it; fix "
+                "them under Configure → Load Management.",
+                self._warning_level, self._target_peak_limit,
+                self._emergency_level,
+                warning, self._target_peak_limit, emergency,
+            )
+        return warning, emergency
+
+    async def update_target_peak_limit(
+        self, new_limit: float, unlimited: bool | None = None
+    ):
+        """Update the target peak limit and persist to config entry.
+
+        (#717 redesign) ``unlimited`` is optional so the two existing
+        Configure-flow writers (which set the flag separately via the
+        options flow's own submit path) keep working unchanged. The
+        Control-tab slider is the one caller that passes both in the same
+        atomic write — dragging to the MAX notch and letting go must not
+        leave a half-applied state between two separate service calls.
+        """
         self._target_peak_limit = new_limit
-        # Persist to config_entry.options so value survives restart (#199)
         new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
+        if unlimited is not None:
+            self._peak_unlimited = unlimited
+            new_options["peak_limit_unlimited"] = unlimited
+        # Persist to config_entry.options so value survives restart (#199)
         coordinator = getattr(self.config_entry, "runtime_data", None)
         if coordinator:
             # (#636b) the listener honors a SNAPSHOT (dict == new options,
@@ -409,7 +477,10 @@ class LoadManagementCoordinator:
             coordinator._skip_options_reload = dict(new_options)
             coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
         self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
-        _LOGGER.info("Updated target peak limit to %skW", new_limit)
+        _LOGGER.info(
+            "Updated target peak limit to %skW%s", new_limit,
+            "" if unlimited is None else f" (unlimited={unlimited})",
+        )
         self._trigger_callbacks()
 
     async def update_warning_peak_level(self, new_level: float):
@@ -644,11 +715,19 @@ class LoadManagementCoordinator:
         Hysteresis applies at SHEDDING→NORMAL transition to prevent rapid cycling.
         If peak drops well below warning level, immediately restore to NORMAL.
         """
+        # (#716) No grid ceiling declared → nothing to defend. Return NORMAL
+        # before any threshold is consulted, so a stale level left in config
+        # can't shed on an install that opted out.
+        if self._peak_unlimited:
+            self._last_state_decision_path = "peak_limit_unlimited_normal"
+            return LoadManagementState.NORMAL
+
+        warning_level, emergency_level = self._effective_levels()
         peak_to_check = current_peak
         restore_threshold = self._target_peak_limit - self._hysteresis
 
         # Emergency state - immediate action required
-        if peak_to_check >= self._emergency_level:
+        if peak_to_check >= emergency_level:
             self._last_state_decision_path = "emergency"
             return LoadManagementState.EMERGENCY
 
@@ -658,7 +737,7 @@ class LoadManagementCoordinator:
             return LoadManagementState.SHEDDING
 
         # In warning zone (between warning and target)
-        elif peak_to_check >= self._warning_level:
+        elif peak_to_check >= warning_level:
             # If we have devices shed and peak is still in warning zone,
             # stay in SHEDDING to allow controlled restoration
             if self._devices_shed:
@@ -1248,6 +1327,11 @@ class LoadManagementCoordinator:
             "target_peak_limit": self._target_peak_limit,
             "warning_level": self._warning_level,
             "emergency_level": self._emergency_level,
+            # (#716) The label, not the number. The stored kW values stay as
+            # they are and keep flowing to the sensors — no consumer of this
+            # dict ever sees an infinity, so nothing downstream can render
+            # NaN. Cards read this flag to show "Unlimited" instead.
+            "peak_limit_unlimited": self._peak_unlimited,
             "total_devices": total_devices,
             "controllable_devices": controllable_devices,
             "devices_shed": len(self._devices_shed),

@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "De twee laatste waardes zijn afhankelijk van je installatie:\n\n• Thuis Batterij capaciteit — de bruikbare capaciteit van je thuis batterij.\n• Piek Vermogen Limiet. Het maximale aantal kW dat uw energie leverancier toestaat voordat SEM begint met het afschakelen van de energie verbruikers. — \n\nSEM detecteert automatich je omvormer ontlaad schakelaar entity: {discharge_entity}\n\nLaat deze optie aan staan zodat SEM automatisch je dashboards creeert. **Let op!!: Home Assistant rwordt automatisch opnieuw opgestart na 5 seconden nadat de installatie voltooid is.**\n\nGebruik verder de (veilige) standaard waardes, deze kan je altijd achteraf nog wijzigen.",
+        "description": "Laatste stap! SEM heeft de ontlaad-besturingsentiteit van je omvormer automatisch gedetecteerd: {discharge_entity}\n\nLaat de dashboardoptie AAN staan zodat SEM automatisch je Lovelace-dashboard voor je aanmaakt. **Let op: dit veroorzaakt ongeveer 5 seconden na het voltooien van de installatie een herstart van Home Assistant.**\n\nVoor al het overige — inclusief je piekvermogenlimiet — gebruikt SEM veilige standaardwaardes die je direct na de installatie kunt aanpassen: de piekvermogenlimiet via de schuifregelaar op het tabblad **Besturing**, de rest via het tabblad **Configuratie** van het SEM-dashboard — waaronder EV-laders, warmtepomp, tarief en batterijzones.",
         "data": {
           "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
-          "target_peak_limit": "Piek Vermogen Limiet (kW)",
           "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)",
           "diagram_style": "Systeemdiagram stijl"
         },
         "data_description": {
           "battery_capacity_kwh": "Totale capaciteit van je thuis batterij in kWh. Wordt gebruikt om voorspellingen te doen ten behoeve van de laad en ontlaad strategie.",
-          "target_peak_limit": "Maximaal aantal kW je maximaal mag gebruiken op je energie aansluiting voordat SEM automatisch apparaten gaat uitschakelen.",
           "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen.",
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
       "entity_not_found": "Entiteit niet gevonden. Controleer of de entiteit-ID bestaat.",
-      "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready heeft BEIDE relais-entiteiten nodig. Stel beide relais in — of laat beide leeg en configureer alleen de klimaat-entiteit voor een klimaat-only instelpunt-boost.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan.",
@@ -241,6 +237,7 @@
         "description": "Configuratie voor load management bijwerken",
         "data": {
           "load_management_enabled": "Load management inschakelen",
+          "peak_limit_unlimited": "Geen netlimiet",
           "target_peak_limit": "Doel piekvermogen (kW)",
           "warning_peak_level": "Waarschuwingsniveau piekvermogen (kW)",
           "emergency_peak_level": "Noodniveau piekvermogen (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Schakel SEM's automatische lastafschakeling in of uit om onder uw netpieklimiet te blijven.",
+          "peak_limit_unlimited": "Schakelt piekbeheer volledig uit: SEM dimensioneert verbruikers niet meer op de doel-pieklimiet en schakelt nooit af om die te bewaken. Alleen voor aansluitingen die geen enkele huishoudelijke belasting in gevaar kan brengen. Dit staat los van 'Load management inschakelen': die optie stopt alleen het afschakelen, de limiet blijft als dimensioneringsplafond gelden.",
           "target_peak_limit": "Maximaal netvermogen (kW) waarna SEM begint met het afschakelen van regelbare verbruikers.",
-          "warning_peak_level": "Vermogensniveau (kW) waarbij SEM een waarschuwing geeft voordat actie wordt ondernomen.",
-          "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden.",
+          "warning_peak_level": "Vermogensniveau (kW) waarbij SEM een waarschuwing geeft voordat actie wordt ondernomen. Moet onder de doel-pieklimiet liggen.",
+          "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden. Moet boven de doel-pieklimiet liggen.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
           "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Het waarschuwingsniveau moet onder de doel-pieklimiet liggen — het is de vroege waarschuwing dat de doelwaarde wordt benaderd.",
+      "peak_emergency_not_above_target": "Het noodniveau moet boven de doel-pieklimiet liggen — anders schakelt SEM verbruikers uit voordat de te beschermen limiet is bereikt.",
+      "heat_pump_partial_relays": "SG-Ready heeft BEIDE relais-entiteiten nodig. Stel beide relais in — of laat beide leeg en configureer alleen de klimaat-entiteit voor een klimaat-only instelpunt-boost.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode-aansturing heeft twee verschillende opties nodig — één voor Load First en één voor Battery First. Kies ze allebei, en niet tweemaal dezelfde.",
+      "deye_force_charge_work_mode_invalid": "Kies met welke Work Mode SEM de batterij geforceerd moet laden: Load First of Battery First."
     }
   },
   "entity": {

@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Capacidade da bateria doméstica (kWh)",
-          "target_peak_limit": "Limite de potência de pico (kW)",
           "generate_dashboard_on_install": "Gerar agora o painel SEM (reinicia o HA)",
           "diagram_style": "Estilo do diagrama do sistema"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacidade total utilizável da sua bateria doméstica (NÃO a do VE) em kWh. Usada pela estratégia de carregamento baseada na previsão para estimar quanto a bateria consegue compensar um défice solar. Consulte a ficha técnica do seu inversor.",
-          "target_peak_limit": "Máximo em kW que o seu contrato de rede permite antes de o SEM começar a reduzir cargas. Para tarifas baseadas na potência contratada, normalmente 3–5 kW; caso contrário, defina o valor do seu disjuntor a dividir por 4 para deixar margem.",
           "generate_dashboard_on_install": "Quando ativado, o SEM cria o painel Lovelace imediatamente após a conclusão deste passo e reinicia o Home Assistant cerca de 5 s depois para que o novo painel fique visível. Pode sempre voltar a executá-lo manualmente mais tarde através do serviço solar_energy_management.generate_dashboard.",
           "diagram_style": "Escolha qual diagrama do sistema usar na aba Início. 'SEM' usa o diagrama animado integrado. 'K-Flow' usa o cartão K-Flow HACS (deve ser instalado separadamente)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Ocorreu um erro inesperado. Tente novamente.",
       "entity_not_found": "Entidade não encontrada. Verifique se o ID da entidade existe.",
-      "service_not_found": "Serviço de notificação não encontrado. Verifique o nome do serviço (p. ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "O SG-Ready necessita de AMBAS as entidades de relé. Defina os dois relés — ou deixe ambos vazios e configure apenas a entidade climate para o boost de setpoint em modo apenas-climate.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Serviço de notificação não encontrado. Verifique o nome do serviço (p. ex. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management já está configurado. Apenas uma instância é permitida.",
@@ -241,6 +237,7 @@
         "description": "Atualize a configuração da gestão de carga",
         "data": {
           "load_management_enabled": "Ativar a gestão de carga",
+          "peak_limit_unlimited": "Sem limite de rede",
           "target_peak_limit": "Limite de pico alvo (kW)",
           "warning_peak_level": "Nível de pico de aviso (kW)",
           "emergency_peak_level": "Nível de pico de emergência (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Ativar/desativar a redução automática de cargas do SEM para se manter abaixo do seu limite de pico de rede.",
+          "peak_limit_unlimited": "Desliga totalmente a gestão de picos: o SEM deixa de dimensionar as cargas pelo limite de pico alvo e nunca corta para o respeitar. Apenas para ligações que nenhuma carga doméstica consegue ameaçar. É diferente de «Ativar gestão de cargas», que para o corte mas mantém o limite como teto de dimensionamento.",
           "target_peak_limit": "Potência máxima da rede (kW) antes de o SEM começar a reduzir as cargas controláveis.",
-          "warning_peak_level": "Nível de potência (kW) a partir do qual o SEM emite um aviso antes de agir.",
-          "emergency_peak_level": "Nível de potência (kW) a partir do qual o SEM reduz cargas de forma agressiva para evitar custos de potência contratada.",
+          "warning_peak_level": "Nível de potência (kW) a partir do qual o SEM emite um aviso antes de agir. Tem de ser inferior ao limite de pico alvo.",
+          "emergency_peak_level": "Nível de potência (kW) a partir do qual o SEM reduz cargas de forma agressiva para evitar custos de potência contratada. Tem de ser superior ao limite de pico alvo.",
           "vehicle_soc_entity": "Sensor opcional que reporta o estado de carga atual do veículo (0–100%).",
           "ev_battery_capacity_kwh": "Capacidade total utilizável da bateria do VE em kWh.",
           "ev_target_soc": "SOC alvo (%) a partir do qual o SEM considera o VE totalmente carregado."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Serviço de notificação não encontrado. Verifique o nome do serviço (p. ex. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "O nível de aviso tem de ser inferior ao limite de pico alvo — é o alerta antecipado de que o alvo está a ser atingido.",
+      "peak_emergency_not_above_target": "O nível de emergência tem de ser superior ao limite de pico alvo — caso contrário, o SEM desligaria cargas antes de atingir o limite que protege.",
+      "heat_pump_partial_relays": "O SG-Ready necessita de AMBAS as entidades de relé. Defina os dois relés — ou deixe ambos vazios e configure apenas a entidade climate para o boost de setpoint em modo apenas-climate.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "O controlo do Work Mode precisa de duas opções diferentes — uma para Load First e outra para Battery First. Escolha ambas e não duas vezes a mesma.",
+      "deye_force_charge_work_mode_invalid": "Escolha com que Work Mode o SEM deve forçar a carga da bateria: Load First ou Battery First."
     }
   },
   "entity": {
