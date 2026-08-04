@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Lomatila"
+      },
+      "overnight_actuation": {
+        "name": "Yösuunnitelman toteutus"
       }
     },
     "number": {

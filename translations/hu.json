@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Vakáció üzemmód"
+      },
+      "overnight_actuation": {
+        "name": "Éjszakai terv végrehajtása"
       }
     },
     "number": {

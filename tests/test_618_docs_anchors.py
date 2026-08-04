@@ -30,9 +30,19 @@ def _doc_slugs(path: Path) -> set:
     return slugs
 
 
+# (#638 G4) every card that carries a docs deep-link is guarded, not just
+# the config card — the overnight plan card links its actuation anchor.
+_EXTRA_CARDS = [
+    _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-overnight-plan-card.js",
+]
+
+
 def _card_doc_links():
     src = _CARD.read_text()
-    return re.findall(r"docs:\s*'([^']+)'", src)
+    links = re.findall(r"docs:\s*'([^']+)'", src)
+    for card in _EXTRA_CARDS:
+        links += re.findall(r"docs:\s*'([^']+)'", card.read_text())
+    return links
 
 
 @pytest.mark.unit

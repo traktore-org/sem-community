@@ -606,6 +606,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._shadow_plan_date = None
         self._overnight_shadow_plan: Optional[Dict[str, Any]] = None
         self._shadow_partial_since = None
+        # (#638 G4) actuation opt-in — the plan's blocks feed the existing
+        # night signals only while this is True. Seeded from the persisted
+        # option, then driven live by ``switch.sem_overnight_actuation``
+        # (same persistence pattern as observer/vacation mode). Default OFF:
+        # a fresh deploy of this branch still runs pure shadow.
+        self._overnight_actuation = config.get("overnight_actuation", False)
+        # (#638 G4) EV connection signature at stamp time — a plug/unplug
+        # during the night re-derives the plan (the doc's replan trigger).
+        self._plan_ev_conn_sig = None
 
         # Observer mode: read-only monitoring, no hardware control
         self._observer_mode = config.get("observer_mode", False)
@@ -2882,6 +2891,50 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             plan = None
                             if pc_target > 0.1:
                                 plan = self._compute_night_plan(charger_cfg, pc_target, energy)
+                                # (#638 G4) the joint overnight plan's overlay,
+                                # written onto the SAME NightChargePlan the
+                                # private planner produced so every downstream
+                                # consumer (context fields, the tri-state
+                                # resolve, decide()) sees one consistent
+                                # decision. UNCOVERED → both signals are
+                                # no-ops and the plan is untouched. The
+                                # reactive guarantees stay senior: a forcing
+                                # deadline or an unreachable floor is never
+                                # gated (see ev_overlay).
+                                try:
+                                    from .overnight_actuation import ev_overlay
+                                    _gate = self._overnight_plan_gate(f"ev:{cid}")
+                                    _wpa = (float(charger_cfg.get("ev_phases") or 3)
+                                            * float(charger_cfg.get("ev_voltage") or 230))
+                                    _wait, _floor = ev_overlay(
+                                        _gate,
+                                        remaining_kwh=pc_target,
+                                        reachable=plan.reachable,
+                                        deadline_active=plan.deadline_active,
+                                        watts_per_amp=_wpa,
+                                        min_amps=int(charger_cfg.get("ev_min_current") or 6),
+                                        max_amps=int(charger_cfg.get("ev_max_current") or 16),
+                                    )
+                                    if _wait:
+                                        plan.should_wait_for_cheap = True
+                                        plan.reason = (
+                                            "joint overnight plan: outside the "
+                                            "planned window — waiting "
+                                            f"({_gate.remaining_kwh:.1f} kWh "
+                                            f"still deliverable)")
+                                    elif _floor > 0:
+                                        plan.should_wait_for_cheap = False
+                                        plan.deadline_amps = max(
+                                            plan.deadline_amps, _floor)
+                                        plan.reason = (
+                                            "joint overnight plan: in planned "
+                                            f"window — floor {_floor}A")
+                                except Exception:  # noqa: BLE001 — overlay must
+                                    # never break the night path; UNCOVERED-by-
+                                    # crash equals "no plan", the safe direction.
+                                    _LOGGER.debug(
+                                        "#638 G4 EV overlay skipped",
+                                        exc_info=True)
                                 self._night_plan_per_charger[cid] = plan
                                 charging_context.night_deadline_amps = plan.deadline_amps
                                 charging_context.night_top_up_amps = plan.top_up_amps
@@ -3246,6 +3299,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _in_window = _now_l.hour >= _hour or _now_l.hour < 7
                 # One plan per NIGHT: after midnight the night began yesterday.
                 _night_of = (_now_l - timedelta(hours=12)).date()
+                # (#638 G4) EV plug/unplug replan: a car that (dis)connects
+                # AFTER the stamp changes the night's demands — re-derive.
+                # Per-charger map when available, fleet OR as the fallback.
+                _conn_sig = tuple(sorted(
+                    (str(k), bool(v)) for k, v in
+                    (getattr(power, "ev_connected_per_charger", None) or {}).items()
+                )) or (("fleet", bool(getattr(power, "ev_connected", False))),)
+                if (_in_window
+                        and getattr(self, "_shadow_plan_date", None) == _night_of
+                        and self._plan_ev_conn_sig is not None
+                        and _conn_sig != self._plan_ev_conn_sig):
+                    _LOGGER.info(
+                        "OVERNIGHT-PLAN (#638): EV connection changed "
+                        "(%s → %s) — replanning the night",
+                        self._plan_ev_conn_sig, _conn_sig)
+                    self._shadow_plan_date = None
                 if (_in_window
                         and getattr(self, "_shadow_plan_date", None) != _night_of):
                     # Stamp only on a READY-world answer: the first refresh
@@ -3254,6 +3323,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if self._shadow_overnight_plan(_sched, energy, None, None,
                                                    power):
                         self._shadow_plan_date = _night_of
+                        self._plan_ev_conn_sig = _conn_sig
             except Exception:  # noqa: BLE001 — shadow must never break the cycle
                 _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
 
@@ -3993,8 +4063,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ONCE per night by ``_shadow_overnight_plan`` and must read the
             # same on every cycle after it — recomputing here would give the
             # card a value that drifts away from the one the logs quote.
-            result["overnight_plan"] = getattr(
-                self, "_overnight_shadow_plan", None)
+            # (#638 G4) ``actuation`` rides along LIVE (not from the stash):
+            # flipping the switch mid-night must change the chip on the next
+            # cycle, not on the next stamp.
+            _onp = getattr(self, "_overnight_shadow_plan", None)
+            result["overnight_plan"] = (
+                {**_onp, "actuation": bool(getattr(
+                    self, "_overnight_actuation", False))}
+                if isinstance(_onp, dict) else _onp)
 
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()
@@ -4311,6 +4387,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 observer=self._observer_mode,
                 # (#633) overnight sources are NIGHT sources.
                 is_night=bool(self.time_manager.is_night_mode()),
+                # (#638 G4) joint-plan window verdicts; empty unless the
+                # actuation switch is on AND tonight's plan covers the load.
+                plan_windows=self._overnight_load_windows(
+                    self._surplus_controller.get_devices_sorted()),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -5614,6 +5694,41 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._shadow_overnight_plan(scheduler, energy, ev_kwh_needed,
                                     ev_max_power, power)
 
+    def _overnight_plan_gate(self, demand_id: str, now=None):
+        """(#638 G4) The trust-rule verdict for one demand against tonight's
+        stamped plan. UNCOVERED (→ callers change nothing) whenever actuation
+        is off, no plan is stamped, the plan is stale/out-of-span, or this
+        demand's verdict is not ``fits`` — see overnight_actuation.plan_gate."""
+        from .overnight_actuation import UNCOVERED, plan_gate
+        if not getattr(self, "_overnight_actuation", False):
+            return UNCOVERED
+        return plan_gate(getattr(self, "_overnight_shadow_plan", None),
+                         demand_id, now or dt_util.now())
+
+    def _overnight_load_windows(self, devices) -> dict:
+        """(#638 G4) Per-device window verdicts for this cycle's surplus
+        update: device_id → True/False for loads the plan covers; devices
+        the plan has no say over are simply absent. Empty dict when
+        actuation is off or nothing is stamped — the controller then
+        behaves exactly as before G4."""
+        windows: dict = {}
+        if not getattr(self, "_overnight_actuation", False):
+            return windows
+        if not isinstance(getattr(self, "_overnight_shadow_plan", None), dict):
+            return windows
+        from .overnight_actuation import load_window
+        now = dt_util.now()
+        for dev in devices:
+            try:
+                did = dev.device_id
+                verdict = load_window(
+                    self._overnight_plan_gate(f"load:{did}", now))
+                if verdict is not None:
+                    windows[did] = verdict
+            except Exception:  # noqa: BLE001 — one odd device won't gate the rest
+                continue
+        return windows
+
     def _shadow_overnight_plan(self, scheduler, energy, phantom_ev_kwh,
                                phantom_ev_w, power=None) -> bool:
         """#638 G3 — compute the joint overnight plan in shadow mode.
@@ -5638,6 +5753,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .ev_tariff_planner import resolve_deadline
 
             now = dt_util.now()
+            # (#638 G4) the log tag is the honest mode of THIS stamp: while
+            # the actuation switch is on, the plan's blocks feed the night
+            # signals — the lines must say so.
+            tag = ("active" if getattr(self, "_overnight_actuation", False)
+                   else "shadow")
             try:
                 night_end_s = self.time_manager.get_night_end_time()
             except Exception:  # noqa: BLE001 — window end is best-effort
@@ -5979,27 +6099,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if phantom_ev_kwh is not None and phantom_ev_w is not None
                 else "n/a (scheduler off)")
             _LOGGER.info(
-                "OVERNIGHT-PLAN (shadow #638): %d demand(s), %d slot(s), "
+                "OVERNIGHT-PLAN (%s #638): %d demand(s), %d slot(s), "
                 "est cost %.2f, fits=%s | EV model — scheduler(phantom): "
                 "%s vs real per-charger map: %.1f kWh (#652)",
-                len(demands), len(slots), plan.total_cost, plan.fits,
+                tag, len(demands), len(slots), plan.total_cost, plan.fits,
                 phantom_txt, real_ev,
             )
             if plan.takeover is not None:
                 _LOGGER.info(
-                    "OVERNIGHT-PLAN (shadow): battery carries home until "
+                    "OVERNIGHT-PLAN (%s): battery carries home until "
                     "%s — the grid takes over from there "
                     "(floor %.1f kWh of %.1f kWh)",
-                    f"{plan.takeover:%H:%M}", floor_kwh, soc_kwh)
+                    tag, f"{plan.takeover:%H:%M}", floor_kwh, soc_kwh)
             else:
                 _LOGGER.info(
-                    "OVERNIGHT-PLAN (shadow): battery carries home through "
+                    "OVERNIGHT-PLAN (%s): battery carries home through "
                     "the whole night (floor %.1f kWh of %.1f kWh)",
-                    floor_kwh, soc_kwh)
+                    tag, floor_kwh, soc_kwh)
             for line in plan.summary_lines():
-                _LOGGER.info("OVERNIGHT-PLAN (shadow): %s", line)
+                _LOGGER.info("OVERNIGHT-PLAN (%s): %s", tag, line)
             for a in plan.allocations:
-                _LOGGER.debug("OVERNIGHT-PLAN (shadow) alloc: %s", a.reason)
+                _LOGGER.debug("OVERNIGHT-PLAN (%s) alloc: %s", tag, a.reason)
             # (#638 G3c) STRUCTURED shape for the card, beside the log-shaped
             # strings the diagnose payload has always carried. The card must
             # not have to parse "ev:x: YIELDS 1.5 kWh — 0.5/2.0 kWh (peak
@@ -6752,6 +6872,44 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         deadline_reachable = True
         if self.time_manager.is_night_mode() and night_target > 0.1:
             night_plan = self._compute_night_plan(_primary_cfg, night_target, energy)
+            # (#638 G4) the joint-plan overlay for the PRIMARY charger —
+            # the same overlay the multi-charger loop applies to every
+            # charger it visits. The primary's plan is computed HERE, at a
+            # second site, so skipping it would actuate every charger
+            # except the one a single-charger install actually has (the
+            # per-charger-vs-primary parity class, #683/#684).
+            try:
+                from .overnight_actuation import ev_overlay
+                _pcid = _primary_cfg.get("id") or "ev_charger"
+                _gate = self._overnight_plan_gate(f"ev:{_pcid}")
+                _wpa = (float(_primary_cfg.get("ev_phases") or 3)
+                        * float(_primary_cfg.get("ev_voltage") or 230))
+                _wait, _floor = ev_overlay(
+                    _gate,
+                    remaining_kwh=night_target,
+                    reachable=night_plan.reachable,
+                    deadline_active=night_plan.deadline_active,
+                    watts_per_amp=_wpa,
+                    min_amps=int(_primary_cfg.get("ev_min_current") or 6),
+                    max_amps=int(_primary_cfg.get("ev_max_current") or 16),
+                )
+                if _wait:
+                    night_plan.should_wait_for_cheap = True
+                    night_plan.reason = (
+                        "joint overnight plan: outside the planned window "
+                        f"— waiting ({_gate.remaining_kwh:.1f} kWh "
+                        f"still deliverable)")
+                elif _floor > 0:
+                    night_plan.should_wait_for_cheap = False
+                    night_plan.deadline_amps = max(
+                        night_plan.deadline_amps, _floor)
+                    night_plan.reason = (
+                        f"joint overnight plan: in planned window — "
+                        f"floor {_floor}A")
+            except Exception:  # noqa: BLE001 — overlay must never break the
+                # night path; a crash equals "no plan", the safe direction.
+                _LOGGER.debug("#638 G4 primary EV overlay skipped",
+                              exc_info=True)
             deadline_amps = night_plan.deadline_amps
             deadline_active = night_plan.deadline_active
             tariff_wait = night_plan.should_wait_for_cheap

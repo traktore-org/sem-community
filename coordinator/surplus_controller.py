@@ -127,6 +127,7 @@ def compute_load_intent(
     is_shed_target: bool = False,
     soc_above_reserve: bool = False,
     is_night: bool = True,
+    plan_window: Optional[bool] = None,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
 
@@ -202,13 +203,18 @@ def compute_load_intent(
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
     # in daytime (caught live at 09:10 in full sun).
+    # (#638 G4) ``plan_window is False`` = the joint overnight plan placed
+    # this load's blocks elsewhere tonight — an extra AND-gate on the start,
+    # never a run reason. None (no trusted plan) leaves behaviour untouched.
     if (deficit and can_start and is_night
+            and plan_window is not False
             and getattr(device, "battery_eligible_overnight", False)
             and soc_above_reserve):
         return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
 
     # Cheap-hours grid: finish a runtime deficit off the grid in a cheap window.
     if (deficit and can_start and price_is_cheap
+            and plan_window is not False
             and getattr(device, "top_up_policy", "solar_only") == "cheap_hours"):
         return LoadIntent(True, rated, "cheap_grid", "cheap-hours grid — runtime deficit")
 
@@ -494,6 +500,12 @@ class SurplusController:
         # passes. Default OFF — the passes stay authoritative until a parity
         # corpus + a real-hardware soak prove the new path identical.
         self._use_desired_state: bool = False
+        # (#638 G4) per-cycle window verdicts from the joint overnight plan:
+        # device_id → True (inside its planned block) / False (planned
+        # elsewhere tonight — don't start now). Absent = the plan has no say.
+        # Stamped by update() from the coordinator; empty when actuation is
+        # off or no trusted plan exists.
+        self._plan_windows: dict = {}
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -729,7 +741,10 @@ class SurplusController:
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 price_is_cheap=price_is_cheap, peak_freeze=peak_freeze,
                 is_night=getattr(self, "_is_night_cycle", True),
-                is_shed_target=device.device_id in shed, soc_above_reserve=soc_above)
+                is_shed_target=device.device_id in shed, soc_above_reserve=soc_above,
+                # (#638 G4) the joint plan's per-device window verdict this
+                # cycle; absent from the dict = the plan has no say.
+                plan_window=self._plan_windows.get(device.device_id))
             intents[device.device_id] = intent
             # solar/tier1-driven loads consume surplus for lower-priority ones
             if intent.on and intent.source in ("solar", "tier1_battery"):
@@ -796,6 +811,9 @@ class SurplusController:
         battery_assist_budget_w: float = 0.0,
         observer: bool = False,
         is_night: bool = True,
+        # (#638 G4) device_id → True/False window verdicts from the joint
+        # overnight plan; None/empty = no trusted plan → today's behaviour.
+        plan_windows: Optional[dict] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -851,6 +869,9 @@ class SurplusController:
         # (#633) "Finish overnight from: Battery" is a NIGHT source — the
         # Tier-2 pass and its force-expiry both gate on this cycle flag.
         self._is_night_cycle = bool(is_night)
+        # (#638 G4) stamp this cycle's joint-plan window verdicts for the
+        # intent path AND the imperative passes below.
+        self._plan_windows = dict(plan_windows or {})
         peak_freeze = peak_state in (
             LoadManagementState.WARNING,
             LoadManagementState.SHEDDING,
@@ -1295,6 +1316,12 @@ class SurplusController:
                     continue
                 if device.stop_condition_met:
                     continue
+                # (#638 G4) the joint plan placed this load's blocks elsewhere
+                # tonight — don't start it in THIS cheap hour. Gates the start
+                # only; a run already going ends by its own terms (deficit /
+                # expiry), matching the plan's min-run quantization.
+                if self._plan_windows.get(device.device_id) is False:
+                    continue
                 # (arc) Respect can_activate() here too — otherwise a cheap-hours
                 # top-up would re-activate a load the user just turned off,
                 # bypassing the reconciler's user-respect cooldown (and the
@@ -1347,6 +1374,11 @@ class SurplusController:
                 if not device.needs_offpeak_activation:  # deficit + not capped
                     continue
                 if not self._tier2_overnight_eligible(device):
+                    continue
+                # (#638 G4) same window gate as the cheap-hours pass: the plan
+                # may defer a Tier-2 load to a later slot when the battery's
+                # shared discharge budget is contested.
+                if self._plan_windows.get(device.device_id) is False:
                     continue
                 if not device.can_activate():
                     continue

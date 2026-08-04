@@ -101,14 +101,37 @@ class SEMOvernightPlanCard extends SEMLitBase {
         }));
     }
 
-    _renderIdle() {
+    // (#638 G4) the chip is the mode made visible: purple "shadow" while the
+    // plan is log-only, green "active" while the actuation switch feeds it
+    // into the night signals. Same for the footer note; the tooltip repeats
+    // the note so the idle render (which has no footer) still explains itself.
+    _modeChip(act) {
+        return html`<span class="chip ${act ? 'chip-active' : ''}"
+            title="${this._t(act ? 'overnight_active_note' : 'overnight_shadow_note')}">${
+            this._t(act ? 'overnight_active' : 'overnight_shadow')}</span>`;
+    }
+
+    // Deep link into the planner docs (guarded by tests/test_618_docs_anchors.py
+    // — the regex there matches this "docs:" literal, keep the shape).
+    _docsLink() {
+        const url = {
+            docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#actuation-g4',
+        };
+        return html`<a class="docs-link" href="${url.docs}" target="_blank"
+            rel="noopener" title="${this._t('config_docs')}">
+            <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:13px"></ha-icon>
+        </a>`;
+    }
+
+    _renderIdle(act) {
         return html`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
                         <span class="title">${this._t('overnight_plan_title')}</span>
-                        <span class="chip">${this._t('overnight_shadow')}</span>
+                        ${this._modeChip(act)}
+                        ${this._docsLink()}
                     </div>
                     <div class="idle">${this._t('overnight_idle')}</div>
                 </div>
@@ -128,11 +151,12 @@ class SEMOvernightPlanCard extends SEMLitBase {
         this.style.display = '';
 
         const a = st.attributes || {};
+        const act = a.actuation === true;
         const demands = Array.isArray(a.demands) ? a.demands : [];
         const slots = Array.isArray(a.slots) ? a.slots : [];
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
         if (verdict === 'idle' || !demands.length) {
-            return this._renderIdle();
+            return this._renderIdle(act);
         }
 
         const t0 = slots.length ? Date.parse(slots[0].start) : NaN;
@@ -209,7 +233,8 @@ class SEMOvernightPlanCard extends SEMLitBase {
                     <div class="head">
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
                         <span class="title">${this._t('overnight_plan_title')}</span>
-                        <span class="chip">${this._t('overnight_shadow')}</span>
+                        ${this._modeChip(act)}
+                        ${this._docsLink()}
                         <span class="stamp">${this._hm(a.computed_at)}</span>
                     </div>
 
@@ -312,7 +337,8 @@ class SEMOvernightPlanCard extends SEMLitBase {
                         </div>
                     ` : nothing}
 
-                    <div class="foot">${this._t('overnight_shadow_note')}</div>
+                    <div class="foot">${this._t(act
+                        ? 'overnight_active_note' : 'overnight_shadow_note')}</div>
                 </div>
             </ha-card>
         `;
@@ -343,6 +369,16 @@ class SEMOvernightPlanCard extends SEMLitBase {
                 background: rgba(131,83,209,0.18); color: #b39ddb;
                 border: 1px solid rgba(131,83,209,0.35);
             }
+            .chip-active {
+                background: rgba(141,200,146,0.18); color: #8DC892;
+                border-color: rgba(141,200,146,0.40);
+            }
+            .docs-link {
+                display: inline-flex; align-items: center;
+                color: var(--secondary-text-color);
+                opacity: 0.6; transition: opacity 0.15s;
+            }
+            .docs-link:hover { opacity: 1; color: #8353d1; }
             .stamp {
                 margin-left: auto; font-size: 11px;
                 color: var(--secondary-text-color);

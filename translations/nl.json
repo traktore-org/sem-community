@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Vakantiemodus"
+      },
+      "overnight_actuation": {
+        "name": "Nachtplan-uitvoering"
       }
     },
     "number": {

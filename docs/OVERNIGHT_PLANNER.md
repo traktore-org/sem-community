@@ -1,8 +1,11 @@
 # The Overnight Joint Planner — how SEM plans the night (#638)
 
-> **Status: shadow mode.** The planner computes and logs *tonight's plan*
-> every night, but does not actuate anything yet. Every real decision is
-> still made by SEM's reactive layer. See [Where to see it](#where-to-see-it).
+> **Status: actuation available, off by default.** The planner computes and
+> logs *tonight's plan* every night. With `switch.sem_overnight_actuation`
+> **off** (the default) that is all it does — pure shadow, every real
+> decision made by SEM's reactive layer. Switched **on**, the plan's
+> windows feed the *existing* night signals — see
+> [Actuation](#actuation-g4) and [Where to see it](#where-to-see-it).
 
 ## The problem in one picture
 
@@ -182,8 +185,10 @@ owes the rest of the night a plan and gets one.
   axis: where each block is planned, which hours are cheap, and the battery's
   own row shading teal while it covers the house and steel-blue after the
   **takeover**. A `shadow` chip and a footer line say plainly that SEM is not
-  acting on it yet. The card **self-hides** until a plan has been stamped, so
-  it costs nothing during the day.
+  acting on it yet — with actuation switched on they turn into a green
+  `active` chip and an "the plan's windows steer tonight" footer. The card
+  **self-hides** until a plan has been stamped, so it costs nothing during
+  the day.
 - **As an entity** — `sensor.sem_overnight_plan` (diagnostic). Its state is
   the verdict word `fits` / `yields` / `idle` / `pending`; the plan itself
   rides as attributes (`demands`, `slots`, `blocks`, `takeover`,
@@ -196,9 +201,10 @@ owes the rest of the night a plan and gets one.
   night the timeline alone is dropped — `timeline_omitted: true`, the card
   falls back to the demand list and says so. `diagnose` always has the full
   detail.
-- **Logs** — `OVERNIGHT-PLAN (shadow)` lines: the summary at INFO, one line
-  per allocation at DEBUG. Never silent: even "no overnight demands
-  tonight" is logged, with the counts that explain it.
+- **Logs** — `OVERNIGHT-PLAN (shadow)` lines (`(active)` while actuation is
+  on): the summary at INFO, one line per allocation at DEBUG. Never silent:
+  even "no overnight demands tonight" is logged, with the counts that
+  explain it.
 - **On demand** — the `solar_energy_management.diagnose` service response
   carries `overnight_plan_shadow`: the timestamp, fits/yields summary, the
   takeover hour, and every allocation line of the most recent plan.
@@ -214,14 +220,47 @@ The plan is only as good as its inputs — all of which SEM maintains anyway:
 - deviations don't break anything — they trigger a re-plan, and the
   reactive layer never depended on the plan in the first place.
 
+## Actuation (G4)
+
+Actuation does **not** add a control path — it feeds the plan's windows
+into the two signal families the reactive layer already consumes
+(`coordinator/overnight_actuation.py`):
+
+- **EV** — inside one of its planned blocks, the charger gets an amps
+  *floor* derived from the block's planned power (threaded through the
+  existing `deadline_amps` signal, so the peak governor and the charger's
+  own [min, max] still apply on top). Outside its blocks it *waits*
+  (the existing tariff-wait state) — but **only while the remaining blocks
+  can still deliver the remaining floor**.
+- **Loads** — the cheap-hours and Tier-2 overnight starts get one extra
+  AND-gate: don't start now if the plan placed this load's blocks
+  elsewhere tonight. The gate never *creates* a run — the deficit, the
+  price level, the reserve SOC and the anti-cycle timers keep deciding
+  *whether*; the plan only narrows *when*.
+
+The trust rule, per demand, fail-open to pre-G4 behaviour: the switch is
+on, tonight's plan is stamped and fresh, `now` is inside the plan's own
+night span, and **this demand's verdict is `fits`**. A `yields`/`partial`
+demand, a stale stamp, a malformed block — any doubt at all — and that
+demand behaves exactly as if the planner did not exist. The reactive
+guarantees stay senior even when covered: a forcing deadline or an
+unreachable floor is never gated, and a peak shed still wins over any
+planned window.
+
+Flip it with `switch.sem_overnight_actuation` (Config category on the SEM
+device; persisted across restarts, default **off**). The card's chip, the
+sensor's `actuation` attribute and the log tag all reflect the live state.
+
 ## The road ahead (the verification ladder)
 
 1. **Baseline** — nightly measurements of the unchanged reactive system:
-   grid energy, cost, every floor met.
+   grid energy, cost, every floor met. *(done — the number to beat)*
 2. **Corpus** — the pure packing scenarios in
-   `tests/test_638_overnight_planner.py`.
-3. **Shadow** *(current)* — the plan computed and logged next to reality
-   every night, compared each morning.
-4. **Actuation** — only after the shadow proves itself, the plan's output
-   feeds the *existing* signals (the EV's night amps, the loads' window
-   gates). The reconcilers do not change.
+   `tests/test_638_overnight_planner.py`. *(done)*
+3. **Shadow** — the plan computed and logged next to reality
+   every night, compared each morning. *(done — six findings fixed)*
+4. **Actuation** *(current)* — the plan's output feeds the *existing*
+   signals (the EV's night amps, the loads' window gates), behind
+   `switch.sem_overnight_actuation`, default off. The reconcilers do not
+   change. Soaking: shadow-verify nights with the switch off, then flip
+   it and compare the same nights acted.

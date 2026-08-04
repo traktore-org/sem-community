@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Modo vacaciones"
+      },
+      "overnight_actuation": {
+        "name": "Ejecución del plan nocturno"
       }
     },
     "number": {

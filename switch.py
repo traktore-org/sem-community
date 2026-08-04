@@ -36,6 +36,15 @@ SWITCH_TYPES = [
         entity_category=EntityCategory.CONFIG,
         icon="mdi:beach",
     ),
+    # #638 G4 — overnight plan actuation: while ON, the joint overnight
+    # plan's blocks feed the existing night signals (EV amps floor / wait,
+    # load window gates). OFF (default) = pure shadow, log-only. Same
+    # persistence pattern as observer/vacation mode.
+    SwitchEntityDescription(
+        key="overnight_actuation",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:weather-night",
+    ),
 ]
 
 # (ev_limit_surplus (#235) was folded into the optional Max ceiling (#245); its
@@ -147,6 +156,9 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             # #594 — same persistence pattern as observer_mode: seed from the
             # config option, then RestoreEntity takes over across reboots.
             self._is_on = coordinator.config_entry.options.get("vacation_mode", False)
+        elif description.key == "overnight_actuation":
+            # #638 G4 — same persistence pattern again; default OFF (shadow).
+            self._is_on = coordinator.config_entry.options.get("overnight_actuation", False)
         else:
             self._is_on = False
 
@@ -173,6 +185,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # the first control cycle after a reboot already gates comfort heating.
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = self._is_on
+        # #638 G4: actuation must NOT silently arm before the restore lands —
+        # push the restored state so the first night cycle reads the truth.
+        if self.entity_description.key == "overnight_actuation":
+            self.coordinator._overnight_actuation = self._is_on
 
 
     def _persist_flag(self, value: bool) -> None:
@@ -214,6 +230,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._observer_mode = True
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = True  # #594 — immediate
+        if self.entity_description.key == "overnight_actuation":
+            self.coordinator._overnight_actuation = True  # #638 G4 — immediate
         # Reload-durable: the flag must survive a config-entry reload (see
         # _persist_flag — the unprotected-window class).
         self._persist_flag(True)
@@ -235,6 +253,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._observer_mode = False
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = False  # #594 — immediate
+        if self.entity_description.key == "overnight_actuation":
+            self.coordinator._overnight_actuation = False  # #638 G4 — immediate
         self._persist_flag(False)  # reload-durable (see _persist_flag)
         self.async_write_ha_state()  # reflect immediately (#259)
 

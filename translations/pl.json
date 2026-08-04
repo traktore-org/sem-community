@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Tryb wakacyjny"
+      },
+      "overnight_actuation": {
+        "name": "Realizacja planu nocnego"
       }
     },
     "number": {

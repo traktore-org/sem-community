@@ -30,9 +30,12 @@ class TestSEMSwitches:
         ``night_charging`` and ``smart_night_charging`` switches are
         gone (the named ``charge_mode`` selector carries the same
         intent); ``observer_mode`` remains, joined by ``vacation_mode``
-        (#594 — suppress comfort heating while away)."""
+        (#594 — suppress comfort heating while away) and
+        ``overnight_actuation`` (#638 G4 — feed the joint overnight
+        plan into the night signals; default off = pure shadow)."""
         keys = [s.key for s in SWITCH_TYPES]
-        assert keys == ["observer_mode", "vacation_mode"]
+        assert keys == ["observer_mode", "vacation_mode",
+                        "overnight_actuation"]
 
     # ``test_night_charging_default_off`` and
     # ``test_night_charging_existing_state_preserved`` removed in

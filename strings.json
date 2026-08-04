@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Vacation Mode"
+      },
+      "overnight_actuation": {
+        "name": "Overnight Plan Actuation"
       }
     },
     "number": {

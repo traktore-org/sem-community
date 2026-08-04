@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Mod vacanță"
+      },
+      "overnight_actuation": {
+        "name": "Executarea planului de noapte"
       }
     },
     "number": {

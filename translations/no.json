@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Feriemodus"
+      },
+      "overnight_actuation": {
+        "name": "Nattplan-utførelse"
       }
     },
     "number": {

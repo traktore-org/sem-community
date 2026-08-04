@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Režim dovolené"
+      },
+      "overnight_actuation": {
+        "name": "Provádění nočního plánu"
       }
     },
     "number": {

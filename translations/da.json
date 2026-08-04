@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "Ferietilstand"
+      },
+      "overnight_actuation": {
+        "name": "Natplan-udførelse"
       }
     },
     "number": {

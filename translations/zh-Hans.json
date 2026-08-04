@@ -1130,6 +1130,9 @@
       },
       "vacation_mode": {
         "name": "度假模式"
+      },
+      "overnight_actuation": {
+        "name": "夜间计划执行"
       }
     },
     "number": {

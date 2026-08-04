@@ -144,6 +144,9 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
         # a SUBSET of the fleet (#638 finding #3) — the card says so rather
         # than presenting a degraded plan as a healthy one.
         "battery_fleet_partial": plan.get("battery_fleet_partial"),
+        # (#638 G4) True while the actuation switch is on — the plan's
+        # blocks feed the night signals; the card swaps its shadow chip.
+        "actuation": bool(plan.get("actuation", False)),
     }
     try:
         oversize = len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES
