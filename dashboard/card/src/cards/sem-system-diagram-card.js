@@ -281,6 +281,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
         key += '|' + (sun?.attributes?.elevation ?? '')
              + ':' + (sun?.attributes?.next_rising || '')
              + ':' + (sun?.attributes?.next_setting || '');
+        // #711 — moon phase/arc position depend on sensor.moon too; without
+        // this a phase-only transition (no sun.sun change) can sit stale.
+        key += '|' + (hass?.states['sensor.moon']?.state || '');
 
         if (key === this._lastDiagKey && !localeChanged) return;
         this._lastDiagKey = key;
