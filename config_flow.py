@@ -42,6 +42,7 @@ from .const import (
     MIN_PEAK_LIMIT_KW,
     MAX_PEAK_LIMIT_KW,
     PEAK_LIMIT_STEP_KW,
+    DEFAULT_PEAK_LIMIT_UNLIMITED,
 )
 from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -897,6 +898,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "minimum_solar_power",
     "mobile_notification_service",
     "observer_mode",
+    "peak_limit_unlimited",
     "phase_guard_enabled",
     "phase_guard_enforcement_enabled",
     "phase_guard_notifications_enabled",
@@ -2181,13 +2183,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # to defend is even reached. Raising the target and leaving the
             # other two at their old values is the easy way to land here, so
             # say so instead of saving it.
+            #
+            # (#716) An install with no grid ceiling has no ladder to order,
+            # so skip the check rather than force three meaningless numbers
+            # into line before the user can save the opt-out.
             _target = float(user_input.get("target_peak_limit", 0) or 0)
             _warn = float(user_input.get("warning_peak_level", 0) or 0)
             _emerg = float(user_input.get("emergency_peak_level", 0) or 0)
-            if _warn >= _target:
-                errors["warning_peak_level"] = "peak_warning_not_below_target"
-            if _emerg <= _target:
-                errors["emergency_peak_level"] = "peak_emergency_not_above_target"
+            if not user_input.get("peak_limit_unlimited", False):
+                if _warn >= _target:
+                    errors["warning_peak_level"] = "peak_warning_not_below_target"
+                if _emerg <= _target:
+                    errors["emergency_peak_level"] = "peak_emergency_not_above_target"
 
             if not errors:
                 self._data.update(user_input)
@@ -2201,6 +2208,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "target_peak_limit": _c("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
             "warning_peak_level": _c("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
             "emergency_peak_level": _c("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
+            "peak_limit_unlimited": _c("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED),
         }
 
         return self.async_show_form(
@@ -2209,6 +2217,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     "load_management_enabled",
                     default=data_defaults["load_management_enabled"],
+                ): selector.BooleanSelector(),
+                # (#716) The opt-out for installs whose grid connection is
+                # large enough that no household load can threaten it. Its own
+                # boolean, NOT ``load_management_enabled = False``: that switch
+                # only stops SEM *shedding*, while the ceiling still constrains
+                # everything SEM *sizes* (the EV night rate above all). Turning
+                # off shedding and silently going unlimited would hand an EV
+                # the whole house.
+                vol.Required(
+                    "peak_limit_unlimited",
+                    default=data_defaults["peak_limit_unlimited"],
                 ): selector.BooleanSelector(),
                 # (#717) All three share one range and a box input — see the
                 # install step for why a slider is wrong here. They used to

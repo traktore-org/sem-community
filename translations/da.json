@@ -239,6 +239,7 @@
         "description": "Opdatér konfigurationen af lastbegrænsningen",
         "data": {
           "load_management_enabled": "Aktivér lastbegrænsning",
+          "peak_limit_unlimited": "Ingen netgrænse",
           "target_peak_limit": "Mål for spidsbelastningsgrænse (kW)",
           "warning_peak_level": "Advarselsniveau for spidsbelastning (kW)",
           "emergency_peak_level": "Nødniveau for spidsbelastning (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Slå SEM's automatiske lastfrakobling til/fra, så du holder dig under din spidsbelastningsgrænse.",
+          "peak_limit_unlimited": "Slår spidsbelastningsstyring helt fra: SEM dimensionerer ikke længere forbrug efter den målsatte spidsgrænse og kobler aldrig fra for at overholde den. Kun til tilslutninger, som ingen husholdningsbelastning kan true. Det er noget andet end “Aktivér laststyring”, som kun stopper frakoblingen, men beholder grænsen som dimensioneringsloft.",
           "target_peak_limit": "Maksimal neteffekt (kW), før SEM begynder at frakoble styrbare laster.",
           "warning_peak_level": "Effektniveau (kW), hvor SEM udsender en advarsel, før der gribes ind. Skal være under den målsatte spidsgrænse.",
           "emergency_peak_level": "Effektniveau (kW), hvor SEM aggressivt frakobler laster for at undgå effekttarif-gebyrer. Skal være over den målsatte spidsgrænse.",

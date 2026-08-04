@@ -239,6 +239,7 @@
         "description": "A terheléskezelés konfigurációjának frissítése",
         "data": {
           "load_management_enabled": "Terheléskezelés engedélyezése",
+          "peak_limit_unlimited": "Nincs hálózati korlát",
           "target_peak_limit": "Cél csúcskorlát (kW)",
           "warning_peak_level": "Figyelmeztetési csúcsszint (kW)",
           "emergency_peak_level": "Vészhelyzeti csúcsszint (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "A SEM automatikus terheléslekapcsolásának be- és kikapcsolása, hogy a hálózati csúcskorlát alatt maradjon.",
+          "peak_limit_unlimited": "Teljesen kikapcsolja a csúcskezelést: a SEM többé nem méretezi a fogyasztókat a cél csúcsteljesítmény-korláthoz, és soha nem kapcsol le a védelmében. Csak olyan csatlakozásokhoz, amelyeket egyetlen háztartási fogyasztó sem veszélyeztethet. Ez más, mint a „Terheléskezelés engedélyezése”: az csak a lekapcsolást állítja le, a korlát méretezési plafonként megmarad.",
           "target_peak_limit": "Az a maximális hálózati teljesítmény (kW), amely felett a SEM megkezdi a vezérelhető terhelések lekapcsolását.",
           "warning_peak_level": "Az a teljesítményszint (kW), amelynél a SEM figyelmeztetést ad ki, mielőtt beavatkozna. A cél csúcsteljesítmény-korlát alatt kell lennie.",
           "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében. A cél csúcsteljesítmény-korlát fölött kell lennie.",

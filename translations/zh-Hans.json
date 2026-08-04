@@ -239,6 +239,7 @@
         "description": "更新负荷管理配置",
         "data": {
           "load_management_enabled": "启用负荷管理",
+          "peak_limit_unlimited": "无电网上限",
           "target_peak_limit": "目标峰值限制 (kW)",
           "warning_peak_level": "预警峰值水平 (kW)",
           "emergency_peak_level": "紧急峰值水平 (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "启用/禁用 SEM 的自动减载功能，以保持在您的电网峰值限制以下。",
+          "peak_limit_unlimited": "完全关闭峰值管理：SEM 不再按目标峰值上限来分配负载功率，也绝不会为守住该上限而卸载。仅适用于任何家用负载都无法造成威胁的大容量进线。这与“启用负载管理”不同——后者只停止卸载，上限仍作为功率分配的天花板。",
           "target_peak_limit": "在 SEM 开始切除可控负荷之前的最大电网功率 (kW)。",
           "warning_peak_level": "SEM 在采取行动前发出警告的功率水平 (kW)。 必须低于目标峰值上限。",
           "emergency_peak_level": "SEM 为避免产生需量电费而采取激进减载措施的功率水平 (kW)。 必须高于目标峰值上限。",

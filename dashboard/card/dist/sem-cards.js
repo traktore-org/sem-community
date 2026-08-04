@@ -6745,15 +6745,23 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("battery_min_deficit_kwh","config_bs_min_deficit",{min:.5,max:10,step:.5,unit:"kWh",default:2},t,"config_help_bs_min_deficit")}
             ${this._renderOptionSlider("battery_pessimism_weight","config_bs_pessimism",{min:0,max:1,step:.1,unit:"",default:.3},t,"config_help_bs_pessimism")}
             ${this._renderOptionToggle("battery_force_charge_negative_price","config_bs_force_neg",t,"config_help_bs_force_neg",!0)}
-        `}_renderLoadManagement(e){const t=this._options||{};return W`
+        `}_renderLoadManagement(e){const t=this._options||{},i="opt:peak_limit_unlimited",s=this._isDirty(i)?!!this._staged[i].value:!!t.peak_limit_unlimited;return W`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t("load_management_status")}</span>
                 <span class="readonly-value">${this._val("load_management_status")||"—"}</span>
             </div>
             ${this._renderOptionToggle("load_management_enabled","config_lm_enabled",t,"config_help_lm_enabled",!0)}
-            ${this._renderOptionNumberInput("target_peak_limit","config_lm_target_peak",{min:1,max:80,step:.1,unit:"kW",default:5},t,"config_help_lm_target_peak")}
-            ${this._renderOptionNumberInput("warning_peak_level","config_lm_warning_peak",{min:1,max:80,step:.1,unit:"kW",default:4.5},t,"config_help_lm_warning_peak")}
-            ${this._renderOptionNumberInput("emergency_peak_level","config_lm_emergency_peak",{min:1,max:80,step:.1,unit:"kW",default:6},t,"config_help_lm_emergency_peak")}
+            ${this._renderOptionToggle("peak_limit_unlimited","config_lm_unlimited",t,"config_help_lm_unlimited",!1)}
+            ${s?W`
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t("config_lm_target_peak")}</span>
+                    <span class="readonly-value">${this._t("config_lm_unlimited_value")}</span>
+                </div>
+            `:W`
+                ${this._renderOptionNumberInput("target_peak_limit","config_lm_target_peak",{min:1,max:80,step:.1,unit:"kW",default:5},t,"config_help_lm_target_peak")}
+                ${this._renderOptionNumberInput("warning_peak_level","config_lm_warning_peak",{min:1,max:80,step:.1,unit:"kW",default:4.5},t,"config_help_lm_warning_peak")}
+                ${this._renderOptionNumberInput("emergency_peak_level","config_lm_emergency_peak",{min:1,max:80,step:.1,unit:"kW",default:6},t,"config_help_lm_emergency_peak")}
+            `}
         `}_renderForecast(e){const t=this._val("forecast_source")||"none",i="none"===t?this._t("none"):this._forecastProviderLabel(t);return W`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t("forecast_source")}</span>

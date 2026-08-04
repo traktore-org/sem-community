@@ -32,6 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configuration where emergency fires before warning. The kW fields became numeric boxes —
   a 791-stop slider is not a way to enter a contract value. Docs: `USER_GUIDE.md`,
   `SETUP_GUIDE.md`, `TROUBLESHOOTING.md`.
+- 🔌 **New "No grid limit" switch — peak management can now be turned off outright**
+  (#716, reported by @Azlinon) — raising the cap to 80 kW is not enough for a connection no
+  household load can threaten. Turning *Enable Load Management* off was never the answer: it
+  stops the shedding, but the target peak limit stays a **sizing** ceiling, so the EV charger
+  still capped its current against it. That is deliberate — "leave my loads alone" must not
+  silently mean "there is no limit" — so opting out is now its own explicit switch. With it
+  on, the EV controller sizes from surplus alone, load management never escalates, and the kW
+  fields disappear from the Config card; your numbers stay in config and come back untouched
+  when you turn it off. The flag is a **boolean**, never `target_peak_limit == 0`: a zero
+  sentinel fails open, and a key nothing writes reads as zero and hands the EV the whole house
+  (that exact failure surfaced during the #638 shadow soak). A test scans the codebase and
+  fails if the sentinel is reintroduced. Two hardening fixes came with it — the
+  headroom→amps conversion saturates **before** rounding (`round(float('inf'))` raises
+  `OverflowError`), and an out-of-order peak ladder is repaired at read time: a stored
+  `emergency ≤ target` made the emergency branch win at the target itself, dumping every load
+  the instant the limit was touched, and the options flow is not the only writer
+  (`set_option` writes any key unvalidated). Docs: `USER_GUIDE.md`, `SETUP_GUIDE.md`,
+  `TROUBLESHOOTING.md`.
 - 🌐 **Six options-flow error messages rendered as raw keys** (found while fixing #717) —
   HA resolves options-flow errors under `options.error`, not `config.error`
   (`show-dialog-options-flow.ts` falls back to the bare key), and all of SEM's options-flow

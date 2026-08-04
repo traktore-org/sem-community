@@ -239,6 +239,7 @@
         "description": "Zaktualizuj konfigurację zarządzania obciążeniem",
         "data": {
           "load_management_enabled": "Włącz zarządzanie obciążeniem",
+          "peak_limit_unlimited": "Brak limitu sieci",
           "target_peak_limit": "Docelowy limit szczytu (kW)",
           "warning_peak_level": "Ostrzegawczy poziom szczytu (kW)",
           "emergency_peak_level": "Awaryjny poziom szczytu (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Włącz/wyłącz automatyczne zrzucanie obciążeń przez SEM, aby utrzymać się poniżej limitu szczytu sieci.",
+          "peak_limit_unlimited": "Całkowicie wyłącza zarządzanie szczytem: SEM przestaje dobierać moc odbiorników do docelowego limitu szczytu i nigdy nie odłącza, aby go bronić. Tylko dla przyłączy, których żaden odbiornik domowy nie jest w stanie zagrozić. To co innego niż „Włącz zarządzanie obciążeniem”, które zatrzymuje samo odłączanie, ale zachowuje limit jako pułap doboru mocy.",
           "target_peak_limit": "Maksymalna moc z sieci (kW), po przekroczeniu której SEM zaczyna zrzucać sterowalne obciążenia.",
           "warning_peak_level": "Poziom mocy (kW), przy którym SEM wystawia ostrzeżenie, zanim podejmie działanie. Musi być niższy niż docelowy limit szczytu.",
           "emergency_peak_level": "Poziom mocy (kW), przy którym SEM agresywnie zrzuca obciążenia, aby uniknąć opłat mocowych. Musi być wyższy niż docelowy limit szczytu.",

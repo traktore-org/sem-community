@@ -239,6 +239,7 @@
         "description": "Update load management configuration",
         "data": {
           "load_management_enabled": "Enable Load Management",
+          "peak_limit_unlimited": "No grid limit",
           "target_peak_limit": "Target Peak Limit (kW)",
           "warning_peak_level": "Warning Peak Level (kW)",
           "emergency_peak_level": "Emergency Peak Level (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
+          "peak_limit_unlimited": "Turn peak management off entirely: SEM stops sizing loads against the target peak limit and never sheds to defend it. Only for connections large enough that no household load can threaten them. This is separate from Enable Load Management, which stops the shedding but keeps the limit as a sizing ceiling.",
           "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
           "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action. Must be below the target peak limit.",
           "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges. Must be above the target peak limit.",

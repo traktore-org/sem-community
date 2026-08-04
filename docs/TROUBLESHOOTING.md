@@ -295,7 +295,9 @@ read-only by design — SEM can't suppress it), but the cards will load.
 
 **Fix:**
 1. Go to **Settings > Devices & Services > Solar Energy Management > Configure**
-2. Verify `load_management_enabled` is checked
+2. Verify `load_management_enabled` is checked, and that **No grid limit**
+   (`peak_limit_unlimited`) is **off** — it hides the kW fields and disables
+   peak management entirely, including the ceiling the EV charger sizes against
 3. Set a realistic `target_peak_limit` — your grid connection ceiling, from the
    supply contract or main breaker (e.g. 5.0 kW for a typical European household,
    about 38 kW for a 200 A North-American service). The field accepts 1–80 kW.

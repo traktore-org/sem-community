@@ -239,6 +239,7 @@
         "description": "Atualize a configuração da gestão de carga",
         "data": {
           "load_management_enabled": "Ativar a gestão de carga",
+          "peak_limit_unlimited": "Sem limite de rede",
           "target_peak_limit": "Limite de pico alvo (kW)",
           "warning_peak_level": "Nível de pico de aviso (kW)",
           "emergency_peak_level": "Nível de pico de emergência (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Ativar/desativar a redução automática de cargas do SEM para se manter abaixo do seu limite de pico de rede.",
+          "peak_limit_unlimited": "Desliga totalmente a gestão de picos: o SEM deixa de dimensionar as cargas pelo limite de pico alvo e nunca corta para o respeitar. Apenas para ligações que nenhuma carga doméstica consegue ameaçar. É diferente de «Ativar gestão de cargas», que para o corte mas mantém o limite como teto de dimensionamento.",
           "target_peak_limit": "Potência máxima da rede (kW) antes de o SEM começar a reduzir as cargas controláveis.",
           "warning_peak_level": "Nível de potência (kW) a partir do qual o SEM emite um aviso antes de agir. Tem de ser inferior ao limite de pico alvo.",
           "emergency_peak_level": "Nível de potência (kW) a partir do qual o SEM reduz cargas de forma agressiva para evitar custos de potência contratada. Tem de ser superior ao limite de pico alvo.",

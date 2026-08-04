@@ -1786,6 +1786,13 @@ class SEMConfigCard extends SEMLitBase {
 
     _renderLoadManagement(T) {
         const opts = this._options || {};
+        // #716 — read the toggle's STAGED value, not just the persisted one,
+        // so the three kW fields disappear the moment it is flipped rather
+        // than one Apply later.
+        const usid = 'opt:peak_limit_unlimited';
+        const unlimited = this._isDirty(usid)
+            ? !!this._staged[usid].value
+            : !!opts.peak_limit_unlimited;
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('load_management_status')}</span>
@@ -1793,12 +1800,21 @@ class SEMConfigCard extends SEMLitBase {
             </div>
             ${this._renderOptionToggle('load_management_enabled', 'config_lm_enabled',
                 opts, 'config_help_lm_enabled', true)}
-            ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
-                { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
-            ${this._renderOptionNumberInput('warning_peak_level', 'config_lm_warning_peak',
-                { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
-            ${this._renderOptionNumberInput('emergency_peak_level', 'config_lm_emergency_peak',
-                { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+            ${this._renderOptionToggle('peak_limit_unlimited', 'config_lm_unlimited',
+                opts, 'config_help_lm_unlimited', false)}
+            ${unlimited ? html`
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('config_lm_target_peak')}</span>
+                    <span class="readonly-value">${this._t('config_lm_unlimited_value')}</span>
+                </div>
+            ` : html`
+                ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
+                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
+                ${this._renderOptionNumberInput('warning_peak_level', 'config_lm_warning_peak',
+                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
+                ${this._renderOptionNumberInput('emergency_peak_level', 'config_lm_emergency_peak',
+                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+            `}
         `;
     }
 

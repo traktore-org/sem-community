@@ -239,6 +239,7 @@
         "description": "Oppdater konfigurasjonen for laststyring",
         "data": {
           "load_management_enabled": "Aktiver laststyring",
+          "peak_limit_unlimited": "Ingen nettgrense",
           "target_peak_limit": "Måltopplastgrense (kW)",
           "warning_peak_level": "Varselnivå for topplast (kW)",
           "emergency_peak_level": "Nødnivå for topplast (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Slå av/på SEMs automatiske utkobling av laster for å holde seg under nettets topplastgrense.",
+          "peak_limit_unlimited": "Slår av topplaststyring helt: SEM dimensjonerer ikke lenger laster etter mål-toppgrensen og kobler aldri ut for å holde den. Kun for tilkoblinger ingen husholdningslast kan true. Dette er noe annet enn «Aktiver laststyring», som bare stopper utkoblingen, men beholder grensen som dimensjoneringstak.",
           "target_peak_limit": "Maksimal nettoeffekt (kW) før SEM begynner å koble ut styrbare laster.",
           "warning_peak_level": "Effektnivået (kW) der SEM gir en advarsel før den griper inn. Må være under mål-toppgrensen.",
           "emergency_peak_level": "Effektnivået (kW) der SEM aggressivt kobler ut laster for å unngå effekttariffkostnader. Må være over mål-toppgrensen.",

@@ -130,6 +130,7 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `load_management_enabled` | false | Enable peak load management |
+| `peak_limit_unlimited` | false | **No grid limit** — turn peak management off entirely |
 | `target_peak_limit` | 5 kW | Maximum grid power SEM stays under (1–80 kW) |
 | `warning_peak_level` | 90% of target | Warning threshold — must be **below** the target (1–80 kW) |
 | `emergency_peak_level` | 120% of target | Emergency shedding threshold — must be **above** the target (1–80 kW) |
@@ -142,6 +143,29 @@ demand-based European tariff; about 38 kW for a 200 A North-American service
 from it (90% / 120%), so a 38 kW service does not inherit the 4.5 kW / 6.0 kW
 levels that suit a 5 kW one. All three accept **1–80 kW**, and the options flow
 rejects an out-of-order ladder (warning ≥ target, or emergency ≤ target).
+
+#### No grid limit
+
+Some connections are large enough that no household load can threaten them —
+an industrial supply, or a site where the limit is enforced upstream. Turn on
+**No grid limit** and SEM stops treating the peak limit as a ceiling at all:
+the EV charger sizes its current from surplus alone, load management never
+escalates, and the kW fields disappear from the card.
+
+This is **not** the same as leaving *Enable Load Management* off:
+
+| | Sheds loads to defend the limit | Sizes the EV/loads under the limit |
+|---|---|---|
+| Load management **on** | yes | yes |
+| Load management **off** | no | **yes** — the ceiling still stands |
+| **No grid limit** on | no | no |
+
+That distinction is deliberate. Turning shedding off means "leave my loads
+alone", not "there is no limit" — if it meant both, an install that only
+wanted its dishwasher left alone would silently hand the EV the whole house.
+Declaring no limit is its own explicit switch, so it is never reached by
+accident. Your kW numbers stay in config while it is on and come back
+untouched when you turn it off.
 
 ### Other Settings
 

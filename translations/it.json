@@ -239,6 +239,7 @@
         "description": "Aggiorna la configurazione della gestione dei carichi",
         "data": {
           "load_management_enabled": "Attiva la gestione dei carichi",
+          "peak_limit_unlimited": "Nessun limite di rete",
           "target_peak_limit": "Limite di picco obiettivo (kW)",
           "warning_peak_level": "Livello di picco di avviso (kW)",
           "emergency_peak_level": "Livello di picco di emergenza (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Attiva/disattiva il distacco automatico dei carichi di SEM per restare sotto il tuo limite di picco di rete.",
+          "peak_limit_unlimited": "Disattiva completamente la gestione dei picchi: SEM smette di dimensionare i carichi sul limite di picco obiettivo e non distacca mai per rispettarlo. Solo per allacciamenti che nessun carico domestico può mettere in crisi. È diverso da «Abilita gestione carichi», che ferma il distacco ma mantiene il limite come tetto di dimensionamento.",
           "target_peak_limit": "Potenza di rete massima (kW) prima che SEM inizi a distaccare i carichi controllabili.",
           "warning_peak_level": "Livello di potenza (kW) al quale SEM emette un avviso prima di intervenire. Deve essere inferiore al limite di picco obiettivo.",
           "emergency_peak_level": "Livello di potenza (kW) al quale SEM distacca i carichi in modo aggressivo per evitare costi di potenza impegnata. Deve essere superiore al limite di picco obiettivo.",

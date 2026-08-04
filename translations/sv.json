@@ -239,6 +239,7 @@
         "description": "Uppdatera konfigurationen för lasthantering",
         "data": {
           "load_management_enabled": "Aktivera lasthantering",
+          "peak_limit_unlimited": "Ingen nätgräns",
           "target_peak_limit": "Måleffekttoppsgräns (kW)",
           "warning_peak_level": "Varningsnivå för effekttopp (kW)",
           "emergency_peak_level": "Nödnivå för effekttopp (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Aktivera/inaktivera SEM:s automatiska lastbortkoppling för att hålla dig under din effekttoppsgräns.",
+          "peak_limit_unlimited": "Stänger av toppeffekthanteringen helt: SEM dimensionerar inte längre laster efter den målsatta toppgränsen och kopplar aldrig bort för att hålla den. Endast för anslutningar som ingen hushållslast kan hota. Detta är något annat än ”Aktivera lasthantering”, som bara stoppar bortkopplingen men behåller gränsen som dimensioneringstak.",
           "target_peak_limit": "Maximal näteffekt (kW) innan SEM börjar koppla bort styrbara laster.",
           "warning_peak_level": "Effektnivå (kW) vid vilken SEM utfärdar en varning innan åtgärd vidtas. Måste ligga under den målsatta toppgränsen.",
           "emergency_peak_level": "Effektnivå (kW) vid vilken SEM aggressivt kopplar bort laster för att undvika effektavgifter. Måste ligga över den målsatta toppgränsen.",

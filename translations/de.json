@@ -239,6 +239,7 @@
         "description": "Lastmanagement-Konfiguration aktualisieren",
         "data": {
           "load_management_enabled": "Lastmanagement aktivieren",
+          "peak_limit_unlimited": "Kein Netzlimit",
           "target_peak_limit": "Ziel-Spitzenlastgrenze (kW)",
           "warning_peak_level": "Warn-Spitzenlaststufe (kW)",
           "emergency_peak_level": "Notfall-Spitzenlaststufe (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "SEMs automatischen Lastabwurf aktivieren/deaktivieren, um unter Ihrer Netz-Spitzenlastgrenze zu bleiben.",
+          "peak_limit_unlimited": "Schaltet das Spitzenlastmanagement vollständig ab: SEM bemisst Verbraucher nicht mehr am Ziel-Spitzenlimit und schaltet nie ab, um es einzuhalten. Nur für Anschlüsse, die kein Haushaltsverbraucher gefährden kann. Das ist etwas anderes als „Lastmanagement aktivieren“: Diese Option beendet nur das Abschalten, das Limit bleibt als Bemessungsgrenze bestehen.",
           "target_peak_limit": "Maximale Netzleistung (kW), ab der SEM beginnt, steuerbare Lasten abzuwerfen.",
           "warning_peak_level": "Leistungsstufe (kW), ab der SEM eine Warnung ausgibt, bevor es eingreift. Muss unter dem Ziel-Spitzenlimit liegen.",
           "emergency_peak_level": "Leistungsstufe (kW), ab der SEM Lasten aggressiv abwirft, um Leistungspreise zu vermeiden. Muss über dem Ziel-Spitzenlimit liegen.",

@@ -239,6 +239,7 @@
         "description": "Aktualizujte konfiguraci správy zátěže",
         "data": {
           "load_management_enabled": "Povolit správu zátěže",
+          "peak_limit_unlimited": "Bez limitu sítě",
           "target_peak_limit": "Cílový limit špičky (kW)",
           "warning_peak_level": "Varovná úroveň špičky (kW)",
           "emergency_peak_level": "Nouzová úroveň špičky (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Zapnout/vypnout automatické odpojování zátěží, kterým SEM drží odběr pod vaším limitem špičky.",
+          "peak_limit_unlimited": "Zcela vypne řízení špiček: SEM přestane dimenzovat spotřebiče podle cílového limitu špičky a nikdy kvůli němu neodpojí zátěž. Jen pro přípojky, které žádný domácí spotřebič nemůže ohrozit. Je to něco jiného než „Povolit řízení zátěže“, které zastaví jen odpojování, ale limit zůstává jako strop pro dimenzování.",
           "target_peak_limit": "Maximální výkon ze sítě (kW), než SEM začne odpojovat řiditelné zátěže.",
           "warning_peak_level": "Úroveň výkonu (kW), při které SEM vydá varování, než začne jednat. Musí být nižší než cílový limit špičky.",
           "emergency_peak_level": "Úroveň výkonu (kW), při které SEM agresivně odpojuje zátěže, aby se vyhnul poplatkům za rezervovaný příkon. Musí být vyšší než cílový limit špičky.",

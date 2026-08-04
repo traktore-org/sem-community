@@ -239,6 +239,7 @@
         "description": "Configuratie voor load management bijwerken",
         "data": {
           "load_management_enabled": "Load management inschakelen",
+          "peak_limit_unlimited": "Geen netlimiet",
           "target_peak_limit": "Doel piekvermogen (kW)",
           "warning_peak_level": "Waarschuwingsniveau piekvermogen (kW)",
           "emergency_peak_level": "Noodniveau piekvermogen (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Schakel SEM's automatische lastafschakeling in of uit om onder uw netpieklimiet te blijven.",
+          "peak_limit_unlimited": "Schakelt piekbeheer volledig uit: SEM dimensioneert verbruikers niet meer op de doel-pieklimiet en schakelt nooit af om die te bewaken. Alleen voor aansluitingen die geen enkele huishoudelijke belasting in gevaar kan brengen. Dit staat los van 'Load management inschakelen': die optie stopt alleen het afschakelen, de limiet blijft als dimensioneringsplafond gelden.",
           "target_peak_limit": "Maximaal netvermogen (kW) waarna SEM begint met het afschakelen van regelbare verbruikers.",
           "warning_peak_level": "Vermogensniveau (kW) waarbij SEM een waarschuwing geeft voordat actie wordt ondernomen. Moet onder de doel-pieklimiet liggen.",
           "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden. Moet boven de doel-pieklimiet liggen.",

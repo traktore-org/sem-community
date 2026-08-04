@@ -239,6 +239,7 @@
         "description": "Mettre à jour la configuration de gestion de charge",
         "data": {
           "load_management_enabled": "Activer la Gestion de Charge",
+          "peak_limit_unlimited": "Aucune limite réseau",
           "target_peak_limit": "Limite de Pointe Cible (kW)",
           "warning_peak_level": "Niveau d'Alerte de Pointe (kW)",
           "emergency_peak_level": "Niveau d'Urgence de Pointe (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Activer/désactiver le délestage automatique de SEM pour rester sous votre limite de pointe réseau.",
+          "peak_limit_unlimited": "Désactive complètement la gestion des pointes : SEM cesse de dimensionner les charges sur la limite de pointe cible et ne délestera jamais pour la respecter. Réservé aux raccordements qu'aucune charge domestique ne peut menacer. À distinguer de « Activer la gestion de charge », qui arrête le délestage mais conserve la limite comme plafond de dimensionnement.",
           "target_peak_limit": "Puissance réseau maximale (kW) avant que SEM ne commence à délester les charges pilotables.",
           "warning_peak_level": "Niveau de puissance (kW) auquel SEM émet une alerte avant d'agir. Doit être inférieur à la limite de pointe cible.",
           "emergency_peak_level": "Niveau de puissance (kW) auquel SEM déleste agressivement les charges pour éviter les pénalités de puissance souscrite. Doit être supérieur à la limite de pointe cible.",

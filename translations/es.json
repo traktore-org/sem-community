@@ -239,6 +239,7 @@
         "description": "Actualizar la configuración de la gestión de cargas",
         "data": {
           "load_management_enabled": "Activar gestión de cargas",
+          "peak_limit_unlimited": "Sin límite de red",
           "target_peak_limit": "Límite de pico objetivo (kW)",
           "warning_peak_level": "Nivel de pico de aviso (kW)",
           "emergency_peak_level": "Nivel de pico de emergencia (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Activar/desactivar la desconexión automática de cargas de SEM para mantenerse por debajo de su límite de pico de red.",
+          "peak_limit_unlimited": "Desactiva por completo la gestión de picos: SEM deja de dimensionar las cargas según el límite de pico objetivo y nunca desconecta para respetarlo. Solo para acometidas que ninguna carga doméstica puede comprometer. Es distinto de «Activar gestión de cargas», que detiene la desconexión pero mantiene el límite como techo de dimensionado.",
           "target_peak_limit": "Potencia máxima de red (kW) antes de que SEM empiece a desconectar cargas controlables.",
           "warning_peak_level": "Nivel de potencia (kW) a partir del cual SEM emite un aviso antes de actuar. Debe ser inferior al límite de pico objetivo.",
           "emergency_peak_level": "Nivel de potencia (kW) a partir del cual SEM desconecta cargas de forma agresiva para evitar recargos por demanda. Debe ser superior al límite de pico objetivo.",

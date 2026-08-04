@@ -239,6 +239,7 @@
         "description": "Päivitä kuormanhallinnan määritykset",
         "data": {
           "load_management_enabled": "Ota kuormanhallinta käyttöön",
+          "peak_limit_unlimited": "Ei verkkorajaa",
           "target_peak_limit": "Huipputehon tavoiteraja (kW)",
           "warning_peak_level": "Varoitustason huipputeho (kW)",
           "emergency_peak_level": "Hätätason huipputeho (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Ota käyttöön tai poista käytöstä SEM:n automaattinen kuormien pudotus, jolla pysytään verkon huipputehorajan alapuolella.",
+          "peak_limit_unlimited": "Kytkee huipputehon hallinnan kokonaan pois: SEM ei enää mitoita kuormia tavoitehuipputehon mukaan eikä koskaan pudota kuormia sen suojaamiseksi. Vain liittymille, joita mikään kotitalouskuorma ei voi vaarantaa. Tämä on eri asia kuin ”Ota kuormanhallinta käyttöön”, joka pysäyttää vain pudotuksen mutta säilyttää rajan mitoituskattona.",
           "target_peak_limit": "Suurin verkkoteho (kW), jonka jälkeen SEM alkaa pudottaa ohjattavia kuormia.",
           "warning_peak_level": "Tehotaso (kW), jolla SEM antaa varoituksen ennen toimenpiteitä. On oltava tavoitehuippurajan alapuolella.",
           "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja. On oltava tavoitehuippurajan yläpuolella.",

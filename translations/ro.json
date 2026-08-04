@@ -239,6 +239,7 @@
         "description": "Actualizați configurația gestionării sarcinii",
         "data": {
           "load_management_enabled": "Activează gestionarea sarcinii",
+          "peak_limit_unlimited": "Fără limită de rețea",
           "target_peak_limit": "Limită țintă de vârf (kW)",
           "warning_peak_level": "Nivel de vârf de avertizare (kW)",
           "emergency_peak_level": "Nivel de vârf de urgență (kW)",
@@ -248,6 +249,7 @@
         },
         "data_description": {
           "load_management_enabled": "Activează/dezactivează delestarea automată a sarcinilor de către SEM pentru a rămâne sub limita de vârf a rețelei.",
+          "peak_limit_unlimited": "Oprește complet gestionarea vârfurilor: SEM nu mai dimensionează consumatorii după limita de vârf țintă și nu deconectează niciodată pentru a o apăra. Doar pentru branșamente pe care niciun consumator casnic nu le poate amenința. Este altceva decât „Activare gestionare consum”, care oprește doar deconectarea, dar păstrează limita ca plafon de dimensionare.",
           "target_peak_limit": "Puterea maximă din rețea (kW) înainte ca SEM să înceapă delestarea sarcinilor controlabile.",
           "warning_peak_level": "Nivelul de putere (kW) la care SEM emite o avertizare înainte de a lua măsuri. Trebuie să fie sub limita de vârf țintă.",
           "emergency_peak_level": "Nivelul de putere (kW) la care SEM delestează agresiv sarcinile pentru a evita taxele de putere. Trebuie să fie peste limita de vârf țintă.",
