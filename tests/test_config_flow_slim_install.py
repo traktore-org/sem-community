@@ -83,6 +83,9 @@ def test_install_defaults_never_enable_phase_guard_without_topology():
     """
     defaults = SolarEnergyManagementConfigFlow._install_defaults()
 
+    # Pin today's safe default while retaining the forward-looking invariant
+    # that any future opt-in must persist an unambiguous topology.
+    assert not defaults.get("phase_guard_enabled", False)
     assert not defaults.get("phase_guard_enabled", False) or (
         defaults.get("phase_guard_topology") in {"grid_only", "hybrid_load_port"}
     )
