@@ -553,6 +553,9 @@
       "night_charging_status": {
         "name": "Yölataus"
       },
+      "overnight_plan": {
+        "name": "Yösuunnitelma"
+      },
       "battery_priority_status": {
         "name": "Akun etusija"
       },

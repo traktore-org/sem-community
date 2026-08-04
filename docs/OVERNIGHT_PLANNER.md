@@ -177,6 +177,25 @@ owes the rest of the night a plan and gets one.
 
 ## Where to see it
 
+- **On the dashboard** — the **Tonight's Plan** card on the *System* tab
+  (`custom:sem-overnight-plan-card`). One row per demand over a shared hour
+  axis: where each block is planned, which hours are cheap, and the battery's
+  own row shading teal while it covers the house and steel-blue after the
+  **takeover**. A `shadow` chip and a footer line say plainly that SEM is not
+  acting on it yet. The card **self-hides** until a plan has been stamped, so
+  it costs nothing during the day.
+- **As an entity** — `sensor.sem_overnight_plan` (diagnostic). Its state is
+  the verdict word `fits` / `yields` / `idle` / `pending`; the plan itself
+  rides as attributes (`demands`, `slots`, `blocks`, `takeover`,
+  `total_cost`, `computed_at`), which is what the card reads. Useful for
+  your own template sensors or an automation that pings you when a night
+  does *not* fit. Those attributes are a *projection*: the log prose and the
+  ledger's internal columns stay out, and back-to-back allocations are merged
+  into runs, so the payload stays under the recorder's 16 KiB attribute limit
+  (above it HA stores **no** attributes at all). On an exceptionally large
+  night the timeline alone is dropped — `timeline_omitted: true`, the card
+  falls back to the demand list and says so. `diagnose` always has the full
+  detail.
 - **Logs** — `OVERNIGHT-PLAN (shadow)` lines: the summary at INFO, one line
   per allocation at DEBUG. Never silent: even "no overnight demands
   tonight" is logged, with the counts that explain it.

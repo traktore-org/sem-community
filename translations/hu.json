@@ -553,6 +553,9 @@
       "night_charging_status": {
         "name": "Éjszakai töltés"
       },
+      "overnight_plan": {
+        "name": "Éjszakai terv"
+      },
       "battery_priority_status": {
         "name": "Akkumulátor prioritása"
       },

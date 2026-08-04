@@ -553,6 +553,9 @@
       "night_charging_status": {
         "name": "Ładowanie nocne"
       },
+      "overnight_plan": {
+        "name": "Plan nocny"
+      },
       "battery_priority_status": {
         "name": "Priorytet baterii"
       },

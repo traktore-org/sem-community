@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -40,6 +41,108 @@ type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
+
+
+def _overnight_plan_state(plan: Any) -> str:
+    """(#638) Collapse tonight's plan to one verdict word.
+
+    ``pending`` — the planner has not answered for tonight yet (before the
+    night window, or still waiting on a not-ready world). ``idle`` — it
+    answered "nothing needs the night", which is a real answer, not a gap.
+    ``fits`` / ``yields`` — everything got its floor, or something did not.
+    """
+    if not isinstance(plan, dict):
+        return "pending"
+    if not plan.get("demands"):
+        return "idle"
+    return "fits" if plan.get("fits") else "yields"
+
+
+# HA's recorder refuses to store a state whose attributes serialize above
+# 16 KiB: it logs a warning and records NO attributes at all, so the plan
+# would silently vanish from history. Stay under it with headroom.
+_PLAN_ATTR_BUDGET_BYTES = 15000
+
+
+def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
+    """(#638) Collapse a demand's back-to-back slot allocations into runs.
+
+    The packer allocates per market slot, so a pump running four consecutive
+    quarter-hours arrives as four blocks. The strip draws them as one bar
+    regardless, and on a 15-minute curve those per-slot blocks are the single
+    largest term in the payload — merging them is free to the card and is
+    what keeps a normal 15-min night under the recorder's limit at all.
+
+    ``price`` is dropped rather than carried: a merged run spans slots that
+    may differ in price, and quoting one of them would be a lie. The per-slot
+    prices stay on the ledger rows, and ``diagnose`` still has every original
+    allocation with its own price.
+    """
+    out: List[Dict[str, Any]] = []
+    for b in blocks or []:
+        if not isinstance(b, dict):
+            continue
+        row = {
+            "id": b.get("id"),
+            "start": b.get("start"),
+            "end": b.get("end"),
+            "power_w": b.get("power_w"),
+        }
+        prev = out[-1] if out else None
+        if (prev and prev["id"] == row["id"]
+                and prev["power_w"] == row["power_w"]
+                and prev["end"] == row["start"]):
+            prev["end"] = row["end"]
+            continue
+        out.append(row)
+    return out
+
+
+def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
+    """(#638) Project tonight's stashed plan into entity attributes.
+
+    Three things are deliberately not copied wholesale:
+
+    * ``summary`` / ``allocations`` — log prose. The logs quote it and the
+      ``diagnose`` payload carries it; the card reads the structured rows.
+    * the ledger's ``home_w`` and ``soc_kwh`` columns — the strip does not
+      draw them, and they are most of what pushes a 15-minute price curve
+      over a long winter night past the recorder's limit.
+    * per-slot allocations — merged into runs, see ``_merge_plan_blocks``.
+
+    If the projection is *still* too large (a 15-min curve × a large fleet),
+    the timeline is dropped rather than the whole payload: the card falls
+    back to the per-demand list and says the chart was omitted. A visibly
+    reduced card beats an entity whose attributes disappear from history.
+    """
+    if not isinstance(plan, dict):
+        return {}
+    attrs: Dict[str, Any] = {
+        "computed_at": plan.get("computed_at"),
+        "fits": plan.get("fits"),
+        "total_cost": plan.get("total_cost"),
+        "takeover": plan.get("takeover"),
+        "demands": plan.get("demands") or [],
+        "slots": [{
+            "start": s.get("start"), "end": s.get("end"),
+            "price": s.get("price"), "cheap": s.get("cheap"),
+            "home_grid_w": s.get("home_grid_w"),
+        } for s in (plan.get("slots") or [])],
+        "blocks": _merge_plan_blocks(plan.get("blocks")),
+        # A string here means the battery figures behind this plan came from
+        # a SUBSET of the fleet (#638 finding #3) — the card says so rather
+        # than presenting a degraded plan as a healthy one.
+        "battery_fleet_partial": plan.get("battery_fleet_partial"),
+    }
+    try:
+        oversize = len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES
+    except (TypeError, ValueError):  # pragma: no cover — defensive
+        oversize = True
+    if oversize:
+        attrs["slots"] = []
+        attrs["blocks"] = []
+        attrs["timeline_omitted"] = True
+    return attrs
 
 
 def _phase_guard_current_description(*, key: str) -> SensorEntityDescription:
@@ -239,6 +342,14 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="night_charging_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # (#638) The overnight joint planner's verdict for tonight. SHADOW: this
+    # reports what the planner WOULD do — nothing here actuates. State is a
+    # stable key (``fits``/``yields``/``idle``/``pending``) so the card and
+    # the tests can branch on it; the plan itself rides as attributes.
+    SensorEntityDescription(
+        key="overnight_plan",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
@@ -2178,6 +2289,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             if self.entity_description.key == "charging_state":
                 value = self._format_charging_state(value)
 
+            # (#638) The overnight plan's STATE is a verdict key, never the
+            # plan dict itself — a dict here would stringify into a >255-char
+            # state and get rejected. The plan rides as attributes below.
+            elif self.entity_description.key == "overnight_plan":
+                value = _overnight_plan_state(value)
+
             # Special handling for battery status
             elif self.entity_description.key == "battery_status":
                 battery_status_map = {
@@ -2339,6 +2456,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     f"charger_{cid_708}_estimate_stop_active"
                 ),
             })
+        elif self.entity_description.key == "overnight_plan":
+            # (#638) SHADOW — what the joint planner WOULD do tonight.
+            # sem-overnight-plan-card renders these directly; the log lines
+            # and the ``diagnose`` stash carry the same plan in prose.
+            attrs.update(_overnight_plan_attrs(
+                self.coordinator.data.get("overnight_plan")))
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

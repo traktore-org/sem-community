@@ -3988,6 +3988,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _LOGGER.debug("today_plan compose failed (#282): %s", e)
                 result["today_plan"] = []
 
+            # (#638 G3c) The shadow overnight plan, published for the card.
+            # Read from the stash rather than recomputed: the plan is stamped
+            # ONCE per night by ``_shadow_overnight_plan`` and must read the
+            # same on every cycle after it — recomputing here would give the
+            # card a value that drifts away from the one the logs quote.
+            result["overnight_plan"] = getattr(
+                self, "_overnight_shadow_plan", None)
+
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()
             today_date = now_time.date()
@@ -5637,6 +5645,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             night_end = resolve_deadline(now, night_end_s) or (now + _td(hours=8))
 
             demands = []
+            # Display names per demand id, for the card (#638 G3c). Kept OUT
+            # of the pure planner: ``Demand`` stays free of presentation.
+            labels = {}
             # EV floors — the REAL per-charger night-need map (#652 closure).
             targets = build_night_target_map(self, energy) if energy is not None else {}
             cfg_by_id = {c.get("id"): c for c in self.config.get("ev_chargers", [])
@@ -5674,6 +5685,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ev_prio = int(self._ev_priority_for(cid))
                 except Exception:  # noqa: BLE001
                     ev_prio = int(cfg.get("priority") or 0)
+                labels[f"ev:{cid}"] = str(cfg.get("name") or "").strip() or None
                 demands.append(Demand(
                     id=f"ev:{cid}", kind="ev", energy_kwh=float(kwh),
                     max_power_w=float(cfg.get("ev_max_current") or 16) * wpa,
@@ -5713,6 +5725,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if deficit_h <= 0 or rated <= 0:
                         continue
                     tier2 = bool(getattr(dev, "battery_eligible_overnight", False))
+                    labels[f"load:{dev.device_id}"] = (
+                        str(getattr(dev, "name", "") or "").strip() or None)
                     demands.append(Demand(
                         id=f"load:{dev.device_id}", kind="load",
                         energy_kwh=rated * deficit_h / 1000.0,
@@ -5832,6 +5846,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "computed_at": now.isoformat(),
                     "fits": True,
                     "summary": [f"no overnight demands tonight ({why})"],
+                    # (#638 G3c) Same keys as a full plan, empty — the card
+                    # renders "nothing needs the night" from the SHAPE, not
+                    # from a missing key it would have to treat as an error.
+                    "demands": [],
+                    "slots": [],
+                    "blocks": [],
                     "battery_fleet_partial": partial_note,
                 }
                 return True
@@ -5980,12 +6000,56 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _LOGGER.info("OVERNIGHT-PLAN (shadow): %s", line)
             for a in plan.allocations:
                 _LOGGER.debug("OVERNIGHT-PLAN (shadow) alloc: %s", a.reason)
+            # (#638 G3c) STRUCTURED shape for the card, beside the log-shaped
+            # strings the diagnose payload has always carried. The card must
+            # not have to parse "ev:x: YIELDS 1.5 kWh — 0.5/2.0 kWh (peak
+            # cap)" back apart: the packer already has this as dataclasses,
+            # so publish the fields, not the sentence. Both stay — the
+            # strings are what the log lines and the soak notes quote.
+            kind_of = {d.id: d.kind for d in demands}
+            rows = [{
+                "id": r.demand_id,
+                "kind": kind_of.get(r.demand_id, "load"),
+                # None = no device name to show; the card localizes by kind.
+                "label": labels.get(r.demand_id),
+                "status": r.status,
+                "planned_kwh": round(r.planned_kwh, 2),
+                "needed_kwh": round(r.needed_kwh, 2),
+                "est_cost": round(r.est_cost, 2),
+                "note": r.note or None,
+            } for r in plan.results]
+            # The ledger itself — the card's hour axis and battery trajectory.
+            # ``home_grid_w > 0`` is the takeover made visible per slot: the
+            # hour the battery stopped covering the house on its own.
+            slot_rows = [{
+                "start": s.start.isoformat(),
+                # ``end`` is carried explicitly rather than left for the card
+                # to infer from the next slot's start: the last slot has no
+                # successor, and market slots are not always hourly (15-min
+                # curves exist), so the strip's time axis needs a real end.
+                "end": s.end.isoformat(),
+                "price": s.price,
+                "cheap": bool(s.level_cheap),
+                "home_w": round(s.home_w, 1),
+                "soc_kwh": round(s.soc_kwh, 2),
+                "home_grid_w": round(s.home_grid_w, 1),
+            } for s in ledger]
+            blocks = [{
+                "id": a.demand_id,
+                "start": a.start.isoformat(),
+                "end": a.end.isoformat(),
+                "power_w": round(a.power_w, 0),
+                "price": a.price,
+            } for a in plan.allocations]
             self._overnight_shadow_plan = {
                 "computed_at": now.isoformat(),
                 "fits": plan.fits,
                 "total_cost": plan.total_cost,
                 "takeover": (plan.takeover.isoformat()
                              if plan.takeover is not None else None),
+                "demands": rows,
+                "slots": slot_rows,
+                "blocks": blocks,
                 "summary": plan.summary_lines() + (
                     # Say what was left OUT and why, next to what was packed
                     # (finding #4): "the plan has no EV line" reads identically

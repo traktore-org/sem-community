@@ -396,6 +396,12 @@ views:
             entity_prefix: sensor.sem_
 
           # ══════════════════════════════════════════════════════
+          # 0b. OVERNIGHT PLAN (#638) — SHADOW. Self-hides until the
+          #     joint planner has stamped a plan for tonight.
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-overnight-plan-card
+
+          # ══════════════════════════════════════════════════════
           # 1b. GRID CARD
           # ══════════════════════════════════════════════════════
           - type: custom:sem-grid-card
