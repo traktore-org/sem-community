@@ -1347,7 +1347,7 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
+        "disabled": "Disattivato",
         "grid_only": "Solo alimentazione di rete",
         "hybrid_load_port": "Rete + uscita Load/EPS dell'inverter ibrido"
       }

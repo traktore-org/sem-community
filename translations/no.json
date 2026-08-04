@@ -1347,7 +1347,7 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
+        "disabled": "Deaktivert",
         "grid_only": "Kun nettforsyning",
         "hybrid_load_port": "Nett + hybridinverterens Load/EPS-utgang"
       }

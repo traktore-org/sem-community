@@ -1347,7 +1347,7 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
+        "disabled": "Deaktiviert",
         "grid_only": "Nur Netzversorgung",
         "hybrid_load_port": "Stromnetz + Load/EPS-Ausgang des Hybridwechselrichters"
       }

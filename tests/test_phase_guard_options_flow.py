@@ -209,7 +209,7 @@ def test_phase_guard_topology_copy_is_localized_in_every_language():
             assert step["data_description"][key] != english_step["data_description"][
                 key
             ], (path.name, key)
-        for key in ("grid_only", "hybrid_load_port"):
+        for key in ("disabled", "grid_only", "hybrid_load_port"):
             assert options[key] != english_options[key], (path.name, key)
 
 

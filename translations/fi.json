@@ -1347,7 +1347,7 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
+        "disabled": "Poistettu käytöstä",
         "grid_only": "Vain verkkosyöttö",
         "hybrid_load_port": "Sähköverkko + hybridi-invertterin Load/EPS-lähtö"
       }

@@ -1347,7 +1347,7 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
+        "disabled": "Désactivé",
         "grid_only": "Alimentation réseau seule",
         "hybrid_load_port": "Réseau + sortie Load/EPS de l'onduleur hybride"
       }

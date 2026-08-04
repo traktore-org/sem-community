@@ -434,7 +434,7 @@
           "phase_guard_phase_count": "Liczba faz"
         },
         "data_description": {
-          "phase_guard_topology": "Wybierz Tylko sieć w przypadku instalacji konwencjonalnej. Wybierz Sieć + falownik hybrydowy, gdy odbiorniki są również zasilane przez wyjście Load, EPS lub Backup.",
+          "phase_guard_topology": "Wybierz Tylko zasilanie z sieci w przypadku instalacji konwencjonalnej. Wybierz Sieć + wyjście Load/EPS falownika hybrydowego, gdy odbiorniki są również zasilane przez wyjście Load, EPS lub Backup.",
           "phase_guard_phase_count": "Wybierz 1 dla zasilania jednofazowego lub 3 dla zasilania trójfazowego. Monitorowane i wymagane są tylko wybrane fazy."
         }
       },
@@ -1347,7 +1347,7 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
+        "disabled": "Wyłączone",
         "grid_only": "Tylko zasilanie z sieci",
         "hybrid_load_port": "Sieć + wyjście Load/EPS falownika hybrydowego"
       }

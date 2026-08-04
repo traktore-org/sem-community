@@ -1347,7 +1347,7 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
+        "disabled": "Letiltva",
         "grid_only": "Csak hálózati ellátás",
         "hybrid_load_port": "Hálózat + hibrid inverter Load/EPS kimenete"
       }
