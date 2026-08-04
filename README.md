@@ -171,13 +171,13 @@ For detailed explanations of all settings, see the [Setup Guide](docs/SETUP_GUID
 
 ### Step 6: Load Management (Optional)
 
-Enable peak load management if your utility bills based on peak demand:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Target peak limit | 5 kW | SEM sheds loads above this threshold |
-| Warning level | — | Early warning threshold |
-| Emergency level | — | All non-critical loads shed |
+Enable peak load management if your utility bills based on peak demand. Tune
+the target peak limit from the Control tab's slider (1–80 kW, or drag to
+**Uncapped** if your connection has no limit worth defending) — warning (90%)
+and emergency (120%) are derived from it automatically and sit behind an
+**Advanced** disclosure on the Configuration tab. See
+[Load Management Settings](docs/USER_GUIDE.md#load-management-settings) for
+the full reference.
 
 ![SEM Integration Page](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_integration_detail.png)
 

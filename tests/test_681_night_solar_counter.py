@@ -108,6 +108,61 @@ class TestTheNightIsNotSolar:
 
         assert _daily(calc) == pytest.approx(12.0)
 
+    def test_an_overnight_charge_books_zero_solar(self):
+        """The gate is magnitude-blind: an 11 kW night charge is still not PV.
+
+        The catch was a 510 W house load. An overnight EV charge (or a
+        cheap-hours battery top-up) pushes the SAME AC-output counter up two
+        orders of magnitude harder — ~40 kWh across a night — because the
+        inverter is passing grid power through to the car. Pre-#681 every one
+        of those kWh was booked as production.
+        """
+        states = {COUNTER: _state(20675.17)}
+        _night(states)
+        calc = _calc(states)
+        _reconcile(calc)
+
+        # 22:00Z → 06:00Z at ~5 kW: +40 kWh of pass-through.
+        for hour in range(1, 9):
+            states[COUNTER] = _state(20675.17 + hour * 5.0)
+            _reconcile(calc)
+
+        assert _daily(calc) == 0.0
+        assert calc._lifetime_accumulators.get("lifetime_solar", 0.0) == 0.0
+
+    def test_an_overnight_charge_across_midnight_books_zero_solar(self):
+        """Day rollover mid-charge: the new day starts anchored, not inflated.
+
+        Every overnight charge crosses midnight, so the rollover branch runs
+        while the gate is closed. The new day must re-baseline on the counter
+        as it stands at that moment — otherwise the post-midnight half of the
+        charge lands on the new day as production.
+        """
+        states = {COUNTER: _state(20675.17)}
+        _night(states)
+        calc = _calc(states)
+        _reconcile(calc)
+        states[COUNTER] = _state(20685.17)  # 22:00Z → 00:00Z, +10 kWh
+        _reconcile(calc)
+
+        # Midnight: the coordinator now passes tomorrow's keys.
+        tomorrow = date(2026, 7, 27)
+        for value in (20690.17, 20695.17, 20705.17):  # +20 kWh more, still dark
+            states[COUNTER] = _state(value)
+            calc._reconcile_solar_energy(tomorrow, MONTH, YEAR)
+
+        assert calc._daily_accumulators.get(f"solar_{tomorrow}", 0.0) == 0.0
+        assert _daily(calc) == 0.0
+        assert calc._lifetime_accumulators.get("lifetime_solar", 0.0) == 0.0
+
+        # ...and sunrise on the new day still anchors on the integrator.
+        _day(states)
+        calc._reconcile_solar_energy(tomorrow, MONTH, YEAR)
+        states[COUNTER] = _state(20713.17)  # +8 kWh of real production
+        calc._reconcile_solar_energy(tomorrow, MONTH, YEAR)
+
+        assert calc._daily_accumulators.get(f"solar_{tomorrow}") == pytest.approx(8.0)
+
     def test_a_midnight_counter_reset_in_the_dark_is_absorbed(self):
         """A daily-type counter resetting at midnight must not re-anchor."""
         states = {COUNTER: _state(71.15)}
@@ -149,6 +204,68 @@ class TestDaylightIsUnchanged:
         _reconcile(calc)
 
         assert _daily(calc) == pytest.approx(20.0)
+
+
+@pytest.mark.unit
+class TestTheNightWindowLiesInsideTheGate:
+    """The overnight charge can never outlive the gate that covers it.
+
+    Both subsystems read the same ``sun.sun``. ``get_night_window`` clamps::
+
+        night_start = max(sunset + 10min, earliest_start)   # after sunset
+        night_end   = min(sunrise, latest_end)              # at/before sunrise
+
+    so the whole night-charging window sits strictly inside the period where
+    ``_sun_is_down()`` is True. That is what makes #681 cover an overnight
+    charge in full: the inverter's AC-output counter passes grid power through
+    to the car at kW scale, and the gate is closed for every minute of it.
+
+    If someone ever relaxes a clamp — lets night charging run past sunrise to
+    "finish the session" — the counter starts booking that pass-through as
+    production again. This test is the tripwire.
+    """
+
+    @staticmethod
+    def _window(sunrise_utc, sunset_utc, **config):
+        from unittest.mock import MagicMock as MM
+
+        from custom_components.solar_energy_management.utils.time_manager import (
+            TimeManager,
+        )
+
+        sun = MM()
+        sun.attributes = {"next_rising": sunrise_utc, "next_setting": sunset_utc}
+        hass = MM()
+        hass.states.get = MM(return_value=sun)
+        return TimeManager(hass=hass, config=config).get_night_window()
+
+    @pytest.mark.parametrize(
+        "label,sunrise,sunset",
+        [
+            # Midsummer: sunrise 03:51 is what PROD reported on 26.07.2026.
+            ("midsummer", "2026-07-26T03:51:00+00:00", "2026-07-26T19:08:00+00:00"),
+            # Midwinter: sunrise is LATER than latest_end, so the ceiling wins.
+            ("midwinter", "2026-01-15T07:15:00+00:00", "2026-01-15T15:35:00+00:00"),
+        ],
+    )
+    def test_the_window_never_escapes_darkness(self, label, sunrise, sunset):
+        night_start, night_end = self._window(sunrise, sunset)
+        sunrise_hhmm, sunset_hhmm = sunrise[11:16], sunset[11:16]
+
+        # Charging stops at or before the gate opens...
+        assert night_end <= sunrise_hhmm, f"{label}: charge outlives the gate"
+        # ...and never starts before the gate closes.
+        assert night_start > sunset_hhmm, f"{label}: charge starts before the gate"
+
+    def test_an_absurd_earliest_start_cannot_open_a_daylight_window(self):
+        """``max()`` is load-bearing: a midday floor still yields a dark start."""
+        night_start, night_end = self._window(
+            "2026-07-26T03:51:00+00:00",
+            "2026-07-26T19:08:00+00:00",
+            night_earliest_start=12.0,  # user asks for noon
+        )
+        assert night_start == "19:18"  # sunset + 10, not 12:00
+        assert night_end <= "03:51"
 
 
 @pytest.mark.unit

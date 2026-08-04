@@ -2640,6 +2640,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         }
             except Exception:
                 pass
+        elif self.entity_description.key == "target_peak_limit":
+            # (#717 redesign) The Control-tab slider needs to know whether
+            # the system is currently unlimited to render its MAX notch as
+            # "Unlimited" instead of a stale 80.0 kW number.
+            attrs["peak_limit_unlimited"] = self.coordinator.data.get(
+                "peak_limit_unlimited", False
+            )
         elif self.entity_description.key == "monthly_consecutive_peak":
             # (#657) The ``top_5_peaks`` / ``top_5_peaks_formatted`` pair used
             # to be built here from ``peak_history_top5`` — a key no producer

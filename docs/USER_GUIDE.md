@@ -130,10 +130,53 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `load_management_enabled` | false | Enable peak load management |
-| `target_peak_limit` | 5 kW | Target peak power limit (1-15 kW) |
-| `warning_peak_level` | — | Warning threshold (1-15 kW) |
-| `emergency_peak_level` | — | Emergency shedding threshold (1-20 kW) |
+| `peak_limit_unlimited` | false | **No grid limit** — turn peak management off entirely |
+| `target_peak_limit` | 5 kW | Maximum grid power SEM stays under (1–80 kW) |
+| `warning_peak_level` | 90% of target | Warning threshold — must be **below** the target (1–80 kW) |
+| `emergency_peak_level` | 120% of target | Emergency shedding threshold — must be **above** the target (1–80 kW) |
 | `critical_device_protection` | — | Protect critical loads from shedding |
+
+`target_peak_limit` is your **grid connection ceiling**, not a tariff preference —
+take it from your supply contract or main breaker. Around 3–5 kW on a
+demand-based European tariff; about 38 kW for a 200 A North-American service
+(200 A × 240 V × 0.8). Every install starts at the 5 kW default — SEM no
+longer asks for a peak limit during setup — and warning/emergency are derived
+from whatever you set **at read time** (90% / 120%, recalculated on every
+poll), so a 38 kW service is never stuck with the 4.5 kW / 6.0 kW levels that
+suit a 5 kW one. All three accept **1–80 kW**, and the options flow rejects an
+out-of-order ladder (warning ≥ target, or emergency ≤ target).
+
+Two places to change it after install:
+- **Control tab** — the Load Management card's slider is the fast path: drag
+  to any value between 1 and 80 kW, or all the way to the top for **Uncapped**
+  (the No grid limit opt-out below). Changes apply live, no restart needed.
+- **Configuration tab** — the same value as a precise kW number field, for
+  when you want an exact figure rather than a drag. Warning and emergency
+  aren't separate fields anymore; they live behind an **Advanced** disclosure
+  here, since almost nobody needs to touch the derived ratios.
+
+#### No grid limit
+
+Some connections are large enough that no household load can threaten them —
+an industrial supply, or a site where the limit is enforced upstream. Turn on
+**No grid limit** and SEM stops treating the peak limit as a ceiling at all:
+the EV charger sizes its current from surplus alone, load management never
+escalates, and the kW fields disappear from the card.
+
+This is **not** the same as leaving *Enable Load Management* off:
+
+| | Sheds loads to defend the limit | Sizes the EV/loads under the limit |
+|---|---|---|
+| Load management **on** | yes | yes |
+| Load management **off** | no | **yes** — the ceiling still stands |
+| **No grid limit** on | no | no |
+
+That distinction is deliberate. Turning shedding off means "leave my loads
+alone", not "there is no limit" — if it meant both, an install that only
+wanted its dishwasher left alone would silently hand the EV the whole house.
+Declaring no limit is its own explicit switch, so it is never reached by
+accident. Your kW numbers stay in config while it is on and come back
+untouched when you turn it off.
 
 ### Other Settings
 
@@ -681,7 +724,7 @@ SEM monitors rolling 15-minute average power and progressively sheds loads to st
 
 When the peak drops back below the target, SEM restores devices **only if they were ON before shedding**. Devices that were already off are not turned on.
 
-Enable via integration options. Requires controllable devices with switch entities.
+Enable via **Enable Load Management** on the Configuration tab. Requires controllable devices with switch entities. For the target/warning/emergency range, the Control-tab slider, and the **No grid limit** opt-out, see [Load Management Settings](#load-management-settings).
 
 ---
 

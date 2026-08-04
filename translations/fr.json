@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Matériel",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Capacité de la batterie domestique (kWh)",
-          "target_peak_limit": "Limite de puissance de pointe (kW)",
           "generate_dashboard_on_install": "Générer le tableau de bord SEM maintenant (redémarre HA)",
           "diagram_style": "Style du diagramme système"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacité utile totale de votre batterie domestique (PAS celle du VE) en kWh. Utilisée par la stratégie de charge pilotée par les prévisions pour estimer dans quelle mesure la batterie peut compenser un déficit solaire. Consultez la fiche technique de votre onduleur.",
-          "target_peak_limit": "Puissance maximale en kW autorisée par votre contrat réseau avant que SEM ne commence à délester. Pour les tarifs basés sur la puissance souscrite, généralement 3–5 kW ; sinon, réglez sur le calibre de votre disjoncteur divisé par 4 pour garder une marge.",
           "generate_dashboard_on_install": "Lorsque cette option est activée, SEM crée le tableau de bord Lovelace immédiatement après cette étape, puis redémarre Home Assistant environ 5 s plus tard afin que le nouveau tableau de bord devienne visible. Vous pouvez toujours le régénérer manuellement plus tard via le service solar_energy_management.generate_dashboard.",
           "diagram_style": "Choisissez le diagramme système à utiliser sur l'onglet Accueil. 'SEM' utilise le diagramme animé intégré. 'K-Flow' utilise la carte K-Flow HACS (à installer séparément)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "entity_not_found": "Entité introuvable. Vérifiez que l'ID d'entité existe.",
-      "service_not_found": "Service de notification introuvable. Veuillez vérifier le nom du service (par ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready nécessite les DEUX entités relais. Renseignez les deux relais — ou laissez-les vides et configurez uniquement l'entité climate pour un boost de consigne climate seul.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Service de notification introuvable. Veuillez vérifier le nom du service (par ex. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management est déjà configuré. Une seule instance est autorisée.",
@@ -241,6 +237,7 @@
         "description": "Mettre à jour la configuration de gestion de charge",
         "data": {
           "load_management_enabled": "Activer la Gestion de Charge",
+          "peak_limit_unlimited": "Aucune limite réseau",
           "target_peak_limit": "Limite de Pointe Cible (kW)",
           "warning_peak_level": "Niveau d'Alerte de Pointe (kW)",
           "emergency_peak_level": "Niveau d'Urgence de Pointe (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Activer/désactiver le délestage automatique de SEM pour rester sous votre limite de pointe réseau.",
+          "peak_limit_unlimited": "Désactive complètement la gestion des pointes : SEM cesse de dimensionner les charges sur la limite de pointe cible et ne délestera jamais pour la respecter. Réservé aux raccordements qu'aucune charge domestique ne peut menacer. À distinguer de « Activer la gestion de charge », qui arrête le délestage mais conserve la limite comme plafond de dimensionnement.",
           "target_peak_limit": "Puissance réseau maximale (kW) avant que SEM ne commence à délester les charges pilotables.",
-          "warning_peak_level": "Niveau de puissance (kW) auquel SEM émet une alerte avant d'agir.",
-          "emergency_peak_level": "Niveau de puissance (kW) auquel SEM déleste agressivement les charges pour éviter les pénalités de puissance souscrite.",
+          "warning_peak_level": "Niveau de puissance (kW) auquel SEM émet une alerte avant d'agir. Doit être inférieur à la limite de pointe cible.",
+          "emergency_peak_level": "Niveau de puissance (kW) auquel SEM déleste agressivement les charges pour éviter les pénalités de puissance souscrite. Doit être supérieur à la limite de pointe cible.",
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh.",
           "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé."
@@ -427,14 +425,14 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Topologie électrique",
+        "description": "Choisissez comment la charge de la maison est alimentée. Dans une installation hybride, le réseau et la sortie Load/EPS/Backup de l'onduleur peuvent alimenter la maison en même temps. La charge à l'intérieur de la maison peut donc être supérieure au courant traversant le fusible principal. SEM surveille les deux chemins indépendamment. Le contrôle actif est facultatif ; vérifiez les relevés en mode Observateur avant d'activer le contrôle EV.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Topologie d'alimentation",
           "phase_guard_phase_count": "Nombre de phases"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
+          "phase_guard_topology": "Sélectionnez Réseau seul pour une installation classique. Sélectionnez Réseau + onduleur hybride lorsque les charges sont également alimentées via une sortie Load, EPS ou Backup.",
           "phase_guard_phase_count": "Sélectionnez 1 pour une alimentation monophasée ou 3 pour une alimentation triphasée. Seules les phases sélectionnées sont requises et surveillées."
         }
       },
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Service de notification introuvable. Veuillez vérifier le nom du service (par ex. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Le niveau d'alerte doit être inférieur à la limite de pointe cible — c'est l'alerte précoce indiquant que la cible est approchée.",
+      "peak_emergency_not_above_target": "Le niveau d'urgence doit être supérieur à la limite de pointe cible — sinon SEM délesterait avant même d'atteindre la limite qu'il protège.",
+      "heat_pump_partial_relays": "SG-Ready nécessite les DEUX entités relais. Renseignez les deux relais — ou laissez-les vides et configurez uniquement l'entité climate pour un boost de consigne climate seul.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Le contrôle du Work Mode nécessite deux options différentes — une pour Load First et une pour Battery First. Choisissez les deux, et pas deux fois la même.",
+      "deye_force_charge_work_mode_invalid": "Choisissez le Work Mode que SEM doit utiliser pour forcer la charge de la batterie : Load First ou Battery First."
     }
   },
   "entity": {
@@ -1350,9 +1357,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Désactivé",
+        "grid_only": "Alimentation réseau seule",
+        "hybrid_load_port": "Réseau + sortie Load/EPS de l'onduleur hybride"
       }
     }
   }

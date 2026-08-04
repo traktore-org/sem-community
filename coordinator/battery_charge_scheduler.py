@@ -310,8 +310,14 @@ class SchedulerConfig:
             # not a migration), so the peak-aware slot distribution ran with
             # ``0 = no limit`` on every install. ``target_peak_limit`` is the
             # install-flow key, in kW (shared with load management).
-            peak_limit_w=float(
-                config.get("target_peak_limit", 0.0) or 0.0) * 1000.0,
+            # (#716) An install that declared no grid ceiling seeds this
+            # planner's own ``0 = no limit`` sentinel. The flag is translated
+            # here rather than passed through: this dataclass field is
+            # consumed by slot arithmetic that has no infinity handling, and
+            # 0 is the no-limit value it already understands.
+            peak_limit_w=0.0 if config.get(
+                "peak_limit_unlimited", False
+            ) else float(config.get("target_peak_limit", 0.0) or 0.0) * 1000.0,
             max_grid_import_w=config.get("battery_max_grid_import_w", 0.0),
             force_charge_on_negative_price=config.get("battery_force_charge_negative_price", True),
             arbitrage_enabled=config.get("battery_grid_arbitrage_enabled", False),

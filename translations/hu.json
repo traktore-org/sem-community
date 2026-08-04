@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardver",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Házi akkumulátor kapacitása (kWh)",
-          "target_peak_limit": "Csúcsteljesítmény-korlát (kW)",
           "generate_dashboard_on_install": "SEM irányítópult létrehozása most (újraindítja a HA-t)",
           "diagram_style": "Rendszerdiagram stílusa"
         },
         "data_description": {
           "battery_capacity_kwh": "A házi akkumulátor (NEM az EV) teljes hasznos kapacitása kWh-ban. Az előrejelzés-vezérelt töltési stratégia ez alapján becsli meg, mekkora napenergia-hiányt tud az akkumulátor áthidalni. Nézze meg az inverter műszaki adatait.",
-          "target_peak_limit": "A maximális kW, amelyet a hálózati szerződése megenged, mielőtt a SEM megkezdi a terheléslekapcsolást. Teljesítménydíjas tarifáknál jellemzően 3–5 kW; egyébként állítsa a biztosíték névleges értékének negyedére, hogy maradjon tartalék.",
           "generate_dashboard_on_install": "Bekapcsolva a SEM közvetlenül e lépés befejezése után létrehozza a Lovelace irányítópultot, majd kb. 5 másodperccel később újraindítja a Home Assistantot, hogy az új irányítópult láthatóvá váljon. Ezt később bármikor újrafuttathatja kézzel a solar_energy_management.generate_dashboard szolgáltatással.",
           "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Váratlan hiba történt. Kérjük, próbálja újra.",
       "entity_not_found": "Az entitás nem található. Ellenőrizze, hogy az entitásazonosító létezik-e.",
-      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "Az SG-Ready MINDKÉT relé entitást igényli. Állítsa be mindkét relét — vagy hagyja mindkettőt üresen, és csak a climate entitást konfigurálja a kizárólag climate alapú célhőmérséklet-emeléshez.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "A Solar Energy Management már konfigurálva van. Csak egy példány engedélyezett.",
@@ -241,6 +237,7 @@
         "description": "A terheléskezelés konfigurációjának frissítése",
         "data": {
           "load_management_enabled": "Terheléskezelés engedélyezése",
+          "peak_limit_unlimited": "Nincs hálózati korlát",
           "target_peak_limit": "Cél csúcskorlát (kW)",
           "warning_peak_level": "Figyelmeztetési csúcsszint (kW)",
           "emergency_peak_level": "Vészhelyzeti csúcsszint (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "A SEM automatikus terheléslekapcsolásának be- és kikapcsolása, hogy a hálózati csúcskorlát alatt maradjon.",
+          "peak_limit_unlimited": "Teljesen kikapcsolja a csúcskezelést: a SEM többé nem méretezi a fogyasztókat a cél csúcsteljesítmény-korláthoz, és soha nem kapcsol le a védelmében. Csak olyan csatlakozásokhoz, amelyeket egyetlen háztartási fogyasztó sem veszélyeztethet. Ez más, mint a „Terheléskezelés engedélyezése”: az csak a lekapcsolást állítja le, a korlát méretezési plafonként megmarad.",
           "target_peak_limit": "Az a maximális hálózati teljesítmény (kW), amely felett a SEM megkezdi a vezérelhető terhelések lekapcsolását.",
-          "warning_peak_level": "Az a teljesítményszint (kW), amelynél a SEM figyelmeztetést ad ki, mielőtt beavatkozna.",
-          "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében.",
+          "warning_peak_level": "Az a teljesítményszint (kW), amelynél a SEM figyelmeztetést ad ki, mielőtt beavatkozna. A cél csúcsteljesítmény-korlát alatt kell lennie.",
+          "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében. A cél csúcsteljesítmény-korlát fölött kell lennie.",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban.",
           "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
@@ -427,15 +425,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektromos topológia",
+        "description": "Válassza ki, hogyan legyen ellátva a ház terhelése. Hibrid telepítés esetén a hálózat és az inverter Load/EPS/Backup kimenete egyidejűleg táplálhatja a házat. A házon belüli terhelés ezért magasabb is lehet, mint a főbiztosítékon átfolyó áram. A SEM a két útvonalat egymástól függetlenül felügyeli. Az aktív beavatkozás opcionális; a leolvasásokat Observer módban ellenőrizze, mielőtt engedélyezi az EV-vezérlést.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Ellátási topológia",
           "phase_guard_phase_count": "Fázisok száma"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Válasszon 1-et egyfázisú vagy 3-at háromfázisú tápláláshoz. Csak a kiválasztott fázisok szükségesek és figyeltek."
+          "phase_guard_topology": "Hagyományos telepítéshez válassza a Csak hálózat opciót. Válassza a Hálózat + hibrid invertert, ha a terheléseket Load, EPS vagy Backup kimeneten keresztül is táplálják.",
+          "phase_guard_phase_count": "Egyfázisú ellátáshoz válasszon 1-et, háromfázisúhoz 3-at. Csak a kiválasztott fázisok szükségesek és kerülnek felügyelet alá."
         }
       },
       "settings_phase_guard": {
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "A figyelmeztetési szintnek a cél csúcsteljesítmény-korlát alatt kell lennie – ez a korai jelzés, hogy a cél közeledik.",
+      "peak_emergency_not_above_target": "A vészszintnek a cél csúcsteljesítmény-korlát fölött kell lennie – különben a SEM már azelőtt lekapcsolna fogyasztókat, hogy a védett korlátot elérné.",
+      "heat_pump_partial_relays": "Az SG-Ready MINDKÉT relé entitást igényli. Állítsa be mindkét relét — vagy hagyja mindkettőt üresen, és csak a climate entitást konfigurálja a kizárólag climate alapú célhőmérséklet-emeléshez.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "A Work Mode vezérléshez két különböző opció kell – egy a Load First és egy a Battery First számára. Válassza ki mindkettőt, és ne ugyanazt kétszer.",
+      "deye_force_charge_work_mode_invalid": "Válassza ki, melyik Work Mode móddal töltse a SEM kényszerítve az akkumulátort: Load First vagy Battery First."
     }
   },
   "entity": {
@@ -1350,9 +1357,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Letiltva",
+        "grid_only": "Csak hálózati ellátás",
+        "hybrid_load_port": "Hálózat + hibrid inverter Load/EPS kimenete"
       }
     }
   }

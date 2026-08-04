@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Husbatteriets kapacitet (kWh)",
-          "target_peak_limit": "Effektgrænse for spidsbelastning (kW)",
           "generate_dashboard_on_install": "Generér SEM-dashboardet nu (genstarter HA)",
           "diagram_style": "Systemdiagram stil"
         },
         "data_description": {
           "battery_capacity_kwh": "Husbatteriets samlede anvendelige kapacitet (IKKE EV'ens) i kWh. Bruges af den prognosestyrede opladningsstrategi til at estimere, hvor meget batteriet kan dække et solunderskud. Se specifikationen for din inverter.",
-          "target_peak_limit": "Det maksimale antal kW, din elaftale tillader, før SEM begynder at frakoble laster. Ved effekttariffer typisk 3–5 kW; ellers sæt den til din sikringsstørrelse divideret med 4 for at have luft.",
           "generate_dashboard_on_install": "Når dette er aktiveret, opretter SEM Lovelace-dashboardet umiddelbart efter dette trin og genstarter derefter Home Assistant ca. 5 s senere, så det nye dashboard bliver synligt. Du kan altid køre det manuelt senere via tjenesten solar_energy_management.generate_dashboard.",
           "diagram_style": "Vælg systemdiagram på fanen Hjem. 'SEM' bruger det indbyggede animerede diagram. 'K-Flow' bruger K-Flow HACS-kortet (skal installeres separat)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Der opstod en uventet fejl. Prøv venligst igen.",
       "entity_not_found": "Entiteten blev ikke fundet. Kontrollér venligst, at entitets-ID'et findes.",
-      "service_not_found": "Notifikationstjenesten blev ikke fundet. Kontrollér tjenestenavnet (f.eks. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready kræver BEGGE relæentiteter. Angiv begge relæer — eller lad begge stå tomme og konfigurer kun klimaentiteten til setpunkt-boost i klima-kun-tilstand.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Notifikationstjenesten blev ikke fundet. Kontrollér tjenestenavnet (f.eks. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management er allerede konfigureret. Kun én instans er tilladt.",
@@ -241,6 +237,7 @@
         "description": "Opdatér konfigurationen af lastbegrænsningen",
         "data": {
           "load_management_enabled": "Aktivér lastbegrænsning",
+          "peak_limit_unlimited": "Ingen netgrænse",
           "target_peak_limit": "Mål for spidsbelastningsgrænse (kW)",
           "warning_peak_level": "Advarselsniveau for spidsbelastning (kW)",
           "emergency_peak_level": "Nødniveau for spidsbelastning (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Slå SEM's automatiske lastfrakobling til/fra, så du holder dig under din spidsbelastningsgrænse.",
+          "peak_limit_unlimited": "Slår spidsbelastningsstyring helt fra: SEM dimensionerer ikke længere forbrug efter den målsatte spidsgrænse og kobler aldrig fra for at overholde den. Kun til tilslutninger, som ingen husholdningsbelastning kan true. Det er noget andet end “Aktivér laststyring”, som kun stopper frakoblingen, men beholder grænsen som dimensioneringsloft.",
           "target_peak_limit": "Maksimal neteffekt (kW), før SEM begynder at frakoble styrbare laster.",
-          "warning_peak_level": "Effektniveau (kW), hvor SEM udsender en advarsel, før der gribes ind.",
-          "emergency_peak_level": "Effektniveau (kW), hvor SEM aggressivt frakobler laster for at undgå effekttarif-gebyrer.",
+          "warning_peak_level": "Effektniveau (kW), hvor SEM udsender en advarsel, før der gribes ind. Skal være under den målsatte spidsgrænse.",
+          "emergency_peak_level": "Effektniveau (kW), hvor SEM aggressivt frakobler laster for at undgå effekttarif-gebyrer. Skal være over den målsatte spidsgrænse.",
           "vehicle_soc_entity": "Valgfri sensor, der rapporterer køretøjets aktuelle ladetilstand (0–100 %).",
           "ev_battery_capacity_kwh": "EV-batteriets samlede anvendelige kapacitet i kWh.",
           "ev_target_soc": "Mål-SOC (%), hvor SEM betragter EV'en som fuldt opladet."
@@ -427,15 +425,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektrisk topologi",
+        "description": "Vælg, hvordan husets belastning forsynes. I en hybridinstallation kan elnettet og inverterens Load/EPS/Backup-udgang forsyne huset samtidig. Belastningen i huset kan derfor være højere end strømmen gennem hovedsikringen. SEM overvåger de to forsyningsveje uafhængigt. Aktiv indgriben er valgfri; kontrollér målingerne i observatørtilstand, før EV-styring aktiveres.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Forsyningstopologi",
           "phase_guard_phase_count": "Antal faser"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Vælg 1 for en enkeltfaset forsyning eller 3 for en trefaset forsyning. Kun de valgte faser kræves og overvåges."
+          "phase_guard_topology": "Vælg Kun elnet for en almindelig installation. Vælg Elnet + hybridinverter, når belastninger også forsynes via en Load-, EPS- eller Backup-udgang.",
+          "phase_guard_phase_count": "Vælg 1 for enfaset forsyning eller 3 for trefaset forsyning. Kun de valgte faser er påkrævede og overvåges."
         }
       },
       "settings_phase_guard": {
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Notifikationstjenesten blev ikke fundet. Kontrollér tjenestenavnet (f.eks. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Advarselsniveauet skal være under den målsatte spidsgrænse – det er den tidlige advarsel om, at målet nærmer sig.",
+      "peak_emergency_not_above_target": "Nødniveauet skal være over den målsatte spidsgrænse – ellers ville SEM afbryde forbrug, før den beskyttede grænse overhovedet nås.",
+      "heat_pump_partial_relays": "SG-Ready kræver BEGGE relæentiteter. Angiv begge relæer — eller lad begge stå tomme og konfigurer kun klimaentiteten til setpunkt-boost i klima-kun-tilstand.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode-styring kræver to forskellige valg – ét til Load First og ét til Battery First. Vælg begge, og ikke det samme to gange.",
+      "deye_force_charge_work_mode_invalid": "Vælg hvilken Work Mode SEM skal bruge til tvangsopladning af batteriet: Load First eller Battery First."
     }
   },
   "entity": {
@@ -1350,9 +1357,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Deaktiveret",
+        "grid_only": "Kun elforsyning fra nettet",
+        "hybrid_load_port": "Elnet + hybridinverterens Load/EPS-udgang"
       }
     }
   }

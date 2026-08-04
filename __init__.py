@@ -32,7 +32,7 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN
+from .const import DOMAIN, MIN_PEAK_LIMIT_KW, MAX_PEAK_LIMIT_KW
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
@@ -3145,8 +3145,14 @@ async def _async_register_services(
             )
 
         target = call.data.get("target_peak_limit")
-        await coordinator._load_manager.update_target_peak_limit(float(target))
-        _LOGGER.info("Updated target peak limit to %.1f kW", target)
+        unlimited = call.data.get("peak_limit_unlimited")
+        await coordinator._load_manager.update_target_peak_limit(
+            float(target), unlimited=unlimited
+        )
+        _LOGGER.info(
+            "Updated target peak limit to %.1f kW%s", target,
+            "" if unlimited is None else f" (unlimited={unlimited})",
+        )
 
     try:
         hass.services.async_register(
@@ -3154,9 +3160,18 @@ async def _async_register_services(
             "update_target_peak",
             async_update_target_peak,
             schema=vol.Schema({
+                # (#717) Same range as the config flow. A hard-coded 20 kW
+                # here silently rejected any service larger than a European
+                # fuse box even once the form allowed it.
                 vol.Required("target_peak_limit"): vol.All(
-                    vol.Coerce(float), vol.Range(min=1.0, max=20.0)
+                    vol.Coerce(float),
+                    vol.Range(min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW),
                 ),
+                # (#717 redesign) Optional: the Control-tab slider sends this
+                # alongside the target in one atomic write when the drag
+                # lands on the MAX notch. Omitted by callers that only ever
+                # touch the numeric ceiling (e.g. an automation).
+                vol.Optional("peak_limit_unlimited"): cv.boolean,
             }),
         )
         _LOGGER.debug("Registered service: %s.update_target_peak", DOMAIN)

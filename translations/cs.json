@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Kapacita domácí baterie (kWh)",
-          "target_peak_limit": "Limit špičkového výkonu (kW)",
           "generate_dashboard_on_install": "Vygenerovat nyní panel SEM (restartuje HA)",
           "diagram_style": "Styl systémového diagramu"
         },
         "data_description": {
           "battery_capacity_kwh": "Celková využitelná kapacita vaší domácí baterie (NIKOLI baterie EV) v kWh. Používá ji strategie nabíjení řízená předpovědí k odhadu, jak velký solární deficit dokáže baterie překlenout. Ověřte ve specifikaci svého měniče.",
-          "target_peak_limit": "Maximální výkon v kW, který vaše smlouva se sítí umožňuje, než SEM začne odpojovat zátěže. Pro tarify podle rezervovaného příkonu typicky 3–5 kW; jinak nastavte hodnotu jističe dělenou 4, aby zůstala rezerva.",
           "generate_dashboard_on_install": "Je-li zapnuto, SEM vytvoří panel Lovelace ihned po dokončení tohoto kroku a přibližně o 5 s později restartuje Home Assistant, aby se nový panel zobrazil. Kdykoli později jej můžete znovu vytvořit ručně pomocí služby solar_energy_management.generate_dashboard.",
           "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Došlo k neočekávané chybě. Zkuste to prosím znovu.",
       "entity_not_found": "Entita nebyla nalezena. Ověřte prosím, že dané ID entity existuje.",
-      "service_not_found": "Služba oznámení nebyla nalezena. Zkontrolujte název služby (např. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready vyžaduje OBĚ entity relé. Nastavte obě relé — nebo ponechte obě prázdná a nakonfigurujte pouze entitu climate pro navýšení cílové teploty v režimu pouze climate.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Služba oznámení nebyla nalezena. Zkontrolujte název služby (např. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management je již nakonfigurován. Povolena je pouze jedna instance.",
@@ -241,6 +237,7 @@
         "description": "Aktualizujte konfiguraci správy zátěže",
         "data": {
           "load_management_enabled": "Povolit správu zátěže",
+          "peak_limit_unlimited": "Bez limitu sítě",
           "target_peak_limit": "Cílový limit špičky (kW)",
           "warning_peak_level": "Varovná úroveň špičky (kW)",
           "emergency_peak_level": "Nouzová úroveň špičky (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Zapnout/vypnout automatické odpojování zátěží, kterým SEM drží odběr pod vaším limitem špičky.",
+          "peak_limit_unlimited": "Zcela vypne řízení špiček: SEM přestane dimenzovat spotřebiče podle cílového limitu špičky a nikdy kvůli němu neodpojí zátěž. Jen pro přípojky, které žádný domácí spotřebič nemůže ohrozit. Je to něco jiného než „Povolit řízení zátěže“, které zastaví jen odpojování, ale limit zůstává jako strop pro dimenzování.",
           "target_peak_limit": "Maximální výkon ze sítě (kW), než SEM začne odpojovat řiditelné zátěže.",
-          "warning_peak_level": "Úroveň výkonu (kW), při které SEM vydá varování, než začne jednat.",
-          "emergency_peak_level": "Úroveň výkonu (kW), při které SEM agresivně odpojuje zátěže, aby se vyhnul poplatkům za rezervovaný příkon.",
+          "warning_peak_level": "Úroveň výkonu (kW), při které SEM vydá varování, než začne jednat. Musí být nižší než cílový limit špičky.",
+          "emergency_peak_level": "Úroveň výkonu (kW), při které SEM agresivně odpojuje zátěže, aby se vyhnul poplatkům za rezervovaný příkon. Musí být vyšší než cílový limit špičky.",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh.",
           "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité."
@@ -427,15 +425,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektrická topologie",
+        "description": "Zvolte způsob napájení domu. V hybridní instalaci mohou dům současně napájet distribuční síť a výstup Load/EPS/Backup střídače. Zatížení uvnitř domu proto může být vyšší než proud procházející hlavním jističem. SEM sleduje obě cesty nezávisle. Aktivní ochrana je volitelná; před povolením řízení EV ověřte hodnoty v režimu sledování.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Topologie napájení",
           "phase_guard_phase_count": "Počet fází"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Vyberte 1 pro jednofázové napájení nebo 3 pro třífázové napájení. Vyžadovány a monitorovány jsou pouze vybrané fáze."
+          "phase_guard_topology": "Pro běžnou instalaci vyberte Pouze distribuční síť. Pokud jsou spotřebiče napájeny také přes výstup Load, EPS nebo Backup, vyberte Distribuční síť + hybridní střídač.",
+          "phase_guard_phase_count": "Pro jednofázové napájení vyberte 1, pro třífázové 3. Vyžadovány a sledovány budou pouze vybrané fáze."
         }
       },
       "settings_phase_guard": {
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Služba oznámení nebyla nalezena. Zkontrolujte název služby (např. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Úroveň varování musí být nižší než cílový limit špičky – jde o včasné upozornění, že se cíl blíží.",
+      "peak_emergency_not_above_target": "Nouzová úroveň musí být vyšší než cílový limit špičky – jinak by SEM odpojoval spotřebiče dřív, než je chráněný limit vůbec dosažen.",
+      "heat_pump_partial_relays": "SG-Ready vyžaduje OBĚ entity relé. Nastavte obě relé — nebo ponechte obě prázdná a nakonfigurujte pouze entitu climate pro navýšení cílové teploty v režimu pouze climate.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Řízení Work Mode vyžaduje dvě různé volby – jednu pro Load First a jednu pro Battery First. Vyberte obě, a ne dvakrát tutéž.",
+      "deye_force_charge_work_mode_invalid": "Zvolte, kterým režimem Work Mode má SEM vynuceně nabíjet baterii: Load First, nebo Battery First."
     }
   },
   "entity": {
@@ -1350,9 +1357,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Zakázáno",
+        "grid_only": "Pouze distribuční síť",
+        "hybrid_load_port": "Distribuční síť + výstup Load/EPS hybridního střídače"
       }
     }
   }

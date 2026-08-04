@@ -8259,6 +8259,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 lm_info = self._load_manager.get_load_management_data()
 
                 lm_data.target_peak_limit = lm_info.get("target_peak_limit", 5.0)
+                lm_data.peak_limit_unlimited = lm_info.get("peak_limit_unlimited", False)
                 lm_data.load_management_status = lm_info.get("state", "idle")
                 lm_data.controllable_devices_count = lm_info.get("controllable_devices", 0)
                 lm_data.available_load_reduction = lm_info.get("available_load_reduction", 0.0)

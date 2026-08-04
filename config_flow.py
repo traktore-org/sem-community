@@ -37,6 +37,10 @@ from .const import (
     DEFAULT_EMERGENCY_PEAK_LEVEL,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     DEFAULT_OBSERVER_MODE,
+    MIN_PEAK_LIMIT_KW,
+    MAX_PEAK_LIMIT_KW,
+    PEAK_LIMIT_STEP_KW,
+    DEFAULT_PEAK_LIMIT_UNLIMITED,
 )
 from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -495,9 +499,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "enable_charger_notifications": True,
             "enable_mobile_notifications": False,
             "mobile_notification_service": "",
-            # Load management — only target_peak_limit is asked at install,
-            # everything else uses safe defaults that the user can tune later.
+            # Load management — the grid ceiling used to be asked at install
+            # (#717 removed that field: it duplicated the live Control-tab
+            # slider and the Configure fallback, see docs/UI_PATTERNS.md).
+            # Every value here is a safe default the user can tune later.
             "load_management_enabled": DEFAULT_LOAD_MANAGEMENT_ENABLED,
+            "target_peak_limit": DEFAULT_TARGET_PEAK_LIMIT,
+            "peak_limit_unlimited": DEFAULT_PEAK_LIMIT_UNLIMITED,
             "warning_peak_level": DEFAULT_WARNING_PEAK_LEVEL,
             "emergency_peak_level": DEFAULT_EMERGENCY_PEAK_LEVEL,
             # #442 slim install: explicit empty EV chargers list so
@@ -511,13 +519,16 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_hardware(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Final install step: ask only the genuinely hardware-dependent values.
+        """Final install step: dashboard style + auto-detected hardware.
 
-        Asks the user for the home battery capacity and the grid peak limit
-        (both vary by install and have no universal default). Auto-detects
-        the inverter's battery discharge control entity from the entity
-        registry. All other tunables are filled from ``_install_defaults()``
-        so the coordinator boots with a complete config dict.
+        The grid peak limit used to be asked here too, but it duplicated the
+        live Control-tab slider and the Configure options-flow fallback —
+        three places to set one number (#717). It now seeds from
+        ``DEFAULT_TARGET_PEAK_LIMIT`` like every other tunable and is tuned
+        post-install. Auto-detects the inverter's battery discharge control
+        entity from the entity registry. All other tunables are filled from
+        ``_install_defaults()`` so the coordinator boots with a complete
+        config dict.
         """
         errors: dict[str, str] = {}
 
@@ -593,14 +604,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="hardware",
             data_schema=vol.Schema({
-                vol.Required(
-                    "target_peak_limit",
-                    default=DEFAULT_TARGET_PEAK_LIMIT,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=2.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
-                    )
-                ),
                 # Opt-in: generate the SEM Lovelace dashboard right after the
                 # config entry is created. The post-setup hook in __init__.py
                 # consumes this flag exactly once and clears it from
@@ -854,6 +857,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "minimum_solar_power",
     "mobile_notification_service",
     "observer_mode",
+    "peak_limit_unlimited",
     "phase_guard_enabled",
     "phase_guard_enforcement_enabled",
     "phase_guard_notifications_enabled",
@@ -2131,8 +2135,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_heat_pump()
+            # (#717) The three levels are an ordered ladder, and getting the
+            # order wrong is silently destructive rather than merely odd: an
+            # emergency level at or below the target means ``LoadManager``
+            # escalates to EMERGENCY shedding before the target it is meant
+            # to defend is even reached. Raising the target and leaving the
+            # other two at their old values is the easy way to land here, so
+            # say so instead of saving it.
+            #
+            # (#716) An install with no grid ceiling has no ladder to order,
+            # so skip the check rather than force three meaningless numbers
+            # into line before the user can save the opt-out.
+            _target = float(user_input.get("target_peak_limit", 0) or 0)
+            _warn = float(user_input.get("warning_peak_level", 0) or 0)
+            _emerg = float(user_input.get("emergency_peak_level", 0) or 0)
+            if not user_input.get("peak_limit_unlimited", False):
+                if _warn >= _target:
+                    errors["warning_peak_level"] = "peak_warning_not_below_target"
+                if _emerg <= _target:
+                    errors["emergency_peak_level"] = "peak_emergency_not_above_target"
+
+            if not errors:
+                self._data.update(user_input)
+                return await self.async_step_heat_pump()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -2142,6 +2167,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "target_peak_limit": _c("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
             "warning_peak_level": _c("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
             "emergency_peak_level": _c("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
+            "peak_limit_unlimited": _c("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED),
         }
 
         return self.async_show_form(
@@ -2151,12 +2177,28 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "load_management_enabled",
                     default=data_defaults["load_management_enabled"],
                 ): selector.BooleanSelector(),
+                # (#716) The opt-out for installs whose grid connection is
+                # large enough that no household load can threaten it. Its own
+                # boolean, NOT ``load_management_enabled = False``: that switch
+                # only stops SEM *shedding*, while the ceiling still constrains
+                # everything SEM *sizes* (the EV night rate above all). Turning
+                # off shedding and silently going unlimited would hand an EV
+                # the whole house.
+                vol.Required(
+                    "peak_limit_unlimited",
+                    default=data_defaults["peak_limit_unlimited"],
+                ): selector.BooleanSelector(),
+                # (#717) All three share one range and a box input — see the
+                # install step for why a slider is wrong here. They used to
+                # cap at 15/15/20 kW, which no North-American service fits.
                 vol.Required(
                     "target_peak_limit",
                     default=data_defaults["target_peak_limit"],
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=1.0, max=15.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
                     )
                 ),
                 vol.Required(
@@ -2164,7 +2206,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=data_defaults["warning_peak_level"],
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=1.0, max=15.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
                     )
                 ),
                 vol.Required(
@@ -2172,7 +2216,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=data_defaults["emergency_peak_level"],
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=1.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
                     )
                 ),
             }),

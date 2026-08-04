@@ -181,6 +181,38 @@ def test_phase_guard_safety_controls_are_localized_in_every_language():
                 )
 
 
+def test_phase_guard_topology_copy_is_localized_in_every_language():
+    root = Path(__file__).resolve().parents[1]
+    english = json.loads(
+        (root / "translations" / "en.json").read_text(encoding="utf-8")
+    )
+    english_step = english["options"]["step"]["settings_phase_guard_topology"]
+    english_options = english["selector"]["phase_guard_topology"]["options"]
+
+    for path in sorted((root / "translations").glob("*.json")):
+        if path.name == "en.json":
+            continue
+        translation = json.loads(path.read_text(encoding="utf-8"))
+        step = translation["options"]["step"]["settings_phase_guard_topology"]
+        options = translation["selector"]["phase_guard_topology"]["options"]
+
+        assert step["title"] != english_step["title"], (path.name, "title")
+        assert step["description"] != english_step["description"], (
+            path.name,
+            "description",
+        )
+        for key in ("phase_guard_topology", "phase_guard_phase_count"):
+            assert step["data"][key] != english_step["data"][key], (
+                path.name,
+                key,
+            )
+            assert step["data_description"][key] != english_step["data_description"][
+                key
+            ], (path.name, key)
+        for key in ("disabled", "grid_only", "hybrid_load_port"):
+            assert options[key] != english_options[key], (path.name, key)
+
+
 def test_english_phase_guard_labels_explain_effect_without_internal_jargon():
     root = Path(__file__).resolve().parents[1]
     block = json.loads(

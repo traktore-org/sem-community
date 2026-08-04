@@ -11,10 +11,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.1] — 03.08.2026 *(unreleased — entries land at merge; header renumbers at tag if the 1.8 line opens first)*
+# [1.7.6-beta.1] — 04.08.2026
 
 ### 🐛 Fixes
 
+- ⚡ **The peak limit now goes up to 80 kW — and lives on one slider, not five ceilings**
+  (#717, reported by @Azlinon) — the target peak limit was capped at 15 kW in the options flow
+  (20 kW at install, 20 kW on the `update_target_peak` service, 15/20 kW on two dashboard
+  cards — five different ceilings across ten controls). A 200 A North-American service is
+  about 38 kW, so those installs could not enter their real grid ceiling and SEM sized every
+  load against a limit far below the truth. All ten controls now share one range,
+  **1–80 kW at 0.1 kW steps**, from single constants (`MIN_PEAK_LIMIT_KW` /
+  `MAX_PEAK_LIMIT_KW` / `PEAK_LIMIT_STEP_KW`) — a test scans each surface and fails if any
+  one of them hard-codes a ceiling again. The install wizard no longer asks for a peak limit
+  at all — every install starts at the 5 kW default (byte-identical to before) and you tune it
+  afterward from a single live control: a drag slider on the Control tab's Load Management
+  card, which reaches **"Uncapped"** at the top of its range (the #716 opt-out, below). The
+  same value is also editable as a precise kW number on the Configuration tab. Warning and
+  emergency are no longer separate entry fields — they're derived from the target at read
+  time (90 % / 120 %, unchanged ratios) and tucked behind an **"Advanced"** disclosure on the
+  Configuration tab, since almost nobody needs to touch them. The options flow still rejects
+  an out-of-order ladder (warning ≥ target, or emergency ≤ target) with a localized message in
+  all 16 languages instead of silently storing a configuration where emergency fires before
+  warning. Docs: [USER_GUIDE.md → Load Management
+  Settings](docs/USER_GUIDE.md#load-management-settings), [SETUP_GUIDE.md → Step
+  3](docs/SETUP_GUIDE.md#step-3-hardware-and-dashboard-settings),
+  [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#peak-load-management-not-working).
+- 🔌 **New "No grid limit" switch — peak management can now be turned off outright**
+  (#716, reported by @Azlinon) — raising the cap to 80 kW is not enough for a connection no
+  household load can threaten. Turning *Enable Load Management* off was never the answer: it
+  stops the shedding, but the target peak limit stays a **sizing** ceiling, so the EV charger
+  still capped its current against it. That is deliberate — "leave my loads alone" must not
+  silently mean "there is no limit" — so opting out is now its own explicit switch, reachable
+  either as a Configuration-tab toggle or by dragging the Control-tab slider to its top edge
+  (both flip the same `peak_limit_unlimited` flag). With it on, the EV controller sizes from
+  surplus alone, load management never escalates, and the kW fields disappear from the Config
+  card; your numbers stay in config and come back untouched when you turn it off. The flag is
+  a **boolean**, never `target_peak_limit == 0`: a zero
+  sentinel fails open, and a key nothing writes reads as zero and hands the EV the whole house
+  (that exact failure surfaced during the #638 shadow soak). A test scans the codebase and
+  fails if the sentinel is reintroduced. Two hardening fixes came with it — the
+  headroom→amps conversion saturates **before** rounding (`round(float('inf'))` raises
+  `OverflowError`), and an out-of-order peak ladder is repaired at read time: a stored
+  `emergency ≤ target` made the emergency branch win at the target itself, dumping every load
+  the instant the limit was touched, and the options flow is not the only writer
+  (`set_option` writes any key unvalidated). Docs: [USER_GUIDE.md → No grid
+  limit](docs/USER_GUIDE.md#no-grid-limit), [SETUP_GUIDE.md → Step
+  3](docs/SETUP_GUIDE.md#step-3-hardware-and-dashboard-settings),
+  [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#peak-load-management-not-working).
+- 🔧 **The "no grid limit" opt-out could lag a full restart behind the slider, in both
+  directions** (#716, found in review) — dragging the Control-tab slider to "Uncapped" writes
+  straight into the live load manager and deliberately skips a config-entry reload (a full
+  rebuild on every drag would be too heavy), so the EV controller's own copy of the flag —
+  read from the un-reloaded config — could still see the old value. Dragging to "Uncapped"
+  left the EV sizing against the old ceiling until a restart; dragging back down to a real
+  number left it sizing as if nothing constrained it, ignoring the limit just set. The EV
+  controller now reads the flag from the live load manager first, the same way it already
+  read the target kW value, falling back to config only when no load manager is wired up yet.
+- 🔧 **The shed ladder's own telemetry could publish an inverted warning/emergency pair**
+  (#717, found in review) — `get_load_management_data()` returned the raw stored
+  `warning_level`/`emergency_level`, not the ladder `_effective_levels()` repairs at read
+  time before `_monitor_and_shed()` acts on it. Nothing consumed those two keys from the dict
+  yet, so this was inert, but any future card or sensor reading them would have shown a ladder
+  that didn't match what shedding actually used. Now returns the repaired pair.
+- 🧪 **`services.yaml`'s peak-limit selector had no test tying it to the shared range**
+  (#717, found in review) — the `update_target_peak` service's Developer Tools selector
+  hardcodes `1.0`/`80.0` because YAML can't import `MIN_PEAK_LIMIT_KW`/`MAX_PEAK_LIMIT_KW`,
+  the same drift shape that caused #717 in the first place (five different hard-coded
+  ceilings, nobody comparing them). Added a guard that fails CI if the YAML ever falls out of
+  sync with the constants.
+- 🌐 **Six options-flow error messages rendered as raw keys** (found while fixing #717) —
+  HA resolves options-flow errors under `options.error`, not `config.error`
+  (`show-dialog-options-flow.ts` falls back to the bare key), and all of SEM's options-flow
+  errors were declared only in the config block. Two of them
+  (`deye_work_mode_mapping_not_distinct`, `deye_force_charge_work_mode_invalid`) were
+  declared nowhere at all — the #674 parity guard's regex could not see them because the
+  assignment is parenthesised. All seven now live in the right block in all 17 string files,
+  and the #674 guard was rewritten as an AST walk that attributes each error to the flow
+  class that assigns it, so a message declared in the wrong block now fails CI.
 - 🚗 **EV no longer overshoots the SOC target on slow/polled car sensors** (#708, reported by
   @Azlinon) — OnStar-class integrations poll the vehicle SOC as rarely as every 30 minutes, and
   SEM steered on the last value as if it were live: overshoot = sensor lag × charge power (60 %
@@ -27,7 +101,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ("Car: 55 % (28 min ago) · est. now ~59 %") explain both the early stop and any resume. The
   virtual/estimated SOC display is untouched, and the #446 wall (no speculative SOC in budgets)
   is re-pinned by an extended AST guard. Zero new config keys. Docs:
-  `docs/USER_GUIDE.md` → "Slow-polling SOC sensors (energy-accounted ceiling)".
+  [USER_GUIDE.md → Slow-polling SOC sensors (energy-accounted
+  ceiling)](docs/USER_GUIDE.md#slow-polling-soc-sensors-energy-accounted-ceiling).
+- 🌐 **Phase-guard topology setup step was untranslated in 15 of 16 languages** (by
+  @tintinz in #718, follow-up to #712) — the topology selector and its options rendered
+  in English regardless of profile language; now localized across all 16, with regression
+  coverage that fails CI if a non-English translation falls back to English copy. Silent-install
+  defaults stay fail-closed (an explicit valid topology is still required before the guard can
+  enforce), and a docstring now records that power-derived charger current can lag writes and
+  must not be read as an authoritative command floor. No control-path or actuation changes.
 
 ### ✨ Features
 

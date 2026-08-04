@@ -12,6 +12,7 @@ Mixin class providing all EV charging control logic:
 from __future__ import annotations
 
 import logging
+import math
 from datetime import timedelta
 from typing import Any, Optional
 
@@ -21,6 +22,7 @@ from ..const import (
     ChargingState,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_EV_TARGET_TIME,
+    DEFAULT_PEAK_LIMIT_UNLIMITED,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_VOLTAGE_PER_PHASE,
     EV_DEADLINE_LOOKAHEAD_HOURS,
@@ -30,6 +32,33 @@ from .ev_tariff_planner import NightChargePlan, plan_night_charge
 from .units import power_state_to_watts
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def amps_from_headroom(
+    headroom_w: float,
+    watts_per_amp: float,
+    min_amps: int,
+    max_amps: int,
+) -> int:
+    """Convert available watts to a charger current, clamped to [min, max].
+
+    The clamp happens BEFORE the round, which is the whole point (#716).
+    An install with no grid ceiling reports ``math.inf`` headroom, and
+    ``round(float('inf'))`` raises ``OverflowError`` — rounding first would
+    crash the EV control loop on exactly the installs the unlimited flag
+    exists to serve. Saturating first also costs nothing on the finite path:
+    a headroom that already exceeds ``max_amps`` was going to be clamped down
+    anyway.
+
+    ``watts_per_amp`` is floored at 1.0 to keep a zero/absent voltage config
+    from dividing by zero.
+    """
+    amps = headroom_w / max(1.0, watts_per_amp)
+    if amps >= max_amps:
+        return max_amps
+    if amps <= min_amps:
+        return min_amps
+    return min(max_amps, max(min_amps, round(amps)))
 
 
 class EVControlMixin:
@@ -161,9 +190,11 @@ class EVControlMixin:
                 committed_w += float(_sc.grid_funded_draw_w() or 0.0)
             except (TypeError, ValueError, AttributeError):
                 pass  # no controller / mock host — no load draw to reserve
-        peak_managed_amps = max(
+        peak_managed_amps = amps_from_headroom(
+            peak_limit_w - expected_home_w - committed_w,
+            watts_per_amp,
             min_amps,
-            min(max_amps, round((peak_limit_w - expected_home_w - committed_w) / watts_per_amp)),
+            max_amps,
         )
         peak_rate_kw = max(0.1, peak_managed_amps * watts_per_amp / 1000.0)
 
@@ -356,7 +387,21 @@ class EVControlMixin:
     }
 
     def _get_peak_limit_w(self) -> float:
-        """Get peak limit in watts from load manager or config."""
+        """Get peak limit in watts from load manager or config.
+
+        Returns ``math.inf`` when the install declared it has no grid ceiling
+        (#716, ``peak_limit_unlimited``). Callers must size against this via
+        :func:`amps_from_headroom`, which saturates before rounding —
+        ``round(float('inf'))`` raises ``OverflowError``.
+
+        Note what does NOT make this unlimited: ``load_management_enabled =
+        False``. That switch governs whether SEM *sheds* to defend the ceiling;
+        the ceiling itself still constrains anything SEM *sizes*. Unlimited is
+        an explicit boolean and never inferred — a limit that fails open is how
+        a 5 kW house got handed a 10 kW EV slot (#638 finding #5).
+        """
+        if self._peak_limit_unlimited():
+            return math.inf
         if self._load_manager:
             try:
                 lm_info = self._load_manager.get_load_management_data()
@@ -364,6 +409,31 @@ class EVControlMixin:
             except Exception:
                 pass
         return self.config.get("target_peak_limit", 5.0) * 1000
+
+    def _peak_limit_unlimited(self) -> bool:
+        """True when this install declared it has no grid ceiling (#716).
+
+        Prefers the live ``LoadManagementCoordinator`` value over
+        ``self.config`` — same reason ``_get_peak_limit_w()`` prefers it for
+        ``target_peak_limit`` three lines above: the Control-tab slider
+        writes through ``update_target_peak_limit()`` and deliberately skips
+        the config-entry reload (to avoid a full coordinator rebuild on
+        every drag), so ``self.config`` can sit stale — in either direction —
+        until the next restart. Reading ``self.config`` only here let the EV
+        controller miss a live "Uncapped" flip, and worse, keep charging
+        past a limit the user had just restored.
+        """
+        if self._load_manager:
+            try:
+                lm_info = self._load_manager.get_load_management_data()
+                return bool(
+                    lm_info.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
+                )
+            except Exception:
+                pass
+        return bool(
+            self.config.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
+        )
 
     def _get_peak_15min_w(self) -> Optional[float]:
         """Read the rolling 15-min consecutive peak (#288), in watts.
@@ -462,8 +532,7 @@ class EVControlMixin:
             headroom_w = (
                 self._get_peak_limit_w() - power.home_consumption_power - committed_w
             )
-        target = round(headroom_w / max(1.0, watts_per_amp))
-        return min(max_amps, max(min_amps, target))
+        return amps_from_headroom(headroom_w, watts_per_amp, min_amps, max_amps)
 
     # ``_calculate_solar_ev_budget`` removed in Phase D.2 (#282).
     # Was the legacy actuator-side budget formula that ran alongside the

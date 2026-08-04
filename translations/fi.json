@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Laitteisto",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Kotiakun kapasiteetti (kWh)",
-          "target_peak_limit": "Huipputehon raja (kW)",
           "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)",
           "diagram_style": "Järjestelmäkaavion tyyli"
         },
         "data_description": {
           "battery_capacity_kwh": "Kotiakkusi (EI sähköauton) käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Ennusteohjattu latausstrategia käyttää tätä arvioidakseen, kuinka paljon akku voi paikata aurinkovajetta. Tarkista invertterin tekniset tiedot.",
-          "target_peak_limit": "Suurin kW-teho, jonka verkkosopimuksesi sallii ennen kuin SEM alkaa pudottaa kuormia. Tehoperusteisissa tariffeissa tyypillisesti 3–5 kW; muussa tapauksessa aseta sulakekokosi jaettuna neljällä, jotta jää pelivaraa.",
           "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard.",
           "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen)."
         }
@@ -87,9 +85,7 @@
     "error": {
       "unknown": "Odottamaton virhe. Yritä uudelleen.",
       "entity_not_found": "Entiteettiä ei löytynyt. Tarkista, että entiteettitunnus on olemassa.",
-      "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready vaatii MOLEMMAT releentiteetit. Aseta molemmat releet — tai jätä molemmat tyhjiksi ja määritä vain ilmastointientiteetti pelkän ilmastoinnin asetusarvon boostia varten.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management on jo määritetty. Vain yksi instanssi sallittu.",
@@ -241,6 +237,7 @@
         "description": "Päivitä kuormanhallinnan määritykset",
         "data": {
           "load_management_enabled": "Ota kuormanhallinta käyttöön",
+          "peak_limit_unlimited": "Ei verkkorajaa",
           "target_peak_limit": "Huipputehon tavoiteraja (kW)",
           "warning_peak_level": "Varoitustason huipputeho (kW)",
           "emergency_peak_level": "Hätätason huipputeho (kW)",
@@ -250,9 +247,10 @@
         },
         "data_description": {
           "load_management_enabled": "Ota käyttöön tai poista käytöstä SEM:n automaattinen kuormien pudotus, jolla pysytään verkon huipputehorajan alapuolella.",
+          "peak_limit_unlimited": "Kytkee huipputehon hallinnan kokonaan pois: SEM ei enää mitoita kuormia tavoitehuipputehon mukaan eikä koskaan pudota kuormia sen suojaamiseksi. Vain liittymille, joita mikään kotitalouskuorma ei voi vaarantaa. Tämä on eri asia kuin ”Ota kuormanhallinta käyttöön”, joka pysäyttää vain pudotuksen mutta säilyttää rajan mitoituskattona.",
           "target_peak_limit": "Suurin verkkoteho (kW), jonka jälkeen SEM alkaa pudottaa ohjattavia kuormia.",
-          "warning_peak_level": "Tehotaso (kW), jolla SEM antaa varoituksen ennen toimenpiteitä.",
-          "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja.",
+          "warning_peak_level": "Tehotaso (kW), jolla SEM antaa varoituksen ennen toimenpiteitä. On oltava tavoitehuippurajan alapuolella.",
+          "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja. On oltava tavoitehuippurajan yläpuolella.",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina.",
           "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
@@ -427,15 +425,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Sähköinen topologia",
+        "description": "Valitse, miten talon kuorma syötetään. Hybridiasennuksessa sähköverkko ja invertterin Load/EPS/Backup-lähtö voivat syöttää taloa samanaikaisesti. Talon sisäinen kuorma voi siksi olla suurempi kuin pääsulakkeen läpi kulkeva virta. SEM valvoo kahta syöttöreittiä toisistaan riippumatta. Aktiivinen ohjaus on valinnainen; tarkista lukemat tarkkailutilassa ennen EV-ohjauksen käyttöönottoa.",
         "data": {
-          "phase_guard_topology": "Supply topology",
-          "phase_guard_phase_count": "Vaiheiden lukumäärä"
+          "phase_guard_topology": "Syöttötopologia",
+          "phase_guard_phase_count": "Vaiheiden määrä"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Valitse 1 yksivaiheiselle tai 3 kolmivaiheiselle syötölle. Vain valitut vaiheet ovat pakollisia ja niitä valvotaan."
+          "phase_guard_topology": "Valitse Vain sähköverkko tavalliselle asennukselle. Valitse Sähköverkko + hybridi-invertteri, kun kuormia syötetään myös Load-, EPS- tai Backup-lähdön kautta.",
+          "phase_guard_phase_count": "Valitse 1 yksivaiheiselle tai 3 kolmivaiheiselle syötölle. Vain valitut vaiheet vaaditaan ja niitä valvotaan."
         }
       },
       "settings_phase_guard": {
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Varoitustason on oltava tavoitehuippurajan alapuolella – se on ennakkovaroitus siitä, että tavoitetta lähestytään.",
+      "peak_emergency_not_above_target": "Hätätason on oltava tavoitehuippurajan yläpuolella – muuten SEM katkaisisi kuormia ennen kuin suojattava raja edes saavutetaan.",
+      "heat_pump_partial_relays": "SG-Ready vaatii MOLEMMAT releentiteetit. Aseta molemmat releet — tai jätä molemmat tyhjiksi ja määritä vain ilmastointientiteetti pelkän ilmastoinnin asetusarvon boostia varten.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode -ohjaus tarvitsee kaksi eri vaihtoehtoa – yhden Load First- ja yhden Battery First -tilalle. Valitse molemmat, älä samaa kahdesti.",
+      "deye_force_charge_work_mode_invalid": "Valitse, mitä Work Mode -tilaa SEM käyttää akun pakkolataukseen: Load First vai Battery First."
     }
   },
   "entity": {
@@ -1350,9 +1357,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Poistettu käytöstä",
+        "grid_only": "Vain verkkosyöttö",
+        "hybrid_load_port": "Sähköverkko + hybridi-invertterin Load/EPS-lähtö"
       }
     }
   }

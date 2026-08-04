@@ -1037,6 +1037,16 @@ class EnergyCalculator:
         A missing or unknown ``sun.sun`` means "do not gate": reconciliation
         keeps its pre-#681 behaviour rather than silently switching itself off
         on an install whose sun entity is absent.
+
+        This gate also covers the whole of an overnight charge, and not by
+        luck: ``TimeManager.get_night_window`` reads the SAME ``sun.sun`` and
+        clamps the window to ``max(sunset+10min, earliest_start)`` ..
+        ``min(sunrise, latest_end)``, so night charging is always a subset of
+        darkness. That matters because the counter passes grid power through
+        to the car at kW scale — far bigger than the 510 W house load this was
+        caught with. Relaxing either clamp to let a session run past sunrise
+        would start booking that pass-through as production again; the
+        tripwire is ``TestTheNightWindowLiesInsideTheGate``.
         """
         state = self._hass.states.get("sun.sun") if self._hass else None
         return bool(state) and getattr(state, "state", None) == "below_horizon"
