@@ -37,6 +37,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import voluptuous as vol
+import yaml
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.solar_energy_management.config_flow import (
@@ -136,6 +137,25 @@ def test_the_service_accepts_a_north_american_service():
     assert schema({"target_peak_limit": 38.4})["target_peak_limit"] == 38.4
     with pytest.raises(vol.Invalid):
         schema({"target_peak_limit": MAX_PEAK_LIMIT_KW + 1})
+
+
+def test_the_service_yaml_selector_matches_the_shared_range():
+    """``services.yaml`` cannot import ``MIN_PEAK_LIMIT_KW``/``MAX_PEAK_LIMIT_KW``
+    — YAML has no notion of a Python constant — so its ``update_target_peak``
+    selector is a hand-typed mirror of the same range every other surface in
+    this file derives from a shared import. That is exactly the shape that
+    already drifted once (#717): five different hard-coded ceilings across ten
+    controls, nobody noticing because nothing compared them. This pins the one
+    surface that structurally cannot use the import, so a future bump of the
+    constants can't leave the Developer Tools → Actions picker still offering
+    the old ceiling (found in review).
+    """
+    spec = yaml.safe_load((_ROOT / "services.yaml").read_text(encoding="utf-8"))
+    selector = (
+        spec["update_target_peak"]["fields"]["target_peak_limit"]["selector"]["number"]
+    )
+    assert selector["min"] == MIN_PEAK_LIMIT_KW
+    assert selector["max"] == MAX_PEAK_LIMIT_KW
 
 
 @pytest.mark.parametrize(

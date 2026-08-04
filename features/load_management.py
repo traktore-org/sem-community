@@ -1322,11 +1322,19 @@ class LoadManagementCoordinator:
                 self._is_device_currently_on(device_info))
         )
 
+        warning_level, emergency_level = self._effective_levels()
+
         return {
             "state": self._state,
             "target_peak_limit": self._target_peak_limit,
-            "warning_level": self._warning_level,
-            "emergency_level": self._emergency_level,
+            # (#717, found in review) repaired at read time, not the raw
+            # stored values — a consumer of this dict must see the same
+            # ladder _monitor_and_shed() actually shed against, not a stored
+            # ladder that could still be inverted (set_option writes with no
+            # validation; pre-#717 entries could predate the options-flow
+            # ordering check).
+            "warning_level": warning_level,
+            "emergency_level": emergency_level,
             # (#716) The label, not the number. The stored kW values stay as
             # they are and keep flowing to the sensors — no consumer of this
             # dict ever sees an infinity, so nothing downstream can render

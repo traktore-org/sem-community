@@ -68,6 +68,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   number left it sizing as if nothing constrained it, ignoring the limit just set. The EV
   controller now reads the flag from the live load manager first, the same way it already
   read the target kW value, falling back to config only when no load manager is wired up yet.
+- 🔧 **The shed ladder's own telemetry could publish an inverted warning/emergency pair**
+  (#717, found in review) — `get_load_management_data()` returned the raw stored
+  `warning_level`/`emergency_level`, not the ladder `_effective_levels()` repairs at read
+  time before `_monitor_and_shed()` acts on it. Nothing consumed those two keys from the dict
+  yet, so this was inert, but any future card or sensor reading them would have shown a ladder
+  that didn't match what shedding actually used. Now returns the repaired pair.
+- 🧪 **`services.yaml`'s peak-limit selector had no test tying it to the shared range**
+  (#717, found in review) — the `update_target_peak` service's Developer Tools selector
+  hardcodes `1.0`/`80.0` because YAML can't import `MIN_PEAK_LIMIT_KW`/`MAX_PEAK_LIMIT_KW`,
+  the same drift shape that caused #717 in the first place (five different hard-coded
+  ceilings, nobody comparing them). Added a guard that fails CI if the YAML ever falls out of
+  sync with the constants.
 - 🌐 **Six options-flow error messages rendered as raw keys** (found while fixing #717) —
   HA resolves options-flow errors under `options.error`, not `config.error`
   (`show-dialog-options-flow.ts` falls back to the bare key), and all of SEM's options-flow
