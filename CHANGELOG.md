@@ -15,6 +15,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixes
 
+- ⚡ **The peak limit now goes up to 80 kW, and the warning/emergency levels scale with it**
+  (#717, reported by @Azlinon) — the target peak limit was capped at 15 kW in the options flow
+  (20 kW at install, 20 kW on the `update_target_peak` service, 15/20 kW on two dashboard
+  cards — five different ceilings across ten controls). A 200 A North-American service is
+  about 38 kW, so those installs could not enter their real grid ceiling and SEM sized every
+  load against a limit far below the truth. All ten controls now share one range,
+  **1–80 kW at 0.1 kW steps**, from single constants (`MIN_PEAK_LIMIT_KW` /
+  `MAX_PEAK_LIMIT_KW` / `PEAK_LIMIT_STEP_KW`) — a test scans each surface and fails if any
+  one of them hard-codes a ceiling again. Raising only the target would have left a 38 kW
+  install emergency-shedding at 6.0 kW, so the install flow now **derives** the warning and
+  emergency levels from whatever you enter (90 % / 120 %); at the 5 kW default that
+  reproduces today's 4.5 / 6.0 exactly, so existing and default installs are byte-identical.
+  The options flow now rejects an out-of-order ladder (warning ≥ target, or emergency ≤
+  target) with a localized message in all 16 languages instead of silently storing a
+  configuration where emergency fires before warning. The kW fields became numeric boxes —
+  a 791-stop slider is not a way to enter a contract value. Docs: `USER_GUIDE.md`,
+  `SETUP_GUIDE.md`, `TROUBLESHOOTING.md`.
+- 🌐 **Six options-flow error messages rendered as raw keys** (found while fixing #717) —
+  HA resolves options-flow errors under `options.error`, not `config.error`
+  (`show-dialog-options-flow.ts` falls back to the bare key), and all of SEM's options-flow
+  errors were declared only in the config block. Two of them
+  (`deye_work_mode_mapping_not_distinct`, `deye_force_charge_work_mode_invalid`) were
+  declared nowhere at all — the #674 parity guard's regex could not see them because the
+  assignment is parenthesised. All seven now live in the right block in all 17 string files,
+  and the #674 guard was rewritten as an AST walk that attributes each error to the flow
+  class that assigns it, so a message declared in the wrong block now fails CI.
 - 🚗 **EV no longer overshoots the SOC target on slow/polled car sensors** (#708, reported by
   @Azlinon) — OnStar-class integrations poll the vehicle SOC as rarely as every 30 minutes, and
   SEM steered on the last value as if it were live: overshoot = sensor lag × charge power (60 %

@@ -46,7 +46,7 @@
         },
         "data_description": {
           "battery_capacity_kwh": "Total brukbar kapasitet på husbatteriet ditt (IKKE elbilen) i kWh. Brukes av den prognosestyrte ladestrategien til å anslå hvor mye batteriet kan dekke et solunderskudd. Se spesifikasjonen for inverteren din.",
-          "target_peak_limit": "Maksimalt antall kW nettavtalen din tillater før SEM begynner å koble ut laster. For effekttariffer typisk 3–5 kW; ellers setter du sikringsstørrelsen delt på 4 for å ha margin.",
+          "target_peak_limit": "Maksimalt nettuttak (kW) som SEM skal holde seg under. Hent verdien fra strømavtalen eller hovedsikringen – rundt 3–5 kW på en europeisk effekttariff, omtrent 38 kW for en nordamerikansk 200 A-tilkobling. SEM skalerer varsel- og nødnivåene sine etter denne verdien.",
           "generate_dashboard_on_install": "Når dette er aktivert, oppretter SEM Lovelace-dashbordet umiddelbart etter at dette steget er fullført, og starter deretter Home Assistant på nytt etter ca. 5 s slik at det nye dashbordet blir synlig. Du kan alltid kjøre det manuelt senere via tjenesten solar_energy_management.generate_dashboard.",
           "diagram_style": "Velg systemdiagram på Hjem-fanen. 'SEM' bruker det innebygde animerte diagrammet. 'K-Flow' bruker K-Flow HACS-kortet (må installeres separat)."
         }
@@ -87,9 +87,7 @@
     "error": {
       "unknown": "En uventet feil oppstod. Vennligst prøv igjen.",
       "entity_not_found": "Entiteten ble ikke funnet. Kontroller at entitets-ID-en finnes.",
-      "service_not_found": "Varslingstjenesten ble ikke funnet. Kontroller tjenestenavnet (f.eks. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready krever BEGGE reléentitetene. Angi begge reléene — eller la begge stå tomme og konfigurer kun klimaentiteten for settpunkt-boost i kun-klima-modus.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Varslingstjenesten ble ikke funnet. Kontroller tjenestenavnet (f.eks. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management er allerede konfigurert. Bare én instans er tillatt.",
@@ -251,8 +249,8 @@
         "data_description": {
           "load_management_enabled": "Slå av/på SEMs automatiske utkobling av laster for å holde seg under nettets topplastgrense.",
           "target_peak_limit": "Maksimal nettoeffekt (kW) før SEM begynner å koble ut styrbare laster.",
-          "warning_peak_level": "Effektnivået (kW) der SEM gir en advarsel før den griper inn.",
-          "emergency_peak_level": "Effektnivået (kW) der SEM aggressivt kobler ut laster for å unngå effekttariffkostnader.",
+          "warning_peak_level": "Effektnivået (kW) der SEM gir en advarsel før den griper inn. Må være under mål-toppgrensen.",
+          "emergency_peak_level": "Effektnivået (kW) der SEM aggressivt kobler ut laster for å unngå effekttariffkostnader. Må være over mål-toppgrensen.",
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh.",
           "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Varslingstjenesten ble ikke funnet. Kontroller tjenestenavnet (f.eks. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Varselnivået må være under mål-toppgrensen – det er den tidlige varslingen om at målet nærmer seg.",
+      "peak_emergency_not_above_target": "Nødnivået må være over mål-toppgrensen – ellers ville SEM koble ut laster før grensen den beskytter i det hele tatt nås.",
+      "heat_pump_partial_relays": "SG-Ready krever BEGGE reléentitetene. Angi begge reléene — eller la begge stå tomme og konfigurer kun klimaentiteten for settpunkt-boost i kun-klima-modus.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode-styring krever to forskjellige valg – ett for Load First og ett for Battery First. Velg begge, og ikke det samme to ganger.",
+      "deye_force_charge_work_mode_invalid": "Velg hvilken Work Mode SEM skal bruke til tvangslading av batteriet: Load First eller Battery First."
     }
   },
   "entity": {

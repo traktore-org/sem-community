@@ -46,7 +46,7 @@
         },
         "data_description": {
           "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
+          "target_peak_limit": "Maximum grid power (kW) SEM should stay under. Take it from your supply contract or main breaker — around 3–5 kW on a demand-based European tariff, about 38 kW for a 200 A North-American service. SEM scales its warning and emergency shedding levels to this number.",
           "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
           "diagram_style": "Choose which system diagram card to use on the Home tab. 'SEM' uses the built-in animated diagram. 'K-Flow' uses the K-Flow HACS card (must be installed separately)."
         }
@@ -87,9 +87,7 @@
     "error": {
       "unknown": "An unexpected error occurred. Please try again.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
-      "service_not_found": "Notification service not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Notification service not found. Please check the service name (e.g., notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management is already configured. Only one instance is allowed.",
@@ -251,8 +249,8 @@
         "data_description": {
           "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
           "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
-          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
-          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
+          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action. Must be below the target peak limit.",
+          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges. Must be above the target peak limit.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Notification service not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Warning level must be below the target peak limit — it is the early alert that the target is being approached.",
+      "peak_emergency_not_above_target": "Emergency level must be above the target peak limit — otherwise SEM sheds loads before the limit it protects is even reached.",
+      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode control needs two different options — one for Load First and one for Battery First. Pick both, and make sure they are not the same option.",
+      "deye_force_charge_work_mode_invalid": "Choose which Work Mode SEM should use to force-charge the battery: Load First or Battery First."
     }
   },
   "entity": {

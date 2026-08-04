@@ -46,7 +46,7 @@
         },
         "data_description": {
           "battery_capacity_kwh": "Capacità utilizzabile totale della tua batteria domestica (NON quella del VE) in kWh. Usata dalla strategia di carica basata sulle previsioni per stimare quanta batteria può compensare un deficit solare. Controlla le specifiche del tuo inverter.",
-          "target_peak_limit": "Massimo dei kW consentiti dal tuo contratto di rete prima che SEM inizi il distacco dei carichi. Per le tariffe basate sulla potenza impegnata tipicamente 3–5 kW; altrimenti imposta il valore del tuo interruttore diviso 4 per lasciare margine.",
+          "target_peak_limit": "Potenza di rete massima (kW) che SEM non deve superare. Prendila dal contratto di fornitura o dall'interruttore generale: circa 3–5 kW con una tariffa europea a potenza impegnata, circa 38 kW per un allacciamento nordamericano da 200 A. SEM adatta a questo valore i livelli di avviso ed emergenza.",
           "generate_dashboard_on_install": "Se attivata, SEM crea la dashboard Lovelace subito dopo la fine di questo passo e poi riavvia Home Assistant ~5 s dopo, così la nuova dashboard diventa visibile. Puoi sempre rieseguirla manualmente in seguito tramite il servizio solar_energy_management.generate_dashboard.",
           "diagram_style": "Scegli quale diagramma di sistema usare nella scheda Home. 'SEM' usa il diagramma animato integrato. 'K-Flow' usa la scheda K-Flow HACS (da installare separatamente)."
         }
@@ -87,9 +87,7 @@
     "error": {
       "unknown": "Si è verificato un errore imprevisto. Riprova.",
       "entity_not_found": "Entità non trovata. Verifica che l'ID entità esista.",
-      "service_not_found": "Servizio di notifica non trovato. Verifica il nome del servizio (ad es. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready richiede ENTRAMBE le entità relè. Imposta entrambi i relè — oppure lasciali entrambi vuoti e configura solo l'entità climate per il boost del setpoint in modalità solo-climate.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Servizio di notifica non trovato. Verifica il nome del servizio (ad es. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management è già configurato. È consentita una sola istanza.",
@@ -251,8 +249,8 @@
         "data_description": {
           "load_management_enabled": "Attiva/disattiva il distacco automatico dei carichi di SEM per restare sotto il tuo limite di picco di rete.",
           "target_peak_limit": "Potenza di rete massima (kW) prima che SEM inizi a distaccare i carichi controllabili.",
-          "warning_peak_level": "Livello di potenza (kW) al quale SEM emette un avviso prima di intervenire.",
-          "emergency_peak_level": "Livello di potenza (kW) al quale SEM distacca i carichi in modo aggressivo per evitare costi di potenza impegnata.",
+          "warning_peak_level": "Livello di potenza (kW) al quale SEM emette un avviso prima di intervenire. Deve essere inferiore al limite di picco obiettivo.",
+          "emergency_peak_level": "Livello di potenza (kW) al quale SEM distacca i carichi in modo aggressivo per evitare costi di potenza impegnata. Deve essere superiore al limite di picco obiettivo.",
           "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh.",
           "ev_target_soc": "SOC obiettivo (%) al quale SEM considera il VE completamente carico."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Servizio di notifica non trovato. Verifica il nome del servizio (ad es. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Il livello di avviso deve essere inferiore al limite di picco obiettivo: è l'allerta anticipata che l'obiettivo si sta avvicinando.",
+      "peak_emergency_not_above_target": "Il livello di emergenza deve essere superiore al limite di picco obiettivo, altrimenti SEM staccherebbe i carichi prima di raggiungere il limite che protegge.",
+      "heat_pump_partial_relays": "SG-Ready richiede ENTRAMBE le entità relè. Imposta entrambi i relè — oppure lasciali entrambi vuoti e configura solo l'entità climate per il boost del setpoint in modalità solo-climate.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Il controllo Work Mode richiede due opzioni diverse: una per Load First e una per Battery First. Selezionale entrambe e non due volte la stessa.",
+      "deye_force_charge_work_mode_invalid": "Scegli con quale Work Mode SEM deve forzare la carica della batteria: Load First o Battery First."
     }
   },
   "entity": {

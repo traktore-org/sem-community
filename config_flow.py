@@ -37,6 +37,11 @@ from .const import (
     DEFAULT_EMERGENCY_PEAK_LEVEL,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     DEFAULT_OBSERVER_MODE,
+    WARNING_PEAK_RATIO,
+    EMERGENCY_PEAK_RATIO,
+    MIN_PEAK_LIMIT_KW,
+    MAX_PEAK_LIMIT_KW,
+    PEAK_LIMIT_STEP_KW,
 )
 from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -47,6 +52,29 @@ from .hardware_detection import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def derive_peak_levels(target_kw: float) -> tuple[float, float]:
+    """(#717) Scale the warning and emergency levels to the target peak.
+
+    The install flow asks for one number — the grid limit — and fills the
+    rest silently. Filling the two shed thresholds with fixed kilowatts only
+    works next to a European-sized target: ``LoadManager`` escalates to
+    EMERGENCY at ``peak >= emergency_level``, so a North-American 200 A
+    service (38 kW) paired with the old flat 6.0 kW emergency level would
+    start shedding loads at an oven plus a dryer, on a house nowhere near
+    its limit.
+
+    Returns ``(warning, emergency)`` rounded to the same 0.1 kW step the
+    form uses. At the 5.0 kW default this returns exactly ``(4.5, 6.0)`` —
+    the values that were hard-coded before — so a default install is
+    unchanged.
+    """
+    target = max(MIN_PEAK_LIMIT_KW, min(MAX_PEAK_LIMIT_KW, float(target_kw)))
+    return (
+        round(target * WARNING_PEAK_RATIO, 1),
+        round(target * EMERGENCY_PEAK_RATIO, 1),
+    )
 
 
 def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
@@ -534,6 +562,16 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 merged.update(self._data)
                 merged.update(user_input)
 
+                # (#717) The two shed thresholds follow whatever target the
+                # user just entered. ``_install_defaults()`` seeded them with
+                # the 5 kW-shaped constants; leaving those next to a 38 kW
+                # target would have SEM emergency-shedding at 6 kW.
+                _warn, _emerg = derive_peak_levels(
+                    merged.get("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT)
+                )
+                merged["warning_peak_level"] = _warn
+                merged["emergency_peak_level"] = _emerg
+
                 discharge_entity = discover_inverter_from_registry(
                     self.hass, self._energy_dashboard_config
                 )
@@ -597,8 +635,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "target_peak_limit",
                     default=DEFAULT_TARGET_PEAK_LIMIT,
                 ): selector.NumberSelector(
+                    # (#717) A box, not a slider: this is a number the user
+                    # reads off a contract or a main breaker (5.0 kW, 38.4 kW),
+                    # and a 1-80 slider at 0.1 steps is 791 stops of nothing.
                     selector.NumberSelectorConfig(
-                        min=2.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
                     )
                 ),
                 # Opt-in: generate the SEM Lovelace dashboard right after the
@@ -2131,8 +2174,24 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_heat_pump()
+            # (#717) The three levels are an ordered ladder, and getting the
+            # order wrong is silently destructive rather than merely odd: an
+            # emergency level at or below the target means ``LoadManager``
+            # escalates to EMERGENCY shedding before the target it is meant
+            # to defend is even reached. Raising the target and leaving the
+            # other two at their old values is the easy way to land here, so
+            # say so instead of saving it.
+            _target = float(user_input.get("target_peak_limit", 0) or 0)
+            _warn = float(user_input.get("warning_peak_level", 0) or 0)
+            _emerg = float(user_input.get("emergency_peak_level", 0) or 0)
+            if _warn >= _target:
+                errors["warning_peak_level"] = "peak_warning_not_below_target"
+            if _emerg <= _target:
+                errors["emergency_peak_level"] = "peak_emergency_not_above_target"
+
+            if not errors:
+                self._data.update(user_input)
+                return await self.async_step_heat_pump()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -2151,12 +2210,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "load_management_enabled",
                     default=data_defaults["load_management_enabled"],
                 ): selector.BooleanSelector(),
+                # (#717) All three share one range and a box input — see the
+                # install step for why a slider is wrong here. They used to
+                # cap at 15/15/20 kW, which no North-American service fits.
                 vol.Required(
                     "target_peak_limit",
                     default=data_defaults["target_peak_limit"],
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=1.0, max=15.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
                     )
                 ),
                 vol.Required(
@@ -2164,7 +2228,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=data_defaults["warning_peak_level"],
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=1.0, max=15.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
                     )
                 ),
                 vol.Required(
@@ -2172,7 +2238,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=data_defaults["emergency_peak_level"],
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=1.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
                     )
                 ),
             }),

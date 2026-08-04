@@ -46,7 +46,7 @@
         },
         "data_description": {
           "battery_capacity_kwh": "A házi akkumulátor (NEM az EV) teljes hasznos kapacitása kWh-ban. Az előrejelzés-vezérelt töltési stratégia ez alapján becsli meg, mekkora napenergia-hiányt tud az akkumulátor áthidalni. Nézze meg az inverter műszaki adatait.",
-          "target_peak_limit": "A maximális kW, amelyet a hálózati szerződése megenged, mielőtt a SEM megkezdi a terheléslekapcsolást. Teljesítménydíjas tarifáknál jellemzően 3–5 kW; egyébként állítsa a biztosíték névleges értékének negyedére, hogy maradjon tartalék.",
+          "target_peak_limit": "A maximális hálózati teljesítmény (kW), amely alatt a SEM-nek maradnia kell. Vegye ki a szolgáltatási szerződésből vagy a főbiztosítékból – európai teljesítménydíjas tarifánál nagyjából 3–5 kW, egy észak-amerikai 200 A-es bekötésnél körülbelül 38 kW. A SEM ehhez az értékhez skálázza a figyelmeztetési és vészszintjét.",
           "generate_dashboard_on_install": "Bekapcsolva a SEM közvetlenül e lépés befejezése után létrehozza a Lovelace irányítópultot, majd kb. 5 másodperccel később újraindítja a Home Assistantot, hogy az új irányítópult láthatóvá váljon. Ezt később bármikor újrafuttathatja kézzel a solar_energy_management.generate_dashboard szolgáltatással.",
           "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő)."
         }
@@ -87,9 +87,7 @@
     "error": {
       "unknown": "Váratlan hiba történt. Kérjük, próbálja újra.",
       "entity_not_found": "Az entitás nem található. Ellenőrizze, hogy az entitásazonosító létezik-e.",
-      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "Az SG-Ready MINDKÉT relé entitást igényli. Állítsa be mindkét relét — vagy hagyja mindkettőt üresen, és csak a climate entitást konfigurálja a kizárólag climate alapú célhőmérséklet-emeléshez.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "A Solar Energy Management már konfigurálva van. Csak egy példány engedélyezett.",
@@ -251,8 +249,8 @@
         "data_description": {
           "load_management_enabled": "A SEM automatikus terheléslekapcsolásának be- és kikapcsolása, hogy a hálózati csúcskorlát alatt maradjon.",
           "target_peak_limit": "Az a maximális hálózati teljesítmény (kW), amely felett a SEM megkezdi a vezérelhető terhelések lekapcsolását.",
-          "warning_peak_level": "Az a teljesítményszint (kW), amelynél a SEM figyelmeztetést ad ki, mielőtt beavatkozna.",
-          "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében.",
+          "warning_peak_level": "Az a teljesítményszint (kW), amelynél a SEM figyelmeztetést ad ki, mielőtt beavatkozna. A cél csúcsteljesítmény-korlát alatt kell lennie.",
+          "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében. A cél csúcsteljesítmény-korlát fölött kell lennie.",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban.",
           "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Az értesítési szolgáltatás nem található. Ellenőrizze a szolgáltatás nevét (pl. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "A figyelmeztetési szintnek a cél csúcsteljesítmény-korlát alatt kell lennie – ez a korai jelzés, hogy a cél közeledik.",
+      "peak_emergency_not_above_target": "A vészszintnek a cél csúcsteljesítmény-korlát fölött kell lennie – különben a SEM már azelőtt lekapcsolna fogyasztókat, hogy a védett korlátot elérné.",
+      "heat_pump_partial_relays": "Az SG-Ready MINDKÉT relé entitást igényli. Állítsa be mindkét relét — vagy hagyja mindkettőt üresen, és csak a climate entitást konfigurálja a kizárólag climate alapú célhőmérséklet-emeléshez.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "A Work Mode vezérléshez két különböző opció kell – egy a Load First és egy a Battery First számára. Válassza ki mindkettőt, és ne ugyanazt kétszer.",
+      "deye_force_charge_work_mode_invalid": "Válassza ki, melyik Work Mode móddal töltse a SEM kényszerítve az akkumulátort: Load First vagy Battery First."
     }
   },
   "entity": {

@@ -29,6 +29,7 @@ not happen to open that particular step in that particular language.
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -186,9 +187,35 @@ class TestConfigFlowStringsResolve674:
     All three are the same silent-by-construction shape as the parity failure:
     HA falls back to *something* renderable for a missing key, so the flow still
     opens and no test fails.
+
+    **#717 reopened this in two places.** The error scan was a regex, and it
+    compared everything it found against ``config.error`` alone:
+
+    * ``errors[k] = ("some_key")`` — the parenthesised form black formats a long
+      assignment into — never matched ``errors\\[…\\]\\s*=\\s*"…"``. Two Deye
+      validation errors were declared in *no* file and nothing noticed. Bug
+      class 8 again, one level below the guard that exists to catch it: the
+      scan's own blind spot is invisible to the scan.
+    * The options flow does not read ``config.error``. frontend's
+      ``show-dialog-options-flow.ts`` localises against
+      ``component.<domain>.options.error.<key>`` and falls back to the bare key,
+      so ``heat_pump_partial_relays`` and friends — set only inside
+      ``OptionsFlowHandler`` — rendered as ``heat_pump_partial_relays`` in every
+      language while sitting fully translated under ``config.error``, where no
+      code path can reach them.
+
+    So the scan is now an AST walk that attributes each assignment to its
+    enclosing class, and each flow is checked against the block HA actually
+    resolves it in.
     """
 
     _FLOW = _ROOT / "config_flow.py"
+
+    # class name in config_flow.py -> strings.json block HA localises it under
+    _FLOW_BLOCKS = {
+        "SolarEnergyManagementConfigFlow": "config",
+        "OptionsFlowHandler": "options",
+    }
 
     # HA sets this one itself via _abort_if_unique_id_configured(), so it is
     # declared-but-never-literally-written and must not read as dead.
@@ -200,28 +227,80 @@ class TestConfigFlowStringsResolve674:
     def _config_block(self, name: str) -> dict:
         return json.loads(_STRINGS.read_text(encoding="utf-8"))["config"][name]
 
+    def _assigned_errors(self) -> dict[str, set[str]]:
+        """``errors[...] = "key"`` per enclosing flow class, via AST.
+
+        AST rather than regex because the string may be parenthesised, wrapped
+        over lines, or both — see the class docstring. Anything that is not a
+        plain string constant is reported as such rather than skipped: a
+        computed error key cannot be checked against the strings, and silently
+        ignoring it is how the blind spot got there in the first place.
+        """
+        found: dict[str, set[str]] = {name: set() for name in self._FLOW_BLOCKS}
+        dynamic: list[str] = []
+
+        def walk(node, cls=None):
+            for child in ast.iter_child_nodes(node):
+                inner = child.name if isinstance(child, ast.ClassDef) else cls
+                if isinstance(child, ast.Assign):
+                    for target in child.targets:
+                        if not (
+                            isinstance(target, ast.Subscript)
+                            and isinstance(target.value, ast.Name)
+                            and target.value.id == "errors"
+                        ):
+                            continue
+                        value = child.value
+                        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                            found.setdefault(inner, set()).add(value.value)
+                        else:
+                            dynamic.append(f"{self._FLOW.name}:{child.lineno}")
+                walk(child, inner)
+
+        walk(ast.parse(self._src()))
+        assert not dynamic, (
+            f"errors[...] assigned a non-literal at {dynamic} — this guard cannot "
+            "verify it resolves. Use a literal key (#674)."
+        )
+        unexpected = set(found) - set(self._FLOW_BLOCKS)
+        assert not unexpected, (
+            f"errors[...] set outside a known flow class: {sorted(unexpected)}. "
+            f"Add it to _FLOW_BLOCKS with the strings.json block HA localises "
+            "it under, or the keys it sets go unchecked (#674)."
+        )
+        return found
+
     def test_the_scans_find_something(self):
         """Bug class 8 — every assertion below compares two scanned sets, so a
         regex that stopped matching would make all of them pass on empty."""
         src = self._src()
         assert len(src) > 50_000, "config_flow.py shrank unexpectedly"
-        assert re.findall(r'errors\[[^\]]+\]\s*=\s*"([a-z_]+)"', src)
+        assigned = self._assigned_errors()
+        for cls in self._FLOW_BLOCKS:
+            assert assigned[cls], f"no errors[...] assignments found in {cls}"
         assert re.findall(r'reason\s*=\s*"([a-z_]+)"', src)
         assert re.findall(r"description_placeholders\s*=\s*\{", src)
 
     def test_every_error_key_is_both_declared_and_reachable(self):
-        declared = set(self._config_block("error"))
-        assigned = set(re.findall(r'errors\[[^\]]+\]\s*=\s*"([a-z_]+)"', self._src()))
-        assert not (assigned - declared), (
-            f"config_flow.py sets errors the strings do not declare: "
-            f"{sorted(assigned - declared)} — the user sees the raw key (#674)"
-        )
-        assert not (declared - assigned), (
-            f"config.error keys nothing ever assigns: {sorted(declared - assigned)}. "
-            "Every language pays to translate these and no user can reach them. "
-            "Delete them, or wire up the validation that was meant to set them "
-            "(#674)."
-        )
+        strings = json.loads(_STRINGS.read_text(encoding="utf-8"))
+        assigned = self._assigned_errors()
+
+        for cls, block in self._FLOW_BLOCKS.items():
+            declared = set(strings[block].get("error", {}))
+            used = assigned[cls]
+            assert not (used - declared), (
+                f"{cls} sets errors {block}.error does not declare: "
+                f"{sorted(used - declared)} — the user sees the raw key. HA "
+                f"localises this flow's errors under {block}.error and nowhere "
+                "else, so declaring them in the other block does not count (#674)."
+            )
+            assert not (declared - used), (
+                f"{block}.error keys no code path in {cls} assigns: "
+                f"{sorted(declared - used)}. Every language pays to translate "
+                "these and no user can reach them. Delete them, move them to the "
+                "block whose flow actually sets them, or wire up the validation "
+                "that was meant to set them (#674)."
+            )
 
     def test_every_abort_reason_has_a_message(self):
         declared = set(self._config_block("abort"))

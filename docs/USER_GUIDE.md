@@ -130,10 +130,18 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `load_management_enabled` | false | Enable peak load management |
-| `target_peak_limit` | 5 kW | Target peak power limit (1-15 kW) |
-| `warning_peak_level` | — | Warning threshold (1-15 kW) |
-| `emergency_peak_level` | — | Emergency shedding threshold (1-20 kW) |
+| `target_peak_limit` | 5 kW | Maximum grid power SEM stays under (1–80 kW) |
+| `warning_peak_level` | 90% of target | Warning threshold — must be **below** the target (1–80 kW) |
+| `emergency_peak_level` | 120% of target | Emergency shedding threshold — must be **above** the target (1–80 kW) |
 | `critical_device_protection` | — | Protect critical loads from shedding |
+
+`target_peak_limit` is your **grid connection ceiling**, not a tariff preference —
+take it from your supply contract or main breaker. Around 3–5 kW on a
+demand-based European tariff; about 38 kW for a 200 A North-American service
+(200 A × 240 V × 0.8). At install SEM derives the warning and emergency levels
+from it (90% / 120%), so a 38 kW service does not inherit the 4.5 kW / 6.0 kW
+levels that suit a 5 kW one. All three accept **1–80 kW**, and the options flow
+rejects an out-of-order ladder (warning ≥ target, or emergency ≤ target).
 
 ### Other Settings
 

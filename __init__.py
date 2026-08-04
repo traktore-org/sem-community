@@ -32,7 +32,7 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN
+from .const import DOMAIN, MIN_PEAK_LIMIT_KW, MAX_PEAK_LIMIT_KW
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
@@ -3154,8 +3154,12 @@ async def _async_register_services(
             "update_target_peak",
             async_update_target_peak,
             schema=vol.Schema({
+                # (#717) Same range as the config flow. A hard-coded 20 kW
+                # here silently rejected any service larger than a European
+                # fuse box even once the form allowed it.
                 vol.Required("target_peak_limit"): vol.All(
-                    vol.Coerce(float), vol.Range(min=1.0, max=20.0)
+                    vol.Coerce(float),
+                    vol.Range(min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW),
                 ),
             }),
         )

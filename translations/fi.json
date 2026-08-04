@@ -46,7 +46,7 @@
         },
         "data_description": {
           "battery_capacity_kwh": "Kotiakkusi (EI sähköauton) käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Ennusteohjattu latausstrategia käyttää tätä arvioidakseen, kuinka paljon akku voi paikata aurinkovajetta. Tarkista invertterin tekniset tiedot.",
-          "target_peak_limit": "Suurin kW-teho, jonka verkkosopimuksesi sallii ennen kuin SEM alkaa pudottaa kuormia. Tehoperusteisissa tariffeissa tyypillisesti 3–5 kW; muussa tapauksessa aseta sulakekokosi jaettuna neljällä, jotta jää pelivaraa.",
+          "target_peak_limit": "Suurin verkosta otettava teho (kW), jonka alle SEM pyrkii jäämään. Ota arvo sähkösopimuksesta tai pääsulakkeesta – noin 3–5 kW eurooppalaisella tehotariffilla, noin 38 kW pohjoisamerikkalaisessa 200 A:n liittymässä. SEM skaalaa varoitus- ja hätätasonsa tämän arvon mukaan.",
           "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard.",
           "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen)."
         }
@@ -87,9 +87,7 @@
     "error": {
       "unknown": "Odottamaton virhe. Yritä uudelleen.",
       "entity_not_found": "Entiteettiä ei löytynyt. Tarkista, että entiteettitunnus on olemassa.",
-      "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready vaatii MOLEMMAT releentiteetit. Aseta molemmat releet — tai jätä molemmat tyhjiksi ja määritä vain ilmastointientiteetti pelkän ilmastoinnin asetusarvon boostia varten.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management on jo määritetty. Vain yksi instanssi sallittu.",
@@ -251,8 +249,8 @@
         "data_description": {
           "load_management_enabled": "Ota käyttöön tai poista käytöstä SEM:n automaattinen kuormien pudotus, jolla pysytään verkon huipputehorajan alapuolella.",
           "target_peak_limit": "Suurin verkkoteho (kW), jonka jälkeen SEM alkaa pudottaa ohjattavia kuormia.",
-          "warning_peak_level": "Tehotaso (kW), jolla SEM antaa varoituksen ennen toimenpiteitä.",
-          "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja.",
+          "warning_peak_level": "Tehotaso (kW), jolla SEM antaa varoituksen ennen toimenpiteitä. On oltava tavoitehuippurajan alapuolella.",
+          "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja. On oltava tavoitehuippurajan yläpuolella.",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina.",
           "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Ilmoituspalvelua ei löytynyt. Tarkista palvelun nimi (esim. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Varoitustason on oltava tavoitehuippurajan alapuolella – se on ennakkovaroitus siitä, että tavoitetta lähestytään.",
+      "peak_emergency_not_above_target": "Hätätason on oltava tavoitehuippurajan yläpuolella – muuten SEM katkaisisi kuormia ennen kuin suojattava raja edes saavutetaan.",
+      "heat_pump_partial_relays": "SG-Ready vaatii MOLEMMAT releentiteetit. Aseta molemmat releet — tai jätä molemmat tyhjiksi ja määritä vain ilmastointientiteetti pelkän ilmastoinnin asetusarvon boostia varten.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode -ohjaus tarvitsee kaksi eri vaihtoehtoa – yhden Load First- ja yhden Battery First -tilalle. Valitse molemmat, älä samaa kahdesti.",
+      "deye_force_charge_work_mode_invalid": "Valitse, mitä Work Mode -tilaa SEM käyttää akun pakkolataukseen: Load First vai Battery First."
     }
   },
   "entity": {

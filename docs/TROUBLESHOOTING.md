@@ -296,7 +296,9 @@ read-only by design — SEM can't suppress it), but the cards will load.
 **Fix:**
 1. Go to **Settings > Devices & Services > Solar Energy Management > Configure**
 2. Verify `load_management_enabled` is checked
-3. Set a realistic `target_peak_limit` (e.g., 5.0 kW for a typical household)
+3. Set a realistic `target_peak_limit` — your grid connection ceiling, from the
+   supply contract or main breaker (e.g. 5.0 kW for a typical European household,
+   about 38 kW for a 200 A North-American service). The field accepts 1–80 kW.
 4. Check that controllable devices have been discovered: `sensor.sem_controllable_devices_count` should be > 0
 5. The 15-minute rolling average (`sensor.sem_consecutive_peak_15min`) must exceed the target before shedding activates
 

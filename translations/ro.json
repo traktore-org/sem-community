@@ -46,7 +46,7 @@
         },
         "data_description": {
           "battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei casnice (NU a celei din EV), în kWh. Folosită de strategia de încărcare bazată pe prognoză pentru a estima cât poate acoperi bateria dintr-un deficit solar. Consultați specificațiile invertorului.",
-          "target_peak_limit": "Numărul maxim de kW permis de contractul dumneavoastră de rețea înainte ca SEM să înceapă delestarea sarcinilor. Pentru tarifele bazate pe putere, de obicei 3–5 kW; altfel setați valoarea siguranței principale împărțită la 4, pentru a păstra o rezervă.",
+          "target_peak_limit": "Puterea maximă din rețea (kW) sub care SEM trebuie să rămână. Preluați valoarea din contractul de furnizare sau de pe siguranța generală – circa 3–5 kW la un tarif european bazat pe putere, aproximativ 38 kW la un branșament nord-american de 200 A. SEM își scalează nivelurile de avertizare și de urgență după această valoare.",
           "generate_dashboard_on_install": "Când este activat, SEM creează tabloul de bord Lovelace imediat după încheierea acestui pas și apoi repornește Home Assistant după circa 5 s, pentru ca noul tablou de bord să devină vizibil. Îl puteți regenera oricând manual mai târziu prin serviciul solar_energy_management.generate_dashboard.",
           "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat)."
         }
@@ -87,9 +87,7 @@
     "error": {
       "unknown": "A apărut o eroare neașteptată. Vă rugăm să încercați din nou.",
       "entity_not_found": "Entitatea nu a fost găsită. Verificați dacă ID-ul entității există.",
-      "service_not_found": "Serviciul de notificare nu a fost găsit. Verificați numele serviciului (de ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready necesită AMBELE entități de releu. Setați ambele relee — sau lăsați-le pe ambele goale și configurați doar entitatea climate pentru stimularea punctului de referință doar prin climate.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Serviciul de notificare nu a fost găsit. Verificați numele serviciului (de ex. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management este deja configurat. Este permisă o singură instanță.",
@@ -251,8 +249,8 @@
         "data_description": {
           "load_management_enabled": "Activează/dezactivează delestarea automată a sarcinilor de către SEM pentru a rămâne sub limita de vârf a rețelei.",
           "target_peak_limit": "Puterea maximă din rețea (kW) înainte ca SEM să înceapă delestarea sarcinilor controlabile.",
-          "warning_peak_level": "Nivelul de putere (kW) la care SEM emite o avertizare înainte de a lua măsuri.",
-          "emergency_peak_level": "Nivelul de putere (kW) la care SEM delestează agresiv sarcinile pentru a evita taxele de putere.",
+          "warning_peak_level": "Nivelul de putere (kW) la care SEM emite o avertizare înainte de a lua măsuri. Trebuie să fie sub limita de vârf țintă.",
+          "emergency_peak_level": "Nivelul de putere (kW) la care SEM delestează agresiv sarcinile pentru a evita taxele de putere. Trebuie să fie peste limita de vârf țintă.",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh.",
           "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat."
@@ -483,6 +481,15 @@
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
       }
+    },
+    "error": {
+      "service_not_found": "Serviciul de notificare nu a fost găsit. Verificați numele serviciului (de ex. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Nivelul de avertizare trebuie să fie sub limita de vârf țintă – este alerta timpurie că ținta este atinsă.",
+      "peak_emergency_not_above_target": "Nivelul de urgență trebuie să fie peste limita de vârf țintă – altfel SEM ar deconecta consumatori înainte ca limita protejată să fie atinsă.",
+      "heat_pump_partial_relays": "SG-Ready necesită AMBELE entități de releu. Setați ambele relee — sau lăsați-le pe ambele goale și configurați doar entitatea climate pentru stimularea punctului de referință doar prin climate.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Controlul Work Mode are nevoie de două opțiuni diferite – una pentru Load First și una pentru Battery First. Alegeți-le pe amândouă, nu de două ori aceeași.",
+      "deye_force_charge_work_mode_invalid": "Alegeți ce Work Mode trebuie să folosească SEM pentru încărcarea forțată a bateriei: Load First sau Battery First."
     }
   },
   "entity": {

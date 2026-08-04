@@ -429,7 +429,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="peak-box" style="margin-bottom:16px">
                         <span class="dim">${this._t('adjust_target_peak')}</span>
                         <div class="target-row">
-                            <input type="number" id="targetInput" min="1" max="20" step="0.1" .value="${String(this.targetPeakLimit)}">
+                            <input type="number" id="targetInput" min="1" max="80" step="0.1" .value="${String(this.targetPeakLimit)}">
                             <span class="dim">kW</span>
                             <button id="setTargetBtn">${this._t('set')}</button>
                         </div>
@@ -972,9 +972,15 @@ class SEMLoadPriorityCard extends SEMLitBase {
             setBtn.addEventListener('click', () => {
                 const input = root.getElementById('targetInput');
                 const val = parseFloat(input?.value);
-                if (val && val > 0 && val <= 20) {
-                    this.targetPeakLimit = val;
-                    this._sendTargetPeakUpdate(val);
+                // (#717) Clamp rather than drop. This used to bail out
+                // silently above 20 kW: the user typed their real service
+                // size, pressed Set, and absolutely nothing happened — no
+                // change, no error. Keep the guard, but make it land on the
+                // nearest legal value so the button always does something.
+                if (Number.isFinite(val) && val > 0) {
+                    const clamped = Math.min(80, Math.max(1, val));
+                    this.targetPeakLimit = clamped;
+                    this._sendTargetPeakUpdate(clamped);
                     this.requestUpdate();
                 }
             });

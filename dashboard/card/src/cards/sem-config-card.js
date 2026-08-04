@@ -1793,12 +1793,12 @@ class SEMConfigCard extends SEMLitBase {
             </div>
             ${this._renderOptionToggle('load_management_enabled', 'config_lm_enabled',
                 opts, 'config_help_lm_enabled', true)}
-            ${this._renderOptionSlider('target_peak_limit', 'config_lm_target_peak',
-                { min: 1.0, max: 15.0, step: 0.5, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
-            ${this._renderOptionSlider('warning_peak_level', 'config_lm_warning_peak',
-                { min: 1.0, max: 15.0, step: 0.5, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
-            ${this._renderOptionSlider('emergency_peak_level', 'config_lm_emergency_peak',
-                { min: 1.0, max: 20.0, step: 0.5, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+            ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
+                { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
+            ${this._renderOptionNumberInput('warning_peak_level', 'config_lm_warning_peak',
+                { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
+            ${this._renderOptionNumberInput('emergency_peak_level', 'config_lm_emergency_peak',
+                { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
         `;
     }
 

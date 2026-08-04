@@ -199,7 +199,7 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| **Target peak limit (kW)** | 5.0 kW | Maximum grid import before SEM starts shedding controllable loads. Set to your electricity contract's peak demand limit, or 0 to disable peak management |
+| **Target peak limit (kW)** | 5.0 kW | Maximum grid power SEM should stay under — your grid connection ceiling, from the supply contract or main breaker. Around 3–5 kW on a demand-based European tariff, about 38 kW for a 200 A North-American service. Accepts 1–80 kW; SEM scales its warning (90%) and emergency (120%) shedding levels to whatever you enter |
 | **Generate dashboard** | On | Creates the SEM Lovelace dashboard in your sidebar immediately after setup. Leave this on unless you want to build your own dashboard |
 | **System diagram style** | SEM | Choose which system diagram card appears on the Home tab. **SEM** uses the built-in illustrated diagram with SVG animations. **K-Flow** uses the third-party K-Flow card (must be installed via HACS separately) |
 
