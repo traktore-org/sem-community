@@ -42,6 +42,26 @@ const WATCHED_SUFFIXES = [
     'forecast_today_kwh', 'controllable_devices_count',
 ];
 
+// Synodic month + a known new-moon epoch, used only when sensor.moon isn't
+// present. Accurate to a few hours — far beyond what a ~40px disc resolves
+// (#711).
+const SYNODIC_MONTH_MS = 29.530589 * 86400000;
+const MOON_EPOCH_MS = Date.parse('2000-01-06T18:14:00Z');
+
+// sensor.moon (HA core Moon integration, optional) reports one of these 8
+// discrete phase names. Map each to the illuminated fraction (k) and
+// waxing/waning the two-arc render path needs.
+const MOON_STATE_PHASE = {
+    new_moon:        { k: 0.00, waxing: true },
+    waxing_crescent: { k: 0.25, waxing: true },
+    first_quarter:   { k: 0.50, waxing: true },
+    waxing_gibbous:  { k: 0.75, waxing: true },
+    full_moon:       { k: 1.00, waxing: true },
+    waning_gibbous:  { k: 0.75, waxing: false },
+    last_quarter:    { k: 0.50, waxing: false },
+    waning_crescent: { k: 0.25, waxing: false },
+};
+
 class SEMSystemDiagramCard extends SEMLitBase {
     // Reactive properties exist ONLY for values driven by the rAF counter tick
     // and the sun-arc measure loop. Everything else flows through render()
@@ -463,6 +483,24 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 const todaySunrise = nextRiseTs - 86400000;
                 const dayLength = nextSetTs - todaySunrise;
                 if (dayLength > 0) pos = (now - todaySunrise) / dayLength;
+            } else if (isNight && nextRiseTs && nextSetTs) {
+                // Night clock, not an ephemeris: maps sunset -> next sunrise
+                // onto the same arc, mirroring the day-progress calc above.
+                // sun.sun carries no moonrise/moonset, and a real lunar
+                // ephemeris would often place the moon below the horizon for
+                // much of the night — deliberate simplification (#711). Do
+                // not "fix" this toward real moon times without solving that
+                // problem first.
+                //
+                // Direction is inverted vs. the day calc: the arc's pos=0 is
+                // anchored at sunrise (left) and pos=1 at sunset (right), the
+                // same points the day-time sun walks 0→1 through. The night
+                // starts where the day ended (sunset, pos=1) and ends where
+                // the next day starts (sunrise, pos=0), so pos must count
+                // DOWN from 1 to 0 as the night progresses, not up.
+                const sunset = nextSetTs - 86400000;
+                const nightLength = nextRiseTs - sunset;
+                if (nightLength > 0) pos = 1 - (now - sunset) / nightLength;
             } else {
                 pos = (nextRiseTs && now < nextRiseTs) ? 0 : 1;
             }
@@ -470,6 +508,28 @@ class SEMSystemDiagramCard extends SEMLitBase {
         }
         const scale = isNight ? 0.7 : (0.7 + 0.6 * Math.min(1, solar / 10000));
         return { pos, scale, isNight, solar };
+    }
+
+    // Pure helper: illuminated fraction {k, waxing}. Prefers sensor.moon (HA
+    // core Moon integration) so this card agrees with any other moon card on
+    // the dashboard; otherwise computes from the date (#711).
+    _computeMoonPhase() {
+        const state = this._hass?.states['sensor.moon']?.state;
+        if (state && MOON_STATE_PHASE[state]) return MOON_STATE_PHASE[state];
+        const age = (((Date.now() - MOON_EPOCH_MS) % SYNODIC_MONTH_MS) + SYNODIC_MONTH_MS) % SYNODIC_MONTH_MS;
+        const p = age / SYNODIC_MONTH_MS;
+        return { k: (1 - Math.cos(2 * Math.PI * p)) / 2, waxing: p < 0.5 };
+    }
+
+    // Pure helper: two-arc SVG path for a moon disc of radius R at
+    // illuminated fraction k (0=new, 1=full). Outer semicircle + terminator
+    // ellipse with rx = R·|1-2k|; sweep flips at the quarters (k=0.5) and
+    // mirrors for waning so the lit limb sits on the correct side (#711).
+    _moonPhasePath(R, k, waxing) {
+        const rx = (R * Math.abs(1 - 2 * k)).toFixed(2);
+        const outerSweep = waxing ? 1 : 0;
+        const termSweep = k < 0.5 ? 1 - outerSweep : outerSweep;
+        return `M 0 ${-R} A ${R} ${R} 0 0 ${outerSweep} 0 ${R} A ${rx} ${R} 0 0 ${termSweep} 0 ${-R} Z`;
     }
 
     // ── Static CSS ──
@@ -537,6 +597,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // Sun pose (pure)
         const pose = this._computeSunPose();
         const { isNight } = pose;
+        const moonPhase = isNight ? this._computeMoonPhase() : { k: 0, waxing: true };
         const sunOpacity = isNight ? 0.3 : 0.85;
         const sparkOpacity = solar > 50 ? Math.min(1, 0.3 + solar / 5000) : 0;
 
@@ -790,8 +851,14 @@ class SEMSystemDiagramCard extends SEMLitBase {
                         <g style="display:${isNight ? 'block' : 'none'}"
                            transform="${this._moonTransform ?? ''}">
                             <circle cx="${L.sunX}" cy="${L.sunY}" r="${L.sunR}" fill="#1a2540"/>
-                            <circle cx="${L.sunX + L.sunR * 0.38}" cy="${L.sunY - L.sunR * 0.22}"
-                                    r="${L.sunR * 0.78}" fill="#0d1a30"/>
+                            ${moonPhase.k > 0.03 ? svg`<circle cx="${L.sunX}" cy="${L.sunY}"
+                                    r="${(L.sunR + 3 + 5 * moonPhase.k).toFixed(1)}" fill="none"
+                                    stroke="rgba(240,236,216,${(0.09 * moonPhase.k).toFixed(2)})"
+                                    stroke-width="4"/>` : nothing}
+                            <g transform="translate(${L.sunX},${L.sunY})">
+                                <path d="${this._moonPhasePath(L.sunR, moonPhase.k, moonPhase.waxing)}"
+                                      fill="#f0ecd8"/>
+                            </g>
                             <circle cx="${L.sunX}" cy="${L.sunY}" r="${L.sunR}"
                                     fill="none" stroke="rgba(200,220,255,0.5)" stroke-width="1"/>
                         </g>
