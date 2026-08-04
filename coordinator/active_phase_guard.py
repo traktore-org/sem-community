@@ -254,6 +254,11 @@ class ActivePhaseGuard:
             or power_w < 0
         ):
             return None
+        # The power-derived current can lag a just-issued charger write by one
+        # or more coordinator cycles. Use it as the baseline for incremental
+        # headroom accounting, never as an authoritative command floor;
+        # treating it as one could re-issue an unsafe current while a reduction
+        # is still settling.
         current_a = power_w / (phases * voltage)
         if not math.isfinite(current_a):
             return None

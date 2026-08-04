@@ -425,15 +425,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Topologie electrică",
+        "description": "Alegeți modul în care este alimentată locuința. Într-o instalație hibridă, rețeaua și ieșirea Load/EPS/Backup a invertorului pot alimenta locuința în același timp. Sarcina din interiorul locuinței poate fi, prin urmare, mai mare decât curentul prin siguranța principală. SEM monitorizează cele două căi în mod independent. Intervenția activă este opțională; verificați citirile în Modul Observator înainte de a activa controlul EV.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Topologia alimentării",
           "phase_guard_phase_count": "Număr de faze"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Selectați 1 pentru o alimentare monofazată sau 3 pentru o alimentare trifazată. Doar fazele selectate sunt obligatorii și sunt monitorizate."
+          "phase_guard_topology": "Selectați Numai rețea pentru o instalație convențională. Selectați Rețea + invertor hibrid atunci când sarcinile sunt alimentate și printr-o ieșire Load, EPS sau Backup.",
+          "phase_guard_phase_count": "Selectați 1 pentru o alimentare monofazată sau 3 pentru o alimentare trifazată. Doar fazele selectate sunt necesare și monitorizate."
         }
       },
       "settings_phase_guard": {
@@ -1354,9 +1354,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Dezactivat",
+        "grid_only": "Doar alimentare din rețea",
+        "hybrid_load_port": "Rețea + ieșire Load/EPS a invertorului hibrid"
       }
     }
   }

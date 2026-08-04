@@ -425,15 +425,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektrisk topologi",
+        "description": "Vælg, hvordan husets belastning forsynes. I en hybridinstallation kan elnettet og inverterens Load/EPS/Backup-udgang forsyne huset samtidig. Belastningen i huset kan derfor være højere end strømmen gennem hovedsikringen. SEM overvåger de to forsyningsveje uafhængigt. Aktiv indgriben er valgfri; kontrollér målingerne i observatørtilstand, før EV-styring aktiveres.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Forsyningstopologi",
           "phase_guard_phase_count": "Antal faser"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Vælg 1 for en enkeltfaset forsyning eller 3 for en trefaset forsyning. Kun de valgte faser kræves og overvåges."
+          "phase_guard_topology": "Vælg Kun elnet for en almindelig installation. Vælg Elnet + hybridinverter, når belastninger også forsynes via en Load-, EPS- eller Backup-udgang.",
+          "phase_guard_phase_count": "Vælg 1 for enfaset forsyning eller 3 for trefaset forsyning. Kun de valgte faser er påkrævede og overvåges."
         }
       },
       "settings_phase_guard": {
@@ -1354,9 +1354,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Deaktiveret",
+        "grid_only": "Kun elforsyning fra nettet",
+        "hybrid_load_port": "Elnet + hybridinverterens Load/EPS-udgang"
       }
     }
   }

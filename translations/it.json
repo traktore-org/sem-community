@@ -425,15 +425,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Topologia elettrica",
+        "description": "Scegli come viene alimentato il carico dell'abitazione. In un'installazione ibrida, la rete e l'uscita Load/EPS/Backup dell'inverter possono alimentare la casa contemporaneamente. Il carico all'interno della casa può quindi essere superiore alla corrente che attraversa il fusibile principale. SEM monitora i due percorsi in modo indipendente. L'intervento attivo è facoltativo; verifica le letture in modalità Osservatore prima di abilitare il controllo EV.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Topologia di alimentazione",
           "phase_guard_phase_count": "Numero di fasi"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Selezionare 1 per un'alimentazione monofase o 3 per un'alimentazione trifase. Solo le fasi selezionate sono richieste e monitorate."
+          "phase_guard_topology": "Seleziona Solo rete per un'installazione convenzionale. Seleziona Rete + inverter ibrido quando i carichi sono alimentati anche tramite un'uscita Load, EPS o Backup.",
+          "phase_guard_phase_count": "Seleziona 1 per un'alimentazione monofase o 3 per un'alimentazione trifase. Solo le fasi selezionate sono richieste e monitorate."
         }
       },
       "settings_phase_guard": {
@@ -1354,9 +1354,9 @@
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Disattivato",
+        "grid_only": "Solo alimentazione di rete",
+        "hybrid_load_port": "Rete + uscita Load/EPS dell'inverter ibrido"
       }
     }
   }
