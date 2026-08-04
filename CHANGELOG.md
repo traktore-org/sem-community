@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.1] — 03.08.2026 *(unreleased — entries land at merge; header renumbers at tag if the 1.8 line opens first)*
+# [1.7.6-beta.1] — 04.08.2026
 
 ### 🐛 Fixes
 
@@ -103,6 +103,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is re-pinned by an extended AST guard. Zero new config keys. Docs:
   [USER_GUIDE.md → Slow-polling SOC sensors (energy-accounted
   ceiling)](docs/USER_GUIDE.md#slow-polling-soc-sensors-energy-accounted-ceiling).
+- 🌐 **Phase-guard topology setup step was untranslated in 15 of 16 languages** (by
+  @tintinz in #718, follow-up to #712) — the topology selector and its options rendered
+  in English regardless of profile language; now localized across all 16, with regression
+  coverage that fails CI if a non-English translation falls back to English copy. Silent-install
+  defaults stay fail-closed (an explicit valid topology is still required before the guard can
+  enforce), and a docstring now records that power-derived charger current can lag writes and
+  must not be read as an authoritative command floor. No control-path or actuation changes.
 
 ### ✨ Features
 
