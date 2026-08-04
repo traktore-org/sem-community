@@ -517,6 +517,23 @@ exact residual of the six rows published beside it.
 - The *instantaneous* `sensor.sem_home_consumption_power` is unchanged (see ADR 0004) — only the
   daily energy row moved to the balance.
 
+## Charging stopped before my car app showed the target (slow SOC sensors)
+
+**This is intentional (v1.7.6, #708).** Some car integrations (OnStar and similar) poll the
+vehicle SOC as rarely as every 30 minutes. Steering on such a stale value used to overshoot the
+target by *sensor lag × charge power* — a 60 % target could land at 67 %. SEM now also tracks the
+energy it actually delivered during the session: when *last reading + delivered energy* says the
+target is reached, charging stops even though the car sensor still shows the old value.
+
+- The charger card shows the reasoning live: `Car: 55 % (28 min ago) · est. now ~59 %`, and
+  "Target reached — ~60 % estimated" after the stop. A mobile notification explains it too.
+- When the sensor finally updates: if it confirms the target, nothing happens. If it lands
+  **below** the target, SEM automatically resumes for the difference — you may see one or two
+  short top-ups spaced by the sensor's polling interval. That is the feature keeping your
+  "at least X %" promise, not flapping.
+- The battery gauge always shows exactly what your car reports — the estimate only ever appears
+  in the info line, and only while the sensor is stale during a session.
+
 ## Energy values spiked after integration update or restart
 
 **Cause:** When a hardware integration (e.g. Huawei Solar) restarts or updates, its sensors go `unavailable` briefly. When they come back, SEM's energy integrator could multiply the returned power value by the entire gap duration, producing unrealistic energy spikes (e.g. 40+ kWh battery discharge on a 15 kWh battery).

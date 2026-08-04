@@ -2320,6 +2320,25 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # Per-charger plan rows (#464) — {cid: [rows…]}.
                 "per_charger_plans": _per_charger_plans,
             })
+        elif (self.entity_description.key.startswith("charger_")
+              and self.entity_description.key.endswith("_estimated_soc")):
+            # #708 — the stale-sensor overshoot guard rides as attributes
+            # of the per-charger Estimated SOC sensor (no new entities):
+            # the session energy-accounted SOC and whether it is what
+            # currently holds the charge stopped. The card's info line
+            # reads these; sensor age is computed client-side from the
+            # vehicle_soc mirror's own last_changed (no churn here).
+            cid_708 = self.entity_description.key[
+                len("charger_"):-len("_estimated_soc")
+            ]
+            attrs.update({
+                "energy_accounted_soc": self.coordinator.data.get(
+                    f"charger_{cid_708}_energy_accounted_soc"
+                ),
+                "estimate_stop_active": self.coordinator.data.get(
+                    f"charger_{cid_708}_estimate_stop_active"
+                ),
+            })
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data
