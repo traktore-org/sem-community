@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "De twee laatste waardes zijn afhankelijk van je installatie:\n\n• Thuis Batterij capaciteit — de bruikbare capaciteit van je thuis batterij.\n• Piek Vermogen Limiet. Het maximale aantal kW dat uw energie leverancier toestaat voordat SEM begint met het afschakelen van de energie verbruikers. — \n\nSEM detecteert automatich je omvormer ontlaad schakelaar entity: {discharge_entity}\n\nLaat deze optie aan staan zodat SEM automatisch je dashboards creeert. **Let op!!: Home Assistant rwordt automatisch opnieuw opgestart na 5 seconden nadat de installatie voltooid is.**\n\nGebruik verder de (veilige) standaard waardes, deze kan je altijd achteraf nog wijzigen.",
+        "description": "Laatste stap! SEM heeft de ontlaad-besturingsentiteit van je omvormer automatisch gedetecteerd: {discharge_entity}\n\nLaat de dashboardoptie AAN staan zodat SEM automatisch je Lovelace-dashboard voor je aanmaakt. **Let op: dit veroorzaakt ongeveer 5 seconden na het voltooien van de installatie een herstart van Home Assistant.**\n\nVoor al het overige — inclusief je piekvermogenlimiet — gebruikt SEM veilige standaardwaardes die je direct na de installatie kunt aanpassen: de piekvermogenlimiet via de schuifregelaar op het tabblad **Besturing**, de rest via het tabblad **Configuratie** van het SEM-dashboard — waaronder EV-laders, warmtepomp, tarief en batterijzones.",
         "data": {
           "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
-          "target_peak_limit": "Piek Vermogen Limiet (kW)",
           "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)",
           "diagram_style": "Systeemdiagram stijl"
         },
         "data_description": {
           "battery_capacity_kwh": "Totale capaciteit van je thuis batterij in kWh. Wordt gebruikt om voorspellingen te doen ten behoeve van de laad en ontlaad strategie.",
-          "target_peak_limit": "Maximaal netvermogen (kW) waaronder SEM moet blijven. Neem de waarde uit uw leveringscontract of hoofdzekering — ongeveer 3–5 kW bij een Europees capaciteitstarief, circa 38 kW bij een Noord-Amerikaanse 200 A-aansluiting. SEM schaalt zijn waarschuwings- en noodniveaus mee met deze waarde.",
           "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen.",
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren)."
         }

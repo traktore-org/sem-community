@@ -139,10 +139,21 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 `target_peak_limit` is your **grid connection ceiling**, not a tariff preference —
 take it from your supply contract or main breaker. Around 3–5 kW on a
 demand-based European tariff; about 38 kW for a 200 A North-American service
-(200 A × 240 V × 0.8). At install SEM derives the warning and emergency levels
-from it (90% / 120%), so a 38 kW service does not inherit the 4.5 kW / 6.0 kW
-levels that suit a 5 kW one. All three accept **1–80 kW**, and the options flow
-rejects an out-of-order ladder (warning ≥ target, or emergency ≤ target).
+(200 A × 240 V × 0.8). Every install starts at the 5 kW default — SEM no
+longer asks for a peak limit during setup — and warning/emergency are derived
+from whatever you set **at read time** (90% / 120%, recalculated on every
+poll), so a 38 kW service is never stuck with the 4.5 kW / 6.0 kW levels that
+suit a 5 kW one. All three accept **1–80 kW**, and the options flow rejects an
+out-of-order ladder (warning ≥ target, or emergency ≤ target).
+
+Two places to change it after install:
+- **Control tab** — the Load Management card's slider is the fast path: drag
+  to any value between 1 and 80 kW, or all the way to the top for **Uncapped**
+  (the No grid limit opt-out below). Changes apply live, no restart needed.
+- **Configuration tab** — the same value as a precise kW number field, for
+  when you want an exact figure rather than a drag. Warning and emergency
+  aren't separate fields anymore; they live behind an **Advanced** disclosure
+  here, since almost nobody needs to touch the derived ratios.
 
 #### No grid limit
 
@@ -713,7 +724,7 @@ SEM monitors rolling 15-minute average power and progressively sheds loads to st
 
 When the peak drops back below the target, SEM restores devices **only if they were ON before shedding**. Devices that were already off are not turned on.
 
-Enable via integration options. Requires controllable devices with switch entities.
+Enable via **Enable Load Management** on the Configuration tab. Requires controllable devices with switch entities. For the target/warning/emergency range, the Control-tab slider, and the **No grid limit** opt-out, see [Load Management Settings](#load-management-settings).
 
 ---
 

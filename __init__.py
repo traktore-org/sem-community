@@ -3145,8 +3145,14 @@ async def _async_register_services(
             )
 
         target = call.data.get("target_peak_limit")
-        await coordinator._load_manager.update_target_peak_limit(float(target))
-        _LOGGER.info("Updated target peak limit to %.1f kW", target)
+        unlimited = call.data.get("peak_limit_unlimited")
+        await coordinator._load_manager.update_target_peak_limit(
+            float(target), unlimited=unlimited
+        )
+        _LOGGER.info(
+            "Updated target peak limit to %.1f kW%s", target,
+            "" if unlimited is None else f" (unlimited={unlimited})",
+        )
 
     try:
         hass.services.async_register(
@@ -3161,6 +3167,11 @@ async def _async_register_services(
                     vol.Coerce(float),
                     vol.Range(min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW),
                 ),
+                # (#717 redesign) Optional: the Control-tab slider sends this
+                # alongside the target in one atomic write when the drag
+                # lands on the MAX notch. Omitted by callers that only ever
+                # touch the numeric ceiling (e.g. an automation).
+                vol.Optional("peak_limit_unlimited"): cv.boolean,
             }),
         )
         _LOGGER.debug("Registered service: %s.update_target_peak", DOMAIN)

@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardver",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Házi akkumulátor kapacitása (kWh)",
-          "target_peak_limit": "Csúcsteljesítmény-korlát (kW)",
           "generate_dashboard_on_install": "SEM irányítópult létrehozása most (újraindítja a HA-t)",
           "diagram_style": "Rendszerdiagram stílusa"
         },
         "data_description": {
           "battery_capacity_kwh": "A házi akkumulátor (NEM az EV) teljes hasznos kapacitása kWh-ban. Az előrejelzés-vezérelt töltési stratégia ez alapján becsli meg, mekkora napenergia-hiányt tud az akkumulátor áthidalni. Nézze meg az inverter műszaki adatait.",
-          "target_peak_limit": "A maximális hálózati teljesítmény (kW), amely alatt a SEM-nek maradnia kell. Vegye ki a szolgáltatási szerződésből vagy a főbiztosítékból – európai teljesítménydíjas tarifánál nagyjából 3–5 kW, egy észak-amerikai 200 A-es bekötésnél körülbelül 38 kW. A SEM ehhez az értékhez skálázza a figyelmeztetési és vészszintjét.",
           "generate_dashboard_on_install": "Bekapcsolva a SEM közvetlenül e lépés befejezése után létrehozza a Lovelace irányítópultot, majd kb. 5 másodperccel később újraindítja a Home Assistantot, hogy az új irányítópult láthatóvá váljon. Ezt később bármikor újrafuttathatja kézzel a solar_energy_management.generate_dashboard szolgáltatással.",
           "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő)."
         }

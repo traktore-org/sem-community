@@ -35,6 +35,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         super();
         this.devices = [];
         this.targetPeakLimit = 5.0;
+        this.peakLimitUnlimited = false;  // (#716) explicit opt-out, never inferred
         this.currentPeak = 0;
         this.loadManagementStatus = 'normal';
         this._sortable = null;
@@ -143,11 +144,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .mono { font-variant-numeric:tabular-nums; font-weight:500; }
             .bar { width:100%; height:5px; background:var(--divider-color, rgba(128,128,128,0.12)); border-radius:3px; overflow:hidden; margin-top:8px; }
             .bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease, background 0.4s ease; }
-            .target-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
-            .target-row input { width:70px; padding:5px 8px; border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:8px; background:var(--card-background-color, rgba(0,0,0,0.2)); color:var(--primary-text-color); text-align:center; font-size:1em; }
-            .target-row input:focus { outline:none; border-color:#ff9800; }
-            .target-row button { padding:5px 14px; border:none; border-radius:8px; background:#ff9800; color:#fff; cursor:pointer; font-size:0.95em; }
-            .target-row button:hover { background:#e68900; }
             .section-label { font-size:0.95em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
             .device-list { min-height:40px; }
             .device { display:flex; align-items:stretch; background:var(--secondary-background-color, rgba(255,255,255,0.04)); border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:12px; margin-bottom:6px; transition:transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; overflow:hidden; backdrop-filter:blur(8px); }
@@ -262,6 +258,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .range-split:hover { background:rgba(0,0,0,0.75); }
             .range-handle-min { border:3px solid #8DC892; }
             .range-handle-max { border:3px solid #ff9800; }
+            .range-handle-peak { border:3px solid #488fc2; }
             /* EV charge-target look (#559 UI merge) */
             .goal-editor {
                 margin:8px 0 4px 28px; padding:10px 12px;
@@ -348,6 +345,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const devicesEntity     = this._hass.states[`${this.entityPrefix}controllable_devices_count`];
 
         if (targetPeakEntity)  this.targetPeakLimit      = parseFloat(targetPeakEntity.state)  || 5.0;
+        if (targetPeakEntity)  this.peakLimitUnlimited   = targetPeakEntity.attributes?.peak_limit_unlimited || false;
         if (currentPeakEntity) this.currentPeak          = parseFloat(currentPeakEntity.state) || 0;
         if (statusEntity)      this.loadManagementStatus = statusEntity.state || 'normal';
 
@@ -390,9 +388,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     render() {
         if (!this._config) return nothing;
 
+        const unlimited  = this.peakLimitUnlimited;
         const peakColor  = this._getPeakColor();
         const peakMargin = this.targetPeakLimit - this.currentPeak;
-        const peakPct    = this.targetPeakLimit > 0 ? Math.min((this.currentPeak / this.targetPeakLimit) * 100, 100) : 0;
+        const peakPct    = unlimited ? 0 : (this.targetPeakLimit > 0 ? Math.min((this.currentPeak / this.targetPeakLimit) * 100, 100) : 0);
 
         return html`
             <ha-card>
@@ -403,7 +402,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <div class="spacer"></div>
                         <span class="dim">${this._t('peak')}</span>
                         <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>
-                        <span class="dim">/ ${this.targetPeakLimit.toFixed(1)}</span>
+                        <span class="dim">/ ${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(1)}</span>
                         <button class="help-btn ${this._showHelp ? 'active' : ''}" data-action="toggle-help"
                                 title="${this._t('help')}">?</button>
                     </div>
@@ -415,12 +414,13 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         </div>
                         <div class="peak-row">
                             <span class="dim">${this._t('target_limit')}</span>
-                            <span id="peak-target" class="mono">${this.targetPeakLimit.toFixed(2)} kW</span>
+                            <span id="peak-target" class="mono">${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(2) + ' kW'}</span>
                         </div>
+                        ${unlimited ? nothing : html`
                         <div class="peak-row">
                             <span class="dim">${this._t('margin')}</span>
                             <span id="peak-margin" class="mono" style="color:${peakMargin > 0 ? '#4caf50' : '#f44336'}">${peakMargin.toFixed(2)} kW</span>
-                        </div>
+                        </div>`}
                         <div class="bar">
                             <div id="peak-bar" class="bar-fill" style="width:${peakPct}%;background:${peakColor}"></div>
                         </div>
@@ -428,11 +428,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
                     <div class="peak-box" style="margin-bottom:16px">
                         <span class="dim">${this._t('adjust_target_peak')}</span>
-                        <div class="target-row">
-                            <input type="number" id="targetInput" min="1" max="80" step="0.1" .value="${String(this.targetPeakLimit)}">
-                            <span class="dim">kW</span>
-                            <button id="setTargetBtn">${this._t('set')}</button>
-                        </div>
+                        ${this._renderPeakSlider()}
                     </div>
 
                     ${this._showHelp ? html`
@@ -734,6 +730,67 @@ class SEMLoadPriorityCard extends SEMLitBase {
         window.addEventListener('pointercancel', onUp);
     }
 
+    // Single-handle grid-ceiling slider (#717 redesign) — replaces the old
+    // number-input + Set button. Steel blue (#488fc2) matches CLAUDE.md's
+    // canonical "Grid Import" color since target_peak_limit is a grid-import
+    // ceiling. Reaching the top of the range is the explicit, deliberate
+    // "Unlimited" opt-out (#716) — never inferred from an absent value.
+    _renderPeakSlider() {
+        const MIN_KW = 1, MAX_KW = 80;
+        const drag = this._peakDrag;
+        let kw = this.peakLimitUnlimited ? MAX_KW : Math.min(MAX_KW, Math.max(MIN_KW, this.targetPeakLimit || MIN_KW));
+        if (drag != null) kw = drag;
+        const pct = ((kw - MIN_KW) / (MAX_KW - MIN_KW)) * 100;
+        const atMax = kw >= MAX_KW - 1e-6;
+        const label = atMax ? this._t('uncapped') : `${kw.toFixed(1)} kW`;
+        return html`
+            <div class="range-wrap">
+                <div class="range-labels">
+                    <span>${this._t('target_limit')}</span>
+                    <span><b style="color:#488fc2">${label}</b></span>
+                </div>
+                <div class="range-track">
+                    <div class="range-fill" style="left:0;width:${pct}%;background:#488fc2"></div>
+                    <div class="range-handle range-handle-peak" style="left:${pct}%"
+                         @pointerdown=${(e) => this._peakSliderStart(e)}></div>
+                </div>
+            </div>`;
+    }
+
+    _peakSliderStart(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        const MIN_KW = 1, MAX_KW = 80, STEP_KW = 0.5;
+        const track = e.currentTarget.parentElement;  // handle → .range-track
+        const rect = track.getBoundingClientRect();
+        const toVal = (clientX) => {
+            let frac = (clientX - rect.left) / (rect.width || 1);
+            frac = Math.max(0, Math.min(1, frac));
+            return Math.round((MIN_KW + frac * (MAX_KW - MIN_KW)) / STEP_KW) * STEP_KW;
+        };
+        const apply = (clientX) => {
+            this._peakDrag = toVal(clientX);
+            this.requestUpdate();
+        };
+        apply(e.clientX);
+        const onMove = (ev) => apply(ev.clientX);
+        const onUp = (ev) => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            const kw = toVal(ev.clientX);
+            this._peakDrag = null;
+            const unlimited = kw >= MAX_KW - 1e-6;
+            this.targetPeakLimit = kw;
+            this.peakLimitUnlimited = unlimited;
+            this._sendTargetPeakUpdate(kw, unlimited);
+            this.requestUpdate();
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+    }
+
     _onStopEntity(device, e) {
         // <ha-entity-picker> fires value-changed (not change) with the chosen
         // entity in e.detail.value. Persist via the same goal path as the text
@@ -966,25 +1023,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── Event binding (called from firstUpdated + updated) ──
     _bindEvents() {
         const root = this.renderRoot;
-        const setBtn = root.getElementById('setTargetBtn');
-        if (setBtn && !setBtn._semBound) {
-            setBtn._semBound = true;
-            setBtn.addEventListener('click', () => {
-                const input = root.getElementById('targetInput');
-                const val = parseFloat(input?.value);
-                // (#717) Clamp rather than drop. This used to bail out
-                // silently above 20 kW: the user typed their real service
-                // size, pressed Set, and absolutely nothing happened — no
-                // change, no error. Keep the guard, but make it land on the
-                // nearest legal value so the button always does something.
-                if (Number.isFinite(val) && val > 0) {
-                    const clamped = Math.min(80, Math.max(1, val));
-                    this.targetPeakLimit = clamped;
-                    this._sendTargetPeakUpdate(clamped);
-                    this.requestUpdate();
-                }
-            });
-        }
 
         const delegateClick = (e) => {
             const target = e.target.closest('[data-action]');
@@ -1109,10 +1147,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
         });
     }
 
-    _sendTargetPeakUpdate(val) {
+    _sendTargetPeakUpdate(val, unlimited = false) {
         if (!this._hass) return;
         this._hass.callService('solar_energy_management', 'update_target_peak', {
             target_peak_limit: val,
+            peak_limit_unlimited: unlimited,
         });
     }
 
@@ -1242,6 +1281,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
     // ── Helpers ──
     _getPeakColor() {
+        if (this.peakLimitUnlimited) return '#4caf50';
         const pct = this.targetPeakLimit > 0 ? (this.currentPeak / this.targetPeakLimit) * 100 : 0;
         if (pct >= 100) return '#f44336';
         if (pct >= 90)  return '#ff9800';

@@ -37,15 +37,13 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Last step! Set your **Peak Power Limit** — the maximum kW your grid contract allows before SEM starts shedding load. SEM auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the **Configuration** tab on the SEM dashboard — including EV chargers, heat pump, tariff, and battery zones.",
+        "description": "Last step! SEM auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else — including your grid peak limit — uses safe defaults that you can tune right after setup: the peak limit from the **Control** tab slider, everything else from the **Configuration** tab on the SEM dashboard — including EV chargers, heat pump, tariff, and battery zones.",
         "data": {
-          "target_peak_limit": "Peak Power Limit (kW)",
           "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
           "diagram_style": "System diagram style",
           "battery_capacity_kwh": "Home Battery Capacity (kWh)"
         },
         "data_description": {
-          "target_peak_limit": "Maximum grid power (kW) SEM should stay under. Take it from your supply contract or main breaker — around 3–5 kW on a demand-based European tariff, about 38 kW for a 200 A North-American service. SEM scales its warning and emergency shedding levels to this number.",
           "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
           "diagram_style": "Choose which system diagram card to use on the Home tab. 'SEM' uses the built-in animated diagram. 'K-Flow' uses the K-Flow HACS card (must be installed separately).",
           "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec."

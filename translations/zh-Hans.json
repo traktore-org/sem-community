@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "硬件",
-        "description": "最后一步！设置您的 **峰值功率限制** —— 即您的电网合同允许的最大 kW，超过该值后 SEM 将开始减载。SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置都将使用安全默认值，您稍后可以在 SEM 看板全新的 **配置** 标签页中进行调整 —— 包括电动汽车充电桩、热泵、电价以及电池分区。",
+        "description": "最后一步！SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置——包括电网峰值功率限制——都将使用安全默认值，您可以在安装完成后立即调整：峰值功率限制通过 **控制** 标签页的滑块调整，其余设置通过 SEM 看板的 **配置** 标签页调整——包括电动汽车充电桩、热泵、电价以及电池分区。",
         "data": {
           "battery_capacity_kwh": "家用蓄电池容量 (kWh)",
-          "target_peak_limit": "峰值功率限制 (kW)",
           "generate_dashboard_on_install": "立即生成 SEM 看板（会重启 HA）",
           "diagram_style": "系统拓扑图样式"
         },
         "data_description": {
           "battery_capacity_kwh": "您家用蓄电池（非电动汽车）的总可用容量 (kWh)。由预测驱动的充电策略用于估算电池可在多大程度上弥补太阳能缺口。请检查您的逆变器规格说明书。",
-          "target_peak_limit": "SEM 应保持不超过的最大电网功率（kW）。请按供电合同或总断路器填写——欧洲按容量计费的合同通常为 3–5 kW，北美 200 A 进线约为 38 kW。SEM 会按此数值缩放其警告级别和紧急级别。",
           "generate_dashboard_on_install": "启用时，SEM 将在完成此步骤后立即创建 Lovelace 看板，并在此后约 5 秒重启 Home Assistant，以便让新看板可见。您稍后随时可以通过 solar_energy_management.generate_dashboard 服务手动重新运行此操作。",
           "diagram_style": "选择在“主页”标签页上使用哪种系统拓扑图卡片。“SEM” 使用内置的动效拓扑图。“K-Flow” 使用 K-Flow HACS 卡片（必须单独安装）。"
         }

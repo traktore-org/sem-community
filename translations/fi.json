@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Laitteisto",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Kotiakun kapasiteetti (kWh)",
-          "target_peak_limit": "Huipputehon raja (kW)",
           "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)",
           "diagram_style": "Järjestelmäkaavion tyyli"
         },
         "data_description": {
           "battery_capacity_kwh": "Kotiakkusi (EI sähköauton) käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Ennusteohjattu latausstrategia käyttää tätä arvioidakseen, kuinka paljon akku voi paikata aurinkovajetta. Tarkista invertterin tekniset tiedot.",
-          "target_peak_limit": "Suurin verkosta otettava teho (kW), jonka alle SEM pyrkii jäämään. Ota arvo sähkösopimuksesta tai pääsulakkeesta – noin 3–5 kW eurooppalaisella tehotariffilla, noin 38 kW pohjoisamerikkalaisessa 200 A:n liittymässä. SEM skaalaa varoitus- ja hätätasonsa tämän arvon mukaan.",
           "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard.",
           "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen)."
         }

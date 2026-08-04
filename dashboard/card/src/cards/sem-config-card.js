@@ -96,7 +96,7 @@ const SECTIONS = [
     },
     {
         id: 'load_management',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/LOAD_PRIORITY.md#what-it-does',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/USER_GUIDE.md#load-management-settings',
         icon: 'mdi:flash-alert',
         color: '#ff9800',
         titleKey: 'config_section_load_management',
@@ -193,6 +193,7 @@ class SEMConfigCard extends SEMLitBase {
         return {
             ...super.properties,
             _showHelp: { state: true },
+            _lmAdvancedOpen: { state: true },
             _entryId: { state: true },
             _saveStatus: { state: true },
             // #461 grid-sign fix button transient UI state.
@@ -232,6 +233,7 @@ class SEMConfigCard extends SEMLitBase {
             notifications: true, advanced: true,
         };
         this._showHelp = false;
+        this._lmAdvancedOpen = false;  // (#717) warning/emergency ladder disclosure
         this._entryId = '';
         this._saveStatus = {};  // { fieldKey: 'saving' | 'ok' | error-msg }
         this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
@@ -1810,10 +1812,17 @@ class SEMConfigCard extends SEMLitBase {
             ` : html`
                 ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
                     { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
-                ${this._renderOptionNumberInput('warning_peak_level', 'config_lm_warning_peak',
-                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
-                ${this._renderOptionNumberInput('emergency_peak_level', 'config_lm_emergency_peak',
-                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+                <div class="advanced-toggle-row" @click=${() => { this._lmAdvancedOpen = !this._lmAdvancedOpen; }}>
+                    <ha-icon class="chevron" icon="mdi:chevron-down"
+                             style="--mdc-icon-size:16px;transform:${this._lmAdvancedOpen ? 'rotate(0deg)' : 'rotate(-90deg)'}"></ha-icon>
+                    <span>${this._t('config_section_advanced')}</span>
+                </div>
+                ${this._lmAdvancedOpen ? html`
+                    ${this._renderOptionNumberInput('warning_peak_level', 'config_lm_warning_peak',
+                        { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
+                    ${this._renderOptionNumberInput('emergency_peak_level', 'config_lm_emergency_peak',
+                        { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+                ` : nothing}
             `}
         `;
     }
@@ -2329,6 +2338,16 @@ class SEMConfigCard extends SEMLitBase {
                     overflow: hidden; text-overflow: ellipsis; margin-right: 4px;
                 }
                 .chevron { transition: transform 0.25s ease; color: var(--secondary-text-color, ${T.textSec}); }
+                /* (#717) inline sub-disclosure for the warning/emergency
+                   ladder — most users never touch it, the target slider on
+                   the Control tab is the one live control that matters. */
+                .advanced-toggle-row {
+                    display: flex; align-items: center; gap: 6px;
+                    padding: 8px 2px; margin-top: 2px; cursor: pointer; user-select: none;
+                    font-size: 0.85em; font-weight: 600;
+                    color: var(--secondary-text-color, ${T.textSec});
+                }
+                .advanced-toggle-row:hover { color: var(--primary-text-color, ${T.text}); }
                 .section-content {
                     max-height: 0; opacity: 0; overflow: hidden;
                     transition: max-height 0.3s ease, opacity 0.2s ease;

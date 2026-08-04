@@ -75,10 +75,11 @@ If you have no EV charger, leave the fields empty and click **Submit**.
 | Setting | Default | What it means |
 |---------|---------|---------------|
 | Battery capacity | 10 kWh | Your home battery size |
-| Target peak limit | 5 kW | Maximum grid draw before SEM starts shedding load |
 | Generate dashboard | ON | Auto-create the SEM dashboard — leave this on |
 
-Click **Submit**.
+Click **Submit**. SEM starts at a 5 kW target peak limit; tune it later from
+the Control tab's slider (up to 80 kW, or **Uncapped**) — see
+[Load Management Settings](USER_GUIDE.md#load-management-settings).
 
 **What you should see:** A success message and the integration listed under **Devices & Services**.
 

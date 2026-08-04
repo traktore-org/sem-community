@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hårdvara",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Husbatteriets kapacitet (kWh)",
-          "target_peak_limit": "Effekttoppsgräns (kW)",
           "generate_dashboard_on_install": "Skapa SEM-instrumentpanelen nu (startar om HA)",
           "diagram_style": "Systemdiagram stil"
         },
         "data_description": {
           "battery_capacity_kwh": "Total användbar kapacitet i ditt husbatteri (INTE elbilens) i kWh. Används av den prognosstyrda laddningsstrategin för att uppskatta hur mycket batteriet kan överbrygga ett solunderskott. Se växelriktarens specifikation.",
-          "target_peak_limit": "Högsta nätuttag (kW) som SEM ska hålla sig under. Hämta värdet från elavtalet eller huvudsäkringen – runt 3–5 kW på en europeisk effekttariff, cirka 38 kW för en nordamerikansk 200 A-servis. SEM skalar sina varnings- och nödnivåer efter detta värde.",
           "generate_dashboard_on_install": "När detta är aktiverat skapar SEM Lovelace-instrumentpanelen direkt efter att det här steget är klart och startar sedan om Home Assistant ca 5 s senare så att den nya instrumentpanelen blir synlig. Du kan alltid köra det manuellt igen senare via tjänsten solar_energy_management.generate_dashboard.",
           "diagram_style": "Välj systemdiagram på fliken Hem. 'SEM' använder det inbyggda animerade diagrammet. 'K-Flow' använder K-Flow HACS-kortet (måste installeras separat)."
         }

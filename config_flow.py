@@ -37,8 +37,6 @@ from .const import (
     DEFAULT_EMERGENCY_PEAK_LEVEL,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     DEFAULT_OBSERVER_MODE,
-    WARNING_PEAK_RATIO,
-    EMERGENCY_PEAK_RATIO,
     MIN_PEAK_LIMIT_KW,
     MAX_PEAK_LIMIT_KW,
     PEAK_LIMIT_STEP_KW,
@@ -53,29 +51,6 @@ from .hardware_detection import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def derive_peak_levels(target_kw: float) -> tuple[float, float]:
-    """(#717) Scale the warning and emergency levels to the target peak.
-
-    The install flow asks for one number — the grid limit — and fills the
-    rest silently. Filling the two shed thresholds with fixed kilowatts only
-    works next to a European-sized target: ``LoadManager`` escalates to
-    EMERGENCY at ``peak >= emergency_level``, so a North-American 200 A
-    service (38 kW) paired with the old flat 6.0 kW emergency level would
-    start shedding loads at an oven plus a dryer, on a house nowhere near
-    its limit.
-
-    Returns ``(warning, emergency)`` rounded to the same 0.1 kW step the
-    form uses. At the 5.0 kW default this returns exactly ``(4.5, 6.0)`` —
-    the values that were hard-coded before — so a default install is
-    unchanged.
-    """
-    target = max(MIN_PEAK_LIMIT_KW, min(MAX_PEAK_LIMIT_KW, float(target_kw)))
-    return (
-        round(target * WARNING_PEAK_RATIO, 1),
-        round(target * EMERGENCY_PEAK_RATIO, 1),
-    )
 
 
 def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
@@ -524,9 +499,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "enable_charger_notifications": True,
             "enable_mobile_notifications": False,
             "mobile_notification_service": "",
-            # Load management — only target_peak_limit is asked at install,
-            # everything else uses safe defaults that the user can tune later.
+            # Load management — the grid ceiling used to be asked at install
+            # (#717 removed that field: it duplicated the live Control-tab
+            # slider and the Configure fallback, see docs/UI_PATTERNS.md).
+            # Every value here is a safe default the user can tune later.
             "load_management_enabled": DEFAULT_LOAD_MANAGEMENT_ENABLED,
+            "target_peak_limit": DEFAULT_TARGET_PEAK_LIMIT,
+            "peak_limit_unlimited": DEFAULT_PEAK_LIMIT_UNLIMITED,
             "warning_peak_level": DEFAULT_WARNING_PEAK_LEVEL,
             "emergency_peak_level": DEFAULT_EMERGENCY_PEAK_LEVEL,
             # #442 slim install: explicit empty EV chargers list so
@@ -540,13 +519,16 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_hardware(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Final install step: ask only the genuinely hardware-dependent values.
+        """Final install step: dashboard style + auto-detected hardware.
 
-        Asks the user for the home battery capacity and the grid peak limit
-        (both vary by install and have no universal default). Auto-detects
-        the inverter's battery discharge control entity from the entity
-        registry. All other tunables are filled from ``_install_defaults()``
-        so the coordinator boots with a complete config dict.
+        The grid peak limit used to be asked here too, but it duplicated the
+        live Control-tab slider and the Configure options-flow fallback —
+        three places to set one number (#717). It now seeds from
+        ``DEFAULT_TARGET_PEAK_LIMIT`` like every other tunable and is tuned
+        post-install. Auto-detects the inverter's battery discharge control
+        entity from the entity registry. All other tunables are filled from
+        ``_install_defaults()`` so the coordinator boots with a complete
+        config dict.
         """
         errors: dict[str, str] = {}
 
@@ -562,16 +544,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 merged.update(_detect_hardware_specs(self.hass))
                 merged.update(self._data)
                 merged.update(user_input)
-
-                # (#717) The two shed thresholds follow whatever target the
-                # user just entered. ``_install_defaults()`` seeded them with
-                # the 5 kW-shaped constants; leaving those next to a 38 kW
-                # target would have SEM emergency-shedding at 6 kW.
-                _warn, _emerg = derive_peak_levels(
-                    merged.get("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT)
-                )
-                merged["warning_peak_level"] = _warn
-                merged["emergency_peak_level"] = _emerg
 
                 discharge_entity = discover_inverter_from_registry(
                     self.hass, self._energy_dashboard_config
@@ -632,19 +604,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="hardware",
             data_schema=vol.Schema({
-                vol.Required(
-                    "target_peak_limit",
-                    default=DEFAULT_TARGET_PEAK_LIMIT,
-                ): selector.NumberSelector(
-                    # (#717) A box, not a slider: this is a number the user
-                    # reads off a contract or a main breaker (5.0 kW, 38.4 kW),
-                    # and a 1-80 slider at 0.1 steps is 791 stops of nothing.
-                    selector.NumberSelectorConfig(
-                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
-                        step=PEAK_LIMIT_STEP_KW,
-                        unit_of_measurement="kW", mode="box"
-                    )
-                ),
                 # Opt-in: generate the SEM Lovelace dashboard right after the
                 # config entry is created. The post-setup hook in __init__.py
                 # consumes this flag exactly once and clears it from

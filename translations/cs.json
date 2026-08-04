@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Kapacita domácí baterie (kWh)",
-          "target_peak_limit": "Limit špičkového výkonu (kW)",
           "generate_dashboard_on_install": "Vygenerovat nyní panel SEM (restartuje HA)",
           "diagram_style": "Styl systémového diagramu"
         },
         "data_description": {
           "battery_capacity_kwh": "Celková využitelná kapacita vaší domácí baterie (NIKOLI baterie EV) v kWh. Používá ji strategie nabíjení řízená předpovědí k odhadu, jak velký solární deficit dokáže baterie překlenout. Ověřte ve specifikaci svého měniče.",
-          "target_peak_limit": "Maximální výkon ze sítě (kW), pod kterým má SEM zůstat. Hodnotu převezměte ze smlouvy o dodávce nebo z hlavního jističe – zhruba 3–5 kW u evropského výkonového tarifu, asi 38 kW u severoamerické přípojky 200 A. SEM podle této hodnoty škáluje své varovné a nouzové úrovně.",
           "generate_dashboard_on_install": "Je-li zapnuto, SEM vytvoří panel Lovelace ihned po dokončení tohoto kroku a přibližně o 5 s později restartuje Home Assistant, aby se nový panel zobrazil. Kdykoli později jej můžete znovu vytvořit ručně pomocí služby solar_energy_management.generate_dashboard.",
           "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť)."
         }

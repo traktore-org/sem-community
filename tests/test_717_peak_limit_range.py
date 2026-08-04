@@ -20,9 +20,12 @@ Two things made this worse than "one slider is too short":
   emergency field goes into emergency shedding at an oven plus a dryer. Bug
   class: raising a bound without re-deriving what was scaled to the old one.
 
-The fix makes the levels a RATIO of the target. 0.9/1.2 reproduce 4.5/6.0
-exactly at the 5.0 kW default, so a default install is byte-identical — the
-first test below is what pins that.
+The fix makes the levels a RATIO of the target, derived at read time by
+``_effective_levels()`` in ``features/load_management.py`` (see
+``test_716_peak_limit_unlimited.py`` for that derivation pinned at the
+5.0 kW default). #717 went further and removed the install-step field
+entirely — the Control-tab slider is now the one live place to set it; see
+the tests below for what that leaves in ``config_flow.py`` and the cards.
 """
 from __future__ import annotations
 
@@ -38,10 +41,10 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.solar_energy_management.config_flow import (
     OptionsFlowHandler,
-    derive_peak_levels,
 )
 from custom_components.solar_energy_management.const import (
     DEFAULT_EMERGENCY_PEAK_LEVEL,
+    DEFAULT_PEAK_LIMIT_UNLIMITED,
     DEFAULT_TARGET_PEAK_LIMIT,
     DEFAULT_WARNING_PEAK_LEVEL,
     EMERGENCY_PEAK_RATIO,
@@ -53,61 +56,6 @@ from custom_components.solar_energy_management.const import (
 
 _ROOT = Path(__file__).resolve().parent.parent
 _CARDS = _ROOT / "dashboard" / "card" / "src" / "cards"
-
-
-# ---------------------------------------------------------------------------
-# The ladder derivation
-# ---------------------------------------------------------------------------
-
-def test_the_default_install_is_byte_identical():
-    """The whole reason the ratios are 0.9/1.2 and not something rounder.
-
-    Every existing install has 5.0/4.5/6.0 stored. If ``derive_peak_levels``
-    produced anything else at the default target, this change would silently
-    re-tune load shedding on every European system that never asked for it.
-    """
-    assert derive_peak_levels(DEFAULT_TARGET_PEAK_LIMIT) == (
-        DEFAULT_WARNING_PEAK_LEVEL,
-        DEFAULT_EMERGENCY_PEAK_LEVEL,
-    )
-    assert (DEFAULT_WARNING_PEAK_LEVEL, DEFAULT_EMERGENCY_PEAK_LEVEL) == (4.5, 6.0)
-
-
-@pytest.mark.parametrize(
-    "target",
-    [
-        MIN_PEAK_LIMIT_KW,
-        3.0,
-        DEFAULT_TARGET_PEAK_LIMIT,
-        11.0,   # 3x16 A European
-        17.3,   # 3x25 A European
-        38.4,   # 200 A North-American split-phase — Azlinon's shape
-        69.0,   # 3x100 A European
-        MAX_PEAK_LIMIT_KW,
-    ],
-)
-def test_the_ladder_stays_ordered_at_every_service_size(target):
-    """warning < target < emergency, or ``LoadManager`` sheds against the
-    wrong number. This is the invariant the options flow now enforces on
-    input; here it is checked on everything the install flow can derive."""
-    warning, emergency = derive_peak_levels(target)
-    assert warning < target < emergency, (target, warning, emergency)
-
-
-def test_the_levels_actually_scale():
-    """Bug class 8 — a derivation that returned the old constants for every
-    target would pass the ordering test at 5.0 kW and fail every real user."""
-    small = derive_peak_levels(5.0)
-    large = derive_peak_levels(38.4)
-    assert large[0] > small[0] and large[1] > small[1]
-    assert large == (round(38.4 * WARNING_PEAK_RATIO, 1),
-                     round(38.4 * EMERGENCY_PEAK_RATIO, 1))
-
-
-def test_a_target_outside_the_range_is_clamped_not_propagated():
-    """Garbage in must not become a 900 kW emergency level in stored config."""
-    assert derive_peak_levels(0) == derive_peak_levels(MIN_PEAK_LIMIT_KW)
-    assert derive_peak_levels(10_000) == derive_peak_levels(MAX_PEAK_LIMIT_KW)
 
 
 # ---------------------------------------------------------------------------
@@ -143,10 +91,14 @@ def _number_selector_bounds(source: str, key: str) -> list[tuple[str, str]]:
 def test_no_python_surface_hard_codes_a_ceiling():
     """The five-different-ceilings failure, pinned.
 
-    Every peak-limit number input in ``config_flow.py`` — install step and
-    options step alike — must be bounded by the shared constants. A literal
-    here is how the install form ended up 5 kW wider than the options form
-    that edits the same key.
+    Every peak-limit number input in ``config_flow.py`` must be bounded by
+    the shared constants. A literal here is how the install form ended up
+    5 kW wider than the options form that edits the same key.
+
+    #717 removed the install-step ``target_peak_limit`` field entirely (it
+    duplicated the Control-tab slider and this options-flow field), so each
+    of the three keys now has exactly one NumberSelector left — all in the
+    options flow.
     """
     source = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
     seen = 0
@@ -159,7 +111,7 @@ def test_no_python_surface_hard_codes_a_ceiling():
                 "constants (#717)"
             )
             seen += 1
-    assert seen >= 4, f"only {seen} peak selectors found — the scan broke"
+    assert seen == 3, f"expected exactly 3 peak selectors (one per key), found {seen}"
 
 
 def test_the_service_accepts_a_north_american_service():
@@ -187,50 +139,63 @@ def test_the_service_accepts_a_north_american_service():
 
 
 @pytest.mark.parametrize(
-    "card,pattern",
+    "card,anchor,positive",
     [
         # The three config-card fields. Number inputs, not sliders: 791 stops
         # at 0.1 kW is not a control, it is a hazard.
-        ("sem-config-card.js", r"'(?:target_peak_limit|warning_peak_level|"
-                               r"emergency_peak_level)'"),
-        # The load-priority card's inline "Set" box.
-        ("sem-load-priority-card.js", r'id="targetInput"'),
+        ("sem-config-card.js",
+         r"'(?:target_peak_limit|warning_peak_level|emergency_peak_level)'",
+         r"max:\s*80(?:\.0)?\b"),
+        # The load-priority card's Control-tab slider (#717 redesign — the
+        # old inline "Set" number box is gone, this is the one live editable
+        # peak-limit control).
+        ("sem-load-priority-card.js",
+         r"range-handle-peak",
+         r"MAX_KW\s*=\s*80\b"),
     ],
 )
-def test_no_card_hard_codes_the_old_ceiling(card, pattern):
+def test_no_card_hard_codes_the_old_ceiling(card, anchor, positive):
     """The cards are a separate copy of the same bound, and they are what most
-    users actually touch — the load-priority card silently *discarded* a value
-    over 20 kW, so the user typed their real service size, pressed Set and
-    nothing at all happened."""
+    users actually touch — the load-priority card used to silently *discard*
+    a value over 20 kW, so the user typed their real service size, pressed
+    Set and nothing at all happened. #717 replaced that box with a slider
+    that reaches 80 kW ("Unlimited") at the top."""
     source = (_CARDS / card).read_text(encoding="utf-8")
-    assert re.search(pattern, source), f"{card}: anchor gone — retarget this scan"
+    assert re.search(anchor, source), f"{card}: anchor gone — retarget this scan"
     for stale in (r"max:\s*(?:15|20)(?:\.0)?\b", r'max="(?:15|20)"',
-                  r"val\s*<=\s*20\b", r"Math\.min\(\s*(?:15|20)\s*,"):
+                  r"val\s*<=\s*20\b", r"Math\.min\(\s*(?:15|20)\s*,",
+                  r"MAX_KW\s*=\s*(?:15|20)\b",
+                  r'id="targetInput"', r'id="setTargetBtn"'):
         assert not re.search(stale, source), (
             f"{card} still carries the retired {stale!r} peak ceiling (#717)"
         )
-    assert re.search(r"(?:max:\s*80(?:\.0)?\b|max=\"80\"|Math\.min\(80,)", source), (
+    assert re.search(positive, source), (
         f"{card} does not carry the {MAX_PEAK_LIMIT_KW:g} kW ceiling (#717)"
     )
 
 
 # ---------------------------------------------------------------------------
-# The install flow derives; the options flow validates
+# The install flow no longer asks; the options flow validates
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("target", [DEFAULT_TARGET_PEAK_LIMIT, 38.4])
-async def test_install_derives_the_levels_from_the_entered_target(mock_hass, target):
-    """The install form asks for the target and nothing else, then writes all
-    three. Before #717 it wrote the seeded 4.5/6.0 next to whatever target the
-    user typed — a 38 kW service configured to emergency-shed at 6 kW.
-
-    Parametrised over the default too: at 5.0 kW the stored entry must still
-    come out 4.5/6.0, which is what makes this safe to ship to every existing
-    install.
+async def test_install_no_longer_asks_for_the_peak_limit(mock_hass):
+    """#717 dropped the install-step ``target_peak_limit`` field — it
+    duplicated the live Control-tab slider and the options-flow field, three
+    places to set one number. The install flow now always seeds the shared
+    defaults for all four load-management keys, regardless of what the
+    hardware step is submitted with — it has no way left to ask.
     """
     from custom_components.solar_energy_management.config_flow import (
         SolarEnergyManagementConfigFlow,
+    )
+
+    source = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
+    start = source.index("async def async_step_hardware(")
+    end = source.index("async def async_step_reconfigure(", start)
+    schema_block = source[start:end]
+    assert '"target_peak_limit"' not in schema_block, (
+        "the install-step schema still asks for target_peak_limit (#717)"
     )
 
     flow = SolarEnergyManagementConfigFlow()
@@ -246,18 +211,16 @@ async def test_install_derives_the_levels_from_the_entered_target(mock_hass, tar
         return_value=None,
     ):
         result = await flow.async_step_hardware({
-            "battery_capacity_kwh": 12,
-            "target_peak_limit": target,
             "generate_dashboard_on_install": False,
         })
 
     assert result["type"] == FlowResultType.CREATE_ENTRY, result
     data = result["data"]
-    assert data["target_peak_limit"] == target
-    assert (data["warning_peak_level"], data["emergency_peak_level"]) == (
-        derive_peak_levels(target)
-    )
-    assert data["warning_peak_level"] < target < data["emergency_peak_level"]
+    assert data["target_peak_limit"] == DEFAULT_TARGET_PEAK_LIMIT
+    assert data["peak_limit_unlimited"] == DEFAULT_PEAK_LIMIT_UNLIMITED
+    assert data["warning_peak_level"] == DEFAULT_WARNING_PEAK_LEVEL
+    assert data["emergency_peak_level"] == DEFAULT_EMERGENCY_PEAK_LEVEL
+    assert data["warning_peak_level"] < data["target_peak_limit"] < data["emergency_peak_level"]
 
 
 def _options_flow(mock_hass, config_entry):
@@ -351,16 +314,23 @@ def test_the_two_new_errors_resolve_in_every_language():
             assert block[key].strip(), f"{path.name}:{key} is empty"
 
 
-def test_the_install_help_no_longer_assumes_a_european_fuse_box():
-    """The old text told every user to size from "your fuse rating divided by
-    4" and named 3-5 kW as typical — advice that produced exactly Azlinon's
-    misconfiguration on a North-American service."""
-    description = json.loads((_ROOT / "strings.json").read_text(encoding="utf-8"))
-    text = description["config"]["step"]["hardware"]["data_description"][
-        "target_peak_limit"
-    ]
-    assert "divided by 4" not in text
-    assert "200 A" in text, "the help text no longer names a non-European size"
+def test_the_install_help_no_longer_promises_a_removed_field():
+    """#717 dropped the install-step ``target_peak_limit`` field. Its
+    ``data``/``data_description`` entries must go with it — a stale entry is
+    silently ignored by Home Assistant, but the install-step description
+    text is prose a real user reads, so it must stop telling them to "Set
+    your Peak Power Limit" on a step that no longer has that field.
+    """
+    files = [_ROOT / "strings.json", *sorted((_ROOT / "translations").glob("*.json"))]
+    assert len(files) >= 17
+    for path in files:
+        hardware = json.loads(path.read_text(encoding="utf-8"))["config"]["step"]["hardware"]
+        assert "target_peak_limit" not in hardware.get("data", {}), (
+            f"{path.name}: orphaned data.target_peak_limit (#717)"
+        )
+        assert "target_peak_limit" not in hardware.get("data_description", {}), (
+            f"{path.name}: orphaned data_description.target_peak_limit (#717)"
+        )
 
 
 def test_the_constants_are_a_usable_range():
@@ -383,8 +353,9 @@ def test_this_file_scans_real_sources():
                  _CARDS / "sem-config-card.js",
                  _CARDS / "sem-load-priority-card.js"):
         assert path.is_file() and path.stat().st_size > 1000, path
-    # and derive_peak_levels is really the function the flow uses
+    # and async_step_hardware is really still the method the scans above slice
     source = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
-    names = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
-    assert "derive_peak_levels" in names
+    names = {n.name for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)}
+    assert "async_step_hardware" in names
+    assert "async_step_reconfigure" in names

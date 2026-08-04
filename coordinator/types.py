@@ -583,6 +583,10 @@ class SystemStatus:
 class LoadManagementData:
     """Load management and peak tracking data."""
     target_peak_limit: float = 5.0  # kW
+    # (#716) Explicit, never-inferred "no ceiling" opt-out — see
+    # ``LoadManager.get_load_management_data()`` for the fail-closed
+    # contract this mirrors.
+    peak_limit_unlimited: bool = False
     peak_margin: float = 0.5  # kW
     load_management_status: str = "idle"
     loads_currently_shed: str = "none"
@@ -1105,6 +1109,7 @@ class SEMData:
 
             # Load management
             "target_peak_limit": self.load_management.target_peak_limit,
+            "peak_limit_unlimited": self.load_management.peak_limit_unlimited,
             "peak_margin": self.load_management.peak_margin,
             "load_management_status": self.load_management.load_management_status,
             "loads_currently_shed": self.load_management.loads_currently_shed,

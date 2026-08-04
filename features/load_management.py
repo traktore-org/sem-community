@@ -450,11 +450,24 @@ class LoadManagementCoordinator:
             )
         return warning, emergency
 
-    async def update_target_peak_limit(self, new_limit: float):
-        """Update the target peak limit and persist to config entry."""
+    async def update_target_peak_limit(
+        self, new_limit: float, unlimited: bool | None = None
+    ):
+        """Update the target peak limit and persist to config entry.
+
+        (#717 redesign) ``unlimited`` is optional so the two existing
+        Configure-flow writers (which set the flag separately via the
+        options flow's own submit path) keep working unchanged. The
+        Control-tab slider is the one caller that passes both in the same
+        atomic write — dragging to the MAX notch and letting go must not
+        leave a half-applied state between two separate service calls.
+        """
         self._target_peak_limit = new_limit
-        # Persist to config_entry.options so value survives restart (#199)
         new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
+        if unlimited is not None:
+            self._peak_unlimited = unlimited
+            new_options["peak_limit_unlimited"] = unlimited
+        # Persist to config_entry.options so value survives restart (#199)
         coordinator = getattr(self.config_entry, "runtime_data", None)
         if coordinator:
             # (#636b) the listener honors a SNAPSHOT (dict == new options,
@@ -464,7 +477,10 @@ class LoadManagementCoordinator:
             coordinator._skip_options_reload = dict(new_options)
             coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
         self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
-        _LOGGER.info("Updated target peak limit to %skW", new_limit)
+        _LOGGER.info(
+            "Updated target peak limit to %skW%s", new_limit,
+            "" if unlimited is None else f" (unlimited={unlimited})",
+        )
         self._trigger_callbacks()
 
     async def update_warning_peak_level(self, new_level: float):

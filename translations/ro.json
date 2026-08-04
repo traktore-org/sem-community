@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Capacitatea bateriei casnice (kWh)",
-          "target_peak_limit": "Limită de putere de vârf (kW)",
           "generate_dashboard_on_install": "Generează acum tabloul de bord SEM (repornește HA)",
           "diagram_style": "Stilul diagramei de sistem"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei casnice (NU a celei din EV), în kWh. Folosită de strategia de încărcare bazată pe prognoză pentru a estima cât poate acoperi bateria dintr-un deficit solar. Consultați specificațiile invertorului.",
-          "target_peak_limit": "Puterea maximă din rețea (kW) sub care SEM trebuie să rămână. Preluați valoarea din contractul de furnizare sau de pe siguranța generală – circa 3–5 kW la un tarif european bazat pe putere, aproximativ 38 kW la un branșament nord-american de 200 A. SEM își scalează nivelurile de avertizare și de urgență după această valoare.",
           "generate_dashboard_on_install": "Când este activat, SEM creează tabloul de bord Lovelace imediat după încheierea acestui pas și apoi repornește Home Assistant după circa 5 s, pentru ca noul tablou de bord să devină vizibil. Îl puteți regenera oricând manual mai târziu prin serviciul solar_energy_management.generate_dashboard.",
           "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat)."
         }

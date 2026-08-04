@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Letzter Schritt! Stellen Sie Ihr **Netz-Spitzenwert-Limit** ein — die maximale kW, die Ihr Netzvertrag zulässt, bevor SEM mit dem Lastabwurf beginnt. SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere verwendet sichere Standardwerte, die Sie später im **Konfiguration**-Tab des SEM-Dashboards anpassen können — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
+        "description": "Letzter Schritt! SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere — einschließlich Ihres Netz-Spitzenwert-Limits — verwendet sichere Standardwerte, die Sie direkt nach der Einrichtung anpassen können: das Spitzenwert-Limit über den Schieberegler im **Steuerung**-Tab, alles andere im **Konfiguration**-Tab des SEM-Dashboards — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
         "data": {
           "battery_capacity_kwh": "Hausbatterie-Kapazität (kWh)",
-          "target_peak_limit": "Spitzenlast-Grenze (kW)",
           "generate_dashboard_on_install": "SEM-Dashboard jetzt erstellen (startet HA neu)",
           "diagram_style": "Systemdiagramm-Stil"
         },
         "data_description": {
           "battery_capacity_kwh": "Gesamte nutzbare Kapazität Ihrer Hausbatterie (NICHT des EV) in kWh. Wird von der prognosegesteuerten Ladestrategie verwendet, um abzuschätzen, wie viel Batterie ein Solardefizit überbrücken kann. Sehen Sie im Datenblatt Ihres Wechselrichters nach.",
-          "target_peak_limit": "Maximale Netzleistung (kW), die SEM nicht überschreiten soll. Entnehmen Sie den Wert Ihrem Liefervertrag oder Hauptsicherungsautomaten – bei leistungsbasierten europäischen Tarifen etwa 3–5 kW, bei einem nordamerikanischen 200-A-Anschluss rund 38 kW. SEM skaliert seine Warn- und Notfallschwellen an diesem Wert.",
           "generate_dashboard_on_install": "Wenn aktiviert, erstellt SEM das Lovelace-Dashboard direkt nach Abschluss dieses Schritts und startet Home Assistant etwa 5 s später neu, damit das neue Dashboard sichtbar wird. Sie können es später jederzeit manuell über den Dienst solar_energy_management.generate_dashboard erneut ausführen.",
           "diagram_style": "Wählen Sie das Systemdiagramm für den Haus-Tab. 'SEM' verwendet das integrierte animierte Diagramm. 'K-Flow' verwendet die K-Flow HACS-Karte (muss separat installiert werden)."
         }

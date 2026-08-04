@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Sprzęt",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Pojemność baterii domowej (kWh)",
-          "target_peak_limit": "Limit mocy szczytowej (kW)",
           "generate_dashboard_on_install": "Wygeneruj teraz pulpit SEM (restartuje HA)",
           "diagram_style": "Styl diagramu systemowego"
         },
         "data_description": {
           "battery_capacity_kwh": "Całkowita użyteczna pojemność baterii domowej (NIE pojazdu EV) w kWh. Używana przez strategię ładowania opartą na prognozie do oszacowania, jak duży deficyt słoneczny bateria może zmostkować. Sprawdź specyfikację falownika.",
-          "target_peak_limit": "Maksymalna moc z sieci (kW), której SEM nie powinien przekraczać. Odczytaj ją z umowy z dostawcą lub z zabezpieczenia głównego — około 3–5 kW przy europejskiej taryfie mocowej, około 38 kW przy północnoamerykańskim przyłączu 200 A. SEM skaluje do tej wartości swoje poziomy ostrzegawczy i awaryjny.",
           "generate_dashboard_on_install": "Gdy opcja jest włączona, SEM tworzy pulpit Lovelace natychmiast po zakończeniu tego kroku, a następnie ok. 5 s później restartuje Home Assistant, aby nowy pulpit stał się widoczny. Zawsze możesz uruchomić to ponownie ręcznie usługą solar_energy_management.generate_dashboard.",
           "diagram_style": "Wybierz styl diagramu systemowego na karcie Strona główna. 'SEM' używa wbudowanego animowanego diagramu. 'K-Flow' używa karty K-Flow HACS (wymaga osobnej instalacji)."
         }

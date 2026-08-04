@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Matériel",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Capacité de la batterie domestique (kWh)",
-          "target_peak_limit": "Limite de puissance de pointe (kW)",
           "generate_dashboard_on_install": "Générer le tableau de bord SEM maintenant (redémarre HA)",
           "diagram_style": "Style du diagramme système"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacité utile totale de votre batterie domestique (PAS celle du VE) en kWh. Utilisée par la stratégie de charge pilotée par les prévisions pour estimer dans quelle mesure la batterie peut compenser un déficit solaire. Consultez la fiche technique de votre onduleur.",
-          "target_peak_limit": "Puissance réseau maximale (kW) que SEM ne doit pas dépasser. Reprenez-la de votre contrat de fourniture ou de votre disjoncteur principal — environ 3 à 5 kW sur un tarif européen basé sur la puissance, environ 38 kW pour un branchement nord-américain de 200 A. SEM ajuste ses niveaux d'alerte et d'urgence à cette valeur.",
           "generate_dashboard_on_install": "Lorsque cette option est activée, SEM crée le tableau de bord Lovelace immédiatement après cette étape, puis redémarre Home Assistant environ 5 s plus tard afin que le nouveau tableau de bord devienne visible. Vous pouvez toujours le régénérer manuellement plus tard via le service solar_energy_management.generate_dashboard.",
           "diagram_style": "Choisissez le diagramme système à utiliser sur l'onglet Accueil. 'SEM' utilise le diagramme animé intégré. 'K-Flow' utilise la carte K-Flow HACS (à installer séparément)."
         }
