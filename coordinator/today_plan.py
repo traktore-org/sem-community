@@ -324,3 +324,100 @@ def compose_today_plan(
     # Sort + return as dicts. Cap at 8 rows so the card stays glanceable.
     rows.sort(key=lambda r: r.when)
     return [r.to_dict() for r in rows[:8]]
+
+
+def compose_tomorrow_plan(
+    *,
+    now: datetime,
+    upcoming_prices: Optional[List[Dict[str, Any]]] = None,
+    solar_peak_time: Optional[str] = None,
+    solar_forecast_kwh: Optional[float] = None,
+    night_start: Optional[datetime] = None,
+    night_end: Optional[datetime] = None,
+    ev_min_remaining_kwh: Optional[float] = None,
+    ev_deadline: Optional[datetime] = None,
+    ev_tariff_optimized: bool = False,
+    ev_tariff_waiting: bool = False,
+    ev_next_cheap_window: Optional[datetime] = None,
+    ev_effective_rate_kw: Optional[float] = None,
+    currency: str = "",
+) -> Dict[str, Any]:
+    """Build a fixed calendar-day forecast for tomorrow.
+
+    Unlike ``compose_today_plan``'s rolling 24-hour horizon, this view is clipped
+    to tomorrow 00:00–24:00. The status remains ``preliminary`` until at least
+    one tariff point for that date has been published.
+    """
+    day_start = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    )
+    day_end = day_start + timedelta(days=1)
+    day_prices: List[Dict[str, Any]] = []
+    for point in upcoming_prices or []:
+        try:
+            timestamp = datetime.fromisoformat(
+                str(point["t"]).replace("Z", "+00:00"),
+            )
+            if day_start.tzinfo:
+                timestamp = timestamp.astimezone(day_start.tzinfo)
+            if day_start <= timestamp < day_end:
+                day_prices.append(point)
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    peak_for_day = None
+    if solar_peak_time:
+        try:
+            if "T" in solar_peak_time:
+                parsed_peak = datetime.fromisoformat(
+                    solar_peak_time.replace("Z", "+00:00")
+                )
+                if parsed_peak.tzinfo and day_start.tzinfo:
+                    parsed_peak = parsed_peak.astimezone(day_start.tzinfo)
+                hour, minute = parsed_peak.hour, parsed_peak.minute
+            else:
+                hour_text, minute_text = solar_peak_time.split(":")[:2]
+                hour, minute = int(hour_text), int(minute_text)
+            peak_for_day = day_start.replace(
+                hour=hour, minute=minute,
+            ).isoformat()
+        except (TypeError, ValueError):
+            peak_for_day = None
+
+    # Anchor one microsecond before midnight so events exactly at 00:00 are
+    # included by the existing strict future comparisons. The anchor row itself
+    # is filtered out below.
+    rows = compose_today_plan(
+        now=day_start - timedelta(microseconds=1),
+        horizon_hours=24,
+        upcoming_prices=day_prices,
+        solar_peak_time=peak_for_day,
+        solar_remaining_kwh=solar_forecast_kwh,
+        night_start=night_start,
+        night_end=night_end,
+        ev_min_remaining_kwh=ev_min_remaining_kwh,
+        ev_deadline=ev_deadline,
+        ev_tariff_optimized=ev_tariff_optimized,
+        ev_tariff_waiting=ev_tariff_waiting,
+        ev_next_cheap_window=ev_next_cheap_window,
+        ev_effective_rate_kw=ev_effective_rate_kw,
+        currency=currency,
+    )
+    calendar_rows = []
+    for row in rows:
+        if row.get("kind") == KIND_NOW:
+            continue
+        try:
+            when = datetime.fromisoformat(str(row["when"]).replace("Z", "+00:00"))
+            if day_start.tzinfo:
+                when = when.astimezone(day_start.tzinfo)
+            if day_start <= when < day_end:
+                calendar_rows.append(row)
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    return {
+        "status": "final" if day_prices else "preliminary",
+        "date": day_start.date().isoformat(),
+        "rows": calendar_rows,
+    }

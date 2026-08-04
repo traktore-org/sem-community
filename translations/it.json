@@ -587,6 +587,9 @@
       "daily_ev_energy": {
         "name": "Oggi VE"
       },
+      "daily_calendar_ev_energy": {
+        "name": "Oggi VE"
+      },
       "monthly_solar_yield_energy": {
         "name": "Mensile Solare"
       },

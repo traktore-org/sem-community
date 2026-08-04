@@ -1,6 +1,7 @@
 """Test SEM Solar Energy Management switches."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.components.switch import SwitchEntityDescription
 
@@ -54,6 +55,76 @@ class TestSEMSwitches:
         mock_coordinator.config_entry.options = {}
         switch2 = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         assert switch2._is_on is False
+
+    def test_observer_countdown_attributes_use_persisted_start(self, mock_coordinator):
+        """The observer switch exposes a restart-durable 72-hour countdown."""
+        now = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
+        started = now - timedelta(hours=25)
+        mock_coordinator.config_entry.options = {
+            "observer_mode": True,
+            "_observer_mode_started_at": started.isoformat(),
+        }
+        switch = SEMSolarSwitch(
+            mock_coordinator,
+            create_switch_description("observer_mode"),
+            "test_entry_id",
+        )
+
+        with patch(
+            "custom_components.solar_energy_management.switch.dt_util.utcnow",
+            return_value=now,
+        ):
+            attrs = switch.extra_state_attributes
+
+        assert attrs["observation_target_hours"] == 72
+        assert attrs["observation_elapsed_seconds"] == 25 * 60 * 60
+        assert attrs["observation_remaining_seconds"] == 47 * 60 * 60
+        assert attrs["ready_for_manual_activation"] is False
+        assert attrs["automatic_activation"] is False
+
+    @pytest.mark.asyncio
+    async def test_observer_turn_on_persists_countdown_start(self, mock_coordinator):
+        """Starting observation stores its clock without enabling auto-actuation."""
+        now = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
+        mock_coordinator.config_entry.options = {}
+        switch = SEMSolarSwitch(
+            mock_coordinator,
+            create_switch_description("observer_mode"),
+            "test_entry_id",
+        )
+        switch.hass = mock_coordinator.hass
+        switch.async_write_ha_state = MagicMock()
+
+        with patch(
+            "custom_components.solar_energy_management.switch.dt_util.utcnow",
+            return_value=now,
+        ):
+            await switch.async_turn_on()
+
+        written = mock_coordinator.hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        assert written["observer_mode"] is True
+        assert written["_observer_mode_started_at"] == now.isoformat()
+
+    @pytest.mark.asyncio
+    async def test_observer_turn_off_clears_countdown_start(self, mock_coordinator):
+        now = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
+        mock_coordinator.config_entry.options = {
+            "observer_mode": True,
+            "_observer_mode_started_at": now.isoformat(),
+        }
+        switch = SEMSolarSwitch(
+            mock_coordinator,
+            create_switch_description("observer_mode"),
+            "test_entry_id",
+        )
+        switch.hass = mock_coordinator.hass
+        switch.async_write_ha_state = MagicMock()
+
+        await switch.async_turn_off()
+
+        written = mock_coordinator.hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        assert written["observer_mode"] is False
+        assert "_observer_mode_started_at" not in written
 
     @pytest.mark.asyncio
     async def test_switch_is_on(self, mock_coordinator):
@@ -260,7 +331,8 @@ async def test_observer_toggle_persists_to_entry_options(monkeypatch):
     kwargs = sw.hass.config_entries.async_update_entry.call_args
     assert kwargs.args[0] is entry
     assert kwargs.kwargs["options"]["observer_mode"] is True
-    assert coordinator._skip_options_reload == {"observer_mode": True}
+    assert coordinator._skip_options_reload["observer_mode"] is True
+    assert coordinator._skip_options_reload["_observer_mode_started_at"]
     assert coordinator.config["observer_mode"] is True
     await sw.async_turn_off()
     kwargs = sw.hass.config_entries.async_update_entry.call_args

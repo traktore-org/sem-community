@@ -587,6 +587,9 @@
       "daily_ev_energy": {
         "name": "EV idag"
       },
+      "daily_calendar_ev_energy": {
+        "name": "EV idag"
+      },
       "monthly_solar_yield_energy": {
         "name": "Sol denna månad"
       },

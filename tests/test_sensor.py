@@ -249,6 +249,10 @@ class TestEMSSensors:
             "tariff_next_cheap_end": "2026-05-28T04:00:00+02:00",
             "tariff_upcoming": [{"t": "2026-05-27T22:00:00+02:00", "price": 0.10, "level": "cheap"}],
             "tariff_schedule_today": [],
+            "tariff_schedule_tomorrow": [
+                {"start": "17:00", "end": "19:00", "level": "expensive"},
+            ],
+            "schedule_tomorrow_status": "final",
         }
         a = sensor.extra_state_attributes
         assert a["price_level"] == "cheap"
@@ -256,6 +260,8 @@ class TestEMSSensors:
         assert a["today_max"] == 0.42
         assert a["next_cheap_start"] == "2026-05-27T23:00:00+02:00"
         assert len(a["upcoming"]) == 1
+        assert a["schedule_tomorrow"][0]["level"] == "expensive"
+        assert a["schedule_tomorrow_status"] == "final"
 
     @pytest.mark.asyncio
     async def test_async_setup_entry(self, mock_hass, config_entry, mock_coordinator):

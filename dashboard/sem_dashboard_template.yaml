@@ -148,7 +148,7 @@ views:
                     color: "#ff9800"
                     name: Sol>EV
                     children:
-                      - sensor.sem_daily_ev_energy
+                      - sensor.sem_daily_calendar_ev_energy
                   - entity_id: sensor.sem_flow_solar_to_battery_energy
                     color: "#ff9800"
                     name: Sol>Bat
@@ -168,7 +168,7 @@ views:
                     color: "#488fc2"
                     name: Grid>EV
                     children:
-                      - sensor.sem_daily_ev_energy
+                      - sensor.sem_daily_calendar_ev_energy
                   - entity_id: sensor.sem_flow_grid_to_battery_energy
                     color: "#488fc2"
                     name: Grid>Bat
@@ -183,12 +183,12 @@ views:
                     color: "#4db6ac"
                     name: Bat>EV
                     children:
-                      - sensor.sem_daily_ev_energy
+                      - sensor.sem_daily_calendar_ev_energy
               - entities:
                   - entity_id: sensor.sem_daily_home_energy
                     color: "#5BC8D8"
                     name: House
-                  - entity_id: sensor.sem_daily_ev_energy
+                  - entity_id: sensor.sem_daily_calendar_ev_energy
                     color: "#8DC892"
                     name: EV
                   - entity_id: sensor.sem_daily_battery_charge_energy

@@ -75,6 +75,23 @@ class TestDashboardTemplate:
         expected = ["home", "energy", "battery", "ev", "control", "config", "costs", "system"]
         assert paths == expected
 
+    def test_energy_flow_uses_calendar_day_ev_total(self):
+        """Sankey is a calendar-day chart, not a charge-deadline report.
+
+        Overnight charging must remain visible after the configured EV deadline
+        has passed; all three EV links and the final EV node therefore use the
+        midnight-reset calendar mirror.
+        """
+        template_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "dashboard",
+            "sem_dashboard_template.yaml",
+        )
+        with open(template_path) as f:
+            template = f.read()
+        assert template.count("sensor.sem_daily_calendar_ev_energy") == 4
+        assert "sensor.sem_daily_ev_energy" not in template
+
     def test_template_no_overview_tab(self):
         """Overview tab was removed in v2.6."""
         template_path = os.path.join(

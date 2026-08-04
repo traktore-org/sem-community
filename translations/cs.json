@@ -587,6 +587,9 @@
       "daily_ev_energy": {
         "name": "Dnes EV"
       },
+      "daily_calendar_ev_energy": {
+        "name": "Dnes EV"
+      },
       "monthly_solar_yield_energy": {
         "name": "Měsíčně solární"
       },

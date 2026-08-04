@@ -310,6 +310,12 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
+    SensorEntityDescription(
+        key="daily_calendar_ev_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
     # Removed: Redundant (use daily_home_energy instead)
     # daily_home_consumption_actual_energy
 
@@ -1929,8 +1935,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "per_charger_states",
         "per_charger_plans",
         "today_plan",
+        "tomorrow_plan",
         "upcoming",
         "schedule_today",
+        "schedule_tomorrow",
         "schedule_surplus_hours",
         "schedule_ev_hours",
         "energy_dashboard",
@@ -2317,6 +2325,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # Today's plan rows (#282) — list of {when, kind, label, detail, values}.
                 # sem-today-plan-card consumes this directly.
                 "today_plan": self.coordinator.data.get("today_plan") or [],
+                "tomorrow_plan": self.coordinator.data.get("tomorrow_plan") or [],
+                "tomorrow_plan_status": self.coordinator.data.get(
+                    "tomorrow_plan_status", "preliminary"
+                ),
+                "tomorrow_plan_date": self.coordinator.data.get(
+                    "tomorrow_plan_date"
+                ),
                 # Per-charger plan rows (#464) — {cid: [rows…]}.
                 "per_charger_plans": _per_charger_plans,
             })
@@ -2397,6 +2412,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "next_cheap_end": d.get("tariff_next_cheap_end"),
                 "upcoming": d.get("tariff_upcoming"),
                 "schedule_today": d.get("tariff_schedule_today"),
+                "schedule_tomorrow": d.get("tariff_schedule_tomorrow"),
+                "schedule_tomorrow_status": d.get(
+                    "schedule_tomorrow_status", "preliminary"
+                ),
             })
         elif self.entity_description.key == "heat_pump_registration_status":
             # #432: surface WHY the heat pump is or is not registered.

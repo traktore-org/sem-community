@@ -12,6 +12,11 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard, SEM_COLORS } from '../base/sem-shared.js';
+import {
+    getScheduleForDay,
+    getPlanWindowForDay,
+    getSolarIntensityForDay,
+} from '../util/schedule-day.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -75,6 +80,13 @@ class SEMScheduleCard extends SEMLitBase {
     setConfig(config) {
         super.setConfig(config);
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
+        this._selectedDay = this._selectedDay || 'today';
+    }
+
+    _selectDay(day) {
+        if (!['today', 'tomorrow'].includes(day) || day === this._selectedDay) return;
+        this._selectedDay = day;
+        this.requestUpdate();
     }
 
     // Override hass setter: key includes attribute values, not just entity states
@@ -103,7 +115,11 @@ class SEMScheduleCard extends SEMLitBase {
             const e = hass?.states[`${this._prefix}${s}`];
             return (e?.state || '')
                 + JSON.stringify(e?.attributes?.schedule_today || '')
+                + JSON.stringify(e?.attributes?.schedule_tomorrow || '')
                 + JSON.stringify(e?.attributes?.tariff_schedule_today || '')
+                + JSON.stringify(e?.attributes?.tariff_schedule_tomorrow || '')
+                + JSON.stringify(e?.attributes?.today_plan || '')
+                + JSON.stringify(e?.attributes?.tomorrow_plan || '')
                 + JSON.stringify(e?.attributes?.schedule_surplus_hours || '')
                 + JSON.stringify(e?.attributes?.schedule_ev_hours || '');
         });
@@ -123,63 +139,14 @@ class SEMScheduleCard extends SEMLitBase {
     }
 
     _getTariffSchedule() {
-        // schedule_today lives on tariff_current_import_rate (rich attributes,
-        // see sensor.py:tariff_current_import_rate branch). Previously this
-        // card read it from tariff_price_level — where it doesn't exist — and
-        // silently fell through to the default weekday HT/NT shape, so dynamic
-        // tariffs never showed their actual schedule (#282 follow-up).
         const entity = this._stateObj('tariff_current_import_rate')
-                    || this._stateObj('tariff_price_level');  // legacy fallback
-        const schedule = entity?.attributes?.schedule_today
-                      || entity?.attributes?.tariff_schedule_today;  // legacy key
-        if (Array.isArray(schedule) && schedule.length > 0) {
-            // Read the richer `level` field from #282 when present (cheap /
-            // normal / expensive) — falls back to the legacy binary HT/NT so
-            // older providers and static-tariff schedules still render correctly.
-            return schedule.map(s => ({
-                start: parseTime(s.start) ?? 0,
-                end:   parseTime(s.end)   ?? 1,
-                level: s.level || (
-                    (s.tariff || s.type || 'HT').toUpperCase() === 'NT' ? 'cheap' : 'normal'
-                ),
-                type:  (s.tariff || s.type || 'HT').toUpperCase(),
-                avgPrice: s.avg_price,
-            }));
-        }
-        // v1.7.2-beta.3 (2026-06-07): the previous fallback baked a
-        // CH-shape HT/NT schedule into the chart whenever
-        // ``schedule_today`` wasn't published — including on weekends
-        // where it returned ``cheap`` for ALL 24 hours. For a user on
-        // a dynamic Tibber NL tariff with the schedule attribute
-        // momentarily missing, the bottom-of-dashboard tariff
-        // timeline lied about "Goedkoop all day" even when the
-        // current price level sensor correctly said "Normaal".
-        // Reported by RienduPre on Discussion #432 (2026-06-06,
-        // Saturday — the all-cheap branch).
-        //
-        // New behaviour: if SEM hasn't published a schedule, mirror
-        // the CURRENT ``tariff_price_level`` across the whole day so
-        // at least the colour matches reality. Marked with
-        // ``isFallback: true`` so the renderer can visually
-        // distinguish fallback rows from real per-hour data (dashed
-        // stripe instead of solid fill).
+                    || this._stateObj('tariff_price_level');
         const currentLevel = this._stateObj('tariff_price_level')?.state;
-        const knownLevels = new Set([
-            'cheap', 'very_cheap', 'normal', 'expensive', 'very_expensive',
-        ]);
-        if (currentLevel && knownLevels.has(currentLevel)) {
-            return [{
-                start: 0, end: 1,
-                level: currentLevel,
-                type: currentLevel === 'cheap' || currentLevel === 'very_cheap' ? 'NT' : 'HT',
-                isFallback: true,
-            }];
-        }
-        // Last resort — neither schedule_today nor a current price
-        // level reported. Default to ``normal`` so the colour is
-        // neutral (vs the old "cheap on weekends" misleading shape),
-        // and still mark as fallback so the renderer flags it.
-        return [{ start: 0, end: 1, level: 'normal', type: 'HT', isFallback: true }];
+        return getScheduleForDay(
+            entity?.attributes || {},
+            this._selectedDay || 'today',
+            currentLevel,
+        ).blocks;
     }
 
     _getNightWindow() {
@@ -190,10 +157,13 @@ class SEMScheduleCard extends SEMLitBase {
     }
 
     _getPredictedSurplusWindow() {
+        const tomorrowSelected = this._selectedDay === 'tomorrow';
         for (const key of ['predicted_surplus_window', 'best_surplus_window']) {
-            const raw = this._stateObj(key)?.state;
+            let raw = this._stateObj(key)?.state;
             if (!raw || raw === 'unknown' || raw === 'unavailable') continue;
-            if (raw.toLowerCase().startsWith('tomorrow')) continue;
+            const isTomorrow = raw.toLowerCase().startsWith('tomorrow');
+            if (tomorrowSelected !== isTomorrow) continue;
+            if (isTomorrow) raw = raw.replace(/^tomorrow\s*/i, '');
             const parts = raw.split(/[-–]/);
             if (parts.length !== 2) continue;
             const start = parseTime(parts[0].trim());
@@ -204,11 +174,13 @@ class SEMScheduleCard extends SEMLitBase {
     }
 
     _getSurplusBlocks() {
+        if (this._selectedDay === 'tomorrow') return [];
         const data = this._hass?.states[`${this._prefix}surplus_total_w`];
         return hoursToBlocks(data?.attributes?.schedule_surplus_hours);
     }
 
     _getEvBlocks() {
+        if (this._selectedDay === 'tomorrow') return [];
         const data = this._hass?.states[`${this._prefix}surplus_total_w`];
         return hoursToBlocks(data?.attributes?.schedule_ev_hours);
     }
@@ -221,33 +193,14 @@ class SEMScheduleCard extends SEMLitBase {
      */
     _getEvPlanWindow() {
         const cs = this._stateObj('charging_state');
-        const plan = cs?.attributes?.today_plan;
-        if (!Array.isArray(plan)) return null;
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const tomorrow = today.getTime() + 24 * 3600 * 1000;
-        const tFrac = (when) => {
-            const t = new Date(when).getTime();
-            if (t < today.getTime() || t >= tomorrow) return null;
-            return ((t - today.getTime()) / (24 * 3600 * 1000));
-        };
-        let chargeStart, minReached, deadline, kwhVal;
-        for (const r of plan) {
-            if (r.kind === 'ev_charge_start') chargeStart = tFrac(r.when);
-            else if (r.kind === 'ev_min_reached') {
-                minReached = tFrac(r.when);
-                kwhVal = r.values?.kwh;
-            } else if (r.kind === 'ev_deadline') deadline = tFrac(r.when);
-        }
-        // Plan block: from charge_start until min_reached (preferred) or deadline.
-        const start = chargeStart;
-        const end = minReached ?? deadline;
-        if (start == null && end == null && deadline == null) return null;
-        return {
-            plan: (start != null && end != null && end > start)
-                ? [{ start, end, kwh: kwhVal }] : [],
-            deadlineFrac: deadline,
-            minReachedFrac: minReached,
-        };
+        const day = this._selectedDay || 'today';
+        const plan = day === 'tomorrow'
+            ? cs?.attributes?.tomorrow_plan
+            : cs?.attributes?.today_plan;
+        const dayStart = new Date();
+        dayStart.setHours(0, 0, 0, 0);
+        if (day === 'tomorrow') dayStart.setDate(dayStart.getDate() + 1);
+        return getPlanWindowForDay(plan, dayStart);
     }
 
     /**
@@ -259,29 +212,44 @@ class SEMScheduleCard extends SEMLitBase {
      * informative than the single best_surplus_window string.
      */
     _getSolarIntensity() {
-        const peakRaw = this._stateObj('forecast_peak_time_today')?.state
-                     || this._stateObj('peak_time_today')?.state;
-        const todayKwh = parseFloat(
-            this._stateObj('forecast_today_kwh')?.state
-            || this._stateObj('forecast_today')?.state
+        const tomorrow = this._selectedDay === 'tomorrow';
+        const plan = tomorrow
+            ? this._stateObj('charging_state')?.attributes?.tomorrow_plan
+            : null;
+        const peakRow = Array.isArray(plan)
+            ? plan.find(row => row.kind === 'solar_peak')
+            : null;
+        const peakDate = peakRow?.when ? new Date(peakRow.when) : null;
+        const planPeak = peakDate && Number.isFinite(peakDate.getTime())
+            ? `${String(peakDate.getHours()).padStart(2, '0')}:${String(peakDate.getMinutes()).padStart(2, '0')}`
+            : null;
+        const peakRaw = planPeak
+            || this._stateObj(tomorrow ? 'forecast_peak_time_tomorrow' : 'forecast_peak_time_today')?.state
+            || (!tomorrow ? this._stateObj('peak_time_today')?.state : null);
+        const forecastKwh = parseFloat(
+            this._stateObj(tomorrow ? 'forecast_tomorrow_kwh' : 'forecast_today_kwh')?.state
+            || this._stateObj(tomorrow ? 'forecast_tomorrow' : 'forecast_today')?.state
         );
-        if (!peakRaw || isNaN(todayKwh) || todayKwh < 0.5) return null;
-        const peak = parseTime(peakRaw.slice(0, 5));
-        if (peak == null) return null;
-        // Spread ~3h half-width on a clear day, scales with forecast magnitude
-        // so dim days draw a flatter, weaker curve.
-        const sigma = 0.13;  // ~3.1h half-width
-        const arr = new Array(24).fill(0);
-        let total = 0;
-        for (let h = 0; h < 24; h++) {
-            const x = (h / 24) - peak;
-            const y = Math.exp(-(x * x) / (2 * sigma * sigma));
-            arr[h] = y;
-            total += y;
-        }
-        // Normalise so peak intensity stays around 1 even for weak days.
-        const max = Math.max(...arr);
-        return arr.map(v => v / max);
+        return getSolarIntensityForDay(peakRaw, forecastKwh);
+    }
+
+    _getForecastKwh() {
+        const tomorrow = this._selectedDay === 'tomorrow';
+        return parseFloat(
+            this._stateObj(tomorrow ? 'forecast_tomorrow_kwh' : 'forecast_today_kwh')?.state
+            || this._stateObj(tomorrow ? 'forecast_tomorrow' : 'forecast_today')?.state
+        );
+    }
+
+    _getSelectedDayStatus() {
+        if (this._selectedDay !== 'tomorrow') return 'final';
+        const tariff = this._stateObj('tariff_current_import_rate')
+            || this._stateObj('tariff_price_level');
+        return getScheduleForDay(
+            tariff?.attributes || {},
+            'tomorrow',
+            this._stateObj('tariff_price_level')?.state,
+        ).status;
     }
 
     _isEvCharging() {
@@ -428,11 +396,10 @@ class SEMScheduleCard extends SEMLitBase {
         // + predicted window (legacy single block) + actual blocks (history).
         const surplusY = FRY + 2 * (RH + RG);
         const intensity = this._getSolarIntensity();
-        const todayKwh = parseFloat(
-            this._stateObj('forecast_today_kwh')?.state || NaN);
+        const forecastKwh = this._getForecastKwh();
         if (intensity) {
-            const intTip = isNaN(todayKwh) ? this._t('surplus')
-                : `${this._t('surplus')} · forecast ${todayKwh.toFixed(1)} kWh`;
+            const intTip = isNaN(forecastKwh) ? this._t('surplus')
+                : `${this._t('surplus')} · forecast ${forecastKwh.toFixed(1)} kWh`;
             // Render 24 thin slats with opacity proportional to expected output.
             // Caps min opacity at 0 to keep dark hours dark; rounds slat widths
             // to whole pixels of viewBox so antialiasing doesn't dim the row.
@@ -490,7 +457,7 @@ class SEMScheduleCard extends SEMLitBase {
                 stroke="#f06292" stroke-width="1.2" stroke-dasharray="2,1" opacity="0.85">
                 <title>${this._t('plan_ev_deadline')}</title></line>`;
         }
-        if (this._isEvCharging()) {
+        if (this._selectedDay !== 'tomorrow' && this._isEvCharging()) {
             const now = new Date();
             const nowFrac = (now.getHours() + now.getMinutes() / 60) / 24;
             const halfBlock = 0.5 / 24;
@@ -502,15 +469,17 @@ class SEMScheduleCard extends SEMLitBase {
                 rx="3" fill="${colors.ev}" opacity="0.95"/>`;
         }
 
-        // Current time indicator
-        const now = new Date();
-        const nowX = toX((now.getHours() + now.getMinutes() / 60) / 24);
-        const lineTop = FRY - 2;
-        const lineBottom = FRY + 4 * (RH + RG) - RG;
-        svg += `<line x1="${nowX}" y1="${lineTop}" x2="${nowX}" y2="${lineBottom}"
-            stroke="#ef5350" stroke-width="1.5" stroke-linecap="round" opacity="0.9"/>`;
-        svg += `<polygon points="${nowX - 3},${lineTop} ${nowX + 3},${lineTop} ${nowX},${lineTop + 4}"
-            fill="#ef5350" opacity="0.9"/>`;
+        // Current time belongs only on today's calendar view.
+        if (this._selectedDay !== 'tomorrow') {
+            const now = new Date();
+            const nowX = toX((now.getHours() + now.getMinutes() / 60) / 24);
+            const lineTop = FRY - 2;
+            const lineBottom = FRY + 4 * (RH + RG) - RG;
+            svg += `<line x1="${nowX}" y1="${lineTop}" x2="${nowX}" y2="${lineBottom}"
+                stroke="#ef5350" stroke-width="1.5" stroke-linecap="round" opacity="0.9"/>`;
+            svg += `<polygon points="${nowX - 3},${lineTop} ${nowX + 3},${lineTop} ${nowX},${lineTop + 4}"
+                fill="#ef5350" opacity="0.9"/>`;
+        }
 
         return svg;
     }
@@ -523,6 +492,9 @@ class SEMScheduleCard extends SEMLitBase {
         const totalHeight = FRY + 4 * (RH + RG) + 4;
         const dotCol = T.dotColor || 'rgba(128,128,128,0.04)';
         const svgContent = this._buildSvgContent(T);
+        const tomorrowSelected = this._selectedDay === 'tomorrow';
+        const selectedStatus = this._getSelectedDayStatus();
+        const preliminary = tomorrowSelected && selectedStatus !== 'final';
 
         // Now-state badges (#282/D): rendered as HTML next to the SVG so
         // they get clean typography + accessible markup. One per row.
@@ -557,6 +529,30 @@ class SEMScheduleCard extends SEMLitBase {
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                 }
                 .timeline-svg { width: 100%; height: auto; }
+                .schedule-head {
+                    display: flex; align-items: flex-start; justify-content: space-between;
+                    gap: 10px; margin-bottom: 5px;
+                }
+                .day-tabs {
+                    display: inline-flex; padding: 2px; border-radius: 9px;
+                    background: rgba(127,127,127,0.12);
+                }
+                .day-tab {
+                    appearance: none; border: 0; border-radius: 7px; cursor: pointer;
+                    padding: 4px 11px; color: var(--secondary-text-color, #999);
+                    background: transparent; font: inherit; font-size: 12px; font-weight: 600;
+                }
+                .day-tab.active {
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
+                    background: rgba(141,200,146,0.18);
+                    box-shadow: inset 0 0 0 1px rgba(141,200,146,0.28);
+                }
+                .schedule-status {
+                    max-width: 290px; text-align: right; line-height: 1.25;
+                    font-size: 10px; color: var(--secondary-text-color, #999);
+                }
+                .schedule-status strong { display: block; color: #ffb74d; font-size: 11px; }
+                .schedule-status.final strong { color: #8DC892; }
                 .now-row {
                     display: flex; align-items: center; gap: 10px;
                     font-size: 11px; color: var(--secondary-text-color, #999);
@@ -591,6 +587,26 @@ class SEMScheduleCard extends SEMLitBase {
             </style>
             <ha-card>
                 <div class="wrap">
+                    <div class="schedule-head">
+                        <div class="day-tabs" role="tablist" aria-label="${this._t('schedule_day')}">
+                            <button class="day-tab ${tomorrowSelected ? '' : 'active'}"
+                                role="tab" aria-selected="${tomorrowSelected ? 'false' : 'true'}"
+                                @click=${() => { this._selectedDay = 'today'; this._scheduleUpdate(); }}>
+                                ${this._t('today')}
+                            </button>
+                            <button class="day-tab ${tomorrowSelected ? 'active' : ''}"
+                                role="tab" aria-selected="${tomorrowSelected ? 'true' : 'false'}"
+                                @click=${() => { this._selectedDay = 'tomorrow'; this._scheduleUpdate(); }}>
+                                ${this._t('tomorrow')}
+                            </button>
+                        </div>
+                        ${tomorrowSelected ? html`
+                            <div class="schedule-status ${preliminary ? '' : 'final'}" role="status">
+                                <strong>${this._t(preliminary ? 'schedule_preliminary' : 'schedule_final')}</strong>
+                                ${preliminary ? this._t('schedule_preliminary_hint') : nothing}
+                            </div>
+                        ` : nothing}
+                    </div>
                     <svg class="timeline-svg"
                         viewBox="0 0 ${W} ${totalHeight}"
                         preserveAspectRatio="xMidYMid meet"
@@ -598,13 +614,15 @@ class SEMScheduleCard extends SEMLitBase {
                         aria-label="24-hour schedule timeline"
                         .innerHTML=${svgContent}>
                     </svg>
-                    <div class="now-row" role="status">
-                        <span class="now-label">${this._t('plan_now')}:</span>
-                        <span class="row-pair"><span>${this._t('tariff')}</span>${badgeRow('tariff', badges.tariff)}</span>
-                        <span class="row-pair"><span>${this._t('night')}</span>${badgeRow('night', badges.night)}</span>
-                        <span class="row-pair"><span>${this._t('surplus')}</span>${badgeRow('surplus', badges.surplus)}</span>
-                        <span class="row-pair"><span>${this._t('ev')}</span>${badgeRow('ev', badges.ev)}</span>
-                    </div>
+                    ${!tomorrowSelected ? html`
+                        <div class="now-row" role="status">
+                            <span class="now-label">${this._t('plan_now')}:</span>
+                            <span class="row-pair"><span>${this._t('tariff')}</span>${badgeRow('tariff', badges.tariff)}</span>
+                            <span class="row-pair"><span>${this._t('night')}</span>${badgeRow('night', badges.night)}</span>
+                            <span class="row-pair"><span>${this._t('surplus')}</span>${badgeRow('surplus', badges.surplus)}</span>
+                            <span class="row-pair"><span>${this._t('ev')}</span>${badgeRow('ev', badges.ev)}</span>
+                        </div>
+                    ` : nothing}
                     <div class="legend">
                         <span class="item"><i style="background:#66bb6a"></i>${this._t('cheap')}</span>
                         <span class="item"><i style="background:${SEM_COLORS.solar}"></i>${this._t('normal')}</span>

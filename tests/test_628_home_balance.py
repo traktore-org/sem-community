@@ -337,6 +337,7 @@ class TestTheEvTerm628:
         assert calc._daily_accumulators[
             f"{MIDNIGHT_EV_CATEGORY}_{DAY}"] == pytest.approx(7.0)
         # 20 imported, 7 into the car → 13 for the house. Not 3.
+        assert energy.daily_calendar_ev == pytest.approx(7.0)
         assert energy.daily_home == pytest.approx(13.0, abs=0.01)
 
     @freeze_time("2026-07-15 03:00:00")

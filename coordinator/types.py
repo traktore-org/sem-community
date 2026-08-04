@@ -366,6 +366,9 @@ class EnergyTotals:
     daily_solar: float = 0.0
     daily_home: float = 0.0
     daily_ev: float = 0.0
+    # Calendar-day EV total for dashboards and energy-flow charts. ``daily_ev``
+    # intentionally follows the configured charge-deadline bucket instead.
+    daily_calendar_ev: float = 0.0
     daily_grid_import: float = 0.0
     daily_grid_export: float = 0.0
     daily_battery_charge: float = 0.0
@@ -952,6 +955,7 @@ class SEMData:
             "daily_solar_energy": self.energy.daily_solar,
             "daily_home_energy": self.energy.daily_home,
             "daily_ev_energy": self.energy.daily_ev,
+            "daily_calendar_ev_energy": self.energy.daily_calendar_ev,
             "daily_grid_import_energy": self.energy.daily_grid_import,
             "daily_grid_export_energy": self.energy.daily_grid_export,
             "daily_battery_charge_energy": self.energy.daily_battery_charge,

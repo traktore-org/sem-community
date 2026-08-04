@@ -3666,9 +3666,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .publish_diag import build_diagnostics
             result.update(build_diagnostics(self))
 
-            # Tariff schedule for dashboard card (#25)
+            # Tariff schedules for the Today/Tomorrow dashboard tabs (#25).
+            # Tomorrow remains explicitly preliminary until the provider has
+            # published at least one block for that calendar day.
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
+                try:
+                    _tomorrow = dt_util.now() + timedelta(days=1)
+                    _tomorrow_schedule = self._tariff_provider.get_schedule_for_day(
+                        _tomorrow
+                    )
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("Tomorrow tariff schedule unavailable: %s", err)
+                    _tomorrow_schedule = []
+                result["tariff_schedule_tomorrow"] = _tomorrow_schedule
+                result["schedule_tomorrow_status"] = (
+                    "final" if _tomorrow_schedule else "preliminary"
+                )
                 # v1.7.2-beta.3 (2026-06-07): diagnose-only counter so
                 # users with a misclassifying schedule (RienduPre,
                 # Tibber NL, Discussion #432) can paste back the
@@ -3731,20 +3745,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception as e:
                 _LOGGER.debug("Tariff price-curve surface failed (#257): %s", e)
 
-            # Today's plan (#282): compose a forward-looking schedule from the
-            # tariff curve + solar forecast + night window + EV state. Surfaced
-            # on charging_state attributes for sem-today-plan-card. Pure helper
-            # in coordinator/today_plan.py so logic is unit-testable.
+            # Today/Tomorrow plans (#282): compose the rolling live plan and a
+            # fixed forecast for the next calendar day. Pure helpers keep the
+            # clipping/status rules unit-testable.
             try:
-                from .today_plan import compose_today_plan
+                from .today_plan import compose_today_plan, compose_tomorrow_plan
                 _now = dt_util.now()
                 # Solar — read directly from the forecast reader's cached data
                 _peak_t = None
                 _solar_remaining = None
+                _solar_tomorrow = None
                 try:
                     _fcd = self._forecast_reader.forecast_data
                     _peak_t = _fcd.peak_time_today
                     _solar_remaining = _fcd.forecast_remaining_today_kwh
+                    _solar_tomorrow = _fcd.forecast_tomorrow_kwh
                 except AttributeError:
                     pass
                 # Night window — get HH:MM endpoints, resolve to datetime.
@@ -3823,6 +3838,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if isinstance(c, dict) and c.get("id")
                 ] or [_dl_pcfg if isinstance(_dl_pcfg, dict) else {}]
                 _fleet_plan = None
+                _fleet_tomorrow_plan = None
                 from .ev_tariff_planner import resolve_deadline
                 for _pcfg in _plan_cfgs:
                     _cid = _pcfg.get("id")
@@ -3931,18 +3947,59 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         ev_target_eta=_ev_target_eta,
                         ev_target_kwh=_ev_target_kwh,
                     )
+                    _tomorrow_plan = compose_tomorrow_plan(
+                        now=_now,
+                        upcoming_prices=result.get("tariff_upcoming"),
+                        solar_peak_time=_peak_t,
+                        solar_forecast_kwh=_solar_tomorrow,
+                        night_start=_night_start,
+                        night_end=_night_end_dt,
+                        ev_min_remaining_kwh=_ev_remaining,
+                        ev_deadline=_ev_deadline_dt,
+                        ev_tariff_optimized=self._tariff_optimized_for(_pcfg),
+                        ev_tariff_waiting=bool(
+                            _np_c.should_wait_for_cheap if _np_c else False
+                        ),
+                        ev_next_cheap_window=(
+                            _np_c.next_cheap_start
+                            if _np_c and _np_c.next_cheap_start else None
+                        ),
+                        ev_effective_rate_kw=_ev_rate_kw,
+                        currency=result.get("tariff_currency", ""),
+                    )
+                    # Static tariff providers may not expose upcoming price
+                    # points even though a complete tomorrow schedule exists.
+                    _tomorrow_plan["status"] = result.get(
+                        "schedule_tomorrow_status", _tomorrow_plan["status"]
+                    )
                     if _cid:
                         result[f"charger_{_cid}_today_plan"] = _plan
                     if _fleet_plan is None or _cid == _primary_cid:
                         _fleet_plan = _plan
+                        _fleet_tomorrow_plan = _tomorrow_plan
 
                 result["today_plan"] = (
                     _fleet_plan if _fleet_plan is not None
                     else compose_today_plan(**_shared_plan_kwargs)
                 )
+                if _fleet_tomorrow_plan is None:
+                    _fleet_tomorrow_plan = compose_tomorrow_plan(
+                        now=_now,
+                        upcoming_prices=result.get("tariff_upcoming"),
+                        solar_peak_time=_peak_t,
+                        solar_forecast_kwh=_solar_tomorrow,
+                        night_start=_night_start,
+                        night_end=_night_end_dt,
+                        currency=result.get("tariff_currency", ""),
+                    )
+                result["tomorrow_plan"] = _fleet_tomorrow_plan["rows"]
+                result["tomorrow_plan_status"] = _fleet_tomorrow_plan["status"]
+                result["tomorrow_plan_date"] = _fleet_tomorrow_plan["date"]
             except Exception as e:
-                _LOGGER.debug("today_plan compose failed (#282): %s", e)
+                _LOGGER.debug("Today/Tomorrow plan compose failed (#282): %s", e)
                 result["today_plan"] = []
+                result["tomorrow_plan"] = []
+                result["tomorrow_plan_status"] = "preliminary"
 
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()

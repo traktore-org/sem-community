@@ -587,6 +587,9 @@
       "daily_ev_energy": {
         "name": "Tänään sähköauto"
       },
+      "daily_calendar_ev_energy": {
+        "name": "Tänään sähköauto"
+      },
       "monthly_solar_yield_energy": {
         "name": "Kuukausi aurinko"
       },

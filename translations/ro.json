@@ -587,6 +587,9 @@
       "daily_ev_energy": {
         "name": "VE azi"
       },
+      "daily_calendar_ev_energy": {
+        "name": "VE azi"
+      },
       "monthly_solar_yield_energy": {
         "name": "Solar lunar"
       },

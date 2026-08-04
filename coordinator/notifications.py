@@ -38,6 +38,17 @@ _COOLDOWN_STATES = {
 }
 _MOBILE_COOLDOWN_SECONDS = 600  # 10 minutes
 _FLAP_STABILITY_SECONDS = 60  # state must be stable this long before notifying
+# Data-quality incidents stay open until readings have been continuously valid.
+# This is notification hysteresis only: ActivePhaseGuard still blocks immediately.
+_PHASE_GUARD_SENSOR_RECOVERY_SECONDS = 300
+_PHASE_GUARD_SENSOR_FAULT_REASONS = (
+    "invalid_current",
+    "stale",
+    "unavailable",
+    "missing",
+    "no_sample",
+    "invalid_configuration",
+)
 
 # Notification channels for Android companion app
 _CHANNEL_CHARGING = "sem_charging"
@@ -83,6 +94,9 @@ class NotificationManager:
         # Independent from EV connection state: the phase guard watches the
         # electrical installation even when every charger is idle or disabled.
         self._last_phase_guard_alert_state: Optional[str] = None
+        self._last_phase_guard_incident_kind: Optional[str] = None
+        self._phase_guard_sensor_fault_active: bool = False
+        self._last_phase_guard_sensor_fault_at: Optional[float] = None
 
     # ──────────────────────────────────────────────────────────────────
     # v1.6.8-compat shims for flap-suppression fields. Reads/writes
@@ -458,20 +472,42 @@ class NotificationManager:
             # Re-enabling notifications starts from a clean baseline instead of
             # replaying an incident or recovery that happened while opted out.
             self._last_phase_guard_alert_state = None
+            self._last_phase_guard_incident_kind = None
+            self._phase_guard_sensor_fault_active = False
+            self._last_phase_guard_sensor_fault_at = None
             return
         if not isinstance(snapshot, dict):
             return
 
+        now = time.monotonic()
+        reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
         unsafe = not bool(snapshot.get("safe")) or not bool(
             snapshot.get("data_fresh")
         )
         read_only = bool(snapshot.get("read_only", False))
+        incident_kind = (
+            "sensor_fault"
+            if any(token in reason for token in _PHASE_GUARD_SENSOR_FAULT_REASONS)
+            else "over_limit" if "over_limit" in reason else "unsafe"
+        )
         if unsafe:
+            if incident_kind == "sensor_fault":
+                self._phase_guard_sensor_fault_active = True
+                self._last_phase_guard_sensor_fault_at = now
             state = (
                 "phase_guard_observer_warning"
                 if read_only
                 else "phase_guard_blocked"
             )
+        elif (
+            self._phase_guard_sensor_fault_active
+            and self._last_phase_guard_sensor_fault_at is not None
+            and now - self._last_phase_guard_sensor_fault_at
+            < _PHASE_GUARD_SENSOR_RECOVERY_SECONDS
+        ):
+            # Keep one data-quality incident open across short valid samples.
+            # The active guard remains fail-closed and is evaluated independently.
+            return
         elif self._last_phase_guard_alert_state == "phase_guard_blocked" and not bool(
             snapshot.get("control_authorized", True)
         ):
@@ -483,37 +519,67 @@ class NotificationManager:
 
         previous = self._last_phase_guard_alert_state
         if state == previous:
-            return
+            # A real over-limit event must never be hidden behind a data-quality
+            # incident that happens to use the same observer/blocked state.
+            if not (
+                unsafe
+                and incident_kind == "over_limit"
+                and self._last_phase_guard_incident_kind != "over_limit"
+            ):
+                return
         self._last_phase_guard_alert_state = state
+        if unsafe:
+            self._last_phase_guard_incident_kind = incident_kind
 
         # Establishing an initial healthy baseline is silent.
         if previous is None and state == "phase_guard_normal":
+            self._last_phase_guard_incident_kind = None
+            self._phase_guard_sensor_fault_active = False
+            self._last_phase_guard_sensor_fault_at = None
             return
 
         from ..utils.translate import get_text
 
         if state == "phase_guard_blocked":
-            reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
             location = self._phase_guard_alert_location(snapshot, reason)
-            message = get_text(
-                self.hass,
-                "notif_phase_guard_blocked",
-                "Phase guard blocked: {location} ({reason}).",
-                location=location,
-                reason=reason,
-            )
+            if incident_kind == "sensor_fault":
+                message = get_text(
+                    self.hass,
+                    "notif_phase_guard_sensor_blocked",
+                    "Phase guard blocked because sensor data is invalid at "
+                    "{location} ({reason}).",
+                    location=location,
+                    reason=reason,
+                )
+            else:
+                message = get_text(
+                    self.hass,
+                    "notif_phase_guard_blocked",
+                    "Phase guard blocked: {location} ({reason}).",
+                    location=location,
+                    reason=reason,
+                )
             event_state = state
         elif state == "phase_guard_observer_warning":
-            reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
             location = self._phase_guard_alert_location(snapshot, reason)
-            message = get_text(
-                self.hass,
-                "notif_phase_guard_observer_warning",
-                "Phase limit exceeded in Observer Mode at {location} "
-                "({reason}) — no action was taken.",
-                location=location,
-                reason=reason,
-            )
+            if incident_kind == "sensor_fault":
+                message = get_text(
+                    self.hass,
+                    "notif_phase_guard_sensor_warning_observer",
+                    "Phase guard sensor data is invalid in Observer Mode at "
+                    "{location} ({reason}) — no action was taken.",
+                    location=location,
+                    reason=reason,
+                )
+            else:
+                message = get_text(
+                    self.hass,
+                    "notif_phase_guard_observer_warning",
+                    "Phase limit exceeded in Observer Mode at {location} "
+                    "({reason}) — no action was taken.",
+                    location=location,
+                    reason=reason,
+                )
             event_state = state
         else:
             if read_only:
@@ -529,6 +595,9 @@ class NotificationManager:
                     "Phase guard restored and armed after fresh safe readings.",
                 )
             event_state = "phase_guard_recovered"
+            self._last_phase_guard_incident_kind = None
+            self._phase_guard_sensor_fault_active = False
+            self._last_phase_guard_sensor_fault_at = None
 
         try:
             self.hass.bus.async_fire(

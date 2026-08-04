@@ -1,6 +1,6 @@
 """Phase-guard alerting stays active independently of EV connection state."""
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -111,6 +111,79 @@ async def test_observer_warning_and_recovery_never_claim_hardware_was_blocked():
         for call in manager.hass.bus.async_fire.call_args_list
     ]
     assert states == ["phase_guard_observer_warning", "phase_guard_recovered"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_sensor_incident_stays_open_until_readings_are_stable():
+    manager = _manager()
+    invalid = _snapshot(
+        safe=False,
+        authorized=True,
+        reason="inverter:l1:invalid_current",
+    )
+    invalid["read_only"] = True
+    safe = _snapshot(safe=True, authorized=True)
+    safe["read_only"] = True
+
+    with patch(
+        "custom_components.solar_energy_management.coordinator.notifications.time.monotonic"
+    ) as monotonic:
+        monotonic.return_value = 0.0
+        await manager.notify_phase_guard_transition(invalid)
+        first_message = manager._send_mobile_notification.await_args.args[0].lower()
+        assert "sensor data" in first_message
+        assert "limit exceeded" not in first_message
+        monotonic.return_value = 20.0
+        await manager.notify_phase_guard_transition(safe)
+        monotonic.return_value = 40.0
+        await manager.notify_phase_guard_transition(invalid)
+        monotonic.return_value = 80.0
+        await manager.notify_phase_guard_transition(safe)
+
+        assert manager._send_mobile_notification.await_count == 1
+
+        monotonic.return_value = 380.0
+        await manager.notify_phase_guard_transition(safe)
+
+    states = [
+        call.args[1]["state"]
+        for call in manager.hass.bus.async_fire.call_args_list
+    ]
+    assert states == ["phase_guard_observer_warning", "phase_guard_recovered"]
+
+
+@pytest.mark.asyncio
+async def test_over_limit_escalates_immediately_during_sensor_fault_incident():
+    manager = _manager()
+    invalid = _snapshot(
+        safe=False,
+        authorized=True,
+        reason="inverter:l1:invalid_current",
+    )
+    invalid["read_only"] = True
+    over_limit = _snapshot(
+        safe=False,
+        authorized=True,
+        reason="grid:l2:over_limit",
+    )
+    over_limit["read_only"] = True
+
+    with patch(
+        "custom_components.solar_energy_management.coordinator.notifications.time.monotonic",
+        return_value=10.0,
+    ):
+        await manager.notify_phase_guard_transition(invalid)
+        await manager.notify_phase_guard_transition(over_limit)
+
+    states = [
+        call.args[1]["state"]
+        for call in manager.hass.bus.async_fire.call_args_list
+    ]
+    assert states == [
+        "phase_guard_observer_warning",
+        "phase_guard_observer_warning",
+    ]
+    assert manager._send_mobile_notification.await_count == 2
 
 
 @pytest.mark.asyncio

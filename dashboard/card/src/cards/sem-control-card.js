@@ -16,6 +16,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
+import { formatObserverCountdown } from '../util/observer-countdown.js';
 
 // EV section removed in #282 audit: every control (charging mode, night
 // charging, smart night, target, currents, phases, stall cooldown) is
@@ -450,6 +451,13 @@ class SEMControlCard extends SEMLitBase {
         const isDark = T.isDark !== false;
         const accent = T.accent || '#42a5f5';
         const obsOn = this._switchOn('observer_mode');
+        const obsEntity = this._hass?.states['switch.sem_observer_mode'];
+        const obsRemainingRaw = Number(obsEntity?.attributes?.observation_remaining_seconds);
+        const obsHasCountdown = Number.isFinite(obsRemainingRaw);
+        const obsReady = obsEntity?.attributes?.ready_for_manual_activation === true;
+        const obsCountdown = obsHasCountdown
+            ? formatObserverCountdown(obsRemainingRaw)
+            : null;
 
         const sectionRenderers = {
             surplus:  (T) => this._renderSurplusSection(T),
@@ -484,10 +492,25 @@ class SEMControlCard extends SEMLitBase {
                     font-size: 13px; font-weight: 500;
                     overflow: hidden;
                     transition: max-height 0.3s ease, opacity 0.2s ease, margin-bottom 0.3s ease, padding 0.3s ease;
-                    max-height: ${obsOn ? '60px' : '0'};
+                    max-height: ${obsOn ? '90px' : '0'};
                     opacity: ${obsOn ? '1' : '0'};
                     margin-bottom: ${obsOn ? '12px' : '0'};
                     padding: ${obsOn ? '12px 16px' : '0 16px'};
+                }
+                .observer-copy { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
+                .observer-detail { color: var(--secondary-text-color, ${T.textSec}); font-size: 12px; font-weight: 500; }
+                .observer-countdown {
+                    flex: 0 0 auto;
+                    min-width: 78px;
+                    padding: 5px 8px;
+                    border-radius: 8px;
+                    background: rgba(244,67,54,0.10);
+                    border: 1px solid rgba(244,67,54,0.24);
+                    color: #f44336;
+                    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                    font-size: 13px;
+                    font-variant-numeric: tabular-nums;
+                    text-align: center;
                 }
 
                 /* ── Sections (polish: color accent + EV-card-matching typography) ── */
@@ -703,7 +726,15 @@ class SEMControlCard extends SEMLitBase {
             <div class="wrap">
                 <div class="observer-warning">
                     <ha-icon icon="mdi:eye-outline" style="--mdc-icon-size:20px;color:#f44336"></ha-icon>
-                    <span>${this._t('observer_mode_active')} — ${this._t('observer_mode_readonly')}</span>
+                    <span class="observer-copy">
+                        <span>${this._t('observer_mode_active')} — ${this._t('observer_mode_readonly')}</span>
+                        ${obsHasCountdown ? html`
+                            <span class="observer-detail">
+                                ${obsReady ? this._t('observer_ready_manual') : this._t('observer_time_remaining')}
+                            </span>
+                        ` : nothing}
+                    </span>
+                    ${obsHasCountdown ? html`<span class="observer-countdown">${obsCountdown}</span>` : nothing}
                 </div>
                 ${SECTIONS.map(s => this._renderSection(s, sectionRenderers[s.id], T))}
             </div>

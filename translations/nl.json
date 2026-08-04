@@ -587,6 +587,9 @@
       "daily_ev_energy": {
         "name": "Vandaag EV"
       },
+      "daily_calendar_ev_energy": {
+        "name": "Vandaag EV"
+      },
       "monthly_solar_yield_energy": {
         "name": "Maandelijks Zon"
       },

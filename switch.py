@@ -13,9 +13,13 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+from .observer_readiness import observation_progress
+
+_OBSERVER_STARTED_AT_OPTION = "_observer_mode_started_at"
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -169,6 +173,12 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # False) won the race and SEM controlled hardware despite the switch.
         if self.entity_description.key == "observer_mode":
             self.coordinator._observer_mode = self._is_on
+            if self._is_on and not (
+                self.coordinator.config_entry.options or {}
+            ).get(_OBSERVER_STARTED_AT_OPTION):
+                # Existing observer installs predate the countdown. Start their
+                # clock at first load rather than guessing historical uptime.
+                self._persist_flag(True)
         # Same immediacy for vacation mode (#594): push the restored state so
         # the first control cycle after a reboot already gates comfort heating.
         if self.entity_description.key == "vacation_mode":
@@ -176,33 +186,59 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
 
 
     def _persist_flag(self, value: bool) -> None:
-        """Persist the toggle into entry.options WITHOUT a reload.
+        """Persist the toggle and observer countdown without a reload.
 
-        PROD/TEST 2026-07-18: observer mode lived only in the switch entity +
-        the running coordinator flag. Every config-entry RELOAD built a fresh
-        coordinator from ``config.get("observer_mode", False)`` — and until
-        the switch platform re-attached (minutes on a busy start), a
-        supposedly hands-off install ran FULLY ARMED; a VPP test in that
-        window force-discharged the real battery. Same no-reload write path
-        as set_option's tunable branch: arm the skip mirror, update the
-        running config in place, then write the entry options.
+        Observer timing lives in entry options so a Home Assistant restart does
+        not restart the 72-hour clock. Turning observer mode off clears the clock;
+        turning it on starts a fresh one unless an existing start is being
+        restored. Reaching zero never disables observer mode automatically.
         """
         if self.hass is None:
             return  # pre-add lifecycle / bare test stubs — nothing to persist to
         key = self.entity_description.key
-        entry = self.coordinator.config_entry
-        new_options = {**(entry.options or {}), key: value}
+        old_options = dict(self.coordinator.config_entry.options or {})
+        new_options = {**old_options, key: value}
+        if key == "observer_mode":
+            if value:
+                new_options.setdefault(
+                    _OBSERVER_STARTED_AT_OPTION,
+                    dt_util.utcnow().isoformat(),
+                )
+            else:
+                new_options.pop(_OBSERVER_STARTED_AT_OPTION, None)
         self.coordinator._skip_options_reload = dict(new_options)
         try:
             self.coordinator.config[key] = value
         except Exception:  # noqa: BLE001
             pass
-        self.hass.config_entries.async_update_entry(entry, options=new_options)
+        self.hass.config_entries.async_update_entry(
+            self.coordinator.config_entry,
+            options=new_options,
+        )
 
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
         return self._is_on
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose the restart-durable 72-hour observer readiness clock."""
+        if self.entity_description.key != "observer_mode":
+            return None
+        started_at = (self.coordinator.config_entry.options or {}).get(
+            _OBSERVER_STARTED_AT_OPTION
+        )
+        progress = observation_progress(started_at, now=dt_util.utcnow())
+        return {
+            "observation_started_at": started_at,
+            "observation_target_hours": 72,
+            "observation_elapsed_seconds": progress["elapsed_seconds"],
+            "observation_remaining_seconds": progress["remaining_seconds"],
+            "ready_for_manual_activation": progress["ready"],
+            # Advisory only: observer mode remains read-only until explicitly off.
+            "automatic_activation": False,
+        }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
