@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sensor's own update interval and shrink each round). A mobile notification and a card info line
   ("Car: 55 % (28 min ago) · est. now ~59 %") explain both the early stop and any resume. The
   virtual/estimated SOC display is untouched, and the #446 wall (no speculative SOC in budgets)
-  is re-pinned by an extended AST guard. Zero new config keys.
+  is re-pinned by an extended AST guard. Zero new config keys. Docs:
+  `docs/USER_GUIDE.md` → "Slow-polling SOC sensors (energy-accounted ceiling)".
 
 ### ✨ Features
 
