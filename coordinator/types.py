@@ -1327,6 +1327,21 @@ class SEMData:
                     # clobbered across the per-charger update loop.
                     f"charger_{cid}_vehicle_soc": intel.get("vehicle_soc"),
                     f"charger_{cid}_taper_minutes_to_full": intel.get("minutes_to_full"),
+                    # #708 — session energy-accounted SOC (the overshoot
+                    # guard) + whether it is what currently holds the
+                    # charge stopped. Surfaced as ATTRIBUTES of the
+                    # estimated_soc sensor, not as new entities.
+                    # Integer-rounded so the attribute only moves every
+                    # few minutes of charging — a per-cycle decimal would
+                    # re-arm the #581 recorder churn.
+                    f"charger_{cid}_energy_accounted_soc": (
+                        round(_ea708)
+                        if (_ea708 := intel.get("energy_accounted_soc")) is not None
+                        else None
+                    ),
+                    f"charger_{cid}_estimate_stop_active": bool(
+                        intel.get("estimate_stop_active")
+                    ),
                 })
         except Exception as e:
             _LOGGER.warning("Per-charger intelligence to_dict failed: %s", e)

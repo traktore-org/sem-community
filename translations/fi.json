@@ -209,6 +209,7 @@
         "description": "Sähkön hinnat ja edistyneet säätöparametrit.",
         "data": {
           "electricity_import_rate": "Ostohinta",
+          "grid_import_surcharge": "Muuttuva verkonhaltijan maksu (valuutta/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Vientihinta",
           "demand_charge_rate": "Tehomaksun hinta",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Päivä- tai kiinteä ostohinta (valuutta/kWh sis. alv). Käytetään varalla, kun dynaaminen hinnoittelu ei ole käytettävissä.",
+          "grid_import_surcharge": "Valinnainen kokonaismuuttuva verkonhaltijan maksu lisättynä jokaiseen tuotuun kWh:hen. Voi yhdistää sähkönsiirron ja energiaveron. Ei kiinteää liittymää; ei vaikuta vientiin.",
           "electricity_off_peak_rate": "Yö- tai halvan ajan ostohinta (valuutta/kWh). Aseta samaksi kuin ostohinta, jos sinulla on kiinteä tariffi.",
           "electricity_export_rate": "Verkkoyhtiön maksama syöttötariffi (valuutta/kWh).",
           "demand_charge_rate": "Kuukausittainen huipputehomaksu (valuutta/kW/kk). Aseta arvoon 0, jos sopimuksessasi ei ole sellaista.",
@@ -426,18 +428,24 @@
       },
       "settings_phase_guard_topology": {
         "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
         "data": {
-          "phase_guard_topology": "Supply topology"
+          "phase_guard_topology": "Supply topology",
+          "phase_guard_phase_count": "Vaiheiden lukumäärä"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
+          "phase_guard_phase_count": "Valitse 1 yksivaiheiselle tai 3 kolmivaiheiselle syötölle. Vain valitut vaiheet ovat pakollisia ja niitä valvotaan."
         }
       },
       "settings_phase_guard": {
         "title": "Per-phase guard sensors",
-        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "description": "Kartoita anturit kohteelle {topology}. Yksivaiheisessa syötössä vaaditaan vain L1. Kolmivaiheisessa syötössä valitse täydellinen L1-L3 suoran RMS-virran perhe, jos saatavilla; muuten verkkovirta lasketaan absoluuttisen tehon ja jännitteen osamääränä. Hybridi Load/EPS-väylässä valitse ei-negatiiviset RMS-virta-anturit määritetyille vaiheille. Puuttuvat, vanhentuneet, virheelliset tai negatiiviset pakolliset lukemat epäonnistuvat suljetusti (fail closed). Observer Mode julkaisee vain diagnostiikkaa; se ei lähetä ohjauskomentoja.",
         "data": {
+          "phase_guard_enforcement_enabled": "Pysäytä EV-lataus, kun vaiherajat ylittyvät",
+          "phase_guard_notifications_enabled": "Lähetä vaihevahtihälytykset",
+          "phase_guard_recovery_margin_a": "Turvamarginaali kunkin vaiherajan alapuolella",
+          "phase_guard_recovery_cycles": "Turvalliset lukemat ennen latauksen jatkamista",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -455,12 +463,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "Kun tämä on käytössä, kaikki hallitut EV-laturit sammutetaan heti, jos lukemat ovat vaarallisia tai vanhentuneita, jotta pääsulake ei laukea. Oletuksena pois käytöstä, jotta vaihevahdin voi ensin tarkistaa tarkkailutilassa.",
+          "phase_guard_recovery_margin_a": "Lataus pysyy estettynä, kunnes jokainen vaadittu vaihe on vähintään tämän verran oman rajansa alapuolella.",
+          "phase_guard_recovery_cycles": "Näin monta peräkkäistä kelvollista ja turvallista lukemaa tarvitaan, ennen kuin EV-lataus voidaan käynnistää uudelleen.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
-          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_current_entity": "Valinnainen suora, ei-negatiivinen RMS-verkkovirta ampeereina. Jos käytetään suoraa lähdettä, kaikki määritetyt vaiheet on annettava.",
+          "phase_guard_grid_l2_current_entity": "Valinnainen suora, ei-negatiivinen RMS-verkkovirta ampeereina. Jos käytetään suoraa lähdettä, kaikki määritetyt vaiheet on annettava.",
+          "phase_guard_grid_l3_current_entity": "Valinnainen suora, ei-negatiivinen RMS-verkkovirta ampeereina. Jos käytetään suoraa lähdettä, kaikki määritetyt vaiheet on annettava.",
           "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
           "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
           "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",

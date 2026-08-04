@@ -294,9 +294,23 @@ class DynamicTariffProvider(TariffProvider):
         currency: str = "CHF",
         classification_mode: str = "percentile",
         fallback_price: float = 0.30,
+        # Grid import surcharge: a constant per-kWh network
+        # fee (e.g. 0.725 SEK/kWh) applied on top of the raw spot price for
+        # every IMPORTED kWh. Explicit config only — 0 disables it. Never
+        # applies to export; never mutates the raw spot series (classification,
+        # ordering, scheduling and raw display all keep raw values).
+        grid_import_surcharge: float = 0.0,
     ):
         self.hass = hass
         self.export_rate = export_rate
+        # The wizard's NumberSelector (min=0.0) is the primary guard, but a
+        # hand-edited config (or a stale entry written before the field
+        # existed) could slip NaN / a negative through. Never let a corrupt
+        # surcharge produce NaN or negative import cost at runtime: clamp
+        # non-finite / negative values to 0.0 (off).
+        self.grid_import_surcharge = self.normalize_grid_import_surcharge(
+            grid_import_surcharge
+        )
         self.cheap_threshold = cheap_threshold
         self.expensive_threshold = expensive_threshold
         # Last-resort import rate when the price entity is unavailable
@@ -1204,8 +1218,29 @@ class DynamicTariffProvider(TariffProvider):
         self._percentile_breaks_for = window_key
         return breaks
 
+    @staticmethod
+    def normalize_grid_import_surcharge(value: object) -> float:
+        """Return a safe non-negative surcharge value, or ``0.0``."""
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0.0
+        value = float(value)
+        return value if math.isfinite(value) and value >= 0.0 else 0.0
+
     def get_current_import_rate(self) -> float:
-        return self._read_current_price()
+        """Current effective import rate: raw spot + grid import surcharge.
+
+        ``grid_import_surcharge`` is an explicit,
+        constant per-kWh add-on applied to every IMPORTED kWh, so it is
+        included here — this is the value that feeds the cost accumulators
+        and savings break-even. Classification keeps the raw
+        ``_read_current_price()`` (see ``get_price_level`` /
+        ``get_tariff_data``).
+        """
+        return self._read_current_price() + self._grid_import_surcharge()
+
+    def _grid_import_surcharge(self) -> float:
+        """Return the configured per-kWh import surcharge, defaulting off."""
+        return getattr(self, "grid_import_surcharge", 0.0)
 
     def effective_import_floor(self, raw_min: float) -> float:
         """Scale a raw forecast minimum to the all-in import rate (#531).
@@ -1223,17 +1258,32 @@ class DynamicTariffProvider(TariffProvider):
         down would make arbitrage over-eager (the bug we're fixing). Below
         1.0 means the cheapest slot is genuinely cheaper than now, which we
         keep.
+
+        The configured ``grid_import_surcharge`` is applied
+        EXACTLY ONCE to every imported kWh, *after* the state-vs-curve
+        correction. It must not enter the correction factor: the factor
+        compares like-for-like raw spot (state vs curve), so we use the raw
+        live rate — ``_read_current_price()`` — not ``get_current_import_rate()``
+        which already adds the surcharge. Using the surcharged rate would
+        inflate the factor by the surcharge ratio AND then add the surcharge
+        again below — double counting (regression guard, #531 follow-up).
         """
         try:
-            all_in = float(self.get_current_import_rate())
+            # Configured surcharge (0.0 when absent — e.g. providers built
+            # via ``__new__`` in legacy tests, or surcharge disabled).
+            surcharge = self._grid_import_surcharge()
+            # Raw live rate (pre-surcharge) for like-for-like correction.
+            live_raw = float(self._read_current_price())
             curve_now = self._cached_price_for(dt_util.now())
-            if curve_now is not None and curve_now > 0.0 and all_in > 0.0:
-                factor = all_in / float(curve_now)
+            if curve_now is not None and curve_now > 0.0 and live_raw > 0.0:
+                factor = live_raw / float(curve_now)
                 if factor > 1.0:
-                    return float(raw_min) * factor
+                    return float(raw_min) * factor + surcharge
         except Exception:  # noqa: BLE001
             pass
-        return raw_min
+        # No correction applied (identity path): the surcharge still
+        # applies once to every imported kWh.
+        return float(raw_min) + self._grid_import_surcharge()
 
     def get_current_export_rate(self) -> float:
         """Read export rate from feed-in entity if available, else static.
@@ -1290,13 +1340,19 @@ class DynamicTariffProvider(TariffProvider):
         return self._detect_interval(prices).total_seconds() / 3600.0
 
     def get_price_at(self, when: datetime) -> Optional[float]:
+        """Price at ``when`` for planning: raw slot + grid import surcharge.
+
+        The surcharge applies to every imported kWh, so optimisation /
+        cost inputs see the all-in rate. Returns ``None`` when no data is
+        known. The underlying raw ``PricePoint`` objects are untouched.
+        """
         prices = self._read_prices_list()
         if not prices:
             return None
         interval = self._detect_interval(prices)
         for p in prices:
             if p.timestamp <= when < p.timestamp + interval:
-                return p.price
+                return p.price + self._grid_import_surcharge()
         return None
 
     def get_price_level_at(self, when: datetime) -> Optional[PriceLevel]:
@@ -1359,9 +1415,16 @@ class DynamicTariffProvider(TariffProvider):
                 if _local_date(p.timestamp) == today
             ]
             if today_prices:
-                data.today_min_price = min(today_prices)
-                data.today_max_price = max(today_prices)
-                data.today_avg_price = sum(today_prices) / len(today_prices)
+                # These attributes accompany current_import_rate on the
+                # import-rate sensor, so expose the same effective all-in
+                # convention. Keep upcoming_prices raw: optimisation applies
+                # the surcharge later via effective_import_floor().
+                surcharge = self._grid_import_surcharge()
+                data.today_min_price = min(today_prices) + surcharge
+                data.today_max_price = max(today_prices) + surcharge
+                data.today_avg_price = (
+                    sum(today_prices) / len(today_prices) + surcharge
+                )
 
             # Find next cheap window
             for p in prices:
@@ -1452,7 +1515,11 @@ class DynamicTariffProvider(TariffProvider):
         slots = self.find_cheapest_hours(hours, within_hours=within_hours)
         if not slots:
             return None
-        return sum(p.price for p in slots) / len(slots)
+        # Average of the raw selected slots, then apply the configured
+        # grid import surcharge exactly once — it applies
+        # to every imported kWh, and each selected slot is one kWh of
+        # import. The raw ``PricePoint`` objects stay untouched.
+        return sum(p.price for p in slots) / len(slots) + self._grid_import_surcharge()
 
     def get_next_daytime_rate(
         self, peak_start: int = 7, peak_end: int = 20,
@@ -1476,7 +1543,9 @@ class DynamicTariffProvider(TariffProvider):
         ]
         if not day_prices:
             return None
-        return sum(day_prices) / len(day_prices)
+        # Average of the raw future daytime slots, then apply the
+        # configured grid import surcharge exactly once (per imported kWh).
+        return sum(day_prices) / len(day_prices) + self._grid_import_surcharge()
 
     def price_series_fingerprint(self) -> Optional[int]:
         """Stable fingerprint of the known price series.

@@ -2,7 +2,7 @@
 
 The radio or field-bus transport is intentionally outside this module. Home
 Assistant integrations expose the usable sensor entities; this helper only
-accepts a complete, coherent L1-L3 RMS-current family.
+accepts one unambiguous family containing every configured phase.
 """
 from __future__ import annotations
 
@@ -52,8 +52,13 @@ def _candidate(state: Any) -> tuple[str, int, str] | None:
     return None
 
 
-def discover_grid_phase_current_entities(states: Iterable[Any]) -> dict[str, str]:
-    """Return one unambiguous, complete L1-L3 direct-current family."""
+def discover_grid_phase_current_entities(
+    states: Iterable[Any], phase_count: int = 3
+) -> dict[str, str]:
+    """Return one unambiguous family containing all configured phases."""
+    if isinstance(phase_count, bool) or phase_count not in {1, 3}:
+        return {}
+    required_phases = set(range(1, phase_count + 1))
     families: dict[str, dict[int, str]] = {}
     for state in states:
         candidate = _candidate(state)
@@ -65,11 +70,13 @@ def discover_grid_phase_current_entities(states: Iterable[Any]) -> dict[str, str
             return {}
         phases[phase] = entity_id
 
-    complete = [phases for phases in families.values() if set(phases) == {1, 2, 3}]
+    complete = [
+        phases for phases in families.values() if required_phases.issubset(phases)
+    ]
     if len(complete) != 1:
         return {}
     phases = complete[0]
     return {
         f"phase_guard_grid_l{phase}_current_entity": phases[phase]
-        for phase in range(1, 4)
+        for phase in range(1, phase_count + 1)
     }

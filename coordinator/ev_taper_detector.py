@@ -55,6 +55,14 @@ FULL_SESSION_ENERGY_FRAC_OF_CAPACITY = 0.025  # 2.5 % of pack capacity. Below
                                               # noise, not a completed charge.
 TAPER_RATIO_NEARLY_FULL = 50   # % — below this = nearly full
 TAPER_RATIO_DETECTED = 70     # % — below this + declining = taper confirmed
+CHARGE_EFFICIENCY = 0.92       # #708 — AC-side delivered → DC-pack fraction for
+                               # the energy-accounted SOC. Deliberately at the
+                               # optimistic end of the realistic 0.85–0.95 band:
+                               # over-estimating pack gain stops the charge AT or
+                               # slightly ABOVE the target, so "Min is a floor"
+                               # stays honest, while the stale-sensor overshoot
+                               # (lag × power, 7 % on the #708 report) is gone.
+                               # Hard-coded by decision — no config knob.
 MAX_ETA_MINUTES = 60           # Cap completion estimate
 MAX_HEALTH_SAMPLES = 20        # Bounded battery health sample buffer
 
@@ -116,6 +124,19 @@ class EVTaperDetector:
         self._last_real_soc: Optional[float] = None
         # Session SOC tracking for partial-charge health estimates
         self._session_start_soc: Optional[float] = None
+        # #708 — energy-accounted SOC anchor: the last sensor VALUE and the
+        # session-energy reading at the moment that value arrived. Between
+        # sensor updates the pack can only be FULLER than the anchor by what
+        # we measurably delivered — that bound is the overshoot guard for
+        # slow/polled SOC sensors (OnStar: 30-min poll ⇒ 7 % overshoot at
+        # 11.5 kW). Session-scoped: cleared on disconnect, never persisted —
+        # after a restart the ceiling stays inactive until the next anchor,
+        # which is the pre-#708 behaviour (fail-open to the known state).
+        self._soc_anchor_value: Optional[float] = None
+        self._soc_anchor_session_kwh: Optional[float] = None
+        # #708 — session latch: the estimate (not the sensor) ended a charge.
+        # Read by the notification layer; cleared on resume or disconnect.
+        self._estimate_stop_active: bool = False
         # Hardware counter tracking for drift-free energy accounting
         self._hw_total_at_full: Optional[float] = None  # Charger total kWh when SOC was 100%
         self._hw_total_last: Optional[float] = None  # Last known charger total kWh
@@ -374,6 +395,20 @@ class EVTaperDetector:
                     "SOC calibrated from vehicle: %.1f%% (energy_since_full=%.1f kWh)",
                     vehicle_soc, self._energy_since_full,
                 )
+                # #708 — every fresh sensor value re-anchors the
+                # energy-accounted SOC; the sensor always wins.
+                self._soc_anchor_value = vehicle_soc
+                self._soc_anchor_session_kwh = self._current_session_energy_kwh
+            elif self._soc_anchor_value is None:
+                # #708 — session-start bootstrap: after a disconnect cleared
+                # the anchor, the first present reading anchors even without
+                # a value change. While the car is not charging its SOC does
+                # not move, so a reading that is minutes old is still the
+                # truth at plug-in — without this, a session whose target
+                # lies inside the sensor's first polling window would run
+                # entirely unguarded.
+                self._soc_anchor_value = vehicle_soc
+                self._soc_anchor_session_kwh = self._current_session_energy_kwh
             self._last_real_soc = vehicle_soc
             self._soc_anchored = True
             # Track session start SOC for health calculation
@@ -395,6 +430,35 @@ class EVTaperDetector:
             min(100.0, 100.0 - (self._energy_since_full / capacity * 100.0)),
         )
         return self._estimated_soc
+
+    def energy_accounted_soc(self) -> Optional[float]:
+        """The pack cannot be emptier than the last reading plus what we
+        measurably delivered since — the #708 overshoot guard.
+
+        ``anchor + delivered_since_anchor × CHARGE_EFFICIENCY / capacity``,
+        capped at 100. Returns ``None`` when no anchor exists (no sensor
+        reading this session, capacity unconfigured, or just after a
+        restart) — callers fall back to pre-#708 behaviour.
+
+        This is deliberately NOT the virtual SOC: ``get_virtual_soc``
+        carries speculative terms (daily driving decay, temperature,
+        self-heal) and is walled off from steering (#440/#446). This
+        estimate contains only measured quantities from the current
+        plugged session, which is what makes it safe to let it CAP —
+        never replace — the sensor in the stop decision.
+        """
+        if self._soc_anchor_value is None or self._soc_anchor_session_kwh is None:
+            return None
+        capacity = float(self._config.get("ev_battery_capacity_kwh", 40) or 0)
+        if capacity <= 0:
+            return None
+        delivered = max(
+            0.0, self._current_session_energy_kwh - self._soc_anchor_session_kwh
+        )
+        return min(
+            100.0,
+            self._soc_anchor_value + delivered * CHARGE_EFFICIENCY / capacity * 100.0,
+        )
 
     def on_session_end(self, session_energy_kwh: float, end_soc: Optional[float] = None) -> None:
         """Record completed session for battery health tracking.
@@ -493,6 +557,12 @@ class EVTaperDetector:
         self._settling_counter = 0
         self._last_setpoint = 0.0
         self._session_start_soc = None
+        # #708 — the anchor is meaningless across sessions (unknown car,
+        # unknown driving in between); the bootstrap in get_virtual_soc
+        # re-arms it from the first reading of the next session.
+        self._soc_anchor_value = None
+        self._soc_anchor_session_kwh = None
+        self._estimate_stop_active = False
         # #438 — reset session-energy accumulator + integration state
         self._current_session_energy_kwh = 0.0
         self._last_energy_timestamp = None

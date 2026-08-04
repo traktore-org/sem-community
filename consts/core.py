@@ -8,6 +8,10 @@ DOMAIN: Final = "solar_energy_management"
 # ============================================
 DEFAULT_OBSERVER_MODE: Final = False  # When True, skip all hardware control (read-only monitoring)
 DEFAULT_UPDATE_INTERVAL: Final = 10  # seconds - 10 seconds for highly accurate energy integration
+# Missing legacy config must not silently require an inverter/load sensor lane.
+# Grid-only remains fail-closed for the installation's upstream phase limit and
+# matches the config flow's least-assumptive default.
+DEFAULT_PHASE_GUARD_TOPOLOGY: Final = "grid_only"
 # Cold-start recovery (#274): re-derive Energy Dashboard power sensors for this many
 # update cycles while they're still unresolved (source integration not yet registered),
 # then give up. ~40 cycles ≈ 7-20 min depending on update_interval.

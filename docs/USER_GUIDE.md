@@ -407,6 +407,38 @@ Charges to a **state-of-charge percentage**, if your EV integration provides a `
 
 SEM calculates remaining need from the SOC gap: `(target_soc - actual_soc) × battery_capacity = kWh remaining`.
 
+#### Slow-polling SOC sensors (energy-accounted ceiling)
+
+Some EV integrations (OnStar-class, cloud-polled) only update `vehicle_soc_entity` every 20–30
+minutes. Steering purely on that last reading lets a session overshoot the target by roughly
+*sensor lag × charge power* — a 60% target on an 85 kWh pack at 11.5 kW can land at 67% before
+the sensor even reports it.
+
+SEM guards against this with an energy-accounted ceiling that sits beside the sensor, not instead
+of it:
+
+```
+effective_soc = max(sensor, anchor + delivered_since_anchor_kwh × 0.92 ÷ capacity_kwh)
+```
+
+- The **anchor** is just the last real sensor value plus a running tally of energy delivered
+  since then (0.92 assumed charge efficiency) — a forward projection from real telemetry, not a
+  guess.
+- A **fresh sensor reading always wins** (`max(...)`) — the sensor is never replaced, only capped
+  from below. If the projection overshoots and a later real reading lands under target, SEM
+  auto-resumes charging for the difference, paced to the sensor's own update interval so it
+  doesn't flap.
+- The anchor is **session-scoped only** — never persisted across restarts, and reset the moment
+  the car disconnects (per charger, so a second charger's session can never leak into the first
+  one's target decision).
+- You'll see a mobile notification on both the early stop and any resume, and a small info line
+  under the SOC gauge on the EV card (e.g. "Car: 55% (28 min ago) · est. now ~59%") — the gauge
+  itself always shows the raw sensor value.
+
+This is separate from the [Virtual SOC](#virtual-soc) fallback below, which only activates when
+you have *no* `vehicle_soc_entity` at all. Here, a real sensor is configured — this just fills the
+gap between its polls with measured energy, and defers to it the instant a fresh reading lands.
+
 #### No vehicle SOC sensor?
 
 If you do not have a `vehicle_soc_entity`, SEM falls back to the **virtual SOC** from EV intelligence once it has a confident anchor (detected full charge or BMS taper event). The estimate is a *soft* ceiling:

@@ -15,6 +15,7 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     DOMAIN,
+    DEFAULT_PHASE_GUARD_TOPOLOGY,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_PRIORITY_SOC,
     DEFAULT_BATTERY_BUFFER_SOC,
@@ -838,6 +839,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_total_energy_sensor",
     "grid_export_power_entity",
     "grid_import_power_entity",
+    "grid_import_surcharge",
     "grid_sign_invert",
     "heat_pump_boost_offset",
     "heat_pump_climate_entity",
@@ -853,10 +855,15 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "mobile_notification_service",
     "observer_mode",
     "phase_guard_enabled",
+    "phase_guard_enforcement_enabled",
+    "phase_guard_notifications_enabled",
+    "phase_guard_recovery_margin_a",
+    "phase_guard_recovery_cycles",
     "phase_guard_topology",
     "phase_guard_grid_limit_a",
     "phase_guard_inverter_limit_a",
     "phase_guard_max_age_s",
+    "phase_guard_phase_count",
     "phase_guard_grid_l1_current_entity",
     "phase_guard_grid_l2_current_entity",
     "phase_guard_grid_l3_current_entity",
@@ -1695,6 +1702,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Choose which electrical lanes need independent phase protection."""
         if user_input is not None:
             topology = user_input["phase_guard_topology"]
+            user_input["phase_guard_phase_count"] = int(
+                user_input.get("phase_guard_phase_count", 3)
+            )
             self._data.update(user_input)
             self._data["phase_guard_enabled"] = topology != "disabled"
             if topology == "disabled":
@@ -1727,6 +1737,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                vol.Required(
+                    "phase_guard_phase_count",
+                    default=str(self._cfg(current_config, "phase_guard_phase_count", 3)),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["1", "3"],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }),
         )
 
@@ -1743,7 +1762,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             **self.config_entry.options,
             **self._data,
         }
-        topology = current_config.get("phase_guard_topology", "grid_only")
+        topology = current_config.get(
+            "phase_guard_topology", DEFAULT_PHASE_GUARD_TOPOLOGY
+        )
+        try:
+            phase_count = int(current_config.get("phase_guard_phase_count", 3))
+        except (TypeError, ValueError):
+            phase_count = 3
+        if phase_count not in {1, 3}:
+            phase_count = 3
         from .coordinator.phase_current_discovery import (
             discover_grid_phase_current_entities,
         )
@@ -1751,13 +1778,52 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         discovered_currents = {}
         if not any(
             current_config.get(f"phase_guard_grid_l{phase}_current_entity")
-            for phase in range(1, 4)
+            for phase in range(1, phase_count + 1)
         ):
             discovered_currents = discover_grid_phase_current_entities(
-                self.hass.states.async_all("sensor")
+                self.hass.states.async_all("sensor"), phase_count=phase_count
             )
 
         fields: dict[Any, Any] = {
+            vol.Optional(
+                "phase_guard_enforcement_enabled",
+                default=self._cfg(
+                    current_config, "phase_guard_enforcement_enabled", False
+                ),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                "phase_guard_notifications_enabled",
+                default=self._cfg(
+                    current_config, "phase_guard_notifications_enabled", True
+                ),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                "phase_guard_recovery_margin_a",
+                default=self._cfg(
+                    current_config, "phase_guard_recovery_margin_a", 2.0
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.5,
+                    max=10.0,
+                    step=0.5,
+                    unit_of_measurement="A",
+                    mode="box",
+                )
+            ),
+            vol.Optional(
+                "phase_guard_recovery_cycles",
+                default=self._cfg(
+                    current_config, "phase_guard_recovery_cycles", 3
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1,
+                    max=12,
+                    step=1,
+                    mode="box",
+                )
+            ),
             vol.Optional(
                 "phase_guard_grid_limit_a",
                 default=self._cfg(current_config, "phase_guard_grid_limit_a", 16.0),
@@ -1848,6 +1914,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 description={"suggested_value": current_config.get("phase_guard_grid_l3_voltage_entity") or None},
             ): sensor_selector,
         })
+        if phase_count == 1:
+            fields = {
+                marker: value
+                for marker, value in fields.items()
+                if "_l2_" not in marker.schema and "_l3_" not in marker.schema
+            }
 
         if topology == "hybrid_load_port":
             fields[
@@ -1880,6 +1952,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     description={"suggested_value": current_config.get("phase_guard_inverter_l3_current_entity") or None},
                 ): sensor_selector,
             })
+            if phase_count == 1:
+                fields = {
+                    marker: value
+                    for marker, value in fields.items()
+                    if "_l2_" not in marker.schema and "_l3_" not in marker.schema
+                }
 
         topology_summary = (
             "grid and inverter Load/EPS output"
@@ -1897,6 +1975,22 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Tariff & Advanced settings."""
         if user_input is not None:
+            # The surcharge field is hidden outside dynamic mode, but it is
+            # still an options-flow-owned key. Preserve an existing value
+            # while static/calendar is selected so a temporary mode switch
+            # cannot silently erase the user's dynamic-tariff configuration.
+            current_config = {
+                **self.config_entry.data,
+                **self.config_entry.options,
+            }
+            if (
+                user_input.get("tariff_mode") != "dynamic"
+                and "grid_import_surcharge" not in user_input
+                and "grid_import_surcharge" in current_config
+            ):
+                user_input["grid_import_surcharge"] = current_config[
+                    "grid_import_surcharge"
+                ]
             # Auto-detect dynamic tariff provider entity if mode=dynamic
             if user_input.get("tariff_mode") == "dynamic" and not user_input.get("dynamic_tariff_entity"):
                 # Shared candidate matcher (#485 K5): the flow used to
@@ -1998,6 +2092,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=100000.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")  # #549 currency-agnostic
                 ),
+                # Grid import surcharge is meaningful only for dynamic
+                # tariffs. Static/calendar providers never consume it, so
+                # hiding it there avoids a silent no-op configuration.
+                **({
+                    vol.Optional(
+                        "grid_import_surcharge",
+                        default=_c("grid_import_surcharge", 0.0),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic / SEK/NOK/HUF-safe
+                    ),
+                } if _c("tariff_mode", "static") == "dynamic" else {}),
                 vol.Optional(
                     "update_interval",
                     default=_c("update_interval", DEFAULT_UPDATE_INTERVAL),

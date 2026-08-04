@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-08-01T11:21:18.824603+00:00
+// Generated: 2026-08-03T21:05:29.432272+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -290,6 +290,10 @@
       "notif_charger_night_no_ev": "Night: No EV",
       "notif_charger_target_done": "Target done",
       "notif_charger_complete": "Complete",
+      "notif_phase_guard_blocked": "Phase guard blocked: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Phase limit exceeded in Observer Mode at {location} ({reason}) — no action was taken.",
+      "notif_phase_guard_recovered": "Phase guard restored and armed after fresh safe readings.",
+      "notif_phase_guard_recovered_observer": "Phase readings returned to safe levels.",
       "notif_ev_nearly_full": "EV nearly full — ~{minutes:.0f} min remaining",
       "notif_daily_summary": "Today: {solar:.1f} kWh solar · {autarky:.0f}% autarky · Saved {savings:.2f} {currency} · Net cost {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -1243,7 +1247,12 @@
       "config_help_grid_power_sensor": "Overrides the auto-detected grid power sensor. The import/export sign convention is detected automatically on the chosen sensor. Leave empty for auto (Energy Dashboard).",
       "config_sources_all_auto": "all auto (Energy Dashboard)",
       "config_sources_overridden": "overridden",
-      "config_source_unavailable": "override sensor unavailable — SEM keeps reading it (no silent fallback). Fix the sensor or clear the override."
+      "config_source_unavailable": "override sensor unavailable — SEM keeps reading it (no silent fallback). Fix the sensor or clear the override.",
+      "notif_ev_estimate_stop": "{name}: stopped at ~{target:.0f}% (estimated) — car sensor is {age:.0f} min old (last: {sensor:.0f}%). SEM measured the delivered energy and stopped to protect your target.",
+      "notif_ev_estimate_resume": "{name}: car reported {sensor:.0f}% — topping up to your {target:.0f}% target.",
+      "soc_info_line": "Car: {soc}% ({age} min ago) · est. now ~{est}%",
+      "soc_target_reached_est": "Target reached — ~{est}% estimated",
+      "soc_confirms_next_update": "car sensor {age} min old; confirms on next update"
     },
     "de": {
       "charging": "Laden",
@@ -1522,6 +1531,10 @@
       "notif_charger_night_no_ev": "Nacht: Kein EV",
       "notif_charger_target_done": "Ziel fertig",
       "notif_charger_complete": "Abgeschlossen",
+      "notif_phase_guard_blocked": "Phasenwächter blockiert: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Phasengrenzwert im Beobachtungsmodus bei {location} überschritten ({reason}) — es wurde keine Maßnahme ausgeführt.",
+      "notif_phase_guard_recovered": "Phasenwächter nach frischen sicheren Messwerten wiederhergestellt und aktiviert.",
+      "notif_phase_guard_recovered_observer": "Die Phasenmesswerte sind wieder im sicheren Bereich.",
       "notif_ev_nearly_full": "EV fast voll — noch ~{minutes:.0f} Min",
       "notif_daily_summary": "Heute: {solar:.1f} kWh Solar · {autarky:.0f}% Autarkie · Gespart {savings:.2f} {currency} · Nettokosten {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -2483,7 +2496,12 @@
       "config_help_grid_power_sensor": "Überschreibt den automatisch erkannten Netzleistungssensor. Die Import/Export-Vorzeichenkonvention wird am gewählten Sensor automatisch erkannt. Leer lassen für Auto (Energie-Dashboard).",
       "config_sources_all_auto": "alles auto (Energie-Dashboard)",
       "config_sources_overridden": "überschrieben",
-      "config_source_unavailable": "Override-Sensor nicht verfügbar — SEM liest ihn weiter (kein stiller Fallback). Sensor reparieren oder Override entfernen."
+      "config_source_unavailable": "Override-Sensor nicht verfügbar — SEM liest ihn weiter (kein stiller Fallback). Sensor reparieren oder Override entfernen.",
+      "notif_ev_estimate_stop": "{name}: gestoppt bei ~{target:.0f}% (geschätzt) — der Fahrzeugsensor ist {age:.0f} Min. alt (zuletzt: {sensor:.0f}%). SEM hat die gelieferte Energie gemessen und gestoppt, um dein Ziel zu schützen.",
+      "notif_ev_estimate_resume": "{name}: Fahrzeug meldet {sensor:.0f}% — lädt nach bis zum Ziel von {target:.0f}%.",
+      "soc_info_line": "Auto: {soc}% (vor {age} Min.) · jetzt geschätzt ~{est}%",
+      "soc_target_reached_est": "Ziel erreicht — ~{est}% geschätzt",
+      "soc_confirms_next_update": "Fahrzeugsensor {age} Min. alt; Bestätigung beim nächsten Update"
     },
     "fr": {
       "charging": "En charge",
@@ -2759,6 +2777,10 @@
       "notif_charger_night_no_ev": "Nuit: Pas de VE",
       "notif_charger_target_done": "Objectif terminé",
       "notif_charger_complete": "Terminé",
+      "notif_phase_guard_blocked": "Protection de phase bloquée : {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Limite de phase dépassée en mode observation à {location} ({reason}) — aucune action n’a été effectuée.",
+      "notif_phase_guard_recovered": "Protection de phase rétablie et armée après des mesures sûres et récentes.",
+      "notif_phase_guard_recovered_observer": "Les mesures de phase sont revenues à des niveaux sûrs.",
       "notif_ev_nearly_full": "VE presque plein — ~{minutes:.0f} min restantes",
       "notif_daily_summary": "Aujourd'hui: {solar:.1f} kWh solaire · {autarky:.0f}% autarcie · Économisé {savings:.2f} {currency} · Coût net {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · VE {ev:.1f} kWh",
@@ -3723,7 +3745,12 @@
       "config_help_grid_power_sensor": "Remplace le capteur de puissance réseau détecté automatiquement. La convention de signe import/export est détectée automatiquement sur le capteur choisi. Laisser vide pour Auto (tableau de bord Énergie).",
       "config_sources_all_auto": "tout auto (tableau Énergie)",
       "config_sources_overridden": "remplacé(s)",
-      "config_source_unavailable": "capteur de remplacement indisponible — SEM continue de le lire (pas de repli silencieux). Réparez le capteur ou effacez le remplacement."
+      "config_source_unavailable": "capteur de remplacement indisponible — SEM continue de le lire (pas de repli silencieux). Réparez le capteur ou effacez le remplacement.",
+      "notif_ev_estimate_stop": "{name} : arrêt à ~{target:.0f}% (estimé) — le capteur du véhicule date de {age:.0f} min (dernier : {sensor:.0f}%). SEM a mesuré l'énergie livrée et s'est arrêté pour protéger votre cible.",
+      "notif_ev_estimate_resume": "{name} : le véhicule indique {sensor:.0f}% — recharge jusqu'à votre cible de {target:.0f}%.",
+      "soc_info_line": "Voiture : {soc}% (il y a {age} min) · est. actuelle ~{est}%",
+      "soc_target_reached_est": "Cible atteinte — ~{est}% estimé",
+      "soc_confirms_next_update": "capteur véhicule vieux de {age} min ; confirmation à la prochaine mise à jour"
     },
     "es": {
       "charging": "Cargando",
@@ -3999,6 +4026,10 @@
       "notif_charger_night_no_ev": "Noche: Sin VE",
       "notif_charger_target_done": "Objetivo listo",
       "notif_charger_complete": "Completo",
+      "notif_phase_guard_blocked": "Protector de fases bloqueado: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Límite de fase superado en modo observador en {location} ({reason}) — no se realizó ninguna acción.",
+      "notif_phase_guard_recovered": "Protector de fases restablecido y armado tras lecturas seguras y recientes.",
+      "notif_phase_guard_recovered_observer": "Las lecturas de fase volvieron a niveles seguros.",
       "notif_ev_nearly_full": "VE casi lleno — ~{minutes:.0f} min restantes",
       "notif_daily_summary": "Hoy: {solar:.1f} kWh solar · {autarky:.0f}% autarquía · Ahorrado {savings:.2f} {currency} · Coste neto {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · VE {ev:.1f} kWh",
@@ -4963,7 +4994,12 @@
       "config_help_grid_power_sensor": "Anula el sensor de potencia de red autodetectado. La convención de signo import/export se detecta automáticamente en el sensor elegido. Dejar vacío para Auto (panel de Energía).",
       "config_sources_all_auto": "todo auto (panel de Energía)",
       "config_sources_overridden": "anulado(s)",
-      "config_source_unavailable": "sensor de anulación no disponible — SEM sigue leyéndolo (sin respaldo silencioso). Repare el sensor o borre la anulación."
+      "config_source_unavailable": "sensor de anulación no disponible — SEM sigue leyéndolo (sin respaldo silencioso). Repare el sensor o borre la anulación.",
+      "notif_ev_estimate_stop": "{name}: detenido en ~{target:.0f}% (estimado) — el sensor del coche tiene {age:.0f} min (último: {sensor:.0f}%). SEM midió la energía entregada y se detuvo para proteger tu objetivo.",
+      "notif_ev_estimate_resume": "{name}: el coche informa {sensor:.0f}% — recargando hasta tu objetivo de {target:.0f}%.",
+      "soc_info_line": "Coche: {soc}% (hace {age} min) · est. ahora ~{est}%",
+      "soc_target_reached_est": "Objetivo alcanzado — ~{est}% estimado",
+      "soc_confirms_next_update": "sensor del coche de hace {age} min; se confirma en la próxima actualización"
     },
     "it": {
       "charging": "In carica",
@@ -5239,6 +5275,10 @@
       "notif_charger_night_no_ev": "Notte: Nessun VE",
       "notif_charger_target_done": "Obiettivo fatto",
       "notif_charger_complete": "Completato",
+      "notif_phase_guard_blocked": "Controllo fasi bloccato: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Limite di fase superato in modalità osservatore in {location} ({reason}) — non è stata eseguita alcuna azione.",
+      "notif_phase_guard_recovered": "Controllo fasi ripristinato e attivato dopo letture sicure e aggiornate.",
+      "notif_phase_guard_recovered_observer": "Le letture di fase sono tornate a livelli sicuri.",
       "notif_ev_nearly_full": "VE quasi pieno — ~{minutes:.0f} min rimanenti",
       "notif_daily_summary": "Oggi: {solar:.1f} kWh solare · {autarky:.0f}% autoconsumo · Risparmiato {savings:.2f} {currency} · Costo netto {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · VE {ev:.1f} kWh",
@@ -6203,7 +6243,12 @@
       "config_help_grid_power_sensor": "Sovrascrive il sensore di potenza di rete rilevato automaticamente. La convenzione di segno import/export viene rilevata automaticamente sul sensore scelto. Lasciare vuoto per Auto (dashboard Energia).",
       "config_sources_all_auto": "tutto auto (dashboard Energia)",
       "config_sources_overridden": "sovrascritti",
-      "config_source_unavailable": "sensore di override non disponibile — SEM continua a leggerlo (nessun fallback silenzioso). Riparare il sensore o rimuovere l'override."
+      "config_source_unavailable": "sensore di override non disponibile — SEM continua a leggerlo (nessun fallback silenzioso). Riparare il sensore o rimuovere l'override.",
+      "notif_ev_estimate_stop": "{name}: fermato a ~{target:.0f}% (stimato) — il sensore dell'auto è vecchio di {age:.0f} min (ultimo: {sensor:.0f}%). SEM ha misurato l'energia erogata e si è fermato per proteggere il tuo obiettivo.",
+      "notif_ev_estimate_resume": "{name}: l'auto segnala {sensor:.0f}% — ricarica fino al tuo obiettivo di {target:.0f}%.",
+      "soc_info_line": "Auto: {soc}% ({age} min fa) · stima attuale ~{est}%",
+      "soc_target_reached_est": "Obiettivo raggiunto — ~{est}% stimato",
+      "soc_confirms_next_update": "sensore auto di {age} min fa; conferma al prossimo aggiornamento"
     },
     "nl": {
       "charging": "Laden",
@@ -6482,6 +6527,10 @@
       "notif_charger_night_no_ev": "Nacht: Geen EV",
       "notif_charger_target_done": "Doel behaald",
       "notif_charger_complete": "Voltooid",
+      "notif_phase_guard_blocked": "Fasebewaking geblokkeerd: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Faselimiet overschreden in observatiemodus bij {location} ({reason}) — er is geen actie uitgevoerd.",
+      "notif_phase_guard_recovered": "Fasebewaking hersteld en geactiveerd na actuele veilige metingen.",
+      "notif_phase_guard_recovered_observer": "De fasemetingen zijn terug op veilige niveaus.",
       "notif_ev_nearly_full": "EV bijna vol — nog ~{minutes:.0f} min",
       "notif_daily_summary": "Vandaag: {solar:.1f} kWh zon · {autarky:.0f}% zelfvoorzienend · Bespaard {savings:.2f} {currency} · Netto kosten {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -7443,7 +7492,12 @@
       "config_help_grid_power_sensor": "Overschrijft de automatisch gedetecteerde netvermogenssensor. De import/export-tekenconventie wordt automatisch gedetecteerd op de gekozen sensor. Leeg laten voor Auto (Energiedashboard).",
       "config_sources_all_auto": "alles auto (Energiedashboard)",
       "config_sources_overridden": "overschreven",
-      "config_source_unavailable": "override-sensor niet beschikbaar — SEM blijft hem lezen (geen stille terugval). Repareer de sensor of wis de override."
+      "config_source_unavailable": "override-sensor niet beschikbaar — SEM blijft hem lezen (geen stille terugval). Repareer de sensor of wis de override.",
+      "notif_ev_estimate_stop": "{name}: gestopt op ~{target:.0f}% (geschat) — de autosensor is {age:.0f} min oud (laatst: {sensor:.0f}%). SEM heeft de geleverde energie gemeten en is gestopt om je doel te beschermen.",
+      "notif_ev_estimate_resume": "{name}: auto meldt {sensor:.0f}% — bijladen tot je doel van {target:.0f}%.",
+      "soc_info_line": "Auto: {soc}% ({age} min geleden) · nu geschat ~{est}%",
+      "soc_target_reached_est": "Doel bereikt — ~{est}% geschat",
+      "soc_confirms_next_update": "autosensor {age} min oud; bevestiging bij volgende update"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7719,6 +7773,10 @@
       "notif_charger_night_no_ev": "Noc: Žádné EV",
       "notif_charger_target_done": "Cíl hotovo",
       "notif_charger_complete": "Dokončeno",
+      "notif_phase_guard_blocked": "Fázová ochrana zablokovala provoz: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Ve sledovacím režimu byl překročen limit fáze v {location} ({reason}) — nebyla provedena žádná akce.",
+      "notif_phase_guard_recovered": "Fázová ochrana byla po čerstvých bezpečných měřeních obnovena a aktivována.",
+      "notif_phase_guard_recovered_observer": "Hodnoty fází se vrátily do bezpečného rozsahu.",
       "notif_ev_nearly_full": "EV téměř plné — zbývá ~{minutes:.0f} min",
       "notif_daily_summary": "Dnes: {solar:.1f} kWh solar · {autarky:.0f}% autarkie · Ušetřeno {savings:.2f} {currency} · Čisté náklady {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -8683,7 +8741,12 @@
       "config_help_grid_power_sensor": "Přepíše automaticky detekovaný senzor výkonu sítě. Znaménková konvence import/export se na zvoleném senzoru detekuje automaticky. Ponechte prázdné pro Auto (energetický panel).",
       "config_sources_all_auto": "vše auto (energetický panel)",
       "config_sources_overridden": "přepsáno",
-      "config_source_unavailable": "přepisový senzor nedostupný — SEM jej dále čte (žádný tichý fallback). Opravte senzor nebo přepis odstraňte."
+      "config_source_unavailable": "přepisový senzor nedostupný — SEM jej dále čte (žádný tichý fallback). Opravte senzor nebo přepis odstraňte.",
+      "notif_ev_estimate_stop": "{name}: zastaveno na ~{target:.0f}% (odhad) — senzor vozu je {age:.0f} min starý (naposledy: {sensor:.0f}%). SEM změřil dodanou energii a zastavil, aby ochránil váš cíl.",
+      "notif_ev_estimate_resume": "{name}: vůz hlásí {sensor:.0f}% — dobíjí se na váš cíl {target:.0f}%.",
+      "soc_info_line": "Vůz: {soc}% (před {age} min) · odhad nyní ~{est}%",
+      "soc_target_reached_est": "Cíl dosažen — ~{est}% odhad",
+      "soc_confirms_next_update": "senzor vozu {age} min starý; potvrzení při další aktualizaci"
     },
     "da": {
       "charging": "Oplader",
@@ -8959,6 +9022,10 @@
       "notif_charger_night_no_ev": "Nat: Ingen EV",
       "notif_charger_target_done": "Mål færdig",
       "notif_charger_complete": "Fuldført",
+      "notif_phase_guard_blocked": "Fasevagt blokerede: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Fasegrænsen blev overskredet i observatørtilstand ved {location} ({reason}) — der blev ikke foretaget nogen handling.",
+      "notif_phase_guard_recovered": "Fasevagt gendannet og aktiveret efter friske, sikre målinger.",
+      "notif_phase_guard_recovered_observer": "Fasemålingerne er tilbage på sikre niveauer.",
       "notif_ev_nearly_full": "EV næsten fuld — ~{minutes:.0f} min tilbage",
       "notif_daily_summary": "I dag: {solar:.1f} kWh sol · {autarky:.0f}% selvforsyning · Sparet {savings:.2f} {currency} · Nettoomkostning {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -9923,7 +9990,12 @@
       "config_help_grid_power_sensor": "Tilsidesætter den autodetekterede neteffektsensor. Import/eksport-fortegnskonventionen registreres automatisk på den valgte sensor. Lad stå tom for Auto (energidashboard).",
       "config_sources_all_auto": "alt auto (energidashboard)",
       "config_sources_overridden": "tilsidesat",
-      "config_source_unavailable": "tilsidesættelsessensor utilgængelig — SEM læser den fortsat (ingen stille fallback). Reparer sensoren eller ryd tilsidesættelsen."
+      "config_source_unavailable": "tilsidesættelsessensor utilgængelig — SEM læser den fortsat (ingen stille fallback). Reparer sensoren eller ryd tilsidesættelsen.",
+      "notif_ev_estimate_stop": "{name}: stoppet ved ~{target:.0f}% (estimeret) — bilens sensor er {age:.0f} min gammel (senest: {sensor:.0f}%). SEM målte den leverede energi og stoppede for at beskytte dit mål.",
+      "notif_ev_estimate_resume": "{name}: bilen melder {sensor:.0f}% — lader op til dit mål på {target:.0f}%.",
+      "soc_info_line": "Bil: {soc}% ({age} min siden) · est. nu ~{est}%",
+      "soc_target_reached_est": "Mål nået — ~{est}% estimeret",
+      "soc_confirms_next_update": "bilsensor {age} min gammel; bekræftes ved næste opdatering"
     },
     "fi": {
       "charging": "Lataus",
@@ -10199,6 +10271,10 @@
       "notif_charger_night_no_ev": "Yö: Ei EV",
       "notif_charger_target_done": "Tavoite valmis",
       "notif_charger_complete": "Valmis",
+      "notif_phase_guard_blocked": "Vaihevahti esti toiminnan: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Vaiheraja ylittyi tarkkailutilassa kohdassa {location} ({reason}) — mitään toimenpidettä ei tehty.",
+      "notif_phase_guard_recovered": "Vaihevahti palautettu ja aktivoitu tuoreiden turvallisten mittausten jälkeen.",
+      "notif_phase_guard_recovered_observer": "Vaihemittaukset ovat palanneet turvalliselle tasolle.",
       "notif_ev_nearly_full": "EV lähes täynnä — ~{minutes:.0f} min jäljellä",
       "notif_daily_summary": "Tänään: {solar:.1f} kWh aurinko · {autarky:.0f}% omavaraisuus · Säästetty {savings:.2f} {currency} · Nettokustannus {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -11163,7 +11239,12 @@
       "config_help_grid_power_sensor": "Ohittaa automaattisesti tunnistetun verkkotehon anturin. Tuonti/vienti-etumerkkikäytäntö tunnistetaan valitusta anturista automaattisesti. Jätä tyhjäksi (Auto, energiapaneeli).",
       "config_sources_all_auto": "kaikki auto (energiapaneeli)",
       "config_sources_overridden": "ohitettu",
-      "config_source_unavailable": "ohitusanturi ei saatavilla — SEM lukee sitä edelleen (ei hiljaista varasiirtymää). Korjaa anturi tai poista ohitus."
+      "config_source_unavailable": "ohitusanturi ei saatavilla — SEM lukee sitä edelleen (ei hiljaista varasiirtymää). Korjaa anturi tai poista ohitus.",
+      "notif_ev_estimate_stop": "{name}: pysäytetty ~{target:.0f}%:iin (arvio) — auton anturi on {age:.0f} min vanha (viimeisin: {sensor:.0f}%). SEM mittasi toimitetun energian ja pysähtyi suojatakseen tavoitteesi.",
+      "notif_ev_estimate_resume": "{name}: auto ilmoittaa {sensor:.0f}% — ladataan tavoitteeseesi {target:.0f}%.",
+      "soc_info_line": "Auto: {soc}% ({age} min sitten) · arvio nyt ~{est}%",
+      "soc_target_reached_est": "Tavoite saavutettu — ~{est}% arvioitu",
+      "soc_confirms_next_update": "auton anturi {age} min vanha; vahvistuu seuraavassa päivityksessä"
     },
     "hu": {
       "charging": "Töltés",
@@ -11439,6 +11520,10 @@
       "notif_charger_night_no_ev": "Éjszaka: Nincs EV",
       "notif_charger_target_done": "Cél kész",
       "notif_charger_complete": "Befejezve",
+      "notif_phase_guard_blocked": "Fázisőr blokkolt: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "A fázishatár túllépésre került megfigyelési módban itt: {location} ({reason}) — nem történt beavatkozás.",
+      "notif_phase_guard_recovered": "A fázisőr friss, biztonságos mérések után helyreállt és aktiválódott.",
+      "notif_phase_guard_recovered_observer": "A fázismérések visszatértek a biztonságos szintre.",
       "notif_ev_nearly_full": "EV majdnem tele — ~{minutes:.0f} perc hátra",
       "notif_daily_summary": "Ma: {solar:.1f} kWh nap · {autarky:.0f}% önellátás · Megtakarítva {savings:.2f} {currency} · Nettó költség {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -12403,7 +12488,12 @@
       "config_help_grid_power_sensor": "Felülírja az automatikusan észlelt hálózati teljesítményszenzort. Az import/export előjel-konvenció a kiválasztott szenzoron automatikusan felismerésre kerül. Hagyja üresen az Auto módhoz (Energia irányítópult).",
       "config_sources_all_auto": "minden auto (Energia irányítópult)",
       "config_sources_overridden": "felülírva",
-      "config_source_unavailable": "a felülíró szenzor nem elérhető — a SEM továbbra is azt olvassa (nincs csendes tartalék). Javítsa a szenzort vagy törölje a felülírást."
+      "config_source_unavailable": "a felülíró szenzor nem elérhető — a SEM továbbra is azt olvassa (nincs csendes tartalék). Javítsa a szenzort vagy törölje a felülírást.",
+      "notif_ev_estimate_stop": "{name}: leállítva ~{target:.0f}%-nál (becsült) — az autó szenzora {age:.0f} perc régi (utolsó: {sensor:.0f}%). A SEM megmérte a leadott energiát, és leállt, hogy védje a célodat.",
+      "notif_ev_estimate_resume": "{name}: az autó {sensor:.0f}%-ot jelez — töltés a {target:.0f}%-os célodig.",
+      "soc_info_line": "Autó: {soc}% ({age} perce) · becslés most ~{est}%",
+      "soc_target_reached_est": "Cél elérve — ~{est}% becsült",
+      "soc_confirms_next_update": "az autó szenzora {age} perc régi; a következő frissítés megerősíti"
     },
     "no": {
       "charging": "Lader",
@@ -12679,6 +12769,10 @@
       "notif_charger_night_no_ev": "Natt: Ingen EV",
       "notif_charger_target_done": "Mål fullført",
       "notif_charger_complete": "Fullført",
+      "notif_phase_guard_blocked": "Fasevakt blokkerte: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Fasegrensen ble overskredet i observatørmodus ved {location} ({reason}) — ingen handling ble utført.",
+      "notif_phase_guard_recovered": "Fasevakt gjenopprettet og aktivert etter ferske, trygge målinger.",
+      "notif_phase_guard_recovered_observer": "Fasemålingene er tilbake på trygge nivåer.",
       "notif_ev_nearly_full": "EV nesten full — ~{minutes:.0f} min gjenstår",
       "notif_daily_summary": "I dag: {solar:.1f} kWh sol · {autarky:.0f}% selvforsyning · Spart {savings:.2f} {currency} · Nettokostnad {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -13643,7 +13737,12 @@
       "config_help_grid_power_sensor": "Overstyrer den autodetekterte netteffektsensoren. Import/eksport-fortegnskonvensjonen oppdages automatisk på valgt sensor. La stå tom for Auto (energidashbord).",
       "config_sources_all_auto": "alt auto (energidashbord)",
       "config_sources_overridden": "overstyrt",
-      "config_source_unavailable": "overstyringssensor utilgjengelig — SEM fortsetter å lese den (ingen stille fallback). Reparer sensoren eller fjern overstyringen."
+      "config_source_unavailable": "overstyringssensor utilgjengelig — SEM fortsetter å lese den (ingen stille fallback). Reparer sensoren eller fjern overstyringen.",
+      "notif_ev_estimate_stop": "{name}: stoppet på ~{target:.0f}% (estimert) — bilens sensor er {age:.0f} min gammel (sist: {sensor:.0f}%). SEM målte levert energi og stoppet for å beskytte målet ditt.",
+      "notif_ev_estimate_resume": "{name}: bilen melder {sensor:.0f}% — lader opp til målet ditt på {target:.0f}%.",
+      "soc_info_line": "Bil: {soc}% ({age} min siden) · est. nå ~{est}%",
+      "soc_target_reached_est": "Mål nådd — ~{est}% estimert",
+      "soc_confirms_next_update": "bilsensor {age} min gammel; bekreftes ved neste oppdatering"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -13919,6 +14018,10 @@
       "notif_charger_night_no_ev": "Noc: Brak EV",
       "notif_charger_target_done": "Cel gotowy",
       "notif_charger_complete": "Zakończone",
+      "notif_phase_guard_blocked": "Strażnik faz zablokował: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Limit fazy został przekroczony w trybie obserwatora w {location} ({reason}) — nie podjęto żadnego działania.",
+      "notif_phase_guard_recovered": "Strażnik faz został przywrócony i uzbrojony po świeżych, bezpiecznych odczytach.",
+      "notif_phase_guard_recovered_observer": "Odczyty faz wróciły do bezpiecznych poziomów.",
       "notif_ev_nearly_full": "EV prawie pełne — ~{minutes:.0f} min pozostało",
       "notif_daily_summary": "Dziś: {solar:.1f} kWh solar · {autarky:.0f}% autarkia · Zaoszczędzono {savings:.2f} {currency} · Koszt netto {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -14883,7 +14986,12 @@
       "config_help_grid_power_sensor": "Nadpisuje automatycznie wykryty czujnik mocy sieci. Konwencja znaku import/eksport jest wykrywana automatycznie na wybranym czujniku. Pozostaw puste dla Auto (Panel Energii).",
       "config_sources_all_auto": "wszystko auto (Panel Energii)",
       "config_sources_overridden": "nadpisane",
-      "config_source_unavailable": "czujnik nadpisania niedostępny — SEM nadal go odczytuje (brak cichego fallbacku). Napraw czujnik lub usuń nadpisanie."
+      "config_source_unavailable": "czujnik nadpisania niedostępny — SEM nadal go odczytuje (brak cichego fallbacku). Napraw czujnik lub usuń nadpisanie.",
+      "notif_ev_estimate_stop": "{name}: zatrzymano na ~{target:.0f}% (szacowane) — czujnik auta ma {age:.0f} min (ostatnio: {sensor:.0f}%). SEM zmierzył dostarczoną energię i zatrzymał ładowanie, aby chronić Twój cel.",
+      "notif_ev_estimate_resume": "{name}: auto zgłasza {sensor:.0f}% — doładowywanie do celu {target:.0f}%.",
+      "soc_info_line": "Auto: {soc}% ({age} min temu) · szac. teraz ~{est}%",
+      "soc_target_reached_est": "Cel osiągnięty — ~{est}% szacowane",
+      "soc_confirms_next_update": "czujnik auta sprzed {age} min; potwierdzenie przy następnej aktualizacji"
     },
     "pt": {
       "charging": "A carregar",
@@ -15159,6 +15267,10 @@
       "notif_charger_night_no_ev": "Noite: Sem VE",
       "notif_charger_target_done": "Meta concluída",
       "notif_charger_complete": "Concluído",
+      "notif_phase_guard_blocked": "Monitor de fases bloqueado: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Limite de fase excedido no modo observador em {location} ({reason}) — nenhuma ação foi executada.",
+      "notif_phase_guard_recovered": "Monitor de fases restaurado e ativado após leituras recentes e seguras.",
+      "notif_phase_guard_recovered_observer": "As leituras de fase voltaram a níveis seguros.",
       "notif_ev_nearly_full": "VE quase cheio — ~{minutes:.0f} min restantes",
       "notif_daily_summary": "Hoje: {solar:.1f} kWh solar · {autarky:.0f}% autarquia · Poupado {savings:.2f} {currency} · Custo líquido {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · VE {ev:.1f} kWh",
@@ -16123,7 +16235,12 @@
       "config_help_grid_power_sensor": "Substitui o sensor de potência da rede autodetetado. A convenção de sinal import/export é detetada automaticamente no sensor escolhido. Deixar vazio para Auto (painel de Energia).",
       "config_sources_all_auto": "tudo auto (painel de Energia)",
       "config_sources_overridden": "substituído(s)",
-      "config_source_unavailable": "sensor de substituição indisponível — o SEM continua a lê-lo (sem recurso silencioso). Repare o sensor ou limpe a substituição."
+      "config_source_unavailable": "sensor de substituição indisponível — o SEM continua a lê-lo (sem recurso silencioso). Repare o sensor ou limpe a substituição.",
+      "notif_ev_estimate_stop": "{name}: parado em ~{target:.0f}% (estimado) — o sensor do carro tem {age:.0f} min (último: {sensor:.0f}%). O SEM mediu a energia entregue e parou para proteger o teu objetivo.",
+      "notif_ev_estimate_resume": "{name}: o carro reporta {sensor:.0f}% — a carregar até ao teu objetivo de {target:.0f}%.",
+      "soc_info_line": "Carro: {soc}% (há {age} min) · est. agora ~{est}%",
+      "soc_target_reached_est": "Objetivo atingido — ~{est}% estimado",
+      "soc_confirms_next_update": "sensor do carro com {age} min; confirma na próxima atualização"
     },
     "ro": {
       "charging": "Încărcare",
@@ -16399,6 +16516,10 @@
       "notif_charger_night_no_ev": "Noapte: Fără VE",
       "notif_charger_target_done": "Obiectiv gata",
       "notif_charger_complete": "Complet",
+      "notif_phase_guard_blocked": "Monitorul de fază a blocat: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Limita fazei a fost depășită în modul observator la {location} ({reason}) — nu a fost efectuată nicio acțiune.",
+      "notif_phase_guard_recovered": "Monitorul de fază a fost restabilit și armat după citiri sigure și recente.",
+      "notif_phase_guard_recovered_observer": "Citirile de fază au revenit la niveluri sigure.",
       "notif_ev_nearly_full": "VE aproape plin — ~{minutes:.0f} min rămase",
       "notif_daily_summary": "Astăzi: {solar:.1f} kWh solar · {autarky:.0f}% autarhie · Economisit {savings:.2f} {currency} · Cost net {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · VE {ev:.1f} kWh",
@@ -17363,7 +17484,12 @@
       "config_help_grid_power_sensor": "Suprascrie senzorul de putere de rețea autodetectat. Convenția de semn import/export este detectată automat pe senzorul ales. Lăsați gol pentru Auto (panoul Energie).",
       "config_sources_all_auto": "totul auto (panoul Energie)",
       "config_sources_overridden": "suprascrise",
-      "config_source_unavailable": "senzorul de suprascriere indisponibil — SEM continuă să îl citească (fără revenire silențioasă). Reparați senzorul sau ștergeți suprascrierea."
+      "config_source_unavailable": "senzorul de suprascriere indisponibil — SEM continuă să îl citească (fără revenire silențioasă). Reparați senzorul sau ștergeți suprascrierea.",
+      "notif_ev_estimate_stop": "{name}: oprit la ~{target:.0f}% (estimat) — senzorul mașinii are {age:.0f} min (ultimul: {sensor:.0f}%). SEM a măsurat energia livrată și s-a oprit pentru a-ți proteja ținta.",
+      "notif_ev_estimate_resume": "{name}: mașina raportează {sensor:.0f}% — se încarcă până la ținta ta de {target:.0f}%.",
+      "soc_info_line": "Mașină: {soc}% (acum {age} min) · est. acum ~{est}%",
+      "soc_target_reached_est": "Țintă atinsă — ~{est}% estimat",
+      "soc_confirms_next_update": "senzorul mașinii vechi de {age} min; se confirmă la următoarea actualizare"
     },
     "sv": {
       "charging": "Laddar",
@@ -17639,6 +17765,10 @@
       "notif_charger_night_no_ev": "Natt: Ingen EV",
       "notif_charger_target_done": "Mål klart",
       "notif_charger_complete": "Klart",
+      "notif_phase_guard_blocked": "Fasvakten blockerade: {location} ({reason}).",
+      "notif_phase_guard_observer_warning": "Fasgränsen överskreds i observatörsläge vid {location} ({reason}) — ingen åtgärd utfördes.",
+      "notif_phase_guard_recovered": "Fasvakten är återställd och aktiverad efter nya säkra mätvärden.",
+      "notif_phase_guard_recovered_observer": "Fasvärdena är tillbaka på säkra nivåer.",
       "notif_ev_nearly_full": "EV nästan full — ~{minutes:.0f} min kvar",
       "notif_daily_summary": "Idag: {solar:.1f} kWh sol · {autarky:.0f}% självförsörjning · Sparat {savings:.2f} {currency} · Nettokostnad {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · EV {ev:.1f} kWh",
@@ -18603,7 +18733,12 @@
       "config_help_grid_power_sensor": "Åsidosätter den autodetekterade näteffektsensorn. Import/export-teckenkonventionen identifieras automatiskt på vald sensor. Lämna tomt för Auto (energipanel).",
       "config_sources_all_auto": "allt auto (energipanel)",
       "config_sources_overridden": "åsidosatta",
-      "config_source_unavailable": "åsidosättningssensor otillgänglig — SEM fortsätter läsa den (ingen tyst reserv). Reparera sensorn eller rensa åsidosättningen."
+      "config_source_unavailable": "åsidosättningssensor otillgänglig — SEM fortsätter läsa den (ingen tyst reserv). Reparera sensorn eller rensa åsidosättningen.",
+      "notif_ev_estimate_stop": "{name}: stoppad vid ~{target:.0f}% (uppskattat) — bilens sensor är {age:.0f} min gammal (senast: {sensor:.0f}%). SEM mätte den levererade energin och stoppade för att skydda ditt mål.",
+      "notif_ev_estimate_resume": "{name}: bilen rapporterar {sensor:.0f}% — laddar upp till ditt mål på {target:.0f}%.",
+      "soc_info_line": "Bil: {soc}% ({age} min sedan) · uppskattat nu ~{est}%",
+      "soc_target_reached_est": "Mål uppnått — ~{est}% uppskattat",
+      "soc_confirms_next_update": "bilsensor {age} min gammal; bekräftas vid nästa uppdatering"
     },
     "zh": {
       "charging": "充电中",
@@ -18890,6 +19025,10 @@
       "notif_charger_night_no_ev": "夜间：无车",
       "notif_charger_target_done": "目标完成",
       "notif_charger_complete": "完成",
+      "notif_phase_guard_blocked": "相位保护已阻止运行：{location}（{reason}）。",
+      "notif_phase_guard_observer_warning": "观察模式下 {location} 的相位限值已超出（{reason}）— 未执行任何操作。",
+      "notif_phase_guard_recovered": "相位保护在获得新的安全读数后已恢复并启用。",
+      "notif_phase_guard_recovered_observer": "相位读数已恢复到安全水平。",
       "notif_ev_nearly_full": "电动汽车即将充满 — 约剩 {minutes:.0f} 分钟",
       "notif_daily_summary": "今日：太阳能 {solar:.1f} kWh · 自给率 {autarky:.0f}% · 节省 {savings:.2f} {currency} · 净费用 {net_cost:.2f} {currency}",
       "notif_daily_summary_ev": " · 电动汽车 {ev:.1f} kWh",
@@ -19843,7 +19982,12 @@
       "config_help_grid_power_sensor": "覆盖自动检测的电网功率传感器。所选传感器的输入/输出符号约定会自动检测。留空则使用自动（能源仪表板）。",
       "config_sources_all_auto": "全部自动（能源仪表板）",
       "config_sources_overridden": "已覆盖",
-      "config_source_unavailable": "覆盖传感器不可用 — SEM 仍在读取它（不会静默回退）。请修复传感器或清除覆盖。"
+      "config_source_unavailable": "覆盖传感器不可用 — SEM 仍在读取它（不会静默回退）。请修复传感器或清除覆盖。",
+      "notif_ev_estimate_stop": "{name}：已在约 {target:.0f}%（估算）停止 — 车辆传感器数据已有 {age:.0f} 分钟（最近:{sensor:.0f}%）。SEM 根据实测充入电量停止充电，以保护你的目标。",
+      "notif_ev_estimate_resume": "{name}：车辆报告 {sensor:.0f}% — 正在补充至你的 {target:.0f}% 目标。",
+      "soc_info_line": "车辆:{soc}%（{age} 分钟前）· 当前估算 ~{est}%",
+      "soc_target_reached_est": "已达目标 — 估算约 {est}%",
+      "soc_confirms_next_update": "车辆传感器数据 {age} 分钟前;下次更新时确认"
     }
   };
 

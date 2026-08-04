@@ -532,6 +532,30 @@ class SEMEVStatusCard extends SEMLitBase {
             this._val(`charger_${id}_estimated_soc`, null),
             this._chargers.length,
         );
+        // #708 — stale-sensor info line (approved Option A): the gauge keeps
+        // showing exactly what the car reports; the session energy-accounted
+        // estimate appears as a separate line with the sensor's age, and a
+        // "target reached (estimated)" line explains an estimate-based stop.
+        // Sensor age comes client-side from the vehicle_soc mirror's own
+        // last_changed — no extra server data, no recorder churn.
+        const estAttrs708 = this._stateAttrs(`sensor.sem_charger_${id}_estimated_soc`);
+        const eaSoc708 = estAttrs708.energy_accounted_soc;
+        const estStop708 = estAttrs708.estimate_stop_active === true;
+        const vSoc708 = this._val(`charger_${id}_vehicle_soc`, null);
+        let socAge708 = null;
+        const vSocState708 = this._hass?.states[`sensor.sem_charger_${id}_vehicle_soc`];
+        if (vSocState708?.last_changed) {
+            socAge708 = Math.round(
+                (Date.now() - new Date(vSocState708.last_changed).getTime()) / 60000);
+        }
+        const fmt708 = (key) => (this._t(key) || '')
+            .replace(/\{soc\}/g, vSoc708 != null ? Math.round(vSoc708) : '—')
+            .replace(/\{age\}/g, socAge708 != null ? socAge708 : '—')
+            .replace(/\{est\}/g, eaSoc708 != null ? Math.round(eaSoc708) : '—');
+        // Only show while the estimate meaningfully leads the sensor and the
+        // sensor is actually stale (>= 5 min) — display users see no change.
+        const showSocInfo708 = vSoc708 != null && eaSoc708 != null
+            && socAge708 != null && socAge708 >= 5 && (eaSoc708 - vSoc708) >= 1;
         // (#440) nights / chargeNeeded / needsCharge / chargeIcon / chargeColor /
         // chargeText removed — the underlying skip decision is gone.
         const name = this._chargerName(id);
@@ -679,6 +703,17 @@ class SEMEVStatusCard extends SEMLitBase {
                              authority on whether to charge at night. -->
                     </div>
                 </div>
+
+                ${estStop708 ? html`
+                <div class="soc-info-708 soc-info-708-stop">
+                    <ha-icon icon="mdi:check-circle-outline" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
+                    <span>${fmt708('soc_target_reached_est')}<br>
+                        <small>${fmt708('soc_confirms_next_update')}</small></span>
+                </div>` : showSocInfo708 ? html`
+                <div class="soc-info-708">
+                    <ha-icon icon="mdi:information-outline" style="--mdc-icon-size:14px;color:#5BC8D8"></ha-icon>
+                    <span>${fmt708('soc_info_line')}</span>
+                </div>` : nothing}
 
                 <div class="charge-target-group">
                     <div class="ct-title">
@@ -1184,6 +1219,22 @@ class SEMEVStatusCard extends SEMLitBase {
             .charger-metrics {
                 flex: 1;
                 display: flex; flex-direction: column; gap: 2px;
+            }
+            /* #708 — stale-sensor estimate info line */
+            .soc-info-708 {
+                display: flex; align-items: flex-start; gap: 6px;
+                margin: 4px 0 2px; padding: 4px 8px;
+                font-size: 11px; line-height: 1.35;
+                color: var(--secondary-text-color, #999);
+                background: rgba(91, 200, 216, 0.08);
+                border-radius: 6px;
+            }
+            .soc-info-708-stop {
+                background: rgba(141, 200, 146, 0.10);
+                color: var(--primary-text-color, #c9d4c9);
+            }
+            .soc-info-708 small {
+                font-size: 10px; opacity: 0.75;
             }
             .cm-row {
                 display: flex; justify-content: space-between; align-items: baseline;

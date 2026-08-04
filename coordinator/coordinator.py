@@ -416,6 +416,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 fallback_price=_cfg_rate(
                     config, "electricity_import_rate", default=0.30,
                 ),
+                # Grid import surcharge: explicit constant
+                # per-kWh network fee added to every IMPORTED kWh for
+                # dynamic tariffs. 0 disables it. Defaults to 0.0 so an
+                # existing config without the key is unaffected.
+                grid_import_surcharge=config.get("grid_import_surcharge", 0.0),
             )
         elif tariff_mode == "calendar":
             schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI
@@ -1649,6 +1654,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # detectors exist the getter still resolves the primary from them.
         self._ev_taper_detector_default = value
 
+    def _reset_per_charger_estimate_state(self, cid: str, was_connected: bool) -> None:
+        """#708 — clear THIS charger's energy-accounted-SOC anchor and
+        estimate-stop/resume flags on ITS OWN disconnect transition.
+
+        ``_update_ev_intelligence`` resets the taper detector too, but only
+        the PRIMARY charger's (``self._ev_taper_detector`` is computed from
+        ``_ev_taper_detectors[primary_id]``), gated on the fleet-wide OR of
+        every charger's connection state. #708 added steering-critical
+        session fields (the SOC anchor) to the same detector class, so a
+        secondary charger's stale anchor could otherwise survive into its
+        next session and falsely cap the SOC target as already met. Call
+        this from inside the per-charger loop, where ``was_connected`` /
+        ``self._last_ev_connected`` are already swapped to THIS charger's
+        values, so the reset is scoped correctly regardless of which
+        charger is primary.
+        """
+        if not (was_connected and not self._last_ev_connected):
+            return
+        det = (getattr(self, "_ev_taper_detectors", None) or {}).get(cid)
+        if det is not None:
+            det.reset_session()
+        nm = getattr(self, "_notification_manager", None)
+        if nm is not None:
+            nm.clear_estimate_flags(flag_key=cid)
+
     @property
     def _ev_stalled_since(self) -> Optional[float]:
         """#589 Surface-A — this charger's stall timestamp, backed by the
@@ -2570,7 +2600,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         pc_chg_map = getattr(power, "ev_charging_per_charger", None) or {}
                         if cid in pc_chg_map:
                             power.ev_charging = bool(pc_chg_map[cid])
+                    was_connected_this_cid = self._last_ev_connected
                     self._update_session_tracking(power, charger_flows)
+                    self._reset_per_charger_estimate_state(cid, was_connected_this_cid)
                     # Save back per-charger state
                     self._session_data_per_charger[cid] = self._session_data
                     self._last_ev_connected_per_charger[cid] = self._last_ev_connected
@@ -2629,6 +2661,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             charging_state = self._state_machine.update_state(charging_context)
 
             # Step 7.5a: Unified EV control via CurrentControlDevice
+            # Evaluate the dual-source phase guard once per cycle before any
+            # charger decision can reach an adapter.  The resulting state is
+            # cached for every charger and for diagnostics publication.
+            from .active_phase_guard import update_active_phase_guard
+            if self.config.get("phase_guard_enabled", False):
+                phase_guard_snapshot = update_active_phase_guard(self)
+                await self._notification_manager.notify_phase_guard_transition(
+                    phase_guard_snapshot,
+                    enabled=True,
+                )
+
             # Multi-charger (#112): control each charger in priority order
             if not self._ev_device and not self._ev_devices:
                 await self._retry_ev_device_with_backoff()
@@ -2969,6 +3012,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             **self._charge_stability_kwargs(),
                             now_ts=_now_mono_cycle,
                         )
+                        # Safety write gate is deliberately LAST: stability
+                        # logic must never bridge or ramp around an emergency
+                        # phase-guard stop.
+                        from .active_phase_guard import filter_charger_decision
+                        decision = filter_charger_decision(
+                            self, decision, adapter=adapter, power=view.power
+                        )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -3159,6 +3209,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     decision, view, adapter,
                     **self._charge_stability_kwargs(),
                     now_ts=_now_mono_cycle,
+                )
+                from .active_phase_guard import filter_charger_decision
+                decision = filter_charger_decision(
+                    self, decision, adapter=adapter, power=view.power
                 )
                 try:
                     await actuate(decision, adapter, view.power, reconciler=reconciler)
@@ -6094,6 +6148,55 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         mins_to_full, charger_name=charger_name
                     )
 
+                # #708 — estimate-stop / auto-resume announcements. The
+                # decision itself lives in _calculate_remaining_need
+                # (effective SOC = max(sensor, energy-accounted)); this
+                # block only detects the two user-visible transitions:
+                # the estimate ends a charge the stale sensor would have
+                # kept running, and a fresh reading below target makes
+                # SEM resume. Latch lives on the per-charger detector
+                # (session-scoped, cleared on disconnect).
+                det_708 = self._ev_taper_detectors.get(cid)
+                cfg_708 = cfg_for_cid or {}
+                type_708 = (
+                    cfg_708.get("ev_target_type") or cfg_708.get("ev_target_mode")
+                    or self.config.get("ev_target_type")
+                    or self.config.get("ev_target_mode", "kwh")
+                )
+                ea_708 = intel.get("energy_accounted_soc")
+                soc_708 = intel.get("vehicle_soc")
+                if (det_708 is not None and charger_connected
+                        and type_708 == "soc"
+                        and ea_708 is not None and soc_708 is not None):
+                    cap_708 = (
+                        cfg_708.get("ev_battery_capacity_kwh")
+                        or self.config.get("ev_battery_capacity_kwh", 40)
+                    )
+                    for bound_708 in ("min", "max"):
+                        tgt = self._resolve_target(
+                            cfg_708, "ev_target_soc", bound_708, 80, 100
+                        )
+                        sensor_rem = max(0.0, (tgt - soc_708) / 100 * cap_708)
+                        eff_rem = max(
+                            0.0, (tgt - max(soc_708, ea_708)) / 100 * cap_708
+                        )
+                        if (not det_708._estimate_stop_active
+                                and sensor_rem > 0.1 and eff_rem <= 0.1):
+                            det_708._estimate_stop_active = True
+                            await self._notification_manager.notify_ev_estimate_stop(
+                                target_soc=tgt, sensor_soc=soc_708,
+                                sensor_age_min=intel.get("vehicle_soc_age_min") or 0,
+                                charger_name=charger_name, flag_key=cid,
+                            )
+                            break
+                        if det_708._estimate_stop_active and eff_rem > 0.1:
+                            det_708._estimate_stop_active = False
+                            await self._notification_manager.notify_ev_estimate_resume(
+                                sensor_soc=soc_708, target_soc=tgt,
+                                charger_name=charger_name, flag_key=cid,
+                            )
+                            break
+
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Event notification failed: %s", e)
         except HomeAssistantError as e:
@@ -6329,14 +6432,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if ev_target_type == "soc":
             # Pre-condition guaranteed by GUI gate + v10→v11 migration:
             # a real ``vehicle_soc_entity`` is configured for this charger.
-            # If its current value is unavailable (network blip etc.),
-            # return the full capacity so SEM keeps charging — taper
-            # detection will eventually stop it on car-full. Never use
-            # estimated_soc.
+            #
+            # #708 — the sensor value may be MINUTES old (OnStar polls every
+            # 30; overshoot = lag × power). The pack cannot be emptier than
+            # the last reading plus what this session measurably delivered
+            # since, so the effective SOC is ``max(sensor, energy-accounted)``.
+            # The sensor stays primary: every fresh value re-anchors the
+            # estimate and wins (this is a CAP, not the #446-forbidden
+            # substitution — the virtual/estimated SOC is still never used
+            # here). When a later reading lands below target, the need goes
+            # positive again and charging auto-resumes — the resumes are
+            # spaced by the sensor's own update interval, and each round
+            # shrinks, so the floor promise is kept without flapping.
+            ceiling_soc = None
+            detectors = getattr(self, "_ev_taper_detectors", None)
+            det = detectors.get(cfg.get("id")) if (detectors and cfg) else None
+            if det is None and detectors:
+                det = self._ev_taper_detector  # primary (single-charger installs)
+            if det is not None:
+                ceiling_soc = det.energy_accounted_soc()
             if vehicle_soc is None:
-                return float(ev_capacity)
+                # Sensor momentarily unavailable: pre-#708 this returned the
+                # full capacity (keep charging until taper). With an anchor
+                # from earlier in the session the estimate keeps counting —
+                # strictly better than charging blind. Never estimated_soc.
+                if ceiling_soc is None:
+                    return float(ev_capacity)
+                soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
+                return max(0, (soc_target - ceiling_soc) / 100 * ev_capacity)
             soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
-            return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
+            effective_soc = (
+                max(vehicle_soc, ceiling_soc) if ceiling_soc is not None else vehicle_soc
+            )
+            return max(0, (soc_target - effective_soc) / 100 * ev_capacity)
 
         # kWh branch — the default mode for installs without a SOC sensor.
         daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
@@ -7400,6 +7528,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#440) Per-charger skip-decision latch removed alongside the
             # skip-decision wiring — charge mode is the sole authority
             # on whether to charge at night now.
+            # #708 — sensor age for the card's staleness display. From
+            # ``last_changed`` deliberately: a poll that re-publishes the
+            # same value bumps only ``last_reported``, and for steering a
+            # value that hasn't CHANGED in 28 minutes of charging is
+            # exactly as stale as one that wasn't re-published.
+            soc_age_min: Optional[float] = None
+            if per_charger_soc_entity:
+                _soc_state = self.hass.states.get(per_charger_soc_entity)
+                if _soc_state is not None and _soc_state.last_changed is not None:
+                    soc_age_min = round(
+                        (dt_util.utcnow() - _soc_state.last_changed).total_seconds() / 60
+                    )
+
             result[cid] = {
                 "estimated_soc": round(soc, 1) if soc is not None else None,
                 # #383: surface the real per-charger vehicle SOC reading
@@ -7414,6 +7555,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ),
                 "minutes_to_full": taper_data.minutes_to_full if taper_data else None,
                 "battery_health": detector.battery_health_pct,
+                # #708 — measurement-only session estimate + sensor age,
+                # for the charger card's stale-sensor info line. NOT a
+                # SOC display value: the gauge keeps showing the sensor.
+                "energy_accounted_soc": (
+                    round(det_ea, 1)
+                    if (det_ea := detector.energy_accounted_soc()) is not None
+                    else None
+                ),
+                "vehicle_soc_age_min": soc_age_min,
+                "estimate_stop_active": detector._estimate_stop_active,
             }
 
         return result
@@ -7955,6 +8106,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     tp.fallback_price = _cfg_rate(
                         cfg, "electricity_import_rate", default=0.30
+                    )
+                    # #710: cached at construction, so options updates must
+                    # push this live like the thresholds above. An absent key
+                    # (upgraded install) preserves the current/legacy value.
+                    tp.grid_import_surcharge = (
+                        DynamicTariffProvider.normalize_grid_import_surcharge(
+                            cfg.get(
+                                "grid_import_surcharge",
+                                tp.grid_import_surcharge,
+                            )
+                        )
                     )
                 else:
                     # Static / Calendar share peak/off-peak rate fields. Fall

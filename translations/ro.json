@@ -209,6 +209,7 @@
         "description": "Tarifele de energie electrică și parametrii avansați de reglare.",
         "data": {
           "electricity_import_rate": "Tarif import",
+          "grid_import_surcharge": "Taxă variabilă de rețea (monedă/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Tarif export",
           "demand_charge_rate": "Tarif pentru putere contractată",
@@ -222,6 +223,7 @@
         },
         "data_description": {
           "electricity_import_rate": "Tarif de import de zi/unic (monedă/kWh, cu TVA inclus). Folosit ca rezervă atunci când prețul dinamic este indisponibil.",
+          "grid_import_surcharge": "Taxă variabilă totală opțională de rețea adăugată la fiecare kWh importat. Poate combina transportul de electricitate și impozitul pe energie. Fără abonament fix; fără efect asupra exportului.",
           "electricity_off_peak_rate": "Tarif de import de noapte/în afara vârfului (monedă/kWh). Setați-l egal cu tariful de import dacă aveți un tarif unic.",
           "electricity_export_rate": "Tariful de injecție plătit de furnizor (monedă/kWh).",
           "demand_charge_rate": "Taxa lunară pentru puterea de vârf (monedă/kW/lună). Setați 0 dacă în contractul dumneavoastră nu există.",
@@ -426,18 +428,24 @@
       },
       "settings_phase_guard_topology": {
         "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
         "data": {
-          "phase_guard_topology": "Supply topology"
+          "phase_guard_topology": "Supply topology",
+          "phase_guard_phase_count": "Număr de faze"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
+          "phase_guard_phase_count": "Selectați 1 pentru o alimentare monofazată sau 3 pentru o alimentare trifazată. Doar fazele selectate sunt obligatorii și sunt monitorizate."
         }
       },
       "settings_phase_guard": {
         "title": "Per-phase guard sensors",
-        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "description": "Asociați senzorii pentru {topology}. Pentru o alimentare monofazată, este necesar doar L1. Pentru o alimentare trifazată, selectați o familie completă de curenți RMS directi L1-L3 atunci când este disponibilă; în caz contrar, curentul de rețea se calculează ca putere absolută împărțită la tensiune. Pentru o bandă hibridă Load/EPS, selectați senzori de curent RMS nenegativi pentru fazele configurate. Citirile obligatorii lipsă, învechite, invalide sau negative eșuează în siguranță (fail closed). Modul Observer Mode publică doar diagnostice; nu trimite comenzi de control.",
         "data": {
+          "phase_guard_enforcement_enabled": "Opriți încărcarea EV când limitele de fază sunt depășite",
+          "phase_guard_notifications_enabled": "Trimite alertele monitorului de fază",
+          "phase_guard_recovery_margin_a": "Marjă de siguranță sub fiecare limită de fază",
+          "phase_guard_recovery_cycles": "Citiri sigure înainte de reluarea încărcării",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -455,12 +463,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "Când opțiunea este activată, toate încărcătoarele EV gestionate sunt oprite imediat dacă citirile sunt nesigure sau învechite, pentru a evita declanșarea siguranței principale. Este dezactivată implicit, astfel încât protecția de fază să poată fi verificată mai întâi în modul de observare.",
+          "phase_guard_recovery_margin_a": "Încărcarea rămâne blocată până când fiecare fază necesară se află cu cel puțin această marjă sub propria limită.",
+          "phase_guard_recovery_cycles": "Numărul de citiri valide și sigure consecutive necesare înainte ca încărcarea EV să poată fi pornită din nou.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
-          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_current_entity": "Curent de rețea RMS direct, nenegativ, opțional, în A. Dacă se utilizează o sursă directă, trebuie furnizate toate fazele configurate.",
+          "phase_guard_grid_l2_current_entity": "Curent de rețea RMS direct, nenegativ, opțional, în A. Dacă se utilizează o sursă directă, trebuie furnizate toate fazele configurate.",
+          "phase_guard_grid_l3_current_entity": "Curent de rețea RMS direct, nenegativ, opțional, în A. Dacă se utilizează o sursă directă, trebuie furnizate toate fazele configurate.",
           "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
           "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
           "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",
