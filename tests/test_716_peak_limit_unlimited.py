@@ -139,12 +139,52 @@ class TestPeakLimitRead:
         host._load_manager = lm
         assert host._get_peak_limit_w() == 9000.0
 
-    def test_flag_beats_the_load_manager(self):
-        """The opt-out short-circuits before the LoadManager is consulted, so
-        a stale stored limit can't leak back in."""
+    def test_live_load_manager_unlimited_wins_over_stale_config(self):
+        """Regression for the bug this method was named after: the Control-
+        tab slider writes ``peak_limit_unlimited`` straight into the live
+        ``LoadManagementCoordinator`` and deliberately skips the config-entry
+        reload (see ``update_target_peak_limit``), so ``self.config`` can sit
+        stale in the "limited" state after the user drags to MAX. The EV
+        controller must observe the live flip immediately, not after the
+        next restart."""
+        host = _ev_host({"target_peak_limit": 5.0, "peak_limit_unlimited": False})
+        lm = MagicMock()
+        lm.get_load_management_data.return_value = {
+            "target_peak_limit": 5.0,
+            "peak_limit_unlimited": True,
+        }
+        host._load_manager = lm
+        assert host._get_peak_limit_w() == math.inf
+
+    def test_live_load_manager_limited_overrides_stale_config_unlimited(self):
+        """The dangerous direction: config stuck at "Uncapped" from before a
+        restart, but the user has since dragged the slider back down to a
+        real ceiling. The EV must respect the number the user just set, not
+        keep sizing as if nothing constrains it."""
         host = _ev_host({"target_peak_limit": 5.0, "peak_limit_unlimited": True})
         lm = MagicMock()
-        lm.get_load_management_data.return_value = {"target_peak_limit": 9.0}
+        lm.get_load_management_data.return_value = {
+            "target_peak_limit": 9.0,
+            "peak_limit_unlimited": False,
+        }
+        host._load_manager = lm
+        assert host._get_peak_limit_w() == 9000.0
+
+    def test_config_flag_used_when_no_load_manager(self):
+        """Before the LoadManager is wired up (or when load management is
+        off and the coordinator never constructs one), the config value is
+        the only source of truth left."""
+        host = _ev_host({"target_peak_limit": 5.0, "peak_limit_unlimited": True})
+        assert host._load_manager is None
+        assert host._get_peak_limit_w() == math.inf
+
+    def test_config_flag_used_when_load_manager_read_raises(self):
+        """A defensive fallback, matching ``target_peak_limit``'s own
+        try/except three lines above — an unexpected LoadManager error must
+        not crash EV sizing."""
+        host = _ev_host({"target_peak_limit": 5.0, "peak_limit_unlimited": True})
+        lm = MagicMock()
+        lm.get_load_management_data.side_effect = RuntimeError("boom")
         host._load_manager = lm
         assert host._get_peak_limit_w() == math.inf
 

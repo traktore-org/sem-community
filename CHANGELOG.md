@@ -59,6 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limit](docs/USER_GUIDE.md#no-grid-limit), [SETUP_GUIDE.md → Step
   3](docs/SETUP_GUIDE.md#step-3-hardware-and-dashboard-settings),
   [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#peak-load-management-not-working).
+- 🔧 **The "no grid limit" opt-out could lag a full restart behind the slider, in both
+  directions** (#716, found in review) — dragging the Control-tab slider to "Uncapped" writes
+  straight into the live load manager and deliberately skips a config-entry reload (a full
+  rebuild on every drag would be too heavy), so the EV controller's own copy of the flag —
+  read from the un-reloaded config — could still see the old value. Dragging to "Uncapped"
+  left the EV sizing against the old ceiling until a restart; dragging back down to a real
+  number left it sizing as if nothing constrained it, ignoring the limit just set. The EV
+  controller now reads the flag from the live load manager first, the same way it already
+  read the target kW value, falling back to config only when no load manager is wired up yet.
 - 🌐 **Six options-flow error messages rendered as raw keys** (found while fixing #717) —
   HA resolves options-flow errors under `options.error`, not `config.error`
   (`show-dialog-options-flow.ts` falls back to the bare key), and all of SEM's options-flow

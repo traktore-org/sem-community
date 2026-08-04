@@ -411,7 +411,26 @@ class EVControlMixin:
         return self.config.get("target_peak_limit", 5.0) * 1000
 
     def _peak_limit_unlimited(self) -> bool:
-        """True when this install declared it has no grid ceiling (#716)."""
+        """True when this install declared it has no grid ceiling (#716).
+
+        Prefers the live ``LoadManagementCoordinator`` value over
+        ``self.config`` — same reason ``_get_peak_limit_w()`` prefers it for
+        ``target_peak_limit`` three lines above: the Control-tab slider
+        writes through ``update_target_peak_limit()`` and deliberately skips
+        the config-entry reload (to avoid a full coordinator rebuild on
+        every drag), so ``self.config`` can sit stale — in either direction —
+        until the next restart. Reading ``self.config`` only here let the EV
+        controller miss a live "Uncapped" flip, and worse, keep charging
+        past a limit the user had just restored.
+        """
+        if self._load_manager:
+            try:
+                lm_info = self._load_manager.get_load_management_data()
+                return bool(
+                    lm_info.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
+                )
+            except Exception:
+                pass
         return bool(
             self.config.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
         )
