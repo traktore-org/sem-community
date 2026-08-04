@@ -190,13 +190,16 @@ def _synthetic_plan(*, slots, demands, blocks_per_demand, minutes=15):
             "price": 0.2345, "cheap": bool(i % 3),
             "home_w": 451.7, "soc_kwh": 9.87, "home_grid_w": 451.7,
         } for i in range(slots)],
-        # Contiguous per-slot allocations — exactly what the packer emits.
+        # Per-slot allocations in the order the packer really emits them:
+        # SLOT-major, every demand for a slot before moving to the next. A
+        # demand's own consecutive blocks are therefore NOT neighbours here
+        # — a demand-major fixture would let a broken merge look correct.
         "blocks": [{
             "id": f"load:device_{d}",
             "start": (t + i * step).isoformat(),
             "end": (t + (i + 1) * step).isoformat(),
             "power_w": 2300.0, "price": 0.2345,
-        } for d in range(demands) for i in range(blocks_per_demand)],
+        } for i in range(blocks_per_demand) for d in range(demands)],
     }
 
 
@@ -217,16 +220,43 @@ def test_projection_leaves_the_prose_and_the_trajectory_behind():
 
 def test_contiguous_allocations_merge_into_one_run():
     """The packer allocates per market slot; the strip draws a run. Merging is
-    invisible to the card and is what keeps a 15-minute night chartable."""
+    invisible to the card and is what keeps a 15-minute night chartable.
+
+    Note the fixture is SLOT-major (see ``_synthetic_plan``): merging has to
+    group by demand first. A version that only compared each block with its
+    predecessor merged nothing live and still passed a demand-major test."""
     attrs = _overnight_plan_attrs(
         _synthetic_plan(slots=16, demands=2, blocks_per_demand=4))
     assert len(attrs["blocks"]) == 2, "4 back-to-back slots are one bar"
-    b = attrs["blocks"][0]
-    assert b["start"].endswith("16:00:00+01:00")
-    assert b["end"].endswith("17:00:00+01:00")
-    # A merged run spans slots that may differ in price — quoting one would
-    # be a lie, so the projection carries none. diagnose still has them all.
-    assert "price" not in b
+    for b in attrs["blocks"]:
+        assert b["start"].endswith("16:00:00+01:00")
+        assert b["end"].endswith("17:00:00+01:00")
+        # A merged run spans slots that may differ in price — quoting one
+        # would be a lie, so the projection carries none. diagnose has them.
+        assert "price" not in b
+
+
+def test_merge_handles_the_shape_ha_test_actually_published():
+    """Verbatim from ``sensor.sem_overnight_plan`` on HA-TEST, 2026-08-04
+    04:58 — two demands over two contiguous hours. The first merge shipped
+    green against a demand-major fixture and collapsed NOTHING here."""
+    live = [
+        {"id": "ev:keba_fa87f74cd3", "start": "2026-08-04T05:00:00+02:00",
+         "end": "2026-08-04T06:00:00+02:00", "power_w": 5800.0, "price": 0.3387},
+        {"id": "load:sim_pool_pump", "start": "2026-08-04T05:00:00+02:00",
+         "end": "2026-08-04T06:00:00+02:00", "power_w": 1500.0, "price": 0.3387},
+        {"id": "ev:keba_fa87f74cd3", "start": "2026-08-04T06:00:00+02:00",
+         "end": "2026-08-04T06:01:00+02:00", "power_w": 5800.0, "price": 0.3387},
+        {"id": "load:sim_pool_pump", "start": "2026-08-04T06:00:00+02:00",
+         "end": "2026-08-04T06:01:00+02:00", "power_w": 1500.0, "price": 0.3387},
+    ]
+    merged = _overnight_plan_attrs({"demands": [1], "blocks": live})["blocks"]
+    assert len(merged) == 2
+    assert {b["id"] for b in merged} == {"ev:keba_fa87f74cd3",
+                                         "load:sim_pool_pump"}
+    for b in merged:
+        assert b["start"] == "2026-08-04T05:00:00+02:00"
+        assert b["end"] == "2026-08-04T06:01:00+02:00"
 
 
 def test_a_gap_between_allocations_is_not_merged_away():

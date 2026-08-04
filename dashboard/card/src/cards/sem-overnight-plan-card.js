@@ -229,7 +229,8 @@ class SEMOvernightPlanCard extends SEMLitBase {
                             <div class="track axis">
                                 ${cheapLayer}
                                 ${ticks.map(t => html`
-                                    <span class="tick" style="left:${t.left}%">${t.text}</span>
+                                    <span class="tick ${t.left < 4 ? 'first' : ''}"
+                                          style="left:${t.left}%">${t.text}</span>
                                 `)}
                             </div>
                             <div class="stat axis"></div>
@@ -364,7 +365,10 @@ class SEMOvernightPlanCard extends SEMLitBase {
             }
             .strip {
                 display: grid;
-                grid-template-columns: 82px 1fr 92px;
+                /* The label column grows with the card: on a panel-width
+                   System tab a fixed 82px truncated "Sim Pool Pump" to
+                   "Sim Pool P…" with 700px going spare. */
+                grid-template-columns: minmax(82px, 16%) 1fr 92px;
                 align-items: center;
                 row-gap: 4px; column-gap: 8px;
             }
@@ -405,6 +409,14 @@ class SEMOvernightPlanCard extends SEMLitBase {
             .tick {
                 position: absolute; top: 0;
                 transform: translateX(-50%);
+                font-size: 9px; color: var(--secondary-text-color);
+                font-variant-numeric: tabular-nums;
+                white-space: nowrap;
+            }
+            /* The first tick sits at 0% — centring it would hang half the
+               label off the left edge of the track. Left-align that one. */
+            .tick.first {
+                transform: none;
                 font-size: 9px; color: var(--secondary-text-color);
                 font-variant-numeric: tabular-nums;
                 white-space: nowrap;

@@ -77,24 +77,35 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     may differ in price, and quoting one of them would be a lie. The per-slot
     prices stay on the ledger rows, and ``diagnose`` still has every original
     allocation with its own price.
+
+    Grouping by demand id is load-bearing, not tidiness: the packer emits
+    allocations SLOT-major (every demand for 05:00, then every demand for
+    06:00), so a demand's own consecutive blocks are never neighbours in the
+    list. Comparing each block only against the previous one merges nothing
+    at all on real data — verified live on HA-TEST.
     """
-    out: List[Dict[str, Any]] = []
+    by_id: Dict[Any, List[Dict[str, Any]]] = {}
     for b in blocks or []:
         if not isinstance(b, dict):
             continue
-        row = {
+        by_id.setdefault(b.get("id"), []).append({
             "id": b.get("id"),
             "start": b.get("start"),
             "end": b.get("end"),
             "power_w": b.get("power_w"),
-        }
-        prev = out[-1] if out else None
-        if (prev and prev["id"] == row["id"]
-                and prev["power_w"] == row["power_w"]
-                and prev["end"] == row["start"]):
-            prev["end"] = row["end"]
-            continue
-        out.append(row)
+        })
+    out: List[Dict[str, Any]] = []
+    for rows in by_id.values():
+        rows.sort(key=lambda r: str(r["start"]))
+        run: List[Dict[str, Any]] = []
+        for row in rows:
+            prev = run[-1] if run else None
+            if (prev and prev["power_w"] == row["power_w"]
+                    and prev["end"] == row["start"]):
+                prev["end"] = row["end"]
+                continue
+            run.append(row)
+        out.extend(run)
     return out
 
 
