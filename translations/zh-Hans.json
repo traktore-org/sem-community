@@ -427,15 +427,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "电气拓扑",
+        "description": "选择住宅的供电方式。在混合安装中，电网和逆变器的 Load/EPS/Backup 输出可以同时为住宅供电。因此，住宅内部的负载可能高于主保险丝的电流。SEM 会独立监测这两条路径。主动干预为可选功能；请在启用 EV 控制之前，先在观察者模式下核对读数。",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "供电拓扑",
           "phase_guard_phase_count": "相数"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "选择 1 表示单相供电，选择 3 表示三相供电。仅选定相位为必需并进行监控。"
+          "phase_guard_topology": "对于传统安装，请选择“仅电网”。当负载也通过 Load、EPS 或 Backup 输出供电时，请选择“电网 + 混合逆变器”。",
+          "phase_guard_phase_count": "单相供电请选择 1，三相供电请选择 3。仅所选相会被要求和监测。"
         }
       },
       "settings_phase_guard": {
@@ -1348,8 +1348,8 @@
     "phase_guard_topology": {
       "options": {
         "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "grid_only": "仅电网供电",
+        "hybrid_load_port": "电网 + 混合逆变器 Load/EPS 输出"
       }
     }
   }

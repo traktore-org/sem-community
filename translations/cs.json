@@ -427,15 +427,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektrická topologie",
+        "description": "Zvolte způsob napájení domu. V hybridní instalaci mohou dům současně napájet distribuční síť a výstup Load/EPS/Backup střídače. Zatížení uvnitř domu proto může být vyšší než proud procházející hlavním jističem. SEM sleduje obě cesty nezávisle. Aktivní ochrana je volitelná; před povolením řízení EV ověřte hodnoty v režimu sledování.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Topologie napájení",
           "phase_guard_phase_count": "Počet fází"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Vyberte 1 pro jednofázové napájení nebo 3 pro třífázové napájení. Vyžadovány a monitorovány jsou pouze vybrané fáze."
+          "phase_guard_topology": "Pro běžnou instalaci vyberte Pouze distribuční síť. Pokud jsou spotřebiče napájeny také přes výstup Load, EPS nebo Backup, vyberte Distribuční síť + hybridní střídač.",
+          "phase_guard_phase_count": "Pro jednofázové napájení vyberte 1, pro třífázové 3. Vyžadovány a sledovány budou pouze vybrané fáze."
         }
       },
       "settings_phase_guard": {
@@ -1348,8 +1348,8 @@
     "phase_guard_topology": {
       "options": {
         "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "grid_only": "Pouze distribuční síť",
+        "hybrid_load_port": "Distribuční síť + výstup Load/EPS hybridního střídače"
       }
     }
   }

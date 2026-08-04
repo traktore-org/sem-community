@@ -427,15 +427,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektrische topologie",
+        "description": "Kies hoe de belasting van de woning wordt gevoed. Bij een hybride installatie kunnen het net en de Load/EPS/Backup-uitgang van de omvormer tegelijkertijd de woning voeden. De belasting in huis kan daardoor hoger zijn dan de stroom door de hoofdzekering. SEM bewaakt de twee paden onafhankelijk van elkaar. Actief ingrijpen is optioneel; controleer de metingen in de observatiemodus voordat u EV-regeling inschakelt.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Voedingstopologie",
           "phase_guard_phase_count": "Aantal fasen"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Selecteer 1 voor een enkelfasige of 3 voor een driefasige voeding. Alleen de geselecteerde fasen zijn vereist en worden bewaakt."
+          "phase_guard_topology": "Selecteer Alleen net voor een conventionele installatie. Selecteer Net + hybride omvormer wanneer belastingen ook via een Load-, EPS- of Backup-uitgang worden gevoed.",
+          "phase_guard_phase_count": "Selecteer 1 voor een eenfasige voeding of 3 voor een driefasige voeding. Alleen de geselecteerde fasen zijn vereist en worden bewaakt."
         }
       },
       "settings_phase_guard": {
@@ -1348,8 +1348,8 @@
     "phase_guard_topology": {
       "options": {
         "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "grid_only": "Alleen netvoeding",
+        "hybrid_load_port": "Net + Load/EPS-uitgang van de hybride omvormer"
       }
     }
   }

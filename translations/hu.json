@@ -427,15 +427,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektromos topológia",
+        "description": "Válassza ki, hogyan legyen ellátva a ház terhelése. Hibrid telepítés esetén a hálózat és az inverter Load/EPS/Backup kimenete egyidejűleg táplálhatja a házat. A házon belüli terhelés ezért magasabb is lehet, mint a főbiztosítékon átfolyó áram. A SEM a két útvonalat egymástól függetlenül felügyeli. Az aktív beavatkozás opcionális; a leolvasásokat Observer módban ellenőrizze, mielőtt engedélyezi az EV-vezérlést.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Ellátási topológia",
           "phase_guard_phase_count": "Fázisok száma"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Válasszon 1-et egyfázisú vagy 3-at háromfázisú tápláláshoz. Csak a kiválasztott fázisok szükségesek és figyeltek."
+          "phase_guard_topology": "Hagyományos telepítéshez válassza a Csak hálózat opciót. Válassza a Hálózat + hibrid invertert, ha a terheléseket Load, EPS vagy Backup kimeneten keresztül is táplálják.",
+          "phase_guard_phase_count": "Egyfázisú ellátáshoz válasszon 1-et, háromfázisúhoz 3-at. Csak a kiválasztott fázisok szükségesek és kerülnek felügyelet alá."
         }
       },
       "settings_phase_guard": {
@@ -1348,8 +1348,8 @@
     "phase_guard_topology": {
       "options": {
         "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "grid_only": "Csak hálózati ellátás",
+        "hybrid_load_port": "Hálózat + hibrid inverter Load/EPS kimenete"
       }
     }
   }

@@ -427,15 +427,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Topologia elektryczna",
+        "description": "Wybierz sposób zasilania obciążenia domu. W instalacji hybrydowej sieć oraz wyjście Load/EPS/Backup falownika mogą zasilać dom jednocześnie. Obciążenie wewnątrz domu może zatem być wyższe niż prąd płynący przez główny bezpiecznik. SEM monitoruje obie ścieżki niezależnie. Aktywne wymuszanie jest opcjonalne; przed włączeniem sterowania EV zweryfikuj odczyty w trybie obserwatora.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Topologia zasilania",
           "phase_guard_phase_count": "Liczba faz"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Wybierz 1 dla zasilania jednofazowego lub 3 dla zasilania trójfazowego. Tylko wybrane fazy są wymagane i monitorowane."
+          "phase_guard_topology": "Wybierz Tylko sieć w przypadku instalacji konwencjonalnej. Wybierz Sieć + falownik hybrydowy, gdy odbiorniki są również zasilane przez wyjście Load, EPS lub Backup.",
+          "phase_guard_phase_count": "Wybierz 1 dla zasilania jednofazowego lub 3 dla zasilania trójfazowego. Monitorowane i wymagane są tylko wybrane fazy."
         }
       },
       "settings_phase_guard": {
@@ -1348,8 +1348,8 @@
     "phase_guard_topology": {
       "options": {
         "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "grid_only": "Tylko zasilanie z sieci",
+        "hybrid_load_port": "Sieć + wyjście Load/EPS falownika hybrydowego"
       }
     }
   }

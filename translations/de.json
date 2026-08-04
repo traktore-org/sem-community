@@ -427,15 +427,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Elektrische Topologie",
+        "description": "Wählen Sie, wie die Hauslast versorgt wird. Bei einer Hybridinstallation können das Stromnetz und der Load/EPS/Backup-Ausgang des Wechselrichters das Haus gleichzeitig versorgen. Die Last im Haus kann daher höher sein als der Strom durch die Hauptsicherung. SEM überwacht beide Pfade unabhängig voneinander. Der aktive Eingriff ist optional; prüfen Sie die Messwerte im Beobachtermodus, bevor Sie die EV-Steuerung aktivieren.",
         "data": {
-          "phase_guard_topology": "Supply topology",
+          "phase_guard_topology": "Versorgungstopologie",
           "phase_guard_phase_count": "Anzahl der Phasen"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Wählen Sie 1 für eine einphasige oder 3 für eine dreiphasige Versorgung. Nur die ausgewählten Phasen werden benötigt und überwacht."
+          "phase_guard_topology": "Wählen Sie Nur Stromnetz für eine herkömmliche Installation. Wählen Sie Stromnetz + Hybridwechselrichter, wenn Verbraucher zusätzlich über einen Load-, EPS- oder Backup-Ausgang versorgt werden.",
+          "phase_guard_phase_count": "Wählen Sie 1 für eine einphasige oder 3 für eine dreiphasige Versorgung. Nur die ausgewählten Phasen sind erforderlich und werden überwacht."
         }
       },
       "settings_phase_guard": {
@@ -1348,8 +1348,8 @@
     "phase_guard_topology": {
       "options": {
         "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "grid_only": "Nur Netzversorgung",
+        "hybrid_load_port": "Stromnetz + Load/EPS-Ausgang des Hybridwechselrichters"
       }
     }
   }

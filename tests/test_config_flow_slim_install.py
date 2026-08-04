@@ -73,6 +73,21 @@ def test_install_defaults_seed_empty_ev_chargers_list():
     assert defaults["ev_chargers"] == []
 
 
+def test_install_defaults_never_enable_phase_guard_without_topology():
+    """Silent install defaults must not create an ambiguous enforcing config.
+
+    Runtime helpers intentionally use the least-assumptive ``grid_only``
+    fallback for legacy/disabled entries. If the slim installer ever starts
+    enabling the phase guard by default, it must also persist the selected
+    topology so a hybrid installation cannot silently lose its inverter lane.
+    """
+    defaults = SolarEnergyManagementConfigFlow._install_defaults()
+
+    assert not defaults.get("phase_guard_enabled", False) or (
+        defaults.get("phase_guard_topology") in {"grid_only", "hybrid_load_port"}
+    )
+
+
 def test_options_flow_ev_charger_step_still_registered():
     """The OptionsFlow EV step must remain since (1) power users use it
     directly and (2) the new ``sem-config-card`` deep-links to it for

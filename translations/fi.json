@@ -427,15 +427,15 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. Enforcement is opt-in; verify the readings in Observer Mode before enabling EV control.",
+        "title": "Sähköinen topologia",
+        "description": "Valitse, miten talon kuorma syötetään. Hybridiasennuksessa sähköverkko ja invertterin Load/EPS/Backup-lähtö voivat syöttää taloa samanaikaisesti. Talon sisäinen kuorma voi siksi olla suurempi kuin pääsulakkeen läpi kulkeva virta. SEM valvoo kahta syöttöreittiä toisistaan riippumatta. Aktiivinen ohjaus on valinnainen; tarkista lukemat tarkkailutilassa ennen EV-ohjauksen käyttöönottoa.",
         "data": {
-          "phase_guard_topology": "Supply topology",
-          "phase_guard_phase_count": "Vaiheiden lukumäärä"
+          "phase_guard_topology": "Syöttötopologia",
+          "phase_guard_phase_count": "Vaiheiden määrä"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output.",
-          "phase_guard_phase_count": "Valitse 1 yksivaiheiselle tai 3 kolmivaiheiselle syötölle. Vain valitut vaiheet ovat pakollisia ja niitä valvotaan."
+          "phase_guard_topology": "Valitse Vain sähköverkko tavalliselle asennukselle. Valitse Sähköverkko + hybridi-invertteri, kun kuormia syötetään myös Load-, EPS- tai Backup-lähdön kautta.",
+          "phase_guard_phase_count": "Valitse 1 yksivaiheiselle tai 3 kolmivaiheiselle syötölle. Vain valitut vaiheet vaaditaan ja niitä valvotaan."
         }
       },
       "settings_phase_guard": {
@@ -1348,8 +1348,8 @@
     "phase_guard_topology": {
       "options": {
         "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "grid_only": "Vain verkkosyöttö",
+        "hybrid_load_port": "Sähköverkko + hybridi-invertterin Load/EPS-lähtö"
       }
     }
   }
