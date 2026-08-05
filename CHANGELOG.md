@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.2] — 05.08.2026
 
 ### 🐛 Fixes
+- 🌙 **The night sky got a real moon — with the right phase, moving the right way**
+  (#711) — the diagram card's static full-moon placeholder is now the actual lunar phase
+  (from `sensor.moon`, folded into the card's dirty-check key so a phase change re-renders),
+  and the moon walks the sun's arc through the night, sunset (right) → sunrise (left).
+  Two rounds of hardening on the arc position: the dawn/dusk *slivers* — the few minutes
+  where the card's elevation-gated night disagrees with HA's limb-crossing
+  `next_rising`/`next_setting` — put the moon back near mid-arc at 06:05 with an 06:03
+  sunrise (caught live on PROD). The first fix keyed on elapsed time and would have broken
+  real 20–22 h high-latitude nights (Tromsø, Murmansk — caught in review); the shipped fix
+  detects slivers by **proximity to the flip event**, needs no assumption about night
+  length, and falls back *directionally* (nearest arc end, never a frozen mid-arc) in the
+  degenerate polar-onset case. Extracted to `dashboard/card/src/util/night-arc.js` with a
+  7-case regression suite (`dashboard/card/test/night-arc-sliver.test.js`).
 
 - 📅 **Moving the *Charge by* time no longer re-buckets the EV day that is already running**
   (#724) — the fleet EV daily counter's day is deadline-based (#279), and the bucket key was
