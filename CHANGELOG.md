@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deadline-to-deadline behaviour unchanged, and each charger's own counter always rolls at
   its own deadline. Side effect: the 20:00 daily-summary notification's EV figure now sits
   on the same day as the solar/home/cost figures beside it on mixed-deadline fleets.
-  Docs: [USER_GUIDE.md → Day boundaries](docs/USER_GUIDE.md#energy--cost-sensors),
+  Docs: [USER_GUIDE.md → Energy Sensors](docs/USER_GUIDE.md#energy-sensors-kwh),
   [EV_CHARGING_LOGIC.md → When does the daily target counter
   reset?](docs/EV_CHARGING_LOGIC.md#when-does-the-daily-target-counter-reset),
   [KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md#sunrise-based-meter-day),
