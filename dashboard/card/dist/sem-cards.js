@@ -4568,7 +4568,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             title="${this._t(e?"overnight_active_note":"overnight_shadow_note")}">${this._t(e?"overnight_active":"overnight_shadow")}</span>`}_docsLink(){return W`<a class="docs-link" href="${"https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#actuation-g4"}" target="_blank"
             rel="noopener" title="${this._t("config_docs")}">
             <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:13px"></ha-icon>
-        </a>`}_renderIdle(e){return W`
+        </a>`}_renderIdle(e,t="overnight_idle"){return W`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
@@ -4577,10 +4577,10 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         ${this._modeChip(e)}
                         ${this._docsLink()}
                     </div>
-                    <div class="idle">${this._t("overnight_idle")}</div>
+                    <div class="idle">${this._t(t)}</div>
                 </div>
             </ha-card>
-        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"pending"===t||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation,r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s);const n=a.length?Date.parse(a[0].start):NaN,l=(a.length?Date.parse(a[a.length-1].end):NaN)-n,c=a.length>0&&Number.isFinite(l)&&l>0,d=this._runs(a,n,l,e=>!!e.cheap).filter(e=>e.v),p=W`
+        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation;if("pending"===t)return this._renderIdle(s,"overnight_pending");const r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s);const n=a.length?Date.parse(a[0].start):NaN,l=(a.length?Date.parse(a[a.length-1].end):NaN)-n,c=a.length>0&&Number.isFinite(l)&&l>0,d=this._runs(a,n,l,e=>!!e.cheap).filter(e=>e.v),p=W`
             <div class="band">
                 ${d.map(e=>W`
                     <div class="cheap" style="left:${e.left}%;width:${e.width}%"></div>

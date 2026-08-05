@@ -175,7 +175,7 @@ class SEMOvernightPlanCard extends SEMLitBase {
         </a>`;
     }
 
-    _renderIdle(act) {
+    _renderIdle(act, textKey = 'overnight_idle') {
         return html`
             <ha-card>
                 <div class="wrap">
@@ -185,7 +185,7 @@ class SEMOvernightPlanCard extends SEMLitBase {
                         ${this._modeChip(act)}
                         ${this._docsLink()}
                     </div>
-                    <div class="idle">${this._t('overnight_idle')}</div>
+                    <div class="idle">${this._t(textKey)}</div>
                 </div>
             </ha-card>
         `;
@@ -195,8 +195,9 @@ class SEMOvernightPlanCard extends SEMLitBase {
         if (!this._hass || !this._config) return nothing;
         const st = this._hass.states[this._entity];
         const verdict = st?.state;
-        if (!st || verdict === 'pending' || verdict === 'unavailable'
-            || verdict === 'unknown') {
+        // Truly gone (integration down / entity missing) → hide with the
+        // rest of the dashboard's unavailable surfaces.
+        if (!st || verdict === 'unavailable' || verdict === 'unknown') {
             this.style.display = 'none';
             return nothing;
         }
@@ -204,6 +205,14 @@ class SEMOvernightPlanCard extends SEMLitBase {
 
         const a = st.attributes || {};
         const act = a.actuation === true;
+        // ``pending`` used to self-hide entirely — fine as a System-tab
+        // diagnostic, wrong on the Control tab: after a daytime restart
+        // (the stash is in-memory, task #14) the card vanished until the
+        // 21:00 stamp and read as broken — Guido hit exactly that on
+        // 2026-08-05. Show a slim placeholder saying when the plan comes.
+        if (verdict === 'pending') {
+            return this._renderIdle(act, 'overnight_pending');
+        }
         const demands = Array.isArray(a.demands) ? a.demands : [];
         const slots = Array.isArray(a.slots) ? a.slots : [];
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
