@@ -3377,8 +3377,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # Stamp only on a READY-world answer: the first refresh
                     # after a restart sees zero registered devices (delayed
                     # rediscovery) — that degenerate shape retries next cycle.
-                    if self._shadow_overnight_plan(_sched, energy, None, None,
-                                                   power):
+                    # Same for a battery SOC that hasn't reported yet (armed
+                    # night 1, second stamp): the 21:53:30 restart stamped
+                    # 86 s before the SOC's first reading, the trajectory
+                    # walked from nothing, takeover landed on the FIRST slot
+                    # and every battery demand yielded a battery that was
+                    # actually at 63 %. A silent sensor is not an empty
+                    # battery (#638 finding #3) — wait for the reading; the
+                    # no-battery install shape (capacity 0) stamps normally.
+                    _batt_ready = (
+                        float(self.config.get("battery_capacity_kwh", 0) or 0) <= 0
+                        or not getattr(power, "battery_soc_unavailable", False)
+                    )
+                    if _batt_ready and self._shadow_overnight_plan(
+                            _sched, energy, None, None, power):
                         self._shadow_plan_date = _night_of
                         self._plan_ev_conn_sig = _conn_sig
             except Exception:  # noqa: BLE001 — shadow must never break the cycle

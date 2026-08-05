@@ -151,3 +151,26 @@ class TestMeasuredWattsPerAmp:
     def test_missing_power_object_is_nameplate(self):
         c = _coord([CFG], amps=10)
         assert c._ev_watts_per_amp("keba", CFG, None) == pytest.approx(690.0)
+
+
+class TestStampWaitsForTheBattery:
+    """Armed night 1, second stamp: the restart re-stamped 86 s before the
+    battery SOC's first reading — the trajectory walked from nothing and
+    every battery demand yielded a 63 %-full battery. A silent sensor is
+    not an empty battery (#638 finding #3): the trigger must gate on
+    ``battery_soc_unavailable`` (0.0 is a VALID reading; ``None`` never
+    happens — PowerReadings defaults the float and raises the flag)."""
+
+    def test_the_trigger_gates_on_soc_availability(self):
+        src = (REPO / "coordinator" / "coordinator.py").read_text(
+            encoding="utf-8")
+        i = src.index("_batt_ready = (")
+        window = src[i:i + 300]
+        assert "battery_soc_unavailable" in window, (
+            "the stamp trigger no longer waits for a live battery SOC — "
+            "a boot-time stamp walks the trajectory from nothing and "
+            "yields every battery demand (armed night 1, 21:53 stamp)"
+        )
+        assert "battery_capacity_kwh" in window, (
+            "battery-less installs must keep stamping without a SOC gate"
+        )
