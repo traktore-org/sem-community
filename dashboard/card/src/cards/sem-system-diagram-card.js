@@ -27,6 +27,7 @@ import {
     semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_ACCENT,
     semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey, semTheme,
 } from '../base/sem-shared.js';
+import { nightArcPos } from '../util/night-arc.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -495,15 +496,17 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 // not "fix" this toward real moon times without solving that
                 // problem first.
                 //
-                // Direction is inverted vs. the day calc: the arc's pos=0 is
-                // anchored at sunrise (left) and pos=1 at sunset (right), the
-                // same points the day-time sun walks 0→1 through. The night
-                // starts where the day ended (sunset, pos=1) and ends where
-                // the next day starts (sunrise, pos=0), so pos must count
-                // DOWN from 1 to 0 as the night progresses, not up.
-                const sunset = nextSetTs - 86400000;
-                const nightLength = nextRiseTs - sunset;
-                if (nightLength > 0) pos = 1 - (now - sunset) / nightLength;
+                // Direction is inverted vs. the day calc: the night counts
+                // DOWN from 1 (sunset, right) to 0 (sunrise, left) — the
+                // same anchor points the day-time sun walks 0→1 through.
+                // The dawn/dusk boundary slivers (elevation-gated isNight
+                // vs. limb-crossing next_* attributes), the high-latitude
+                // long-night cases, and the degenerate polar-onset
+                // directional fallback all live in nightArcPos — see
+                // src/util/night-arc.js, pinned by test/night-arc-sliver.
+                // null only on missing attributes (guarded above anyway).
+                const nightPos = nightArcPos(now, nextRiseTs, nextSetTs);
+                if (nightPos !== null) pos = nightPos;
             } else {
                 pos = (nextRiseTs && now < nextRiseTs) ? 0 : 1;
             }
