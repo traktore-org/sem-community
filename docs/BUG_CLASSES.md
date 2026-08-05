@@ -844,6 +844,51 @@ renders as an equation; any new card that draws 2+ balance values as connected f
 by choice: freezing real telemetry entities to protect a view would corrupt genuine data.
 Refs #699 #237 #444 #289.
 
+### 33. A card hardcodes a unit HA already converted (display-unit mislabel) — GUARDED
+**Symptom:** a reading shown on a card is labelled with a unit that does not match the number
+beside it, but only for users on a non-default unit system. #727: a US install's Home view showed
+the inverter node at **"118°C"** — a plausible-looking but nonsensical value — because the real
+reading was 118 °F. Metric users never saw it, so it survived until a US user reported it.
+**Root shape:** SEM publishes a reading as a device-class sensor in a fixed NATIVE unit (temperature
+is `°C`-native), and Home Assistant then converts that sensor to the user's unit system for display —
+so the value the card reads from `.state` is already in the user's unit (°F on a US install), and its
+`attributes.unit_of_measurement` is that unit too. A card that concatenates a **hardcoded** unit
+literal (`` `${v.toFixed(0)}°C` ``) onto that already-converted value mislabels it. The number is
+right for the user's locale; only the suffix is a lie. This is the DISPLAY-side twin of class 21
+(that one is the ingest-side magnitude decision). Compounding factor here: the *ingest* also assumed
+°C (class 21 extended to temperature — `sensor_reader._read_*_temperature` read `float(state.state)`
+ignoring the source's `°F` unit), so a mislabeled bridge (SolarAssistant reporting the C value with a
+°F label) produced the doubly-wrong 118.
+**Where it lives:** every dashboard card that renders a device-class sensor (temperature today;
+any future unit-converted class — energy, power, volume, pressure, monetary) with a literal unit.
+`dashboard/card/src/cards/sem-system-diagram-card.js` (inverter temp) and `sem-battery-card.js`
+(battery temp) were the two temperature sites. **Not** instances: the config-card HP/HW setpoint
+sliders + legionella stepper are SEM's own `°C` control *inputs*; the config-card HP/HW
+current-temperature *displays* (`sem-config-card.js` ~1109/1113) are plain `coordinator.data`
+attributes, NOT device-class sensors, so HA never unit-converts them and a `°C` label is not a
+class-33 mislabel — but their INGEST assumes °C, which is the deferred Guido sibling below. The
+weather card already did it right (`attrs.temperature_unit || '°C'`), the reference pattern.
+**Closure:** read the unit HA attached to the entity (`_unitOf`/`_unitStr`, or the
+`temperatureUnit`/`formatTemperatureLabel` helpers in `dashboard/card/src/util/temperature.js`) and
+label with that, falling back to the native unit only when HA attached none. Ingest side: route
+`_read_*_temperature` through `units.temperature_state_to_celsius` so a °F/K source is converted to
+`°C` native before republish (class 21's one-place-decides-magnitude rule, now covering temperature).
+**Guard:** `dashboard/card/test/temperature-unit.test.js` (a °F entity can only ever be labelled °F);
+`tests/test_564_battery_temperature.py` (F→C on ingest, °C passthrough, unitless→°C);
+`tests/test_641_units.py` (the `temperature_state_to_celsius` behaviour **and** the AST lint widened
+to ban a `unit == "°C"/"°F"` comparison outside `units.py`, so a future inline temperature-unit check
+is unrepresentable). Refs #727 #564 #641.
+**Watch:** the JS guard tests the pure helpers, not the card render — a NEW card that draws a
+converted sensor with a hardcoded unit isn't caught until it routes through the helpers. Any new
+device-class reading on a card must label from `unit_of_measurement`, never a literal. **Sibling
+left for Guido (larger/riskier — control + safety path):** the heat-pump / hot-water controllers'
+`get_current_temperature` (`devices/heat_pump_controller.py`, `devices/hot_water_controller.py`,
+incl. the climate `current_temperature` attribute path) still read `float(state.state)` assuming °C
+and compare against °C setpoints — a US user with a °F sensor gets wrong control decisions
+(legionella safety). Same class as the ingest side; route through `temperature_state_to_celsius`,
+but the climate-attribute unit semantics + control/safety tests need care, so it is flagged not
+auto-shipped.
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
