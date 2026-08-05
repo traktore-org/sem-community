@@ -65,8 +65,11 @@ _DAILY_ASSIGN = re.compile(
 # by #628 for the home balance) but has no sensor surface — and PR #722 adds
 # exactly that surface plus the template swap. Duplicating it here would
 # collide with a contributor's open PR, so the instance is exempted and the
-# exemption SELF-EXPIRES: the moment a calendar-day EV sensor exists in the
-# tree, the test below fails until this entry is removed.
+# exemption SELF-EXPIRES against a HALF-landed fix: a calendar-day EV sensor
+# existing while a balancing card still references the exempted entity fails
+# below. A PR landing sensor + swap together (what #722 does) passes clean —
+# pruning this entry afterwards is OUR chore, deliberately never forced into
+# a contributor's PR.
 KNOWN_MIXED_ENTITIES = {"sensor.sem_daily_ev_energy"}
 CALENDAR_EV_FIELD = "daily_calendar_ev"
 
