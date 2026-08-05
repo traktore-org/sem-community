@@ -588,7 +588,7 @@
         "name": "Tänään sähköauto"
       },
       "daily_calendar_ev_energy": {
-        "name": "Tänään sähköauto"
+        "name": "Sähköauto tänään (kalenteripäivä)"
       },
       "monthly_solar_yield_energy": {
         "name": "Kuukausi aurinko"

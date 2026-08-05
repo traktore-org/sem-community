@@ -588,7 +588,7 @@
         "name": "Mai EV"
       },
       "daily_calendar_ev_energy": {
-        "name": "Mai EV"
+        "name": "Mai EV (naptári nap)"
       },
       "monthly_solar_yield_energy": {
         "name": "Havi napenergia"

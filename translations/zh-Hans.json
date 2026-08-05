@@ -588,7 +588,7 @@
         "name": "今日电动汽车充电量"
       },
       "daily_calendar_ev_energy": {
-        "name": "今日电动汽车充电量"
+        "name": "今日电动汽车（自然日）"
       },
       "monthly_solar_yield_energy": {
         "name": "本月太阳能发电量"

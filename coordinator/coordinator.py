@@ -3727,13 +3727,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Dynamic price visibility (#257): surface the upcoming hourly price
             # curve + today's summary so the price card can render a live chart.
+            # Keep the public chart payload capped, but compose Tomorrow from all
+            # points for that local calendar day. A fixed 48-point slice only
+            # covers 12 hours for 15-minute providers.
+            _tomorrow_price_points = []
+            _tariff_dynamic = False
             try:
                 _td = self._tariff_provider.get_tariff_data()
+                _all_upcoming_prices = _td.upcoming_prices or []
                 result["tariff_upcoming"] = [
                     {"t": p.timestamp.isoformat(), "price": round(p.price, 4),
                      "level": p.level.value}
-                    for p in (_td.upcoming_prices or [])[:48]
+                    for p in _all_upcoming_prices[:48]
                 ]
+                _tomorrow_price_date = (dt_util.now() + timedelta(days=1)).date()
+                _tomorrow_price_points = [
+                    {"t": p.timestamp.isoformat(), "price": round(p.price, 4),
+                     "level": p.level.value}
+                    for p in _all_upcoming_prices
+                    if _tariff_local_date(p.timestamp) == _tomorrow_price_date
+                ]
+                _tariff_dynamic = bool(_td.is_dynamic)
                 result["tariff_currency"] = _td.currency
                 result["tariff_today_min_price"] = _td.today_min_price
                 result["tariff_today_max_price"] = _td.today_max_price
@@ -3949,7 +3963,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     _tomorrow_plan = compose_tomorrow_plan(
                         now=_now,
-                        upcoming_prices=result.get("tariff_upcoming"),
+                        upcoming_prices=_tomorrow_price_points,
                         solar_peak_time=_peak_t,
                         solar_forecast_kwh=_solar_tomorrow,
                         night_start=_night_start,
@@ -3969,9 +3983,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     # Static tariff providers may not expose upcoming price
                     # points even though a complete tomorrow schedule exists.
-                    _tomorrow_plan["status"] = result.get(
-                        "schedule_tomorrow_status", _tomorrow_plan["status"]
-                    )
+                    # Dynamic providers must stay preliminary when tomorrow's
+                    # actual points are absent; a schedule label alone must not
+                    # claim a final price plan with zero tariff rows.
+                    if not _tariff_dynamic:
+                        _tomorrow_plan["status"] = result.get(
+                            "schedule_tomorrow_status", _tomorrow_plan["status"]
+                        )
                     if _cid:
                         result[f"charger_{_cid}_today_plan"] = _plan
                     if _fleet_plan is None or _cid == _primary_cid:
@@ -3985,13 +4003,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if _fleet_tomorrow_plan is None:
                     _fleet_tomorrow_plan = compose_tomorrow_plan(
                         now=_now,
-                        upcoming_prices=result.get("tariff_upcoming"),
+                        upcoming_prices=_tomorrow_price_points,
                         solar_peak_time=_peak_t,
                         solar_forecast_kwh=_solar_tomorrow,
                         night_start=_night_start,
                         night_end=_night_end_dt,
                         currency=result.get("tariff_currency", ""),
                     )
+                    if not _tariff_dynamic:
+                        _fleet_tomorrow_plan["status"] = result.get(
+                            "schedule_tomorrow_status",
+                            _fleet_tomorrow_plan["status"],
+                        )
                 result["tomorrow_plan"] = _fleet_tomorrow_plan["rows"]
                 result["tomorrow_plan_status"] = _fleet_tomorrow_plan["status"]
                 result["tomorrow_plan_date"] = _fleet_tomorrow_plan["date"]
@@ -4000,6 +4023,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 result["today_plan"] = []
                 result["tomorrow_plan"] = []
                 result["tomorrow_plan_status"] = "preliminary"
+                result["tomorrow_plan_date"] = (
+                    dt_util.now() + timedelta(days=1)
+                ).date().isoformat()
 
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()

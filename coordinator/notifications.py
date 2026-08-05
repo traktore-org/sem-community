@@ -41,14 +41,6 @@ _FLAP_STABILITY_SECONDS = 60  # state must be stable this long before notifying
 # Data-quality incidents stay open until readings have been continuously valid.
 # This is notification hysteresis only: ActivePhaseGuard still blocks immediately.
 _PHASE_GUARD_SENSOR_RECOVERY_SECONDS = 300
-_PHASE_GUARD_SENSOR_FAULT_REASONS = (
-    "invalid_current",
-    "stale",
-    "unavailable",
-    "missing",
-    "no_sample",
-    "invalid_configuration",
-)
 
 # Notification channels for Android companion app
 _CHANNEL_CHARGING = "sem_charging"
@@ -485,11 +477,11 @@ class NotificationManager:
             snapshot.get("data_fresh")
         )
         read_only = bool(snapshot.get("read_only", False))
-        incident_kind = (
-            "sensor_fault"
-            if any(token in reason for token in _PHASE_GUARD_SENSOR_FAULT_REASONS)
-            else "over_limit" if "over_limit" in reason else "unsafe"
-        )
+        # A physical limit breach outranks any simultaneous data-quality fault:
+        # alerting must never hide a real over-current behind another phase's
+        # stale/invalid reading. Every non-limit guard failure is a data or
+        # configuration fault; keeping an allow-list here drifted from the guard.
+        incident_kind = "over_limit" if "over_limit" in reason else "sensor_fault"
         if unsafe:
             if incident_kind == "sensor_fault":
                 self._phase_guard_sensor_fault_active = True
@@ -509,7 +501,7 @@ class NotificationManager:
             # The active guard remains fail-closed and is evaluated independently.
             return
         elif self._last_phase_guard_alert_state == "phase_guard_blocked" and not bool(
-            snapshot.get("control_authorized", True)
+            snapshot.get("control_authorized", False)
         ):
             # Keep an enforcing incident open throughout the recovery hold. The
             # recovery notification means the active gate is actually armed again.

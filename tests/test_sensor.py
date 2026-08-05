@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
 )
 
 from custom_components.solar_energy_management.sensor import (
+    SENSOR_TYPES,
     SEMSolarSensor,
     async_setup_entry,
 )
@@ -27,6 +28,13 @@ def create_sensor_description(key, name, icon, device_class=None, state_class=No
         native_unit_of_measurement=unit,
         entity_category=entity_category,
     )
+
+
+def test_calendar_day_ev_mirror_is_disabled_by_default():
+    description = next(
+        item for item in SENSOR_TYPES if item.key == "daily_calendar_ev_energy"
+    )
+    assert description.entity_registry_enabled_default is False
 
 
 @pytest.mark.unit

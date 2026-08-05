@@ -588,7 +588,7 @@
         "name": "VE azi"
       },
       "daily_calendar_ev_energy": {
-        "name": "VE azi"
+        "name": "VE astăzi (zi calendaristică)"
       },
       "monthly_solar_yield_energy": {
         "name": "Solar lunar"

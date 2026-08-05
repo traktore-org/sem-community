@@ -588,7 +588,7 @@
         "name": "EV i dag"
       },
       "daily_calendar_ev_energy": {
-        "name": "EV i dag"
+        "name": "EV i dag (kalenderdag)"
       },
       "monthly_solar_yield_energy": {
         "name": "Sol denne måned"

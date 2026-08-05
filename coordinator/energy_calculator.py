@@ -507,6 +507,7 @@ class EnergyCalculator:
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
         energy.daily_ev = self._get_daily(EV_CATEGORY, ev_day)
+        energy.daily_calendar_ev = self._get_daily(MIDNIGHT_EV_CATEGORY, today)
         energy.monthly_ev = self._get_monthly(EV_CATEGORY, month_key)
         energy.yearly_ev = self._get_yearly(EV_CATEGORY, year_key)
         energy.daily_grid_import = self._get_daily("grid_import", today)

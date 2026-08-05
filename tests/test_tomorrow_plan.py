@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from custom_components.solar_energy_management.coordinator.today_plan import (
     KIND_CHEAP_START,
+    KIND_EXPENSIVE_START,
     KIND_NOW,
     KIND_SOLAR_PEAK,
     compose_tomorrow_plan,
@@ -57,6 +58,23 @@ def test_tomorrow_plan_handles_timezone_aware_calendar_day():
         assert when.astimezone(tz).date() == tomorrow
 
 
+def test_tomorrow_plan_handles_naive_now_with_aware_prices():
+    utc = ZoneInfo("UTC")
+    result = compose_tomorrow_plan(
+        now=NOW,
+        upcoming_prices=[
+            _price(TOMORROW.replace(hour=1, tzinfo=utc), "cheap", 0.08),
+            _price(TOMORROW.replace(hour=2, tzinfo=utc), "cheap", 0.10),
+        ],
+        currency="SEK",
+    )
+
+    assert result["status"] == "final"
+    cheap = [row for row in result["rows"] if row["kind"] == KIND_CHEAP_START]
+    assert len(cheap) == 1
+    assert datetime.fromisoformat(cheap[0]["when"]).hour == 1
+
+
 def test_tomorrow_plan_remaps_iso_solar_peak_to_tomorrow():
     result = compose_tomorrow_plan(
         now=NOW,
@@ -94,6 +112,26 @@ def test_tomorrow_plan_becomes_final_with_tomorrow_prices_only():
         datetime.fromisoformat(row["when"]).date() == TOMORROW.date()
         for row in result["rows"]
     )
+
+
+def test_tomorrow_plan_keeps_late_blocks_from_full_15_minute_day():
+    prices = [
+        _price(
+            TOMORROW + timedelta(minutes=15 * index),
+            "expensive" if index >= 72 else "normal",
+            0.45 if index >= 72 else 0.20,
+        )
+        for index in range(96)
+    ]
+
+    result = compose_tomorrow_plan(now=NOW, upcoming_prices=prices)
+
+    assert result["status"] == "final"
+    expensive = [
+        row for row in result["rows"] if row["kind"] == KIND_EXPENSIVE_START
+    ]
+    assert len(expensive) == 1
+    assert datetime.fromisoformat(expensive[0]["when"]) == TOMORROW.replace(hour=18)
 
 
 def test_tomorrow_plan_keeps_overnight_ev_window_inside_calendar_day():

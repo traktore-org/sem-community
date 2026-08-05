@@ -315,6 +315,7 @@ SENSOR_TYPES = [
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        entity_registry_enabled_default=False,
     ),
     # Removed: Redundant (use daily_home_energy instead)
     # daily_home_consumption_actual_energy

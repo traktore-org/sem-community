@@ -356,12 +356,21 @@ def compose_tomorrow_plan(
     for point in upcoming_prices or []:
         try:
             timestamp = datetime.fromisoformat(
-                str(point["t"]).replace("Z", "+00:00"),
+                str(point["t"]).replace("Z", "+00:00")
             )
             if day_start.tzinfo:
-                timestamp = timestamp.astimezone(day_start.tzinfo)
+                timestamp = (
+                    timestamp.astimezone(day_start.tzinfo)
+                    if timestamp.tzinfo
+                    else timestamp.replace(tzinfo=day_start.tzinfo)
+                )
+            elif timestamp.tzinfo:
+                # Tests and direct helper callers may pass a naive ``now``.
+                # Preserve wall-clock semantics rather than dropping otherwise
+                # valid aware price points on a naive/aware comparison error.
+                timestamp = timestamp.replace(tzinfo=None)
             if day_start <= timestamp < day_end:
-                day_prices.append(point)
+                day_prices.append({**point, "t": timestamp.isoformat()})
         except (KeyError, TypeError, ValueError):
             continue
 

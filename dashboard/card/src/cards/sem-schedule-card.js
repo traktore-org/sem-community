@@ -223,9 +223,10 @@ class SEMScheduleCard extends SEMLitBase {
         const planPeak = peakDate && Number.isFinite(peakDate.getTime())
             ? `${String(peakDate.getHours()).padStart(2, '0')}:${String(peakDate.getMinutes()).padStart(2, '0')}`
             : null;
-        const peakRaw = planPeak
-            || this._stateObj(tomorrow ? 'forecast_peak_time_tomorrow' : 'forecast_peak_time_today')?.state
-            || (!tomorrow ? this._stateObj('peak_time_today')?.state : null);
+        const peakRaw = tomorrow
+            ? planPeak
+            : (this._stateObj('forecast_peak_time_today')?.state
+                || this._stateObj('peak_time_today')?.state);
         const forecastKwh = parseFloat(
             this._stateObj(tomorrow ? 'forecast_tomorrow_kwh' : 'forecast_today_kwh')?.state
             || this._stateObj(tomorrow ? 'forecast_tomorrow' : 'forecast_today')?.state

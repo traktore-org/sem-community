@@ -588,7 +588,7 @@
         "name": "Today EV"
       },
       "daily_calendar_ev_energy": {
-        "name": "Today EV"
+        "name": "Today EV (calendar day)"
       },
       "monthly_solar_yield_energy": {
         "name": "Monthly Solar"

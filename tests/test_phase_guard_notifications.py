@@ -86,6 +86,25 @@ async def test_guard_recovery_waits_until_active_gate_is_rearmed():
 
 
 @pytest.mark.asyncio
+async def test_missing_control_authorized_cannot_close_an_open_incident():
+    manager = _manager()
+    await manager.notify_phase_guard_transition(
+        _snapshot(safe=False, authorized=False, reason="grid:l2:over_limit")
+    )
+    incomplete_safe = _snapshot(safe=True, authorized=True)
+    incomplete_safe.pop("control_authorized")
+
+    await manager.notify_phase_guard_transition(incomplete_safe)
+
+    assert manager._send_mobile_notification.await_count == 1
+    states = [
+        call.args[1]["state"]
+        for call in manager.hass.bus.async_fire.call_args_list
+    ]
+    assert states == ["phase_guard_blocked"]
+
+
+@pytest.mark.asyncio
 async def test_observer_warning_and_recovery_never_claim_hardware_was_blocked():
     manager = _manager()
     unsafe = _snapshot(safe=False, authorized=True, reason="grid:l2:over_limit")
@@ -164,7 +183,7 @@ async def test_over_limit_escalates_immediately_during_sensor_fault_incident():
     over_limit = _snapshot(
         safe=False,
         authorized=True,
-        reason="grid:l2:over_limit",
+        reason="inverter:l1:invalid_current,grid:l2:over_limit",
     )
     over_limit["read_only"] = True
 
@@ -184,6 +203,25 @@ async def test_over_limit_escalates_immediately_during_sensor_fault_incident():
         "phase_guard_observer_warning",
     ]
     assert manager._send_mobile_notification.await_count == 2
+    message = manager._send_mobile_notification.await_args.args[0].lower()
+    assert "limit exceeded" in message
+    assert "sensor data" not in message
+
+
+@pytest.mark.asyncio
+async def test_unlisted_guard_fault_is_not_reported_as_a_limit_breach():
+    manager = _manager()
+    invalid = _snapshot(
+        safe=False,
+        authorized=False,
+        reason="unsupported_topology",
+    )
+
+    await manager.notify_phase_guard_transition(invalid)
+
+    message = manager._send_mobile_notification.await_args.args[0].lower()
+    assert "sensor data" in message
+    assert "limit exceeded" not in message
 
 
 @pytest.mark.asyncio

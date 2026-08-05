@@ -29,6 +29,7 @@ without anyone remembering to add it.
 from __future__ import annotations
 
 import dataclasses
+from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
@@ -36,6 +37,7 @@ from freezegun import freeze_time
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EV_CATEGORY,
+    MIDNIGHT_EV_CATEGORY,
     EnergyCalculator,
 )
 from custom_components.solar_energy_management.coordinator.types import (
@@ -141,6 +143,21 @@ class TestAccumulatorKeyRoundTrip666:
         assert any(k.startswith("ev_") for k in calc._daily_accumulators)
         assert not any("ev_daily_sun" in k for k in calc._daily_accumulators)
         assert calc._lifetime_accumulators.get("lifetime_ev", 0.0) > 0
+
+    @freeze_time("2026-07-15 12:00:00")
+    def test_gap_return_preserves_calendar_day_ev_total(self):
+        """A skipped integration cycle must publish the current mirror value."""
+        calc = _make_calc()
+        today = date(2026, 7, 15)
+        calc._daily_accumulators[f"{MIDNIGHT_EV_CATEGORY}_{today}"] = 4.25
+
+        totals = calc._build_current_totals(
+            today,
+            f"{today.year}_{today.month}",
+            str(today.year),
+        )
+
+        assert totals.daily_calendar_ev == 4.25
 
 
 @pytest.mark.unit
