@@ -97,6 +97,12 @@ def _fake_self(devices=()):
         # The peak authority execution uses — load manager first, config
         # ``target_peak_limit`` (kW) behind it (#638 finding #5).
         _get_peak_limit_w=lambda: 6000.0,
+        # (#638 armed night 1) measured W/A accessor — the fake models the
+        # no-memo case: nameplate, same as a coordinator that has never
+        # observed a draw.
+        _ev_watts_per_amp=lambda cid, cfg, power=None: (
+            float(cfg.get("ev_phases") or 3)
+            * float(cfg.get("ev_voltage") or 230)),
         battery_capacity_kwh=10.0,
         # (#638 finding #3) when the fleet first came up short, or None.
         _shadow_partial_since=None,

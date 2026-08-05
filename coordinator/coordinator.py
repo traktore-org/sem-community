@@ -563,6 +563,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (e.g. solar_only with surplus below the 3-phase 6 A floor —
         # the stall detector would otherwise falsely anchor SOC at 100 %).
         self._last_commanded_amps_fleet: int = 0
+        # (#638) Measured watts-per-amp EMA per charger. Nameplate
+        # (phases × voltage) overstates cars that don't pull every phase to
+        # the rail — PROD's Zoe draws ~485 W/A at 10 A against a 690 W/A
+        # nameplate — and the night packer modelling the EV floor at
+        # nameplate concluded 6.9 kW can never fit under a 6.0 kW peak,
+        # yielding a demand the reactive layer then charged anyway (first
+        # armed night). Learned only while the charger is actually drawing;
+        # consumers fall back to nameplate when empty.
+        self._ev_wpa_ema: Dict[str, float] = {}
 
         # Session cost tracking (primary charger + per-charger dict)
         self._session_data = SessionData()
@@ -808,6 +817,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         seed = int(getattr(dev, "priority", 3) or 3)
         reg = getattr(self, "_device_registry", None)
         return reg.priority_for(cid, seed=seed) if reg is not None else seed
+
+    def _ev_watts_per_amp(self, cid: str, cfg: dict, power=None) -> float:
+        """(#638) This charger's real watts-per-amp: measured when known,
+        nameplate otherwise.
+
+        Nameplate (``phases × voltage``) is an upper bound, not a draw — a
+        Zoe at 10 A pulls ~4.85 kW against a 6.9 kW nameplate. The night
+        packer sizing the EV floor from nameplate declared it unplaceable
+        under the peak on the first armed night while the car charged
+        happily below the threshold.
+
+        The sample is ``this charger's draw / commanded amps``, folded into
+        a per-charger EMA while genuinely charging. SINGLE-charger installs
+        only for the live sample: the fleet ``power.ev_power`` equals this
+        charger's draw iff there is exactly one — on multi-charger installs
+        we return the memo or nameplate rather than commit the fleet-read
+        class bug (docs/MULTI_CHARGER.md).
+        """
+        nameplate = (float(cfg.get("ev_phases") or 3)
+                     * float(cfg.get("ev_voltage") or 230))
+        chargers = self.config.get("ev_chargers") or []
+        if power is not None and len(chargers) == 1:
+            amps = int(getattr(self, "_last_commanded_amps_fleet", 0) or 0)
+            watts = float(getattr(power, "ev_power", 0.0) or 0.0)
+            if amps >= 1 and watts > 400:
+                sample = min(nameplate, max(100.0, watts / amps))
+                prev = self._ev_wpa_ema.get(cid)
+                self._ev_wpa_ema[cid] = (
+                    sample if prev is None else 0.7 * prev + 0.3 * sample
+                )
+        learned = self._ev_wpa_ema.get(cid)
+        return float(learned) if learned else nameplate
 
     def _charger_priority_rows(self) -> "List[Dict[str, Any]]":
         """(#576 P2.1) Priority-list rows for every configured EV charger,
@@ -2910,8 +2951,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 try:
                                     from .overnight_actuation import ev_overlay
                                     _gate = self._overnight_plan_gate(f"ev:{cid}")
-                                    _wpa = (float(charger_cfg.get("ev_phases") or 3)
-                                            * float(charger_cfg.get("ev_voltage") or 230))
+                                    # Same measured W/A the demand was packed
+                                    # with — floor amps derived from the same
+                                    # power model the plan promised.
+                                    _wpa = self._ev_watts_per_amp(
+                                        cid, charger_cfg, power)
                                     _wait, _floor = ev_overlay(
                                         _gate,
                                         remaining_kwh=pc_target,
@@ -5809,8 +5853,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     continue
                 if kwh <= 0.05:
                     continue
-                wpa = (float(cfg.get("ev_phases") or 3)
-                       * float(cfg.get("ev_voltage") or 230))
+                # (#638 armed night 1) MEASURED W/A, nameplate fallback: the
+                # packer sized the floor at nameplate 6.9 kW, found no slot
+                # under the 6.0 kW peak, and yielded a car that then charged
+                # at 4.85 kW below the threshold all night.
+                wpa = self._ev_watts_per_amp(cid, cfg, power)
                 deadline = resolve_deadline(now, cfg.get("ev_target_time"))
                 try:
                     # The canonical one-list slot (#576): a drag override wins
@@ -5824,9 +5871,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     max_power_w=float(cfg.get("ev_max_current") or 16) * wpa,
                     min_power_w=float(cfg.get("ev_min_current") or 6) * wpa,
                     deadline=min(deadline, night_end) if deadline else night_end,
-                    # The one list packs highest-priority FIRST (#576);
-                    # the packer packs LOWEST first — negate.
-                    priority=-ev_prio,
+                    # The one list counts 1 = HIGHEST (get_devices_sorted)
+                    # and the packer packs LOWEST first — the directions
+                    # already agree. The old negation REVERSED the list:
+                    # armed night 1 packed rank 14 first and the EV (rank 1)
+                    # dead last (#638).
+                    priority=ev_prio,
                     source="grid",   # never-EV-from-battery (standing rule)
                 ))
             # Load min-runtime deficits eligible for a night source.
@@ -5865,7 +5915,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         energy_kwh=rated * deficit_h / 1000.0,
                         max_power_w=rated, min_power_w=rated,
                         deadline=night_end,
-                        priority=-int(getattr(dev, "priority", 0) or 0),
+                        # 1 = highest in BOTH the one list and the packer —
+                        # no negation (see the EV demand above).
+                        priority=int(getattr(dev, "priority", 0) or 0),
                         # Tier-2 runs off the home battery: no grid meter, no
                         # peak cap, no price — it spends the trajectory.
                         source="battery" if tier2 else "grid",
@@ -5894,7 +5946,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     max_power_w=float(getattr(
                         getattr(scheduler, "_config", None),
                         "battery_max_charge_power_w", 5000.0)),
-                    priority=-batt_prio,
+                    priority=batt_prio,
                     source="grid",
                 ))
 
@@ -6895,8 +6947,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 from .overnight_actuation import ev_overlay
                 _pcid = _primary_cfg.get("id") or "ev_charger"
                 _gate = self._overnight_plan_gate(f"ev:{_pcid}")
-                _wpa = (float(_primary_cfg.get("ev_phases") or 3)
-                        * float(_primary_cfg.get("ev_voltage") or 230))
+                # Same measured W/A the demand was packed with (see the
+                # multi-charger site) — plan and floor share one power model.
+                _wpa = self._ev_watts_per_amp(_pcid, _primary_cfg, power)
                 _wait, _floor = ev_overlay(
                     _gate,
                     remaining_kwh=night_target,
