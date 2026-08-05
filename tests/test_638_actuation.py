@@ -292,3 +292,58 @@ class TestEverySiteThatComputesANightPlanAppliesTheOverlay:
             "ev_overlay call(s) — a night-plan site is missing the "
             "#638 G4 joint-plan overlay"
         )
+
+
+class TestAuthorityBeginsAtTheStamp:
+    """Armed night 1: slots open on the next full hour, so a 22:00:55 stamp
+    left 22:00-23:00 UNCOVERED — Heizband (block 23:00) started reactively
+    at 22:00:57 while the card promised WAITS. The gate must cover the
+    sliver between the stamp and the first slot."""
+
+    def _plan(self, computed="2026-08-05T22:00:55+02:00"):
+        return {
+            "computed_at": computed,
+            "slots": [
+                {"start": "2026-08-05T23:00:00+02:00",
+                 "end": "2026-08-06T00:00:00+02:00"},
+                {"start": "2026-08-06T00:00:00+02:00",
+                 "end": "2026-08-06T07:00:00+02:00"},
+            ],
+            "demands": [{"id": "load:heizband", "status": "fits"}],
+            "blocks": [{"id": "load:heizband",
+                        "start": "2026-08-05T23:00:00+02:00",
+                        "end": "2026-08-06T01:16:00+02:00",
+                        "power_w": 1000.0}],
+        }
+
+    def test_the_pre_first_slot_sliver_is_covered_and_vetoes(self):
+        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+            load_window, plan_gate,
+        )
+        now = datetime.fromisoformat("2026-08-05T22:00:57+02:00")
+        gate = plan_gate(self._plan(), "load:heizband", now)
+        assert gate.covered, "stamped+fresh plan must own the whole night"
+        assert gate.in_block is False
+        assert load_window(gate) is False, (
+            "the live regression: block at 23:00, now 22:00:57 — the gate "
+            "said 'no opinion' and the reactive pass started the device"
+        )
+
+    def test_inside_the_block_still_opens(self):
+        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+            load_window, plan_gate,
+        )
+        now = datetime.fromisoformat("2026-08-05T23:30:00+02:00")
+        gate = plan_gate(self._plan(), "load:heizband", now)
+        assert gate.covered and gate.in_block
+        assert load_window(gate) is True
+
+    def test_before_the_stamp_stays_uncovered(self):
+        """No retroactive authority: a cycle evaluated before computed_at
+        (clock skew, replayed stash) must not be gated by a plan from its
+        own future."""
+        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+            plan_gate, UNCOVERED,
+        )
+        now = datetime.fromisoformat("2026-08-05T21:30:00+02:00")
+        assert plan_gate(self._plan(), "load:heizband", now) is UNCOVERED

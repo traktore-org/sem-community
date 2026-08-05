@@ -90,6 +90,14 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         span_end = _parse_dt(slots[-1].get("end")) if slots else None
         if span_start is None or span_end is None:
             return UNCOVERED
+        # The plan's authority begins at the STAMP, not at the first slot.
+        # Slots start on the next full hour, so a 22:00:55 stamp opens a
+        # 23:00 grid — and gating on the slot span alone left every demand
+        # UNCOVERED for that sliver. Armed night 1: Heizband, block 23:00,
+        # started reactively at 22:00:57 in exactly that gap while the card
+        # already promised "WAITS · 23:00". A stamped, fresh plan has an
+        # opinion about the whole night it was computed for.
+        span_start = min(span_start, computed)
         if not (span_start <= now < span_end):
             return UNCOVERED
         row = next((r for r in plan.get("demands") or []
