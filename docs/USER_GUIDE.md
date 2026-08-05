@@ -842,9 +842,17 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 > **Day boundaries:** solar / grid / home daily counters reset at **midnight**
 > (matching HA's Energy Dashboard). The EV counter is different by design:
 > its "day" runs **deadline-to-deadline**, rolling over at your charger's
-> *Charge by* time (default 07:00, latest deadline across chargers on
-> multi-charger installs) — so an overnight charge lands in one bucket
-> instead of being split at midnight. A session still charging at the
+> *Charge by* time (default 07:00) — so an overnight charge lands in one
+> bucket instead of being split at midnight. On multi-charger installs the
+> fleet total uses the shared deadline while all chargers agree on one; when
+> their *Charge by* times differ there is no fleet deadline to roll on, so
+> the fleet total resets at **midnight** like every other daily counter,
+> while each charger's own counter keeps rolling at its own deadline (#724).
+> Moving a *Charge by* time takes effect at the next rollover — the day
+> already accumulating keeps its boundary. Moving it *later* therefore
+> extends the current EV day once (07:00 → 23:00 at midday means that one
+> day runs up to ~40 h and the counter simply doesn't reset at the old
+> 07:00); the next day is normal length again. A session still charging at the
 > deadline continues into the next EV day; the counter restarting mid-session
 > at your Charge-by time is expected. For calendar-day comparisons against
 > HA's Energy Dashboard, use the charger's own daily counter instead.
