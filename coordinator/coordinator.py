@@ -977,7 +977,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         - single charger → the persisted GLOBAL ``daily_ev`` (displayed basis);
         - multi-charger with own accounting → THIS charger's accumulator;
         - multi-charger, cid absent from the map → the FLEET total (#351 H1:
-          conservative — over-counts consumed so a top-up never overshoots);
+          conservative — over-counts consumed so a top-up never overshoots.
+          Caveat since #724: on a fleet with DIFFERENT Charge-by times the
+          fleet bucket rolls at midnight, so between 00:00 and this
+          charger's own deadline it can UNDER-count a pre-midnight session
+          — never-overshoot holds only from the charger's deadline onward.
+          The path needs a fresh/unpersisted charger id AND a
+          mixed-deadline fleet to matter);
         - defensive on stubs (no ``_daily_ev_per_charger`` attr → empty map).
         """
         pcd = getattr(self, "_daily_ev_per_charger", None) or {}
