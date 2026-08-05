@@ -54,7 +54,16 @@ class SEMOvernightPlanCard extends SEMLitBase {
         // The plan is stamped ONCE per night — computed_at is the only field
         // that moves when it changes. Keying on it (rather than on the state
         // alone) means a re-plan re-renders and a quiet night does not.
-        const key = [s?.state, a.computed_at, hass?.language].join('|');
+        // (#638 G4 chips) The live chips depend on the CLOCK crossing block
+        // boundaries, which no attribute change announces — fold the per-
+        // demand live signature into the key. hass streams every few seconds,
+        // so the card re-renders exactly when a demand's live state flips
+        // (in-window → done, wait → in-window) and stays quiet otherwise.
+        const liveSig = (a.actuation === true && Array.isArray(a.demands))
+            ? a.demands.map(d => this._liveState(d, a.blocks)).join(',')
+            : '';
+        const key = [s?.state, a.computed_at, a.actuation, liveSig,
+                     hass?.language].join('|');
         const hasLocalize = typeof semLocalize === 'function';
         if (key !== this._lastKey || (hasLocalize && !this._localizeReady)) {
             this._lastKey = key;
@@ -64,6 +73,49 @@ class SEMOvernightPlanCard extends SEMLitBase {
         }
     }
     get hass() { return this._hass; }
+
+    // (#638 G4) One demand's live actuation state, from its blocks vs. the
+    // clock — mirrors the backend trust rule's observable outcome without
+    // any new payload: 'now' (inside a block), 'wait:<iso>' (next block
+    // ahead), 'done' (all blocks past), 'reactive' (verdict not fits — the
+    // trust rule falls back to the reactive layer), null (battery pre-charge
+    // or malformed — no chip; G4 does not steer the scheduler).
+    _liveState(d, blocks) {
+        if (!d || d.kind === 'battery') return null;
+        if (d.status !== 'fits') return 'reactive';
+        const now = Date.now();
+        let next = null;
+        let sawValid = false;
+        for (const b of (Array.isArray(blocks) ? blocks : [])) {
+            if (b.id !== d.id) continue;
+            const start = Date.parse(b.start);
+            const end = Date.parse(b.end);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+            sawValid = true;
+            if (start <= now && now < end) return 'now';
+            if (start > now && (next === null || start < next)) next = start;
+        }
+        if (next !== null) return 'wait:' + next;
+        // fits with no blocks at all = zero-need demand; no chip either.
+        return sawValid ? 'done' : null;
+    }
+
+    // (#638 G4) chip renderer for a live state string.
+    _liveChip(live) {
+        if (!live) return nothing;
+        if (live === 'now') {
+            return html`<span class="live now">▶ ${this._t('overnight_live_now')}</span>`;
+        }
+        if (live.startsWith('wait:')) {
+            const t = this._hm(new Date(Number(live.slice(5))).toISOString());
+            return html`<span class="live wait">${
+                this._format('overnight_live_wait', { time: t }) || t}</span>`;
+        }
+        if (live === 'done') {
+            return html`<span class="live done">${this._t('overnight_live_done')}</span>`;
+        }
+        return html`<span class="live react">${this._t('overnight_live_reactive')}</span>`;
+    }
 
     _hm(iso) {
         if (!iso) return '—';
@@ -257,6 +309,17 @@ class SEMOvernightPlanCard extends SEMLitBase {
                                     <span class="tick ${t.left < 4 ? 'first' : ''}"
                                           style="left:${t.left}%">${t.text}</span>
                                 `)}
+                                ${slots.map(s => {
+                                    const sl = ((Date.parse(s.start) - t0) / span) * 100;
+                                    const sw = ((Date.parse(s.end) - Date.parse(s.start)) / span) * 100;
+                                    if (!Number.isFinite(sl) || !Number.isFinite(sw)) return nothing;
+                                    const price = (s.price === null || s.price === undefined)
+                                        ? '—' : `${s.price} ${currency}`;
+                                    const tipS = `${this._hm(s.start)}–${this._hm(s.end)} · ${price}`
+                                        + (s.cheap ? ` · ${this._t('overnight_legend_cheap')}` : '');
+                                    return html`<div class="slotcell" title="${tipS}"
+                                        style="left:${sl}%;width:${sw}%"></div>`;
+                                })}
                             </div>
                             <div class="stat axis"></div>
                         ` : nothing}
@@ -284,10 +347,38 @@ class SEMOvernightPlanCard extends SEMLitBase {
                             const kwh = d.status === 'fits'
                                 ? `${(d.planned_kwh || 0).toFixed(1)} kWh`
                                 : `${(d.planned_kwh || 0).toFixed(1)}/${(d.needed_kwh || 0).toFixed(1)} kWh`;
+                            // (#638 G4) the row tooltip: everything the plan
+                            // knows about this demand, composed from data the
+                            // card already holds (windows, power, energy, est
+                            // cost, the packer's note). Replaces the raw-id
+                            // title the name used to carry.
+                            const tip = [
+                                name,
+                                mine.map(b => `${this._hm(b.start)}–${this._hm(b.end)} · ${
+                                    (b.power_w / 1000).toFixed(1)} kW`).join('\n') || null,
+                                `${(d.planned_kwh || 0).toFixed(1)} / ${(d.needed_kwh || 0).toFixed(1)} kWh`
+                                    + ` · ${this._t('overnight_est')} ${(d.est_cost || 0).toFixed(2)} ${currency}`,
+                                d.note || null,
+                            ].filter(Boolean).join('\n');
+                            // (#638 G4) live chip while actuation is on.
+                            const live = act ? this._liveState(d, blocks) : null;
+                            // (#638 G4) a yielding demand always explains
+                            // itself — the packer's note when it wrote one,
+                            // the generic fallback line otherwise. An empty
+                            // row used to be the only signal.
+                            const reason = d.note || (d.status !== 'fits'
+                                ? this._format('overnight_yield_reason', {
+                                    planned: (d.planned_kwh || 0).toFixed(1),
+                                    needed: (d.needed_kwh || 0).toFixed(1),
+                                  })
+                                : null);
                             return html`
-                                <div class="lbl">
-                                    <ha-icon icon="${k.icon}" style="--mdc-icon-size:13px;color:${k.color}"></ha-icon>
-                                    <span class="name" title="${d.id}">${name}</span>
+                                <div class="lbl ${live ? 'col' : ''}" title="${tip}">
+                                    <div class="lname">
+                                        <ha-icon icon="${k.icon}" style="--mdc-icon-size:13px;color:${k.color}"></ha-icon>
+                                        <span class="name">${name}</span>
+                                    </div>
+                                    ${this._liveChip(live)}
                                 </div>
                                 ${hasStrip ? html`
                                     <div class="track">
@@ -303,13 +394,13 @@ class SEMOvernightPlanCard extends SEMLitBase {
                                         })}
                                     </div>
                                 ` : nothing}
-                                <div class="stat">
+                                <div class="stat" title="${tip}">
                                     <ha-icon icon="${s.icon}" style="--mdc-icon-size:13px;color:${s.color}"></ha-icon>
                                     <span>${kwh}</span>
                                 </div>
-                                ${d.note ? html`
+                                ${reason ? html`
                                     <div class="lbl"></div>
-                                    <div class="note">${d.note}</div>
+                                    <div class="note">${reason}</div>
                                     ${hasStrip ? html`<div class="stat"></div>` : nothing}
                                 ` : nothing}
                             `;
@@ -416,6 +507,37 @@ class SEMOvernightPlanCard extends SEMLitBase {
                 min-width: 0; font-size: 11px;
                 color: var(--primary-text-color);
             }
+            /* (#638 G4) a row wearing a live chip stacks name over chip. */
+            .lbl.col {
+                flex-direction: column; align-items: flex-start; gap: 2px;
+            }
+            .lname {
+                display: flex; align-items: center; gap: 4px; min-width: 0;
+                max-width: 100%;
+            }
+            .live {
+                font-size: 8.5px; letter-spacing: 0.05em; text-transform: uppercase;
+                padding: 0 5px; border-radius: 7px; white-space: nowrap;
+            }
+            .live.now {
+                background: rgba(141,200,146,0.20); color: #8DC892;
+                border: 1px solid rgba(141,200,146,0.45);
+            }
+            .live.wait {
+                background: rgba(91,200,216,0.12); color: #5BC8D8;
+                border: 1px solid rgba(91,200,216,0.30);
+                font-variant-numeric: tabular-nums;
+            }
+            .live.done {
+                background: rgba(255,255,255,0.06); color: var(--secondary-text-color);
+                border: 1px solid rgba(255,255,255,0.12);
+            }
+            .live.react {
+                background: rgba(131,83,209,0.16); color: #b39ddb;
+                border: 1px solid rgba(131,83,209,0.35);
+            }
+            /* (#638 G4) invisible hover cells on the axis: per-slot price. */
+            .slotcell { position: absolute; top: 0; bottom: 0; }
             .name {
                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
             }

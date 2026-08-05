@@ -312,12 +312,20 @@ def test_card_is_in_the_bundle_entry():
         "deploy scripts only rsync; they do NOT build.")
 
 
-def test_card_is_placed_on_the_system_tab():
+def test_card_is_placed_on_the_control_tab_between_schedule_and_loads():
+    """(#638 G4) With actuation the plan is a control surface, not a
+    diagnostic: Guido moved it to the Control tab between Today's Schedule
+    and Load Management (2026-08-05). Pin the ORDER, not just membership —
+    a card that drifts below Load Management silently loses the placement."""
     tpl = (REPO / "dashboard" / "sem_dashboard_template.yaml").read_text()
-    assert "custom:sem-overnight-plan-card" in tpl
-    system = tpl.split("- title: System", 1)[1]
-    assert "custom:sem-overnight-plan-card" in system, (
-        "the shadow plan belongs with the diagnostics, not on Home")
+    assert tpl.count("custom:sem-overnight-plan-card") == 1, (
+        "the plan card must live in exactly one place")
+    schedule = tpl.index("title: Today's Schedule")
+    card = tpl.index("custom:sem-overnight-plan-card")
+    loads = tpl.index("title: Load Management")
+    assert schedule < card < loads, (
+        "Tonight's Plan belongs on the Control tab between Today's "
+        "Schedule and Load Management")
 
 
 def test_card_localization_keys_exist_in_every_language():

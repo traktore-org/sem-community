@@ -305,6 +305,13 @@ views:
           - type: custom:sem-schedule-card
             entity_prefix: sensor.sem_
 
+          # ── Tonight's Plan (#638) ── the joint overnight planner's answer.
+          # Self-hides until a plan is stamped; live chips while actuation is
+          # on. Placed between the schedule and load management on Guido's
+          # call (2026-08-05) — it belongs with the control surfaces, not
+          # the diagnostics.
+          - type: custom:sem-overnight-plan-card
+
           # ── Load Priority (drag-and-drop device management) ──
           - type: custom:sem-title-card
             title: Load Management
@@ -395,11 +402,8 @@ views:
           - type: custom:sem-system-card
             entity_prefix: sensor.sem_
 
-          # ══════════════════════════════════════════════════════
-          # 0b. OVERNIGHT PLAN (#638) — SHADOW. Self-hides until the
-          #     joint planner has stamped a plan for tonight.
-          # ══════════════════════════════════════════════════════
-          - type: custom:sem-overnight-plan-card
+          # (#638: Tonight's Plan moved to the Control tab, between
+          # Today's Schedule and Load Management — Guido, 2026-08-05.)
 
           # ══════════════════════════════════════════════════════
           # 1b. GRID CARD
