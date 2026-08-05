@@ -501,9 +501,24 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 // starts where the day ended (sunset, pos=1) and ends where
                 // the next day starts (sunrise, pos=0), so pos must count
                 // DOWN from 1 to 0 as the night progresses, not up.
-                const sunset = nextSetTs - 86400000;
-                const nightLength = nextRiseTs - sunset;
-                if (nightLength > 0) pos = 1 - (now - sunset) / nightLength;
+                //
+                // Boundary slivers (#711, caught live at 06:05 with a 06:03
+                // sunrise): isNight gates on elevation < 0 (sun CENTER), but
+                // next_rising/next_setting flip at the official −0.833°
+                // upper-limb crossing — the two disagree for a few minutes
+                // around each. Just after official sunrise, next_rising
+                // already points at TOMORROW while it is still "night": the
+                // raw night length inflates by 24 h and the moon jumps from
+                // the sunrise end back to mid-arc. Mirror case at dusk.
+                // Normalize both endpoints to THIS night before mapping —
+                // 20 h separates any real night (≤ ~18 h at inhabited
+                // latitudes) from a 24 h-rolled-over neighbour.
+                let setTs = nextSetTs - 86400000;
+                if (now - setTs > 72000000) setTs = nextSetTs;
+                let riseTs = nextRiseTs;
+                if (riseTs - now > 72000000) riseTs -= 86400000;
+                const nightLength = riseTs - setTs;
+                if (nightLength > 0) pos = 1 - (now - setTs) / nightLength;
             } else {
                 pos = (nextRiseTs && now < nextRiseTs) ? 0 : 1;
             }
