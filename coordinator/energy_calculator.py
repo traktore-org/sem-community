@@ -64,6 +64,12 @@ _LEGACY_EV_KEY_PREFIX = f"{_LEGACY_EV_CATEGORY}_"
 # midnight rollover" (``_check_rollover``), and this bucket must roll at midnight.
 MIDNIGHT_EV_CATEGORY = "midnight_ev"
 
+# (#724) The boundary the FLEET EV total falls back to when its chargers do not
+# share a Charge-by deadline. Expressed as an offset so it flows through the
+# same ``get_current_meter_day_offset_based`` path (and the same day memo) as a
+# real deadline — "00:00" is calendar midnight by construction.
+_FLEET_CALENDAR_OFFSET = "00:00"
+
 # (#628) A balance term with no counter of its own may still take part in the
 # home balance while it is physically ABSENT — an install with no battery
 # integrates 0 kWh of battery charge all day, and demanding a BMS counter of it
@@ -196,6 +202,12 @@ class EnergyCalculator:
         # First calendar day the midnight EV mirror was tracking. The balance
         # refuses to run on that day — see ``_reconcile_home_energy``.
         self._midnight_ev_since: Optional[date] = None
+        # (#724) The deadline that opened the running EV day, and the day key
+        # it produced. A deadline moved mid-day is deferred to the next
+        # rollover rather than re-naming a day already accumulated into —
+        # see ``_ev_reset_day``.
+        self._ev_day_offset: Optional[str] = None
+        self._ev_day_key: Optional[date] = None
         self._lifetime_seeded: bool = False
         self._yearly_seeded: bool = False
         self._yearly_seed_attempts: int = 0
@@ -219,26 +231,13 @@ class EnergyCalculator:
             self.clamp_engagement.pop(name, None)
         return clamped
 
-    def _ev_reset_day(self, now: datetime):
-        """Return today's EV-day bucket key, deadline-based (#279 follow-up).
-
-        Mirrors the per-charger reset boundary so the GLOBAL daily_ev_energy
-        sensor doesn't wipe at sunrise (~05:30 in summer) and instead rolls
-        at the user's actual ``Charge by`` deadline (default 07:00). For
-        multi-charger setups, uses the LATEST deadline across configured
-        chargers — the global counter survives until ALL chargers have
-        rolled over, otherwise a charger with a later deadline would see
-        a phantom mid-night reset.
-
-        Falls back to the legacy sunrise-based boundary only when no
-        chargers + no global default are configured (transition / pre-setup).
-        """
+    def _ev_deadlines(self) -> list[str]:
+        """Every configured ``Charge by`` time: per charger, else the global
+        default. Empty only pre-setup (no chargers AND no default)."""
         from ..consts.core import DEFAULT_EV_TARGET_TIME
 
-        # Gather all charger target_times + the global default
-        ev_chargers = self.config.get("ev_chargers") or []
         deadlines = []
-        for c in ev_chargers:
+        for c in self.config.get("ev_chargers") or []:
             tt = c.get("ev_target_time") or self.config.get("ev_target_time")
             if tt:
                 deadlines.append(str(tt))
@@ -246,15 +245,105 @@ class EnergyCalculator:
             global_tt = self.config.get("ev_target_time") or DEFAULT_EV_TARGET_TIME
             if global_tt:
                 deadlines.append(str(global_tt))
+        return deadlines
 
+    def _seed_ev_day_memo_from_legacy_rule(self) -> None:
+        """(#724) Upgrade seam: adopt the new fleet rule at a rollover, not
+        mid-day.
+
+        First start on this code finds a store with EV buckets but no day
+        memo. Re-deriving the day from the NEW rule right away would re-key a
+        disagreeing fleet's running day mid-flight (calendar vs the old
+        ``max(deadlines)`` answer) — the daily sensor would jump once at
+        upgrade, the exact discontinuity the memo exists to prevent. Seeding
+        the memo with the LEGACY rule instead means the running day keeps the
+        identity it was accumulated under, and the calendar fallback takes
+        over at that day's natural rollover. Agreeing fleets seed a value the
+        new rule reproduces anyway, so this is a no-op for them.
+        """
+        deadlines = self._ev_deadlines()
+        if not deadlines:
+            return
+        legacy = max(deadlines)
+        try:
+            day = self._time_manager.get_current_meter_day_offset_based(legacy)
+        except (ValueError, TypeError):
+            return
+        self._ev_day_offset = legacy
+        self._ev_day_key = day
+
+    def _ev_reset_day(self, now: datetime):
+        """Return today's EV-day bucket key, deadline-based (#279 follow-up).
+
+        Mirrors the per-charger reset boundary so the GLOBAL daily_ev_energy
+        sensor doesn't wipe at sunrise (~05:30 in summer) and instead rolls
+        at the user's actual ``Charge by`` deadline (default 07:00).
+
+        That holds while the fleet AGREES on a deadline. When chargers are on
+        different Charge-by times there is no fleet deadline to roll on, and
+        the total falls back to calendar midnight — the only boundary every
+        charger shares (#724).
+
+        Falls back to the legacy sunrise-based boundary only when no
+        chargers + no global default are configured (transition / pre-setup).
+
+        The deadline is a live setting (a ``time.`` entity on the dashboard),
+        so it can move while a day is already accumulating. Applying the new
+        boundary immediately would RE-NAME that day: at 12:00 a move from
+        07:00 to 23:00 flips ``now < offset`` and the bucket key becomes
+        yesterday's, so the sensor shows yesterday's total and further
+        increments merge into it (#724). A boundary change is legitimate; a
+        retroactive one is not. So the offset that OPENED the running day owns
+        it, and a changed deadline is adopted at the next rollover of the old
+        one. Both halves of that memo persist — a memo about a boundary that
+        does not survive a restart across that boundary just reinstates the
+        bug on the next reboot (#645 rule 2).
+        """
+        deadlines = self._ev_deadlines()
         if not deadlines:
             # Pure fallback — pre-#279 behaviour.
             return self._time_manager.get_current_meter_day_sunrise_based()
 
-        # Pick the LATEST deadline so the global counter doesn't roll over
-        # before the slowest-deadline charger has finished its bucket.
-        latest = max(deadlines)
-        return self._time_manager.get_current_meter_day_offset_based(latest)
+        # (#724) A FLEET total needs a boundary the whole fleet shares.
+        #
+        # When every charger agrees — one charger, or several on the same
+        # Charge-by time — the deadline day is well-defined and #279 stands
+        # untouched: the counter rolls at the user's deadline, not at sunrise.
+        #
+        # When they disagree there is no such thing as "the deadline day".
+        # The old rule (LATEST deadline, so the bucket outlives the slowest
+        # charger) bucketed the fleet total on ONE charger's clock while every
+        # per-charger counter rolled on its own: a charger on 06:00 rolled at
+        # 06:00 while the fleet figure waited until 22:00 for its sibling. A
+        # number that describes none of its members cannot be reconciled
+        # against anything. Midnight is the only boundary every charger
+        # shares, so the fleet total falls back to it — which is also the
+        # boundary every other daily energy figure already uses (#723).
+        #
+        # Per-charger continuity is unaffected: each charger's own counter
+        # still rolls on its own deadline, which is where an overnight
+        # session's identity actually lives.
+        unique = set(deadlines)
+        latest = max(deadlines) if len(unique) == 1 else _FLEET_CALENDAR_OFFSET
+
+        # (#724) Hold the running day against a mid-day boundary move.
+        in_effect, running = self._ev_day_offset, self._ev_day_key
+        if in_effect and running is not None and str(in_effect) != latest:
+            try:
+                still_open = self._time_manager.get_current_meter_day_offset_based(
+                    str(in_effect)
+                )
+            except (ValueError, TypeError):
+                # Unusable memo (hand-edited store, format change). Re-derive
+                # from config below — right for a fresh day, and never raises.
+                still_open = None
+            if still_open == running:
+                return running
+
+        day = self._time_manager.get_current_meter_day_offset_based(latest)
+        self._ev_day_offset = latest
+        self._ev_day_key = day
+        return day
 
     def calculate_energy(
         self, power: PowerReadings,
@@ -2183,6 +2272,14 @@ class EnergyCalculator:
                 self._midnight_ev_since.isoformat()
                 if self._midnight_ev_since else None
             ),
+            # (#724) Which deadline opened the running EV day. Without this
+            # pair a restart re-derives the day from whatever the deadline is
+            # NOW, which is exactly the retroactive re-bucket ``_ev_reset_day``
+            # defends against — the bug would simply return on the next reboot.
+            "ev_day_offset": self._ev_day_offset,
+            "ev_day_key": (
+                self._ev_day_key.isoformat() if self._ev_day_key else None
+            ),
         }
 
     @staticmethod
@@ -2288,6 +2385,29 @@ class EnergyCalculator:
                         "Discarding unparseable midnight_ev_since %r — the home "
                         "balance re-arms for one day", since,
                     )
+            ev_day_offset = state.get("ev_day_offset")
+            ev_day_key = state.get("ev_day_key")
+            if ev_day_offset and ev_day_key:
+                try:
+                    self._ev_day_key = date.fromisoformat(str(ev_day_key))
+                    self._ev_day_offset = str(ev_day_offset)
+                except ValueError:
+                    # Re-derive from config on the next cycle. The only cost is
+                    # that a deadline moved during the downtime applies at once.
+                    _LOGGER.warning(
+                        "Discarding unparseable EV day memo %r/%r — the EV day "
+                        "re-derives from the current deadline",
+                        ev_day_offset, ev_day_key,
+                    )
+                    self._ev_day_offset = None
+                    self._ev_day_key = None
+            else:
+                # A store WITHOUT the memo is a pre-#724 install mid-upgrade:
+                # its running EV day was keyed by the legacy rule, so continue
+                # it under that rule and let the new one take over at the next
+                # rollover. (A fresh install never reaches restore_state, so
+                # this cannot mask a genuinely new setup.)
+                self._seed_ev_day_memo_from_legacy_rule()
             last_update = state.get("last_update")
             if last_update:
                 self._last_update = datetime.fromisoformat(last_update)

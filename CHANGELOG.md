@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.2] — 05.08.2026
+
+### 🐛 Fixes
+
+- 📅 **Moving the *Charge by* time no longer re-buckets the EV day that is already running**
+  (#724) — the fleet EV daily counter's day is deadline-based (#279), and the bucket key was
+  re-derived from the live config on every cycle. Move the deadline from 07:00 to 23:00 at
+  midday and `sensor.sem_daily_ev_energy` instantly showed *yesterday's* total (a plausible
+  wrong number, not an obviously-broken zero), with every further watt merging into
+  yesterday's bucket; the reverse move orphaned the day's accrual. The boundary that opened
+  the running day now **owns it until it rolls** — a changed deadline takes effect at the
+  next rollover, and the memo persists across restarts (a boundary memo that dies on reboot
+  just reinstates the bug, #645 rule 2). Upgrades are seamed the same way: the first start on
+  this version continues the running day under the old rule and switches at its natural
+  rollover, so no install sees a one-time jump.
+- 🚗🚗 **Multi-charger fleets with different *Charge by* times: the fleet EV total now
+  resets at midnight** (#724) — the fleet counter was bucketed on `max(deadlines)`, one
+  charger's clock standing in for the whole fleet: with Car A on 06:00 and Car B on 22:00,
+  Car A's own counter rolled at 06:00 while the fleet figure waited until 22:00 — a number
+  describing none of its members. Once deadlines diverge there is no such thing as "the
+  fleet deadline day", so the fleet total falls back to **calendar midnight**, the only
+  boundary every charger shares (and the one every other daily figure already uses). Fleets
+  that agree on one deadline — including every single-charger install — keep the #279
+  deadline-to-deadline behaviour unchanged, and each charger's own counter always rolls at
+  its own deadline. Side effect: the 20:00 daily-summary notification's EV figure now sits
+  on the same day as the solar/home/cost figures beside it on mixed-deadline fleets.
+  Docs: [USER_GUIDE.md → Day boundaries](docs/USER_GUIDE.md#energy--cost-sensors),
+  [EV_CHARGING_LOGIC.md → When does the daily target counter
+  reset?](docs/EV_CHARGING_LOGIC.md#when-does-the-daily-target-counter-reset),
+  [KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md#sunrise-based-meter-day),
+  [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
 # [1.7.6-beta.1] — 04.08.2026
 
 ### 🐛 Fixes
