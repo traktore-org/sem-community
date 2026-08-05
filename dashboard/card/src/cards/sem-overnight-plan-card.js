@@ -63,6 +63,9 @@ class SEMOvernightPlanCard extends SEMLitBase {
             ? a.demands.map(d => this._liveState(d, a.blocks)).join(',')
             : '';
         const key = [s?.state, a.computed_at, a.actuation, liveSig,
+                     // pending-face chip reads the switch directly (attrs
+                     // are empty then) — its flips must re-render too.
+                     hass?.states['switch.sem_overnight_actuation']?.state,
                      hass?.language].join('|');
         const hasLocalize = typeof semLocalize === 'function';
         if (key !== this._lastKey || (hasLocalize && !this._localizeReady)) {
@@ -204,7 +207,11 @@ class SEMOvernightPlanCard extends SEMLitBase {
         this.style.display = '';
 
         const a = st.attributes || {};
-        const act = a.actuation === true;
+        // The actuation flag rides on the plan attributes — absent while
+        // ``pending`` (empty attrs). Fall back to the switch entity itself
+        // so the chip never claims "shadow" while actuation is armed.
+        const act = a.actuation === true || (a.actuation === undefined
+            && this._hass.states['switch.sem_overnight_actuation']?.state === 'on');
         // ``pending`` used to self-hide entirely — fine as a System-tab
         // diagnostic, wrong on the Control tab: after a daytime restart
         // (the stash is in-memory, task #14) the card vanished until the
