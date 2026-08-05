@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.2] — 05.08.2026
+
+### 🧪 Guards
+
+- ⚖️ **A view that must balance may no longer mix SEM's day boundaries** (#723) — the
+  Energy tab's Sankey — a conservation diagram whose arrows are supposed to add up — drew six
+  calendar-day figures next to an EV node bucketed on the Charge-by deadline, so between
+  midnight and the deadline the EV branch still carried last night's charge while every source
+  it is drawn from had already reset: out by roughly an overnight charge, every night. The
+  producer side of this class was closed by #645's boundary registry, but nothing governed a
+  view that COMPOSES several individually-correct figures. New guard
+  (`tests/test_723_view_day_boundary.py`) derives each entity's boundary from production
+  source and fails any balancing card that mixes two; the current Sankey instance carries a
+  self-expiring exemption that trips the moment a calendar-day EV sensor lands half-finished
+  (PR #722 delivers the sensor + template swap together and passes cleanly). The same class
+  in COMPUTED form — the 2026-06-01 PROD autarky bug, 9 % instead of ~42 % from
+  deadline-day EV divided into calendar-day flows — is pinned too: production may never call
+  `calculate_performance` without flow attribution.
+
 # [1.7.6-beta.1] — 04.08.2026
 
 ### 🐛 Fixes
