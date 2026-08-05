@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import deque
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, Optional, Set
@@ -69,6 +70,20 @@ MIDNIGHT_EV_CATEGORY = "midnight_ev"
 # same ``get_current_meter_day_offset_based`` path (and the same day memo) as a
 # real deadline — "00:00" is calendar midnight by construction.
 _FLEET_CALENDAR_OFFSET = "00:00"
+
+
+def _valid_hhmm(value) -> bool:
+    """A usable day-boundary offset: ``HH:MM`` on a real clock.
+
+    (#724) The day memo round-trips through the store, where a hand edit or a
+    format change can put anything. The time manager does NOT reject junk —
+    it falls back to midnight — so validity must be decided here, before the
+    memo is allowed to hold a day open.
+    """
+    if not isinstance(value, str):
+        return False
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", value)
+    return bool(m) and int(m.group(1)) < 24 and int(m.group(2)) < 60
 
 # (#628) A balance term with no counter of its own may still take part in the
 # home balance while it is physically ABSENT — an install with no battery
@@ -326,17 +341,21 @@ class EnergyCalculator:
         unique = set(deadlines)
         latest = max(deadlines) if len(unique) == 1 else _FLEET_CALENDAR_OFFSET
 
-        # (#724) Hold the running day against a mid-day boundary move.
+        # (#724) Hold the running day against a mid-day boundary move. The
+        # validity check is load-bearing, not defensive: the real time
+        # manager never raises on a junk offset — get_offset_time silently
+        # falls back to MIDNIGHT — so an unvalidated corrupt memo would not
+        # be discarded, it would quietly hold the day on a boundary nobody
+        # configured (review of f9045aa).
         in_effect, running = self._ev_day_offset, self._ev_day_key
+        if not _valid_hhmm(in_effect):
+            self._ev_day_offset = None
+            self._ev_day_key = None
+            in_effect, running = None, None
         if in_effect and running is not None and str(in_effect) != latest:
-            try:
-                still_open = self._time_manager.get_current_meter_day_offset_based(
-                    str(in_effect)
-                )
-            except (ValueError, TypeError):
-                # Unusable memo (hand-edited store, format change). Re-derive
-                # from config below — right for a fresh day, and never raises.
-                still_open = None
+            still_open = self._time_manager.get_current_meter_day_offset_based(
+                str(in_effect)
+            )
             if still_open == running:
                 return running
 
@@ -2387,7 +2406,7 @@ class EnergyCalculator:
                     )
             ev_day_offset = state.get("ev_day_offset")
             ev_day_key = state.get("ev_day_key")
-            if ev_day_offset and ev_day_key:
+            if _valid_hhmm(ev_day_offset) and ev_day_key:
                 try:
                     self._ev_day_key = date.fromisoformat(str(ev_day_key))
                     self._ev_day_offset = str(ev_day_offset)

@@ -849,7 +849,10 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 > the fleet total resets at **midnight** like every other daily counter,
 > while each charger's own counter keeps rolling at its own deadline (#724).
 > Moving a *Charge by* time takes effect at the next rollover — the day
-> already accumulating keeps its boundary. A session still charging at the
+> already accumulating keeps its boundary. Moving it *later* therefore
+> extends the current EV day once (07:00 → 23:00 at midday means that one
+> day runs up to ~40 h and the counter simply doesn't reset at the old
+> 07:00); the next day is normal length again. A session still charging at the
 > deadline continues into the next EV day; the counter restarting mid-session
 > at your Charge-by time is expected. For calendar-day comparisons against
 > HA's Energy Dashboard, use the charger's own daily counter instead.

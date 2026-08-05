@@ -35,14 +35,23 @@ from custom_components.solar_energy_management.coordinator.energy_calculator imp
 class _FakeTimeManager:
     """Only the two meter-day helpers ``_ev_reset_day`` reaches for.
 
-    ``get_offset_time`` semantics are HA's: today's date at HH:MM.
+    Faithful to the REAL TimeManager's contract (review of f9045aa): it never
+    raises on a junk offset — ``get_offset_time`` silently falls back to
+    midnight. An earlier fake raised instead, which let a test document a
+    discard path production didn't actually have.
     """
 
     def __init__(self, now: datetime):
         self.now = now
 
     def get_current_meter_day_offset_based(self, offset: str = "00:00") -> date:
-        hh, mm = (int(p) for p in str(offset).split(":")[:2])
+        try:
+            hh_s, mm_s = str(offset).split(":")[:2]
+            hh, mm = int(hh_s), int(mm_s)
+            if not (0 <= hh < 24 and 0 <= mm < 60):
+                raise ValueError(offset)
+        except (ValueError, AttributeError):
+            hh, mm = 0, 0  # the real TM's midnight fallback
         boundary = self.now.replace(hour=hh, minute=mm, second=0, microsecond=0)
         return (self.now.date() - timedelta(days=1)) if self.now < boundary \
             else self.now.date()
@@ -187,14 +196,32 @@ class TestMemoSurvivesRestart:
         restored._ev_day_key = date.fromisoformat(state["ev_day_key"])
         assert restored._ev_reset_day(NOON) == TODAY
 
-    @pytest.mark.parametrize("bad", ["", "not-a-time", "25:00", None])
-    def test_an_unusable_restored_offset_is_discarded_not_crashed(self, bad):
-        calc = _calc(NOON, "07:00")
+    @pytest.mark.parametrize("bad", ["", "not-a-time", "25:00", "07:60", None])
+    def test_an_unusable_offset_is_discarded_not_held(self, bad):
+        """The discard must be REAL (review of f9045aa): the time manager
+        treats junk as midnight rather than raising, so without explicit
+        validation a corrupt memo would silently HOLD the running day on a
+        midnight boundary nobody configured. Fixture chosen so hold-on-junk
+        and derive-from-config give DIFFERENT answers: at 06:00 under a
+        07:00 deadline the honest answer is YESTERDAY, while a junk memo
+        interpreted as midnight would have held TODAY."""
+        early = datetime(2026, 8, 5, 6, 0)
+        calc = _calc(early, "07:00")
         calc._ev_day_offset = bad
-        calc._ev_day_key = TODAY
-        # Falls back to deriving from config — the pre-#724 behaviour, which is
-        # correct for a fresh day and never raises.
-        assert calc._ev_reset_day(NOON) == TODAY
+        calc._ev_day_key = TODAY  # what a midnight-read junk memo would hold
+        assert calc._ev_reset_day(early) == YESTERDAY
+        # ...and the memo was cleansed, not left to trip the next cycle.
+        assert calc._ev_day_offset == "07:00"
+
+    @pytest.mark.parametrize("bad", ["", "not-a-time", "25:00", "07:60", 7])
+    def test_a_corrupt_stored_offset_never_restores(self, bad):
+        """restore_state's gate: a memo with a junk offset is equivalent to
+        no memo (the upgrade seam takes over), never adopted as-is."""
+        from custom_components.solar_energy_management.coordinator.energy_calculator import (
+            _valid_hhmm,
+        )
+        assert not _valid_hhmm(bad)
+        assert _valid_hhmm("07:00") and _valid_hhmm("23:59") and _valid_hhmm("0:05")
 
 
 class TestUpgradeSeam:
@@ -226,14 +253,16 @@ class TestUpgradeSeam:
         assert (calc._ev_day_offset, calc._ev_day_key) == ("07:00", TODAY)
         assert calc._ev_reset_day(NOON) == TODAY
 
-    def test_no_configured_deadlines_seeds_nothing(self):
+    def test_an_ev_less_config_seeds_the_default_and_stays_harmless(self):
+        """DEFAULT_EV_TARGET_TIME means _ev_deadlines is never empty, so the
+        seed always seeds — pin what it seeds and that an EV-less install is
+        unharmed: the memo matches what the live rule derives anyway, so
+        _ev_reset_day's hold branch never engages and daily_ev stays on the
+        exact key it would have used without any memo. (An earlier version
+        of this test asserted a 'seeds nothing' path that is unreachable —
+        review of f9045aa.)"""
         calc = _calc(NOON, "07:00")
-        calc.config = {"ev_chargers": []}
-        calc.config["ev_target_time"] = None
-        # DEFAULT_EV_TARGET_TIME still applies through _ev_deadlines, so use
-        # the truly-empty shape: no chargers key at all and no default reach.
+        calc.config = {"ev_chargers": [], "ev_target_time": None}
         calc._seed_ev_day_memo_from_legacy_rule()
-        # Whatever _ev_deadlines resolves, the seed must never raise; if it
-        # seeded, the value must be internally consistent.
-        if calc._ev_day_offset is not None:
-            assert calc._ev_day_key is not None
+        assert (calc._ev_day_offset, calc._ev_day_key) == ("07:00", TODAY)
+        assert calc._ev_reset_day(NOON) == TODAY
