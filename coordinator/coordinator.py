@@ -3356,21 +3356,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _in_window = _now_l.hour >= 21 or _now_l.hour < 7
                 # One plan per NIGHT: after midnight the night began yesterday.
                 _night_of = (_now_l - timedelta(hours=12)).date()
-                # (#638 G4) EV plug/unplug replan: a car that (dis)connects
-                # AFTER the stamp changes the night's demands — re-derive.
-                # Per-charger map when available, fleet OR as the fallback.
-                _conn_sig = tuple(sorted(
-                    (str(k), bool(v)) for k, v in
-                    (getattr(power, "ev_connected_per_charger", None) or {}).items()
-                )) or (("fleet", bool(getattr(power, "ev_connected", False))),)
+                # (#638) DEMAND-SHAPE replan. #638 specified the triggers as
+                # "price update, floor change, unplug, big deviation"; only
+                # unplug shipped, so raising the EV target at 22:19 on armed
+                # night 1 left the ledger describing a night that no longer
+                # existed while execution correctly followed the new floor.
+                # One signature over every input that changes WHAT is asked of
+                # the night — connection, EV floor/deadline/mode, each load's
+                # runtime deficit, and the night's price curve.
+                _demand_sig = self._overnight_demand_signature(power)
                 if (_in_window
                         and getattr(self, "_shadow_plan_date", None) == _night_of
                         and self._plan_ev_conn_sig is not None
-                        and _conn_sig != self._plan_ev_conn_sig):
+                        and _demand_sig != self._plan_ev_conn_sig):
                     _LOGGER.info(
-                        "OVERNIGHT-PLAN (#638): EV connection changed "
-                        "(%s → %s) — replanning the night",
-                        self._plan_ev_conn_sig, _conn_sig)
+                        "OVERNIGHT-PLAN (#638): the night's demands changed "
+                        "(%s → %s) — replanning",
+                        self._plan_ev_conn_sig, _demand_sig)
                     self._shadow_plan_date = None
                 if (_in_window
                         and getattr(self, "_shadow_plan_date", None) != _night_of):
@@ -3392,7 +3394,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if _batt_ready and self._shadow_overnight_plan(
                             _sched, energy, None, None, power):
                         self._shadow_plan_date = _night_of
-                        self._plan_ev_conn_sig = _conn_sig
+                        self._plan_ev_conn_sig = _demand_sig
             except Exception:  # noqa: BLE001 — shadow must never break the cycle
                 _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
 
@@ -5773,6 +5775,67 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return UNCOVERED
         return plan_gate(getattr(self, "_overnight_shadow_plan", None),
                          demand_id, now or dt_util.now())
+
+    def _overnight_demand_signature(self, power) -> tuple:
+        """(#638) What the night is being ASKED for, as a comparable value.
+
+        The stamp is once per night; this is how it learns the night changed
+        underneath it. #638 specified the re-plan triggers as "price update,
+        floor change, unplug, big deviation" — only unplug shipped, so on
+        armed night 1 the EV target went 3.5 → 6.0 kWh at 22:19 and the
+        ledger kept describing the old night while execution correctly
+        followed the new floor.
+
+        Deliberately COARSE: floors are rounded to 0.1 kWh and prices to the
+        cent, so sensor jitter cannot re-plan the night every cycle — only a
+        real change of the ask does. Anything unreadable degrades to a
+        constant rather than raising, because a signature that throws would
+        take the whole trigger down with it.
+        """
+        sig: list = []
+        # 1. Connection — the original trigger, per-charger when available.
+        sig.append(("conn", tuple(sorted(
+            (str(k), bool(v)) for k, v in
+            (getattr(power, "ev_connected_per_charger", None) or {}).items()
+        )) or (("fleet", bool(getattr(power, "ev_connected", False))),)))
+        # 2. Per-charger ask: floor, deadline, mode.
+        for cfg in (self.config.get("ev_chargers") or []):
+            try:
+                cid = str(cfg.get("id") or "")
+                sig.append((
+                    "ev", cid,
+                    round(float(cfg.get("daily_ev_target") or 0.0), 1),
+                    str(cfg.get("ev_target_time") or ""),
+                    str(cfg.get("charge_mode") or ""),
+                ))
+            except Exception:  # noqa: BLE001 — one odd charger cfg is not fatal
+                continue
+        # 3. Each load's remaining runtime deficit — the loads' equivalent of
+        #    a floor. Rounded to 6-minute steps: a deficit shrinks every
+        #    cycle while a device runs, and that is NOT a demand change.
+        controller = getattr(self, "_surplus_controller", None)
+        for dev in (controller.get_devices_sorted() if controller else []):
+            try:
+                if not getattr(dev, "has_runtime_deficit", False):
+                    continue
+                deficit_h = max(0.0, (dev.daily_min_runtime_sec
+                                      - dev._daily_runtime_accumulated_sec) / 3600.0)
+                sig.append(("load", str(dev.device_id), round(deficit_h * 10) / 10))
+            except Exception:  # noqa: BLE001
+                continue
+        # 4. The night's price curve — a provider publishing tomorrow's
+        #    prices mid-evening changes where everything should go.
+        try:
+            ups = getattr(
+                self._tariff_provider.get_tariff_data(), "upcoming_prices", None
+            ) or []
+            sig.append(("price", tuple(
+                round(float(p.price), 2) for p in ups[:48]
+                if getattr(p, "price", None) is not None
+            )))
+        except Exception:  # noqa: BLE001 — no tariff is a valid shape
+            sig.append(("price", ()))
+        return tuple(sig)
 
     def _overnight_load_windows(self, devices) -> dict:
         """(#638 G4) Per-device window verdicts for this cycle's surplus
