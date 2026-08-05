@@ -3292,11 +3292,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             try:
                 _sched = self._battery_charge_scheduler
                 _now_l = dt_util.now()
-                _hour = int(getattr(getattr(_sched, "_config", None),
-                                    "trigger_hour", 21) or 21)
-                # Inside the NIGHT WINDOW, not just the evening: a restart
-                # at 00:48 still owes the rest of the night a plan.
-                _in_window = _now_l.hour >= _hour or _now_l.hour < 7
+                # Inside the REAL night window — the same sunset-anchored
+                # max(sunset+10, earliest_start) → min(sunrise, latest_end)
+                # every night source runs on — not the battery scheduler's
+                # fixed trigger_hour. With the old 21:00 anchor a winter
+                # night (window opening ~17:00–20:30 depending on config)
+                # sat unplanned for hours (Guido, 2026-08-05). A restart at
+                # 00:48 still owes the rest of the night a plan: the window
+                # spans midnight, so is_night_mode covers it.
+                try:
+                    _in_window = bool(self.time_manager.is_night_mode())
+                except Exception:  # noqa: BLE001 — degrade to the old anchor
+                    _in_window = _now_l.hour >= 21 or _now_l.hour < 7
                 # One plan per NIGHT: after midnight the night began yesterday.
                 _night_of = (_now_l - timedelta(hours=12)).date()
                 # (#638 G4) EV plug/unplug replan: a car that (dis)connects

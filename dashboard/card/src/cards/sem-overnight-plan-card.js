@@ -64,8 +64,10 @@ class SEMOvernightPlanCard extends SEMLitBase {
             : '';
         const key = [s?.state, a.computed_at, a.actuation, liveSig,
                      // pending-face chip reads the switch directly (attrs
-                     // are empty then) — its flips must re-render too.
+                     // are empty then) — its flips must re-render too, as
+                     // must the window-open time the face displays.
                      hass?.states['switch.sem_overnight_actuation']?.state,
+                     hass?.states['sensor.sem_night_start_time']?.state,
                      hass?.language].join('|');
         const hasLocalize = typeof semLocalize === 'function';
         if (key !== this._lastKey || (hasLocalize && !this._localizeReady)) {
@@ -178,7 +180,7 @@ class SEMOvernightPlanCard extends SEMLitBase {
         </a>`;
     }
 
-    _renderIdle(act, textKey = 'overnight_idle') {
+    _renderIdle(act, textKey = 'overnight_idle', suffix = '') {
         return html`
             <ha-card>
                 <div class="wrap">
@@ -188,7 +190,7 @@ class SEMOvernightPlanCard extends SEMLitBase {
                         ${this._modeChip(act)}
                         ${this._docsLink()}
                     </div>
-                    <div class="idle">${this._t(textKey)}</div>
+                    <div class="idle">${this._t(textKey)}${suffix}</div>
                 </div>
             </ha-card>
         `;
@@ -215,10 +217,14 @@ class SEMOvernightPlanCard extends SEMLitBase {
         // ``pending`` used to self-hide entirely — fine as a System-tab
         // diagnostic, wrong on the Control tab: after a daytime restart
         // (the stash is in-memory, task #14) the card vanished until the
-        // 21:00 stamp and read as broken — Guido hit exactly that on
-        // 2026-08-05. Show a slim placeholder saying when the plan comes.
+        // night-window stamp and read as broken — Guido hit exactly that
+        // on 2026-08-05. Show a slim placeholder saying when the plan
+        // comes — the REAL window-open time (sunset-anchored, config-
+        // aware) from sensor.sem_night_start_time, never a hardcoded hour.
         if (verdict === 'pending') {
-            return this._renderIdle(act, 'overnight_pending');
+            const ns = this._hass.states['sensor.sem_night_start_time']?.state;
+            const when = (ns && /^\d{1,2}:\d{2}$/.test(ns)) ? ` (~${ns})` : '';
+            return this._renderIdle(act, 'overnight_pending', when);
         }
         const demands = Array.isArray(a.demands) ? a.demands : [];
         const slots = Array.isArray(a.slots) ? a.slots : [];
