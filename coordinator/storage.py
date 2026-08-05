@@ -66,6 +66,12 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # would look like the upgrade day and suppress the balance for good.
     "midnight_ev_baselines",
     "midnight_ev_since",
+    # (#724) the deadline that opened the running EV day, and the day key it
+    # produced. Both must persist: a restart that re-derives the day from the
+    # CURRENT deadline re-buckets a day the user moved the deadline on, which
+    # is the very thing ``_ev_reset_day`` defers.
+    "ev_day_offset",
+    "ev_day_key",
     # (#668) lifetime running totals, summed at each day rollover. Dropped
     # since they were introduced, so ``lifetime_total_savings`` fell back to a
     # 7-day-average-rate ESTIMATE of the entire history after every restart

@@ -141,7 +141,7 @@ With the floor at zero and/or night charging off, the charger only draws solar s
 1. Confirm the coordinator is running: `sensor.sem_charging_state` should NOT be `unavailable`. If it is, the integration failed to start — see HA logs.
 2. Verify power sensors have numeric values (not "unknown" or "unavailable")
 3. Check HA logs for SEM errors: **Settings > System > Logs**, filter for `solar_energy_management`
-4. Daily ENERGY values (solar / home / grid / battery) reset at **midnight** — matching HA's Energy Dashboard. Two deliberate exceptions: the EV daily counter rolls at the charger's **Charge-by deadline** (default 07:00, so an overnight charge stays in one bucket), and load **runtime targets** roll at **sunrise** (see MULTI_DEVICE_GUIDE)
+4. Daily ENERGY values (solar / home / grid / battery) reset at **midnight** — matching HA's Energy Dashboard. Two deliberate exceptions: the EV daily counter rolls at the **Charge-by deadline** (default 07:00, so an overnight charge stays in one bucket; on multi-charger installs only while all chargers share one deadline — otherwise the fleet total rolls at midnight, #724), and load **runtime targets** roll at **sunrise** (see MULTI_DEVICE_GUIDE)
 
 ---
 
