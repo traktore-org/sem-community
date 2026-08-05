@@ -89,8 +89,11 @@ class TestAccumulatorKeyRoundTrip666:
         nothing, every assertion below would pass vacuously."""
         totals = _run_one_cycle(_make_calc())
         assert totals.daily_solar > 0, "probe integrated nothing — cycle broke"
-        assert len(_categories()) == 7, (
-            f"expected 7 daily categories, found {_categories()} — if a "
+        # ``calendar_ev`` is intentionally daily-only: it mirrors wallbox energy
+        # on the local calendar day for the Sankey balance, while ``ev`` remains
+        # the deadline-based category with monthly/yearly/lifetime totals.
+        assert len(_categories()) == 8, (
+            f"expected 8 daily categories, found {_categories()} — if a "
             "category was added or removed, confirm the guard still covers it"
         )
 
