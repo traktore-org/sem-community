@@ -1928,7 +1928,11 @@ def _bare_temperature_inverter_sensor(hass, sibling_sensors, exclude):
         if state is None:
             continue  # not loaded yet — don't guess; retry next probe
         dc = state.attributes.get("device_class")
-        unit = state.attributes.get("unit_of_measurement")
-        if dc == "temperature" or unit in ("°C", "°F", "C", "F"):
+        # #727 — ask units.py (the one place that knows temperature units) rather
+        # than an inline literal list, so °C/°F/K stay in a single source.
+        # Local import keeps this module from eagerly pulling in the coordinator
+        # package (hardware_detection is imported very early).
+        from .coordinator.units import is_temperature_unit
+        if dc == "temperature" or is_temperature_unit(state):
             return eid
     return None

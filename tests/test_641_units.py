@@ -16,9 +16,11 @@ from custom_components.solar_energy_management.coordinator.units import (
     energy_state_to_kwh,
     is_energy_unit,
     is_power_unit,
+    is_temperature_unit,
     normalize_unit,
     power_state_to_watts,
     power_unit_scale,
+    temperature_state_to_celsius,
 )
 
 
@@ -132,6 +134,60 @@ class TestCapacityHeuristicNotDoubleApplied641:
 
 
 @pytest.mark.unit
+class TestTemperatureNormalization727:
+    """#727 — a °F source read as °C showed a 48 °F reading as 118 °C in the
+    Home view. SEM's sensor is °C-native and HA converts for display, so the
+    source unit must be honoured on ingest."""
+
+    @pytest.mark.parametrize("unit", ["°C", "c", " Celsius ", "CELSIUS"])
+    def test_celsius_and_synonyms_pass_through(self, unit):
+        assert temperature_state_to_celsius(_S("40", unit)) == 40.0
+
+    @pytest.mark.parametrize("unit", ["°C", None, "", "junk"])
+    def test_missing_or_unknown_unit_assumed_celsius(self, unit):
+        assert temperature_state_to_celsius(_S("24.5", unit)) == 24.5
+
+    def test_fahrenheit_converts(self):
+        # 118 °F is a real inverter temp; must land near 47.8 °C, never stay 118.
+        assert temperature_state_to_celsius(_S("118.4", "°F")) == pytest.approx(48.0)
+
+    def test_the_727_report_value(self):
+        """A source mislabeled 48 °F (SolarAssistant #727) → 8.9 °C native, which
+        HA renders back as 48 °F on a US install — matching the source, not 118."""
+        assert temperature_state_to_celsius(_S("48", "°F")) == pytest.approx(8.888, abs=1e-2)
+
+    @pytest.mark.parametrize("unit", ["F", "fahrenheit"])
+    def test_fahrenheit_synonyms(self, unit):
+        assert temperature_state_to_celsius(_S("32", unit)) == pytest.approx(0.0)
+
+    def test_kelvin_converts(self):
+        assert temperature_state_to_celsius(_S("300", "K")) == pytest.approx(26.85)
+
+    def test_negative_celsius_kept(self):
+        """Cold-climate inverters read below 0 — the conversion must not clamp."""
+        assert temperature_state_to_celsius(_S("-10", "°C")) == -10.0
+
+    @pytest.mark.parametrize("raw", ["unknown", "unavailable", "", None, "abc"])
+    def test_unreadable_returns_default(self, raw):
+        assert temperature_state_to_celsius(_S(raw, "°C")) is None
+        assert temperature_state_to_celsius(_S(raw, "°C"), default=99.0) == 99.0
+
+    def test_missing_state_object_returns_default(self):
+        assert temperature_state_to_celsius(None, default=0.0) == 0.0
+
+    def test_is_temperature_unit(self):
+        assert is_temperature_unit("°C") and is_temperature_unit(" °f ")
+        assert is_temperature_unit("K") and is_temperature_unit("celsius")
+        assert not is_temperature_unit("W") and not is_temperature_unit("kWh")
+        assert not is_temperature_unit(_S("1", None))
+
+    def test_temperature_table_does_not_bleed_into_power(self):
+        """°C is not a power unit and W is not a temperature unit."""
+        assert not is_power_unit("°C")
+        assert not is_temperature_unit("W")
+
+
+@pytest.mark.unit
 class TestUnitPredicates641:
     def test_is_energy_unit(self):
         assert is_energy_unit("kWh") and is_energy_unit(" wh ") and is_energy_unit("MWh")
@@ -170,6 +226,9 @@ _UNIT_LITERALS = {
     "w", "kw", "mw", "gw",
     "wh", "kwh", "mwh", "gwh",
     "kilowatt", "kilowatts", "watt", "watts",
+    # #727 — temperature joined units.py; an inline ``unit in ("°C", "°F")`` in
+    # hardware_detection was the same divergent-copy shape, now is_temperature_unit().
+    "°c", "°f", "°k", "c", "f", "k", "celsius", "fahrenheit", "kelvin",
 }
 # Files allowed to compare a unit string against a power/energy literal.
 _ALLOWED = {
@@ -205,6 +264,8 @@ class TestNoFifthCopy641:
     writing one, that is the shape this guard cannot see."""
 
     def test_no_module_compares_a_unit_against_a_power_or_energy_literal(self):
+        # #727 widened the ban to temperature literals too — same divergent-copy
+        # shape, now that units.py owns °C/°F/K via is_temperature_unit().
         offenders = []
         for path in sorted(_ROOT.rglob("*.py")):
             rel = path.relative_to(_ROOT).as_posix()
@@ -262,6 +323,7 @@ class TestNoFifthCopy641:
             "devices/base.py": "power_state_to_watts",
             "ha_energy_reader.py": "is_power_unit",
             "config_flow.py": "energy_state_to_kwh",
+            "hardware_detection.py": "is_temperature_unit",  # #727
         }
         missing = [
             rel for rel, symbol in expect.items()

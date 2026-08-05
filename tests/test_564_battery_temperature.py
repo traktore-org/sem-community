@@ -146,3 +146,54 @@ def test_inverter_temperature_in_coordinator_dict():
     power.inverter_temperature = 40.0
     data = SEMData(power=power).to_dict()
     assert data["inverter_temperature"] == 40.0
+
+
+# ── #727 — the source unit is honoured on ingest ──
+# SEM's sensor is °C-native and HA converts it to the user's display unit, so a
+# °F source read as °C (48 stored as 48 °C) rendered as a nonsensical 118 °C in
+# the Home view. The read must convert the source to °C first.
+
+def test_inverter_fahrenheit_source_is_converted_to_celsius():
+    r = _reader(
+        {"inverter_temperature_sensor": "sensor.inv_temp"},
+        {"sensor.inv_temp": SimpleNamespace(
+            state="118.4", attributes={"unit_of_measurement": "°F"})},
+    )
+    readings = PowerReadings()
+    r._read_inverter_temperature(readings)
+    assert readings.inverter_temperature == pytest.approx(48.0)
+
+
+def test_battery_fahrenheit_source_is_converted_to_celsius():
+    r = _reader(
+        {"battery_temperature_sensor": "sensor.batt_temp"},
+        {"sensor.batt_temp": SimpleNamespace(
+            state="77", attributes={"unit_of_measurement": "°F"})},
+    )
+    readings = PowerReadings()
+    r._read_battery_temperature(readings)
+    assert readings.battery_temperature == pytest.approx(25.0)
+
+
+def test_celsius_source_still_passes_through():
+    """The metric case every existing install relies on — untouched."""
+    r = _reader(
+        {"inverter_temperature_sensor": "sensor.inv_temp"},
+        {"sensor.inv_temp": SimpleNamespace(
+            state="40.0", attributes={"unit_of_measurement": "°C"})},
+    )
+    readings = PowerReadings()
+    r._read_inverter_temperature(readings)
+    assert readings.inverter_temperature == 40.0
+
+
+def test_unitless_source_assumed_celsius():
+    """No unit → assume °C (the historical behaviour, and what template/MQTT
+    temperature sensors that omit the unit rely on)."""
+    r = _reader(
+        {"battery_temperature_sensor": "sensor.batt_temp"},
+        {"sensor.batt_temp": SimpleNamespace(state="24.5", attributes={})},
+    )
+    readings = PowerReadings()
+    r._read_battery_temperature(readings)
+    assert readings.battery_temperature == 24.5
