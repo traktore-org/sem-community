@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.2] — 05.08.2026
 
 ### 🐛 Fixes
+- 🌡️ **Inverter/battery temperature no longer shows the wrong number *and* the wrong unit
+  on °F installs** (#727, reported by @Azlinon) — a US user's Home-view power-flow diagram
+  read "118°C", a plausible-but-nonsensical value. Two bugs compounded: SEM read the source
+  temperature sensor with `float(state.state)`, **ignoring its `°F` unit**, and then the card
+  concatenated a **hardcoded `°C`** onto a value HA had already converted to the user's display
+  unit. The reading is now converted from the source's unit to `°C` before republish
+  (`units.temperature_state_to_celsius` — the one place that decides a sensor's magnitude, now
+  covering temperature as it already did power/energy), and both the diagram and battery cards
+  label with the unit HA actually attached, never a fixed `°C`. Metric installs are unchanged
+  (a `°C`/unitless source passes through). A source that is itself mislabelled upstream (the
+  reporter's SolarAssistant bridge sends the Celsius value with a `°F` unit) will now match
+  whatever that source shows in HA, rather than being converted a second time. Sibling flagged
+  for a follow-up: the heat-pump/hot-water control path still assumes `°C` for its setpoint
+  comparisons.
 - 🌙 **The night sky got a real moon — with the right phase, moving the right way**
   (#711) — the diagram card's static full-moon placeholder is now the actual lunar phase
   (from `sensor.moon`, folded into the card's dirty-check key so a phase change re-renders),
@@ -58,6 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🧪 Guards
 
+- 🌡️ **A converted sensor may no longer be labelled with a hardcoded unit** (#727) — the
+  #641 units AST-lint now also bans an inline `unit == "°C"/"°F"` comparison outside
+  `coordinator/units.py` (temperature joined power/energy as a one-place-decides rule), and
+  `dashboard/card/test/temperature-unit.test.js` pins that a `°F` entity can only ever be
+  labelled `°F`. New bug class #33 (display-unit mislabel) in `docs/BUG_CLASSES.md`.
 - ⚖️ **A view that must balance may no longer mix SEM's day boundaries** (#723) — the
   Energy tab's Sankey — a conservation diagram whose arrows are supposed to add up — drew six
   calendar-day figures next to an EV node bucketed on the Charge-by deadline, so between
