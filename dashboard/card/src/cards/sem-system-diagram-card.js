@@ -27,6 +27,7 @@ import {
     semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_ACCENT,
     semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey, semTheme,
 } from '../base/sem-shared.js';
+import { nightArcPos } from '../util/night-arc.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -495,30 +496,17 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 // not "fix" this toward real moon times without solving that
                 // problem first.
                 //
-                // Direction is inverted vs. the day calc: the arc's pos=0 is
-                // anchored at sunrise (left) and pos=1 at sunset (right), the
-                // same points the day-time sun walks 0→1 through. The night
-                // starts where the day ended (sunset, pos=1) and ends where
-                // the next day starts (sunrise, pos=0), so pos must count
-                // DOWN from 1 to 0 as the night progresses, not up.
-                //
-                // Boundary slivers (#711, caught live at 06:05 with a 06:03
-                // sunrise): isNight gates on elevation < 0 (sun CENTER), but
-                // next_rising/next_setting flip at the official −0.833°
-                // upper-limb crossing — the two disagree for a few minutes
-                // around each. Just after official sunrise, next_rising
-                // already points at TOMORROW while it is still "night": the
-                // raw night length inflates by 24 h and the moon jumps from
-                // the sunrise end back to mid-arc. Mirror case at dusk.
-                // Normalize both endpoints to THIS night before mapping —
-                // 20 h separates any real night (≤ ~18 h at inhabited
-                // latitudes) from a 24 h-rolled-over neighbour.
-                let setTs = nextSetTs - 86400000;
-                if (now - setTs > 72000000) setTs = nextSetTs;
-                let riseTs = nextRiseTs;
-                if (riseTs - now > 72000000) riseTs -= 86400000;
-                const nightLength = riseTs - setTs;
-                if (nightLength > 0) pos = 1 - (now - setTs) / nightLength;
+                // Direction is inverted vs. the day calc: the night counts
+                // DOWN from 1 (sunset, right) to 0 (sunrise, left) — the
+                // same anchor points the day-time sun walks 0→1 through.
+                // The dawn/dusk boundary slivers (elevation-gated isNight
+                // vs. limb-crossing next_* attributes), the high-latitude
+                // long-night cases, and the degenerate polar-onset
+                // directional fallback all live in nightArcPos — see
+                // src/util/night-arc.js, pinned by test/night-arc-sliver.
+                // null only on missing attributes (guarded above anyway).
+                const nightPos = nightArcPos(now, nextRiseTs, nextSetTs);
+                if (nightPos !== null) pos = nightPos;
             } else {
                 pos = (nextRiseTs && now < nextRiseTs) ? 0 : 1;
             }
