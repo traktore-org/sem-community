@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the two comparisons are equivalent, and #359's boundaries are pinned by test to prove
   it. The mirror case is fixed too — a small *off*-peak block was pulling the middle tier
   down into "very cheap".
+- 🕐 **Today's-plan windows read an hour short** (#729, spotted by @Azlinon in #686) — a
+  cheap window covering the slots 00:00 through 05:00 announced itself as "open until
+  **05:00**", quietly disclaiming the last hour of itself. The two endpoints were not the
+  same kind of thing: `start` was the moment the window opens, but `end` was the *start
+  stamp of the final slot*. It now names the closing boundary — the same window reads
+  "until **06:00**" — and the slot length is measured off the price curve rather than
+  assumed hourly, so 15-minute markets close on the quarter. The EV strip's cheap/expensive
+  tint, which drew from the same value, stops stopping one slot early too.
 
 # [1.7.6-beta.2] — 05.08.2026
 
