@@ -150,12 +150,32 @@ class EVControlMixin:
             "vehicle_min_current": cfg.get("vehicle_min_current"),
         }
         min_amps = effective_min_amps(_effective_cfg, 6)
-        max_amps = int(self.config.get("ev_max_current", 32))
+        # Hardware limits resolve per-charger-then-fleet, same as everything
+        # else here (#716). Reading ``ev_max_current`` off the fleet plans a
+        # 16 A box as if it were the 32 A one; the device's own rating still
+        # gets the last word below, because config can out-claim the box.
+        max_amps = int(_pc("ev_max_current", 32))
         ev = getattr(self, "_ev_device", None)
         if ev is not None:
             max_amps = int(getattr(ev, "max_current", max_amps))
         phases = int(_pc("ev_phases", 3))
-        watts_per_amp = phases * DEFAULT_VOLTAGE_PER_PHASE
+        # ``ev_voltage`` is read by every other watts-per-amp conversion in
+        # the codebase — decide.py, the energy calculator, and
+        # ``_night_deliverable_kwh`` in this very file. This one alone
+        # hardcoded 230, so a 240 V install was planned 4% short (#716).
+        #
+        # A non-positive or unparseable value falls back to the default
+        # rather than through to ``amps_from_headroom``'s 1.0 W/A floor:
+        # that floor would not crash, it would saturate the charger to max
+        # current on a junk config value — the same fails-open shape the
+        # peak limit was hardened against in this issue.
+        try:
+            voltage = float(_pc("ev_voltage", DEFAULT_VOLTAGE_PER_PHASE))
+        except (TypeError, ValueError):
+            voltage = float(DEFAULT_VOLTAGE_PER_PHASE)
+        if voltage <= 0:
+            voltage = float(DEFAULT_VOLTAGE_PER_PHASE)
+        watts_per_amp = phases * voltage
 
         tariff_optimized = self._tariff_optimized_for(cfg)
         target_time = self._charger_target_time(cfg)
