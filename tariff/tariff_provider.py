@@ -63,6 +63,57 @@ def _local_date(timestamp: datetime):
     return _as_local(timestamp).date()
 
 
+# Recognised day-keyed price-array attributes. Each accepts BOTH a list
+# of ``{start, value}``-style dicts AND a *flat numeric* list anchored at
+# the day's local midnight (#732). Exposed as a constant so the parity
+# guard (``test_732_flat_price_array``) derives its cases from the real
+# vocabulary instead of a hand-retyped copy that can drift (BUG_CLASSES
+# class 24).
+DAY_KEYED_PRICE_ATTRS: Tuple[str, ...] = (
+    "prices_today", "prices_tomorrow", "today", "tomorrow",
+    "prices", "today_raw", "tomorrow_raw", "raw_today", "raw_tomorrow",
+)
+
+
+def _flat_list_base(key: str) -> Optional[datetime]:
+    """Local midnight anchoring a *flat numeric* price array under ``key``.
+
+    Nordpool's own ``today`` / ``tomorrow`` attributes — and the many
+    template/derivative sensors that mirror them (#732: sensor names an
+    ``elpris_sem_inkl_tariffer``-style DK proxy) — expose a bare list of
+    floats (one value per slot, counted from that day's local midnight),
+    NOT a list of ``{start, value}`` dicts. The day is unambiguous from
+    the key name, so the array can be anchored without a per-element
+    timestamp. Ambiguous keys (a bare ``prices`` with no day reference)
+    return ``None`` and keep accepting only the dict shape — guessing a
+    day would silently mis-date the whole percentile distribution.
+
+    Uses the ``dt_util.now().replace(...)`` idiom (not
+    ``start_of_local_day``) so it aligns exactly with how the tariff
+    tests build their expected timestamps.
+    """
+    midnight = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    if "tomorrow" in key:
+        return midnight + timedelta(days=1)
+    if "today" in key:
+        return midnight
+    return None
+
+
+def _flat_list_interval(n: int) -> timedelta:
+    """Slot spacing implied by a flat array of ``n`` values for one day.
+
+    24 → hourly, 48 → 30-min, 96 → 15-min (the three real day-ahead
+    market granularities). The bands absorb 23/25-length DST days as
+    hourly and 92/100-length DST days as 15-min.
+    """
+    if n <= 26:
+        return timedelta(hours=1)
+    if n <= 50:
+        return timedelta(minutes=30)
+    return timedelta(minutes=15)
+
+
 class PriceLevel(Enum):
     """Electricity price classification."""
     NEGATIVE = "negative"
@@ -731,6 +782,17 @@ class DynamicTariffProvider(TariffProvider):
         surface exposes which attribute matched so an empty result
         for a non-listed shape is visible without a maintainer
         having to read the raw entity dump.
+
+        v1.7.6 (#732): the day-keyed attributes above also accept a
+        **flat numeric list** — ``today: [0.25, 0.30, …]`` — not just a
+        list of dicts. This is Nordpool's *own* ``today`` / ``tomorrow``
+        shape and the one most template/derivative sensors copy; the
+        index is the slot counted from the day's local midnight, the
+        granularity (hourly / 30-min / 15-min) is read from the list
+        length, and ``None`` gap padding is skipped without shifting the
+        remaining slots. A bare ``prices`` list has no day reference, so
+        the flat shape is accepted only for the ``today`` / ``tomorrow``
+        keys (see ``_flat_list_base``).
         """
         state = (
             self.hass.states.get(self._price_entity)
@@ -774,69 +836,75 @@ class DynamicTariffProvider(TariffProvider):
         prices = []
         attrs = state.attributes if state else {}
 
-        # Tibber + NL EnergyZero/EasyEnergy + Tibber Grid Reward + generic
-        for key in (
-            "prices_today", "prices_tomorrow", "today", "tomorrow",
-            "prices", "today_raw", "tomorrow_raw",
-        ):
+        # Tibber + NL EnergyZero/EasyEnergy + Tibber Grid Reward +
+        # Nordpool raw_* + generic. Each item may be a ``{start, value}``
+        # -style dict OR a bare number: Nordpool's own ``today`` /
+        # ``tomorrow`` attributes (and the template/derivative sensors
+        # that mirror them, #732) expose a flat float list indexed from
+        # the day's local midnight. Both shapes are parsed here so a
+        # recognised attribute NAME is never rejected for its element
+        # SHAPE — the exact failure #732 reported (the name was listed in
+        # the warning, the flat array was silently dropped anyway).
+        for key in DAY_KEYED_PRICE_ATTRS:
             price_list = attrs.get(key, [])
-            if isinstance(price_list, list):
-                for item in price_list:
-                    if isinstance(item, dict):
-                        # Expanded timestamp key vocabulary — v1.7.2-beta.3
-                        # adds ``time`` (ENTSO-E) and ``hour`` (some NL
-                        # template sensors) to the existing ``start`` /
-                        # ``startsAt``.
-                        ts = (
-                            item.get("start")
-                            or item.get("startsAt")
-                            or item.get("time")
-                            or item.get("hour")
-                        )
-                        # Expanded price key vocabulary — already covers
-                        # most providers, kept verbatim.
-                        price = item.get("total", item.get("price", item.get("value")))
-                        if ts and price is not None:
-                            try:
-                                if isinstance(ts, str):
-                                    dt = datetime.fromisoformat(ts)
-                                else:
-                                    dt = ts
-                                prices.append(PricePoint(
-                                    timestamp=dt,
-                                    price=float(price),
-                                    currency=self.currency,
-                                    level=self._classify_price(float(price)),
-                                ))
-                            except (ValueError, TypeError):
-                                continue
-                if prices and not self._last_parsed_attribute:
-                    self._last_parsed_attribute = key
-
-        # Nordpool: raw_today, raw_tomorrow attributes
-        for key in ("raw_today", "raw_tomorrow"):
-            price_list = attrs.get(key, [])
-            if isinstance(price_list, list):
-                for item in price_list:
-                    if isinstance(item, dict):
-                        ts = item.get("start")
-                        price = item.get("value")
-                        if ts and price is not None:
-                            try:
-                                if isinstance(ts, str):
-                                    dt = datetime.fromisoformat(ts)
-                                else:
-                                    dt = ts
-                                prices.append(PricePoint(
-                                    timestamp=dt,
-                                    price=float(price),
-                                    currency=self.currency,
-                                    level=self._classify_price(float(price)),
-                                ))
-                            except (ValueError, TypeError):
-                                continue
-                if prices and not self._last_parsed_attribute:
-                    self._last_parsed_attribute = key
+            if not isinstance(price_list, list):
+                continue
+            flat_base = _flat_list_base(key)
+            # A flat numeric array is anchored by INDEX from the day's
+            # midnight, so its length must be one day's worth of slots.
+            # >96 (finer than 15-min for a single day) means it
+            # concatenates multiple days or is malformed: the length→
+            # granularity heuristic can't tell "one day, fine" from "many
+            # days, coarse", so refuse to guess rather than silently pack
+            # N days into one (#732 review). Dict items in an over-long
+            # list still parse — they carry their own timestamps.
+            flat_ok = flat_base is not None and len(price_list) <= 96
+            flat_interval = _flat_list_interval(len(price_list))
+            for idx, item in enumerate(price_list):
+                if isinstance(item, dict):
+                    # Timestamp key vocabulary — ``time`` (ENTSO-E) and
+                    # ``hour`` (NL template sensors) beside ``start`` /
+                    # ``startsAt``; price keys ``total`` / ``price`` /
+                    # ``value`` (``value`` also covers Nordpool raw_*).
+                    ts = (
+                        item.get("start")
+                        or item.get("startsAt")
+                        or item.get("time")
+                        or item.get("hour")
+                    )
+                    price = item.get("total", item.get("price", item.get("value")))
+                    if ts and price is not None:
+                        try:
+                            if isinstance(ts, str):
+                                dt = datetime.fromisoformat(ts)
+                            else:
+                                dt = ts
+                            prices.append(PricePoint(
+                                timestamp=dt,
+                                price=float(price),
+                                currency=self.currency,
+                                level=self._classify_price(float(price)),
+                            ))
+                        except (ValueError, TypeError):
+                            continue
+                elif flat_ok and not isinstance(item, bool):
+                    # Flat numeric list (#732): the index IS the slot,
+                    # counted from the day's local midnight. ``enumerate``
+                    # keeps the positional index so null/gap padding
+                    # (Nordpool leaves ``None`` for unpublished hours) is
+                    # skipped without shifting the remaining slots.
+                    try:
+                        val = float(item)
+                    except (ValueError, TypeError):
+                        continue
+                    prices.append(PricePoint(
+                        timestamp=flat_base + flat_interval * idx,
+                        price=val,
+                        currency=self.currency,
+                        level=self._classify_price(val),
+                    ))
+            if prices and not self._last_parsed_attribute:
+                self._last_parsed_attribute = key
 
         # Generic forecast: "forecasts" or "rates" attribute (Amber Electric,
         # Octopus Energy, or any provider that stores an array of price dicts).
@@ -948,7 +1016,9 @@ class DynamicTariffProvider(TariffProvider):
                 "Tariff entity %s has a readable state but exposes no "
                 "recognised price-array attribute (prices_today / today / "
                 "tomorrow / prices / today_raw / raw_today / forecasts / "
-                "rates). "
+                "rates). Each must hold EITHER a list of {start, value} "
+                "entries OR a flat list of numbers (one per hourly/30-min/"
+                "15-min slot from local midnight, #732). "
                 "Percentile classification and cheap-window planning are "
                 "degraded (#359). If this is a derivative/template sensor, "
                 "pass the provider's array through (attributes: "

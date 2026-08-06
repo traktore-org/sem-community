@@ -889,6 +889,42 @@ and compare against °C setpoints — a US user with a °F sensor gets wrong con
 but the climate-attribute unit semantics + control/safety tests need care, so it is flagged not
 auto-shipped.
 
+### 34. Recognised field NAME, silently rejected element SHAPE (parser shape gap) — GUARDED
+**Symptom:** a parser advertises a set of accepted attribute/field NAMES, an input arrives under one
+of exactly those names carrying valid data, and it is dropped without a word — often while a
+diagnostic *names the very attribute it just rejected*, sending the user to fix the name (which was
+never wrong). The inverse of class 10 (there the NAME isn't in the include list; here the name is
+recognised but the value's SHAPE isn't). **Root shape:** the accept-check is split — one list gates
+the *name*, an inner `isinstance`/key-shape guard gates the *element form* — and only the name list
+is advertised. Every provider whose payload takes the un-handled shape is invisible; the scalar/other
+paths keep working, so the failure reads as "half of it works, must be a config issue".
+**Live catch (#732, @bjpo-abelco, Growatt/DK):** `tariff_provider._read_prices_list` iterated each
+day-keyed attribute (`prices_today` / `today` / `raw_today` / …) but parsed only items that were
+`dict` (`{start, value}`-style). A **flat float list** — `today: [0.25, 0.30, …]`, which is
+Nordpool's *own* `today`/`tomorrow` shape and the one nearly every template/derivative sensor copies
+— has `float` items, so the whole 24/96-element array was skipped: `tariff_parsed_count: 0`,
+percentile classification degraded to NORMAL-only, cheap-window planning off. The #359 warning fired
+listing the names, none of which was the problem. Reproduced across three independent DK sensors.
+**Where it lives:** `tariff/tariff_provider.py` — the day-keyed loop (`DAY_KEYED_PRICE_ATTRS`) is now
+flat-aware; the two former dict-only loops (generic + Nordpool `raw_*`) were **merged** into one so
+the shape logic can't drift between them. **Assessed and left dict-only, correctly:** the
+`forecasts`/`rates` loop (Amber/Octopus objects — genuinely dict-shaped, no day anchor for a bare
+list) and the `nordpool.get_prices_for_date` service parser (a structured `{start,end,price}` API
+response). **Closure:** accept both shapes at every day-keyed site — a flat numeric list is anchored
+at the day's local midnight, granularity read from list length (24→hourly, 48→30-min, 96→15-min),
+`None` gap-padding skipped by index so surviving slots stay aligned; ambiguous keys (bare `prices`,
+no day reference) still reject the flat shape rather than guess a day, and a flat list longer than 96
+(the finest single-day granularity) is refused rather than silently packing multiple days into one —
+both cases where the length→granularity heuristic can't disambiguate, so it declines to guess. **Guard:**
+`tests/test_732_flat_price_array.py` — the parity test parametrizes a flat-list case over
+`DAY_KEYED_PRICE_ATTRS` *derived from the parser* (per class 24: the list is read from the source,
+not retyped), so re-narrowing any recognised key to dict-only fails CI; plus a vacuity floor and a
+bool-isn't-a-price case. Refs #732 #359.
+**Sweep question:** for every parser that advertises accepted names — does it accept the *shape* a
+user would most naturally put under each name, or only the one shape the first provider happened to
+use? And: does the "unrecognised" diagnostic distinguish *name* from *shape*, or blame the name for a
+shape gap?
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
