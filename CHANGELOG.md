@@ -38,6 +38,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   38 %. An install with no reference yet still reports "unknown" rather than a
   guess (#245), and the 0 %-recovery path now anchors the value it writes so it
   keeps tracking for the rest of the charge instead of freezing.
+- 🔋 **A hand-set charge efficiency can no longer reach the SOC estimate
+  unchecked** (#735) — `ev_charger_efficiency` overrides the 0.92 AC→DC default
+  used to convert metered energy into pack energy. It has no settings field yet,
+  so the only way to set it is by editing stored configuration by hand, and
+  whatever was typed went straight into the arithmetic: `3.0` claimed the pack
+  absorbed three times what the charger measured, `0` froze the estimate, and a
+  stray word raised an error mid-cycle. Values outside the physical range now
+  fall back to the default. The two places that book delivered energy — every
+  cycle during a charge, and the first-session bootstrap for installs with no
+  SOC sensor — now resolve the setting through one accessor rather than
+  separately; #708 was precisely two halves of one calculation drifting apart.
+  The stop guard added in #708 deliberately keeps the fixed 0.92 and is now
+  pinned as such: it feeds a *ceiling*, so a lowered efficiency would charge
+  **longer**, and stopping late puts energy in the pack that cannot be taken
+  back out, where stopping early is corrected by the next sensor reading.
 
 # [1.7.6-beta.5] — 06.08.2026
 

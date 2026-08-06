@@ -474,6 +474,11 @@ effective_soc = max(sensor, anchor + delivered_since_anchor_kwh × 0.92 ÷ capac
 - The anchor is **session-scoped only** — never persisted across restarts, and reset the moment
   the car disconnects (per charger, so a second charger's session can never leak into the first
   one's target decision).
+- The **0.92 here is fixed and not configurable**, deliberately. It sets a ceiling, so a lower
+  figure would make SEM charge *longer* — and the two mistakes are not equal. Stopping a little
+  early costs nothing: the next sensor reading lands under target and charging resumes. Stopping
+  late has already put the energy in the pack, and that is the overshoot this whole section
+  exists to prevent.
 - You'll see a mobile notification on both the early stop and any resume, and a small info line
   under the SOC gauge on the EV card (e.g. "Car: 55% (28 min ago) · est. now ~59%") — the gauge
   itself always shows the raw sensor value.
