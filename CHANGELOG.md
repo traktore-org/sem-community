@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.4] — 06.08.2026
+
+### 🐛 Fixes
+- 🔌 **Overnight charging read the wrong charger's hardware limits**
+  (#716, reported by @Azlinon) — the night planner sizes the charge rate as
+  `(peak limit − house load) ÷ watts-per-amp`, and it was assembling those limits
+  from the wrong places. `watts_per_amp` hardcoded 230 V, while `ev_voltage` is
+  read by every other conversion in the codebase — all of `decide.py`, the energy
+  calculator, and `_night_deliverable_kwh` forty lines further down the same file.
+  `max_amps` read the *fleet* `ev_max_current`, while the line directly below it
+  read `ev_phases` per-charger — so in a mixed fleet the 16 A box was planned as
+  the 32 A one, over-claiming budget the next charger in the list then never saw.
+  Both now resolve per-charger-then-fleet like the rest of the planner, and a
+  non-positive voltage falls back to the default instead of reaching
+  `amps_from_headroom`'s 1 W/A floor, which would have saturated the charger to
+  max current on a junk config value. The charger's own reported rating still has
+  the last word over config. **Note for North American installs:** the reporter's
+  1.6 kW clamp came from `Phases` defaulting to 3 on single-phase 240 V hardware —
+  a believed 690 W/A against a measured 244. Setting the per-charger **Phases**
+  number entity to 1 is the fix for that today; a declared voltage / Max-Amps
+  surface and measured watts-per-amp learning are still queued on #716.
+
 # [1.7.6-beta.3] — 06.08.2026
 
 ### 🐛 Fixes
