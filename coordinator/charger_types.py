@@ -39,6 +39,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Mapping, Optional
 
+from .plan_verdict import PlanVerdict
+
 
 # ─────────────────────────────────────────────────────────────────
 # Intent enum — what the decide step says the actuator must do
@@ -809,6 +811,21 @@ class ChargerView:
     (charges before the battery) only when ``ev_priority <
     fleet.battery_priority`` AND SOC ≥ reserve floor (#576 P2.2). Defaults to
     999 (bottom) so a view built without it never spuriously reclaims."""
+
+    plan: PlanVerdict = field(default_factory=PlanVerdict)
+    """(#638) What the PLANNING layer decided for this charger this cycle.
+
+    A typed field rather than a key in ``config`` on purpose. Its
+    predecessor travelled as ``config["_tariff_wait"]`` — invisible in
+    this class, therefore invisible to a reader of ``decide()``, therefore
+    consulted by exactly one of the three night-capable modes. On
+    2026-08-06 the car charged an hour early and finished before its own
+    planned window opened, because two modes could not see a signal that
+    was not in the picture they were handed.
+
+    Defaults to no opinion, which every consumer must treat as "no planner
+    exists" — the fail-open contract. Day/night agnostic (see
+    :mod:`.plan_verdict`): a daytime planner fills this same field."""
 
     soc_ceiling_reached: bool = False
     """The car has reached its configured MAX target (SOC % ceiling, or

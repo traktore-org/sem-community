@@ -55,6 +55,7 @@ from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
 from .flow_calculator import FlowCalculator
 from .charging_control import ChargingStateMachine, ChargingContext
+from .plan_verdict import verdict_from_night_plan
 from .per_charger_context import PerChargerContext, PerChargerState
 from .storage import SEMStorage
 from .notifications import NotificationManager
@@ -2917,6 +2918,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         charging_context.night_deadline_active = False
                         charging_context.night_tariff_wait = False
                         charging_context.night_deadline_reachable = True
+                        # (#638) Reset with the rest of the night inputs, not
+                        # inside the branch below: ``decide()`` reads it at the
+                        # bottom of every iteration, and a plan left over from
+                        # a previous cycle would hold a charger the planner is
+                        # no longer speaking about.
+                        plan = None
 
                         # Per-charger off-mode override (v1.6.3 hotfix follow-up).
                         # The global ``charging_state`` is derived from the primary
@@ -2935,7 +2942,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             ChargingState.TARIFF_WAITING_FOR_CHEAP,
                         ):
                             pc_target = charging_context.night_target_kwh
-                            plan = None
                             if pc_target > 0.1:
                                 plan = self._compute_night_plan(charger_cfg, pc_target, energy)
                                 # (#638 G4) the joint overnight plan's overlay,
@@ -3091,7 +3097,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
                             top_up_amps=int(getattr(charging_context, "night_top_up_amps", 0) or 0),
-                            tariff_wait=bool(charging_context.night_tariff_wait),
+                            # (#638) The planning layer's verdict, as a typed
+                            # field. Its predecessor rode along in
+                            # ``charger_cfg`` as ``_tariff_wait``, where two of
+                            # the three night modes never saw it — and on
+                            # 2026-08-06 this charger finished half an hour
+                            # before its own planned window opened.
+                            plan=verdict_from_night_plan(plan),
                             # #678 — the ceiling the adapter will clamp to.
                             # Without it decide reads ``ev_max_current`` off a
                             # per-charger dict that never carries the key and
@@ -3296,7 +3308,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     target_kwh=getattr(charging_context, "night_target_kwh", None),
                     deadline_amps=int(getattr(charging_context, "night_deadline_amps", 0) or 0),
                     top_up_amps=int(getattr(charging_context, "night_top_up_amps", 0) or 0),
-                    tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
+                    # (#638) This legacy single-charger branch drives the
+                    # PRIMARY charger, whose plan ``_build_charging_context``
+                    # already computed and parked on ``_cycle_night_plan``
+                    # earlier this cycle — so it reads the same object the
+                    # multi-charger loop does, through the same factory, and
+                    # the planner's own words survive to the published reason.
+                    # Reading ``night_tariff_wait`` off the context instead
+                    # would carry the bit but drop the sentence.
+                    plan=verdict_from_night_plan(self._cycle_night_plan),
                     night_deliverable_kwh=self._night_deliverable_kwh(
                         self._primary_charger_cfg()
                     ),
@@ -7082,11 +7102,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _primary_cfg.get("id") or "ev_charger", energy,
             ),
             target_kwh=remaining_floor,
-            # Night plan flags (#246 deadline + #247 tariff_wait).
+            # Night plan flags (#246 deadline + #247 tariff wait).
             # Computed above so the primary view's decide() sees the
             # same wait-for-cheap and deadline-floor info the
             # multi-charger loop downstream gets.
-            tariff_wait=tariff_wait,
+            plan=verdict_from_night_plan(night_plan),
             deadline_amps=deadline_amps,
             top_up_amps=int(getattr(night_plan, "top_up_amps", 0) or 0) if night_plan else 0,
             night_deliverable_kwh=self._night_deliverable_kwh(_primary_cfg),
