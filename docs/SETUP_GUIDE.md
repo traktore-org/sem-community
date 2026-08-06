@@ -408,6 +408,17 @@ When tariff mode is **Dynamic**, SEM bucketises every price reading into one of
   Calibrated for CHF — change to your currency only if you've explicitly opted
   in to this mode in Settings → Configure → Tariff settings.
 
+**Tiered / Time-of-Use plans (#728)**: a plan with a handful of fixed rates —
+US ToU, Spain's 2.0TD, UK Economy 7 — is bucketised by **where each tier's
+hours sit in the day**, not by the tier's price alone. A three-rate plan
+therefore gets three labels: the off-peak tier reads cheap, the mid tier
+`normal`, the on-peak tier expensive — whatever the split between them.
+(Before v1.7.6-beta.3 a tier covering less than about a quarter of the day
+pulled its neighbour in with it, so a reporter's twelve mid-peak hours all
+read `expensive` and `normal` never appeared.) Note that `very_cheap` vs
+`cheap` — and `expensive` vs `very_expensive` — is a display distinction
+only; every SEM control path treats each pair identically.
+
 **Cold start / sparse data (#359)**: in percentile mode, if SEM has fewer than
 4 price points for today (cold start before your dynamic-tariff integration
 populates, or a perfectly flat day), the classifier returns `normal` as a safe
