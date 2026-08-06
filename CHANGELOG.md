@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.3] — 06.08.2026
+
+### 🐛 Fixes
+- 💵 **Time-of-Use tariffs got their middle rate back — "normal" was unreachable**
+  (#728, reported by @Azlinon) — on a plan with a handful of fixed rates rather than a
+  continuous hourly curve, SEM classified the day as *only* cheap and expensive. The
+  reporter's Consumers Energy "Nighttime Savers" plan has three prices; his twelve
+  mid-peak hours — half the day — all read **expensive**, so anything waiting for a
+  normal-or-better price sat out the afternoon. Root cause: the percentile classifier
+  picks its breakpoints by nearest rank, which on a discrete plan lands the p75 break
+  *exactly on* one of the tier prices; the comparison `price >= p75` then swallowed that
+  whole tier. Whenever the top tier covers less than about a quarter of the day the
+  middle tier disappears into it — and the flat-day guard never fires, so it failed
+  silently. Classification now compares **positions in the sorted price window** instead
+  of the prices themselves, so a tier is judged by where its hours sit in the day rather
+  than by which single number a quantile happened to land on. Continuous curves
+  (Nordpool, Tibber, Amber, aWATTar) are untouched: wherever a price occurs at most once
+  the two comparisons are equivalent, and #359's boundaries are pinned by test to prove
+  it. The mirror case is fixed too — a small *off*-peak block was pulling the middle tier
+  down into "very cheap".
+
 # [1.7.6-beta.2] — 05.08.2026
 
 ### 🐛 Fixes

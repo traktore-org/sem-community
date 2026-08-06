@@ -11,6 +11,7 @@ SurplusController for price-responsive device control.
 import logging
 import math
 from abc import ABC, abstractmethod
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -20,6 +21,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _quantile_index(n: int, q: float) -> int:
+    """Nearest-rank index of quantile ``q`` in a sorted list of ``n``.
+
+    Plain nearest-rank — good enough for 24/48-point arrays; avoids a
+    numpy dependency. Shared by the breakpoint picker and the
+    classifier so the two can never disagree about where p75 sits
+    (#728).
+    """
+    if n <= 0:
+        return 0
+    return max(0, min(n - 1, int(round(q * (n - 1)))))
 
 
 def _as_local(timestamp: datetime) -> datetime:
@@ -358,8 +372,11 @@ class DynamicTariffProvider(TariffProvider):
         self._no_price_array_warned = False
         # Cached percentile breakpoints, recomputed when the price
         # cache or the rolling window's slot changes.
-        # Keys: ``p10``, ``p25``, ``p75``, ``p90``.
-        self._percentile_breaks: Optional[Dict[str, float]] = None
+        # Keys: ``p10``, ``p25``, ``p75``, ``p90`` (floats, for the
+        # diagnostic path string) plus ``values`` — the sorted window
+        # itself, which is what the classifier actually buckets against
+        # (#728).
+        self._percentile_breaks: Optional[Dict[str, Any]] = None
         self._percentile_breaks_for: Optional[str] = None  # window key
         # #359 follow-up — surface which classifier path produced the most
         # recent ``price_level`` via the ``tariff_classifier_path`` sensor
@@ -1028,13 +1045,28 @@ class DynamicTariffProvider(TariffProvider):
             if breaks is not None:
                 # _get_percentile_breaks sets the active-path string in
                 # the happy case; just return the bucketed level.
-                if price <= breaks["p10"]:
+                #
+                # #728: compare POSITIONS in the sorted window, not
+                # prices. A nearest-rank quantile lands on an actual
+                # sample, so on a discrete Time-of-Use plan p75 IS one
+                # of the three tier prices — and ``price >= p75`` then
+                # swallowed that entire tier. Half of @Azlinon's day
+                # read as EXPENSIVE and NORMAL was unreachable.
+                #
+                # In index space each hour keeps its own slot and a
+                # tier sits at its middle. Where a price occurs at most
+                # once the two comparisons are equivalent, so #359's
+                # continuous curves are untouched.
+                window = breaks["values"]
+                n = len(window)
+                pos = self._window_position(window, price)
+                if pos <= _quantile_index(n, 0.10):
                     return PriceLevel.VERY_CHEAP
-                if price <= breaks["p25"]:
+                if pos <= _quantile_index(n, 0.25):
                     return PriceLevel.CHEAP
-                if price >= breaks["p90"]:
+                if pos >= _quantile_index(n, 0.90):
                     return PriceLevel.VERY_EXPENSIVE
-                if price >= breaks["p75"]:
+                if pos >= _quantile_index(n, 0.75):
                     return PriceLevel.EXPENSIVE
                 return PriceLevel.NORMAL
             # #359: percentile requested but no breaks available.
@@ -1066,7 +1098,27 @@ class DynamicTariffProvider(TariffProvider):
             return PriceLevel.EXPENSIVE
         return PriceLevel.NORMAL
 
-    def _get_percentile_breaks(self) -> Optional[Dict[str, float]]:
+    @staticmethod
+    def _window_position(sorted_values: List[float], price: float) -> float:
+        """Where ``price`` sits in the sorted window, in index space.
+
+        A price the window carries once returns its index. A price it
+        carries N times — every hour of a Time-of-Use tier posts the
+        same number — returns the MIDDLE of the ranks it occupies,
+        because the middle is where that tier sits in the day. A price
+        absent from the window lands half-way between its neighbours.
+
+        Bucketing on this instead of on the price itself is what fixes
+        #728, and it is a narrow change: whenever a price occurs at
+        most once, comparing indices and comparing values give the same
+        answer, so every continuous curve (Nordpool, Tibber, Amber)
+        keeps the boundaries #359 gave it. Only tied tiers move.
+        """
+        below = bisect_left(sorted_values, price)
+        equal = bisect_right(sorted_values, price) - below
+        return below + (equal - 1) / 2.0
+
+    def _get_percentile_breaks(self) -> Optional[Dict[str, Any]]:
         """Compute percentile breakpoints over a rolling ~24h window.
         Returns ``None`` when there's not enough data (< 4 points) for
         percentiles to be meaningful.
@@ -1150,24 +1202,24 @@ class DynamicTariffProvider(TariffProvider):
             return None
 
         def _quantile(sorted_values: List[float], q: float) -> float:
-            # Plain nearest-rank quantile — good enough for 24/48-point
-            # arrays; avoids a numpy dependency.
+            # #728: index picked by the module-level helper the
+            # classifier also uses, so the breakpoint reported in the
+            # diagnostic string and the one bucketing runs against are
+            # always the same index.
             if not sorted_values:
                 return 0.0
-            idx = max(
-                0,
-                min(
-                    len(sorted_values) - 1,
-                    int(round(q * (len(sorted_values) - 1))),
-                ),
-            )
-            return sorted_values[idx]
+            return sorted_values[_quantile_index(len(sorted_values), q)]
 
         breaks = {
             "p10": _quantile(window_prices, 0.10),
             "p25": _quantile(window_prices, 0.25),
             "p75": _quantile(window_prices, 0.75),
             "p90": _quantile(window_prices, 0.90),
+            # #728: the classifier buckets by rank against this list.
+            # The four breakpoints above stay for the flat-day guard
+            # and the diagnostic path string users read off the
+            # ``tariff_classifier_path`` attribute.
+            "values": window_prices,
         }
         # Degenerate distribution guard (M1 reviewer note): a flat or
         # near-flat day collapses every break to the same value, which
