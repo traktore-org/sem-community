@@ -76,13 +76,44 @@ class PlanRow:
         }
 
 
+_DEFAULT_SLOT = timedelta(hours=1)
+
+
+def _slot_duration(points: List[Dict[str, Any]]) -> timedelta:
+    """How long one price point covers, read off the curve's own cadence.
+
+    Most markets post hourly, but 15-minute curves exist, so measure rather
+    than assume. The cadence is the SMALLEST positive gap: a missing slot
+    leaves a double-width gap that must not be read as a wider slot, and a
+    duplicated timestamp leaves a zero gap that would collapse every window
+    onto its own start. One lone point has nothing to measure — fall back to
+    the common case (#729).
+
+    A curve that changes cadence half-way (an hourly day followed by a
+    quarter-hourly one, as markets moving to 15-minute settlement briefly
+    post) is measured by its finer half. No single number describes such a
+    curve; providers post one cadence, and reading the window slightly
+    short beats reading it long.
+    """
+    gaps = [b["t"] - a["t"] for a, b in zip(points, points[1:])
+            if b["t"] > a["t"]]
+    return min(gaps) if gaps else _DEFAULT_SLOT
+
+
 def _consecutive_blocks(
     points: List[Dict[str, Any]],
     levels: tuple,
     min_block_len: int = 1,
 ) -> List[Dict[str, Any]]:
-    """Group consecutive `upcoming` points whose level ∈ levels into blocks."""
+    """Group consecutive `upcoming` points whose level ∈ levels into blocks.
+
+    ``end`` is the block's **closing boundary** — one slot past the last
+    matching point, not that point's own timestamp. Cheap slots 00:00
+    through 05:00 mean cheap power until 06:00, and that is what the user
+    needs to read (#729).
+    """
     blocks: List[Dict[str, Any]] = []
+    slot = _slot_duration(points)
     cur_start = None
     cur_prices: List[float] = []
     last_t = None
@@ -94,12 +125,12 @@ def _consecutive_blocks(
             last_t = p["t"]
         else:
             if cur_start and len(cur_prices) >= min_block_len:
-                blocks.append({"start": cur_start, "end": last_t,
+                blocks.append({"start": cur_start, "end": last_t + slot,
                                "prices": list(cur_prices)})
             cur_start = None
             cur_prices = []
     if cur_start and len(cur_prices) >= min_block_len:
-        blocks.append({"start": cur_start, "end": last_t,
+        blocks.append({"start": cur_start, "end": last_t + slot,
                        "prices": list(cur_prices)})
     return blocks
 
