@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#716, reported by @Azlinon) — the night planner sizes the charge rate as
   `(peak limit − house load) ÷ watts-per-amp`, and it was assembling those limits
   from the wrong places. `watts_per_amp` hardcoded 230 V, while `ev_voltage` is
-  read by every other conversion in the codebase — all of `decide.py`, the energy
-  calculator, and `_night_deliverable_kwh` forty lines further down the same file.
+  read by seven other watts-per-amp conversions in the codebase — three in
+  `decide.py`, two in the coordinator, one in the energy calculator, and one in
+  `_night_deliverable_kwh` further down this very file.
   `max_amps` read the *fleet* `ev_max_current`, while the line directly below it
   read `ev_phases` per-charger — so in a mixed fleet the 16 A box was planned as
   the 32 A one, over-claiming budget the next charger in the list then never saw.
