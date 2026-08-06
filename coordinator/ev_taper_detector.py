@@ -55,13 +55,24 @@ FULL_SESSION_ENERGY_FRAC_OF_CAPACITY = 0.025  # 2.5 % of pack capacity. Below
                                               # noise, not a completed charge.
 TAPER_RATIO_NEARLY_FULL = 50   # % — below this = nearly full
 TAPER_RATIO_DETECTED = 70     # % — below this + declining = taper confirmed
-CHARGE_EFFICIENCY = 0.92       # #708 — AC-side delivered → DC-pack fraction for
-                               # the energy-accounted SOC. Deliberately at the
-                               # optimistic end of the realistic 0.85–0.95 band:
-                               # over-estimating pack gain stops the charge AT or
-                               # slightly ABOVE the target, so "Min is a floor"
-                               # stays honest, while the stale-sensor overshoot
-                               # (lag × power, 7 % on the #708 report) is gone.
+CHARGE_EFFICIENCY = 0.92       # #708 — AC-side delivered → DC-pack fraction.
+                               # Default for the booked deficit (overridable via
+                               # ``ev_charger_efficiency``) AND the fixed value
+                               # for the stop ceiling (not overridable).
+                               #
+                               # #735 — why the ceiling refuses the override.
+                               # It feeds ``max(sensor, ceiling)``, so a LOWER
+                               # efficiency means a lower ceiling, more remaining
+                               # need, and a LONGER charge. The two errors are not
+                               # the same size: stopping early is recovered by the
+                               # next sensor reading (need goes positive, charging
+                               # resumes), while stopping late has already put the
+                               # energy in the pack — that is the #708 report, a
+                               # 30-min-stale reading at 11.5 kW running a 60 %
+                               # target to 67 %. So the ceiling sits at the
+                               # optimistic end of the realistic 0.85–0.95 band
+                               # and stays there: dialling it down would ship the
+                               # unrecoverable direction as a setting.
                                # Hard-coded by decision — no config knob.
 MAX_ETA_MINUTES = 60           # Cap completion estimate
 MAX_HEALTH_SAMPLES = 20        # Bounded battery health sample buffer
@@ -320,6 +331,43 @@ class EVTaperDetector:
             return 1.0 + (outdoor_temp_c - 28) * 0.046
         return 1.0
 
+    def _charge_efficiency(self) -> float:
+        """AC→DC fraction used when BOOKING delivered energy (#735).
+
+        The single resolver for ``ev_charger_efficiency``. Two sites answer
+        the same question about the same session — ``update_energy`` every
+        cycle and ``on_session_end``'s bootstrap — and #708 is the standing
+        reminder of what happens when two halves of one calculation drift.
+
+        The key has no config-flow field yet, so the only way to set it is by
+        hand-editing ``.storage/core.config_entries``: validate rather than
+        trust. Anything outside the band means somebody typed a percentage, a
+        sign, or a word — 3.0 would otherwise claim the pack absorbed three
+        times what the meter measured, and 0.001 would stall the estimate near
+        its starting value for a whole session while looking like it worked.
+
+        The floor is 0.5 rather than a bare ``> 0``: no EV onboard charger
+        throws away half its input, so anything under it is a typo, not a
+        rough install. ``bool`` is rejected before the float conversion — that
+        storage file is JSON, so a hand-edited ``true`` arrives as Python
+        ``True`` and ``float(True)`` is a perfectly valid-looking 1.0.
+
+        NOT used by ``energy_accounted_soc``: the stop ceiling deliberately
+        stays on the constant. See the CHARGE_EFFICIENCY comment for why the
+        override is refused there specifically.
+        """
+        raw = self._config.get("ev_charger_efficiency", CHARGE_EFFICIENCY)
+        if isinstance(raw, bool):
+            return CHARGE_EFFICIENCY
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return CHARGE_EFFICIENCY
+        # NaN fails both comparisons, so this also screens it out.
+        if not 0.5 <= value <= 1.0:
+            return CHARGE_EFFICIENCY
+        return value
+
     def update_energy(
         self,
         ev_energy_increment_kwh: float,
@@ -391,7 +439,7 @@ class EVTaperDetector:
         if ev_energy_increment_kwh <= 0:
             return
 
-        efficiency = self._config.get("ev_charger_efficiency", CHARGE_EFFICIENCY)
+        efficiency = self._charge_efficiency()
         self._energy_since_full = max(
             0.0, self._energy_since_full - ev_energy_increment_kwh * efficiency
         )
@@ -553,7 +601,7 @@ class EVTaperDetector:
         # install ever gets a reference from.
         if not self._full_detected and not self._soc_anchored \
                 and session_energy_kwh > 0 and capacity > 0:
-            efficiency = self._config.get("ev_charger_efficiency", CHARGE_EFFICIENCY)
+            efficiency = self._charge_efficiency()
             energy_to_battery = session_energy_kwh * efficiency
             # Assume car arrived at target_soc minus what it accepted
             target = self._config.get("ev_target_soc", 80)
