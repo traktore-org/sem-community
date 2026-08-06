@@ -239,13 +239,19 @@ class TestVirtualSOC:
         assert det._energy_since_full == 0.0
 
     def test_soc_decreases_with_energy(self):
-        """SOC should decrease as energy is consumed."""
+        """SOC should decrease as energy is consumed.
+
+        Consumption enters through ``apply_daily_decay`` — the day-rollover
+        estimate of what the car drove. ``update_energy`` is the opposite
+        direction: it is fed ``ev_power × interval`` by the coordinator, i.e.
+        kWh the charger DELIVERED, and those repay the deficit (#708).
+        """
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
 
         # Simulate 8 kWh consumed (20% of 40 kWh)
         det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(8.0)
+        det.apply_daily_decay(8.0, 0.0)
         soc = det.get_virtual_soc()
         assert soc == pytest.approx(80.0, abs=0.5)
 
@@ -254,7 +260,7 @@ class TestVirtualSOC:
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
         det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(50.0)  # More than capacity
+        det.apply_daily_decay(50.0, 0.0)  # More than capacity
         soc = det.get_virtual_soc()
         assert soc == 0.0
 
@@ -263,7 +269,7 @@ class TestVirtualSOC:
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
         det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(8.0)
+        det.apply_daily_decay(8.0, 0.0)
 
         # Virtual would be 80%, but real is 65%
         soc = det.get_virtual_soc(vehicle_soc=65.0)
@@ -274,7 +280,7 @@ class TestVirtualSOC:
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
         det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(8.0)
+        det.apply_daily_decay(8.0, 0.0)
 
         # Real SOC = 72% → internal state should sync
         det.get_virtual_soc(vehicle_soc=72.0)
@@ -283,7 +289,7 @@ class TestVirtualSOC:
         assert det._energy_since_full == pytest.approx(11.2, abs=0.1)
 
         # Now if car API goes offline, virtual continues from 72%
-        det.update_energy(4.0)  # +4 kWh consumed
+        det.apply_daily_decay(4.0, 0.0)  # +4 kWh consumed
         soc = det.get_virtual_soc(vehicle_soc=None)
         # Should be ~62% (11.2 + 4 = 15.2 kWh → 100 - 15.2/40*100 = 62%)
         assert soc == pytest.approx(62.0, abs=0.5)
@@ -293,7 +299,7 @@ class TestVirtualSOC:
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
         det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(20.0)
+        det.apply_daily_decay(20.0, 0.0)
         assert det.get_virtual_soc() == pytest.approx(50.0, abs=0.5)
 
         # New session — reset and do another taper
@@ -324,7 +330,12 @@ class TestSessionAnchor:
         assert det._estimated_soc == pytest.approx(80.0, abs=2.0)
 
     def test_partial_charge_increases_soc(self):
-        """Charging should increase SOC by delivered energy."""
+        """Charging should increase SOC by delivered energy.
+
+        Booked through ``update_energy`` — the live path the coordinator
+        calls every cycle — not ``on_session_end``. Until #708 the two
+        disagreed in sign and the session end was the half that read right.
+        """
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)  # Anchor at 100%
 
@@ -336,6 +347,8 @@ class TestSessionAnchor:
 
         # Night charge delivers 9.5 kWh → +21.85% (with 92% efficiency)
         _feed_constant(det, 7000, 16, 10)
+        for _ in range(95):
+            det.update_energy(0.1)
         det.on_session_end(9.5)
         assert det._estimated_soc == pytest.approx(61.8, abs=2.0)
 
@@ -385,8 +398,10 @@ class TestSessionAnchor:
             temp_factor = EVTaperDetector.temperature_correction_factor(0)  # Winter
             det.apply_daily_decay(8.0, 10.0, temp_factor)
 
-            # Evening: night charge
+            # Evening: night charge (booked live, cycle by cycle)
             _feed_constant(det, 7000, 16, 10)
+            for _ in range(95):
+                det.update_energy(0.1)
             det.on_session_end(9.5)
 
         # SOC should not be negative — clamped at 0
@@ -419,7 +434,7 @@ class TestPersistence:
         det1 = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det1)
         det1.reset_session()  # Clear full_detected for energy tracking
-        det1.update_energy(8.0)
+        det1.apply_daily_decay(8.0, 0.0)  # non-zero deficit to round-trip
         det1.get_virtual_soc()
 
         state = det1.get_state()

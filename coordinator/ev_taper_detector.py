@@ -325,15 +325,36 @@ class EVTaperDetector:
         ev_energy_increment_kwh: float,
         hw_total_energy_kwh: Optional[float] = None,
     ) -> None:
-        """Update energy since full charge, preferring hardware counter.
+        """Book delivered energy against the deficit below full.
 
-        When a hardware total energy counter is available (e.g. KEBA
-        total_energy), uses the delta since last full charge for drift-free
-        tracking. Falls back to power integration when hardware unavailable.
+        ``_energy_since_full`` is how many kWh the pack sits BELOW full:
+        ``apply_daily_decay`` adds driving consumption to it, the sensor
+        calibration sets it to ``(100 − soc)/100 × capacity``, the taper/stall
+        anchor zeroes it at 100 %, and every display divides it out of 100.
+        Charging therefore SUBTRACTS, and this is the ONLY path that books it:
+        ``on_session_end`` used to subtract the session total again at
+        disconnect, which was the other half of a cancelling pair (see there).
+
+        This path used to add the delivered kWh instead, so a live charge
+        walked the estimate down by exactly what went into the pack (#708).
+        It stayed hidden because a session that reaches full resets the
+        deficit to zero anyway; it takes a charge that stops short AND a
+        vehicle-SOC sensor that goes quiet to leave the inverted value on
+        screen. 11.5 kWh into a blinded 85 kWh pack read 24 % instead of 50 %.
+
+        The hardware total-energy counter is still tracked (the taper anchor
+        ``_hw_total_at_full`` needs it) but no longer books the deficit. It
+        measures energy put back IN, never how far the car was driven — that
+        mismatch IS the sign error. Its per-cycle delta is not a safe
+        substitute either: a counter that goes unavailable for a stretch and
+        then returns re-books the whole gap the integral already covered, and
+        nothing normalizes its unit, so a charger publishing Wh delivers
+        ~4 Wh cycles as the bare number 4.0 — under any plausible sanity
+        bound, and enough to fill the pack in a handful of cycles.
 
         Args:
-            ev_energy_increment_kwh: Power-integrated increment (fallback).
-            hw_total_energy_kwh: Current charger lifetime total (ground truth).
+            ev_energy_increment_kwh: Power-integrated increment — the source.
+            hw_total_energy_kwh: Current charger lifetime total, tracked only.
         """
         capacity = self._config.get("ev_battery_capacity_kwh", 40)
 
@@ -355,26 +376,28 @@ class EVTaperDetector:
                     )
             return
 
-        # Reconcile energy_since_full from hardware total energy counter
-        # This corrects drift from the daily decay prediction (#174)
-        if self._hw_total_at_full is not None and hw_total_energy_kwh is not None:
-            hw_energy = hw_total_energy_kwh - self._hw_total_at_full
-            if capacity > 0 and 0 <= hw_energy <= capacity:
-                if abs(hw_energy - self._energy_since_full) > 0.5:
-                    _LOGGER.info(
-                        "SOC reconciled from hardware: %.1f kWh (was %.1f from decay)",
-                        hw_energy, self._energy_since_full,
-                    )
-                self._energy_since_full = hw_energy
-                self._estimated_soc = max(
-                    0.0, 100.0 - (self._energy_since_full / capacity * 100.0)
-                )
-                return
+        if capacity <= 0:
+            return
 
-        # Fallback: power integration
-        if ev_energy_increment_kwh > 0:
-            self._energy_since_full += ev_energy_increment_kwh
-            self._energy_since_full = min(self._energy_since_full, capacity)
+        # #245: an unanchored detector has no reference to move. Booking into
+        # it would write ``_estimated_soc = 100`` — and that field is
+        # PERSISTED, so it would outlive the ``_soc_anchored`` display gate
+        # that is currently the only thing hiding it. An install with no
+        # vehicle-SOC sensor gets anchored by its first COMPLETED session
+        # (``on_session_end``'s bootstrap), not mid-charge.
+        if not self._soc_anchored:
+            return
+
+        if ev_energy_increment_kwh <= 0:
+            return
+
+        efficiency = self._config.get("ev_charger_efficiency", CHARGE_EFFICIENCY)
+        self._energy_since_full = max(
+            0.0, self._energy_since_full - ev_energy_increment_kwh * efficiency
+        )
+        self._estimated_soc = min(
+            100.0, 100.0 - (self._energy_since_full / capacity * 100.0)
+        )
 
     def get_virtual_soc(self, vehicle_soc: Optional[float] = None) -> float:
         """Get estimated SOC, preferring real vehicle SOC if available.
@@ -516,34 +539,34 @@ class EVTaperDetector:
                 self._battery_health_samples = self._battery_health_samples[-MAX_HEALTH_SAMPLES:]
             self._calculate_battery_health()
 
-        # Update virtual SOC: charging adds energy back
-        # (taper/full detection already handled above — this covers partial charges)
-        if not self._full_detected and session_energy_kwh > 0 and capacity > 0:
-            efficiency = self._config.get("ev_charger_efficiency", 0.92)
+        # Bootstrap: the first completed session anchors SOC when nothing
+        # else can. This block used to ALSO subtract the session energy for
+        # an already-anchored detector, and that was the other half of a
+        # cancelling pair (#708): the live path added it (wrong sign), this
+        # one took it away, so the value at disconnect landed near the truth
+        # while the on-screen number stayed inverted for the whole charge.
+        # With ``update_energy`` booking each cycle correctly, subtracting
+        # the total again here is a straight double-count — 5 kWh into a
+        # 40 kWh pack at 50 % would read 73 % instead of 61.5 %. The
+        # bootstrap stays because ``update_energy`` is deliberately inert
+        # while unanchored, which makes this the only path a sensorless
+        # install ever gets a reference from.
+        if not self._full_detected and not self._soc_anchored \
+                and session_energy_kwh > 0 and capacity > 0:
+            efficiency = self._config.get("ev_charger_efficiency", CHARGE_EFFICIENCY)
             energy_to_battery = session_energy_kwh * efficiency
-            self._energy_since_full = max(0, self._energy_since_full - energy_to_battery)
-            self._estimated_soc = min(
-                100.0, 100.0 - (self._energy_since_full / capacity * 100.0)
+            # Assume car arrived at target_soc minus what it accepted
+            target = self._config.get("ev_target_soc", 80)
+            soc_added = energy_to_battery / capacity * 100.0
+            pre_charge_soc = max(0, target - soc_added)
+            self._estimated_soc = min(100.0, pre_charge_soc + soc_added)
+            self._energy_since_full = (100.0 - self._estimated_soc) / 100.0 * capacity
+            self._soc_anchored = True
+            _LOGGER.info(
+                "SOC bootstrapped from first session: %.1f kWh delivered "
+                "(%.1f%% added) → estimated SOC %.1f%%",
+                session_energy_kwh, soc_added, self._estimated_soc,
             )
-            # Bootstrap: first session anchors SOC if no prior reference
-            if not self._soc_anchored:
-                # Assume car arrived at target_soc minus what it accepted
-                target = self._config.get("ev_target_soc", 80)
-                soc_added = energy_to_battery / capacity * 100.0
-                pre_charge_soc = max(0, target - soc_added)
-                self._estimated_soc = min(100.0, pre_charge_soc + soc_added)
-                self._energy_since_full = (100.0 - self._estimated_soc) / 100.0 * capacity
-                self._soc_anchored = True
-                _LOGGER.info(
-                    "SOC bootstrapped from first session: %.1f kWh delivered "
-                    "(%.1f%% added) → estimated SOC %.1f%%",
-                    session_energy_kwh, soc_added, self._estimated_soc,
-                )
-            else:
-                _LOGGER.info(
-                    "SOC updated after charge: +%.1f kWh (%.0f%% eff) → SOC %.1f%%",
-                    session_energy_kwh, efficiency * 100, self._estimated_soc,
-                )
 
         self._session_start_soc = None
 
@@ -756,6 +779,13 @@ class EVTaperDetector:
                     if s["end"] > latest_full["end"]
                 )
                 capacity = self._config.get("ev_battery_capacity_kwh", 40)
+                # Cold-start seed, NOT the deficit accumulator (#708). At boot
+                # all recorder history offers is "the car took this much back
+                # since it was last full"; how far it was driven in between is
+                # unknowable, so this is a heuristic stand-in, not a measured
+                # deficit. Do not "correct" it to subtract like update_energy
+                # does — that yields SOC 100 % forever, the #245 failure. The
+                # first real SOC reading or taper overwrites it either way.
                 self._energy_since_full = energy_after
                 self._estimated_soc = max(
                     0.0, 100.0 - (energy_after / capacity * 100.0)
