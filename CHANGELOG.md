@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.6] — 06.08.2026
+
+### 🐛 Fixes
+- 🔋 **Estimated EV SOC walked *down* while the car was charging**
+  (#708, reported by @Azlinon) — with the vehicle-SOC sensor quiet, SEM tracks
+  the pack against an internal "how far below full is it" figure. Every path
+  treated that as a deficit — driving raises it, a real reading recalibrates it,
+  reaching full zeroes it, a finished session subtracts what it delivered —
+  except the one that runs each cycle *during* a charge, which **added** the
+  delivered kWh instead. The estimate fell by exactly what went into the pack:
+  11.5 kWh into a blinded 85 kWh pack read 24 % where the car was near 50 %. It
+  stayed hidden because a session that reaches full resets the figure anyway; it
+  takes a charge that stops short **and** a sensor that goes quiet to leave the
+  inverted value on screen. Charging now subtracts, with the 0.92 charge
+  efficiency, so the big "SOC (EST.)" number and the "est. now ~54 %" hint beside
+  it are the same arithmetic by two routes instead of two answers. The disconnect
+  step no longer re-applies the finished session on top of what the live path
+  already booked — subtracting it there had been quietly cancelling half the
+  error, which is why the number looked plausible again once the car was
+  unplugged. A charger's lifetime total-energy counter still anchors the taper
+  but no longer feeds this figure at all: it measures what was put back **in**,
+  never how far the car was driven, and that mismatch is what made it the sign
+  error — on a charger exposing such a counter it could override a fresh real
+  SOC reading outright, showing 94 % for a pack the car had just reported at
+  38 %. An install with no reference yet still reports "unknown" rather than a
+  guess (#245), and the 0 %-recovery path now anchors the value it writes so it
+  keeps tracking for the rest of the charge instead of freezing.
+
 # [1.7.6-beta.5] — 06.08.2026
 
 ### 🐛 Fixes

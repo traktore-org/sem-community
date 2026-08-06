@@ -925,6 +925,80 @@ user would most naturally put under each name, or only the one shape the first p
 use? And: does the "unrecognised" diagnostic distinguish *name* from *shape*, or blame the name for a
 shape gap?
 
+### 35. Signed accumulator whose direction is carried by a name, not asserted anywhere — GUARDED
+**Symptom:** one field holds a signed physical quantity (a deficit, a balance, a remaining amount)
+and several sites write it. Most agree on the convention; one books its input with the opposite
+sign. Nothing raises, nothing goes unavailable — the number simply walks the wrong way, and only in
+the state where the *other* writers aren't there to overwrite it. Because that state is a corner
+(sensor offline, session that stops short), the bug can ship for a year. **Root shape:** the field's
+meaning lives in its NAME, and the name is ambiguous. `_energy_since_full` reads equally well as
+"energy *consumed* since full" (a deficit, which charging repays) and "energy *delivered* since
+full" (throughput, which charging grows). Each writer silently picks whichever reading fits its
+local source; no single call site looks wrong.
+**Live catch (#708, @Azlinon, 85 kWh Blazer EV / JuiceBox / OnStar):** `EVTaperDetector.update_energy` —
+the one path that runs *every cycle while charging* — **added** the delivered kWh to the deficit. Seven
+other sites treat the field as a deficit (day-rollover decay adds driving, the sensor calibration
+sets `(100−soc)/100 × capacity`, the taper/stall anchor zeroes it at 100 %, `on_session_end`
+*subtracts* a session, every display divides it out of 100). The reporter stopped his SOC
+integration mid-charge and watched "SOC (EST.)" walk from 32 % down to 25 % while 11.5 kWh went
+into the pack: `11.5 / 85 × 0.92 ≈ 12.4 %`, "almost exactly the amount of *decrease* I'm seeing".
+The `#715` energy-accounted *ceiling*, added to the same file weeks earlier, had the sign right; the
+reporter noticed the two disagreed on his own dashboard.
+**Why it survived a year — the cancelling pair.** The wrong-sign writer had a partner: `update_energy`
+added the delivered kWh during the session, then at disconnect `on_session_end` **subtracted** the
+session total. Two errors in opposite directions, so the value at disconnect landed back near the
+truth and only the *live* number was inverted. It takes a charge that stops short **and** a
+vehicle-SOC sensor that goes quiet to leave the wrong value visible at rest. **This is the trap in
+the fix, not just in the bug:** correcting one half alone converts a hidden error into a loud one of
+the same magnitude in the other direction (here: 5 kWh into a 40 kWh pack at 50 % would have read
+73 % instead of 61.5 %). When a signed accumulator has two writers that disagree, find the *pair*
+before editing either.
+**How the suite defended it:** six call sites across four tests in `test_ev_taper_detector.py` passed
+`update_energy(8.0)` and asserted SOC *fell*, commented "Simulate 8 kWh consumed" — while both
+production call sites pass `ev_power × interval_hours / 1000`, i.e. energy **delivered**. The tests
+encoded the misreading and went green on it. A test that assumes something about its caller is only
+as good as the last time someone checked the caller.
+**The counter branch was the same error, wearing a unit.** Alongside the `+=` fallback sat a
+"reconcile from the hardware counter" branch (#174): `deficit = hw_total − hw_total_at_full`, i.e.
+*energy put back in since the pack was last full* assigned to *how far below full it is*. Those are
+opposites. It is reachable across sessions — `reset_session` clears `_full_detected` but the taper's
+`_hw_total_at_full` survives — so on a charger exposing a lifetime total it OVERRIDES a fresh real
+SOC reading: a pack a sensor just put at 38 % reads 94 %, then walks down as it charges. Same
+symptom, immune to any per-cycle fix.
+**Where it lives:** `coordinator/ev_taper_detector.py`. **Closure:** charging subtracts, with the
+charge efficiency; `on_session_end` keeps only its *bootstrap* branch (the sole way an install with
+no SOC sensor ever gets anchored) and no longer re-books the session; the deficit is booked from the
+power integral alone. The hardware counter is still tracked for the taper anchor but no longer feeds
+the deficit in any form. Its per-cycle *delta* looked like the obvious salvage and is not: a counter
+that goes unavailable and returns re-books the gap the integral already covered, and nothing
+normalizes its unit, so a charger publishing Wh delivers ~4 Wh cycles as the bare number `4.0` —
+under any plausible sanity bound, and enough to fill the pack in seconds.
+**Second-order trap — a new guard can freeze what it was protecting.** Booking now returns early
+while `not _soc_anchored` (writing `_estimated_soc = 100` into a PERSISTED field for an install with
+no reference was its own bug). That early return silently changed two coordinator sites that reach
+past every method and set the detector's privates directly: the stall→full anchor sets
+`_soc_anchored` and is fine; the SOC **self-heal** set only the deficit and the estimate, so after
+the gate its healed value stops moving for the rest of the charge — worse than the wrong-but-moving
+number it replaced. **Tell:** a gate added inside a class changes the contract for everyone who
+mutates that class from outside, and those callers are invisible to the class's own tests.
+**Assessed and left as-is:** the recorder-history cold-start seed in `async_seed_from_history` sets
+the field from summed post-full session energy — the same conflation, but a one-shot boot heuristic
+with no better information available; flipping it there yields "SOC 100 % forever" (#245). Marked in
+place so nobody "corrects" it to match. **Guard:**
+`tests/test_708_estimate_falls_while_charging.py` — a monotonicity pin (*the estimate may never fall
+while the charger delivers*, checked every cycle), the reporter's own arithmetic as the expected
+value, a disconnect pin that fails on the double-count, a taper-anchored-counter pin (verified RED
+against the restored branch: 94 % vs 38 %), a Wh-shaped counter pin, a #245-unanchored pin on the
+*persisted* `_estimated_soc` (not just the deficit — a display gate hides a bad value, it does not
+stop it being written), and an AST pin over the coordinator's self-heal block asserting it anchors
+what it writes. Refs #708 #715 #174 #245.
+**Sweep question:** for every field that accumulates a signed physical quantity — is its direction
+asserted by a test that would fail if one writer flipped, or is it only implied by the field's name?
+And: which writer runs in a state where no other writer will overwrite it? That one is unguarded by
+construction. Once you find a wrong sign: **is there a second writer whose opposite error has been
+cancelling it?** And before shipping the guard: **who mutates this object's fields from outside the
+class, and does the new precondition hold for them?**
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)
