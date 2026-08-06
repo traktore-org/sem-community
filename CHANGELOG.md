@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.5] — 06.08.2026
+
+### 🐛 Fixes
+- 💵 **Tariff sensors that expose a flat price list now populate the schedule**
+  (#732, reported by @bjpo-abelco) — a `dynamic_tariff_entity` whose attributes
+  carried a valid 24- or 96-value price array under a recognised name
+  (`prices_today` / `today` / `raw_today`) was silently rejected: the schedule
+  stayed empty, percentile classification fell back to "normal", cheap-window
+  planning was off, and the log warned about a missing array that was right there.
+  The parser recognised the attribute *names* but its inner loop only accepted a
+  list of `{start, value}` dicts — so a bare list of numbers, which is Nordpool's
+  *own* `today` / `tomorrow` shape and the one nearly every template/derivative
+  sensor copies, fell straight through. Those attributes now accept both shapes:
+  a flat list is anchored at local midnight with the granularity read from its
+  length (24 hourly / 48 30-min / 96 15-min), `null` gaps are skipped without
+  shifting the remaining slots, and a list longer than one day is declined rather
+  than mis-dated. The current-price read was never affected — only the day-ahead
+  array, which is why only the schedule looked broken.
+
 # [1.7.6-beta.4] — 06.08.2026
 
 ### 🐛 Fixes
