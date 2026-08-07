@@ -5497,6 +5497,18 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             }
             .goal-btn.active { color:#ff9800; border-color:#ff9800; }
             .goal-progress { display:flex; align-items:center; gap:8px; }
+            .comfort-chip { display:inline-flex; align-items:center; gap:4px;
+                margin:2px 0 0 26px; padding:1px 8px; font-size:11.5px;
+                border:1px solid; border-radius:9px; width:fit-content; }
+            .comfort-strip { position:relative; height:18px; margin:6px 4px 2px; }
+            .cs-track { position:absolute; top:8px; left:0; right:0; height:3px;
+                border-radius:2px; background:rgba(255,255,255,0.12); }
+            .cs-zone { position:absolute; top:8px; height:3px; border-radius:2px;
+                background:linear-gradient(90deg,#8DC89255,#ffc10755); }
+            .cs-mark { position:absolute; top:4px; width:3px; height:11px;
+                border-radius:2px; transform:translateX(-50%); }
+            .cs-read { position:absolute; top:-2px; transform:translateX(-50%);
+                font-size:10px; color:var(--primary-text-color,#e0e0e0); }
             .goal-bar {
                 flex:1 1 auto; height:5px; border-radius:3px;
                 background:rgba(128,128,128,0.2); overflow:hidden; max-width:220px;
@@ -5629,7 +5641,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             .ov-opt:last-child { border-right:none; }
             .ov-opt.on { background:#4db6ac; color:#fff; font-weight:600; }
             .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
-        `}_updateDeviceData(){if(!this._hass)return;const e=this._hass.states[`${this.entityPrefix}target_peak_limit`],t=this._hass.states[`${this.entityPrefix}consecutive_peak_15min`],i=this._hass.states[`${this.entityPrefix}load_management_status`],s=this._hass.states[`${this.entityPrefix}controllable_devices_count`];e&&(this.targetPeakLimit=parseFloat(e.state)||5),e&&(this.peakLimitUnlimited=e.attributes?.peak_limit_unlimited||!1),t&&(this.currentPeak=parseFloat(t.state)||0),i&&(this.loadManagementStatus=i.state||"normal"),s?.attributes?.devices&&(this.devices=Object.entries(s.attributes.devices).map(([e,t])=>({id:e,name:t.name||e.replace(/^(load_device_|energy_dashboard_)/,"").replace(/_/g," "),power:(t.current_power||0)/1e3,rating:t.power_rating||0,priority:t.priority||5,isOn:t.is_on||!1,isShed:t.is_shed||!1,shedReason:t.shed_reason||null,isControllable:!1!==t.is_controllable,isCritical:t.is_critical||!1,deviceType:t.device_type||"unknown",isAvailable:t.is_available||!1,hasManualMapping:t.has_manual_mapping||!1,energySensor:t.energy_sensor||"",control:t.control||null,controlEntity:t.control?.entity||t.switch_entity||"",controlType:t.control?.type||"switch",controlMode:t.control_mode||"peak_only",dependsOn:t.depends_on||[],goals:t.goals||null,progress:t.progress||null,blockedBy:t.blocked_by||null,soc:t.soc,icon:this._resolveDeviceIcon(t)})).sort((e,t)=>e.priority-t.priority))}render(){if(!this._config)return q;const e=this.peakLimitUnlimited,t=this._getPeakColor(),i=this.targetPeakLimit-this.currentPeak,s=e?0:this.targetPeakLimit>0?Math.min(this.currentPeak/this.targetPeakLimit*100,100):0;return W`
+        `}_updateDeviceData(){if(!this._hass)return;const e=this._hass.states[`${this.entityPrefix}target_peak_limit`],t=this._hass.states[`${this.entityPrefix}consecutive_peak_15min`],i=this._hass.states[`${this.entityPrefix}load_management_status`],s=this._hass.states[`${this.entityPrefix}controllable_devices_count`];e&&(this.targetPeakLimit=parseFloat(e.state)||5),e&&(this.peakLimitUnlimited=e.attributes?.peak_limit_unlimited||!1),t&&(this.currentPeak=parseFloat(t.state)||0),i&&(this.loadManagementStatus=i.state||"normal"),s?.attributes?.devices&&(this.devices=Object.entries(s.attributes.devices).map(([e,t])=>({id:e,name:t.name||e.replace(/^(load_device_|energy_dashboard_)/,"").replace(/_/g," "),power:(t.current_power||0)/1e3,rating:t.power_rating||0,priority:t.priority||5,isOn:t.is_on||!1,isShed:t.is_shed||!1,shedReason:t.shed_reason||null,isControllable:!1!==t.is_controllable,isCritical:t.is_critical||!1,deviceType:t.device_type||"unknown",isAvailable:t.is_available||!1,hasManualMapping:t.has_manual_mapping||!1,energySensor:t.energy_sensor||"",control:t.control||null,controlEntity:t.control?.entity||t.switch_entity||"",controlType:t.control?.type||"switch",controlMode:t.control_mode||"peak_only",dependsOn:t.depends_on||[],goals:t.goals||null,progress:t.progress||null,comfort:t.comfort||null,blockedBy:t.blocked_by||null,soc:t.soc,icon:this._resolveDeviceIcon(t)})).sort((e,t)=>e.priority-t.priority))}render(){if(!this._config)return q;const e=this.peakLimitUnlimited,t=this._getPeakColor(),i=this.targetPeakLimit-this.currentPeak,s=e?0:this.targetPeakLimit>0?Math.min(this.currentPeak/this.targetPeakLimit*100,100):0;return W`
             <ha-card>
                 <div class="card-content">
                     <div class="status-bar">
@@ -5755,6 +5767,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:16px;pointer-events:none"></ha-icon>
                     </button>`}
                 </div>
+                ${this._renderComfortChip(e)}
                 ${this._renderGoalProgress(e)}
                 ${this._goalOpen[e.id]?this._renderGoalEditor(e):q}
             </div>
@@ -5811,6 +5824,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this._t("daily_target")}
                 </div>
                 ${this._renderGoalSlider(e)}
+                ${this._renderComfortBand(e)}
                 ${this._renderOvernightPicker(e)}
                 ${this._renderAntiCycle(e)}
                 <div class="ge-row">
@@ -5836,7 +5850,62 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     </span>
                 </div>
                 <div class="ge-hint">${this._t("stop_condition_hint")}</div>
-            </div>`}_renderAntiCycle(e){const t=e.goals||{},i=t=>i=>{const s=i.target.value;""===s||null==s||Number(s)<1||(e.goals={...e.goals||{},[t]:s},this._sendDeviceUpdate(e.id,t,String(s)))},s=(e,s)=>W`
+            </div>`}_comfortChipMeta(e){const t=e.comfort;if(!t||!t.state||"disengaged"===t.state)return null;const i="cool"===(t.hvac||"cool");return{forced:{icon:"🔥",color:"#ffc107",label:this._t(i?"chip_cooling_now":"chip_heating_now")},willing:{icon:"❄",color:"#8DC892",label:this._t(i?"chip_pre_cooling":"chip_pre_heating")},banked:{icon:"✓",color:"#4db6ac",label:this._t("chip_banked")}}[t.state]||null}_displayTemp(e){if(null==e)return null;const t=this.hass?.config?.unit_system?.temperature||"°C",i="°F"===t?9*e/5+32:e;return`${Math.round(10*i)/10} ${t}`}_renderComfortChip(e){const t=this._comfortChipMeta(e);if(!t)return q;const i=this._displayTemp(e.comfort.reading_c);return W`
+            <div class="comfort-chip" style="border-color:${t.color}55;color:${t.color}">
+                <span>${t.icon}</span> ${t.label}${i?W` \u00B7 ${i}`:q}
+            </div>`}_renderComfortBand(e){if("climate"!==e.deviceType&&!(e.goals||{}).comfort_limit&&!e.comfort)return q;if(!e.comfort&&"climate"!==e.deviceType)return q;const t=e.goals||{},i=this.hass?.config?.unit_system?.temperature||"°C",s=parseFloat(t.comfort_target)||0,r=parseFloat(t.comfort_offset)||0,a=parseFloat(t.comfort_limit)||0,o=s>0&&a>0,n=o?Math.min(s-r,a)-3:18,l=o?Math.max(s,a)+3:30,c=e=>Math.max(0,Math.min(100,(e-n)/(l-n)*100)),d=e.comfort?e.comfort.reading_c:null,p=null==d?null:"°F"===i?9*d/5+32:d,h=(t,i,s)=>W`
+            <input type="number" step="${s}" style="width:56px"
+                   .value="${i?String(i):""}" placeholder="\u2014"
+                   @change=${i=>{const s=i.target.value;""!==s&&null!=s&&(e.goals={...e.goals||{},[t]:s},this._sendDeviceUpdate(e.id,t,String(s)))}}
+                   @click=${e=>e.stopPropagation()}>`;return W`
+            <div class="ge-title" style="margin-top:10px">
+                <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:14px;color:#4db6ac"></ha-icon>
+                ${this._t("comfort_section")}
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t("comfort_thermometer")}</span>
+                <span class="ge-ctl">
+                    ${this.hass&&customElements.get("ha-entity-picker")?W`
+                    <ha-entity-picker class="ge-entity"
+                           .hass=${this.hass}
+                           .value=${t.comfort_entity||""}
+                           .includeDomains=${["sensor","input_number"]}
+                           .placeholder=${this._t("comfort_own_thermometer")}
+                           allow-custom-entity
+                           @value-changed=${t=>{const i=t.detail?.value??"";e.goals={...e.goals||{},comfort_entity:i},this._sendDeviceUpdate(e.id,"comfort_entity",i)}}
+                           @click=${e=>e.stopPropagation()}></ha-entity-picker>
+                    `:W`
+                    <input type="text" class="ge-entity"
+                           placeholder="${this._t("comfort_own_thermometer")}"
+                           .value="${t.comfort_entity||""}"
+                           @change=${t=>this._sendDeviceUpdate(e.id,"comfort_entity",t.target.value)}>`}
+                </span>
+            </div>
+            ${o?W`
+            <div class="comfort-strip">
+                <div class="cs-track"></div>
+                <div class="cs-zone" style="left:${c(Math.min(s-r,a))}%;width:${Math.abs(c(a)-c(s-r))}%"></div>
+                <div class="cs-mark" style="left:${c(s-r)}%;background:#8DC892" title="bank"></div>
+                <div class="cs-mark" style="left:${c(s)}%;background:#4db6ac" title="target"></div>
+                <div class="cs-mark" style="left:${c(a)}%;background:#ffc107" title="limit"></div>
+                ${null!=p?W`<div class="cs-read" style="left:${c(p)}%" title="${this._displayTemp(d)}">\u25B2</div>`:q}
+            </div>`:q}
+            <div class="ge-row">
+                <span class="ge-label">${this._t("comfort_keep_at")}</span>
+                <span class="ge-ctl">${h("comfort_target",s,.5)}
+                    <span class="ge-unit">${i}</span></span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t("comfort_precool_by")}</span>
+                <span class="ge-ctl">${h("comfort_offset",r,.5)}
+                    <span class="ge-unit">${i}</span></span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t("comfort_limit_label")}</span>
+                <span class="ge-ctl">${h("comfort_limit",a,.5)}
+                    <span class="ge-unit">${i}</span></span>
+            </div>
+            <div class="ge-hint">${this._t("comfort_hint")}</div>`}_renderAntiCycle(e){const t=e.goals||{},i=t=>i=>{const s=i.target.value;""===s||null==s||Number(s)<1||(e.goals={...e.goals||{},[t]:s},this._sendDeviceUpdate(e.id,t,String(s)))},s=(e,s)=>W`
             <input type="number" min="1" max="120" step="1" style="width:56px"
                    .value="${null!=t[e]&&""!==t[e]?String(t[e]):""}"
                    placeholder="${s}"

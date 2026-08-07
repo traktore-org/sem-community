@@ -365,3 +365,53 @@ class TestThresholdsFollowTheInstallUnit:
         hass.config.units.temperature_unit = "°C"
         dev = _ac(hass)   # 24/2/26 °C as everywhere else in this file
         assert dev.comfort_state == "willing"
+
+
+class TestThePayloadIsTheSingleSource:
+    """The card must never re-derive the band — a frontend copy of the
+    band logic is how state-contradicts-action bugs are born. The devices
+    payload publishes the goals (pre-fill) AND the live verdict (chip)."""
+
+    def _registry_with(self, dev, goals):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry,
+        )
+        reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._device_goals = {dev.device_id: goals}
+        ctrl = MagicMock()
+        ctrl.get_device.return_value = dev
+        reg._surplus_controller = ctrl
+        return reg
+
+    def test_comfort_goals_ride_the_payload(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "24.5"}))
+        p = self._registry_with(dev, {
+            "comfort_entity": "sensor.room_temp", "comfort_target": "24",
+            "comfort_offset": "2", "comfort_limit": "26",
+        })._goal_payload(dev.device_id)
+        g = p["goals"]
+        assert g["comfort_entity"] == "sensor.room_temp"
+        assert g["comfort_target"] == "24"
+        assert g["comfort_limit"] == "26"
+
+    def test_the_live_verdict_rides_beside_the_goals(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "27.0"}))
+        p = self._registry_with(dev, {})._goal_payload(dev.device_id)
+        assert p["comfort"] == {"state": "forced", "reading_c": 27.0, "hvac": "cool"}
+
+    def test_a_non_climate_device_carries_no_comfort_block(self):
+        from custom_components.solar_energy_management.devices.base import (
+            SwitchDevice,
+        )
+        dev = SwitchDevice(_hass_with({}), "sw1", "Switch", 500,
+                           entity_id="switch.sw1")
+        p = self._registry_with(dev, {})._goal_payload("sw1")
+        assert "comfort" not in p
+
+    def test_a_disengaged_band_still_reports_honestly(self):
+        """The chip hides on 'disengaged' — but the payload says WHY the
+        band is dark rather than omitting it (a climate device with goals
+        set and a dead sensor must not look identical to one without)."""
+        dev = _ac(_hass_with({}))  # sensor missing
+        p = self._registry_with(dev, {})._goal_payload(dev.device_id)
+        assert p["comfort"] == {"state": "disengaged", "reading_c": None, "hvac": "cool"}

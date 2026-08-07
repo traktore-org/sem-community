@@ -201,6 +201,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
             }
             .goal-btn.active { color:#ff9800; border-color:#ff9800; }
             .goal-progress { display:flex; align-items:center; gap:8px; }
+            .comfort-chip { display:inline-flex; align-items:center; gap:4px;
+                margin:2px 0 0 26px; padding:1px 8px; font-size:11.5px;
+                border:1px solid; border-radius:9px; width:fit-content; }
+            .comfort-strip { position:relative; height:18px; margin:6px 4px 2px; }
+            .cs-track { position:absolute; top:8px; left:0; right:0; height:3px;
+                border-radius:2px; background:rgba(255,255,255,0.12); }
+            .cs-zone { position:absolute; top:8px; height:3px; border-radius:2px;
+                background:linear-gradient(90deg,#8DC89255,#ffc10755); }
+            .cs-mark { position:absolute; top:4px; width:3px; height:11px;
+                border-radius:2px; transform:translateX(-50%); }
+            .cs-read { position:absolute; top:-2px; transform:translateX(-50%);
+                font-size:10px; color:var(--primary-text-color,#e0e0e0); }
             .goal-bar {
                 flex:1 1 auto; height:5px; border-radius:3px;
                 background:rgba(128,128,128,0.2); overflow:hidden; max-width:220px;
@@ -376,6 +388,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     dependsOn: info.depends_on || [],
                     goals: info.goals || null,
                     progress: info.progress || null,
+                    comfort: info.comfort || null,   // (#705) live band verdict
                     blockedBy: info.blocked_by || null,
                     soc: info.soc,   // (#576) battery row only
                     icon: this._resolveDeviceIcon(info),
@@ -558,6 +571,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:16px;pointer-events:none"></ha-icon>
                     </button>`}
                 </div>
+                ${this._renderComfortChip(device)}
                 ${this._renderGoalProgress(device)}
                 ${this._goalOpen[device.id] ? this._renderGoalEditor(device) : nothing}
             </div>
@@ -877,6 +891,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._t('daily_target')}
                 </div>
                 ${this._renderGoalSlider(device)}
+                ${this._renderComfortBand(device)}
                 ${this._renderOvernightPicker(device)}
                 ${this._renderAntiCycle(device)}
                 <div class="ge-row">
@@ -903,6 +918,128 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 </div>
                 <div class="ge-hint">${this._t('stop_condition_hint')}</div>
             </div>`;
+    }
+
+    // ── (#705) thermal comfort — chip + band strip ──────────────────
+    // The band VERDICT comes from the payload (device.comfort), never
+    // re-derived here: a frontend copy of the band logic is how the
+    // published state and the action drift apart. The strip edits the
+    // three goals; the backend answers with the new verdict next cycle.
+
+    _comfortChipMeta(device) {
+        const c = device.comfort;
+        if (!c || !c.state || c.state === 'disengaged') return null;
+        const cooling = (c.hvac || 'cool') === 'cool';
+        const meta = {
+            forced:  { icon: '\u{1F525}', color: '#ffc107',
+                       label: this._t(cooling ? 'chip_cooling_now' : 'chip_heating_now') },
+            willing: { icon: '\u2744',   color: '#8DC892',
+                       label: this._t(cooling ? 'chip_pre_cooling' : 'chip_pre_heating') },
+            banked:  { icon: '\u2713',   color: '#4db6ac',
+                       label: this._t('chip_banked') },
+        }[c.state];
+        return meta || null;
+    }
+
+    _displayTemp(celsius) {
+        // Display in the user's unit; goals are already typed in it, only
+        // the °C reading from the payload converts here.
+        if (celsius == null) return null;
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        const v = unit === '°F' ? celsius * 9 / 5 + 32 : celsius;
+        return `${Math.round(v * 10) / 10}\u00A0${unit}`;
+    }
+
+    _renderComfortChip(device) {
+        const meta = this._comfortChipMeta(device);
+        if (!meta) return nothing;
+        const temp = this._displayTemp(device.comfort.reading_c);
+        return html`
+            <div class="comfort-chip" style="border-color:${meta.color}55;color:${meta.color}">
+                <span>${meta.icon}</span> ${meta.label}${temp ? html` \u00B7 ${temp}` : nothing}
+            </div>`;
+    }
+
+    _renderComfortBand(device) {
+        if (device.deviceType !== 'climate' && !(device.goals || {}).comfort_limit
+            && !device.comfort) return nothing;
+        if (!device.comfort && device.deviceType !== 'climate') return nothing;
+        const g = device.goals || {};
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        const target = parseFloat(g.comfort_target) || 0;
+        const offset = parseFloat(g.comfort_offset) || 0;
+        const limit = parseFloat(g.comfort_limit) || 0;
+        const engaged = target > 0 && limit > 0;
+        // Strip geometry — a fixed pad around the configured band.
+        const lo = engaged ? Math.min(target - offset, limit) - 3 : 18;
+        const hi = engaged ? Math.max(target, limit) + 3 : 30;
+        const pct = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+        const readC = device.comfort ? device.comfort.reading_c : null;
+        const read = readC == null ? null
+            : (unit === '°F' ? readC * 9 / 5 + 32 : readC);
+        const num = (key, val, step) => html`
+            <input type="number" step="${step}" style="width:56px"
+                   .value="${val ? String(val) : ''}" placeholder="\u2014"
+                   @change=${(e) => {
+                       const v = e.target.value;
+                       if (v === '' || v == null) return;
+                       device.goals = { ...(device.goals || {}), [key]: v };
+                       this._sendDeviceUpdate(device.id, key, String(v));
+                   }}
+                   @click=${(e) => e.stopPropagation()}>`;
+        return html`
+            <div class="ge-title" style="margin-top:10px">
+                <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:14px;color:#4db6ac"></ha-icon>
+                ${this._t('comfort_section')}
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_thermometer')}</span>
+                <span class="ge-ctl">
+                    ${this.hass && customElements.get('ha-entity-picker') ? html`
+                    <ha-entity-picker class="ge-entity"
+                           .hass=${this.hass}
+                           .value=${g.comfort_entity || ''}
+                           .includeDomains=${['sensor', 'input_number']}
+                           .placeholder=${this._t('comfort_own_thermometer')}
+                           allow-custom-entity
+                           @value-changed=${(e) => {
+                               const v = e.detail?.value ?? '';
+                               device.goals = { ...(device.goals || {}), comfort_entity: v };
+                               this._sendDeviceUpdate(device.id, 'comfort_entity', v);
+                           }}
+                           @click=${(e) => e.stopPropagation()}></ha-entity-picker>
+                    ` : html`
+                    <input type="text" class="ge-entity"
+                           placeholder="${this._t('comfort_own_thermometer')}"
+                           .value="${g.comfort_entity || ''}"
+                           @change=${(e) => this._sendDeviceUpdate(device.id, 'comfort_entity', e.target.value)}>`}
+                </span>
+            </div>
+            ${engaged ? html`
+            <div class="comfort-strip">
+                <div class="cs-track"></div>
+                <div class="cs-zone" style="left:${pct(Math.min(target - offset, limit))}%;width:${Math.abs(pct(limit) - pct(target - offset))}%"></div>
+                <div class="cs-mark" style="left:${pct(target - offset)}%;background:#8DC892" title="bank"></div>
+                <div class="cs-mark" style="left:${pct(target)}%;background:#4db6ac" title="target"></div>
+                <div class="cs-mark" style="left:${pct(limit)}%;background:#ffc107" title="limit"></div>
+                ${read != null ? html`<div class="cs-read" style="left:${pct(read)}%" title="${this._displayTemp(readC)}">\u25B2</div>` : nothing}
+            </div>` : nothing}
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_keep_at')}</span>
+                <span class="ge-ctl">${num('comfort_target', target, 0.5)}
+                    <span class="ge-unit">${unit}</span></span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_precool_by')}</span>
+                <span class="ge-ctl">${num('comfort_offset', offset, 0.5)}
+                    <span class="ge-unit">${unit}</span></span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_limit_label')}</span>
+                <span class="ge-ctl">${num('comfort_limit', limit, 0.5)}
+                    <span class="ge-unit">${unit}</span></span>
+            </div>
+            <div class="ge-hint">${this._t('comfort_hint')}</div>`;
     }
 
     _renderAntiCycle(device) {

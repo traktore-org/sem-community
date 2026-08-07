@@ -1286,12 +1286,41 @@ class UnifiedDeviceRegistry:
                 # reload (None ⇒ the card shows the default placeholder).
                 "min_on_time_min": goals.get("min_on_time_min"),
                 "min_off_time_min": goals.get("min_off_time_min"),
+                # (#705) the comfort band — pre-fill for the editor.
+                "comfort_entity": goals.get("comfort_entity", ""),
+                "comfort_target": goals.get("comfort_target", 0),
+                "comfort_offset": goals.get("comfort_offset", 0),
+                "comfort_limit": goals.get("comfort_limit", 0),
             },
             "progress": {
                 "runtime_today_min": round(runtime_min, 1),
                 "targets_met": targets_met,
             },
-        }
+        } | self._comfort_payload(live)
+
+    @staticmethod
+    def _comfort_payload(live) -> Dict[str, Any]:
+        """(#705) The live band verdict, published beside the goals.
+
+        The card must never re-derive the band from the goals — a frontend
+        copy of the band logic is how the published state and the action
+        drift apart. Only devices that HAVE a band (ClimateDevice today,
+        switch loads in Phase 2) carry the block; ``disengaged`` is
+        reported rather than omitted, so a climate device with goals set
+        and a dead thermometer does not look identical to one that was
+        never configured.
+        """
+        if live is None or not hasattr(live, "comfort_state"):
+            return {}
+        try:
+            return {"comfort": {
+                "state": str(live.comfort_state),
+                "reading_c": live._comfort_reading(),
+                # so the chip says cooling vs heating without guessing
+                "hvac": str(getattr(live, "hvac_mode", "") or ""),
+            }}
+        except Exception:  # noqa: BLE001 — a payload must never break the sensor
+            return {}
 
     async def async_set_manual_mapping(
         self,
