@@ -350,3 +350,27 @@ class TestTheVerdictIsDayNightAgnostic:
         )
 
         assert "homeassistant" not in inspect.getsource(plan_verdict)
+
+
+class TestStage2TheVerdictCarriesUntil:
+    """(#638 Stage 2) One instant, one story: the ``until`` the user reads
+    is the ``next_block_start`` the decision used."""
+
+    def test_the_factory_reads_the_plans_next_window(self):
+        from datetime import datetime
+        when = datetime(2026, 8, 7, 22, 0)
+        v = verdict_from_night_plan(SimpleNamespace(
+            should_wait_for_cheap=True, reason="waiting", next_cheap_start=when))
+        assert v.until == when
+
+    def test_no_next_window_is_none(self):
+        v = verdict_from_night_plan(SimpleNamespace(
+            should_wait_for_cheap=True, reason="waiting"))
+        assert v.until is None
+
+    def test_decide_renders_the_until(self):
+        from datetime import datetime
+        d = decide(_night_view("min_plus_solar", plan=PlanVerdict(
+            hold=True, reason="planned window ahead",
+            until=datetime(2026, 8, 7, 22, 0))))
+        assert "until 22:00" in d.reason

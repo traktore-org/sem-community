@@ -347,3 +347,32 @@ class TestAuthorityBeginsAtTheStamp:
         )
         now = datetime.fromisoformat("2026-08-05T21:30:00+02:00")
         assert plan_gate(self._plan(), "load:heizband", now) is UNCOVERED
+
+
+class TestStage2NextBlockStart:
+    """(#638 Stage 2) The gate tells WHEN the next block opens, so the
+    verdict's ``until`` and the card's countdown quote the same instant
+    the decision used — one object, one story."""
+
+    def test_outside_a_block_the_gate_names_the_next_start(self):
+        blocks = [{"id": "ev:ch1",
+                   "start": (NOW + timedelta(minutes=30)).isoformat(),
+                   "end": (NOW + timedelta(minutes=90)).isoformat(),
+                   "power_w": 4800.0}]
+        g = plan_gate(_plan(blocks=blocks, computed_at=NOW),
+                      "ev:ch1", NOW)
+        assert g.covered and not g.in_block
+        assert g.next_block_start == NOW + timedelta(minutes=30)
+
+    def test_inside_a_block_next_start_is_none(self):
+        blocks = [{"id": "ev:ch1",
+                   "start": (NOW - timedelta(minutes=10)).isoformat(),
+                   "end": (NOW + timedelta(minutes=20)).isoformat(),
+                   "power_w": 4800.0}]
+        g = plan_gate(_plan(blocks=blocks, computed_at=NOW),
+                      "ev:ch1", NOW)
+        assert g.in_block
+        assert g.next_block_start is None
+
+    def test_uncovered_carries_no_next_start(self):
+        assert UNCOVERED.next_block_start is None

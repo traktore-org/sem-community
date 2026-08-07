@@ -55,6 +55,12 @@ class PlanGate:
     in_block: bool = False
     block_power_w: float = 0.0
     remaining_kwh: float = 0.0
+    next_block_start: Optional[datetime] = None
+    # (#638 Stage 2) When the NEXT of this demand's blocks opens — None
+    # inside a block or when none remain. The verdict's ``until``, the
+    # published reason's "(until HH:MM)" and the card countdown all quote
+    # THIS instant, so the story the user reads is the instant the
+    # decision actually used.
 
 
 UNCOVERED = PlanGate()
@@ -108,6 +114,7 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         in_block = False
         block_power = 0.0
         remaining = 0.0
+        next_start = None
         for b in plan.get("blocks") or []:
             if b.get("id") != demand_id:
                 continue
@@ -123,12 +130,15 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
             if start <= now < end:
                 in_block = True
                 block_power = max(block_power, power)
+            elif start > now and (next_start is None or start < next_start):
+                next_start = start
             left_h = (end - max(start, now)).total_seconds() / 3600.0
             if left_h > 0:
                 remaining += power / 1000.0 * left_h
         return PlanGate(covered=True, in_block=in_block,
                         block_power_w=block_power,
-                        remaining_kwh=round(remaining, 6))
+                        remaining_kwh=round(remaining, 6),
+                        next_block_start=None if in_block else next_start)
     except (TypeError, ValueError, KeyError, IndexError):
         return UNCOVERED
 

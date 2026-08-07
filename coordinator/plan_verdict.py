@@ -90,7 +90,14 @@ def verdict_from_night_plan(plan: object) -> PlanVerdict:
     """
     if plan is None:
         return NO_OPINION
+    until = getattr(plan, "next_cheap_start", None)
     return PlanVerdict(
         hold=bool(getattr(plan, "should_wait_for_cheap", False)),
+        # (#638 Stage 2) When the hold lifts — the #247 planner has always
+        # written the next cheap window here, and the #638 overlay now
+        # writes the gate's next_block_start into the same field, so both
+        # producers speak one ``until`` and the reason's "(until HH:MM)",
+        # the sensor and the card all quote the instant the decision used.
+        until=until if hasattr(until, "strftime") else None,
         reason=str(getattr(plan, "reason", "") or ""),
     )

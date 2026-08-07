@@ -3005,6 +3005,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     )
                                     if _wait:
                                         plan.should_wait_for_cheap = True
+                                        plan.next_cheap_start = _gate.next_block_start
                                         plan.reason = (
                                             "joint overnight plan: outside the "
                                             "planned window — waiting "
@@ -7088,6 +7089,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
                 if _wait:
                     night_plan.should_wait_for_cheap = True
+                    night_plan.next_cheap_start = _gate.next_block_start
                     night_plan.reason = (
                         "joint overnight plan: outside the planned window "
                         f"— waiting ({_gate.remaining_kwh:.1f} kWh "
