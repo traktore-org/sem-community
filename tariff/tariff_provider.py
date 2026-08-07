@@ -11,6 +11,7 @@ SurplusController for price-responsive device control.
 import logging
 import math
 from abc import ABC, abstractmethod
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -20,6 +21,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _quantile_index(n: int, q: float) -> int:
+    """Nearest-rank index of quantile ``q`` in a sorted list of ``n``.
+
+    Plain nearest-rank — good enough for 24/48-point arrays; avoids a
+    numpy dependency. Shared by the breakpoint picker and the
+    classifier so the two can never disagree about where p75 sits
+    (#728).
+    """
+    if n <= 0:
+        return 0
+    return max(0, min(n - 1, int(round(q * (n - 1)))))
 
 
 def _as_local(timestamp: datetime) -> datetime:
@@ -47,6 +61,57 @@ def _local_date(timestamp: datetime):
     and call sites that build their own clocks aren't disturbed.
     """
     return _as_local(timestamp).date()
+
+
+# Recognised day-keyed price-array attributes. Each accepts BOTH a list
+# of ``{start, value}``-style dicts AND a *flat numeric* list anchored at
+# the day's local midnight (#732). Exposed as a constant so the parity
+# guard (``test_732_flat_price_array``) derives its cases from the real
+# vocabulary instead of a hand-retyped copy that can drift (BUG_CLASSES
+# class 24).
+DAY_KEYED_PRICE_ATTRS: Tuple[str, ...] = (
+    "prices_today", "prices_tomorrow", "today", "tomorrow",
+    "prices", "today_raw", "tomorrow_raw", "raw_today", "raw_tomorrow",
+)
+
+
+def _flat_list_base(key: str) -> Optional[datetime]:
+    """Local midnight anchoring a *flat numeric* price array under ``key``.
+
+    Nordpool's own ``today`` / ``tomorrow`` attributes — and the many
+    template/derivative sensors that mirror them (#732: sensor names an
+    ``elpris_sem_inkl_tariffer``-style DK proxy) — expose a bare list of
+    floats (one value per slot, counted from that day's local midnight),
+    NOT a list of ``{start, value}`` dicts. The day is unambiguous from
+    the key name, so the array can be anchored without a per-element
+    timestamp. Ambiguous keys (a bare ``prices`` with no day reference)
+    return ``None`` and keep accepting only the dict shape — guessing a
+    day would silently mis-date the whole percentile distribution.
+
+    Uses the ``dt_util.now().replace(...)`` idiom (not
+    ``start_of_local_day``) so it aligns exactly with how the tariff
+    tests build their expected timestamps.
+    """
+    midnight = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    if "tomorrow" in key:
+        return midnight + timedelta(days=1)
+    if "today" in key:
+        return midnight
+    return None
+
+
+def _flat_list_interval(n: int) -> timedelta:
+    """Slot spacing implied by a flat array of ``n`` values for one day.
+
+    24 → hourly, 48 → 30-min, 96 → 15-min (the three real day-ahead
+    market granularities). The bands absorb 23/25-length DST days as
+    hourly and 92/100-length DST days as 15-min.
+    """
+    if n <= 26:
+        return timedelta(hours=1)
+    if n <= 50:
+        return timedelta(minutes=30)
+    return timedelta(minutes=15)
 
 
 class PriceLevel(Enum):
@@ -374,8 +439,11 @@ class DynamicTariffProvider(TariffProvider):
         self._no_price_array_warned = False
         # Cached percentile breakpoints, recomputed when the price
         # cache or the rolling window's slot changes.
-        # Keys: ``p10``, ``p25``, ``p75``, ``p90``.
-        self._percentile_breaks: Optional[Dict[str, float]] = None
+        # Keys: ``p10``, ``p25``, ``p75``, ``p90`` (floats, for the
+        # diagnostic path string) plus ``values`` — the sorted window
+        # itself, which is what the classifier actually buckets against
+        # (#728).
+        self._percentile_breaks: Optional[Dict[str, Any]] = None
         self._percentile_breaks_for: Optional[str] = None  # window key
         # #359 follow-up — surface which classifier path produced the most
         # recent ``price_level`` via the ``tariff_classifier_path`` sensor
@@ -730,6 +798,17 @@ class DynamicTariffProvider(TariffProvider):
         surface exposes which attribute matched so an empty result
         for a non-listed shape is visible without a maintainer
         having to read the raw entity dump.
+
+        v1.7.6 (#732): the day-keyed attributes above also accept a
+        **flat numeric list** — ``today: [0.25, 0.30, …]`` — not just a
+        list of dicts. This is Nordpool's *own* ``today`` / ``tomorrow``
+        shape and the one most template/derivative sensors copy; the
+        index is the slot counted from the day's local midnight, the
+        granularity (hourly / 30-min / 15-min) is read from the list
+        length, and ``None`` gap padding is skipped without shifting the
+        remaining slots. A bare ``prices`` list has no day reference, so
+        the flat shape is accepted only for the ``today`` / ``tomorrow``
+        keys (see ``_flat_list_base``).
         """
         state = (
             self.hass.states.get(self._price_entity)
@@ -773,69 +852,75 @@ class DynamicTariffProvider(TariffProvider):
         prices = []
         attrs = state.attributes if state else {}
 
-        # Tibber + NL EnergyZero/EasyEnergy + Tibber Grid Reward + generic
-        for key in (
-            "prices_today", "prices_tomorrow", "today", "tomorrow",
-            "prices", "today_raw", "tomorrow_raw",
-        ):
+        # Tibber + NL EnergyZero/EasyEnergy + Tibber Grid Reward +
+        # Nordpool raw_* + generic. Each item may be a ``{start, value}``
+        # -style dict OR a bare number: Nordpool's own ``today`` /
+        # ``tomorrow`` attributes (and the template/derivative sensors
+        # that mirror them, #732) expose a flat float list indexed from
+        # the day's local midnight. Both shapes are parsed here so a
+        # recognised attribute NAME is never rejected for its element
+        # SHAPE — the exact failure #732 reported (the name was listed in
+        # the warning, the flat array was silently dropped anyway).
+        for key in DAY_KEYED_PRICE_ATTRS:
             price_list = attrs.get(key, [])
-            if isinstance(price_list, list):
-                for item in price_list:
-                    if isinstance(item, dict):
-                        # Expanded timestamp key vocabulary — v1.7.2-beta.3
-                        # adds ``time`` (ENTSO-E) and ``hour`` (some NL
-                        # template sensors) to the existing ``start`` /
-                        # ``startsAt``.
-                        ts = (
-                            item.get("start")
-                            or item.get("startsAt")
-                            or item.get("time")
-                            or item.get("hour")
-                        )
-                        # Expanded price key vocabulary — already covers
-                        # most providers, kept verbatim.
-                        price = item.get("total", item.get("price", item.get("value")))
-                        if ts and price is not None:
-                            try:
-                                if isinstance(ts, str):
-                                    dt = datetime.fromisoformat(ts)
-                                else:
-                                    dt = ts
-                                prices.append(PricePoint(
-                                    timestamp=dt,
-                                    price=float(price),
-                                    currency=self.currency,
-                                    level=self._classify_price(float(price)),
-                                ))
-                            except (ValueError, TypeError):
-                                continue
-                if prices and not self._last_parsed_attribute:
-                    self._last_parsed_attribute = key
-
-        # Nordpool: raw_today, raw_tomorrow attributes
-        for key in ("raw_today", "raw_tomorrow"):
-            price_list = attrs.get(key, [])
-            if isinstance(price_list, list):
-                for item in price_list:
-                    if isinstance(item, dict):
-                        ts = item.get("start")
-                        price = item.get("value")
-                        if ts and price is not None:
-                            try:
-                                if isinstance(ts, str):
-                                    dt = datetime.fromisoformat(ts)
-                                else:
-                                    dt = ts
-                                prices.append(PricePoint(
-                                    timestamp=dt,
-                                    price=float(price),
-                                    currency=self.currency,
-                                    level=self._classify_price(float(price)),
-                                ))
-                            except (ValueError, TypeError):
-                                continue
-                if prices and not self._last_parsed_attribute:
-                    self._last_parsed_attribute = key
+            if not isinstance(price_list, list):
+                continue
+            flat_base = _flat_list_base(key)
+            # A flat numeric array is anchored by INDEX from the day's
+            # midnight, so its length must be one day's worth of slots.
+            # >96 (finer than 15-min for a single day) means it
+            # concatenates multiple days or is malformed: the length→
+            # granularity heuristic can't tell "one day, fine" from "many
+            # days, coarse", so refuse to guess rather than silently pack
+            # N days into one (#732 review). Dict items in an over-long
+            # list still parse — they carry their own timestamps.
+            flat_ok = flat_base is not None and len(price_list) <= 96
+            flat_interval = _flat_list_interval(len(price_list))
+            for idx, item in enumerate(price_list):
+                if isinstance(item, dict):
+                    # Timestamp key vocabulary — ``time`` (ENTSO-E) and
+                    # ``hour`` (NL template sensors) beside ``start`` /
+                    # ``startsAt``; price keys ``total`` / ``price`` /
+                    # ``value`` (``value`` also covers Nordpool raw_*).
+                    ts = (
+                        item.get("start")
+                        or item.get("startsAt")
+                        or item.get("time")
+                        or item.get("hour")
+                    )
+                    price = item.get("total", item.get("price", item.get("value")))
+                    if ts and price is not None:
+                        try:
+                            if isinstance(ts, str):
+                                dt = datetime.fromisoformat(ts)
+                            else:
+                                dt = ts
+                            prices.append(PricePoint(
+                                timestamp=dt,
+                                price=float(price),
+                                currency=self.currency,
+                                level=self._classify_price(float(price)),
+                            ))
+                        except (ValueError, TypeError):
+                            continue
+                elif flat_ok and not isinstance(item, bool):
+                    # Flat numeric list (#732): the index IS the slot,
+                    # counted from the day's local midnight. ``enumerate``
+                    # keeps the positional index so null/gap padding
+                    # (Nordpool leaves ``None`` for unpublished hours) is
+                    # skipped without shifting the remaining slots.
+                    try:
+                        val = float(item)
+                    except (ValueError, TypeError):
+                        continue
+                    prices.append(PricePoint(
+                        timestamp=flat_base + flat_interval * idx,
+                        price=val,
+                        currency=self.currency,
+                        level=self._classify_price(val),
+                    ))
+            if prices and not self._last_parsed_attribute:
+                self._last_parsed_attribute = key
 
         # Generic forecast: "forecasts" or "rates" attribute (Amber Electric,
         # Octopus Energy, or any provider that stores an array of price dicts).
@@ -947,7 +1032,9 @@ class DynamicTariffProvider(TariffProvider):
                 "Tariff entity %s has a readable state but exposes no "
                 "recognised price-array attribute (prices_today / today / "
                 "tomorrow / prices / today_raw / raw_today / forecasts / "
-                "rates). "
+                "rates). Each must hold EITHER a list of {start, value} "
+                "entries OR a flat list of numbers (one per hourly/30-min/"
+                "15-min slot from local midnight, #732). "
                 "Percentile classification and cheap-window planning are "
                 "degraded (#359). If this is a derivative/template sensor, "
                 "pass the provider's array through (attributes: "
@@ -1044,13 +1131,28 @@ class DynamicTariffProvider(TariffProvider):
             if breaks is not None:
                 # _get_percentile_breaks sets the active-path string in
                 # the happy case; just return the bucketed level.
-                if price <= breaks["p10"]:
+                #
+                # #728: compare POSITIONS in the sorted window, not
+                # prices. A nearest-rank quantile lands on an actual
+                # sample, so on a discrete Time-of-Use plan p75 IS one
+                # of the three tier prices — and ``price >= p75`` then
+                # swallowed that entire tier. Half of @Azlinon's day
+                # read as EXPENSIVE and NORMAL was unreachable.
+                #
+                # In index space each hour keeps its own slot and a
+                # tier sits at its middle. Where a price occurs at most
+                # once the two comparisons are equivalent, so #359's
+                # continuous curves are untouched.
+                window = breaks["values"]
+                n = len(window)
+                pos = self._window_position(window, price)
+                if pos <= _quantile_index(n, 0.10):
                     return PriceLevel.VERY_CHEAP
-                if price <= breaks["p25"]:
+                if pos <= _quantile_index(n, 0.25):
                     return PriceLevel.CHEAP
-                if price >= breaks["p90"]:
+                if pos >= _quantile_index(n, 0.90):
                     return PriceLevel.VERY_EXPENSIVE
-                if price >= breaks["p75"]:
+                if pos >= _quantile_index(n, 0.75):
                     return PriceLevel.EXPENSIVE
                 return PriceLevel.NORMAL
             # #359: percentile requested but no breaks available.
@@ -1082,7 +1184,27 @@ class DynamicTariffProvider(TariffProvider):
             return PriceLevel.EXPENSIVE
         return PriceLevel.NORMAL
 
-    def _get_percentile_breaks(self) -> Optional[Dict[str, float]]:
+    @staticmethod
+    def _window_position(sorted_values: List[float], price: float) -> float:
+        """Where ``price`` sits in the sorted window, in index space.
+
+        A price the window carries once returns its index. A price it
+        carries N times — every hour of a Time-of-Use tier posts the
+        same number — returns the MIDDLE of the ranks it occupies,
+        because the middle is where that tier sits in the day. A price
+        absent from the window lands half-way between its neighbours.
+
+        Bucketing on this instead of on the price itself is what fixes
+        #728, and it is a narrow change: whenever a price occurs at
+        most once, comparing indices and comparing values give the same
+        answer, so every continuous curve (Nordpool, Tibber, Amber)
+        keeps the boundaries #359 gave it. Only tied tiers move.
+        """
+        below = bisect_left(sorted_values, price)
+        equal = bisect_right(sorted_values, price) - below
+        return below + (equal - 1) / 2.0
+
+    def _get_percentile_breaks(self) -> Optional[Dict[str, Any]]:
         """Compute percentile breakpoints over a rolling ~24h window.
         Returns ``None`` when there's not enough data (< 4 points) for
         percentiles to be meaningful.
@@ -1166,24 +1288,24 @@ class DynamicTariffProvider(TariffProvider):
             return None
 
         def _quantile(sorted_values: List[float], q: float) -> float:
-            # Plain nearest-rank quantile — good enough for 24/48-point
-            # arrays; avoids a numpy dependency.
+            # #728: index picked by the module-level helper the
+            # classifier also uses, so the breakpoint reported in the
+            # diagnostic string and the one bucketing runs against are
+            # always the same index.
             if not sorted_values:
                 return 0.0
-            idx = max(
-                0,
-                min(
-                    len(sorted_values) - 1,
-                    int(round(q * (len(sorted_values) - 1))),
-                ),
-            )
-            return sorted_values[idx]
+            return sorted_values[_quantile_index(len(sorted_values), q)]
 
         breaks = {
             "p10": _quantile(window_prices, 0.10),
             "p25": _quantile(window_prices, 0.25),
             "p75": _quantile(window_prices, 0.75),
             "p90": _quantile(window_prices, 0.90),
+            # #728: the classifier buckets by rank against this list.
+            # The four breakpoints above stay for the flat-day guard
+            # and the diagnostic path string users read off the
+            # ``tariff_classifier_path`` attribute.
+            "values": window_prices,
         }
         # Degenerate distribution guard (M1 reviewer note): a flat or
         # near-flat day collapses every break to the same value, which

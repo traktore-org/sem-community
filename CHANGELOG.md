@@ -11,9 +11,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.7] — 07.08.2026
+
+### ✨ Features
+
+- 🌡️ **Thermal comfort loads (Phases 1+2)** — climate devices AND switch-controlled heaters gain a comfort band: `Keep at` / `Bank by` / `Run now past` temperatures on the per-device goals, driven by any temperature sensor (climate units default to their own thermometer). Surplus pre-conditions the room into thermal mass; past the limit the device runs from the sources you allow; a pre-conditioned room declines further energy. Thresholds are typed in your display unit (°F installs type °F); °F/K sensors convert automatically. Compressor-safe 3-min restart floor on climate units. Row chip + band editor on the Load Priority card. (#705, requested by @onkelfu)
+
+# [1.7.6-beta.6] — 06.08.2026
+
+### 🐛 Fixes
+- 🔋 **Estimated EV SOC walked *down* while the car was charging**
+  (#708, reported by @Azlinon) — with the vehicle-SOC sensor quiet, SEM tracks
+  the pack against an internal "how far below full is it" figure. Every path
+  treated that as a deficit — driving raises it, a real reading recalibrates it,
+  reaching full zeroes it, a finished session subtracts what it delivered —
+  except the one that runs each cycle *during* a charge, which **added** the
+  delivered kWh instead. The estimate fell by exactly what went into the pack:
+  11.5 kWh into a blinded 85 kWh pack read 24 % where the car was near 50 %. It
+  stayed hidden because a session that reaches full resets the figure anyway; it
+  takes a charge that stops short **and** a sensor that goes quiet to leave the
+  inverted value on screen. Charging now subtracts, with the 0.92 charge
+  efficiency, so the big "SOC (EST.)" number and the "est. now ~54 %" hint beside
+  it are the same arithmetic by two routes instead of two answers. The disconnect
+  step no longer re-applies the finished session on top of what the live path
+  already booked — subtracting it there had been quietly cancelling half the
+  error, which is why the number looked plausible again once the car was
+  unplugged. A charger's lifetime total-energy counter still anchors the taper
+  but no longer feeds this figure at all: it measures what was put back **in**,
+  never how far the car was driven, and that mismatch is what made it the sign
+  error — on a charger exposing such a counter it could override a fresh real
+  SOC reading outright, showing 94 % for a pack the car had just reported at
+  38 %. An install with no reference yet still reports "unknown" rather than a
+  guess (#245), and the 0 %-recovery path now anchors the value it writes so it
+  keeps tracking for the rest of the charge instead of freezing.
+- 🔋 **A hand-set charge efficiency can no longer reach the SOC estimate
+  unchecked** (#735) — `ev_charger_efficiency` overrides the 0.92 AC→DC default
+  used to convert metered energy into pack energy. It has no settings field yet,
+  so the only way to set it is by editing stored configuration by hand, and
+  whatever was typed went straight into the arithmetic: `3.0` claimed the pack
+  absorbed three times what the charger measured, `0` froze the estimate, and a
+  stray word raised an error mid-cycle. Values outside the physical range now
+  fall back to the default. The two places that book delivered energy — every
+  cycle during a charge, and the first-session bootstrap for installs with no
+  SOC sensor — now resolve the setting through one accessor rather than
+  separately; #708 was precisely two halves of one calculation drifting apart.
+  The stop guard added in #708 deliberately keeps the fixed 0.92 and is now
+  pinned as such: it feeds a *ceiling*, so a lowered efficiency would charge
+  **longer**, and stopping late puts energy in the pack that cannot be taken
+  back out, where stopping early is corrected by the next sensor reading.
+
+# [1.7.6-beta.5] — 06.08.2026
+
+### 🐛 Fixes
+- 💵 **Tariff sensors that expose a flat price list now populate the schedule**
+  (#732, reported by @bjpo-abelco) — a `dynamic_tariff_entity` whose attributes
+  carried a valid 24- or 96-value price array under a recognised name
+  (`prices_today` / `today` / `raw_today`) was silently rejected: the schedule
+  stayed empty, percentile classification fell back to "normal", cheap-window
+  planning was off, and the log warned about a missing array that was right there.
+  The parser recognised the attribute *names* but its inner loop only accepted a
+  list of `{start, value}` dicts — so a bare list of numbers, which is Nordpool's
+  *own* `today` / `tomorrow` shape and the one nearly every template/derivative
+  sensor copies, fell straight through. Those attributes now accept both shapes:
+  a flat list is anchored at local midnight with the granularity read from its
+  length (24 hourly / 48 30-min / 96 15-min), `null` gaps are skipped without
+  shifting the remaining slots, and a list longer than one day is declined rather
+  than mis-dated. The current-price read was never affected — only the day-ahead
+  array, which is why only the schedule looked broken.
+
+# [1.7.6-beta.4] — 06.08.2026
+
+### 🐛 Fixes
+- 🔌 **Overnight charging read the wrong charger's hardware limits**
+  (#716, reported by @Azlinon) — the night planner sizes the charge rate as
+  `(peak limit − house load) ÷ watts-per-amp`, and it was assembling those limits
+  from the wrong places. `watts_per_amp` hardcoded 230 V, while `ev_voltage` is
+  read by seven other watts-per-amp conversions in the codebase — three in
+  `decide.py`, two in the coordinator, one in the energy calculator, and one in
+  `_night_deliverable_kwh` further down this very file.
+  `max_amps` read the *fleet* `ev_max_current`, while the line directly below it
+  read `ev_phases` per-charger — so in a mixed fleet the 16 A box was planned as
+  the 32 A one, over-claiming budget the next charger in the list then never saw.
+  Both now resolve per-charger-then-fleet like the rest of the planner, and a
+  non-positive voltage falls back to the default instead of reaching
+  `amps_from_headroom`'s 1 W/A floor, which would have saturated the charger to
+  max current on a junk config value. The charger's own reported rating still has
+  the last word over config. **Note for North American installs:** the reporter's
+  1.6 kW clamp came from `Phases` defaulting to 3 on single-phase 240 V hardware —
+  a believed 690 W/A against a measured 244. Setting the per-charger **Phases**
+  number entity to 1 is the fix for that today; a declared voltage / Max-Amps
+  surface and measured watts-per-amp learning are still queued on #716.
+
+# [1.7.6-beta.3] — 06.08.2026
+
+### 🐛 Fixes
+- 💵 **Time-of-Use tariffs got their middle rate back — "normal" was unreachable**
+  (#728, reported by @Azlinon) — on a plan with a handful of fixed rates rather than a
+  continuous hourly curve, SEM classified the day as *only* cheap and expensive. The
+  reporter's Consumers Energy "Nighttime Savers" plan has three prices; his twelve
+  mid-peak hours — half the day — all read **expensive**, so anything waiting for a
+  normal-or-better price sat out the afternoon. Root cause: the percentile classifier
+  picks its breakpoints by nearest rank, which on a discrete plan lands the p75 break
+  *exactly on* one of the tier prices; the comparison `price >= p75` then swallowed that
+  whole tier. Whenever the top tier covers less than about a quarter of the day the
+  middle tier disappears into it — and the flat-day guard never fires, so it failed
+  silently. Classification now compares **positions in the sorted price window** instead
+  of the prices themselves, so a tier is judged by where its hours sit in the day rather
+  than by which single number a quantile happened to land on. Continuous curves
+  (Nordpool, Tibber, Amber, aWATTar) are untouched: wherever a price occurs at most once
+  the two comparisons are equivalent, and #359's boundaries are pinned by test to prove
+  it. The mirror case is fixed too — a small *off*-peak block was pulling the middle tier
+  down into "very cheap".
+- 🕐 **Today's-plan windows read an hour short** (#729, spotted by @Azlinon in #686) — a
+  cheap window covering the slots 00:00 through 05:00 announced itself as "open until
+  **05:00**", quietly disclaiming the last hour of itself. The two endpoints were not the
+  same kind of thing: `start` was the moment the window opens, but `end` was the *start
+  stamp of the final slot*. It now names the closing boundary — the same window reads
+  "until **06:00**" — and the slot length is measured off the price curve rather than
+  assumed hourly, so 15-minute markets close on the quarter. The EV strip's cheap/expensive
+  tint, which drew from the same value, stops stopping one slot early too.
+
 # [1.7.6-beta.2] — 05.08.2026
 
 ### 🐛 Fixes
+- 🌡️ **Inverter/battery temperature no longer shows the wrong number *and* the wrong unit
+  on °F installs** (#727, reported by @Azlinon) — a US user's Home-view power-flow diagram
+  read "118°C", a plausible-but-nonsensical value. Two bugs compounded: SEM read the source
+  temperature sensor with `float(state.state)`, **ignoring its `°F` unit**, and then the card
+  concatenated a **hardcoded `°C`** onto a value HA had already converted to the user's display
+  unit. The reading is now converted from the source's unit to `°C` before republish
+  (`units.temperature_state_to_celsius` — the one place that decides a sensor's magnitude, now
+  covering temperature as it already did power/energy), and both the diagram and battery cards
+  label with the unit HA actually attached, never a fixed `°C`. Metric installs are unchanged
+  (a `°C`/unitless source passes through). A source that is itself mislabelled upstream (the
+  reporter's SolarAssistant bridge sends the Celsius value with a `°F` unit) will now match
+  whatever that source shows in HA, rather than being converted a second time. Sibling flagged
+  for a follow-up: the heat-pump/hot-water control path still assumes `°C` for its setpoint
+  comparisons.
 - 🌙 **The night sky got a real moon — with the right phase, moving the right way**
   (#711) — the diagram card's static full-moon placeholder is now the actual lunar phase
   (from `sensor.moon`, folded into the card's dirty-check key so a phase change re-renders),
@@ -58,6 +192,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🧪 Guards
 
+- 🌡️ **A converted sensor may no longer be labelled with a hardcoded unit** (#727) — the
+  #641 units AST-lint now also bans an inline `unit == "°C"/"°F"` comparison outside
+  `coordinator/units.py` (temperature joined power/energy as a one-place-decides rule), and
+  `dashboard/card/test/temperature-unit.test.js` pins that a `°F` entity can only ever be
+  labelled `°F`. New bug class #33 (display-unit mislabel) in `docs/BUG_CLASSES.md`.
 - ⚖️ **A view that must balance may no longer mix SEM's day boundaries** (#723) — the
   Energy tab's Sankey — a conservation diagram whose arrows are supposed to add up — drew six
   calendar-day figures next to an EV node bucketed on the Charge-by deadline, so between

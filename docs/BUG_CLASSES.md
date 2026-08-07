@@ -844,6 +844,161 @@ renders as an equation; any new card that draws 2+ balance values as connected f
 by choice: freezing real telemetry entities to protect a view would corrupt genuine data.
 Refs #699 #237 #444 #289.
 
+### 33. A card hardcodes a unit HA already converted (display-unit mislabel) — GUARDED
+**Symptom:** a reading shown on a card is labelled with a unit that does not match the number
+beside it, but only for users on a non-default unit system. #727: a US install's Home view showed
+the inverter node at **"118°C"** — a plausible-looking but nonsensical value — because the real
+reading was 118 °F. Metric users never saw it, so it survived until a US user reported it.
+**Root shape:** SEM publishes a reading as a device-class sensor in a fixed NATIVE unit (temperature
+is `°C`-native), and Home Assistant then converts that sensor to the user's unit system for display —
+so the value the card reads from `.state` is already in the user's unit (°F on a US install), and its
+`attributes.unit_of_measurement` is that unit too. A card that concatenates a **hardcoded** unit
+literal (`` `${v.toFixed(0)}°C` ``) onto that already-converted value mislabels it. The number is
+right for the user's locale; only the suffix is a lie. This is the DISPLAY-side twin of class 21
+(that one is the ingest-side magnitude decision). Compounding factor here: the *ingest* also assumed
+°C (class 21 extended to temperature — `sensor_reader._read_*_temperature` read `float(state.state)`
+ignoring the source's `°F` unit), so a mislabeled bridge (SolarAssistant reporting the C value with a
+°F label) produced the doubly-wrong 118.
+**Where it lives:** every dashboard card that renders a device-class sensor (temperature today;
+any future unit-converted class — energy, power, volume, pressure, monetary) with a literal unit.
+`dashboard/card/src/cards/sem-system-diagram-card.js` (inverter temp) and `sem-battery-card.js`
+(battery temp) were the two temperature sites. **Not** instances: the config-card HP/HW setpoint
+sliders + legionella stepper are SEM's own `°C` control *inputs*; the config-card HP/HW
+current-temperature *displays* (`sem-config-card.js` ~1109/1113) are plain `coordinator.data`
+attributes, NOT device-class sensors, so HA never unit-converts them and a `°C` label is not a
+class-33 mislabel — but their INGEST assumes °C, which is the deferred Guido sibling below. The
+weather card already did it right (`attrs.temperature_unit || '°C'`), the reference pattern.
+**Closure:** read the unit HA attached to the entity (`_unitOf`/`_unitStr`, or the
+`temperatureUnit`/`formatTemperatureLabel` helpers in `dashboard/card/src/util/temperature.js`) and
+label with that, falling back to the native unit only when HA attached none. Ingest side: route
+`_read_*_temperature` through `units.temperature_state_to_celsius` so a °F/K source is converted to
+`°C` native before republish (class 21's one-place-decides-magnitude rule, now covering temperature).
+**Guard:** `dashboard/card/test/temperature-unit.test.js` (a °F entity can only ever be labelled °F);
+`tests/test_564_battery_temperature.py` (F→C on ingest, °C passthrough, unitless→°C);
+`tests/test_641_units.py` (the `temperature_state_to_celsius` behaviour **and** the AST lint widened
+to ban a `unit == "°C"/"°F"` comparison outside `units.py`, so a future inline temperature-unit check
+is unrepresentable). Refs #727 #564 #641.
+**Watch:** the JS guard tests the pure helpers, not the card render — a NEW card that draws a
+converted sensor with a hardcoded unit isn't caught until it routes through the helpers. Any new
+device-class reading on a card must label from `unit_of_measurement`, never a literal. **Sibling
+left for Guido (larger/riskier — control + safety path):** the heat-pump / hot-water controllers'
+`get_current_temperature` (`devices/heat_pump_controller.py`, `devices/hot_water_controller.py`,
+incl. the climate `current_temperature` attribute path) still read `float(state.state)` assuming °C
+and compare against °C setpoints — a US user with a °F sensor gets wrong control decisions
+(legionella safety). Same class as the ingest side; route through `temperature_state_to_celsius`,
+but the climate-attribute unit semantics + control/safety tests need care, so it is flagged not
+auto-shipped.
+
+### 34. Recognised field NAME, silently rejected element SHAPE (parser shape gap) — GUARDED
+**Symptom:** a parser advertises a set of accepted attribute/field NAMES, an input arrives under one
+of exactly those names carrying valid data, and it is dropped without a word — often while a
+diagnostic *names the very attribute it just rejected*, sending the user to fix the name (which was
+never wrong). The inverse of class 10 (there the NAME isn't in the include list; here the name is
+recognised but the value's SHAPE isn't). **Root shape:** the accept-check is split — one list gates
+the *name*, an inner `isinstance`/key-shape guard gates the *element form* — and only the name list
+is advertised. Every provider whose payload takes the un-handled shape is invisible; the scalar/other
+paths keep working, so the failure reads as "half of it works, must be a config issue".
+**Live catch (#732, @bjpo-abelco, Growatt/DK):** `tariff_provider._read_prices_list` iterated each
+day-keyed attribute (`prices_today` / `today` / `raw_today` / …) but parsed only items that were
+`dict` (`{start, value}`-style). A **flat float list** — `today: [0.25, 0.30, …]`, which is
+Nordpool's *own* `today`/`tomorrow` shape and the one nearly every template/derivative sensor copies
+— has `float` items, so the whole 24/96-element array was skipped: `tariff_parsed_count: 0`,
+percentile classification degraded to NORMAL-only, cheap-window planning off. The #359 warning fired
+listing the names, none of which was the problem. Reproduced across three independent DK sensors.
+**Where it lives:** `tariff/tariff_provider.py` — the day-keyed loop (`DAY_KEYED_PRICE_ATTRS`) is now
+flat-aware; the two former dict-only loops (generic + Nordpool `raw_*`) were **merged** into one so
+the shape logic can't drift between them. **Assessed and left dict-only, correctly:** the
+`forecasts`/`rates` loop (Amber/Octopus objects — genuinely dict-shaped, no day anchor for a bare
+list) and the `nordpool.get_prices_for_date` service parser (a structured `{start,end,price}` API
+response). **Closure:** accept both shapes at every day-keyed site — a flat numeric list is anchored
+at the day's local midnight, granularity read from list length (24→hourly, 48→30-min, 96→15-min),
+`None` gap-padding skipped by index so surviving slots stay aligned; ambiguous keys (bare `prices`,
+no day reference) still reject the flat shape rather than guess a day, and a flat list longer than 96
+(the finest single-day granularity) is refused rather than silently packing multiple days into one —
+both cases where the length→granularity heuristic can't disambiguate, so it declines to guess. **Guard:**
+`tests/test_732_flat_price_array.py` — the parity test parametrizes a flat-list case over
+`DAY_KEYED_PRICE_ATTRS` *derived from the parser* (per class 24: the list is read from the source,
+not retyped), so re-narrowing any recognised key to dict-only fails CI; plus a vacuity floor and a
+bool-isn't-a-price case. Refs #732 #359.
+**Sweep question:** for every parser that advertises accepted names — does it accept the *shape* a
+user would most naturally put under each name, or only the one shape the first provider happened to
+use? And: does the "unrecognised" diagnostic distinguish *name* from *shape*, or blame the name for a
+shape gap?
+
+### 35. Signed accumulator whose direction is carried by a name, not asserted anywhere — GUARDED
+**Symptom:** one field holds a signed physical quantity (a deficit, a balance, a remaining amount)
+and several sites write it. Most agree on the convention; one books its input with the opposite
+sign. Nothing raises, nothing goes unavailable — the number simply walks the wrong way, and only in
+the state where the *other* writers aren't there to overwrite it. Because that state is a corner
+(sensor offline, session that stops short), the bug can ship for a year. **Root shape:** the field's
+meaning lives in its NAME, and the name is ambiguous. `_energy_since_full` reads equally well as
+"energy *consumed* since full" (a deficit, which charging repays) and "energy *delivered* since
+full" (throughput, which charging grows). Each writer silently picks whichever reading fits its
+local source; no single call site looks wrong.
+**Live catch (#708, @Azlinon, 85 kWh Blazer EV / JuiceBox / OnStar):** `EVTaperDetector.update_energy` —
+the one path that runs *every cycle while charging* — **added** the delivered kWh to the deficit. Seven
+other sites treat the field as a deficit (day-rollover decay adds driving, the sensor calibration
+sets `(100−soc)/100 × capacity`, the taper/stall anchor zeroes it at 100 %, `on_session_end`
+*subtracts* a session, every display divides it out of 100). The reporter stopped his SOC
+integration mid-charge and watched "SOC (EST.)" walk from 32 % down to 25 % while 11.5 kWh went
+into the pack: `11.5 / 85 × 0.92 ≈ 12.4 %`, "almost exactly the amount of *decrease* I'm seeing".
+The `#715` energy-accounted *ceiling*, added to the same file weeks earlier, had the sign right; the
+reporter noticed the two disagreed on his own dashboard.
+**Why it survived a year — the cancelling pair.** The wrong-sign writer had a partner: `update_energy`
+added the delivered kWh during the session, then at disconnect `on_session_end` **subtracted** the
+session total. Two errors in opposite directions, so the value at disconnect landed back near the
+truth and only the *live* number was inverted. It takes a charge that stops short **and** a
+vehicle-SOC sensor that goes quiet to leave the wrong value visible at rest. **This is the trap in
+the fix, not just in the bug:** correcting one half alone converts a hidden error into a loud one of
+the same magnitude in the other direction (here: 5 kWh into a 40 kWh pack at 50 % would have read
+73 % instead of 61.5 %). When a signed accumulator has two writers that disagree, find the *pair*
+before editing either.
+**How the suite defended it:** six call sites across four tests in `test_ev_taper_detector.py` passed
+`update_energy(8.0)` and asserted SOC *fell*, commented "Simulate 8 kWh consumed" — while both
+production call sites pass `ev_power × interval_hours / 1000`, i.e. energy **delivered**. The tests
+encoded the misreading and went green on it. A test that assumes something about its caller is only
+as good as the last time someone checked the caller.
+**The counter branch was the same error, wearing a unit.** Alongside the `+=` fallback sat a
+"reconcile from the hardware counter" branch (#174): `deficit = hw_total − hw_total_at_full`, i.e.
+*energy put back in since the pack was last full* assigned to *how far below full it is*. Those are
+opposites. It is reachable across sessions — `reset_session` clears `_full_detected` but the taper's
+`_hw_total_at_full` survives — so on a charger exposing a lifetime total it OVERRIDES a fresh real
+SOC reading: a pack a sensor just put at 38 % reads 94 %, then walks down as it charges. Same
+symptom, immune to any per-cycle fix.
+**Where it lives:** `coordinator/ev_taper_detector.py`. **Closure:** charging subtracts, with the
+charge efficiency; `on_session_end` keeps only its *bootstrap* branch (the sole way an install with
+no SOC sensor ever gets anchored) and no longer re-books the session; the deficit is booked from the
+power integral alone. The hardware counter is still tracked for the taper anchor but no longer feeds
+the deficit in any form. Its per-cycle *delta* looked like the obvious salvage and is not: a counter
+that goes unavailable and returns re-books the gap the integral already covered, and nothing
+normalizes its unit, so a charger publishing Wh delivers ~4 Wh cycles as the bare number `4.0` —
+under any plausible sanity bound, and enough to fill the pack in seconds.
+**Second-order trap — a new guard can freeze what it was protecting.** Booking now returns early
+while `not _soc_anchored` (writing `_estimated_soc = 100` into a PERSISTED field for an install with
+no reference was its own bug). That early return silently changed two coordinator sites that reach
+past every method and set the detector's privates directly: the stall→full anchor sets
+`_soc_anchored` and is fine; the SOC **self-heal** set only the deficit and the estimate, so after
+the gate its healed value stops moving for the rest of the charge — worse than the wrong-but-moving
+number it replaced. **Tell:** a gate added inside a class changes the contract for everyone who
+mutates that class from outside, and those callers are invisible to the class's own tests.
+**Assessed and left as-is:** the recorder-history cold-start seed in `async_seed_from_history` sets
+the field from summed post-full session energy — the same conflation, but a one-shot boot heuristic
+with no better information available; flipping it there yields "SOC 100 % forever" (#245). Marked in
+place so nobody "corrects" it to match. **Guard:**
+`tests/test_708_estimate_falls_while_charging.py` — a monotonicity pin (*the estimate may never fall
+while the charger delivers*, checked every cycle), the reporter's own arithmetic as the expected
+value, a disconnect pin that fails on the double-count, a taper-anchored-counter pin (verified RED
+against the restored branch: 94 % vs 38 %), a Wh-shaped counter pin, a #245-unanchored pin on the
+*persisted* `_estimated_soc` (not just the deficit — a display gate hides a bad value, it does not
+stop it being written), and an AST pin over the coordinator's self-heal block asserting it anchors
+what it writes. Refs #708 #715 #174 #245.
+**Sweep question:** for every field that accumulates a signed physical quantity — is its direction
+asserted by a test that would fail if one writer flipped, or is it only implied by the field's name?
+And: which writer runs in a state where no other writer will overwrite it? That one is unguarded by
+construction. Once you find a wrong sign: **is there a second writer whose opposite error has been
+cancelling it?** And before shipping the guard: **who mutates this object's fields from outside the
+class, and does the new precondition hold for them?**
+
 ---
 
 ## Meta-classes (the coherence audit hunts these too)

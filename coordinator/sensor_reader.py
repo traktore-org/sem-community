@@ -16,6 +16,7 @@ from .units import (
     is_energy_unit,
     normalize_unit,
     power_state_to_watts,
+    temperature_state_to_celsius,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -2115,10 +2116,12 @@ class SensorReader:
         state = self.hass.states.get(entity)
         if not state or state.state in ("unknown", "unavailable", None):
             return
-        try:
-            readings.battery_temperature = float(state.state)
-        except (ValueError, TypeError):
-            return
+        # #727 — honour the SOURCE unit. SEM's sensor is °C-native and HA converts
+        # it to the user's display unit; a °F source read as °C is wrong by the
+        # F→C offset and HA compounds it. None means unreadable → leave unknown.
+        celsius = temperature_state_to_celsius(state)
+        if celsius is not None:
+            readings.battery_temperature = celsius
 
     def _autodetect_battery_temperature(self) -> Optional[str]:
         """Find a temperature sensor on the battery's own device.
@@ -2169,10 +2172,12 @@ class SensorReader:
         state = self.hass.states.get(entity)
         if not state or state.state in ("unknown", "unavailable", None):
             return
-        try:
-            readings.inverter_temperature = float(state.state)
-        except (ValueError, TypeError):
-            return
+        # #727 — honour the SOURCE unit (see _read_battery_temperature). A °F
+        # source (US install, or a mislabeled SolarAssistant bridge) read as °C
+        # showed a 48 °F reading as 118 °C in the Home view's inverter node.
+        celsius = temperature_state_to_celsius(state)
+        if celsius is not None:
+            readings.inverter_temperature = celsius
 
     def _autodetect_inverter_temperature(self) -> Optional[str]:
         """Find the inverter temperature sensor via hardware detection.

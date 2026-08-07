@@ -7878,6 +7878,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             session_soc = min(95.0, self._session_data.energy_kwh / capacity * 100 * 0.92) if capacity > 0 else 0.0
             self._ev_taper_detector._energy_since_full = (100 - session_soc) / 100 * capacity
             self._ev_taper_detector._estimated_soc = session_soc
+            # #708 — anchor what we just wrote. ``update_energy`` is inert
+            # until the detector is anchored, so a healed-but-unanchored
+            # estimate would FREEZE for the rest of the charge: worse than
+            # the moving-but-wrong value it replaced. The stall→full anchor
+            # below sets this for the same reason.
+            self._ev_taper_detector._soc_anchored = True
             estimated_soc = session_soc
             _LOGGER.warning(
                 "SOC self-healed: was 0%% after %.1f kWh session → %.0f%%",

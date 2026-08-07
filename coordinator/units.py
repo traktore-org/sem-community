@@ -20,9 +20,19 @@ The rule here is the union of the strictest copies:
 * an unknown or missing unit keeps the historical assume-the-base-unit
   behaviour (W for power, kWh for energy) rather than failing the read.
 
+#727 — temperature joins the same rule. SEM republishes external temperatures
+under its own ``°C``-native sensors (``sensor.sem_inverter_temperature`` /
+``sensor.sem_battery_temperature``) and then lets HA convert to the user's
+display unit. A source reporting ``°F`` (US installs, and mislabeled bridges
+like SolarAssistant #727) was read as if it were already ``°C``, so the value
+was wrong by the F↔C offset and HA compounded it (a 48 read stored as 48 °C
+displays as 118 °F on a US install). :func:`temperature_state_to_celsius`
+converts the source's unit to ``°C`` before republish; an unknown/missing unit
+keeps the assume-``°C`` behaviour.
+
 ``tests/test_641_units.py`` fails CI on any new ``unit_of_measurement``
-comparison against a power/energy literal outside this module, so a fifth
-divergent copy can't be written.
+comparison against a power/energy/temperature literal outside this module, so a
+fifth divergent copy can't be written.
 """
 from __future__ import annotations
 
@@ -68,6 +78,16 @@ _ENERGY_TO_KWH = {
     "megawatt_hour": 1000.0,
     "gwh": 1_000_000.0,
 }
+
+# Temperature is affine, not a simple multiplier, so it can't share ``_convert``.
+# Units are matched after ``normalize_unit`` (stripped + lowercased), so "°C",
+# "C" and "Celsius" all collapse to their entry. hardware_detection only ever
+# confirms a temperature source on ``device_class == "temperature"`` or one of
+# these units, so an unknown unit here means "no opinion → already °C".
+_CELSIUS_UNITS = frozenset({"°c", "c", "celsius"})
+_FAHRENHEIT_UNITS = frozenset({"°f", "f", "fahrenheit"})
+_KELVIN_UNITS = frozenset({"k", "°k", "kelvin"})
+_TEMPERATURE_UNITS = _CELSIUS_UNITS | _FAHRENHEIT_UNITS | _KELVIN_UNITS
 
 
 def normalize_unit(state) -> str:
@@ -128,6 +148,35 @@ def energy_state_to_kwh(state, default: Optional[float] = None) -> Optional[floa
     return _convert(state, _ENERGY_TO_KWH, default)
 
 
+def temperature_state_to_celsius(
+    state, default: Optional[float] = None,
+) -> Optional[float]:
+    """A temperature sensor's state in °C, or ``default`` if it isn't readable.
+
+    SEM's own temperature sensors are ``°C``-native and HA converts them to the
+    user's display unit, so a source that already reports ``°F`` or ``K`` must be
+    converted to ``°C`` here — otherwise the number is wrong by the affine offset
+    and HA's display conversion compounds it (#727). A missing or unrecognised
+    unit is assumed to already be ``°C`` (the historical behaviour, and what every
+    metric install relies on).
+    """
+    raw = getattr(state, "state", None)
+    if isinstance(raw, str):
+        raw = raw.strip()
+    if raw is None or (isinstance(raw, str) and raw.lower() in _NOT_A_VALUE):
+        return default
+    try:
+        value = float(raw)
+    except (ValueError, TypeError):
+        return default
+    unit = normalize_unit(state)
+    if unit in _FAHRENHEIT_UNITS:
+        return (value - 32.0) * 5.0 / 9.0
+    if unit in _KELVIN_UNITS:
+        return value - 273.15
+    return value
+
+
 def _unit_of(state_or_unit) -> str:
     if isinstance(state_or_unit, str):
         return state_or_unit.strip().lower()
@@ -155,6 +204,18 @@ def is_power_unit(state_or_unit) -> bool:
     """
     unit = _unit_of(state_or_unit)
     return bool(unit) and unit in _POWER_TO_W
+
+
+def is_temperature_unit(state_or_unit) -> bool:
+    """True when the unit names a TEMPERATURE sensor (°C/°F/K).
+
+    Used by ``hardware_detection`` to confirm a bare ``*temperature`` sibling is
+    really a temperature sensor before adopting it (#564/#727) — the third place
+    that asks about a unit without converting a value. Same missing-unit rule as
+    the power/energy predicates: an unlabelled sensor is not claimed either way.
+    """
+    unit = _unit_of(state_or_unit)
+    return bool(unit) and unit in _TEMPERATURE_UNITS
 
 
 def is_battery_control_power_unit(state_or_unit) -> bool:

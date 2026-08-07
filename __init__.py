@@ -3070,6 +3070,8 @@ async def _async_register_services(
             "battery_eligible_overnight",
             # (#688) per-load anti-cycling (minutes)
             "min_on_time_min", "min_off_time_min",
+            # (#705) thermal comfort band
+            "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -3094,6 +3096,22 @@ async def _async_register_services(
             if prop in ("min_on_time_min", "min_off_time_min"):
                 try:
                     if float(value) < 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
+            # (#705) comfort temperatures are numbers; the offset is also
+            # non-negative (a negative offset would silently widen the band).
+            # Without this a value like "twenty-six" would store, then
+            # _apply_goals' defensive parse would write 0.0 — disabling the
+            # band with no error ever reaching the caller.
+            if prop in ("comfort_target", "comfort_offset", "comfort_limit"):
+                try:
+                    _fv = float(value)
+                    if prop == "comfort_offset" and _fv < 0:
                         raise ValueError
                 except (TypeError, ValueError):
                     raise ServiceValidationError(
@@ -3128,6 +3146,8 @@ async def _async_register_services(
                     "battery_eligible_overnight",
                     # (#688) per-load anti-cycling
                     "min_on_time_min", "min_off_time_min",
+                    # (#705) thermal comfort band
+                    "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -3525,6 +3545,8 @@ async def _async_register_phase_services(
                 # (#620) max cap + battery tiers
                 "daily_max_runtime_min", "battery_assist_enabled",
                 "battery_eligible_overnight",
+                # (#705) thermal comfort band
+                "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
             )
             if k in call.data
         }

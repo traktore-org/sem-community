@@ -28,6 +28,7 @@ import {
     semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey, semTheme,
 } from '../base/sem-shared.js';
 import { nightArcPos } from '../util/night-arc.js';
+import { formatTemperatureLabel } from '../util/temperature.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -325,6 +326,12 @@ class SEMSystemDiagramCard extends SEMLitBase {
     _valStr(suffix) {
         const eid = this._eid(suffix);
         return eid ? this._stateStr(eid) : '';
+    }
+
+    // #727 — the display unit HA attached to a suffix's entity ('' if none).
+    _unitStr(suffix) {
+        const eid = this._eid(suffix);
+        return eid ? this._unitOf(eid) : '';
     }
 
     /**
@@ -680,9 +687,13 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // Blank when there is no inverter-temp source (never fabricated).
         // Use the raw state so a legitimate ≤0 °C reading (cold climates)
         // still shows; blank only when the source is unknown/unavailable.
-        const invTempRaw = this._valStr('inverter_temperature');
-        const invTempStr = invTempRaw !== '' && !isNaN(parseFloat(invTempRaw))
-            ? `${parseFloat(invTempRaw).toFixed(0)}°C` : '';
+        // #727 — label with the unit HA actually attached (°F on US installs,
+        // where HA converts the °C-native sensor), not a hardcoded °C. A
+        // hardcoded °C turned a converted 118 °F into a nonsensical "118°C".
+        const invTempStr = formatTemperatureLabel(
+            this._valStr('inverter_temperature'),
+            this._unitStr('inverter_temperature'),
+        );
         const chargingState = this._valStr('charging_state');
         const maxLen = c ? 22 : 30;
         const invStatusStr = chargingState.length > maxLen

@@ -167,6 +167,15 @@ export class SEMLitBase extends LitElement {
         return (e && e.state !== 'unavailable' && e.state !== 'unknown') ? e.state : '';
     }
 
+    // #727 — the entity's CURRENT display unit. HA converts a sensor to the
+    // user's unit system (e.g. a °C-native temperature sensor is served as °F on
+    // a US install), so a card that hardcodes the native unit mislabels the value
+    // it just read from ``.state``. Read the unit HA actually attached instead.
+    _unitOf(entityId) {
+        const e = this._hass?.states[entityId];
+        return (e && e.attributes && e.attributes.unit_of_measurement) || '';
+    }
+
     // Resolve the primary charger's per-charger entity id for a setting suffix,
     // falling back to the legacy global id (#255 — global EV setting entities were
     // removed; per-charger is canonical). e.g. _pcEntity('number', 'daily_ev_target',
