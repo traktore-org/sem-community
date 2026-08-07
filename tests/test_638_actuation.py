@@ -27,6 +27,12 @@ from custom_components.solar_energy_management.coordinator.overnight_actuation i
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     compute_load_intent,
 )
+from custom_components.solar_energy_management.coordinator.plan_verdict import (
+    PlanVerdict,
+)
+from custom_components.solar_energy_management.devices.base import (
+    DeviceControlMode,
+)
 
 NOW = datetime(2026, 7, 29, 23, 30)
 
@@ -376,3 +382,109 @@ class TestStage2NextBlockStart:
 
     def test_uncovered_carries_no_next_start(self):
         assert UNCOVERED.next_block_start is None
+
+
+class TestStage3LoadVerdict:
+    """(#638 Stage 3) Loads graduate from a bare window bool to the same
+    PlanVerdict the EV uses — reason, until, and a hold that is only
+    raised while the remaining blocks can still deliver the deficit."""
+
+    def test_uncovered_is_no_opinion(self):
+        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+            load_verdict,
+        )
+        from custom_components.solar_energy_management.coordinator.plan_verdict import (
+            NO_OPINION,
+        )
+        assert load_verdict(UNCOVERED, deficit_kwh=1.0) == NO_OPINION
+
+    def test_in_block_is_go(self):
+        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+            load_verdict,
+        )
+        g = PlanGate(covered=True, in_block=True, block_power_w=1000.0,
+                     remaining_kwh=2.0)
+        v = load_verdict(g, deficit_kwh=1.0)
+        assert v.hold is False and v != None  # noqa: E711
+
+    def test_out_of_block_holds_with_reason_and_until(self):
+        g = PlanGate(covered=True, in_block=False, remaining_kwh=2.0,
+                     next_block_start=NOW + timedelta(hours=1))
+        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+            load_verdict,
+        )
+        v = load_verdict(g, deficit_kwh=1.0)
+        assert v.hold is True
+        assert v.until == NOW + timedelta(hours=1)
+        assert "plan" in v.reason
+
+    def test_a_hold_that_cannot_deliver_fails_open(self):
+        """The blocks left can no longer cover the deficit — holding would
+        strand the runtime guarantee. Same rule as the EV overlay."""
+        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+            load_verdict,
+        )
+        from custom_components.solar_energy_management.coordinator.plan_verdict import (
+            NO_OPINION,
+        )
+        g = PlanGate(covered=True, in_block=False, remaining_kwh=0.4,
+                     next_block_start=NOW + timedelta(hours=1))
+        assert load_verdict(g, deficit_kwh=1.0) == NO_OPINION
+
+
+class TestStage3IntentConsultsTheVerdict:
+    """(#638 Stage 3) ``compute_load_intent`` takes the PlanVerdict instead
+    of the bare bool — and the plan may now STOP a paid run whose window
+    closed, not just gate its start."""
+
+    def _load(self, *, active=False, tier2=True, deficit=True):
+        dev = SimpleNamespace(
+            control_mode=DeviceControlMode.SURPLUS,
+            is_active=active, _sem_owned=active,
+            rated_power=1000.0, min_power_threshold=1000.0,
+            has_runtime_deficit=deficit,
+            daily_max_runtime_reached=False, stop_condition_met=False,
+            daily_targets_met=not deficit,
+            battery_eligible_overnight=tier2,
+            top_up_policy="cheap_hours",
+            is_deadline_approaching=False,
+            _batt_overnight_forced=active and tier2,
+            _offpeak_forced=False,
+            get_current_consumption=lambda: 1000.0 if active else 0.0,
+        )
+        return dev
+
+    def test_a_hold_gates_the_tier2_start(self):
+        v = PlanVerdict(hold=True, reason="joint overnight plan: outside")
+        intent = compute_load_intent(
+            self._load(), remaining_surplus_w=0.0, is_night=True,
+            soc_above_reserve=True, plan=v)
+        assert intent.on is False
+        assert "plan" in (intent.reason or "")
+
+    def test_a_hold_stops_a_running_paid_load(self):
+        """The window closed while the load ran — the plan reclaims the
+        energy for the planned block instead of letting the run bleed on."""
+        v = PlanVerdict(hold=True, reason="joint overnight plan: outside")
+        intent = compute_load_intent(
+            self._load(active=True), remaining_surplus_w=0.0, is_night=True,
+            soc_above_reserve=True, plan=v)
+        assert intent.on is False
+
+    def test_no_opinion_changes_nothing(self):
+        from custom_components.solar_energy_management.coordinator.plan_verdict import (
+            NO_OPINION,
+        )
+        intent = compute_load_intent(
+            self._load(), remaining_surplus_w=0.0, is_night=True,
+            soc_above_reserve=True, plan=NO_OPINION)
+        assert intent.on is True and intent.source == "tier2_battery"
+
+    def test_a_hold_never_touches_a_solar_run(self):
+        """Free surplus is never plan-gated — the sun is spending itself."""
+        v = PlanVerdict(hold=True, reason="joint overnight plan: outside")
+        dev = self._load(tier2=False, deficit=False)
+        intent = compute_load_intent(
+            dev, remaining_surplus_w=1500.0, is_night=False,
+            soc_above_reserve=True, plan=v)
+        assert intent.on is True and intent.source == "solar"

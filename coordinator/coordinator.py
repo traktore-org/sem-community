@@ -5901,14 +5901,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return windows
         if not isinstance(getattr(self, "_overnight_shadow_plan", None), dict):
             return windows
-        from .overnight_actuation import load_window
+        from .overnight_actuation import load_verdict
         now = dt_util.now()
         for dev in devices:
             try:
                 did = dev.device_id
-                verdict = load_window(
-                    self._overnight_plan_gate(f"load:{did}", now))
-                if verdict is not None:
+                # (#638 Stage 3) the full verdict — hold + reason + until —
+                # deficit-checked so a plan that can no longer deliver the
+                # outstanding runtime fails open (nothing stored; absence ==
+                # no say, exactly as before).
+                deficit_kwh = (max(0.0, float(getattr(dev, "daily_min_runtime_sec", 0) or 0)
+                                   - float(getattr(dev, "_daily_runtime_accumulated_sec", 0) or 0))
+                               / 3600.0
+                               * float(getattr(dev, "rated_power", 0.0) or 0.0) / 1000.0)
+                verdict = load_verdict(
+                    self._overnight_plan_gate(f"load:{did}", now),
+                    deficit_kwh=deficit_kwh)
+                if verdict.hold or verdict.reason:
                     windows[did] = verdict
             except Exception:  # noqa: BLE001 — one odd device won't gate the rest
                 continue

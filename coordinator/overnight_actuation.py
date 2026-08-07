@@ -186,6 +186,32 @@ def ev_overlay(
     return (False, 0)
 
 
+def load_verdict(gate: PlanGate, *, deficit_kwh: float):
+    """(#638 Stage 3) The load-side verdict, in the same PlanVerdict shape
+    the EV decision consumes — loads graduate from a bare window bool to a
+    hold that carries its reason and its ``until``.
+
+    Same safety rule as ``ev_overlay``: a hold is only raised while the
+    remaining blocks can still deliver the outstanding deficit. A plan
+    that can no longer cover it has lost its authority over this load —
+    NO_OPINION, the runtime guarantee falls back to the reactive layer.
+    """
+    from .plan_verdict import NO_OPINION, PlanVerdict
+    if not gate.covered:
+        return NO_OPINION
+    if gate.in_block:
+        return PlanVerdict(hold=False, reason="joint overnight plan: in planned block")
+    if gate.remaining_kwh + _EPS_KWH < deficit_kwh:
+        return NO_OPINION
+    when = (f" — block opens at {gate.next_block_start:%H:%M}"
+            if gate.next_block_start else "")
+    return PlanVerdict(
+        hold=True,
+        until=gate.next_block_start,
+        reason=f"joint overnight plan: outside the planned window{when}",
+    )
+
+
 def load_window(gate: PlanGate) -> Optional[bool]:
     """The load-side window verdict: ``None`` = the plan has no say
     (behave as today), ``True`` = inside this load's planned block,

@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from homeassistant.core import HomeAssistant
 
 from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
+from .plan_verdict import NO_OPINION, PlanVerdict
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,6 +129,7 @@ def compute_load_intent(
     soc_above_reserve: bool = False,
     is_night: bool = True,
     plan_window: Optional[bool] = None,
+    plan: "PlanVerdict" = NO_OPINION,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
 
@@ -140,6 +142,13 @@ def compute_load_intent(
     mode = getattr(device, "control_mode", DeviceControlMode.SURPLUS)
     active = bool(getattr(device, "is_active", False))
     held = device.get_current_consumption() if active else 0.0
+    # (#638 Stage 3) Loads consult the same PlanVerdict the EV does. The
+    # legacy bool still folds in for un-migrated callers; the verdict wins
+    # when both are given.
+    if plan_window is False and not plan.hold:
+        plan = PlanVerdict(hold=True,
+                           reason="joint overnight plan: outside the planned window")
+    plan_hold = plan.hold
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
@@ -162,6 +171,18 @@ def compute_load_intent(
     # 2. Peak shed wins over any run reason.
     if is_shed_target:
         return LoadIntent(False, 0.0, None, "peak shed")
+
+    # 2b. (#638 Stage 3) The plan may STOP a paid run whose window closed —
+    #     the hold is only ever raised while the remaining blocks can still
+    #     deliver the deficit (load_verdict), so cutting here reclaims the
+    #     energy for the planned block instead of letting the run bleed on.
+    #     ONLY paid, plan-owned runs: solar runs are never plan-gated (the
+    #     sun is spending itself), and user-started runs are not SEM's to cut.
+    if (active and plan_hold
+            and (getattr(device, "_batt_overnight_forced", False)
+                 or getattr(device, "_offpeak_forced", False))):
+        return LoadIntent(False, 0.0, None,
+                          plan.reason or "joint overnight plan: window closed")
 
     # 3. Done for the day — the hard stops (cap overrides the deficit).
     #    (#688) The daily MINIMUM is deliberately NOT one of them. It is a
@@ -207,18 +228,24 @@ def compute_load_intent(
     # this load's blocks elsewhere tonight — an extra AND-gate on the start,
     # never a run reason. None (no trusted plan) leaves behaviour untouched.
     if (deficit and can_start and is_night
-            and plan_window is not False
+            and not plan_hold
             and getattr(device, "battery_eligible_overnight", False)
             and soc_above_reserve):
         return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
 
     # Cheap-hours grid: finish a runtime deficit off the grid in a cheap window.
     if (deficit and can_start and price_is_cheap
-            and plan_window is not False
+            and not plan_hold
             and getattr(device, "top_up_policy", "solar_only") == "cheap_hours"):
         return LoadIntent(True, rated, "cheap_grid", "cheap-hours grid — runtime deficit")
 
-    # 5. No source → off.
+    # 5. No source → off. When a plan hold is what suppressed the paid
+    #    sources, SAY SO — "no source available" with a block twenty
+    #    minutes away reads as a bug; the plan's own words read as a plan.
+    if plan_hold and deficit:
+        detail = f" (until {plan.until:%H:%M})" if plan.until else ""
+        return LoadIntent(False, 0.0, None,
+                          (plan.reason or "joint overnight plan: waiting for the planned window") + detail)
     return LoadIntent(False, 0.0, None, "no source available")
 
 
@@ -744,7 +771,7 @@ class SurplusController:
                 is_shed_target=device.device_id in shed, soc_above_reserve=soc_above,
                 # (#638 G4) the joint plan's per-device window verdict this
                 # cycle; absent from the dict = the plan has no say.
-                plan_window=self._plan_windows.get(device.device_id))
+                plan=self._plan_windows.get(device.device_id) or NO_OPINION)
             intents[device.device_id] = intent
             # solar/tier1-driven loads consume surplus for lower-priority ones
             if intent.on and intent.source in ("solar", "tier1_battery"):
@@ -1061,6 +1088,19 @@ class SurplusController:
                     # crosses the cap keeps running past it (caught live on the
                     # Heizband PROD test). The cap overrides the min deficit.
                     done_reason = "daily max runtime cap reached"
+                elif ((_pv := self._plan_windows.get(device.device_id)) is not None
+                        and getattr(_pv, "hold", False)
+                        and (device._offpeak_forced
+                             or getattr(device, "_batt_overnight_forced", False))):
+                    # (#638 Stage 3) the plan's window closed while a paid run
+                    # was on — the hold is only raised while the remaining
+                    # blocks can still deliver the deficit (load_verdict), so
+                    # cutting here banks the energy for the planned block.
+                    # Imperative twin of compute_load_intent clause 2b: PROD
+                    # runs THESE passes, and a stop that lives only in the
+                    # desired-state path is a stop that never happens.
+                    done_reason = getattr(_pv, "reason", "") or \
+                        "joint overnight plan: window closed"
                 elif (device.daily_targets_met
                         and (device._offpeak_forced
                              or getattr(device, "_batt_overnight_forced", False))):
@@ -1320,7 +1360,8 @@ class SurplusController:
                 # tonight — don't start it in THIS cheap hour. Gates the start
                 # only; a run already going ends by its own terms (deficit /
                 # expiry), matching the plan's min-run quantization.
-                if self._plan_windows.get(device.device_id) is False:
+                _pv = self._plan_windows.get(device.device_id)
+                if _pv is not None and getattr(_pv, "hold", _pv is False):
                     continue
                 # (arc) Respect can_activate() here too — otherwise a cheap-hours
                 # top-up would re-activate a load the user just turned off,
@@ -1378,7 +1419,8 @@ class SurplusController:
                 # (#638 G4) same window gate as the cheap-hours pass: the plan
                 # may defer a Tier-2 load to a later slot when the battery's
                 # shared discharge budget is contested.
-                if self._plan_windows.get(device.device_id) is False:
+                _pv = self._plan_windows.get(device.device_id)
+                if _pv is not None and getattr(_pv, "hold", _pv is False):
                     continue
                 if not device.can_activate():
                     continue
