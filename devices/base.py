@@ -915,6 +915,11 @@ class ClimateDevice(ControllableDevice):
         battery_assist_enabled: bool = False,  # (#620) Tier 1 — Solar + battery
         battery_eligible_overnight: bool = False,  # (#620) Tier 2 — overnight
         energy_entity_id: Optional[str] = None,
+        comfort_entity: str = "",          # (#705) temp sensor; "" = the
+        comfort_target: float = 0.0,       # climate entity's own thermometer
+        comfort_offset: float = 0.0,
+        comfort_limit: float = 0.0,        # 0.0 = band disabled — a true 0 °C
+                                           # threshold needs 0.1 (sentinel)
     ):
         super().__init__(
             hass, device_id, name, priority,
@@ -927,15 +932,175 @@ class ClimateDevice(ControllableDevice):
         self.target_temperature = target_temperature
         # (#644) unified anti-cycle knobs (see SwitchDevice)
         self.min_on_seconds = int(min_on_time)
-        self.min_off_seconds = int(min_off_time)
+        self.min_off_seconds = int(min_off_time)  # routes via the property below
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.daily_max_runtime_sec = daily_max_runtime_sec
         self.battery_assist_enabled = battery_assist_enabled
         self.battery_eligible_overnight = battery_eligible_overnight
+        # (#705) thermal comfort band — the HotWaterController three-
+        # temperature pattern (min/solar-target/max), generalized and
+        # mirrored for cooling. target+limit both set AND a live reading
+        # = engaged; anything less = disengaged = pre-#705 behaviour.
+        self.comfort_entity = comfort_entity or ""
+        self.comfort_target = float(comfort_target or 0.0)
+        self.comfort_offset = float(comfort_offset or 0.0)
+        self.comfort_limit = float(comfort_limit or 0.0)
 
     @property
     def device_type(self) -> DeviceType:
         return DeviceType.CLIMATE
+
+    # (#705) Compressor guard: while the comfort band is engaged, the
+    # off→on gap is floored at 180 s regardless of the configured window.
+    # The band makes cycling TEMPERATURE-driven — sharp edges at
+    # target − offset — and the #569 default of 60 s is below the safe
+    # restart floor for compressor head-pressure equalisation. The
+    # configured value still wins when it is stricter, and a disengaged
+    # band keeps the configured window untouched.
+    _COMFORT_MIN_OFF_FLOOR_S = 180
+
+    @property
+    def min_off_seconds(self) -> int:
+        base = int(getattr(self, "_min_off_configured", 60))
+        if self.comfort_state != "disengaged":
+            return max(base, self._COMFORT_MIN_OFF_FLOOR_S)
+        return base
+
+    @min_off_seconds.setter
+    def min_off_seconds(self, value) -> None:
+        self._min_off_configured = int(value)
+
+    # ── (#705) the comfort band ──────────────────────────────────────
+    def _comfort_reading(self) -> Optional[float]:
+        """The room temperature in °C, or None.
+
+        An explicit ``comfort_entity`` reads that sensor's state; without
+        one the climate entity's own ``current_temperature`` attribute is
+        the thermometer — the zero-config path for ACs.
+
+        Always °C: the comfort thresholds are °C-denominated like every
+        other temperature knob in SEM (hot-water max/solar-target, the HP
+        boost offset), so a °F sensor (US installs, #727 class) is
+        converted here rather than silently compared across unit systems.
+        The climate attribute carries no unit of its own — it is in the
+        install's display unit, so that conversion follows
+        ``hass.config.units``; anything unrecognised is assumed °C, which
+        is the historical behaviour every metric install relies on.
+        """
+        if not self.hass:
+            return None
+        if self.comfort_entity:
+            state = self.hass.states.get(self.comfort_entity)
+            if state is None:
+                return None
+            from ..coordinator.units import temperature_state_to_celsius
+            return temperature_state_to_celsius(state, None)
+        if not self.entity_id:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if state is None:
+            return None
+        raw = (state.attributes or {}).get("current_temperature")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        try:
+            unit = str(getattr(getattr(self.hass.config, "units", None),
+                               "temperature_unit", "") or "").strip()
+        except Exception:  # noqa: BLE001 — unit lookup must never kill the band
+            unit = ""
+        # Exact °F spellings only — anything unrecognised is assumed °C,
+        # the same contract as temperature_state_to_celsius. A substring
+        # test here once classified a mock repr as Fahrenheit.
+        if unit in ("°F", "F", "fahrenheit", "Fahrenheit"):
+            return (value - 32.0) * 5.0 / 9.0
+        return value
+
+    @property
+    def comfort_state(self) -> str:
+        """forced / willing / banked / disengaged.
+
+        Direction follows ``hvac_mode``: ``cool`` forces ABOVE the limit
+        and banks down to target − offset; anything else (heat/heat_cool)
+        is the mirror. Boundary readings count as crossed (hot water's
+        ``temp < min_temperature`` force, inverted). DISENGAGED — fields
+        unset or thermometer silent — must behave byte-for-byte like a
+        pre-#705 device: a dead sensor never forces a run and never parks
+        the device.
+        """
+        if not (self.comfort_target and self.comfort_limit):
+            return "disengaged"
+        # A band on the wrong side of its own target is a misconfiguration,
+        # not a preference: in cool mode a limit BELOW the target would make
+        # the entire comfortable range read "forced" and run the unit
+        # continuously on paid sources. Disengage — the safest failure — and
+        # say so once.
+        if ((self.hvac_mode == "cool" and self.comfort_limit <= self.comfort_target)
+                or (self.hvac_mode != "cool" and self.comfort_limit >= self.comfort_target)):
+            if not getattr(self, "_comfort_misconfig_warned", False):
+                self._comfort_misconfig_warned = True
+                _LOGGER.warning(
+                    "%s: comfort band misconfigured (mode=%s target=%.1f "
+                    "limit=%.1f) — cool needs limit > target, heat needs "
+                    "limit < target; band disengaged",
+                    self.name, self.hvac_mode,
+                    self.comfort_target, self.comfort_limit,
+                )
+            return "disengaged"
+        temp = self._comfort_reading()
+        if temp is None:
+            return "disengaged"
+        if self.hvac_mode == "cool":
+            if temp >= self.comfort_limit:
+                return "forced"
+            if temp <= self.comfort_target - self.comfort_offset:
+                return "banked"
+        else:
+            if temp <= self.comfort_limit:
+                return "forced"
+            if temp >= self.comfort_target + self.comfort_offset:
+                return "banked"
+        return "willing"
+
+    # The band speaks through the three generic properties every surplus
+    # pass already reads — that is the whole Phase-1 design: no new
+    # controller clauses, and peak shed / anti-cycle / priority / LIFO
+    # apply to comfort runs unchanged.
+
+    @property
+    def has_runtime_deficit(self) -> bool:
+        """FORCED reads as a deficit ⇒ the deficit-driven paid passes
+        (cheap-grid off-peak, Tier-2 battery) engage exactly per the
+        user's #620 source-axis opt-ins. ``solar_only`` stays honest: a
+        breach without surplus and without a paid opt-in does not run."""
+        if super().has_runtime_deficit:
+            return True
+        # The daily max cap outranks the comfort force: a unit that has run
+        # its configured maximum for the day is done, breach or no breach —
+        # otherwise "deficit" stops meaning "the cap-gated passes may run me"
+        # and a future consumer that trusts it inherits an uncapped force.
+        if self.daily_max_runtime_reached:
+            return False
+        return self._enabled and self.comfort_state == "forced"
+
+    @property
+    def stop_condition_met(self) -> bool:
+        """BANKED reads as the stop condition ⇒ surplus stops feeding a
+        room already pre-cooled past target − offset. ORs with the
+        existing ``stop_entity`` override — they compose."""
+        if super().stop_condition_met:
+            return True
+        return self.comfort_state == "banked"
+
+    @property
+    def daily_targets_met(self) -> bool:
+        """A met runtime floor must NOT stand the paid sources down while
+        comfort is breached — the floor is about runtime, the breach is
+        about now."""
+        if self.comfort_state == "forced":
+            return False
+        return super().daily_targets_met
 
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a climate unit that SEM is running at (re-)registration.
@@ -2242,6 +2407,11 @@ def surplus_device_from_spec(
             energy_entity_id=energy_entity_id,
             hvac_mode=spec.get("hvac_mode", "cool"),
             target_temperature=float(target) if target is not None else None,
+            # (#705) thermal comfort band — optional, 0/"" = disengaged.
+            comfort_entity=str(spec.get("comfort_entity", "") or ""),
+            comfort_target=float(spec.get("comfort_target", 0.0) or 0.0),
+            comfort_offset=float(spec.get("comfort_offset", 0.0) or 0.0),
+            comfort_limit=float(spec.get("comfort_limit", 0.0) or 0.0),
         )
     return SwitchDevice(
         hass=hass,
