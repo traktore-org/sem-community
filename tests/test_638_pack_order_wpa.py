@@ -174,3 +174,100 @@ class TestStampWaitsForTheBattery:
         assert "battery_capacity_kwh" in window, (
             "battery-less installs must keep stamping without a SOC gate"
         )
+
+
+class _RecordingStorage:
+    """Just enough of SEMStorage: records what the coordinator persists."""
+
+    def __init__(self, state=None):
+        self._state = dict(state or {})
+        self.writes = []
+
+    def get_ev_wpa_state(self):
+        return dict(self._state)
+
+    def set_ev_wpa_state(self, state):
+        self._state = dict(state)
+        self.writes.append(dict(state))
+
+
+class TestWattsPerAmpSurvivesARestart:
+    """(#638 night 2) The EMA lived in plain memory, so every restart reset
+    the packer to nameplate until the car's NEXT charge — and the 23:36
+    deploy restart plus a 23:46 re-plan meant the pack sized the floor at
+    6.9 kW again, found no slot under the peak, and yielded a car that then
+    charged at 4.54 kW. Armed-night-1's nameplate class, restart flavour.
+    Same cure as the sign-detection locks (#476 item 5): learned state that
+    gates behaviour survives the restart."""
+
+    def test_a_learned_sample_is_persisted(self):
+        c = _coord([CFG], amps=10)
+        c._storage = _RecordingStorage()
+        c._ev_watts_per_amp("keba", CFG, _Power(4850.0))
+        assert c._storage.get_ev_wpa_state() == {
+            "keba": pytest.approx(485.0)}
+
+    def test_an_idle_cycle_does_not_write_storage(self):
+        """The mirror happens on LEARN, not on every read — reads run
+        several times per 10 s cycle."""
+        c = _coord([CFG], amps=0, ema={"keba": 485.0})
+        c._storage = _RecordingStorage()
+        c._ev_watts_per_amp("keba", CFG, _Power(0.0))
+        assert c._storage.writes == []
+
+    def test_restore_seeds_the_ema(self):
+        c = _coord([CFG])
+        c._restore_ev_wpa({"keba": 485.0})
+        assert c._ev_watts_per_amp("keba", CFG, None) == pytest.approx(485.0)
+
+    def test_restore_drops_garbage_and_keeps_the_rest(self):
+        """A corrupt entry must not take the good one down (the #563
+        per-entry-repair rule) — and must not poison the pack with a
+        nonsense ratio in either direction."""
+        c = _coord([CFG])
+        c._restore_ev_wpa({
+            "keba": 485.0,
+            "ghost": "NaN-ish",
+            "too_low": 3.0,
+            "too_high": 250000.0,
+        })
+        assert c._ev_wpa_ema == {"keba": pytest.approx(485.0)}
+
+    def test_restore_tolerates_a_missing_or_empty_store(self):
+        c = _coord([CFG])
+        c._restore_ev_wpa({})
+        c._restore_ev_wpa(None)
+        assert c._ev_wpa_ema == {}
+        assert c._ev_watts_per_amp("keba", CFG, None) == pytest.approx(690.0)
+
+    def test_no_storage_attribute_is_fine(self):
+        """The bare harness has no _storage — learning must not require
+        one (unit paths, early boot)."""
+        c = _coord([CFG], amps=10)
+        assert c._ev_watts_per_amp("keba", CFG, _Power(4850.0)) == \
+            pytest.approx(485.0)
+
+    def test_the_first_refresh_restores_it(self):
+        """Source scan (the ``_batt_ready`` precedent above): the restore
+        must be wired into the same first-refresh block that restores the
+        sign locks, or it exists but never runs."""
+        src = (REPO / "coordinator" / "coordinator.py").read_text(
+            encoding="utf-8")
+        i = src.index("restore_sign_state")
+        window = src[i:i + 1200]
+        assert "_restore_ev_wpa" in window, (
+            "the W/A EMA is no longer restored at first refresh — a "
+            "restart resets the pack to nameplate until the next charge "
+            "(#638 night 2: 6.9 kW floor, no slot, yield)"
+        )
+
+    def test_storage_round_trip(self):
+        from custom_components.solar_energy_management.coordinator.storage import (
+            SEMStorage,
+        )
+        st = SEMStorage.__new__(SEMStorage)
+        st._energy_data = {}
+        assert st.get_ev_wpa_state() == {}
+        st.set_ev_wpa_state({"keba": 485.0})
+        assert st.get_ev_wpa_state() == {"keba": 485.0}
+        assert st._energy_data["ev_wpa_ema"] == {"keba": 485.0}

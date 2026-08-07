@@ -848,8 +848,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._ev_wpa_ema[cid] = (
                     sample if prev is None else 0.7 * prev + 0.3 * sample
                 )
+                # (#638 night 2) Mirror the learn into storage — the EMA
+                # died at every restart, so a deploy minutes before the
+                # night pack put the floor back at nameplate: 6.9 kW, no
+                # slot under the peak, yield, and the reactive layer
+                # charged a car the plan should have governed. Mirrored
+                # on LEARN only; reads run several times per cycle.
+                _st = getattr(self, "_storage", None)
+                if _st is not None:
+                    _st.set_ev_wpa_state(dict(self._ev_wpa_ema))
         learned = self._ev_wpa_ema.get(cid)
         return float(learned) if learned else nameplate
+
+    def _restore_ev_wpa(self, state) -> None:
+        """(#638 night 2) Seed the measured-W/A EMA from storage at boot.
+
+        Per-entry repair (the #563 rule): a corrupt value is dropped
+        alone, the rest restore. The bounds mirror the learn-time clamp —
+        100 W/A is the accessor's own floor, 2000 comfortably covers any
+        phases × voltage nameplate while rejecting the nonsense that
+        would re-poison the pack this restore exists to protect.
+        """
+        for cid, val in (state or {}).items():
+            try:
+                wpa = float(val)
+            except (TypeError, ValueError):
+                continue
+            if 100.0 <= wpa <= 2000.0:
+                self._ev_wpa_ema[str(cid)] = wpa
 
     def _charger_priority_rows(self) -> "List[Dict[str, Any]]":
         """(#576 P2.1) Priority-list rows for every configured EV charger,
@@ -2333,6 +2359,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._sensor_reader.restore_sign_state(
                 self._storage.get_sign_state()
             )
+
+            # (#638 night 2) Restore the measured W/A — in-memory only,
+            # every restart reset the overnight packer to nameplate until
+            # the car's next charge, and a deploy at 23:36 + a re-plan at
+            # 23:46 yielded an EV demand the plan should have placed.
+            self._restore_ev_wpa(self._storage.get_ev_wpa_state())
 
             # (#640) The legionella-timestamp restore MOVED to the hot_water
             # registration site in __init__.py — this first-refresh block runs

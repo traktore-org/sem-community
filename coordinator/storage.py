@@ -472,6 +472,21 @@ class SEMStorage:
         intel["chargers"] = chargers
         self._energy_data["ev_intelligence"] = intel
 
+    # Measured watts-per-amp persistence (#638 night 2) — the learned
+    # W/A EMA survives restarts so the overnight packer never falls back
+    # to nameplate right after a deploy. In-memory only, the 23:36
+    # restart reset it and the 23:46 re-plan sized the EV floor at
+    # 6.9 kW nameplate, found no slot under the peak, and yielded a car
+    # that then charged at 4.54 kW. Same rule as the sign locks below:
+    # learned state that gates behaviour is not allowed to die at boot.
+    def get_ev_wpa_state(self) -> Dict[str, float]:
+        """Get the persisted per-charger measured-W/A EMA."""
+        return self._energy_data.get("ev_wpa_ema", {})
+
+    def set_ev_wpa_state(self, state: Dict[str, float]) -> None:
+        """Persist the per-charger measured-W/A EMA."""
+        self._energy_data["ev_wpa_ema"] = dict(state)
+
     # Sign-detection persistence (#476 item 5) — locked grid/battery
     # sign flags survive restarts so the autodetect can't re-learn a
     # wrong sign from ambiguous post-reboot samples.
