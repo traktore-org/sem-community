@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.7] — 07.08.2026
+
+### ✨ Features
+
+- 🌡️ **Thermal comfort loads (Phases 1+2)** — climate devices AND switch-controlled heaters gain a comfort band: `Keep at` / `Bank by` / `Run now past` temperatures on the per-device goals, driven by any temperature sensor (climate units default to their own thermometer). Surplus pre-conditions the room into thermal mass; past the limit the device runs from the sources you allow; a pre-conditioned room declines further energy. Thresholds are typed in your display unit (°F installs type °F); °F/K sensors convert automatically. Compressor-safe 3-min restart floor on climate units. Row chip + band editor on the Load Priority card. (#705, requested by @onkelfu)
+
 # [1.7.6-beta.6] — 06.08.2026
 
 ### 🐛 Fixes
@@ -2991,13 +2997,6 @@ Thanks to @alexmc1510, @hrdilshan, @ebnerjoh and @covuser for the reports and id
 > summary of what changed since **1.7.2**. The biggest themes: EV charging is
 > reliable in every mode, the home battery is protected from feeding the car
 > without sun, and multi-battery + grid-sign + dashboard all got a major pass.
-
-
-## [1.7.6-beta.7] — 07.08.2026
-
-### ✨ Features
-
-- 🌡️ **Thermal comfort loads (Phases 1+2)** — climate devices AND switch-controlled heaters gain a comfort band: `Keep at` / `Bank by` / `Run now past` temperatures on the per-device goals, driven by any temperature sensor (climate units default to their own thermometer). Surplus pre-conditions the room into thermal mass; past the limit the device runs from the sources you allow; a pre-conditioned room declines further energy. Thresholds are typed in your display unit (°F installs type °F); °F/K sensors convert automatically. Compressor-safe 3-min restart floor on climate units. Row chip + band editor on the Load Priority card. (#705, requested by @onkelfu)
 
 ## ⚡ EV charging — rock-solid in every mode
 - **Charger state reconciler (#392).** The per-cycle imperative actuator (which
