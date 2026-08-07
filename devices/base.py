@@ -709,7 +709,166 @@ class ControllableDevice(ABC):
         return d
 
 
-class SwitchDevice(ControllableDevice):
+class ComfortBandMixin:
+    """(#705) The thermal comfort band, shared by every device class that
+    can hold a room at a temperature — ClimateDevice (Phase 1) and
+    SwitchDevice heaters (Phase 2).
+
+    A MIXIN rather than per-class copies on purpose: the one-mode-fixed /
+    siblings-left-blind shape is this codebase's most-repeated bug class,
+    and a band duplicated into SwitchDevice would drift the first time a
+    fix lands in one copy.
+
+    Subclass hooks:
+    - ``_comfort_direction()`` — "cool" or "heat". Default heat (switch
+      loads are heaters; a switch-driven cooler is follow-up work).
+      ClimateDevice derives it from ``hvac_mode``.
+    - ``_comfort_fallback_reading()`` — a thermometer of last resort when
+      no ``comfort_entity`` is configured. Default None (a relay has
+      nothing to fall back to); ClimateDevice reads its entity's own
+      ``current_temperature``.
+    """
+
+    # Class-level defaults: a device that never received comfort goals
+    # carries a disengaged band instead of AttributeErrors.
+    comfort_entity: str = ""
+    comfort_target: float = 0.0
+    comfort_offset: float = 0.0
+    comfort_limit: float = 0.0
+
+    def _comfort_direction(self) -> str:
+        return "heat"
+
+    def _comfort_fallback_reading(self):
+        return None
+
+    def _install_unit_is_f(self) -> bool:
+        """True when the install's display unit is Fahrenheit.
+
+        Exact °F spellings only — anything unrecognised is assumed °C,
+        the same contract as temperature_state_to_celsius. A substring
+        test here once classified a mock repr as Fahrenheit.
+        """
+        try:
+            unit = str(getattr(getattr(self.hass.config, "units", None),
+                               "temperature_unit", "") or "").strip()
+        except Exception:  # noqa: BLE001 — unit lookup must never kill the band
+            unit = ""
+        return unit in ("°F", "F", "fahrenheit", "Fahrenheit")
+
+    def _comfort_thresholds_c(self):
+        """(target, offset, limit) in °C.
+
+        The user TYPES the thresholds in the install's display unit —
+        HA's own convention for every temperature input; a °F user must
+        never be asked to think in °C. Comparison happens in °C because
+        the readings are normalised there. The offset is a temperature
+        DIFFERENCE and converts linearly (Δ°F × 5/9); converting it
+        affinely like the absolute temperatures would shift the banked
+        bound by −17.8 °C.
+        """
+        t, o, l = self.comfort_target, self.comfort_offset, self.comfort_limit
+        if self._install_unit_is_f():
+            return ((t - 32.0) * 5.0 / 9.0,
+                    o * 5.0 / 9.0,
+                    (l - 32.0) * 5.0 / 9.0)
+        return (t, o, l)
+
+    def _comfort_reading(self):
+        """The room temperature in °C, or None.
+
+        An explicit ``comfort_entity`` reads that sensor's state (its own
+        unit_of_measurement decides the conversion — the #727 contract);
+        without one the subclass fallback answers, if it has one.
+        """
+        if not self.hass:
+            return None
+        if self.comfort_entity:
+            state = self.hass.states.get(self.comfort_entity)
+            if state is None:
+                return None
+            from ..coordinator.units import temperature_state_to_celsius
+            return temperature_state_to_celsius(state, None)
+        return self._comfort_fallback_reading()
+
+    @property
+    def comfort_state(self) -> str:
+        """forced / willing / banked / disengaged.
+
+        Direction from ``_comfort_direction()``: cool forces ABOVE the
+        limit and banks down to target − offset; heat is the mirror.
+        Boundary readings count as crossed. DISENGAGED — fields unset,
+        thermometer silent, or a band on the wrong side of its target —
+        behaves byte-for-byte like a device without a band: a dead
+        sensor never forces a run and never parks the device.
+        """
+        if not (self.comfort_target and self.comfort_limit):
+            return "disengaged"
+        cooling = self._comfort_direction() == "cool"
+        if ((cooling and self.comfort_limit <= self.comfort_target)
+                or (not cooling and self.comfort_limit >= self.comfort_target)):
+            if not getattr(self, "_comfort_misconfig_warned", False):
+                self._comfort_misconfig_warned = True
+                _LOGGER.warning(
+                    "%s: comfort band misconfigured (direction=%s target=%.1f "
+                    "limit=%.1f) — cool needs limit > target, heat needs "
+                    "limit < target; band disengaged",
+                    self.name, "cool" if cooling else "heat",
+                    self.comfort_target, self.comfort_limit,
+                )
+            return "disengaged"
+        temp = self._comfort_reading()
+        if temp is None:
+            return "disengaged"
+        target_c, offset_c, limit_c = self._comfort_thresholds_c()
+        if cooling:
+            if temp >= limit_c:
+                return "forced"
+            if temp <= target_c - offset_c:
+                return "banked"
+        else:
+            if temp <= limit_c:
+                return "forced"
+            if temp >= target_c + offset_c:
+                return "banked"
+        return "willing"
+
+    # The band speaks through the three generic properties every surplus
+    # pass already reads — no new controller clauses; peak shed,
+    # anti-cycling, priority and LIFO apply to comfort runs unchanged.
+
+    @property
+    def has_runtime_deficit(self) -> bool:
+        """FORCED reads as a deficit ⇒ the deficit-driven paid passes
+        engage exactly per the user's #620 source-axis opt-ins. The daily
+        max cap outranks the force: a unit that has run its configured
+        maximum is done, breach or no breach."""
+        if super().has_runtime_deficit:
+            return True
+        if self.daily_max_runtime_reached:
+            return False
+        return self._enabled and self.comfort_state == "forced"
+
+    @property
+    def stop_condition_met(self) -> bool:
+        """BANKED reads as the stop condition ⇒ surplus stops feeding a
+        room already conditioned past target ∓ offset. ORs with the
+        existing ``stop_entity`` override — they compose."""
+        if super().stop_condition_met:
+            return True
+        return self.comfort_state == "banked"
+
+    @property
+    def daily_targets_met(self) -> bool:
+        """A met runtime floor must NOT stand the paid sources down while
+        comfort is breached — the floor is about runtime, the breach is
+        about now."""
+        if self.comfort_state == "forced":
+            return False
+        return super().daily_targets_met
+
+
+class SwitchDevice(ComfortBandMixin, ControllableDevice):
     """On/off device (hot water relay, smart plugs, etc.).
 
     When surplus >= min_power_threshold, the switch is turned on.
@@ -877,7 +1036,7 @@ class SwitchDevice(ControllableDevice):
         return 0.0
 
 
-class ClimateDevice(ControllableDevice):
+class ClimateDevice(ComfortBandMixin, ControllableDevice):
     """On/off surplus control for a ``climate.*`` entity (#569).
 
     An air-conditioner / heat pump exposed only as a ``climate.*`` entity has
@@ -956,7 +1115,8 @@ class ClimateDevice(ControllableDevice):
     # target − offset — and the #569 default of 60 s is below the safe
     # restart floor for compressor head-pressure equalisation. The
     # configured value still wins when it is stricter, and a disengaged
-    # band keeps the configured window untouched.
+    # band keeps the configured window untouched. CLIMATE-ONLY: resistive
+    # switch heaters (Phase 2) cycle safely and keep their own window.
     _COMFORT_MIN_OFF_FLOOR_S = 180
 
     @property
@@ -970,31 +1130,14 @@ class ClimateDevice(ControllableDevice):
     def min_off_seconds(self, value) -> None:
         self._min_off_configured = int(value)
 
-    # ── (#705) the comfort band ──────────────────────────────────────
-    def _comfort_reading(self) -> Optional[float]:
-        """The room temperature in °C, or None.
+    def _comfort_direction(self) -> str:
+        return "cool" if self.hvac_mode == "cool" else "heat"
 
-        An explicit ``comfort_entity`` reads that sensor's state; without
-        one the climate entity's own ``current_temperature`` attribute is
-        the thermometer — the zero-config path for ACs.
-
-        Always °C: the comfort thresholds are °C-denominated like every
-        other temperature knob in SEM (hot-water max/solar-target, the HP
-        boost offset), so a °F sensor (US installs, #727 class) is
-        converted here rather than silently compared across unit systems.
-        The climate attribute carries no unit of its own — it is in the
-        install's display unit, so that conversion follows
-        ``hass.config.units``; anything unrecognised is assumed °C, which
-        is the historical behaviour every metric install relies on.
-        """
-        if not self.hass:
-            return None
-        if self.comfort_entity:
-            state = self.hass.states.get(self.comfort_entity)
-            if state is None:
-                return None
-            from ..coordinator.units import temperature_state_to_celsius
-            return temperature_state_to_celsius(state, None)
+    def _comfort_fallback_reading(self):
+        """Zero-config thermometer: the climate entity's own
+        ``current_temperature``. The attribute carries no unit — it is in
+        the install's display unit, so conversion follows
+        ``hass.config.units``; anything unrecognised is assumed °C."""
         if not self.entity_id:
             return None
         state = self.hass.states.get(self.entity_id)
@@ -1008,124 +1151,6 @@ class ClimateDevice(ControllableDevice):
         if self._install_unit_is_f():
             return (value - 32.0) * 5.0 / 9.0
         return value
-
-    def _install_unit_is_f(self) -> bool:
-        """True when the install's display unit is Fahrenheit.
-
-        Exact °F spellings only — anything unrecognised is assumed °C,
-        the same contract as temperature_state_to_celsius. A substring
-        test here once classified a mock repr as Fahrenheit.
-        """
-        try:
-            unit = str(getattr(getattr(self.hass.config, "units", None),
-                               "temperature_unit", "") or "").strip()
-        except Exception:  # noqa: BLE001 — unit lookup must never kill the band
-            unit = ""
-        return unit in ("°F", "F", "fahrenheit", "Fahrenheit")
-
-    def _comfort_thresholds_c(self):
-        """(target, offset, limit) in °C.
-
-        The user TYPES the thresholds in the install's display unit —
-        HA's own convention for every temperature input; a °F user must
-        never be asked to think in °C. Comparison happens in °C because
-        the readings are normalised there. The offset is a temperature
-        DIFFERENCE and converts linearly (Δ°F × 5/9); converting it
-        affinely like the absolute temperatures would shift the banked
-        bound by −17.8 °C.
-        """
-        t, o, l = self.comfort_target, self.comfort_offset, self.comfort_limit
-        if self._install_unit_is_f():
-            return ((t - 32.0) * 5.0 / 9.0,
-                    o * 5.0 / 9.0,
-                    (l - 32.0) * 5.0 / 9.0)
-        return (t, o, l)
-
-    @property
-    def comfort_state(self) -> str:
-        """forced / willing / banked / disengaged.
-
-        Direction follows ``hvac_mode``: ``cool`` forces ABOVE the limit
-        and banks down to target − offset; anything else (heat/heat_cool)
-        is the mirror. Boundary readings count as crossed (hot water's
-        ``temp < min_temperature`` force, inverted). DISENGAGED — fields
-        unset or thermometer silent — must behave byte-for-byte like a
-        pre-#705 device: a dead sensor never forces a run and never parks
-        the device.
-        """
-        if not (self.comfort_target and self.comfort_limit):
-            return "disengaged"
-        # A band on the wrong side of its own target is a misconfiguration,
-        # not a preference: in cool mode a limit BELOW the target would make
-        # the entire comfortable range read "forced" and run the unit
-        # continuously on paid sources. Disengage — the safest failure — and
-        # say so once.
-        if ((self.hvac_mode == "cool" and self.comfort_limit <= self.comfort_target)
-                or (self.hvac_mode != "cool" and self.comfort_limit >= self.comfort_target)):
-            if not getattr(self, "_comfort_misconfig_warned", False):
-                self._comfort_misconfig_warned = True
-                _LOGGER.warning(
-                    "%s: comfort band misconfigured (mode=%s target=%.1f "
-                    "limit=%.1f) — cool needs limit > target, heat needs "
-                    "limit < target; band disengaged",
-                    self.name, self.hvac_mode,
-                    self.comfort_target, self.comfort_limit,
-                )
-            return "disengaged"
-        temp = self._comfort_reading()
-        if temp is None:
-            return "disengaged"
-        target_c, offset_c, limit_c = self._comfort_thresholds_c()
-        if self.hvac_mode == "cool":
-            if temp >= limit_c:
-                return "forced"
-            if temp <= target_c - offset_c:
-                return "banked"
-        else:
-            if temp <= limit_c:
-                return "forced"
-            if temp >= target_c + offset_c:
-                return "banked"
-        return "willing"
-
-    # The band speaks through the three generic properties every surplus
-    # pass already reads — that is the whole Phase-1 design: no new
-    # controller clauses, and peak shed / anti-cycle / priority / LIFO
-    # apply to comfort runs unchanged.
-
-    @property
-    def has_runtime_deficit(self) -> bool:
-        """FORCED reads as a deficit ⇒ the deficit-driven paid passes
-        (cheap-grid off-peak, Tier-2 battery) engage exactly per the
-        user's #620 source-axis opt-ins. ``solar_only`` stays honest: a
-        breach without surplus and without a paid opt-in does not run."""
-        if super().has_runtime_deficit:
-            return True
-        # The daily max cap outranks the comfort force: a unit that has run
-        # its configured maximum for the day is done, breach or no breach —
-        # otherwise "deficit" stops meaning "the cap-gated passes may run me"
-        # and a future consumer that trusts it inherits an uncapped force.
-        if self.daily_max_runtime_reached:
-            return False
-        return self._enabled and self.comfort_state == "forced"
-
-    @property
-    def stop_condition_met(self) -> bool:
-        """BANKED reads as the stop condition ⇒ surplus stops feeding a
-        room already pre-cooled past target − offset. ORs with the
-        existing ``stop_entity`` override — they compose."""
-        if super().stop_condition_met:
-            return True
-        return self.comfort_state == "banked"
-
-    @property
-    def daily_targets_met(self) -> bool:
-        """A met runtime floor must NOT stand the paid sources down while
-        comfort is breached — the floor is about runtime, the breach is
-        about now."""
-        if self.comfort_state == "forced":
-            return False
-        return super().daily_targets_met
 
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a climate unit that SEM is running at (re-)registration.

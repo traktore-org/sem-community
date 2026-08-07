@@ -1316,8 +1316,10 @@ class UnifiedDeviceRegistry:
             return {"comfort": {
                 "state": str(live.comfort_state),
                 "reading_c": live._comfort_reading(),
-                # so the chip says cooling vs heating without guessing
-                "hvac": str(getattr(live, "hvac_mode", "") or ""),
+                # so the chip says cooling vs heating without guessing —
+                # from the band's own direction hook, not hvac_mode (a
+                # switch heater has no hvac_mode).
+                "hvac": live._comfort_direction(),
             }}
         except Exception:  # noqa: BLE001 — a payload must never break the sensor
             return {}

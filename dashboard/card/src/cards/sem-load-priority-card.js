@@ -961,8 +961,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderComfortBand(device) {
-        if (device.deviceType !== 'climate' && !(device.goals || {}).comfort_limit
-            && !device.comfort) return nothing;
+        // Band-capable = the payload says so (Phase 2 gave switches the
+        // band, so this is every climate + switch load; battery/EV rows
+        // carry no comfort block and stay clean). Payload-driven — the
+        // card never guesses capability from the device type.
         if (!device.comfort && device.deviceType !== 'climate') return nothing;
         const g = device.goals || {};
         const unit = this.hass?.config?.unit_system?.temperature || '°C';

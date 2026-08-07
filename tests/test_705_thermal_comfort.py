@@ -399,14 +399,26 @@ class TestThePayloadIsTheSingleSource:
         p = self._registry_with(dev, {})._goal_payload(dev.device_id)
         assert p["comfort"] == {"state": "forced", "reading_c": 27.0, "hvac": "cool"}
 
-    def test_a_non_climate_device_carries_no_comfort_block(self):
+    def test_a_bandless_device_carries_no_comfort_block(self):
+        """Phase 2 gave switches the band, so THEY now report disengaged
+        honestly — this pin moved to a class that genuinely has no band
+        (SetpointDevice: it nudges a setpoint, it cannot hold a room)."""
+        from custom_components.solar_energy_management.devices.base import (
+            SetpointDevice,
+        )
+        dev = SetpointDevice(_hass_with({}), "sp1", "HP Setpoint", 2000)
+        p = self._registry_with(dev, {})._goal_payload("sp1")
+        assert "comfort" not in p
+
+    def test_a_plain_switch_reports_a_disengaged_band(self):
+        """Phase 2: the switch HAS a band now, dark until configured."""
         from custom_components.solar_energy_management.devices.base import (
             SwitchDevice,
         )
         dev = SwitchDevice(_hass_with({}), "sw1", "Switch", 500,
                            entity_id="switch.sw1")
         p = self._registry_with(dev, {})._goal_payload("sw1")
-        assert "comfort" not in p
+        assert p["comfort"]["state"] == "disengaged"
 
     def test_a_disengaged_band_still_reports_honestly(self):
         """The chip hides on 'disengaged' — but the payload says WHY the
@@ -415,3 +427,73 @@ class TestThePayloadIsTheSingleSource:
         dev = _ac(_hass_with({}))  # sensor missing
         p = self._registry_with(dev, {})._goal_payload(dev.device_id)
         assert p["comfort"] == {"state": "disengaged", "reading_c": None, "hvac": "cool"}
+
+
+class TestPhase2SwitchLoads:
+    """The same band on SwitchDevice — one mixin, no sibling copy.
+
+    Differences from climate, each pinned: direction is HEAT (switch loads
+    are heaters; a switch-cooler is a follow-up), the thermometer must be
+    EXPLICIT (a relay has no current_temperature to fall back to), and the
+    compressor min-off floor does NOT apply (resistive loads cycle safely)."""
+
+    def _heater(self, hass, *, target=21.0, offset=2.0, limit=18.0):
+        from custom_components.solar_energy_management.devices.base import (
+            SwitchDevice,
+        )
+        dev = SwitchDevice(hass, "floor1", "Floor Heating", 500,
+                           entity_id="switch.floor1", min_off_time=60)
+        dev.comfort_entity = "sensor.room_temp"
+        dev.comfort_target = target
+        dev.comfort_offset = offset
+        dev.comfort_limit = limit
+        return dev
+
+    def test_a_cold_room_forces_the_heater(self):
+        dev = self._heater(_hass_with({"sensor.room_temp": "17.5"}))
+        assert dev.comfort_state == "forced"
+        assert dev.has_runtime_deficit is True
+
+    def test_a_banked_room_stops_it(self):
+        dev = self._heater(_hass_with({"sensor.room_temp": "23.5"}))
+        assert dev.comfort_state == "banked"
+        assert dev.stop_condition_met is True
+
+    def test_between_is_willing(self):
+        dev = self._heater(_hass_with({"sensor.room_temp": "20.0"}))
+        assert dev.comfort_state == "willing"
+
+    def test_no_explicit_sensor_disengages(self):
+        """A relay has no thermometer of its own — nothing to fall back to."""
+        dev = self._heater(_hass_with({"switch.floor1": "off"}))
+        dev.comfort_entity = ""
+        assert dev.comfort_state == "disengaged"
+        assert dev.has_runtime_deficit is False
+
+    def test_no_compressor_floor_on_switches(self):
+        dev = self._heater(_hass_with({"sensor.room_temp": "20.0"}))
+        assert dev.min_off_seconds == 60
+
+    def test_the_payload_says_heat(self):
+        """The chip must read pre-heating, not pre-cooling."""
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry,
+        )
+        dev = self._heater(_hass_with({"sensor.room_temp": "20.0"}))
+        reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._device_goals = {"floor1": {}}
+        ctrl = MagicMock(); ctrl.get_device.return_value = dev
+        reg._surplus_controller = ctrl
+        p = reg._goal_payload("floor1")
+        assert p["comfort"] == {"state": "willing", "reading_c": 20.0,
+                                "hvac": "heat"}
+
+    def test_a_switch_without_comfort_goals_is_untouched(self):
+        from custom_components.solar_energy_management.devices.base import (
+            SwitchDevice,
+        )
+        dev = SwitchDevice(_hass_with({}), "sw", "Plain", 500,
+                           entity_id="switch.sw")
+        assert dev.comfort_state == "disengaged"
+        assert dev.has_runtime_deficit is False
+        assert dev.stop_condition_met is False
