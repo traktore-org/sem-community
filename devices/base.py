@@ -1005,17 +1005,41 @@ class ClimateDevice(ControllableDevice):
             value = float(raw)
         except (TypeError, ValueError):
             return None
+        if self._install_unit_is_f():
+            return (value - 32.0) * 5.0 / 9.0
+        return value
+
+    def _install_unit_is_f(self) -> bool:
+        """True when the install's display unit is Fahrenheit.
+
+        Exact °F spellings only — anything unrecognised is assumed °C,
+        the same contract as temperature_state_to_celsius. A substring
+        test here once classified a mock repr as Fahrenheit.
+        """
         try:
             unit = str(getattr(getattr(self.hass.config, "units", None),
                                "temperature_unit", "") or "").strip()
         except Exception:  # noqa: BLE001 — unit lookup must never kill the band
             unit = ""
-        # Exact °F spellings only — anything unrecognised is assumed °C,
-        # the same contract as temperature_state_to_celsius. A substring
-        # test here once classified a mock repr as Fahrenheit.
-        if unit in ("°F", "F", "fahrenheit", "Fahrenheit"):
-            return (value - 32.0) * 5.0 / 9.0
-        return value
+        return unit in ("°F", "F", "fahrenheit", "Fahrenheit")
+
+    def _comfort_thresholds_c(self):
+        """(target, offset, limit) in °C.
+
+        The user TYPES the thresholds in the install's display unit —
+        HA's own convention for every temperature input; a °F user must
+        never be asked to think in °C. Comparison happens in °C because
+        the readings are normalised there. The offset is a temperature
+        DIFFERENCE and converts linearly (Δ°F × 5/9); converting it
+        affinely like the absolute temperatures would shift the banked
+        bound by −17.8 °C.
+        """
+        t, o, l = self.comfort_target, self.comfort_offset, self.comfort_limit
+        if self._install_unit_is_f():
+            return ((t - 32.0) * 5.0 / 9.0,
+                    o * 5.0 / 9.0,
+                    (l - 32.0) * 5.0 / 9.0)
+        return (t, o, l)
 
     @property
     def comfort_state(self) -> str:
@@ -1051,15 +1075,16 @@ class ClimateDevice(ControllableDevice):
         temp = self._comfort_reading()
         if temp is None:
             return "disengaged"
+        target_c, offset_c, limit_c = self._comfort_thresholds_c()
         if self.hvac_mode == "cool":
-            if temp >= self.comfort_limit:
+            if temp >= limit_c:
                 return "forced"
-            if temp <= self.comfort_target - self.comfort_offset:
+            if temp <= target_c - offset_c:
                 return "banked"
         else:
-            if temp <= self.comfort_limit:
+            if temp <= limit_c:
                 return "forced"
-            if temp >= self.comfort_target + self.comfort_offset:
+            if temp >= target_c + offset_c:
                 return "banked"
         return "willing"
 

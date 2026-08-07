@@ -254,18 +254,22 @@ class TestReviewFindings:
         assert _ac(hass).comfort_state == "willing"
 
     def test_the_attribute_path_follows_the_install_display_unit(self):
-        """H1, zero-config half: a °F install's climate attribute is °F."""
+        """H1, zero-config half: on a °F install BOTH sides are °F — the
+        climate attribute reads °F and the user's thresholds mean °F.
+        (This test originally pinned °C thresholds on a °F install; that
+        contract was rejected — a °F user types °F.)"""
         hass = _hass_with({
             "climate.ac_livingroom": ("cool", {"current_temperature": 80.6}),
         })
         hass.config.units.temperature_unit = "°F"
-        dev = _ac(hass, comfort_entity="")
-        assert dev.comfort_state == "forced"      # 80.6 °F = 27 °C ≥ 26
+        dev = _ac(hass, comfort_entity="", target=76.0, offset=4.0, limit=80.0)
+        assert dev.comfort_state == "forced"      # 80.6 °F ≥ 80 °F
         hass2 = _hass_with({
             "climate.ac_livingroom": ("cool", {"current_temperature": 73.4}),
         })
         hass2.config.units.temperature_unit = "°F"
-        assert _ac(hass2, comfort_entity="").comfort_state == "willing"  # 23 °C
+        dev2 = _ac(hass2, comfort_entity="", target=76.0, offset=4.0, limit=80.0)
+        assert dev2.comfort_state == "willing"    # 72 °F < 73.4 °F < 80 °F
 
     def test_an_inverted_band_disengages_instead_of_forcing_forever(self):
         """H2 — cool with limit BELOW target would make the whole comfortable
@@ -318,3 +322,46 @@ class TestReviewFindings:
             price_is_cheap=True, soc_above_reserve=True,
         )
         assert intent.on is False
+
+
+class TestThresholdsFollowTheInstallUnit:
+    """A °F user types °F. The thresholds are interpreted in the install's
+    display unit (HA's own convention for every temperature input), and the
+    comparison happens in °C internally. The OFFSET is a temperature
+    DIFFERENCE — it converts linearly (Δ°F × 5/9), never affinely."""
+
+    def _f_install(self, states):
+        hass = _hass_with(states)
+        hass.config.units.temperature_unit = "°F"
+        return hass
+
+    def test_a_fahrenheit_install_types_fahrenheit(self):
+        # target 76 °F (24.4 °C), offset 4 °F (Δ2.2 °C), limit 80 °F (26.7 °C)
+        hass = self._f_install({"sensor.room_temp": ("80.6", {"unit_of_measurement": "°F"})})
+        dev = _ac(hass, target=76.0, offset=4.0, limit=80.0)
+        assert dev.comfort_state == "forced"       # 80.6 °F ≥ 80 °F
+
+    def test_the_offset_converts_as_a_difference(self):
+        # banked bound = 76 − 4 = 72 °F = 22.2 °C. Room 71 °F (21.7 °C) → banked.
+        # An affine (wrong) offset conversion would put the bound at ≈ 40 °F.
+        hass = self._f_install({"sensor.room_temp": ("71.0", {"unit_of_measurement": "°F"})})
+        dev = _ac(hass, target=76.0, offset=4.0, limit=80.0)
+        assert dev.comfort_state == "banked"
+
+    def test_between_is_willing_on_a_f_install(self):
+        hass = self._f_install({"sensor.room_temp": ("74.0", {"unit_of_measurement": "°F"})})
+        dev = _ac(hass, target=76.0, offset=4.0, limit=80.0)
+        assert dev.comfort_state == "willing"
+
+    def test_a_celsius_sensor_on_a_f_install_still_works(self):
+        # Both sides normalize to °C independently: °C sensor reading 27,
+        # °F thresholds 76/80 → 27 ≥ 26.7 → forced.
+        hass = self._f_install({"sensor.room_temp": ("27.0", {"unit_of_measurement": "°C"})})
+        dev = _ac(hass, target=76.0, offset=4.0, limit=80.0)
+        assert dev.comfort_state == "forced"
+
+    def test_metric_installs_are_untouched(self):
+        hass = _hass_with({"sensor.room_temp": "24.5"})
+        hass.config.units.temperature_unit = "°C"
+        dev = _ac(hass)   # 24/2/26 °C as everywhere else in this file
+        assert dev.comfort_state == "willing"
