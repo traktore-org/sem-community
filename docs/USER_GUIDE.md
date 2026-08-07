@@ -474,14 +474,35 @@ effective_soc = max(sensor, anchor + delivered_since_anchor_kwh × 0.92 ÷ capac
 - The anchor is **session-scoped only** — never persisted across restarts, and reset the moment
   the car disconnects (per charger, so a second charger's session can never leak into the first
   one's target decision).
-- The **0.92 here is fixed and not configurable**, deliberately. It sets a ceiling, so a lower
-  figure would make SEM charge *longer* — and the two mistakes are not equal. Stopping a little
+- The **0.92 here is fixed and not configurable**, deliberately — including by *Charger
+  efficiency* below, which every other estimate does follow. It sets a ceiling, so a lower
+  figure would make SEM charge *longer*, and the two mistakes are not equal. Stopping a little
   early costs nothing: the next sensor reading lands under target and charging resumes. Stopping
   late has already put the energy in the pack, and that is the overshoot this whole section
   exists to prevent.
 - You'll see a mobile notification on both the early stop and any resume, and a small info line
   under the SOC gauge on the EV card (e.g. "Car: 55% (28 min ago) · est. now ~59%") — the gauge
   itself always shows the raw sensor value.
+
+#### Charger efficiency
+
+**Options → EV Charger → Charger efficiency (%)**, default **92 %**.
+
+Not all the AC energy your meter counts reaches the battery: the car's onboard charger,
+the cables and (in cold weather) the pack heater take a cut. SEM converts metered kWh into
+pack kWh with this figure wherever it *reports* charge state — the SOC estimate on the EV
+card, the virtual SOC below, and the first-session bootstrap.
+
+Leave it at 92 % unless the estimate visibly disagrees with your car:
+
+| Symptom | Try |
+|---|---|
+| SEM's estimate runs **ahead** of what the car reports | Lower it (e.g. 85 %) |
+| SEM's estimate lags **behind** the car | Raise it (e.g. 95 %) |
+
+Real installs land roughly in the 85–95 % band. Single-phase charging at 3.7 kW and cold
+starts sit at the low end; a 11 kW three-phase charger on a warm pack sits at the high end.
+The dialog only accepts 50–100 % — anything outside that is a typo, not an install.
 
 This is separate from the [Virtual SOC](#virtual-soc) fallback below, which only activates when
 you have *no* `vehicle_soc_entity` at all. Here, a real sensor is configured — this just fills the
@@ -500,9 +521,10 @@ Until the estimate is anchored (first week), % mode uses the **kWh** daily targe
 **Driving range.** SEM also publishes `sensor.sem_ev_remaining_range`. If your car
 integration exposes a real range sensor, set `vehicle_range_entity` to it; otherwise SEM
 estimates range from SOC × **battery capacity** ÷ **consumption** (kWh/100km, default 18).
-Battery capacity and efficiency are **per car** — edit them straight from the EV card
+Battery capacity and consumption are **per car** — edit them straight from the EV card
 (tap the 🔋 / distance chips under each charger) or in the options flow; the range and
 SOC math use that charger's values. `vehicle_range_entity` is set in the options flow.
+(*Charger efficiency*, above, is a single system-wide setting, not per car.)
 
 **Charge-target range (Min/Max).** The EV card shows a **dual-handle slider**: the
 **Min** handle is the *guaranteed* amount (night/grid tops up to it), the **Max**
