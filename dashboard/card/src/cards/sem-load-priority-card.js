@@ -30,6 +30,13 @@ import {
    _dragEnd. SortableJS was removed (#576): an imperative DOM library and
    Lit fought over DOM ownership, causing the reorder/badge desync.  */
 
+// Deep link for the comfort goal section (guarded by
+// tests/test_618_docs_anchors.py — the regex there matches this
+// "docs:" literal, keep the shape).
+const COMFORT_DOCS = {
+    docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#comfort-banking',
+};
+
 class SEMLoadPriorityCard extends SEMLitBase {
     constructor() {
         super();
@@ -282,6 +289,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 color:var(--secondary-text-color,#999);
                 display:flex; align-items:center; gap:5px; margin-bottom:4px;
             }
+            .ge-docs {
+                display:inline-flex; align-items:center;
+                color:var(--secondary-text-color,#999); opacity:0.55;
+            }
+            .ge-docs:hover { opacity:1; }
             .ge-row {
                 display:flex; align-items:center; min-height:34px; padding:2px 0;
             }
@@ -993,6 +1005,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
             <div class="ge-title" style="margin-top:10px">
                 <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:14px;color:#4db6ac"></ha-icon>
                 ${this._t('comfort_section')}
+                <a class="ge-docs" href="${COMFORT_DOCS.docs}" target="_blank"
+                   rel="noopener" title="${this._t('config_docs')}"
+                   @click=${(e) => e.stopPropagation()}>
+                    <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:12px"></ha-icon>
+                </a>
             </div>
             <div class="ge-row">
                 <span class="ge-label">${this._t('comfort_thermometer')}</span>

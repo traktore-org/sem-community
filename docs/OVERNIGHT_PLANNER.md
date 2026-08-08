@@ -1,11 +1,12 @@
-# The Overnight Joint Planner — how SEM plans the night (#638)
+# The Joint Energy Planner — how SEM plans the energy day (#638)
 
 > **Status: actuation available, off by default.** The planner computes and
-> logs *tonight's plan* every night. With `switch.sem_overnight_actuation`
-> **off** (the default) that is all it does — pure shadow, every real
-> decision made by SEM's reactive layer. Switched **on**, the plan's
-> windows feed the *existing* night signals — see
-> [Actuation](#actuation-g4) and [Where to see it](#where-to-see-it).
+> logs *the plan for the whole energy day* — daylight and the coming night
+> in one ledger. With `switch.sem_overnight_actuation` **off** (the
+> default) that is all it does — pure shadow, every real decision made by
+> SEM's reactive layer. Switched **on**, the plan's windows feed the
+> *existing* night signals — see [Actuation](#actuation-g4) and
+> [Where to see it](#where-to-see-it).
 
 ## The problem in one picture
 
@@ -29,6 +30,30 @@ The joint planner closes that with one shared structure — the **Night
 Ledger** — and one deliberately simple rule set. It is a greedy
 priority-packer, **not an optimizer**: pure, deterministic, and every
 allocation explains itself in one line.
+
+## Guidance vs. accounting
+
+Two clocks run in SEM, and keeping them apart is what makes the design
+easy to reason about:
+
+- **The arbiter** (the reactive layer — surplus controller, EV decide
+  chain, battery pipeline, peak manager) runs on the **now-clock**: every
+  ten seconds it divides what is actually flowing — who gets this watt,
+  who sheds for the peak. The energy-flow chart on the dashboard (the
+  Sankey) is the arbiter's outcome.
+- **The planner** runs on the **day-clock**: it moves the *flexible*
+  needs (EV floors, load runtimes, comfort banking, battery pre-charge)
+  to the right place in time, so that when the arbiter does its
+  ten-second triage, the cheap or free source happens to be there.
+
+Inside the planner, three parts with one-word jobs: the **ledger** (the
+books — an honest hour-by-hour model of prices, home draw, sun, the
+battery's trajectory, peak headroom), the **plan** (a timetable derived
+by packing demands into the books), and the **verdict** (the small,
+fail-open signals the arbiter consults — the only part that touches
+behavior). In one line each: *the Sankey is what happened, the ledger is
+what we expect, the plan is what we intend, the verdict is what we dare
+enforce.*
 
 ## Step 1 — Build the Night Ledger
 
@@ -164,19 +189,104 @@ battery.
 ## When it runs
 
 ```
-  once per NIGHT — the first cycle inside the night window,
-  retried until the world is ready (devices registered AND
-  the battery SOC actually reporting):
+  once per ENERGY DAY (night-end to night-end) — retried until the
+  world is ready (devices registered AND the battery SOC reporting):
         │
         ▼
-  build the ledger  →  pack  →  log the answer + stash it
+  build the ledger (day + night)  →  pack  →  log + stash + publish
         │
         ▼
-  re-plan triggers: day-ahead price update · SOC drift ±5% · EV plug/unplug
+  re-plan whenever the ASK or the SUPPLY honestly changes:
+    EV plug/unplug · a charge target, deadline or mode ·
+    a load's runtime deficit · a comfort ask appearing or moving ·
+    the day-ahead price curve landing · the solar forecast revising
 ```
 
-"Once per night" survives restarts and midnight: a restart at 00:48 still
-owes the rest of the night a plan and gets one.
+One plan per energy day survives restarts and midnight: a restart at
+00:48 still owes the rest of the horizon a plan and gets one. Every
+re-plan says why it exists — the sensor's `replan_cause` attribute reads
+`initial` for the day's first answer and `ask changed` for a re-stamp.
+Jitter deliberately does **not** re-plan: targets are compared in
+0.1-kWh steps, load deficits in 6-minute steps, comfort asks in
+0.5-kWh/30-minute steps, prices to the cent, and the forecast by its
+**day total** in 2-kWh steps — a thermometer drifting or the sun burning
+down the remaining forecast is time passing, not the ask changing.
+
+## The energy-day horizon
+
+The plan always covers **now → the coming night's end** (the
+sunrise-bounded night end you configure — the same boundary every night
+source runs on). Stamped during the day, it plans the afternoon *and*
+the night jointly; sunrise opens the next period. Everything is
+sun-anchored, so seasons need no configuration: a December day simply
+contributes a few short daylight hours and the night dominates.
+
+Daylight hours enter the ledger in two honest shapes:
+
+- **expected-surplus hours** — the solar forecast (shaped over the real
+  day length) exceeds the expected home draw. These are **free but
+  finite**: price 0, capped at the expected surplus power. The house
+  runs on the same sun, so it costs the ledger nothing there.
+- **deficit hours** — the house draws the difference, priced by the
+  *same* tariff provider the night uses (there is deliberately no
+  second price path), and walked through the normal
+  battery-then-meter trajectory.
+
+With no solar forecast installed the day degrades to plain priced
+hours — the horizon still spans, nothing free is invented.
+
+## Comfort banking
+
+A room with a [comfort band](#actuation-g4) (the #705 goal fields on a
+climate or heater device) is thermal mass — a battery made of air. The
+planner learns two rates from readings SEM already takes: how fast the
+room drifts toward its limit while the device is **off**, and how fast
+it recovers while **on**. Together they turn comfort into a
+deadline-shaped demand, exactly like tonight's EV floor:
+
+> *"the room hits its limit at 17:20 — banking back to target costs
+> 0.6 kWh — place that run into a free window before then."*
+
+The band rides the thermostat's **own live setpoint** where one exists:
+your schedule, presence logic or the unit's native pre-cool moves the
+whole band, and the values you typed contribute only their offsets.
+
+Two guarantees: a comfort run in the plan packs **only into free-sun or
+cheap-level hours** — banking is opportunism, never plain-rate paid
+power (a real breach is served immediately by the band's FORCED tier,
+on your own source-axis terms); and every doubt (no drift model yet, a
+silent thermometer, a contradictory reading) produces **no demand**
+rather than a guessed one.
+
+## The arbitrage advisor
+
+The advisor answers one question on every plan: *would buying cheap
+energy into the battery and delivering it in an expensive hour actually
+pay?* It reads the **same books** as everything else — the price curve
+across both horizons, the battery's room, the charge/discharge caps,
+the home's hour-by-hour grid draw, tomorrow's forecast — and publishes
+its verdict **with the numbers** on the plan card and the sensor's
+`arbitrage` attribute.
+
+The honesty rules, each one a test:
+
+- the spread must survive the **round trip and the wear**
+  (`η·sell − buy − wear` per bought kWh, using your configured
+  round-trip efficiency);
+- energy never flows backwards in time — deliver only after buying;
+- avoided import needs an import to avoid: delivery counts only in
+  hours where the house would actually draw from the grid;
+- **never grid-charge what tomorrow's sun fills free** — the forecast
+  caps the buying room;
+- a free surplus hour is the sun banking itself, not a buy;
+- unpriced hours are not a market.
+
+**Advice only.** The advisor commands nothing — the battery's command
+wire stays exactly as configured, and a typical answer on a healthy
+sunny-season system is the honest *"best spread does not pay"*. Its
+deeper job is auditing: it is the one reader of *every* page of the
+ledger, so if the books are wrong anywhere, an economically absurd
+advice is the first visible symptom.
 
 ## Where to see it
 
@@ -189,10 +299,15 @@ owes the rest of the night a plan and gets one.
   `active` chip and an "the plan's windows steer tonight" footer. The card
   **self-hides** until a plan has been stamped, so it costs nothing during
   the day.
+  Comfort banking runs appear as their own teal thermometer rows; an
+  arbitrage line under the strip carries the advisor's verdict with its
+  numbers — hover any row or the line for the full story, and the small
+  book icons deep-link straight into this document.
 - **As an entity** — `sensor.sem_overnight_plan` (diagnostic). Its state is
   the verdict word `fits` / `yields` / `idle` / `pending`; the plan itself
   rides as attributes (`demands`, `slots`, `blocks`, `takeover`,
-  `total_cost`, `computed_at`), which is what the card reads. Useful for
+  `total_cost`, `computed_at`, `replan_cause`, `arbitrage`), which is what
+  the card reads. Useful for
   your own template sensors or an automation that pings you when a night
   does *not* fit. Those attributes are a *projection*: the log prose and the
   ledger's internal columns stay out, and back-to-back allocations are merged

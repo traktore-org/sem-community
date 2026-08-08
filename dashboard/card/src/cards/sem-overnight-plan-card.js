@@ -24,11 +24,21 @@ import { semDefineCard, semFormatTime, semGetCurrency } from '../base/sem-shared
 const DEFAULT_ENTITY = 'sensor.sem_overnight_plan';
 
 // Demand kind → icon + block colour. Colours are the SEM palette: EV soft
-// green, generic load home-cyan, battery pre-charge pink (Battery-In).
+// green, generic load home-cyan, battery pre-charge pink (Battery-In),
+// comfort banking teal (thermal mass as a battery — matches the goal
+// editor's comfort section colour).
 const KINDS = {
     ev:      { icon: 'mdi:ev-station',   color: '#8DC892', label: 'overnight_kind_ev' },
     load:    { icon: 'mdi:power-plug',   color: '#5BC8D8', label: 'overnight_kind_load' },
     battery: { icon: 'mdi:home-battery', color: '#f06292', label: 'overnight_kind_battery' },
+    comfort: { icon: 'mdi:thermometer',  color: '#4db6ac', label: 'overnight_kind_comfort' },
+};
+
+// Deep links into the planner docs (guarded by tests/test_618_docs_anchors.py
+// — the regex there matches these "docs:" literals, keep the shape).
+const DOC_LINKS = {
+    actuation: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#actuation-g4' },
+    arbitrage: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#the-arbitrage-advisor' },
 };
 
 const STATUS = {
@@ -168,13 +178,8 @@ class SEMOvernightPlanCard extends SEMLitBase {
             this._t(act ? 'overnight_active' : 'overnight_shadow')}</span>`;
     }
 
-    // Deep link into the planner docs (guarded by tests/test_618_docs_anchors.py
-    // — the regex there matches this "docs:" literal, keep the shape).
-    _docsLink() {
-        const url = {
-            docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#actuation-g4',
-        };
-        return html`<a class="docs-link" href="${url.docs}" target="_blank"
+    _docsLink(key = 'actuation') {
+        return html`<a class="docs-link" href="${DOC_LINKS[key].docs}" target="_blank"
             rel="noopener" title="${this._t('config_docs')}">
             <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:13px"></ha-icon>
         </a>`;
@@ -376,6 +381,12 @@ class SEMOvernightPlanCard extends SEMLitBase {
                             // title the name used to carry.
                             const tip = [
                                 name,
+                                // A comfort row is a new idea on this card —
+                                // its tooltip says what "banking" means before
+                                // the numbers (the docs link in the head has
+                                // the full story under #comfort-banking).
+                                d.kind === 'comfort'
+                                    ? this._t('overnight_comfort_tip') : null,
                                 mine.map(b => `${this._hm(b.start)}–${this._hm(b.end)} · ${
                                     (b.power_w / 1000).toFixed(1)} kW`).join('\n') || null,
                                 `${(d.planned_kwh || 0).toFixed(1)} / ${(d.needed_kwh || 0).toFixed(1)} kWh`
@@ -447,6 +458,18 @@ class SEMOvernightPlanCard extends SEMLitBase {
                         <div class="warn">
                             <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:13px;color:#ff9800"></ha-icon>
                             <span>${this._t('overnight_fleet_partial')}</span>
+                        </div>
+                    ` : nothing}
+
+                    ${a.arbitrage ? html`
+                        <div class="arb" title="${this._t('overnight_arbitrage_tip')}">
+                            <ha-icon icon="mdi:swap-vertical-bold"
+                                     style="--mdc-icon-size:13px;color:${
+                                         a.arbitrage.opportunity ? '#8DC892'
+                                         : 'var(--secondary-text-color,#8a93a5)'}"></ha-icon>
+                            <span class="arb-lbl">${this._t('overnight_arbitrage')}</span>
+                            <span class="arb-txt">${a.arbitrage.reason || ''}</span>
+                            ${this._docsLink('arbitrage')}
                         </div>
                     ` : nothing}
 
@@ -627,6 +650,16 @@ class SEMOvernightPlanCard extends SEMLitBase {
             .warn {
                 display: flex; align-items: center; gap: 5px;
                 margin-top: 8px; font-size: 11px; color: #ffb74d;
+            }
+            .arb {
+                display: flex; align-items: center; gap: 5px;
+                margin-top: 8px; font-size: 11px;
+                color: var(--secondary-text-color, #8a93a5);
+            }
+            .arb-lbl { font-weight: 600; white-space: nowrap; }
+            .arb-txt {
+                overflow: hidden; text-overflow: ellipsis;
+                white-space: nowrap; flex: 1; min-width: 0;
             }
             .foot {
                 margin-top: 8px; font-size: 10px; opacity: 0.5;
