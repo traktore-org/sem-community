@@ -64,6 +64,14 @@ FAILSAFE_TIMEOUT_S = 600
 # turned off over UDP — so point it at 0 instead of fighting it.
 FAILSAFE_OFF_TIMEOUT_S = 10
 
+# #553/#545 — the quota-stop margin. Live-proven on the real P30
+# (2026-08-08): a target just ABOVE the session counter, written before
+# enable, terminates the charge at the target and HOLDS — the box's own
+# firmware refusing the car (ten unpoliced minutes of silence). A target
+# below the counter is rejected; writes after disable never persist
+# (the #553 guard was a silent no-op since it shipped).
+QUOTA_STOP_MARGIN_KWH = 0.3
+
 from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
@@ -1924,6 +1932,63 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("actuation-failure repair clear failed: %s", exc)
 
+    def _session_energy_sensor_id(self):
+        """Entity id of the box's OWN session-energy register sensor
+        (KEBA: ``sensor.*_session_energy``) — same discovery strategy and
+        the same no-negative-caching rule as ``_energy_target_sensor_id``."""
+        cached = getattr(self, "_session_energy_sensor_cache", None)
+        if cached:
+            return cached
+        found = None
+        try:
+            anchor = self.power_entity_id or self.current_sensor_entity_id
+            if anchor and self.hass is not None:
+                from homeassistant.helpers import entity_registry as er
+                reg = er.async_get(self.hass)
+                ent = reg.async_get(anchor)
+                if ent is not None and ent.device_id:
+                    for other in er.async_entries_for_device(reg, ent.device_id):
+                        if other.entity_id.endswith("_session_energy"):
+                            found = other.entity_id
+                            break
+                if not found:
+                    obj = anchor.split(".", 1)[-1]
+                    for suf in ("_charging_power", "_power", "_max_current"):
+                        if obj.endswith(suf):
+                            cand = ("sensor." + obj[: -len(suf)]
+                                    + "_session_energy")
+                            if self.hass.states.get(cand) is not None:
+                                found = cand
+                            break
+                if not found:
+                    prefix = anchor.split(".", 1)[-1].split("_", 1)[0]
+                    cands = [
+                        eid for eid in
+                        self.hass.states.async_entity_ids("sensor")
+                        if eid.endswith("_session_energy")
+                        and eid.split(".", 1)[-1].startswith(prefix)
+                    ]
+                    if len(cands) == 1:
+                        found = cands[0]
+        except Exception:  # noqa: BLE001 — discovery never breaks a stop
+            found = None
+        if found:
+            self._session_energy_sensor_cache = found
+        return found
+
+    def _box_session_kwh(self):
+        """The box's session counter in kWh, or None. The quota math
+        needs the BOX's number (it persists across enable/disable —
+        live-verified), not SEM's own session bookkeeping."""
+        sensor = self._session_energy_sensor_id()
+        if not sensor or self.hass is None:
+            return None
+        st = self.hass.states.get(sensor)
+        try:
+            return float(st.state)
+        except (AttributeError, TypeError, ValueError):
+            return None
+
     async def arm_failsafe(self) -> None:
         """Arm a NON-TRIPPING managed failsafe (#546 — managed-neutralize).
 
@@ -2253,7 +2318,37 @@ class CurrentControlDevice(ControllableDevice):
             elif self.charger_service:
                 # KEBA-style fallback
                 domain = self.charger_service.split(".", 1)[0]
-                if self.hass.services.has_service(domain, "disable"):
+                _session_kwh = self._box_session_kwh()
+                if (_session_kwh is not None
+                        and self.hass.services.has_service(domain, "set_energy")
+                        and self.hass.services.has_service(domain, "enable")):
+                    # THE QUOTA-HOLD STOP (#553/#545, live-proven on the
+                    # real P30 2026-08-08). ``disable`` invites the war:
+                    # the box auto-starts, the car begs, SEM kills, every
+                    # ~90 s all night — and the old guard's set_energy
+                    # AFTER disable never persisted (register 0.0 all
+                    # evening: a silent no-op since #553 shipped). The
+                    # box's own language for "no" is a SATISFIED energy
+                    # target written to an ENABLED session (Guido's own
+                    # script order): park the current at the viable
+                    # minimum (a stored 8 A fed the Zoe-cutout churn),
+                    # write session+margin, enable — the box charges the
+                    # small remainder, suspends itself, and refuses the
+                    # car natively. A fresh plug-in resets the session
+                    # and wakes SEM to re-decide.
+                    quota = max(1.0, round(
+                        _session_kwh + QUOTA_STOP_MARGIN_KWH, 1))
+                    await self._set_current(float(self.min_current))
+                    await self.hass.services.async_call(
+                        domain, "set_energy", {"energy": quota},
+                        blocking=True,
+                    )
+                    await self.hass.services.async_call(
+                        domain, "enable", {}, blocking=True,
+                    )
+                    self._idle_guard_armed = True
+                    stop_method = f"quota-hold({quota:.1f} kWh)"
+                elif self.hass.services.has_service(domain, "disable"):
                     await self.hass.services.async_call(domain, "disable", {}, blocking=True)
                     stop_method = f"{domain}.disable"
                     # #553 — BOX-LEVEL runaway cap (#315): KEBA firmware
@@ -2300,7 +2395,12 @@ class CurrentControlDevice(ControllableDevice):
                         self.name, self.charger_service, domain,
                     )
 
-            await self._set_current(0)
+            if stop_method and stop_method.startswith("quota-hold"):
+                # parked at the viable minimum on purpose — a 0 A write
+                # would re-poison the box's stored current (#545).
+                pass
+            else:
+                await self._set_current(0)
             # (#740) whatever stop path fired, leave the box holding a
             # standing NO: the dead-man's-off failsafe survives SEM's
             # absence, which per-cycle policing (#552) never could.

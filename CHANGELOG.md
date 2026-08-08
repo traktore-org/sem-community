@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.9] — 08.08.2026 (Unreleased)
 
 ### 🐛 Fixes
+- 🔌 **The quota-stop: the wallbox's own language for "no"** (#553/#545,
+  live-proven on the real P30) — `keba.disable` invites the war: the box
+  auto-starts, the car begs, SEM kills, every ~90 s, all night. And the old
+  1 kWh guard's `set_energy` AFTER disable never persisted — the register
+  read 0.0 all evening, a silent no-op since #553 shipped. The KEBA-shape
+  stop is now the quota-hold (the user's own proven script order): park the
+  current at the viable minimum, write `session + 0.3 kWh`, enable — the
+  box charges the small remainder, suspends itself natively, and refuses
+  the car with SEM's hands off (ten unpoliced minutes of silence in the
+  live test, the evening's first). Legacy disable remains the fallback when
+  the box's session register is undiscoverable. A fresh plug-in resets the
+  session and wakes SEM to re-decide.
 - ⚡ **Min is a floor — enforced at the wire** (#545, reopened) — the start
   ladder offered 6/8/9 A below a configured 10 A minimum, the stability hold
   froze 8 A, and a Zoe (whose onboard charger cuts out below ~10 A) flapped
