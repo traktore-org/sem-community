@@ -1607,6 +1607,20 @@ class CurrentControlDevice(ControllableDevice):
         """Set charging current via entity or service."""
         current = round(current, 0)
 
+        # (#545, reopened 2026-08-08) Min is a floor, enforced at the ONE
+        # emit seam: the start ladder offered 6/8/9 A below a configured
+        # minimum of 10, the stability hold froze 8 A, and the Zoe's
+        # onboard charger cut to 0 W against a command it physically
+        # cannot use. Whatever the layers above compute — ladder, zones,
+        # holds — a NONZERO command never reaches the wire below the
+        # floor. Zero stays zero: it is the stop intent, not a current.
+        if 0 < current < self.min_current:
+            _LOGGER.debug(
+                "%s: lifting below-floor command %.0f A to the configured "
+                "minimum %.0f A (#545)", self.name, current, self.min_current,
+            )
+            current = float(round(self.min_current))
+
         # #392 heartbeat dedup: skip the write only when the value didn't
         # change AND we've written recently. Without the time guard, a long
         # steady-state period (always_max holding 16 A, solar plateau) would

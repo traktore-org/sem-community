@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.9] — 08.08.2026 (Unreleased)
 
 ### 🐛 Fixes
+- ⚡ **Min is a floor — enforced at the wire** (#545, reopened) — the start
+  ladder offered 6/8/9 A below a configured 10 A minimum, the stability hold
+  froze 8 A, and a Zoe (whose onboard charger cuts out below ~10 A) flapped
+  to 0 W and stayed there with an active mode and a hungry car. A nonzero
+  command now never reaches the charger below the configured minimum —
+  commanded ∈ {0} ∪ [min, max], clamped in the one emit seam beneath every
+  ladder, zone and hold. Zero stays zero (the stop intent). The wallbox was
+  innocent: its registers mirrored every command faithfully.
 - 🔌 **A stopped KEBA now locks itself off — the dead-man's OFF** (#740) —
   an Off-mode P30 kept feeding the car in ~3 kW bites through a SEM restart:
   masterless, the box's failsafe watchdog re-authorised its *charging*
