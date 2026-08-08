@@ -4578,7 +4578,11 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 ${(e.surplus_windows||[]).map(e=>n(e,"tmw-sun"))}
                 ${(e.cheap_windows||[]).map(e=>n(e,"cheap"))}
             </div>
-        `,c=[];if(a){const e=new Date(i);e.setMinutes(0,0,0),e.getTime()<i&&e.setHours(e.getHours()+1);const t=Math.max(1,Math.round(r/36e5/6));for(let a=new Date(e);a.getTime()<s;a.setHours(a.getHours()+t)){const e=(a.getTime()-i)/r*100;if(e>94)break;c.push({left:e,text:this._hm(a.toISOString())})}}const d=t&&Array.isArray(t.soc_curve)?t.soc_curve:[],p=[];for(let e=0;e+1<d.length;e++)p.push({start:d[e].t,end:d[e+1].t,rising:d[e+1].kwh>d[e].kwh+.01});const h=e.known_asks||[],_="final"!==e.prices;return W`
+        `,c=W`
+            <div class="band">
+                ${(e.cheap_windows||[]).map(e=>n(e,"cheap"))}
+            </div>
+        `,d=[];if(a){const e=new Date(i);e.setMinutes(0,0,0),e.getTime()<i&&e.setHours(e.getHours()+1);const t=Math.max(2,Math.ceil(r/36e5/5));for(let a=new Date(e);a.getTime()<s;a.setHours(a.getHours()+t)){const e=(a.getTime()-i)/r*100;if(e>94)break;d.push({left:e,text:this._hm(a.toISOString())})}}const p=t&&Array.isArray(t.soc_curve)?t.soc_curve:[],h=[];for(let e=0;e+1<p.length;e++)h.push({start:p[e].t,end:p[e+1].t,rising:p[e+1].kwh>p[e].kwh+.01});const _=e.known_asks||[],g="final"!==e.prices;return W`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
@@ -4586,23 +4590,23 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <span class="title">${this._t("overnight_plan_title")}</span>
                         ${this._viewToggle(!0)}
                         <span class="chip" title="${this._t("overnight_provisional_tip")}">${this._t("overnight_provisional")}</span>
-                        <span class="chip ${_?"":"chip-active"}"
-                              title="${this._t(_?"overnight_prices_preliminary_tip":"overnight_prices_final_tip")}">
-                            ${this._t(_?"overnight_prices_preliminary":"overnight_prices_final")}</span>
+                        <span class="chip ${g?"":"chip-active"}"
+                              title="${this._t(g?"overnight_prices_preliminary_tip":"overnight_prices_final_tip")}">
+                            ${this._t(g?"overnight_prices_preliminary":"overnight_prices_final")}</span>
                         ${this._docsLink()}
                     </div>
                     <div class="strip ${a?"":"nostrip"}">
                         ${a?W`
                             <div class="lbl axis"></div>
                             <div class="track axis">
-                                ${l}
-                                ${c.map(e=>W`
+                                ${c}
+                                ${d.map(e=>W`
                                     <span class="tick ${e.left<4?"first":""}" style="left:${e.left}%">${e.text}</span>
                                 `)}
                             </div>
                             <div class="stat axis"></div>
                         `:q}
-                        ${d.length>1?W`
+                        ${p.length>1?W`
                             <div class="lbl" title="${this._t("overnight_provisional_tip")}">
                                 <div class="lname">
                                     <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:13px;color:#4db6ac"></ha-icon>
@@ -4612,14 +4616,14 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             ${a?W`
                                 <div class="track">
                                     ${l}
-                                    ${p.map(e=>n(e,"run",e.rising?"#f06292":"#4db6ac"))}
+                                    ${h.map(e=>n(e,"run",e.rising?"#f06292":"#4db6ac"))}
                                 </div>
                             `:q}
                             <div class="stat">
-                                <span>${d[0].kwh.toFixed(1)} → ${d[d.length-1].kwh.toFixed(1)} kWh</span>
+                                <span>${p[0].kwh.toFixed(1)} → ${p[p.length-1].kwh.toFixed(1)} kWh</span>
                             </div>
                         `:q}
-                        ${h.map((e,i)=>{const s=vt[e.kind]||vt.load,r=((e,i)=>t&&Array.isArray(t.blocks)?t.blocks.filter(t=>t.id===`${e}:${i}`):[])(e.kind,i),o=[e.label,r.map(e=>`${this._hm(e.start)}–${this._hm(e.end)}`).join("\n")||null,this._t("overnight_provisional_tip")].filter(Boolean).join("\n");return W`
+                        ${_.map((e,i)=>{const s=vt[e.kind]||vt.load,r=((e,i)=>t&&Array.isArray(t.blocks)?t.blocks.filter(t=>t.id===`${e}:${i}`):[])(e.kind,i),o=[e.label,r.map(e=>`${this._hm(e.start)}–${this._hm(e.end)}`).join("\n")||null,this._t("overnight_provisional_tip")].filter(Boolean).join("\n");return W`
                                 <div class="lbl" title="${o}">
                                     <div class="lname">
                                         <ha-icon icon="${s.icon}" style="--mdc-icon-size:13px;color:${s.color}"></ha-icon>
@@ -4996,13 +5000,13 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             .tmw-track { position: relative; height: 18px; margin-top: 8px; }
             .tmw-sun {
                 position: absolute; top: 0; height: 100%;
-                background: rgba(255,152,0,0.45); border-radius: 3px;
+                background: rgba(255,152,0,0.20); border-radius: 3px;
             }
             .tmw-cheap {
                 position: absolute; top: 30%; height: 40%;
                 background: rgba(141,200,146,0.5); border-radius: 3px;
             }
-            .tmw-sun-key { background: rgba(255,152,0,0.6); }
+            .tmw-sun-key { background: rgba(255,152,0,0.45); }
             .nightband {
                 position: absolute; top: 0; height: 100%;
                 background: rgba(131,83,209,0.10);

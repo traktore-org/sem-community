@@ -1271,11 +1271,24 @@ class TestTomorrowPreviewComposer:
         assert curve[0]["kwh"] == 4.2 and curve[-1]["kwh"] > 4.2
         assert len(curve) <= 6, "compressed for the recorder budget"
 
-    def test_no_stamped_plan_means_no_provisional(self):
-        """Without today's plan there is no honest morning seed — the
-        preview stays books-only rather than inventing a battery level."""
+    def test_an_idle_today_seeds_from_the_live_soc(self):
+        """(Guido on PROD, 08-08: 'where is the home battery?') An idle
+        today-plan has NO slots, so the stash offers no morning seed —
+        but the live SOC is not an invented number; the provisional
+        seeds from it instead of vanishing."""
         fake = self._fake()
-        p = SEMCoordinator._compose_tomorrow_preview(fake)
+        fake._overnight_shadow_plan = {"slots": []}   # the idle answer
+        p = SEMCoordinator._compose_tomorrow_preview(
+            fake, power=_power(soc=60.0))
+        prov = p["provisional"]
+        assert prov is not None
+        assert prov["soc_start"] == 6.0   # 60% of the 10 kWh attribute
+
+    def test_no_seed_at_all_means_no_provisional(self):
+        """No stash trajectory AND no live reading — only then does the
+        preview stay books-only rather than inventing a battery level."""
+        fake = self._fake()
+        p = SEMCoordinator._compose_tomorrow_preview(fake, power=None)
         assert p.get("provisional") is None
 
     def test_a_load_without_goals_asks_nothing(self):

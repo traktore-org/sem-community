@@ -4149,7 +4149,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # does not exist yet.
             try:
                 result["energy_plan_tomorrow"] = (
-                    self._compose_tomorrow_preview())
+                    self._compose_tomorrow_preview(power))
             except Exception:  # noqa: BLE001 — a preview never costs a cycle
                 result["energy_plan_tomorrow"] = None
 
@@ -5918,7 +5918,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 continue
         return windows
 
-    def _compose_tomorrow_preview(self):
+    def _compose_tomorrow_preview(self, power=None):
         """(#638 consolidation / #722) The next energy day's books,
         previewed for the card's Tomorrow view — or None when the frame
         is unknowable. Anchored to TOMORROW's date throughout (the #722
@@ -6016,17 +6016,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # invented battery level.
         preview["provisional"] = None
         try:
+            # The SAME capacity source the plan itself walks with — the
+            # coordinator attribute, not a config key (a parallel source
+            # is how the clone's battery row went missing while its
+            # arbitrage line happily said /15.0).
+            cap_kwh2 = float(getattr(
+                self, "battery_capacity_kwh", 0.0) or 0.0)
             _stash = getattr(self, "_overnight_shadow_plan", None)
             _sl = (_stash.get("slots") if isinstance(_stash, dict)
                    else None) or []
+            soc_seed = None
             if _sl:
                 soc_seed = float(_sl[-1].get("soc_kwh") or 0.0)
-                # The SAME capacity source the plan itself walks with —
-                # the coordinator attribute, not a config key (reading a
-                # parallel source is how the clone's battery row went
-                # missing while its arbitrage line happily said /15.0).
-                cap_kwh2 = float(getattr(
-                    self, "battery_capacity_kwh", 0.0) or 0.0)
+            elif power is not None and getattr(
+                    power, "battery_soc", None) is not None:
+                # (Guido on PROD, 08-08) an IDLE today has no trajectory
+                # to seed from — but the live SOC is not an invented
+                # number, and a quiet today must not erase tomorrow's
+                # battery row.
+                soc_seed = max(0.0, float(power.battery_soc)) / 100.0                     * cap_kwh2
+            if soc_seed is not None:
                 from .day_ledger import (build_day_slots,
                                          provisional_soc_curve)
                 from .overnight_planner import (Demand, build_night_ledger,

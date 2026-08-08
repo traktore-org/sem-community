@@ -231,13 +231,18 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 ${(t.cheap_windows || []).map(w => seg(w, 'cheap'))}
             </div>
         `;
+        const bandLayerAxis = html`
+            <div class="band">
+                ${(t.cheap_windows || []).map(w => seg(w, 'cheap'))}
+            </div>
+        `;
         // Hour ticks every ~3 h across the day axis.
         const ticks = [];
         if (hasStrip) {
             const first = new Date(axis0);
             first.setMinutes(0, 0, 0);
             if (first.getTime() < axis0) first.setHours(first.getHours() + 1);
-            const stepH = Math.max(1, Math.round(span / 3600000 / 6));
+            const stepH = Math.max(2, Math.ceil(span / 3600000 / 5));
             for (let d = new Date(first); d.getTime() < axis1; d.setHours(d.getHours() + stepH)) {
                 const left = ((d.getTime() - axis0) / span) * 100;
                 if (left > 94) break;
@@ -274,7 +279,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         ${hasStrip ? html`
                             <div class="lbl axis"></div>
                             <div class="track axis">
-                                ${bandLayer}
+                                ${bandLayerAxis}
                                 ${ticks.map(k => html`
                                     <span class="tick ${k.left < 4 ? 'first' : ''}" style="left:${k.left}%">${k.text}</span>
                                 `)}
@@ -862,13 +867,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
             .tmw-track { position: relative; height: 18px; margin-top: 8px; }
             .tmw-sun {
                 position: absolute; top: 0; height: 100%;
-                background: rgba(255,152,0,0.45); border-radius: 3px;
+                background: rgba(255,152,0,0.20); border-radius: 3px;
             }
             .tmw-cheap {
                 position: absolute; top: 30%; height: 40%;
                 background: rgba(141,200,146,0.5); border-radius: 3px;
             }
-            .tmw-sun-key { background: rgba(255,152,0,0.6); }
+            .tmw-sun-key { background: rgba(255,152,0,0.45); }
             .nightband {
                 position: absolute; top: 0; height: 100%;
                 background: rgba(131,83,209,0.10);
