@@ -973,11 +973,19 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderComfortBand(device) {
-        // Band-capable = the payload says so (Phase 2 gave switches the
-        // band, so this is every climate + switch load; battery/EV rows
-        // carry no comfort block and stay clean). Payload-driven — the
-        // card never guesses capability from the device type.
-        if (!device.comfort && device.deviceType !== 'climate') return nothing;
+        // Band-capable = every load that is not an EV charger or a
+        // battery (Phase 2 gave switches the band too). Capability by
+        // EXCLUSION, not by payload: right after register_surplus_device
+        // (or a restart) there is a window where the row exists but the
+        // surplus controller has not materialized the live device yet —
+        // no comfort block on the payload — and the old payload-driven
+        // gate hid the section until the controller caught up, which
+        // read as "the Comfort section appeared later by itself"
+        // (onkelfu, #705 on beta.7). The live VERDICT bits (chip, strip
+        // reading) still key on device.comfort and simply wait.
+        const bandCapable = !['ev_charger', 'ev_charging', 'battery']
+            .includes(device.deviceType);
+        if (!device.comfort && !bandCapable) return nothing;
         const g = device.goals || {};
         const unit = this.hass?.config?.unit_system?.temperature || '°C';
         const target = parseFloat(g.comfort_target) || 0;

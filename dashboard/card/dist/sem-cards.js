@@ -6258,7 +6258,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             </div>`}_comfortChipMeta(e){const t=e.comfort;if(!t||!t.state||"disengaged"===t.state)return null;const i="cool"===(t.hvac||"cool");return{forced:{icon:"🔥",color:"#ffc107",label:this._t(i?"chip_cooling_now":"chip_heating_now")},willing:{icon:"❄",color:"#8DC892",label:this._t(i?"chip_pre_cooling":"chip_pre_heating")},banked:{icon:"✓",color:"#4db6ac",label:this._t("chip_banked")}}[t.state]||null}_displayTemp(e){if(null==e)return null;const t=this.hass?.config?.unit_system?.temperature||"°C",i="°F"===t?9*e/5+32:e;return`${Math.round(10*i)/10} ${t}`}_renderComfortChip(e){const t=this._comfortChipMeta(e);if(!t)return q;const i=this._displayTemp(e.comfort.reading_c);return W`
             <div class="comfort-chip" style="border-color:${t.color}55;color:${t.color}">
                 <span>${t.icon}</span> ${t.label}${i?W` \u00B7 ${i}`:q}
-            </div>`}_renderComfortBand(e){if(!e.comfort&&"climate"!==e.deviceType)return q;const t=e.goals||{},i=this.hass?.config?.unit_system?.temperature||"°C",s=parseFloat(t.comfort_target)||0,r=parseFloat(t.comfort_offset)||0,a=parseFloat(t.comfort_limit)||0,o=s>0&&a>0,n=o?Math.min(s-r,a)-3:18,l=o?Math.max(s,a)+3:30,c=e=>Math.max(0,Math.min(100,(e-n)/(l-n)*100)),d=e.comfort?e.comfort.reading_c:null,p=null==d?null:"°F"===i?9*d/5+32:d,h=(t,i,s)=>W`
+            </div>`}_renderComfortBand(e){const t=!["ev_charger","ev_charging","battery"].includes(e.deviceType);if(!e.comfort&&!t)return q;const i=e.goals||{},s=this.hass?.config?.unit_system?.temperature||"°C",r=parseFloat(i.comfort_target)||0,a=parseFloat(i.comfort_offset)||0,o=parseFloat(i.comfort_limit)||0,n=r>0&&o>0,l=n?Math.min(r-a,o)-3:18,c=n?Math.max(r,o)+3:30,d=e=>Math.max(0,Math.min(100,(e-l)/(c-l)*100)),p=e.comfort?e.comfort.reading_c:null,h=null==p?null:"°F"===s?9*p/5+32:p,_=(t,i,s)=>W`
             <input type="number" step="${s}" style="width:56px"
                    .value="${i?String(i):""}" placeholder="\u2014"
                    @change=${i=>{const s=i.target.value;""!==s&&null!=s&&(e.goals={...e.goals||{},[t]:s},this._sendDeviceUpdate(e.id,t,String(s)))}}
@@ -6278,7 +6278,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this.hass&&customElements.get("ha-entity-picker")?W`
                     <ha-entity-picker class="ge-entity"
                            .hass=${this.hass}
-                           .value=${t.comfort_entity||""}
+                           .value=${i.comfort_entity||""}
                            .includeDomains=${["sensor","input_number"]}
                            .placeholder=${this._t("comfort_own_thermometer")}
                            allow-custom-entity
@@ -6287,33 +6287,33 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     `:W`
                     <input type="text" class="ge-entity"
                            placeholder="${this._t("comfort_own_thermometer")}"
-                           .value="${t.comfort_entity||""}"
+                           .value="${i.comfort_entity||""}"
                            @change=${t=>this._sendDeviceUpdate(e.id,"comfort_entity",t.target.value)}>`}
                 </span>
             </div>
-            ${o?W`
+            ${n?W`
             <div class="comfort-strip">
                 <div class="cs-track"></div>
-                <div class="cs-zone" style="left:${c(Math.min(s-r,a))}%;width:${Math.abs(c(a)-c(s-r))}%"></div>
-                <div class="cs-mark" style="left:${c(s-r)}%;background:#8DC892" title="bank"></div>
-                <div class="cs-mark" style="left:${c(s)}%;background:#4db6ac" title="target"></div>
-                <div class="cs-mark" style="left:${c(a)}%;background:#ffc107" title="limit"></div>
-                ${null!=p?W`<div class="cs-read" style="left:${c(p)}%" title="${this._displayTemp(d)}">\u25B2</div>`:q}
+                <div class="cs-zone" style="left:${d(Math.min(r-a,o))}%;width:${Math.abs(d(o)-d(r-a))}%"></div>
+                <div class="cs-mark" style="left:${d(r-a)}%;background:#8DC892" title="bank"></div>
+                <div class="cs-mark" style="left:${d(r)}%;background:#4db6ac" title="target"></div>
+                <div class="cs-mark" style="left:${d(o)}%;background:#ffc107" title="limit"></div>
+                ${null!=h?W`<div class="cs-read" style="left:${d(h)}%" title="${this._displayTemp(p)}">\u25B2</div>`:q}
             </div>`:q}
             <div class="ge-row">
                 <span class="ge-label">${this._t("comfort_keep_at")}</span>
-                <span class="ge-ctl">${h("comfort_target",s,.5)}
-                    <span class="ge-unit">${i}</span></span>
+                <span class="ge-ctl">${_("comfort_target",r,.5)}
+                    <span class="ge-unit">${s}</span></span>
             </div>
             <div class="ge-row">
                 <span class="ge-label">${this._t("comfort_precool_by")}</span>
-                <span class="ge-ctl">${h("comfort_offset",r,.5)}
-                    <span class="ge-unit">${i}</span></span>
+                <span class="ge-ctl">${_("comfort_offset",a,.5)}
+                    <span class="ge-unit">${s}</span></span>
             </div>
             <div class="ge-row">
                 <span class="ge-label">${this._t("comfort_limit_label")}</span>
-                <span class="ge-ctl">${h("comfort_limit",a,.5)}
-                    <span class="ge-unit">${i}</span></span>
+                <span class="ge-ctl">${_("comfort_limit",o,.5)}
+                    <span class="ge-unit">${s}</span></span>
             </div>
             <div class="ge-hint">${this._t("comfort_hint")}</div>`}_renderAntiCycle(e){const t=e.goals||{},i=t=>i=>{const s=i.target.value;""===s||null==s||Number(s)<1||(e.goals={...e.goals||{},[t]:s},this._sendDeviceUpdate(e.id,t,String(s)))},s=(e,s)=>W`
             <input type="number" min="1" max="120" step="1" style="width:56px"
