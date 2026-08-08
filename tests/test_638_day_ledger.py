@@ -212,3 +212,61 @@ class TestTomorrowPreview:
         p = self._preview(day_kwh=0.0, price_at=lambda t: None)
         assert p["surplus_windows"] == [] and p["prices"] == "preliminary"
         assert "forecast_kwh" in p and "cheap_windows" in p
+
+
+class TestProvisionalSocCurve:
+    """(Guido, 08-08: 'we can also predict the battery level and when the
+    devices get surplus — pull it together') — the missing half of the
+    tomorrow walk: the ledger walk models the battery DISCHARGING to the
+    home; through a surplus day the leftover sun CHARGES it. The curve is
+    the walk's soc plus cumulative leftover-surplus charging, capped at
+    capacity — provisional by nature, labeled so."""
+
+    def _curve(self, **kw):
+        from custom_components.solar_energy_management.coordinator.day_ledger import (
+            provisional_soc_curve,
+        )
+        slots = _slots(day_kwh=30.0)   # deep surplus midday over 500 W home
+        ledger = build_night_ledger(
+            slots, soc_kwh=kw.pop("soc", 4.0), floor_kwh=2.0,
+            max_discharge_w=5000.0, peak_limit_w=6000.0)
+        args = dict(capacity_kwh=10.0, max_charge_w=3000.0)
+        args.update(kw)
+        return provisional_soc_curve(ledger, **args)
+
+    def test_the_sun_charges_the_battery_through_the_day(self):
+        pts = self._curve()
+        assert pts[0]["kwh"] == 4.0
+        assert pts[-1]["kwh"] > pts[0]["kwh"]
+
+    def test_the_curve_caps_at_capacity(self):
+        pts = self._curve()
+        assert all(p["kwh"] <= 10.0 + 1e-6 for p in pts)
+        assert pts[-1]["kwh"] == 10.0   # 30 kWh day fills a 10 kWh pack
+
+    def test_charging_respects_the_power_cap(self):
+        slow = self._curve(max_charge_w=500.0)
+        fast = self._curve(max_charge_w=3000.0)
+        mid = len(slow) // 2
+        assert slow[mid]["kwh"] < fast[mid]["kwh"]
+
+    def test_committed_grants_reduce_the_leftover(self):
+        """A slot whose surplus budget is already granted to devices has
+        less left for the battery — the curve must read the ledger's
+        grid_committed_w, not the raw cap."""
+        slots = _slots(day_kwh=30.0)
+        ledger = build_night_ledger(slots, soc_kwh=4.0, floor_kwh=2.0,
+                                    max_discharge_w=5000.0,
+                                    peak_limit_w=6000.0)
+        free = [s for s in ledger if s.cap_override_w is not None]
+        for s in free:
+            s.grid_committed_w = s.cap_override_w   # devices took it all
+        from custom_components.solar_energy_management.coordinator.day_ledger import (
+            provisional_soc_curve,
+        )
+        pts = provisional_soc_curve(ledger, capacity_kwh=10.0,
+                                    max_charge_w=3000.0)
+        assert pts[-1]["kwh"] < 10.0, "nothing left over — pack stays short"
+
+    def test_no_battery_is_no_curve(self):
+        assert self._curve(capacity_kwh=0.0) == []

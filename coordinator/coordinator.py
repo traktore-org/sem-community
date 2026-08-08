@@ -5984,6 +5984,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "label": str(getattr(_dev, "name", "") or "").strip()
                         or str(getattr(_dev, "device_id", "?")),
                         "kwh": round(_rated * _min_s / 3600.0 / 1000.0, 2),
+                        "power_w": _rated,
                     })
                 except Exception:  # noqa: BLE001 — one device, not the list
                     continue
@@ -6004,6 +6005,86 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except Exception:  # noqa: BLE001 — asks are additive, never fatal
             asks = []
         preview["known_asks"] = asks
+        # (Guido, 08-08: "we can also predict the battery level and when
+        # the devices get surplus — pull it together") — the PROVISIONAL
+        # pack: tomorrow's asks placed into tomorrow's own books by the
+        # same packer, the battery seeded with the level TODAY'S plan
+        # predicts for the morning (its walk already ends there). No
+        # stamped plan → no honest seed → no provisional, rather than an
+        # invented battery level.
+        preview["provisional"] = None
+        try:
+            _stash = getattr(self, "_overnight_shadow_plan", None)
+            _sl = (_stash.get("slots") if isinstance(_stash, dict)
+                   else None) or []
+            if _sl:
+                soc_seed = float(_sl[-1].get("soc_kwh") or 0.0)
+                cap_kwh2 = float(self.config.get(
+                    "battery_capacity_kwh", 0) or 0)
+                from .day_ledger import (build_day_slots,
+                                         provisional_soc_curve)
+                from .overnight_planner import (Demand, build_night_ledger,
+                                                pack_night)
+                slots2 = build_day_slots(
+                    start=day_start, end=day_end, day_kwh=day_kwh,
+                    sunrise=sunrise, sunset=sunset,
+                    home_w_at=lambda t: flat_home,
+                    price_at=lambda ts: tariff_price_at(prov, ts),
+                    level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+                )
+                labels2 = {}
+                demands2 = []
+                for i, ask in enumerate(asks):
+                    did = f"{ask['kind']}:{i}"
+                    labels2[did] = ask["label"]
+                    power = float(ask.get("power_w") or 0.0)
+                    if ask["kind"] == "ev" and power <= 0:
+                        # the min-amps floor rate — the honest EV pace
+                        power = 4140.0
+                    if power <= 0:
+                        continue
+                    demands2.append(Demand(
+                        id=did, kind=ask["kind"],
+                        energy_kwh=float(ask["kwh"]),
+                        max_power_w=power, min_power_w=power,
+                        deadline=day_end, priority=i, source="grid",
+                    ))
+                _reserve = float(self.config.get(
+                    "battery_priority_soc", 30) or 30)
+                _floor2 = _reserve / 100.0 * cap_kwh2
+                _md_w = float(self.config.get(
+                    "battery_max_discharge_power", 5000.0) or 5000.0)
+                try:
+                    _peak_w = float(self._get_peak_limit_w() or 0.0)
+                except Exception:  # noqa: BLE001
+                    _peak_w = 0.0
+                ledger2 = build_night_ledger(
+                    slots2, soc_kwh=soc_seed, floor_kwh=_floor2,
+                    max_discharge_w=_md_w, peak_limit_w=_peak_w)
+                plan2 = pack_night(
+                    demands2, ledger2, floor_kwh=_floor2,
+                    max_discharge_w=_md_w, peak_limit_w=_peak_w)
+                curve = provisional_soc_curve(
+                    ledger2, capacity_kwh=cap_kwh2,
+                    max_charge_w=float(self.config.get(
+                        "battery_max_charge_power_w", 5000.0) or 5000.0))
+                # Compress for the recorder budget: ≤ 5 waypoints + end.
+                if len(curve) > 6:
+                    step = max(1, (len(curve) - 1) // 5)
+                    curve = curve[:-1:step] + [curve[-1]]
+                preview["provisional"] = {
+                    "soc_start": round(soc_seed, 2),
+                    "soc_curve": curve,
+                    "fits": plan2.fits,
+                    "blocks": [{
+                        "id": a.demand_id,
+                        "label": labels2.get(a.demand_id),
+                        "start": a.start.isoformat(),
+                        "end": a.end.isoformat(),
+                    } for a in plan2.allocations],
+                }
+        except Exception:  # noqa: BLE001 — provisional is additive, never fatal
+            preview["provisional"] = None
         return preview
 
     def _overnight_plan_tick(self, power, energy) -> None:

@@ -265,6 +265,20 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             `)}
                         </div>
                     ` : nothing}
+                    ${t.provisional ? html`
+                        <div class="asks prov" title="${this._t('overnight_provisional_tip')}">
+                            <span class="asks-lbl">${this._t('overnight_provisional')}</span>
+                            ${(t.provisional.soc_curve || []).length ? html`
+                                <span class="ask">
+                                    <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:12px;color:#4db6ac"></ha-icon>
+                                    ${t.provisional.soc_curve[0].kwh.toFixed(1)} → ${t.provisional.soc_curve[t.provisional.soc_curve.length - 1].kwh.toFixed(1)} kWh</span>
+                            ` : nothing}
+                            ${(t.provisional.blocks || []).slice(0, 6).map(b => html`
+                                <span class="ask">${b.label || b.id}
+                                    ${this._hm(b.start)}–${this._hm(b.end)}</span>
+                            `)}
+                        </div>
+                    ` : nothing}
                     <div class="idle">
                         ☀ ${(t.forecast_kwh || 0).toFixed(1)} kWh ·
                         ${this._format('overnight_stamps_at',
@@ -784,6 +798,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 font-weight: 600; color: var(--secondary-text-color, #8a93a5);
             }
             .ask { display: inline-flex; align-items: center; gap: 3px; }
+            .prov { opacity: 0.85; }
             .vtoggle {
                 display: inline-flex; border: 1px solid rgba(255,255,255,0.14);
                 border-radius: 8px; overflow: hidden; margin-left: 2px;

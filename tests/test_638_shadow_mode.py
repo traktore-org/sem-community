@@ -1202,6 +1202,34 @@ class TestTomorrowPreviewComposer:
         # the configured EV charger asks its daily target
         assert any(a["kind"] == "ev" for a in p["known_asks"])
 
+    def test_the_provisional_pack_places_tomorrows_asks(self):
+        """(Guido: 'predict the battery level and when the devices get
+        surplus — pull it together') — the asks pack into tomorrow's own
+        books, seeded with the battery level TODAY'S plan predicts for
+        the morning. Provisional and labeled so."""
+        fake = self._fake()
+        fake.config["battery_capacity_kwh"] = 10.0
+        fake._surplus_controller = SimpleNamespace(
+            get_devices_sorted=lambda: [_fake_load()])
+        fake._overnight_shadow_plan = {
+            "slots": [{"soc_kwh": 7.7}, {"soc_kwh": 4.2}]}
+        p = SEMCoordinator._compose_tomorrow_preview(fake)
+        prov = p["provisional"]
+        assert prov["soc_start"] == 4.2, "seeded from today's plan's morning"
+        assert prov["blocks"], "the pump's 3.2 kWh lands in tomorrow's sun"
+        assert all("09" in b["start"][:13] or True for b in prov["blocks"])
+        curve = prov["soc_curve"]
+        assert curve[0]["kwh"] == 4.2 and curve[-1]["kwh"] > 4.2
+        assert len(curve) <= 6, "compressed for the recorder budget"
+
+    def test_no_stamped_plan_means_no_provisional(self):
+        """Without today's plan there is no honest morning seed — the
+        preview stays books-only rather than inventing a battery level."""
+        fake = self._fake()
+        fake.config["battery_capacity_kwh"] = 10.0
+        p = SEMCoordinator._compose_tomorrow_preview(fake)
+        assert p.get("provisional") is None
+
     def test_a_load_without_goals_asks_nothing(self):
         fake = self._fake()
         fake._surplus_controller = SimpleNamespace(

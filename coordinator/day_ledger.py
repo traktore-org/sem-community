@@ -194,3 +194,37 @@ def tariff_cheap_at(prov, ts):
         name = str(getattr(lvl, "value", lvl) or "").lower()
         return name in ("cheap", "very_cheap", "negative")
     return False
+
+
+def provisional_soc_curve(ledger, *, capacity_kwh: float,
+                          max_charge_w: float) -> list:
+    """(Guido, 08-08: "we can also predict the battery level") — the
+    battery's likely path through a walked day ledger.
+
+    The trajectory walk models the DISCHARGE side (home draws battery to
+    the floor); through a surplus day the leftover sun CHARGES it. The
+    curve is the walk's per-slot soc plus cumulative leftover-surplus
+    charging — leftover meaning the slot's surplus budget minus what the
+    pack already granted to devices (``grid_committed_w``) — bounded by
+    the charge power cap and the pack's capacity. An approximation by
+    design (charging feeds back into later coverage only via the base
+    walk), published under a preview that says *provisional* out loud.
+    """
+    if capacity_kwh <= 0 or not ledger:
+        return []
+    pts = []
+    charged = 0.0
+    for s in ledger:
+        soc = min(capacity_kwh, s.soc_kwh + charged)
+        pts.append({"t": s.start.isoformat(), "kwh": round(soc, 2)})
+        leftover_w = 0.0
+        if s.cap_override_w is not None:
+            leftover_w = max(0.0, s.cap_override_w - s.grid_committed_w)
+        room = max(0.0, capacity_kwh - soc)
+        charged += min(min(leftover_w, max_charge_w) * s.hours / 1000.0,
+                       room)
+    last = ledger[-1]
+    end = min(capacity_kwh,
+              max(0.0, last.soc_kwh - last.home_batt_kwh) + charged)
+    pts.append({"t": last.end.isoformat(), "kwh": round(end, 2)})
+    return pts
