@@ -2442,6 +2442,14 @@ async def _async_register_services(
                 "sem-shared.js",
                 "sem-system-diagram-card.js",
             }
+            # (#738) the per-language tables the loader lazily injects —
+            # the mirror must carry them or the legacy /local channel 404s
+            # (the #617 vendor/ class). Computed, not hardcoded: a new
+            # language in translations.json rides along automatically.
+            CANONICAL_TOP_LEVEL |= {
+                f for f in os.listdir(card_src_dir)
+                if f.startswith("sem-localize.") and f.endswith(".js")
+            }
 
             def _install_assets() -> tuple[bool, list[str]]:
                 """Sync top-level dashboard assets to /config/www/. Runs in executor."""
@@ -3263,7 +3271,11 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     return base
 
             return {
-                "localize": _token("sem-localize.js"),
+                # (#738) hash the SOURCE, not the loader: the loader's bytes
+                # don't move on a German-only change, but the German sibling
+                # must still be cache-busted — the loader propagates this
+                # token onto every injected sem-localize.<lang>.js URL.
+                "localize": _token("..", "translations.json"),
                 "bundle": _token("dist", "sem-cards.js"),
                 "diagram": _token("sem-system-diagram-card.js"),
             }
