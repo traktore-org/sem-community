@@ -52,7 +52,7 @@ CARD_KEYS = [
     "overnight_today", "overnight_tomorrow", "overnight_prices_final",
     "overnight_prices_preliminary", "overnight_prices_final_tip",
     "overnight_prices_preliminary_tip", "overnight_legend_surplus",
-    "overnight_stamps_at",
+    "overnight_stamps_at", "overnight_tomorrow_asks",
     "overnight_kind_battery", "overnight_kind_comfort",
     "overnight_comfort_tip", "overnight_arbitrage", "overnight_arbitrage_tip",
     "overnight_strip_omitted",
@@ -231,6 +231,16 @@ def test_the_projection_carries_the_arbitrage_advice():
         {"arbitrage": {"opportunity": False, "reason": "no priced market"},
          "demands": [], "slots": [], "blocks": []})
     assert attrs["arbitrage"]["reason"] == "no priced market"
+
+
+def test_the_idle_answer_carries_its_why():
+    """(Guido, 08-08: uncapping a device made the plan 'disappear') — the
+    quiet answer was CORRECT but unexplained on the card: the why lived
+    only in diagnose. The projection now carries it."""
+    attrs = _overnight_plan_attrs(
+        {"why": "ev_targets={}, loads_eligible=0", "demands": [],
+         "slots": [], "blocks": []})
+    assert attrs["why"] == "ev_targets={}, loads_eligible=0"
 
 
 def test_the_projection_carries_the_replan_cause():

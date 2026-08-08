@@ -4596,14 +4596,24 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             <span class="key"><i class="sw cheapkey"></i>${this._t("overnight_legend_cheap")}</span>
                         </div>
                     `:q}
+                    ${(e.known_asks||[]).length?W`
+                        <div class="asks">
+                            <span class="asks-lbl">${this._t("overnight_tomorrow_asks")}</span>
+                            ${(e.known_asks||[]).map(e=>W`
+                                <span class="ask">
+                                    <ha-icon icon="${"ev"===e.kind?"mdi:ev-station":"mdi:power-plug"}"
+                                             style="--mdc-icon-size:12px;color:${"ev"===e.kind?"#8DC892":"#5BC8D8"}"></ha-icon>
+                                    ${e.label} ${(e.kwh||0).toFixed(1)} kWh</span>
+                            `)}
+                        </div>
+                    `:q}
                     <div class="idle">
                         ☀ ${(e.forecast_kwh||0).toFixed(1)} kWh ·
-                        🌙 ${this._hm(e.night_open)} ·
                         ${this._format("overnight_stamps_at",{time:this._hm(e.stamps_at)})}
                     </div>
                 </div>
             </ha-card>
-        `}_renderIdle(e,t="overnight_idle",i="",s=!1){return W`
+        `}_renderIdle(e,t="overnight_idle",i="",s=!1,r=""){return W`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
@@ -4614,9 +4624,10 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         ${this._docsLink()}
                     </div>
                     <div class="idle">${this._t(t)}${i}</div>
+                    ${r?W`<div class="why" title="${r}">${r}</div>`:q}
                 </div>
             </ha-card>
-        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation||void 0===i.actuation&&"on"===this._hass.states["switch.sem_overnight_actuation"]?.state;if("tomorrow"===(this._view||"today")&&i.tomorrow)return this._renderTomorrow(i.tomorrow);if("pending"===t){const e=this._hass.states["sensor.sem_night_start_time"]?.state,t=e&&/^\d{1,2}:\d{2}$/.test(e)?` (~${e})`:"";return this._renderIdle(s,"overnight_pending",t,!!i.tomorrow)}const r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s,"overnight_idle","",!!i.tomorrow);const n=a.length?Date.parse(a[0].start):NaN,l=a.length?Date.parse(a[a.length-1].end):NaN,c=l-n,d=a.length>0&&Number.isFinite(c)&&c>0,p=this._runs(a,n,c,e=>!!e.cheap).filter(e=>e.v);let h=null;const _=this._hass.states["sensor.sem_night_start_time"]?.state;if(d&&_&&/^\d{1,2}:\d{2}$/.test(_)){const[e,t]=_.split(":").map(Number);for(const i of[0,1]){const s=new Date(n);s.setDate(s.getDate()+i),s.setHours(e,t,0,0);const r=s.getTime();if(r>=n&&r<l){h=(r-n)/c*100;break}}}const g=Date.now(),u=d&&g>=n&&g<l?(g-n)/c*100:null,f=W`
+        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation||void 0===i.actuation&&"on"===this._hass.states["switch.sem_overnight_actuation"]?.state;if("tomorrow"===(this._view||"today")&&i.tomorrow)return this._renderTomorrow(i.tomorrow);if("pending"===t){const e=this._hass.states["sensor.sem_night_start_time"]?.state,t=e&&/^\d{1,2}:\d{2}$/.test(e)?` (~${e})`:"";return this._renderIdle(s,"overnight_pending",t,!!i.tomorrow)}const r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s,"overnight_idle","",!!i.tomorrow,i.why||"");const n=a.length?Date.parse(a[0].start):NaN,l=a.length?Date.parse(a[a.length-1].end):NaN,c=l-n,d=a.length>0&&Number.isFinite(c)&&c>0,p=this._runs(a,n,c,e=>!!e.cheap).filter(e=>e.v);let h=null;const _=this._hass.states["sensor.sem_night_start_time"]?.state;if(d&&_&&/^\d{1,2}:\d{2}$/.test(_)){const[e,t]=_.split(":").map(Number);for(const i of[0,1]){const s=new Date(n);s.setDate(s.getDate()+i),s.setHours(e,t,0,0);const r=s.getTime();if(r>=n&&r<l){h=(r-n)/c*100;break}}}const g=Date.now(),u=d&&g>=n&&g<l?(g-n)/c*100:null,f=W`
             <div class="band">
                 ${p.map(e=>W`
                     <div class="cheap" style="left:${e.left}%;width:${e.width}%"></div>
@@ -4920,6 +4931,20 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 display: flex; align-items: center; gap: 5px;
                 margin-top: 8px; font-size: 11px; color: #ffb74d;
             }
+            .head { flex-wrap: wrap; row-gap: 4px; }
+            .why {
+                margin-top: 4px; font-size: 10px; opacity: 0.55;
+                color: var(--secondary-text-color);
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            }
+            .asks {
+                display: flex; flex-wrap: wrap; gap: 6px 10px;
+                align-items: center; margin-top: 8px; font-size: 11px;
+            }
+            .asks-lbl {
+                font-weight: 600; color: var(--secondary-text-color, #8a93a5);
+            }
+            .ask { display: inline-flex; align-items: center; gap: 3px; }
             .vtoggle {
                 display: inline-flex; border: 1px solid rgba(255,255,255,0.14);
                 border-radius: 8px; overflow: hidden; margin-left: 2px;

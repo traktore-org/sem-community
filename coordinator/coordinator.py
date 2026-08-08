@@ -5955,7 +5955,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             flat_home = 300.0
         from .day_ledger import tariff_cheap_at, tariff_price_at
         prov = self._tariff_provider
-        return tomorrow_preview(
+        preview = tomorrow_preview(
             day_start=day_start, day_end=day_end, day_kwh=day_kwh,
             sunrise=sunrise, sunset=sunset,
             home_w_at=lambda t: flat_home,
@@ -5963,6 +5963,48 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
             stamps_at=stamps_at,
         )
+        # (Guido, 08-08: "forecast and home consumption is something we
+        # already know") — the preview's real content is what tomorrow
+        # will ASK: each load's daily min-runtime × its calibrated draw,
+        # each charger's daily target. Knowable today because the day
+        # counters reset at midnight; no packing, no verdicts — that
+        # plan honestly does not exist until it stamps.
+        asks = []
+        try:
+            _ctrl = getattr(self, "_surplus_controller", None)
+            for _dev in (_ctrl.get_devices_sorted() if _ctrl else []):
+                try:
+                    _min_s = float(getattr(_dev, "daily_min_runtime_sec", 0)
+                                   or 0)
+                    _rated = float(getattr(_dev, "rated_power", 0.0) or 0.0)
+                    if _min_s <= 0 or _rated <= 0:
+                        continue
+                    asks.append({
+                        "kind": "load",
+                        "label": str(getattr(_dev, "name", "") or "").strip()
+                        or str(getattr(_dev, "device_id", "?")),
+                        "kwh": round(_rated * _min_s / 3600.0 / 1000.0, 2),
+                    })
+                except Exception:  # noqa: BLE001 — one device, not the list
+                    continue
+            for _cfg in (self.config.get("ev_chargers") or []):
+                try:
+                    _tgt = float(_cfg.get("daily_ev_target")
+                                 or self.config.get("daily_ev_target", 0)
+                                 or 0)
+                    if _tgt <= 0.05:
+                        continue
+                    asks.append({
+                        "kind": "ev",
+                        "label": str(_cfg.get("name") or "EV").strip(),
+                        "kwh": round(_tgt, 2),
+                    })
+                except Exception:  # noqa: BLE001
+                    continue
+        except Exception:  # noqa: BLE001 — asks are additive, never fatal
+            asks = []
+        preview["known_asks"] = asks
+        return preview
 
     def _overnight_plan_tick(self, power, energy) -> None:
         """(#638) The once-per-night stamp + demand-shape replan trigger.
@@ -6357,6 +6399,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._overnight_shadow_plan = {
                     "computed_at": now.isoformat(),
                     "fits": True,
+                    # (08-08) the quiet answer must explain itself ON the
+                    # card, not only in diagnose — "the plan disappeared"
+                    # was a correct idle answer nobody could read.
+                    "why": why,
                     "summary": [f"no overnight demands tonight ({why})"],
                     # (#638 G3c) Same keys as a full plan, empty — the card
                     # renders "nothing needs the night" from the SHAPE, not

@@ -151,6 +151,9 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
         # night is distinguishable from the first answer on the entity,
         # not only in container logs (which rotate too fast for evidence).
         "replan_cause": plan.get("replan_cause"),
+        # (08-08) the idle answer's why — the card shows it so a quiet
+        # plan reads as an answer, never as a disappearance.
+        "why": plan.get("why"),
         # (#638, the last string) the shadow arbitrage advisor's verdict
         # with its numbers — the morning plan-vs-Sankey audit reads it
         # here. Small by construction (a few blocks at most).

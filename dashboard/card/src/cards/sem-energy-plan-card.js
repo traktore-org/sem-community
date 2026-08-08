@@ -254,9 +254,19 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             <span class="key"><i class="sw cheapkey"></i>${this._t('overnight_legend_cheap')}</span>
                         </div>
                     ` : nothing}
+                    ${(t.known_asks || []).length ? html`
+                        <div class="asks">
+                            <span class="asks-lbl">${this._t('overnight_tomorrow_asks')}</span>
+                            ${(t.known_asks || []).map(k => html`
+                                <span class="ask">
+                                    <ha-icon icon="${k.kind === 'ev' ? 'mdi:ev-station' : 'mdi:power-plug'}"
+                                             style="--mdc-icon-size:12px;color:${k.kind === 'ev' ? '#8DC892' : '#5BC8D8'}"></ha-icon>
+                                    ${k.label} ${(k.kwh || 0).toFixed(1)} kWh</span>
+                            `)}
+                        </div>
+                    ` : nothing}
                     <div class="idle">
                         ☀ ${(t.forecast_kwh || 0).toFixed(1)} kWh ·
-                        🌙 ${this._hm(t.night_open)} ·
                         ${this._format('overnight_stamps_at',
                                        { time: this._hm(t.stamps_at) })}
                     </div>
@@ -265,7 +275,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
         `;
     }
 
-    _renderIdle(act, textKey = 'overnight_idle', suffix = '', hasTomorrow = false) {
+    _renderIdle(act, textKey = 'overnight_idle', suffix = '', hasTomorrow = false, why = '') {
         return html`
             <ha-card>
                 <div class="wrap">
@@ -277,6 +287,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         ${this._docsLink()}
                     </div>
                     <div class="idle">${this._t(textKey)}${suffix}</div>
+                    ${why ? html`<div class="why" title="${why}">${why}</div>` : nothing}
                 </div>
             </ha-card>
         `;
@@ -319,7 +330,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
         const slots = Array.isArray(a.slots) ? a.slots : [];
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
         if (verdict === 'idle' || !demands.length) {
-            return this._renderIdle(act, 'overnight_idle', '', !!a.tomorrow);
+            return this._renderIdle(act, 'overnight_idle', '', !!a.tomorrow, a.why || '');
         }
 
         const t0 = slots.length ? Date.parse(slots[0].start) : NaN;
@@ -759,6 +770,20 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 display: flex; align-items: center; gap: 5px;
                 margin-top: 8px; font-size: 11px; color: #ffb74d;
             }
+            .head { flex-wrap: wrap; row-gap: 4px; }
+            .why {
+                margin-top: 4px; font-size: 10px; opacity: 0.55;
+                color: var(--secondary-text-color);
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            }
+            .asks {
+                display: flex; flex-wrap: wrap; gap: 6px 10px;
+                align-items: center; margin-top: 8px; font-size: 11px;
+            }
+            .asks-lbl {
+                font-weight: 600; color: var(--secondary-text-color, #8a93a5);
+            }
+            .ask { display: inline-flex; align-items: center; gap: 3px; }
             .vtoggle {
                 display: inline-flex; border: 1px solid rgba(255,255,255,0.14);
                 border-radius: 8px; overflow: hidden; margin-left: 2px;

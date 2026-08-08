@@ -1184,3 +1184,27 @@ class TestTomorrowPreviewComposer:
         assert p["forecast_kwh"] == 0.0
         assert p["surplus_windows"] == []
         assert p["prices"] == "final"
+
+    def test_tomorrows_known_asks_ride_the_preview(self):
+        """(Guido, 08-08: 'forecast and home consumption is something we
+        already know') — the preview's real content is what tomorrow will
+        ASK: each load's daily min-runtime × its calibrated draw, and each
+        charger's daily target. Knowable today because the day counters
+        reset at midnight."""
+        fake = self._fake()
+        fake.config["ev_chargers"][0]["daily_ev_target"] = 6.0
+        fake._surplus_controller = SimpleNamespace(
+            get_devices_sorted=lambda: [_fake_load()])
+        p = SEMCoordinator._compose_tomorrow_preview(fake)
+        asks = {a["label"]: a["kwh"] for a in p["known_asks"]}
+        # pump: 4h min runtime × 800 W = 3.2 kWh (full day resets)
+        assert asks.get("pump") == 3.2
+        # the configured EV charger asks its daily target
+        assert any(a["kind"] == "ev" for a in p["known_asks"])
+
+    def test_a_load_without_goals_asks_nothing(self):
+        fake = self._fake()
+        fake._surplus_controller = SimpleNamespace(
+            get_devices_sorted=lambda: [_idle_load()])
+        p = SEMCoordinator._compose_tomorrow_preview(fake)
+        assert not any(a["kind"] == "load" for a in p["known_asks"])
