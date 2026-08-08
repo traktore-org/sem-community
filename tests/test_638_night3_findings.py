@@ -217,3 +217,84 @@ class TestTheStampPrecedesTheDecisions:
             "the trigger body must live only in _overnight_plan_tick — two "
             "copies is the drift invitation this extraction removes"
         )
+
+
+class TestThePlanSurvivesTheReboot:
+    """(Guido, 00:20 on 08-09: 'why would a reboot destroy the planning
+    — it has to survive') — his own Aug-5 note made acute: a mid-night
+    reboot discarded a stamped plan the actuation was steering by. The
+    stash, the period key and the demand signature persist through the
+    energy store (the W/A precedent) and restore at boot — same period
+    → same plan, no silent reshuffle; a stale period discards."""
+
+    def _restored(self, state):
+        fake = SimpleNamespace(
+            _overnight_shadow_plan=None,
+            _shadow_plan_date=None,
+            _plan_ev_conn_sig=None,
+        )
+        SEMCoordinator._restore_overnight_plan(fake, state)
+        return fake
+
+    def test_a_fresh_same_period_plan_restores(self):
+        state = {
+            "plan": {"computed_at": "2026-08-08T23:04:00+02:00",
+                     "demands": [{"id": "ev:x", "status": "fits"}]},
+            "period": "2026-08-09",
+            "sig": [["conn", [["keba", True]]], ["price", [0.3, 0.2]]],
+        }
+        fake = self._restored(state)
+        assert fake._overnight_shadow_plan["demands"][0]["id"] == "ev:x"
+        assert str(fake._shadow_plan_date) == "2026-08-09"
+        # the signature must compare EQUAL to a live tuple-shaped sig —
+        # a JSON round-trip turns tuples into lists, and an unequal sig
+        # would re-plan immediately, defeating the whole persistence.
+        live = (("conn", (("keba", True),)), ("price", (0.3, 0.2)))
+        assert fake._plan_ev_conn_sig == live
+
+    def test_garbage_restores_nothing(self):
+        for bad in (None, "x", {}, {"plan": "not-a-dict"},
+                    {"plan": {}, "period": "not-a-date", "sig": []}):
+            fake = self._restored(bad)
+            assert fake._overnight_shadow_plan is None
+            assert fake._shadow_plan_date is None
+
+    def test_the_tick_does_not_replan_a_restored_period(self, monkeypatch):
+        _freeze(monkeypatch, 23, 30)
+        fake = _tick_self()
+        # simulate the restore: period = tonight's energy day (night_end
+        # 07:00 tomorrow → period = tomorrow's date), sig = current ask
+        from datetime import date
+        fake._shadow_plan_date = date(2026, 8, 9)
+        fake._plan_ev_conn_sig = ("ask",)
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == [], (
+            "same period + same ask after a reboot = the SAME night — "
+            "no silent reshuffle")
+
+    def test_a_manual_replan_restamps_with_its_own_cause(self, monkeypatch):
+        """(Guido, 00:30: 'for testing purposes... a button — or an
+        action') — the explicit re-plan lever from his Aug-5 note:
+        restart-as-replan was the TEST lever, and now that the plan
+        survives reboots, the service is the honest replacement. Same
+        period, same ask — the flag alone re-stamps, cause 'manual'."""
+        _freeze(monkeypatch, 22)
+        fake = _tick_self()
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == ["initial"]
+        fake._manual_replan_requested = True
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == ["initial", "manual"]
+        assert fake._manual_replan_requested is False
+
+    def test_the_stamp_persists_through_the_store(self, monkeypatch):
+        _freeze(monkeypatch, 22)
+        stored = {}
+        fake = _tick_self()
+        fake._storage = SimpleNamespace(
+            set_overnight_plan_state=lambda s: stored.update(s))
+        fake._overnight_shadow_plan = {"computed_at": "x", "demands": []}
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert stored.get("period") == "2026-08-09"
+        assert stored.get("sig") is not None
+        assert isinstance(stored.get("plan"), dict)

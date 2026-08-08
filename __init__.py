@@ -2396,6 +2396,17 @@ async def _async_register_services(
     - Clear logging for debugging
     """
 
+    async def async_replan_service(call) -> None:
+        """(#638) Force a fresh energy-day plan on the next cycle."""
+        coordinator.request_replan()
+        _LOGGER.info("Service replan: fresh plan requested")
+
+    try:
+        hass.services.async_register(DOMAIN, "replan", async_replan_service)
+        _LOGGER.debug("Registered service: %s.replan", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register replan service: %s", err)
+
     # Check if services are already registered (prevents conflicts on reload)
     services_already_registered = hass.services.has_service(DOMAIN, "sync_priorities_from_dashboard")
     if services_already_registered:

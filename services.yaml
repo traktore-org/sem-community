@@ -598,3 +598,10 @@ set_option:
       required: false
       selector:
         text:
+
+replan:
+  name: Re-plan the energy day
+  description: >-
+    Discards the current stamped plan and computes a fresh one on the next
+    cycle (within ~10 seconds). The testing/ops lever — the plan survives
+    restarts, so a reboot no longer re-plans.

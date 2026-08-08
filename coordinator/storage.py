@@ -479,6 +479,18 @@ class SEMStorage:
     # 6.9 kW nameplate, found no slot under the peak, and yielded a car
     # that then charged at 4.54 kW. Same rule as the sign locks below:
     # learned state that gates behaviour is not allowed to die at boot.
+    def get_overnight_plan_state(self) -> Dict[str, Any]:
+        """(#638) Tonight's stamped plan + period + demand signature —
+        a reboot must not silently reshuffle a night the actuation is
+        steering by (Guido's Aug-5 note, made acute 00:20 on 08-09)."""
+        return self._energy_data.get("overnight_plan", {})
+
+    def set_overnight_plan_state(self, state: Dict[str, Any]) -> None:
+        """(#638) Persist the stamp; saved by the normal delayed-save
+        cycle — an abrupt kill before a save degrades to the old
+        re-plan-on-boot, never to a corrupt night."""
+        self._energy_data["overnight_plan"] = dict(state)
+
     def get_ev_wpa_state(self) -> Dict[str, float]:
         """Get the persisted per-charger measured-W/A EMA."""
         return self._energy_data.get("ev_wpa_ema", {})

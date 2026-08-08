@@ -860,6 +860,51 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         learned = self._ev_wpa_ema.get(cid)
         return float(learned) if learned else nameplate
 
+    def request_replan(self) -> None:
+        """(#638) The explicit re-plan action: the next cycle discards
+        the current stamp and re-plans with cause 'manual'."""
+        self._manual_replan_requested = True
+
+    def _restore_overnight_plan(self, state) -> None:
+        """(#638) Re-seat tonight's stamped plan after a reboot.
+
+        The plan is STATE the actuation steers by — 'why would a reboot
+        destroy the planning, it has to survive' (Guido, 00:20 on
+        2026-08-09, his own Aug-5 follow-up note made acute). Restores
+        the stash, the period key and the demand signature so the tick
+        sees the same night and does not silently reshuffle it; the
+        ask-change trigger still works because the signature is
+        restored TUPLE-SHAPED — a JSON round-trip turns tuples into
+        lists, and an unequal shape would re-plan immediately, defeating
+        the persistence. Anything malformed restores nothing (the #563
+        per-entry rule: fall back to re-plan-on-boot, never corrupt).
+        """
+        try:
+            if not isinstance(state, dict):
+                return
+            plan = state.get("plan")
+            period_s = state.get("period")
+            if not isinstance(plan, dict) or not plan.get("computed_at"):
+                return
+            from datetime import date as _date
+            period = _date.fromisoformat(str(period_s))
+
+            def _tuples(v):
+                if isinstance(v, list):
+                    return tuple(_tuples(x) for x in v)
+                return v
+
+            self._overnight_shadow_plan = plan
+            self._shadow_plan_date = period
+            self._plan_ev_conn_sig = _tuples(state.get("sig"))
+            _LOGGER.info(
+                "OVERNIGHT-PLAN (#638): restored the stamped plan for "
+                "period %s (computed %s) — the reboot does not reshuffle "
+                "the night", period, str(plan.get("computed_at"))[:19],
+            )
+        except Exception:  # noqa: BLE001 — a bad stash is a re-plan, not a crash
+            _LOGGER.debug("overnight plan restore skipped", exc_info=True)
+
     def _restore_ev_wpa(self, state) -> None:
         """(#638 night 2) Seed the measured-W/A EMA from storage at boot.
 
@@ -2365,6 +2410,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # the car's next charge, and a deploy at 23:36 + a re-plan at
             # 23:46 yielded an EV demand the plan should have placed.
             self._restore_ev_wpa(self._storage.get_ev_wpa_state())
+            self._restore_overnight_plan(
+                self._storage.get_overnight_plan_state())
 
             # (#640) The legionella-timestamp restore MOVED to the hot_water
             # registration site in __init__.py — this first-refresh block runs
@@ -6191,6 +6238,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # runtime deficit, and the night's price curve.
             _demand_sig = self._overnight_demand_signature(power)
             cause = "initial"
+            # (Guido, 00:30 on 08-09) the explicit re-plan lever — now
+            # that the plan survives reboots, restart-as-replan retires
+            # and the service is the honest test/ops lever.
+            if getattr(self, "_manual_replan_requested", False):
+                self._manual_replan_requested = False
+                self._shadow_plan_date = None
+                cause = "manual"
+                _LOGGER.info(
+                    "OVERNIGHT-PLAN (#638): manual re-plan requested — "
+                    "restamping the period")
             if (getattr(self, "_shadow_plan_date", None) == _night_of
                     and self._plan_ev_conn_sig is not None
                     and _demand_sig != self._plan_ev_conn_sig):
@@ -6224,6 +6281,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         replan_cause=cause):
                     self._shadow_plan_date = _night_of
                     self._plan_ev_conn_sig = _demand_sig
+                    # (#638) the stamp is state — persist it so a reboot
+                    # re-seats the SAME night (saved by the normal
+                    # delayed-save cycle, the W/A precedent).
+                    _st = getattr(self, "_storage", None)
+                    if _st is not None:
+                        try:
+                            _st.set_overnight_plan_state({
+                                "plan": self._overnight_shadow_plan,
+                                "period": _night_of.isoformat(),
+                                "sig": _demand_sig,
+                            })
+                        except Exception:  # noqa: BLE001 — persist is best-effort
+                            pass
         except Exception:  # noqa: BLE001 — shadow must never break the cycle
             _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
 
