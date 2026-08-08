@@ -1226,6 +1226,24 @@ class TestTomorrowPreviewComposer:
         fake.time_manager = SimpleNamespace()   # no window methods at all
         assert SEMCoordinator._compose_tomorrow_preview(fake) is None
 
+    def test_past_midnight_previews_the_COMING_day_not_the_day_after(self, monkeypatch):
+        """(Guido, 00:07 on 08-09) At 00:07 the coming energy day stamps
+        at 06:07 TODAY — but 'now + 1 day' anchored the preview to
+        TOMORROW's daylight: the axis spanned ~36 h (ticks reading
+        07:00·15:00·23:00·07:00·15:00) with every window in the second
+        day. The anchors must derive from the stamp boundary's own date."""
+        from datetime import datetime
+        fixed = datetime(2026, 7, 30, 0, 7,
+                         tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
+        p = SEMCoordinator._compose_tomorrow_preview(self._fake())
+        assert p is not None
+        # the coming day is July 30 — sunrise 06:00 THAT day, night 21:00
+        assert p["stamps_at"].startswith("2026-07-30T07:00")
+        assert p["night_open"].startswith("2026-07-30T21:00")
+        w = p["surplus_windows"]
+        assert w and w[0]["start"].startswith("2026-07-30")
+
     def test_no_forecast_is_a_dark_but_priced_preview(self):
         fake = self._fake()
         fake._forecast_reader = None

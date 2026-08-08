@@ -5933,14 +5933,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             sr_s = self.time_manager.get_sunrise_time()
             ss_s = self.time_manager.get_sunset_plus_10_time()
 
+            # The COMING energy day is the one that stamps at the next
+            # period boundary — whose date is NOT always calendar-
+            # tomorrow: at 00:07 the boundary (06:07) is TODAY, and a
+            # "now + 1 day" anchor previewed the day AFTER next — a
+            # ~36 h axis with every window in the second day (Guido,
+            # 00:07 on 2026-08-09). Every anchor derives from the
+            # boundary's own date.
+            stamps_at = resolve_deadline(now, ne_s)
+            if stamps_at is None:
+                return None
+            _day = stamps_at
+
             def _at(hhmm):
                 h, m = (int(x) for x in hhmm.split(":"))
-                return (now + timedelta(days=1)).replace(
+                return _day.replace(
                     hour=h, minute=m, second=0, microsecond=0)
 
             sunrise, sunset = _at(sr_s), _at(ss_s)
             day_start, day_end = sunrise, _at(ns_s)
-            stamps_at = resolve_deadline(now, ne_s) or _at(ne_s)
         except Exception:  # noqa: BLE001 — no frame, no preview
             return None
         if day_end <= day_start:
