@@ -54,6 +54,7 @@ CARD_KEYS = [
     "overnight_prices_preliminary_tip", "overnight_legend_surplus",
     "overnight_stamps_at", "overnight_tomorrow_asks",
     "overnight_provisional", "overnight_provisional_tip",
+    "overnight_legend_battery_charge",
     "overnight_kind_battery", "overnight_kind_comfort",
     "overnight_comfort_tip", "overnight_arbitrage", "overnight_arbitrage_tip",
     "overnight_strip_omitted",

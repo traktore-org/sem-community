@@ -6074,16 +6074,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if len(curve) > 6:
                     step = max(1, (len(curve) - 1) // 5)
                     curve = curve[:-1:step] + [curve[-1]]
+                # Allocations arrive SLOT-major — merge each ask's
+                # back-to-back windows into runs (the #638 G3c lesson:
+                # group by id first, neighbours in the list never merge).
+                _by_id = {}
+                for a in plan2.allocations:
+                    _by_id.setdefault(a.demand_id, []).append(a)
+                _blocks2 = []
+                for _did, _rows in _by_id.items():
+                    _rows.sort(key=lambda a: a.start)
+                    for a in _rows:
+                        if (_blocks2 and _blocks2[-1]["id"] == _did
+                                and _blocks2[-1]["end"] == a.start.isoformat()):
+                            _blocks2[-1]["end"] = a.end.isoformat()
+                        else:
+                            _blocks2.append({
+                                "id": _did,
+                                "label": labels2.get(_did),
+                                "start": a.start.isoformat(),
+                                "end": a.end.isoformat(),
+                            })
                 preview["provisional"] = {
                     "soc_start": round(soc_seed, 2),
                     "soc_curve": curve,
                     "fits": plan2.fits,
-                    "blocks": [{
-                        "id": a.demand_id,
-                        "label": labels2.get(a.demand_id),
-                        "start": a.start.isoformat(),
-                        "end": a.end.isoformat(),
-                    } for a in plan2.allocations],
+                    "blocks": _blocks2,
                 }
         except Exception:  # noqa: BLE001 — provisional is additive, never fatal
             preview["provisional"] = None

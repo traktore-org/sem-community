@@ -206,28 +206,56 @@ class SEMEnergyPlanCard extends SEMLitBase {
         </span>`;
     }
 
-    // The NEXT energy day's books, previewed — surplus and cheap bands on
-    // the same strip language, plus the honest "no plan yet" line: the
-    // plan for that day stamps at the period boundary, and pretending
-    // otherwise is exactly what this card exists not to do.
+    // The NEXT energy day, in the SAME layout as Today (Guido, 08-08:
+    // "a line for each device is clean — and the house battery should
+    // have a spot, we know the rhythm"): one row per known ask with its
+    // provisional windows as track segments, the battery's predicted
+    // path as its own row — pink while the sun fills it, teal otherwise.
+    // Everything on this face is provisional and the chip says so.
     _renderTomorrow(t) {
-        const t0 = Date.parse(t.stamps_at ? t.stamps_at : t.night_open) || NaN;
-        // Axis: stamp time (~sunrise) → night open. Fall back to the
-        // windows themselves when either endpoint is unparseable.
-        const starts = [...(t.surplus_windows || []), ...(t.cheap_windows || [])]
-            .map(w => Date.parse(w.start)).filter(Number.isFinite);
-        const ends = [...(t.surplus_windows || []), ...(t.cheap_windows || [])]
-            .map(w => Date.parse(w.end)).filter(Number.isFinite);
-        const axis0 = Number.isFinite(t0) ? t0 : Math.min(...starts);
-        const axis1 = Date.parse(t.night_open) || Math.max(...ends);
+        const prov = t.provisional || null;
+        const axis0 = Date.parse(t.stamps_at);
+        const axis1 = Date.parse(t.night_open);
         const span = axis1 - axis0;
         const hasStrip = Number.isFinite(span) && span > 0;
-        const band = (w, cls) => {
-            const left = ((Date.parse(w.start) - axis0) / span) * 100;
-            const width = ((Date.parse(w.end) - Date.parse(w.start)) / span) * 100;
-            return html`<div class="seg ${cls}"
-                style="left:${left}%;width:${Math.max(width, 1)}%"></div>`;
+        const pct = (iso) => ((Date.parse(iso) - axis0) / span) * 100;
+        const seg = (w, cls, color) => {
+            const left = Math.max(0, pct(w.start));
+            const width = Math.min(100, pct(w.end)) - left;
+            if (!Number.isFinite(left) || !Number.isFinite(width) || width <= 0) return nothing;
+            return html`<div class="seg ${cls}" style="left:${left}%;width:${Math.max(width, 1.2)}%${color ? `;background:${color}` : ''}"></div>`;
         };
+        const bandLayer = html`
+            <div class="band">
+                ${(t.surplus_windows || []).map(w => seg(w, 'tmw-sun'))}
+                ${(t.cheap_windows || []).map(w => seg(w, 'cheap'))}
+            </div>
+        `;
+        // Hour ticks every ~3 h across the day axis.
+        const ticks = [];
+        if (hasStrip) {
+            const first = new Date(axis0);
+            first.setMinutes(0, 0, 0);
+            if (first.getTime() < axis0) first.setHours(first.getHours() + 1);
+            const stepH = Math.max(1, Math.round(span / 3600000 / 6));
+            for (let d = new Date(first); d.getTime() < axis1; d.setHours(d.getHours() + stepH)) {
+                const left = ((d.getTime() - axis0) / span) * 100;
+                if (left > 94) break;
+                ticks.push({ left, text: this._hm(d.toISOString()) });
+            }
+        }
+        // Battery rhythm: segments between soc waypoints, pink while rising.
+        const curve = (prov && Array.isArray(prov.soc_curve)) ? prov.soc_curve : [];
+        const battSegs = [];
+        for (let i = 0; i + 1 < curve.length; i++) {
+            battSegs.push({
+                start: curve[i].t, end: curve[i + 1].t,
+                rising: curve[i + 1].kwh > curve[i].kwh + 0.01,
+            });
+        }
+        const asks = t.known_asks || [];
+        const blocksFor = (kind, i) => (prov && Array.isArray(prov.blocks))
+            ? prov.blocks.filter(b => b.id === `${kind}:${i}`) : [];
         const prelim = t.prices !== 'final';
         return html`
             <ha-card>
@@ -236,53 +264,73 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
                         <span class="title">${this._t('overnight_plan_title')}</span>
                         ${this._viewToggle(true)}
+                        <span class="chip" title="${this._t('overnight_provisional_tip')}">${this._t('overnight_provisional')}</span>
                         <span class="chip ${prelim ? '' : 'chip-active'}"
-                              title="${this._t(prelim
-                                  ? 'overnight_prices_preliminary_tip'
-                                  : 'overnight_prices_final_tip')}">
-                            ${this._t(prelim ? 'overnight_prices_preliminary'
-                                             : 'overnight_prices_final')}</span>
+                              title="${this._t(prelim ? 'overnight_prices_preliminary_tip' : 'overnight_prices_final_tip')}">
+                            ${this._t(prelim ? 'overnight_prices_preliminary' : 'overnight_prices_final')}</span>
                         ${this._docsLink()}
                     </div>
-                    ${hasStrip ? html`
-                        <div class="track tmw-track">
-                            ${(t.surplus_windows || []).map(w => band(w, 'tmw-sun'))}
-                            ${(t.cheap_windows || []).map(w => band(w, 'tmw-cheap'))}
-                        </div>
-                        <div class="legend">
-                            <span class="key"><i class="sw tmw-sun-key"></i>${this._t('overnight_legend_surplus')}</span>
-                            <span class="key"><i class="sw cheapkey"></i>${this._t('overnight_legend_cheap')}</span>
-                        </div>
-                    ` : nothing}
-                    ${(t.known_asks || []).length ? html`
-                        <div class="asks">
-                            <span class="asks-lbl">${this._t('overnight_tomorrow_asks')}</span>
-                            ${(t.known_asks || []).map(k => html`
-                                <span class="ask">
-                                    <ha-icon icon="${k.kind === 'ev' ? 'mdi:ev-station' : 'mdi:power-plug'}"
-                                             style="--mdc-icon-size:12px;color:${k.kind === 'ev' ? '#8DC892' : '#5BC8D8'}"></ha-icon>
-                                    ${k.label} ${(k.kwh || 0).toFixed(1)} kWh</span>
-                            `)}
-                        </div>
-                    ` : nothing}
-                    ${t.provisional ? html`
-                        <div class="asks prov" title="${this._t('overnight_provisional_tip')}">
-                            <span class="asks-lbl">${this._t('overnight_provisional')}</span>
-                            ${(t.provisional.soc_curve || []).length ? html`
-                                <span class="ask">
-                                    <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:12px;color:#4db6ac"></ha-icon>
-                                    ${t.provisional.soc_curve[0].kwh.toFixed(1)} → ${t.provisional.soc_curve[t.provisional.soc_curve.length - 1].kwh.toFixed(1)} kWh</span>
+                    <div class="strip ${hasStrip ? '' : 'nostrip'}">
+                        ${hasStrip ? html`
+                            <div class="lbl axis"></div>
+                            <div class="track axis">
+                                ${bandLayer}
+                                ${ticks.map(k => html`
+                                    <span class="tick ${k.left < 4 ? 'first' : ''}" style="left:${k.left}%">${k.text}</span>
+                                `)}
+                            </div>
+                            <div class="stat axis"></div>
+                        ` : nothing}
+                        ${curve.length > 1 ? html`
+                            <div class="lbl" title="${this._t('overnight_provisional_tip')}">
+                                <div class="lname">
+                                    <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:13px;color:#4db6ac"></ha-icon>
+                                    <span class="name">${this._t('overnight_kind_battery')}</span>
+                                </div>
+                            </div>
+                            ${hasStrip ? html`
+                                <div class="track">
+                                    ${bandLayer}
+                                    ${battSegs.map(b => seg(b, 'run', b.rising ? '#f06292' : '#4db6ac'))}
+                                </div>
                             ` : nothing}
-                            ${(t.provisional.blocks || []).slice(0, 6).map(b => html`
-                                <span class="ask">${b.label || b.id}
-                                    ${this._hm(b.start)}–${this._hm(b.end)}</span>
-                            `)}
-                        </div>
-                    ` : nothing}
+                            <div class="stat">
+                                <span>${curve[0].kwh.toFixed(1)} → ${curve[curve.length - 1].kwh.toFixed(1)} kWh</span>
+                            </div>
+                        ` : nothing}
+                        ${asks.map((a, i) => {
+                            const k = KINDS[a.kind] || KINDS.load;
+                            const mine = blocksFor(a.kind, i);
+                            const tip = [a.label,
+                                mine.map(b => `${this._hm(b.start)}–${this._hm(b.end)}`).join('\n') || null,
+                                this._t('overnight_provisional_tip')].filter(Boolean).join('\n');
+                            return html`
+                                <div class="lbl" title="${tip}">
+                                    <div class="lname">
+                                        <ha-icon icon="${k.icon}" style="--mdc-icon-size:13px;color:${k.color}"></ha-icon>
+                                        <span class="name">${a.label}</span>
+                                    </div>
+                                </div>
+                                ${hasStrip ? html`
+                                    <div class="track">
+                                        ${bandLayer}
+                                        ${mine.map(b => seg(b, 'run', k.color))}
+                                    </div>
+                                ` : nothing}
+                                <div class="stat">
+                                    <span>${(a.kwh || 0).toFixed(1)} kWh</span>
+                                </div>
+                            `;
+                        })}
+                    </div>
+                    <div class="legend">
+                        <span class="key"><i class="sw tmw-sun-key"></i>${this._t('overnight_legend_surplus')}</span>
+                        <span class="key"><i class="sw cheapkey"></i>${this._t('overnight_legend_cheap')}</span>
+                        <span class="key"><i class="sw" style="background:#f06292"></i>${this._t('overnight_legend_battery_charge')}</span>
+                    </div>
                     <div class="idle">
                         ☀ ${(t.forecast_kwh || 0).toFixed(1)} kWh ·
-                        ${this._format('overnight_stamps_at',
-                                       { time: this._hm(t.stamps_at) })}
+                        ${this._format('overnight_stamps_at', { time: this._hm(t.stamps_at) })}
                     </div>
                 </div>
             </ha-card>
