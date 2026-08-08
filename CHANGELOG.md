@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.9] — 08.08.2026 (Unreleased)
+
+### 🐛 Fixes
+- ⚡ **Min is a floor — enforced at the wire** (#545, reopened) — the start
+  ladder offered 6/8/9 A below a configured 10 A minimum, the stability hold
+  froze 8 A, and a Zoe (whose onboard charger cuts out below ~10 A) flapped
+  to 0 W and stayed there with an active mode and a hungry car. A nonzero
+  command now never reaches the charger below the configured minimum —
+  commanded ∈ {0} ∪ [min, max], clamped in the one emit seam beneath every
+  ladder, zone and hold. Zero stays zero (the stop intent). The wallbox was
+  innocent: its registers mirrored every command faithfully.
+- 🔌 **A stopped KEBA now locks itself off — the dead-man's OFF** (#740) —
+  an Off-mode P30 kept feeding the car in ~3 kW bites through a SEM restart:
+  masterless, the box's failsafe watchdog re-authorised its *charging*
+  fallback, and firmware auto-start retries defeated repeated `keba.disable`
+  calls for ~13 minutes. The watchdog cannot be turned off over UDP (#546,
+  live-tested) — so SEM now points it at **0 A** after every stop
+  (`set_failsafe timeout=10s fallback=0 persist=1`; fallback 0 is documented
+  as "disables the running charging process completely"): the box itself
+  enforces *off means off* across restarts, UDP loss and auto-start retries,
+  until the next SEM start sequence re-arms the charging failsafe. Mid-charge
+  behavior unchanged (a dead controller still lands the car on the charging
+  floor, never on 0). Same `keba_arm_failsafe` opt-out as before.
+
 # [1.7.6-beta.8] — 08.08.2026
 
 ### 🐛 Fixes
