@@ -54,6 +54,16 @@ _BRAND_WATCHDOG_REFRESH_S = {
 # Persisted so it overwrites the box's short built-in failsafe.
 FAILSAFE_TIMEOUT_S = 600
 
+# #740 — the dead-man's OFF timeout. When SEM STOPS a session, the failsafe
+# re-arms with fallback 0 A ("disables the running charging process
+# completely" — the documented keba semantics of fallback 0): a masterless,
+# rebooting, or disable-defeating box locks itself off within this window
+# and STAYS off until SEM's next start sequence re-arms the charging
+# failsafe. 10 s is the keba integration's minimum accepted timeout. This
+# is the inversion the #546 live test never tried: the watchdog cannot be
+# turned off over UDP — so point it at 0 instead of fighting it.
+FAILSAFE_OFF_TIMEOUT_S = 10
+
 from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
@@ -1818,6 +1828,41 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Failed to set charger failsafe: %s", e)
 
+    async def arm_failsafe_off(self) -> None:
+        """(#740) Re-arm the failsafe as a dead-man's OFF after a stop.
+
+        The charging arm (``arm_failsafe``) points the fallback at the
+        charging floor so a dead controller mid-charge lands the car on
+        the floor. That same persisted floor is what fed an Off-mode car
+        in ~3 kW bites through a SEM restart (PROD 2026-08-08, #740):
+        masterless, the watchdog re-authorised a CHARGING current. After
+        a SEM-initiated stop the correct dead-man state is OFF —
+        fallback 0 A, short timeout, persisted — so the box itself
+        enforces "off means off" across restarts, UDP loss, and firmware
+        auto-start retries, until the next start sequence re-arms the
+        charging failsafe. Same opt-out as the charging arm.
+        """
+        if not bool(getattr(self, "arm_failsafe_enabled", True)):
+            return
+        domain = (self.charger_service or "").split(".", 1)[0]
+        if not domain or not self.hass.services.has_service(domain, "set_failsafe"):
+            return
+        try:
+            await self.hass.services.async_call(
+                domain, "set_failsafe",
+                {"failsafe_timeout": FAILSAFE_OFF_TIMEOUT_S,
+                 "failsafe_fallback": 0, "failsafe_persist": 1},
+                blocking=True,
+            )
+            _LOGGER.info(
+                "%s: failsafe re-armed as dead-man's OFF (timeout=%ds, "
+                "fallback=0A, persisted) — the box holds the no while "
+                "SEM is away (#740)", self.name, FAILSAFE_OFF_TIMEOUT_S,
+            )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to arm the dead-man's-off failsafe: %s", e)
+
     def _energy_target_sensor_id(self) -> Optional[str]:
         """Entity id of the box's OWN energy-target register sensor, if the
         charger integration exposes one (KEBA: ``sensor.*_energy_target``).
@@ -2115,6 +2160,10 @@ class CurrentControlDevice(ControllableDevice):
                     )
 
             await self._set_current(0)
+            # (#740) whatever stop path fired, leave the box holding a
+            # standing NO: the dead-man's-off failsafe survives SEM's
+            # absence, which per-cycle policing (#552) never could.
+            await self.arm_failsafe_off()
             self._session_active = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
