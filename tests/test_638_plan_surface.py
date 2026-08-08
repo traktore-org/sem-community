@@ -36,7 +36,7 @@ from .test_638_shadow_mode import (  # noqa: F401 — fixtures come along
 )
 
 REPO = Path(__file__).resolve().parent.parent
-CARD_SRC = REPO / "dashboard" / "card" / "src" / "cards" / "sem-overnight-plan-card.js"
+CARD_SRC = REPO / "dashboard" / "card" / "src" / "cards" / "sem-energy-plan-card.js"
 
 # Every key the card asks ``semLocalize`` for. Kept as a literal list rather
 # than scraped from the source: a typo'd key in the card would otherwise
@@ -49,7 +49,9 @@ CARD_KEYS = [
     "overnight_legend_battery", "overnight_legend_grid",
     "overnight_legend_cheap", "overnight_fleet_partial",
     "overnight_shadow_note", "overnight_kind_ev", "overnight_kind_load",
-    "overnight_kind_battery", "overnight_strip_omitted",
+    "overnight_kind_battery", "overnight_kind_comfort",
+    "overnight_comfort_tip", "overnight_arbitrage", "overnight_arbitrage_tip",
+    "overnight_strip_omitted",
 ]
 
 
@@ -153,7 +155,7 @@ def test_state_never_exceeds_has_limit(freeze_targets):
 def test_sensor_description_is_registered():
     from custom_components.solar_energy_management.sensor import SENSOR_TYPES
     keys = {d.key for d in SENSOR_TYPES}
-    assert "overnight_plan" in keys
+    assert "energy_plan" in keys
 
 
 # ---------------------------------------------------------------------------
@@ -324,9 +326,9 @@ def test_projection_of_a_missing_plan_is_empty():
 
 def test_card_is_in_the_bundle_entry():
     entry = (REPO / "dashboard" / "card" / "src" / "sem-cards.js").read_text()
-    assert "./cards/sem-overnight-plan-card.js" in entry
+    assert "./cards/sem-energy-plan-card.js" in entry
     dist = (REPO / "dashboard" / "card" / "dist" / "sem-cards.js").read_text()
-    assert "sem-overnight-plan-card" in dist, (
+    assert "sem-energy-plan-card" in dist, (
         "dist/ is stale — run 'cd dashboard/card && npm run build'. The "
         "deploy scripts only rsync; they do NOT build.")
 
@@ -337,10 +339,10 @@ def test_card_is_placed_on_the_control_tab_between_schedule_and_loads():
     and Load Management (2026-08-05). Pin the ORDER, not just membership —
     a card that drifts below Load Management silently loses the placement."""
     tpl = (REPO / "dashboard" / "sem_dashboard_template.yaml").read_text()
-    assert tpl.count("custom:sem-overnight-plan-card") == 1, (
+    assert tpl.count("custom:sem-energy-plan-card") == 1, (
         "the plan card must live in exactly one place")
     schedule = tpl.index("title: Today's Schedule")
-    card = tpl.index("custom:sem-overnight-plan-card")
+    card = tpl.index("custom:sem-energy-plan-card")
     loads = tpl.index("title: Load Management")
     assert schedule < card < loads, (
         "Tonight's Plan belongs on the Control tab between Today's "

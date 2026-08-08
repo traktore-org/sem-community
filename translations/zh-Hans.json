@@ -560,8 +560,8 @@
       "night_charging_status": {
         "name": "夜间谷电充电"
       },
-      "overnight_plan": {
-        "name": "夜间计划"
+      "energy_plan": {
+        "name": "能源计划"
       },
       "battery_priority_status": {
         "name": "蓄电池优先级"

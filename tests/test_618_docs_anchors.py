@@ -34,7 +34,7 @@ def _doc_slugs(path: Path) -> set:
 # the config card — the overnight plan card links its actuation and
 # arbitrage anchors, the load-priority goal editor its comfort anchor.
 _EXTRA_CARDS = [
-    _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-overnight-plan-card.js",
+    _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-energy-plan-card.js",
     _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-load-priority-card.js",
 ]
 

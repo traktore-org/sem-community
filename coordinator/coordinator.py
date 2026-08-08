@@ -4139,7 +4139,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # flipping the switch mid-night must change the chip on the next
             # cycle, not on the next stamp.
             _onp = getattr(self, "_overnight_shadow_plan", None)
-            result["overnight_plan"] = (
+            result["energy_plan"] = (
                 {**_onp, "actuation": bool(getattr(
                     self, "_overnight_actuation", False))}
                 if isinstance(_onp, dict) else _onp)

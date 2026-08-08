@@ -290,8 +290,10 @@ advice is the first visible symptom.
 
 ## Where to see it
 
-- **On the dashboard** — the **Tonight's Plan** card on the *System* tab
-  (`custom:sem-overnight-plan-card`). One row per demand over a shared hour
+- **On the dashboard** — the **Energy Plan** card on the *Control* tab
+  (`custom:sem-energy-plan-card`; the pre-rename
+  `custom:sem-overnight-plan-card` tag still works as an alias until the
+  next `generate_dashboard` rewrites the YAML). One row per demand over a shared hour
   axis: where each block is planned, which hours are cheap, and the battery's
   own row shading teal while it covers the house and steel-blue after the
   **takeover**. A `shadow` chip and a footer line say plainly that SEM is not
@@ -303,7 +305,9 @@ advice is the first visible symptom.
   arbitrage line under the strip carries the advisor's verdict with its
   numbers — hover any row or the line for the full story, and the small
   book icons deep-link straight into this document.
-- **As an entity** — `sensor.sem_overnight_plan` (diagnostic). Its state is
+- **As an entity** — `sensor.sem_energy_plan` (diagnostic; renamed from
+  `sensor.sem_overnight_plan` when the horizon grew past the night — the
+  old entity is cleaned from the registry automatically on restart). Its state is
   the verdict word `fits` / `yields` / `idle` / `pending`; the plan itself
   rides as attributes (`demands`, `slots`, `blocks`, `takeover`,
   `total_cost`, `computed_at`, `replan_cause`, `arbitrage`), which is what

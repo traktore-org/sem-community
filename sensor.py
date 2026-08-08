@@ -371,7 +371,7 @@ SENSOR_TYPES = [
     # stable key (``fits``/``yields``/``idle``/``pending``) so the card and
     # the tests can branch on it; the plan itself rides as attributes.
     SensorEntityDescription(
-        key="overnight_plan",
+        key="energy_plan",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
@@ -2314,7 +2314,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # (#638) The overnight plan's STATE is a verdict key, never the
             # plan dict itself — a dict here would stringify into a >255-char
             # state and get rejected. The plan rides as attributes below.
-            elif self.entity_description.key == "overnight_plan":
+            elif self.entity_description.key == "energy_plan":
                 value = _overnight_plan_state(value)
 
             # Special handling for battery status
@@ -2478,12 +2478,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     f"charger_{cid_708}_estimate_stop_active"
                 ),
             })
-        elif self.entity_description.key == "overnight_plan":
+        elif self.entity_description.key == "energy_plan":
             # (#638) SHADOW — what the joint planner WOULD do tonight.
             # sem-overnight-plan-card renders these directly; the log lines
             # and the ``diagnose`` stash carry the same plan in prose.
             attrs.update(_overnight_plan_attrs(
-                self.coordinator.data.get("overnight_plan")))
+                self.coordinator.data.get("energy_plan")))
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

@@ -560,8 +560,8 @@
       "night_charging_status": {
         "name": "Încărcare de noapte"
       },
-      "overnight_plan": {
-        "name": "Plan de noapte"
+      "energy_plan": {
+        "name": "Plan energetic"
       },
       "battery_priority_status": {
         "name": "Prioritate baterie"

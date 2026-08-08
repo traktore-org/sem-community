@@ -1,8 +1,8 @@
 /**
- * SEM Overnight Plan Card — the Night Ledger, made visible (#638)
+ * SEM Energy Plan Card — the energy-day ledger, made visible (#638)
  *
- * Renders sensor.sem_overnight_plan: the joint overnight planner's answer
- * for tonight. One strip per demand over a shared hour axis, plus the
+ * Renders sensor.sem_energy_plan: the joint planner's answer for the whole
+ * energy day — daylight and the coming night in one ledger. One strip per demand over a shared hour axis, plus the
  * battery's own row showing where it hands the house over to the meter
  * (the "takeover").
  *
@@ -21,7 +21,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semDefineCard, semFormatTime, semGetCurrency } from '../base/sem-shared.js';
 
-const DEFAULT_ENTITY = 'sensor.sem_overnight_plan';
+const DEFAULT_ENTITY = 'sensor.sem_energy_plan';
 
 // Demand kind → icon + block colour. Colours are the SEM palette: EV soft
 // green, generic load home-cyan, battery pre-charge pink (Battery-In),
@@ -51,7 +51,7 @@ const STATUS = {
 // backend rounds home_grid_w to 1 decimal, so anything under a watt is noise.
 const GRID_EPS_W = 1.0;
 
-class SEMOvernightPlanCard extends SEMLitBase {
+class SEMEnergyPlanCard extends SEMLitBase {
     setConfig(config) {
         super.setConfig(config);
         this._entity = config.entity || DEFAULT_ENTITY;
@@ -669,7 +669,11 @@ class SEMOvernightPlanCard extends SEMLitBase {
     }
 }
 
-semDefineCard('sem-overnight-plan-card', SEMOvernightPlanCard, {
-    name: 'SEM Overnight Plan',
-    description: "Tonight's joint plan — when each demand runs and where the battery hands over",
+semDefineCard('sem-energy-plan-card', SEMEnergyPlanCard, {
+    name: 'SEM Energy Plan',
+    description: 'The joint plan for the energy day — when each demand runs and where the battery hands over',
 });
+// Back-compat alias: dashboards generated before the rename still say
+// custom:sem-overnight-plan-card — serve them the same card until the
+// next generate_dashboard rewrites the YAML.
+semDefineCard('sem-overnight-plan-card', class extends SEMEnergyPlanCard {});

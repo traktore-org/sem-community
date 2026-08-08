@@ -560,8 +560,8 @@
       "night_charging_status": {
         "name": "Noční nabíjení"
       },
-      "overnight_plan": {
-        "name": "Noční plán"
+      "energy_plan": {
+        "name": "Energetický plán"
       },
       "battery_priority_status": {
         "name": "Priorita baterie"
