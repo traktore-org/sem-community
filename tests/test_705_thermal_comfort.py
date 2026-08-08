@@ -429,6 +429,101 @@ class TestThePayloadIsTheSingleSource:
         assert p["comfort"] == {"state": "disengaged", "reading_c": None, "hvac": "cool"}
 
 
+class TestSetpointAnchoring:
+    """(#705, Azlinon's review) The band rides the thermostat's OWN live
+    setpoint: the user's schedule / presence logic / Ecobee-style native
+    pre-cool moves the setpoint on the climate entity, and SEM's band must
+    follow it instead of fighting it with a stale absolute. The typed
+    values keep carrying the DELTAS (bank-by, run-now-past) and remain the
+    anchor of last resort when the entity exposes no setpoint."""
+
+    def _ac_with_setpoint(self, room, attrs, **kw):
+        states = {
+            "sensor.room_temp": room,
+            "climate.ac_livingroom": ("cool", attrs),
+        }
+        return _ac(_hass_with(states), **kw)
+
+    def test_the_limit_rides_the_live_setpoint(self):
+        """Config 24/26 (delta +2) but the thermostat holds 25 → forced
+        begins at 27, so 26.4 — forced on the absolute — is only willing."""
+        dev = self._ac_with_setpoint("26.4", {"temperature": 25.0})
+        assert dev.comfort_state == "willing"
+
+    def test_past_the_anchored_limit_is_still_forced(self):
+        dev = self._ac_with_setpoint("27.1", {"temperature": 25.0})
+        assert dev.comfort_state == "forced"
+
+    def test_a_schedule_change_moves_the_band_without_touching_sem(self):
+        """Night setback: the thermostat drops to 23 → forced at 25."""
+        dev = self._ac_with_setpoint("25.2", {"temperature": 23.0})
+        assert dev.comfort_state == "forced"
+
+    def test_the_banked_bound_rides_too(self):
+        # anchor 25, offset 2 → banked at ≤ 23 (config target 24 would
+        # have said willing at 22.9... no: 22.9 ≤ 22 is false → willing).
+        dev = self._ac_with_setpoint("22.9", {"temperature": 25.0})
+        assert dev.comfort_state == "banked"
+
+    def test_cool_range_mode_anchors_on_target_temp_high(self):
+        dev = self._ac_with_setpoint(
+            "26.4", {"target_temp_high": 25.0, "target_temp_low": 20.0})
+        assert dev.comfort_state == "willing"
+
+    def test_heat_range_mode_anchors_on_target_temp_low(self):
+        # heat config 21/18 (delta −3); range low 20 → forced below 17.
+        states = {
+            "sensor.room_temp": "17.5",
+            "climate.ac_livingroom": (
+                "heat", {"target_temp_high": 24.0, "target_temp_low": 20.0}),
+        }
+        dev = _ac(_hass_with(states), hvac_mode="heat",
+                  target=21.0, offset=2.0, limit=18.0)
+        assert dev.comfort_state == "willing"
+
+    def test_no_setpoint_falls_back_to_the_typed_absolutes(self):
+        dev = self._ac_with_setpoint("26.4", {"current_temperature": 24.0})
+        assert dev.comfort_state == "forced"
+
+    def test_a_fahrenheit_install_anchors_in_display_units(self):
+        """Config 76/80 °F (delta 4 °F ≈ 2.22 °C), thermostat at 78 °F →
+        forced at 82 °F. A room at 80 °F is forced on the raw absolute
+        and willing on the anchored band — opposite answers, so this
+        cannot pass by cancellation."""
+        states = {
+            "sensor.room_temp": ("80.0", {"unit_of_measurement": "°F"}),
+            "climate.ac_livingroom": ("cool", {"temperature": 78.0}),
+        }
+        hass = _hass_with(states)
+        hass.config.units.temperature_unit = "°F"
+        dev = _ac(hass, target=76.0, offset=4.0, limit=80.0)
+        assert dev.comfort_state == "willing"
+
+    def test_the_misconfig_guard_judges_the_typed_delta(self):
+        """A limit on the wrong side of the typed target stays disengaged
+        even when a sane-looking setpoint exists — the delta carries the
+        user's intent and a negative cool-delta is still nonsense."""
+        dev = self._ac_with_setpoint(
+            "26.4", {"temperature": 25.0}, target=26.0, limit=24.0)
+        assert dev.comfort_state == "disengaged"
+
+    def test_switch_devices_have_no_anchor(self):
+        """Phase-2 heaters have no setpoint to ride — the mixin default
+        answers None and the typed absolutes stay authoritative."""
+        from custom_components.solar_energy_management.devices.base import (
+            SwitchDevice,
+        )
+        dev = SwitchDevice(
+            _hass_with({"sensor.cellar": "17.0"}), "sw1", "Heater",
+            rated_power=800, entity_id="switch.heater")
+        dev.comfort_entity = "sensor.cellar"
+        dev.comfort_target = 21.0
+        dev.comfort_offset = 1.0
+        dev.comfort_limit = 18.0
+        assert dev._comfort_anchor_c() is None
+        assert dev.comfort_state == "forced"
+
+
 class TestPhase2SwitchLoads:
     """The same band on SwitchDevice — one mixin, no sibling copy.
 

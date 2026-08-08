@@ -742,6 +742,19 @@ class ComfortBandMixin:
     def _comfort_fallback_reading(self):
         return None
 
+    def _comfort_anchor_c(self):
+        """The LIVE anchor the band rides, in °C — or None.
+
+        (#705, Azlinon's review) A thermostat has its own schedule:
+        night setback, presence logic, Ecobee/Nest native pre-cool. An
+        absolute typed into SEM silently fights it the first time the
+        setpoint moves, so where a live setpoint exists it IS the
+        target, and the typed values only contribute their deltas.
+        Default None: a relay heater has no setpoint to ride, and the
+        typed absolutes stay authoritative (ClimateDevice overrides).
+        """
+        return None
+
     def _install_unit_is_f(self) -> bool:
         """True when the install's display unit is Fahrenheit.
 
@@ -769,9 +782,21 @@ class ComfortBandMixin:
         """
         t, o, l = self.comfort_target, self.comfort_offset, self.comfort_limit
         if self._install_unit_is_f():
-            return ((t - 32.0) * 5.0 / 9.0,
-                    o * 5.0 / 9.0,
-                    (l - 32.0) * 5.0 / 9.0)
+            t, o, l = ((t - 32.0) * 5.0 / 9.0,
+                       o * 5.0 / 9.0,
+                       (l - 32.0) * 5.0 / 9.0)
+        # (#705, Azlinon) Ride the live setpoint where one exists: the
+        # typed target/limit contribute only their DELTA, so a schedule
+        # or presence change on the thermostat moves the whole band
+        # without touching SEM config. The delta is computed AFTER unit
+        # conversion — differences convert linearly, absolutes affinely.
+        try:
+            anchor = self._comfort_anchor_c()
+        except Exception:  # noqa: BLE001 — a broken anchor is no anchor
+            anchor = None
+        if anchor is not None:
+            l = anchor + (l - t)
+            t = anchor
         return (t, o, l)
 
     def _comfort_reading(self):
@@ -1132,6 +1157,34 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
 
     def _comfort_direction(self) -> str:
         return "cool" if self.hvac_mode == "cool" else "heat"
+
+    def _comfort_anchor_c(self):
+        """(#705, Azlinon) The thermostat's live setpoint in °C, or None.
+
+        ``temperature`` for single-setpoint units; range units expose
+        ``target_temp_high``/``_low`` — the side this device's direction
+        defends (cool holds the high bound, heat the low). Attributes
+        carry no unit — like ``current_temperature`` they are in the
+        install's display unit.
+        """
+        if not self.entity_id or not self.hass:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if state is None:
+            return None
+        attrs = state.attributes or {}
+        raw = attrs.get("temperature")
+        if raw is None:
+            raw = attrs.get("target_temp_high"
+                            if self._comfort_direction() == "cool"
+                            else "target_temp_low")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if self._install_unit_is_f():
+            return (value - 32.0) * 5.0 / 9.0
+        return value
 
     def _comfort_fallback_reading(self):
         """Zero-config thermometer: the climate entity's own
