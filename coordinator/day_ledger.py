@@ -228,3 +228,36 @@ def provisional_soc_curve(ledger, *, capacity_kwh: float,
               max(0.0, last.soc_kwh - last.home_batt_kwh) + charged)
     pts.append({"t": last.end.isoformat(), "kwh": round(end, 2)})
     return pts
+
+
+def market_step_s(prov, default_s: int = 3600) -> int:
+    """The tariff's own market granularity, from its published curve.
+
+    (Rien's shape, 08-08) A 15-minute market planned with hourly slots
+    holds but goes blind: each slot wears its first quarter's price and
+    sub-hour cheap windows vanish. The step is derived from the spacing
+    of the provider's ``upcoming_prices`` timestamps — 900 s where the
+    market is 15-min, the hourly default where there is no curve to ask
+    (static tariffs). Bounded to [300 s, 1 h]: anything outside is a
+    malformed curve, not a market.
+    """
+    try:
+        ups = getattr(prov.get_tariff_data(), "upcoming_prices", None) or []
+        ts = [p.timestamp for p in ups[:8]
+              if getattr(p, "timestamp", None) is not None]
+        deltas = sorted({int((b - a).total_seconds())
+                         for a, b in zip(ts, ts[1:])
+                         if (b - a).total_seconds() > 0})
+        if deltas and 300 <= deltas[0] <= 3600:
+            return deltas[0]
+    except Exception:  # noqa: BLE001 — no curve is the hourly default
+        pass
+    return default_s
+
+
+def align_to_step(t, step_s: int):
+    """Floor ``t`` onto the market grid (anchored at the hour)."""
+    into = t.minute * 60 + t.second
+    floored = (into // step_s) * step_s if step_s < 3600 else 0
+    return t.replace(minute=0, second=0, microsecond=0) + timedelta(
+        seconds=floored)

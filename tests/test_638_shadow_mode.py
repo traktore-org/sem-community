@@ -1041,6 +1041,56 @@ class TestArbitrageAdviceRidesThePlan:
         assert rows["ev:ev_charger"]["status"] == "fits"
 
 
+class _Fake15MinTariff:
+    """Rien's shape (08-08): the market changes every 15 minutes. The
+    curve carries quarter-hour timestamps; one cheap quarter hides inside
+    an otherwise expensive evening hour."""
+
+    def get_tariff_data(self):
+        from datetime import datetime, timedelta
+        t0 = datetime(2026, 7, 29, 22, 0,
+                      tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
+        pts = [SimpleNamespace(timestamp=t0 + timedelta(minutes=15 * i),
+                               price=0.30)
+               for i in range(8)]
+        return SimpleNamespace(upcoming_prices=pts)
+
+    def get_price_at(self, t):
+        # 22:15–22:30 is the hidden cheap quarter.
+        if t.hour == 22 and 15 <= t.minute < 30:
+            return 0.08
+        return 0.30
+
+
+class TestSlotsFollowTheMarket:
+    """An hourly slot on a 15-minute market wears its first quarter's
+    price for the whole hour and hides sub-hour cheap windows — held,
+    not broken, but blind. The builder now derives the step from the
+    provider's own published curve."""
+
+    def test_a_15min_market_gets_15min_slots(self, freeze_targets):
+        fake = _fake_self(devices=[])
+        fake._tariff_provider = _Fake15MinTariff()
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=1.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        slots = fake._overnight_shadow_plan["slots"]
+        firsts = [s for s in slots if s["start"][11:13] == "22"]
+        assert len(firsts) == 4, f"expected 4 quarter slots in hour 22: {firsts}"
+        cheap_q = [s for s in firsts if "22:15" in s["start"]]
+        assert cheap_q and cheap_q[0]["price"] == 0.08, (
+            "the hidden cheap quarter must carry its OWN price")
+
+    def test_a_static_tariff_stays_hourly(self, freeze_targets):
+        fake = _fake_self(devices=[])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=1.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        slots = fake._overnight_shadow_plan["slots"]
+        assert all(s["start"][14:16] == "00" for s in slots), (
+            "no curve granularity signal → hourly, exactly as before")
+
+
 class TestDisconnectedCarIsNotADemand:
     """Night 3 (2026-08-08): both machines packed kWh for unplugged cars —
     PROD 4.94 kWh, the clone 10 kWh at its 21:00 stamp. The ledger was spent

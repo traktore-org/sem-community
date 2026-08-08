@@ -5875,8 +5875,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ups = getattr(
                 self._tariff_provider.get_tariff_data(), "upcoming_prices", None
             ) or []
+            # 96 entries: a full day even on a 15-min market (48 was
+            # only 12 h there — tomorrow's curve landing late missed it).
             sig.append(("price", tuple(
-                round(float(p.price), 2) for p in ups[:48]
+                round(float(p.price), 2) for p in ups[:96]
                 if getattr(p, "price", None) is not None
             )))
         except Exception:  # noqa: BLE001 — no tariff is a valid shape
@@ -6572,15 +6574,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ONE pair of accessors for EVERY planner surface (night slots,
             # day slots, the tomorrow preview) — a second copy is how a
             # parallel price path starts (day_ledger.tariff_price_at).
-            from .day_ledger import tariff_cheap_at, tariff_price_at
+            from .day_ledger import (align_to_step, market_step_s,
+                                     tariff_cheap_at, tariff_price_at)
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
             _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
+            # (Rien's shape, 08-08) slots follow the MARKET: 15-min where
+            # the published curve is 15-min, hourly where there is no
+            # curve to ask. An hourly slot on a 15-min market wears its
+            # first quarter's price for the whole hour and hides sub-hour
+            # cheap windows.
+            _step_s = market_step_s(prov)
 
             slots = []
-            t = now.replace(minute=0, second=0, microsecond=0)
+            t = align_to_step(now, _step_s)
             if t < now:
-                t += _td(hours=1)
+                t += _td(seconds=_step_s)
             # (horizon-spanning) The DAY part — now → tonight's window
             # open. Expected-surplus hours arrive as price-0 slots capped
             # at the surplus W (day_ledger, sine-shaped from the scalar
@@ -6624,14 +6633,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     sunrise=sunrise, sunset=sunset,
                     home_w_at=_home_at,
                     price_at=_price_at, level_cheap_at=_cheap_at,
+                    step_s=_step_s,
                 ))
                 t = day_end
             while t < night_end:
-                # Align to market hours even after an off-hour day/night
-                # boundary (a 20:38 window open must not shift every night
-                # slot to :38 — prices change on the hour).
-                end = min((t + _td(hours=1)).replace(
-                    minute=0, second=0, microsecond=0), night_end)
+                # Align to market boundaries even after an off-grid
+                # day/night boundary (a 20:38 window open must not shift
+                # every slot to :38 — prices change on the market grid).
+                end = min(align_to_step(t + _td(seconds=_step_s), _step_s),
+                          night_end)
+                if end <= t:
+                    end = min(t + _td(seconds=_step_s), night_end)
                 slots.append(LedgerSlot(
                     start=t, end=end,
                     price=_price_at(t),
