@@ -159,7 +159,8 @@
           "legionella_target_temp": "Legionella-fertőtlenítés célhőmérséklete (°C)",
           "legionella_interval_hours": "Max. óraszám a fertőtlenítési ciklusok között",
           "diagram_style": "Rendszerdiagram stílusa",
-          "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)"
+          "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)",
+          "grid_sign_invert": "Hálózati teljesítmény előjelének megfordítása"
         },
         "data_description": {
           "update_interval": "Milyen gyakran olvassa a koordinátor az érzékelőket és szabályozza a hardvert. A 10 s adja a legpontosabb energiaintegrálást; a 30 s feletti értékek alulmérik az energiát. Tartomány: 10–60 s.",
@@ -183,7 +184,8 @@
           "hot_water_solar_target": "Célhőmérséklet (°C) a napenergiával támogatott melegvíz-fűtéshez. A SEM megemeli a bojlert, amikor többlet áll rendelkezésre.",
           "legionella_target_temp": "Az a hőmérséklet (°C), amelyet a melegvízrendszernek el kell érnie a legionella-fertőtlenítési ciklus során.",
           "legionella_interval_hours": "A legionella-fertőtlenítési ciklusok közötti maximális óraszám, mielőtt a SEM kényszerfelfűtést indít.",
-          "battery_assist_min_surplus": "A legkisebb tényleges napenergia-többlet, amely felett a házi akkumulátor segíthet az EV töltésében — bármely töltési módban. Ez alatt az akkumulátor a ház számára van fenntartva (az autó a hálózatból + napenergiából tölt). Alapértelmezés 1200 W. Állítsa 0-ra, hogy az akkumulátor mindenhol támogassa az EV-t, éjszaka is."
+          "battery_assist_min_surplus": "A legkisebb tényleges napenergia-többlet, amely felett a házi akkumulátor segíthet az EV töltésében — bármely töltési módban. Ez alatt az akkumulátor a ház számára van fenntartva (az autó a hálózatból + napenergiából tölt). Alapértelmezés 1200 W. Állítsa 0-ra, hogy az akkumulátor mindenhol támogassa az EV-t, éjszaka is.",
+          "grid_sign_invert": "Csak akkor kapcsold be, ha a hálózati vételezés pozitív értékként jelenik meg (pl. Enphase). A SEM konvenciója szerint negatív = vételezés; ez megfordítja a nyers értéket, és kihagyja az automatikus előjel-felismerést."
         }
       },
       "settings_ev": {
@@ -217,7 +219,8 @@
           "dynamic_forecast_entity": "Előrejelzés entitás (opcionális, üresen automatikusan felismerve)",
           "dynamic_feedin_entity": "Betáplálási ár entitás (opcionális, dinamikus betáplálási árhoz)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Ár-besorolási mód"
         },
         "data_description": {
           "electricity_import_rate": "Nappali/egységes vételezési ár (pénznem/kWh, áfával). Tartalékként használatos, ha a dinamikus árazás nem érhető el.",
@@ -231,7 +234,8 @@
           "dynamic_forecast_entity": "Opcionális érzékelő órás árelőrejelzésekkel, az intelligens ütemezéshez.",
           "dynamic_feedin_entity": "Opcionális érzékelő, amely az aktuális betáplálási / export árat adja a dinamikus betáplálási árhoz.",
           "grid_import_power_entity": "Opcionális érzékelő (W) a hálózati vételezési teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül.",
-          "grid_export_power_entity": "Opcionális érzékelő (W) a hálózati betáplálási teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül."
+          "grid_export_power_entity": "Opcionális érzékelő (W) a hálózati betáplálási teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül.",
+          "tariff_classification_mode": "A „Percentilis” a mai tartományhoz viszonyítva sorolja be az árakat (ajánlott). A „Statikus” rögzített olcsó/drága küszöböket használ."
         }
       },
       "load_management": {
@@ -291,7 +295,15 @@
           "battery_max_target_soc": "Maximális cél-SOC",
           "battery_min_deficit_kwh": "Minimális hiányküszöb",
           "battery_pessimism_weight": "Előrejelzési pesszimizmus",
-          "battery_force_charge_negative_price": "Kényszertöltés negatív ár esetén"
+          "battery_force_charge_negative_price": "Kényszertöltés negatív ár esetén",
+          "battery_charge_platform": "Akkumulátor töltési platform",
+          "battery_replan_interval_min": "Újratervezési intervallum (min)",
+          "battery_prefer_consecutive_window": "Összefüggő töltési ablak előnyben részesítése"
+        },
+        "data_description": {
+          "battery_charge_platform": "Melyik invertert vezérli a SEM az ütemezett hálózati töltéshez. Válaszd a Deye-t a Deye bekötési lépés megjelenítéséhez.",
+          "battery_replan_interval_min": "Milyen gyakran számolja újra a töltési ütemtervet a legfrissebb előrejelzés és árak alapján.",
+          "battery_prefer_consecutive_window": "Be: az olcsó órák egy blokkban (kevesebb indítás/leállítás ciklus); ki: az egyenként legolcsóbb órák, akár szétszórtan is."
         }
       },
       "ev_charger_edit": {
@@ -312,7 +324,16 @@
           "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Napelemes töltési limit (kWh)",
-          "ev_target_soc_max": "Napelemes töltési limit (SOC %)"
+          "ev_target_soc_max": "Napelemes töltési limit (SOC %)",
+          "daily_ev_target": "Éjszakai töltési cél (kWh)",
+          "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
+          "vehicle_range_entity": "Jármű hatótáv-érzékelő",
+          "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)",
+          "ev_target_soc": "EV cél-SOC (%)",
+          "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
+          "initial_current": "Kezdő áram (A)",
+          "ev_min_current": "Minimális töltőáram (A)",
+          "vehicle_min_current": "Jármű minimális árama (A)"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -329,7 +350,16 @@
           "ev_surplus_priority": "A többlet elosztásának sorrendje több töltő között. Alacsonyabb szám = magasabb prioritás.",
           "ev_current_control_entity": "Number entitás, amellyel a töltőáram (A) beállítható. Wallbox, go-eCharger és hasonló töltőkhöz.",
           "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
-          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból."
+          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból.",
+          "daily_ev_target": "A hálózatról minden éjjel megtöltendő cél kWh. Állítsa 0-ra az éjszakai hálózati töltés kikapcsolásához.",
+          "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
+          "vehicle_range_entity": "Opcionális valós hatótáv-érzékelő. Egyébként a hatótáv becslése: SOC × kapacitás × hatékonyság.",
+          "ev_kwh_per_100km": "A hatótáv becsléséhez használatos, ha nincs hatótáv-érzékelő konfigurálva.",
+          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t.",
+          "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
+          "initial_current": "Kezdő töltőáram, mielőtt a SEM az elérhető többlethez igazodik.",
+          "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot.",
+          "vehicle_min_current": "Járművenkénti áram-alsóhatár. A tényleges minimum ennek és a töltő minimális áramának a nagyobbika."
         }
       },
       "ev_charger_add": {
@@ -350,7 +380,15 @@
           "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Napelemes töltési limit (kWh)",
-          "ev_target_soc_max": "Napelemes töltési limit (SOC %)"
+          "ev_target_soc_max": "Napelemes töltési limit (SOC %)",
+          "daily_ev_target": "Éjszakai töltési cél (kWh)",
+          "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
+          "vehicle_range_entity": "Jármű hatótáv-érzékelő",
+          "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)",
+          "ev_target_soc": "EV cél-SOC (%)",
+          "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
+          "initial_current": "Kezdő áram (A)",
+          "ev_min_current": "Minimális töltőáram (A)"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -367,7 +405,15 @@
           "ev_surplus_priority": "A többlet elosztásának sorrendje több töltő között. Alacsonyabb szám = magasabb prioritás.",
           "ev_current_control_entity": "Number entitás, amellyel a töltőáram (A) beállítható. Wallbox, go-eCharger és hasonló töltőkhöz.",
           "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
-          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból."
+          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból.",
+          "daily_ev_target": "A hálózatról minden éjjel megtöltendő cél kWh. Állítsa 0-ra az éjszakai hálózati töltés kikapcsolásához.",
+          "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
+          "vehicle_range_entity": "Opcionális valós hatótáv-érzékelő. Egyébként a hatótáv becslése: SOC × kapacitás × hatékonyság.",
+          "ev_kwh_per_100km": "A hatótáv becsléséhez használatos, ha nincs hatótáv-érzékelő konfigurálva.",
+          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t.",
+          "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
+          "initial_current": "Kezdő töltőáram, mielőtt a SEM az elérhető többlethez igazodik.",
+          "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot."
         }
       },
       "pv_naming": {
@@ -481,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Deye kényszerített hálózati töltés",
+        "description": "Köss be egy Deye hibrid invertert az ütemezett hálózati töltéshez. A megfigyelő mód alapértelmezetten BE, a beavatkozás KI van kapcsolva, így semmi sem íródik az inverterbe, amíg kifejezetten engedélyezed.",
+        "data": {
+          "deye_grid_charge_switch": "Hálózati töltés kapcsoló (entitás)",
+          "deye_charge_current_entity": "Töltőáram number entitás (A)",
+          "deye_battery_voltage_entity": "Akkufeszültség érzékelő (entitás)",
+          "deye_battery_voltage_max_age_s": "Akkufeszültség max. életkor (s)",
+          "deye_max_charge_current_a": "Max. töltőáram (A)",
+          "deye_bms_max_charge_current_a": "BMS max. töltőáram (A)",
+          "deye_max_discharge_power": "Max. kisütési teljesítmény (W)",
+          "deye_program_control": "Program időzónáinak vezérlése",
+          "deye_observer_mode": "Megfigyelő mód (csak olvasható)",
+          "deye_actuation_enabled": "Beavatkozás engedélyezése (írás az inverterbe)",
+          "deye_work_mode_control": "Munkamód vezérlése",
+          "deye_work_mode_entity": "Munkamód select entitás",
+          "deye_work_mode_load_first_option": "Munkamód érték a „Load First”-höz",
+          "deye_work_mode_battery_first_option": "Munkamód érték a „Battery First”-höz",
+          "deye_force_charge_work_mode": "Munkamód kényszerített töltés közben",
+          "deye_program_1_time": "1. program — időzóna select entitás",
+          "deye_program_1_soc": "1. program — cél-SOC number entitás",
+          "deye_program_1_charge": "1. program — hálózati töltés select entitás",
+          "deye_program_2_time": "2. program — időzóna select entitás",
+          "deye_program_2_soc": "2. program — cél-SOC number entitás",
+          "deye_program_2_charge": "2. program — hálózati töltés select entitás",
+          "deye_program_3_time": "3. program — időzóna select entitás",
+          "deye_program_3_soc": "3. program — cél-SOC number entitás",
+          "deye_program_3_charge": "3. program — hálózati töltés select entitás",
+          "deye_program_4_time": "4. program — időzóna select entitás",
+          "deye_program_4_soc": "4. program — cél-SOC number entitás",
+          "deye_program_4_charge": "4. program — hálózati töltés select entitás",
+          "deye_program_5_time": "5. program — időzóna select entitás",
+          "deye_program_5_soc": "5. program — cél-SOC number entitás",
+          "deye_program_5_charge": "5. program — hálózati töltés select entitás",
+          "deye_program_6_time": "6. program — időzóna select entitás",
+          "deye_program_6_soc": "6. program — cél-SOC number entitás",
+          "deye_program_6_charge": "6. program — hálózati töltés select entitás"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Opcionális, a BMS által előírt felső határ. 0 = nincs BMS-korlát; az inverter saját maximuma érvényes.",
+          "deye_observer_mode": "Bekapcsolva a SEM kiszámítja és naplózza a Deye-műveleteit, de soha nem ír az inverterbe.",
+          "deye_actuation_enabled": "Kikapcsolva a SEM soha nem ír az inverterbe, még ha a megfigyelő mód is ki van kapcsolva. Parancs küldése előtt mindkét kapunak engedélyeznie kell.",
+          "deye_max_charge_current_a": "Biztonságos felső határ, amelyet a SEM a töltőáram entitáson beállít."
         }
       }
     },
