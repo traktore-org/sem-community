@@ -218,6 +218,16 @@ def test_projection_leaves_the_prose_and_the_trajectory_behind():
                           "demands", "slots", "blocks"}
 
 
+def test_the_projection_carries_the_replan_cause():
+    """Night-3 finding 3: a re-stamped night must be distinguishable from
+    the first answer on the entity, not only in container logs (which
+    rotate too fast to serve as evidence)."""
+    attrs = _overnight_plan_attrs(
+        {"replan_cause": "ask changed", "demands": [], "slots": [],
+         "blocks": []})
+    assert attrs["replan_cause"] == "ask changed"
+
+
 def test_contiguous_allocations_merge_into_one_run():
     """The packer allocates per market slot; the strip draws a run. Merging is
     invisible to the card and is what keeps a 15-minute night chartable.

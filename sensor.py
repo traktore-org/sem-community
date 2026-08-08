@@ -147,6 +147,10 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
         # (#638 G4) True while the actuation switch is on — the plan's
         # blocks feed the night signals; the card swaps its shadow chip.
         "actuation": bool(plan.get("actuation", False)),
+        # (night 3, finding 3) "initial" vs "ask changed" — a re-stamped
+        # night is distinguishable from the first answer on the entity,
+        # not only in container logs (which rotate too fast for evidence).
+        "replan_cause": plan.get("replan_cause"),
     }
     try:
         oversize = len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES

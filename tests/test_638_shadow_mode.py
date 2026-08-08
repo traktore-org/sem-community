@@ -837,6 +837,95 @@ def test_an_unevaluable_mode_still_gets_planned(freeze_targets):
     assert "ev:ev_charger" in " ".join(plan["summary"])
 
 
+class TestDisconnectedCarIsNotADemand:
+    """Night 3 (2026-08-08): both machines packed kWh for unplugged cars —
+    PROD 4.94 kWh, the clone 10 kWh at its 21:00 stamp. The ledger was spent
+    on a demand that can never draw, and real demands starve behind it. Only
+    a configured plug sensor may answer "no car" (None = nothing to ask →
+    plan it, the mode-gate precedent); the plug-in re-plans within a cycle
+    because connection is term 1 of the demand signature — proven live on
+    the clone (connect 00:07:32, stamp the same second)."""
+
+    def test_a_disconnected_car_is_not_a_demand(self, freeze_targets):
+        fake = _fake_self(devices=[])
+        fake.config["ev_chargers"][0]["ev_connected_sensor"] = (
+            "binary_sensor.plug")
+        power = _power()
+        power.ev_connected_per_charger = {"ev_charger": False}
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert ok is True, "an absent car is an answer, not a warm-up world"
+        joined = " ".join(fake._overnight_shadow_plan["summary"])
+        assert "ev:ev_charger" not in joined, joined
+        # And it says WHY — the mode-gate lesson, again.
+        assert "disconnected=['ev_charger']" in joined
+
+    def test_a_connected_car_is_still_a_demand(self, freeze_targets):
+        fake = _fake_self(devices=[])
+        fake.config["ev_chargers"][0]["ev_connected_sensor"] = (
+            "binary_sensor.plug")
+        power = _power()
+        power.ev_connected_per_charger = {"ev_charger": True}
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert "ev:ev_charger" in " ".join(
+            fake._overnight_shadow_plan["summary"])
+
+    def test_no_plug_sensor_anywhere_still_plans(self, freeze_targets):
+        """The empty-sensor read publishes ``ev_connected=False`` on installs
+        with no plug sensor at all — that must NOT starve their night."""
+        fake = _fake_self(devices=[])
+        power = _power()
+        power.ev_connected = False
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        assert "ev:ev_charger" in " ".join(
+            fake._overnight_shadow_plan["summary"])
+
+    def test_the_legacy_flat_sensor_gates_too(self, freeze_targets):
+        fake = _fake_self(devices=[])
+        fake.config["ev_plug_sensor"] = "binary_sensor.plug"
+        power = _power()
+        power.ev_connected = False
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+        joined = " ".join(fake._overnight_shadow_plan["summary"])
+        assert "ev:ev_charger" not in joined, joined
+
+
+class TestReplanCauseIsOnThePayload:
+    """Night-3 finding 3: Guido shrinking the ASK to 0.5 kWh at 00:11
+    re-stamped the night with no trace of why — a re-planned night must be
+    distinguishable from the first answer."""
+
+    def test_the_full_plan_carries_the_cause(self, freeze_targets):
+        fake = _fake_self(devices=[_fake_load()])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
+            phantom_ev_w=0, power=_power(), replan_cause="ask changed")
+        assert fake._overnight_shadow_plan["replan_cause"] == "ask changed"
+
+    def test_the_default_is_initial(self, freeze_targets):
+        fake = _fake_self(devices=[_fake_load()])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
+            phantom_ev_w=0, power=_power())
+        assert fake._overnight_shadow_plan["replan_cause"] == "initial"
+
+    def test_the_no_demand_answer_carries_it_too(self, freeze_targets):
+        fake = _fake_self(devices=[])
+        fake._mode_allows_night_charging = lambda cfg: False
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_power(),
+            replan_cause="ask changed")
+        assert fake._overnight_shadow_plan["replan_cause"] == "ask changed"
+
+
 def test_off_mode_load_is_not_a_demand(freeze_targets):
     """Finding #1 (PROD night 1): the off-mode heizband 'yielded' 3.1 kWh —
     but compute_load_intent never night-runs an off/peak_only device. The

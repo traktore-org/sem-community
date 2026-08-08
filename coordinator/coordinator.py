@@ -2583,6 +2583,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 power, energy, energy_flows,
             )
 
+            # Step 4.4: The overnight plan stamp/replan trigger — BEFORE the
+            # charging decisions (#638 night 3). The EV chain used to run
+            # first, so the cycle in which a car connected was decided
+            # against the stale plan: a 10 s `active` blip in observer mode;
+            # against real hardware, an enable command taken straight back.
+            # The plan's authority begins at the stamp — the stamp must come
+            # before the first decision that reads it. Inputs (`power`,
+            # `energy`) exist since Step 2; the scheduler's decision it
+            # reads is last cycle's either way (the battery pipeline runs
+            # later in both orderings).
+            self._overnight_plan_tick(power, energy)
+
             # Step 4.5: Update session tracking (before charging decisions)
             # Multi-charger (#112): track sessions for each charger
             if self._ev_devices:
@@ -3383,73 +3395,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Replaces the legacy split (7.5c the deleted BatteryProtectionMixin, #624, +
             # 7.5d BatteryChargeScheduler.update) with one pure pipeline
             # mirroring the EV-side rebuild.
-            # (#638 G3) The shadow overnight plan runs in BOTH modes — it is
-            # itself an observer construct (log-only), and observer mode is
-            # exactly where shadow computation belongs. It also does not
-            # depend on the battery scheduler being enabled (PROD: static
-            # tariff, summer — EV floors + Tier-2 loads still need a plan).
-            # Two live placement lessons in one: the scheduler.enabled gate
-            # AND the observer gate each silenced it on the machine it was
-            # soaking on. Own once-per-NIGHT trigger; the scheduler's
-            # evaluate/replans recompute on top when it runs.
-            try:
-                _sched = self._battery_charge_scheduler
-                _now_l = dt_util.now()
-                # Inside the REAL night window — the same sunset-anchored
-                # max(sunset+10, earliest_start) → min(sunrise, latest_end)
-                # every night source runs on — not the battery scheduler's
-                # fixed trigger_hour. With the old 21:00 anchor a winter
-                # night (window opening ~17:00–20:30 depending on config)
-                # sat unplanned for hours (Guido, 2026-08-05). A restart at
-                # 00:48 still owes the rest of the night a plan: the window
-                # spans midnight, so is_night_mode covers it.
-                try:
-                    _in_window = bool(self.time_manager.is_night_mode())
-                except Exception:  # noqa: BLE001 — degrade to the old anchor
-                    _in_window = _now_l.hour >= 21 or _now_l.hour < 7
-                # One plan per NIGHT: after midnight the night began yesterday.
-                _night_of = (_now_l - timedelta(hours=12)).date()
-                # (#638) DEMAND-SHAPE replan. #638 specified the triggers as
-                # "price update, floor change, unplug, big deviation"; only
-                # unplug shipped, so raising the EV target at 22:19 on armed
-                # night 1 left the ledger describing a night that no longer
-                # existed while execution correctly followed the new floor.
-                # One signature over every input that changes WHAT is asked of
-                # the night — connection, EV floor/deadline/mode, each load's
-                # runtime deficit, and the night's price curve.
-                _demand_sig = self._overnight_demand_signature(power)
-                if (_in_window
-                        and getattr(self, "_shadow_plan_date", None) == _night_of
-                        and self._plan_ev_conn_sig is not None
-                        and _demand_sig != self._plan_ev_conn_sig):
-                    _LOGGER.info(
-                        "OVERNIGHT-PLAN (#638): the night's demands changed "
-                        "(%s → %s) — replanning",
-                        self._plan_ev_conn_sig, _demand_sig)
-                    self._shadow_plan_date = None
-                if (_in_window
-                        and getattr(self, "_shadow_plan_date", None) != _night_of):
-                    # Stamp only on a READY-world answer: the first refresh
-                    # after a restart sees zero registered devices (delayed
-                    # rediscovery) — that degenerate shape retries next cycle.
-                    # Same for a battery SOC that hasn't reported yet (armed
-                    # night 1, second stamp): the 21:53:30 restart stamped
-                    # 86 s before the SOC's first reading, the trajectory
-                    # walked from nothing, takeover landed on the FIRST slot
-                    # and every battery demand yielded a battery that was
-                    # actually at 63 %. A silent sensor is not an empty
-                    # battery (#638 finding #3) — wait for the reading; the
-                    # no-battery install shape (capacity 0) stamps normally.
-                    _batt_ready = (
-                        float(self.config.get("battery_capacity_kwh", 0) or 0) <= 0
-                        or not getattr(power, "battery_soc_unavailable", False)
-                    )
-                    if _batt_ready and self._shadow_overnight_plan(
-                            _sched, energy, None, None, power):
-                        self._shadow_plan_date = _night_of
-                        self._plan_ev_conn_sig = _demand_sig
-            except Exception:  # noqa: BLE001 — shadow must never break the cycle
-                _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
+            # (#638 night 3) The plan trigger moved ABOVE this block — see
+            # _overnight_plan_tick, called before the EV session/decision
+            # chain: the stamp must precede the first decision that reads it.
 
             discharge_limit = None
             if not self._observer_mode:
@@ -5923,8 +5871,90 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 continue
         return windows
 
+    def _overnight_plan_tick(self, power, energy) -> None:
+        """(#638) The once-per-night stamp + demand-shape replan trigger.
+
+        (#638 G3) Runs in BOTH modes — the plan is itself an observer
+        construct, and it does not depend on the battery scheduler being
+        enabled (PROD: static tariff, summer — EV floors + Tier-2 loads
+        still need a plan). Two live placement lessons in one: the
+        scheduler.enabled gate AND the observer gate each silenced it on
+        the machine it was soaking on. Own once-per-NIGHT trigger; the
+        scheduler's evaluate/replans recompute on top when it runs.
+
+        (night 3) Called BEFORE the charging decisions in the update cycle:
+        the EV chain used to run first, so the cycle in which a car
+        connected was decided against the stale plan — one honest `active`
+        blip in observer, one real enable-then-revoke against hardware.
+        """
+        try:
+            _sched = self._battery_charge_scheduler
+            _now_l = dt_util.now()
+            # Inside the REAL night window — the same sunset-anchored
+            # max(sunset+10, earliest_start) → min(sunrise, latest_end)
+            # every night source runs on — not the battery scheduler's
+            # fixed trigger_hour. With the old 21:00 anchor a winter
+            # night (window opening ~17:00–20:30 depending on config)
+            # sat unplanned for hours (Guido, 2026-08-05). A restart at
+            # 00:48 still owes the rest of the night a plan: the window
+            # spans midnight, so is_night_mode covers it.
+            try:
+                _in_window = bool(self.time_manager.is_night_mode())
+            except Exception:  # noqa: BLE001 — degrade to the old anchor
+                _in_window = _now_l.hour >= 21 or _now_l.hour < 7
+            if not _in_window:
+                return
+            # One plan per NIGHT: after midnight the night began yesterday.
+            _night_of = (_now_l - timedelta(hours=12)).date()
+            # (#638) DEMAND-SHAPE replan. #638 specified the triggers as
+            # "price update, floor change, unplug, big deviation"; only
+            # unplug shipped, so raising the EV target at 22:19 on armed
+            # night 1 left the ledger describing a night that no longer
+            # existed while execution correctly followed the new floor.
+            # One signature over every input that changes WHAT is asked of
+            # the night — connection, EV floor/deadline/mode, each load's
+            # runtime deficit, and the night's price curve.
+            _demand_sig = self._overnight_demand_signature(power)
+            cause = "initial"
+            if (getattr(self, "_shadow_plan_date", None) == _night_of
+                    and self._plan_ev_conn_sig is not None
+                    and _demand_sig != self._plan_ev_conn_sig):
+                _LOGGER.info(
+                    "OVERNIGHT-PLAN (#638): the night's demands changed "
+                    "(%s → %s) — replanning",
+                    self._plan_ev_conn_sig, _demand_sig)
+                self._shadow_plan_date = None
+                # (night 3, finding 3) the re-stamp says why it exists —
+                # Guido shrinking the ASK to 0.5 kWh silently became "the"
+                # night, indistinguishable from the first answer.
+                cause = "ask changed"
+            if getattr(self, "_shadow_plan_date", None) != _night_of:
+                # Stamp only on a READY-world answer: the first refresh
+                # after a restart sees zero registered devices (delayed
+                # rediscovery) — that degenerate shape retries next cycle.
+                # Same for a battery SOC that hasn't reported yet (armed
+                # night 1, second stamp): the 21:53:30 restart stamped
+                # 86 s before the SOC's first reading, the trajectory
+                # walked from nothing, takeover landed on the FIRST slot
+                # and every battery demand yielded a battery that was
+                # actually at 63 %. A silent sensor is not an empty
+                # battery (#638 finding #3) — wait for the reading; the
+                # no-battery install shape (capacity 0) stamps normally.
+                _batt_ready = (
+                    float(self.config.get("battery_capacity_kwh", 0) or 0) <= 0
+                    or not getattr(power, "battery_soc_unavailable", False)
+                )
+                if _batt_ready and self._shadow_overnight_plan(
+                        _sched, energy, None, None, power,
+                        replan_cause=cause):
+                    self._shadow_plan_date = _night_of
+                    self._plan_ev_conn_sig = _demand_sig
+        except Exception:  # noqa: BLE001 — shadow must never break the cycle
+            _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
+
     def _shadow_overnight_plan(self, scheduler, energy, phantom_ev_kwh,
-                               phantom_ev_w, power=None) -> bool:
+                               phantom_ev_w, power=None,
+                               replan_cause="initial") -> bool:
         """#638 G3 — compute the joint overnight plan in shadow mode.
 
         Demands are built from the REAL models — ``build_night_target_map``
@@ -5967,6 +5997,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             cfg_by_id = {c.get("id"): c for c in self.config.get("ev_chargers", [])
                          if isinstance(c, dict)}
             mode_opted_out = []
+            disconnected = []
             for cid, kwh in targets.items():
                 cfg = cfg_by_id.get(cid, {})
                 # Mirror the execution gate (finding #4, TEST night 2026-07-30).
@@ -5987,6 +6018,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     mode_night_ok = True
                 if not mode_night_ok:
                     mode_opted_out.append(cid)
+                    continue
+                # (#638 night 3) A car that is KNOWN absent is not a demand:
+                # both machines packed kWh for unplugged cars — ledger spent
+                # on a demand that can never draw, real demands starved
+                # behind it. Only a configured plug sensor may answer "no"
+                # (None = nothing to ask → plan it, the mode-gate
+                # precedent). The plug-in re-plans within a cycle because
+                # connection is term 1 of the demand signature — proven
+                # live on the clone: connect 00:07:32, stamp same second.
+                from .ev_availability import plan_connectivity
+                if plan_connectivity(cid, cfg, self.config, power) is False:
+                    disconnected.append(cid)
                     continue
                 if kwh <= 0.05:
                     continue
@@ -6160,6 +6203,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # broken one; burned three placement bugs learning that).
                 why = (f"ev_targets={ {k: round(v, 2) for k, v in targets.items()} }, "
                        f"mode_opted_out={mode_opted_out}, "
+                       f"disconnected={disconnected}, "
                        f"loads_seen={loads_seen}, loads_eligible={loads_eligible}, "
                        f"battery_deficit={deficit:.2f} kWh")
                 _LOGGER.info(
@@ -6175,6 +6219,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "slots": [],
                     "blocks": [],
                     "battery_fleet_partial": partial_note,
+                    # (night 3, finding 3) a re-stamped night must be
+                    # distinguishable from the first answer.
+                    "replan_cause": replan_cause,
                 }
                 return True
 
@@ -6377,7 +6424,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (finding #4): "the plan has no EV line" reads identically
                     # whether the charger opted out or the builder lost it.
                     [f"ev opted out of the night by mode: "
-                     f"{', '.join(mode_opted_out)}"] if mode_opted_out else []),
+                     f"{', '.join(mode_opted_out)}"] if mode_opted_out else []
+                ) + (
+                    # Same rule for an absent car (night 3): the missing EV
+                    # line must say it was the plug, not the packer.
+                    [f"ev not planned, no car connected: "
+                     f"{', '.join(disconnected)}"] if disconnected else []),
                 "allocations": [a.reason for a in plan.allocations],
                 # None on a whole fleet. A string here means the battery
                 # figures above cover a SUBSET — the plan is still the best
@@ -6385,6 +6437,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # finding #3). Never silently absent: a degraded plan that
                 # reads like a healthy one is what made this bug invisible.
                 "battery_fleet_partial": partial_note,
+                # (night 3, finding 3) a re-stamped night must be
+                # distinguishable from the first answer.
+                "replan_cause": replan_cause,
             }
             return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle
