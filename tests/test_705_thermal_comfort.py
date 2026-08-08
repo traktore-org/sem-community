@@ -592,3 +592,106 @@ class TestPhase2SwitchLoads:
         assert dev.comfort_state == "disengaged"
         assert dev.has_runtime_deficit is False
         assert dev.stop_condition_met is False
+
+
+class TestComfortSampling:
+    """(#638 Phase 3) The drift learners eat samples SEM already takes —
+    one reading per cycle, split by whether the device was running."""
+
+    def _now(self, minutes=0):
+        from datetime import datetime, timedelta, timezone
+        return (datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc)
+                + timedelta(minutes=minutes))
+
+    def _run(self, dev, running):
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceState,
+        )
+        dev._status.state = (DeviceState.ACTIVE if running
+                             else DeviceState.IDLE)
+
+    def test_samples_split_by_activity(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "24.0"}))
+        self._run(dev, False)
+        dev.record_comfort_sample(self._now(0))
+        self._run(dev, True)
+        dev.record_comfort_sample(self._now(1))
+        assert len(dev._comfort_off_samples) == 1
+        assert len(dev._comfort_on_samples) == 1
+
+    def test_a_silent_thermometer_is_not_a_sample(self):
+        dev = _ac(_hass_with({}))
+        dev.record_comfort_sample(self._now(0))
+        assert not getattr(dev, "_comfort_off_samples", None)
+
+    def test_a_disengaged_band_does_not_sample(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "24.0"}),
+                  target=0.0, limit=0.0)
+        dev.record_comfort_sample(self._now(0))
+        assert not getattr(dev, "_comfort_off_samples", None)
+
+    def test_old_samples_age_out(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "24.0"}))
+        dev.record_comfort_sample(self._now(0))
+        dev.record_comfort_sample(self._now(300))  # 5 h later
+        assert len(dev._comfort_off_samples) == 1
+
+    def test_two_devices_do_not_share_buffers(self):
+        """The class-level-mutable-default trap: buffers must be per
+        instance, or one room's history poisons every room's model."""
+        a = _ac(_hass_with({"sensor.room_temp": "24.0"}))
+        b = ClimateDevice(
+            _hass_with({"sensor.room_temp": "20.0"}), "ac2", "AC 2",
+            rated_power=900, entity_id="climate.ac2", hvac_mode="cool",
+            comfort_entity="sensor.room_temp",
+            comfort_target=24.0, comfort_offset=2.0, comfort_limit=26.0)
+        a.record_comfort_sample(self._now(0))
+        assert not getattr(b, "_comfort_off_samples", None)
+
+
+class TestComfortPlanDemand:
+    """(#638 Phase 3) The band's plannable ask: 'the room hits the limit
+    at T, banking back to target costs E kWh' — or None when the model
+    cannot say. This is what the day planner packs into surplus windows."""
+
+    def _warming_ac(self, room="24.5", off_rate=0.5, on_rate=-1.0):
+        """An AC whose room warms at ``off_rate`` °C/h while off and
+        cools at ``on_rate`` while running, fed 30 min of samples each."""
+        from datetime import datetime, timedelta, timezone
+        dev = _ac(_hass_with({"sensor.room_temp": room}))
+        t0 = datetime(2026, 8, 8, 11, 0, tzinfo=timezone.utc)
+        for i in range(7):
+            ts = t0 + timedelta(minutes=5 * i)
+            h = 5 * i / 60.0
+            dev._ensure_comfort_buffers()
+            dev._comfort_off_samples.append((ts, 23.0 + off_rate * h))
+            dev._comfort_on_samples.append((ts, 25.0 + on_rate * h))
+        self.now = t0 + timedelta(minutes=35)
+        return dev
+
+    def test_a_drifting_room_produces_the_ask(self):
+        dev = self._warming_ac()
+        ask = dev.comfort_plan_demand(self.now)
+        assert ask is not None
+        # 24.5 → 26 at 0.5 °C/h = 3 h to the limit
+        hours = (ask["deadline"] - self.now).total_seconds() / 3600.0
+        assert 2.5 < hours < 3.5
+        # 0.5 °C back to target at 1 °C/h active = 0.5 h × 1.2 kW
+        assert ask["energy_kwh"] == pytest.approx(0.6, abs=0.01)
+
+    def test_a_room_holding_itself_is_no_ask(self):
+        dev = self._warming_ac(off_rate=-0.1)
+        assert dev.comfort_plan_demand(self.now) is None
+
+    def test_a_forced_room_is_the_reactive_layers_problem(self):
+        dev = self._warming_ac(room="26.5")
+        assert dev.comfort_plan_demand(self.now) is None
+
+    def test_no_active_model_is_no_ask(self):
+        dev = self._warming_ac()
+        dev._comfort_on_samples.clear()
+        assert dev.comfort_plan_demand(self.now) is None
+
+    def test_an_already_banked_room_asks_nothing(self):
+        dev = self._warming_ac(room="21.5")
+        assert dev.comfort_plan_demand(self.now) is None

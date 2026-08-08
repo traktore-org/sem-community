@@ -179,6 +179,19 @@ class TestOvernightPlanTick:
         hostile = SimpleNamespace()  # every attribute missing
         SEMCoordinator._overnight_plan_tick(hostile, power=None, energy=None)
 
+    def test_the_tick_feeds_the_drift_learners(self, _freeze_2200):
+        """(#638 Phase 3) Comfort sampling rides the tick — every cycle,
+        not only at stamp time; the model needs continuous history."""
+        sampled = []
+        dev = SimpleNamespace(
+            record_comfort_sample=lambda now: sampled.append(now))
+        fake = _tick_self()
+        fake._surplus_controller = SimpleNamespace(
+            get_devices_sorted=lambda: [dev])
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert len(sampled) == 2
+
 
 class TestTheStampPrecedesTheDecisions:
     """Finding 2 as a structural pin: the tick call sits BEFORE the EV

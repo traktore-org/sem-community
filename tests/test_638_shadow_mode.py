@@ -915,6 +915,73 @@ class TestTheDayPartOfTheHorizon:
                    for s in plan["slots"])
 
 
+def _comfort_dev(did="ac1", kwh=1.5, deadline_h=3):
+    """A device whose band asks for a planned banking run."""
+    def _ask(now):
+        return {"energy_kwh": kwh,
+                "deadline": now + timedelta(hours=deadline_h)}
+    return SimpleNamespace(
+        device_id=did, name="AC One", priority=4,
+        has_runtime_deficit=False,
+        battery_eligible_overnight=False, top_up_policy="solar_only",
+        daily_min_runtime_sec=0, _daily_runtime_accumulated_sec=0,
+        rated_power=1200.0, min_on_seconds=300, min_off_seconds=180,
+        comfort_plan_demand=_ask,
+    )
+
+
+class TestComfortDemandsJoinThePlan:
+    """(#638 Phase 3) A drifting room is a deadline-shaped demand like
+    tonight's EV floor — packed by the same list, into the same ledger,
+    visible on the same card."""
+
+    def test_a_comfort_ask_becomes_a_demand(self, freeze_targets):
+        fake = _fake_self(devices=[_comfort_dev()])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
+            phantom_ev_w=0, power=_power())
+        plan = fake._overnight_shadow_plan
+        rows = {r["id"]: r for r in plan["demands"]}
+        assert "comfort:ac1" in rows
+        assert rows["comfort:ac1"]["kind"] == "comfort"
+        assert rows["comfort:ac1"]["needed_kwh"] == 1.5
+
+    def test_a_device_without_a_band_is_not_asked(self, freeze_targets):
+        """The plain load fake has no comfort_plan_demand — the collector
+        must skip it, not crash on it (and its runtime demand stays)."""
+        fake = _fake_self(devices=[_fake_load()])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
+            phantom_ev_w=0, power=_power())
+        ids = [r["id"] for r in fake._overnight_shadow_plan["demands"]]
+        assert "load:pump" in ids
+        assert not any(i.startswith("comfort:") for i in ids)
+
+    def test_a_raising_ask_is_no_demand(self, freeze_targets):
+        dev = _comfort_dev()
+        def _boom(now):
+            raise RuntimeError("no model")
+        dev.comfort_plan_demand = _boom
+        fake = _fake_self(devices=[dev])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
+            phantom_ev_w=0, power=_power())
+        assert fake._overnight_shadow_plan is not None
+
+    def test_comfort_banks_only_cheap_or_free_energy(self, freeze_targets):
+        """Banking is opportunism: it must pack ONLY into slots the
+        provider's level (or the sun) marks cheap — plain-rate paid
+        pre-cooling is exactly what the band's FORCED tier is for, on
+        the user's own source-axis terms. The fake tariff has NO cheap
+        level, so the ask must yield, not buy."""
+        fake = _fake_self(devices=[_comfort_dev()])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        rows = {r["id"]: r for r in fake._overnight_shadow_plan["demands"]}
+        assert rows["comfort:ac1"]["status"] in ("yields", "partial")
+
+
 class TestDisconnectedCarIsNotADemand:
     """Night 3 (2026-08-08): both machines packed kWh for unplugged cars —
     PROD 4.94 kWh, the clone 10 kWh at its 21:00 stamp. The ledger was spent

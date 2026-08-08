@@ -5824,7 +5824,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sig.append(("load", str(dev.device_id), round(deficit_h * 10) / 10))
             except Exception:  # noqa: BLE001
                 continue
-        # 4. The night's price curve — a provider publishing tomorrow's
+        # 4. Each engaged band's plannable ask (#638 Phase 3) — a comfort
+        #    demand appearing or materially changing re-plans the day.
+        #    Deliberately COARSE like the rest: kWh in 0.5 steps, the
+        #    deadline in 30-min steps — a drifting thermometer must not
+        #    re-plan every cycle.
+        try:
+            _now_sig = dt_util.now()
+            for dev in (controller.get_devices_sorted() if controller else []):
+                try:
+                    _fn = getattr(dev, "comfort_plan_demand", None)
+                    ask = _fn(_now_sig) if callable(_fn) else None
+                    if not ask:
+                        continue
+                    sig.append((
+                        "comfort", str(dev.device_id),
+                        round(float(ask["energy_kwh"]) * 2) / 2,
+                        int(ask["deadline"].timestamp() // 1800),
+                    ))
+                except Exception:  # noqa: BLE001 — one band, not the trigger
+                    continue
+        except Exception:  # noqa: BLE001
+            pass
+        # 5. The night's price curve — a provider publishing tomorrow's
         #    prices mid-evening changes where everything should go.
         try:
             ups = getattr(
@@ -5890,6 +5912,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             _sched = self._battery_charge_scheduler
             _now_l = dt_util.now()
+            # (#638 Phase 3) Feed the drift learners — every cycle, not
+            # only at stamp time: the comfort model needs continuous
+            # ON/OFF temperature history to say when a room hits its
+            # limit and what banking back costs.
+            try:
+                _ctrl = getattr(self, "_surplus_controller", None)
+                for _dev in (_ctrl.get_devices_sorted() if _ctrl else []):
+                    try:
+                        _rec = getattr(_dev, "record_comfort_sample", None)
+                        if callable(_rec):
+                            _rec(_now_l)
+                    except Exception:  # noqa: BLE001 — one device, not all
+                        continue
+            except Exception:  # noqa: BLE001 — sampling must never gate
+                pass
             # (horizon-spanning) One plan per ENERGY DAY — night-end to
             # night-end — not one per night: the plan always covers now →
             # the coming night's end, so a daytime tick stamps the
@@ -6113,6 +6150,41 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         min_gap_s=int(getattr(dev, "min_off_seconds", 0) or 0),
                     ))
                 except Exception:  # noqa: BLE001 — one bad device won't kill the plan
+                    continue
+            # Comfort banking (#638 Phase 3 / #705): a drifting room is a
+            # deadline-shaped demand — "hits the limit at T, banking back
+            # costs E kWh". needs_cheap_level because banking is
+            # opportunism: free sun or a cheap level, never plain-rate
+            # paid power (a breach is the FORCED tier's job, on the
+            # user's own source-axis terms). The ask lives on the device
+            # — the band owns its model; a device without a band simply
+            # has no method to call.
+            for dev in (controller.get_devices_sorted() if controller else []):
+                try:
+                    if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
+                        continue
+                    _ask_fn = getattr(dev, "comfort_plan_demand", None)
+                    ask = _ask_fn(now) if callable(_ask_fn) else None
+                    if not ask:
+                        continue
+                    rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
+                    if rated <= 0:
+                        continue
+                    did = dev.device_id
+                    labels[f"comfort:{did}"] = (
+                        str(getattr(dev, "name", "") or "").strip() or None)
+                    demands.append(Demand(
+                        id=f"comfort:{did}", kind="comfort",
+                        energy_kwh=float(ask["energy_kwh"]),
+                        max_power_w=rated, min_power_w=rated,
+                        deadline=ask.get("deadline") or night_end,
+                        priority=int(getattr(dev, "priority", 0) or 0),
+                        source="grid",
+                        needs_cheap_level=True,
+                        min_run_s=int(getattr(dev, "min_on_seconds", 0) or 0),
+                        min_gap_s=int(getattr(dev, "min_off_seconds", 0) or 0),
+                    ))
+                except Exception:  # noqa: BLE001 — one bad band won't kill the plan
                     continue
             # Battery pre-charge — the scheduler's own computed deficit.
             # (Grid-sourced: charging the battery draws through the meter.)

@@ -858,6 +858,80 @@ class ComfortBandMixin:
                 return "banked"
         return "willing"
 
+    # ── (#638 Phase 3) the band becomes PLANNABLE ──────────────────────
+    # The drift learners eat one reading per cycle, split by whether the
+    # device was running. Buffers are created per INSTANCE on first use —
+    # a class-level deque would share one room's history across every
+    # room (the mutable-default trap).
+
+    _COMFORT_SAMPLE_WINDOW_H = 4.0
+
+    def _ensure_comfort_buffers(self) -> None:
+        if getattr(self, "_comfort_on_samples", None) is None:
+            from collections import deque
+            self._comfort_on_samples = deque(maxlen=720)
+            self._comfort_off_samples = deque(maxlen=720)
+
+    def record_comfort_sample(self, now) -> None:
+        """Feed the drift learners from the reading SEM already takes.
+
+        No engaged band or no reading → no sample: an unavailable
+        thermometer must not teach the model a flat line.
+        """
+        if not (self.comfort_target and self.comfort_limit):
+            return
+        temp = self._comfort_reading()
+        if temp is None:
+            return
+        self._ensure_comfort_buffers()
+        buf = (self._comfort_on_samples if self.is_active
+               else self._comfort_off_samples)
+        buf.append((now, temp))
+        cutoff = now - timedelta(hours=self._COMFORT_SAMPLE_WINDOW_H)
+        for b in (self._comfort_on_samples, self._comfort_off_samples):
+            while b and b[0][0] < cutoff:
+                b.popleft()
+
+    def comfort_plan_demand(self, now):
+        """The band's plannable ask: ``{"energy_kwh", "deadline"}`` or None.
+
+        'The room hits the limit at T (free-running drift), banking back
+        to target costs E kWh (learned active rate)' — the deadline-shaped
+        demand the day planner packs into surplus/cheap windows. None on
+        every doubt: forced rooms belong to the reactive layer, banked
+        rooms have nothing to bank, a missing model must never invent a
+        demand.
+        """
+        if self.comfort_state != "willing":
+            return None
+        from ..coordinator.comfort_drift import (
+            banking_energy_kwh, learn_drift, time_to_limit,
+        )
+        off = learn_drift(list(getattr(self, "_comfort_off_samples", None)
+                               or ()))
+        if off is None:
+            return None
+        temp = self._comfort_reading()
+        if temp is None:
+            return None
+        direction = self._comfort_direction()
+        target_c, _offset_c, limit_c = self._comfort_thresholds_c()
+        deadline = time_to_limit(off, current_c=temp, limit_c=limit_c,
+                                 direction=direction, now=now)
+        if deadline is None:
+            return None
+        on = learn_drift(list(getattr(self, "_comfort_on_samples", None)
+                              or ()))
+        if on is None:
+            return None
+        kwh = banking_energy_kwh(
+            current_c=temp, target_c=target_c, direction=direction,
+            active_rate_c_per_h=on.rate_c_per_h,
+            rated_power_w=float(getattr(self, "rated_power", 0.0) or 0.0))
+        if not kwh:
+            return None
+        return {"energy_kwh": kwh, "deadline": deadline}
+
     # The band speaks through the three generic properties every surplus
     # pass already reads — no new controller clauses; peak shed,
     # anti-cycling, priority and LIFO apply to comfort runs unchanged.

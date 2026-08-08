@@ -127,3 +127,37 @@ class TestJitterDoesNot:
         bad = SimpleNamespace(device_id="x", has_runtime_deficit=True)
         c = _coord(devices=(bad,))  # missing runtime attrs → skipped
         assert isinstance(c._overnight_demand_signature(_power()), tuple)
+
+
+def _comfort_ask_dev(did="ac1", kwh=1.5, minute=0):
+    from datetime import datetime, timezone
+    deadline = datetime(2026, 8, 8, 17, minute, tzinfo=timezone.utc)
+    return SimpleNamespace(
+        device_id=did, has_runtime_deficit=False,
+        comfort_plan_demand=lambda now: {"energy_kwh": kwh,
+                                         "deadline": deadline},
+    )
+
+
+class TestComfortAsksReplan:
+    """(#638 Phase 3) A band's plannable ask is part of what the day is
+    being ASKED for — appearing re-plans; thermometer jitter does not."""
+
+    def test_an_ask_appearing_changes_the_signature(self):
+        quiet = _coord()
+        asking = _coord(devices=(_comfort_ask_dev(),))
+        assert (quiet._overnight_demand_signature(_power())
+                != asking._overnight_demand_signature(_power()))
+
+    def test_drift_jitter_rounds_away(self):
+        """+0.1 kWh and +10 min stay inside the 0.5 kWh / 30 min steps."""
+        a = _coord(devices=(_comfort_ask_dev(kwh=1.5, minute=0),))
+        b = _coord(devices=(_comfort_ask_dev(kwh=1.6, minute=10),))
+        assert (a._overnight_demand_signature(_power())
+                == b._overnight_demand_signature(_power()))
+
+    def test_a_material_change_does_not(self):
+        a = _coord(devices=(_comfort_ask_dev(kwh=1.5),))
+        b = _coord(devices=(_comfort_ask_dev(kwh=2.5),))
+        assert (a._overnight_demand_signature(_power())
+                != b._overnight_demand_signature(_power()))
