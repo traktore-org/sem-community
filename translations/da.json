@@ -159,7 +159,8 @@
           "legionella_target_temp": "Mål for legionella-desinfektion (°C)",
           "legionella_interval_hours": "Maks. antal timer mellem desinfektionscyklusser",
           "diagram_style": "Systemdiagram stil",
-          "battery_assist_min_surplus": "Batteristøtte – min. soloverskud (W)"
+          "battery_assist_min_surplus": "Batteristøtte – min. soloverskud (W)",
+          "grid_sign_invert": "Vend fortegn for neteffekt"
         },
         "data_description": {
           "update_interval": "Hvor ofte koordinatoren læser sensorer og justerer hardwaren. 10 s giver den mest præcise energiintegration; værdier over 30 s vil undervurdere energien. Interval 10–60 s.",
@@ -183,7 +184,8 @@
           "hot_water_solar_target": "Måltemperatur (°C) for solunderstøttet opvarmning af varmt vand. SEM booster varmtvandsbeholderen, når der er overskud.",
           "legionella_target_temp": "Den temperatur (°C), som varmtvandssystemet skal nå under en legionella-desinfektionscyklus.",
           "legionella_interval_hours": "Det maksimale antal timer mellem legionella-desinfektionscyklusser, før SEM fremtvinger en opvarmning.",
-          "battery_assist_min_surplus": "Mindste reelle soloverskud, før husbatteriet må hjælpe med at oplade EV'en — i alle opladningstilstande. Herunder er batteriet reserveret til huset (bilen trækker fra nettet + sol). Standard 1200 W. Sæt til 0 for at lade batteriet understøtte EV'en overalt, også om natten."
+          "battery_assist_min_surplus": "Mindste reelle soloverskud, før husbatteriet må hjælpe med at oplade EV'en — i alle opladningstilstande. Herunder er batteriet reserveret til huset (bilen trækker fra nettet + sol). Standard 1200 W. Sæt til 0 for at lade batteriet understøtte EV'en overalt, også om natten.",
+          "grid_sign_invert": "Slå kun til, hvis netimport vises som en positiv værdi (f.eks. Enphase). SEM's konvention er negativ = import; dette negerer råaflæsningen og springer automatisk fortegnsregistrering over."
         }
       },
       "settings_ev": {
@@ -217,7 +219,8 @@
           "dynamic_forecast_entity": "Prognoseentitet (valgfri, registreres automatisk hvis tom)",
           "dynamic_feedin_entity": "Entitet for afregningspris (valgfri, til dynamisk eksportpris)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Prisklassificeringstilstand"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/fast importpris (valuta/kWh inkl. moms). Bruges som reserve, når dynamisk prissætning ikke er tilgængelig.",
@@ -231,7 +234,8 @@
           "dynamic_forecast_entity": "Valgfri sensor med timeprisprognoser, der bruges til smart planlægning.",
           "dynamic_feedin_entity": "Valgfri sensor, der leverer den aktuelle afregnings-/eksportpris til dynamisk eksportpris.",
           "grid_import_power_entity": "Valgfri sensor (W) til netimporteffekt. Registreres automatisk fra Energi-dashboardet; tilsidesæt her, hvis det er nødvendigt.",
-          "grid_export_power_entity": "Valgfri sensor (W) til neteksporteffekt. Registreres automatisk fra Energi-dashboardet; tilsidesæt her, hvis det er nødvendigt."
+          "grid_export_power_entity": "Valgfri sensor (W) til neteksporteffekt. Registreres automatisk fra Energi-dashboardet; tilsidesæt her, hvis det er nødvendigt.",
+          "tariff_classification_mode": "Percentil inddeler priser i forhold til dagens interval (anbefales). Statisk bruger faste billige/dyre tærskler."
         }
       },
       "load_management": {
@@ -291,7 +295,15 @@
           "battery_max_target_soc": "Maksimalt mål-SOC",
           "battery_min_deficit_kwh": "Mindste underskudstærskel",
           "battery_pessimism_weight": "Prognosepessimisme",
-          "battery_force_charge_negative_price": "Tvungen opladning ved negativ pris"
+          "battery_force_charge_negative_price": "Tvungen opladning ved negativ pris",
+          "battery_charge_platform": "Batteriets ladeplatform",
+          "battery_replan_interval_min": "Genplanlægningsinterval (min)",
+          "battery_prefer_consecutive_window": "Foretræk et sammenhængende ladevindue"
+        },
+        "data_description": {
+          "battery_charge_platform": "Hvilken inverter SEM styrer til planlagt netopladning. Vælg Deye for at vise Deye-ledningstrinnet.",
+          "battery_replan_interval_min": "Hvor ofte ladeplanen genberegnes ud fra den nyeste prognose og priser.",
+          "battery_prefer_consecutive_window": "Til: de billige timer i én blok (færre start/stop-cyklusser); fra: de enkeltvis billigste timer, selv spredt."
         }
       },
       "ev_charger_edit": {
@@ -312,7 +324,16 @@
           "ev_surplus_priority": "Overskudsprioritet (1=højeste)",
           "ev_current_control_entity": "Strømstyringsentitet (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Solopladningsgrænse (kWh)",
-          "ev_target_soc_max": "Solopladningsgrænse (SOC %)"
+          "ev_target_soc_max": "Solopladningsgrænse (SOC %)",
+          "daily_ev_target": "Natopladningsmål (kWh)",
+          "vehicle_soc_entity": "Køretøjets batteri-SOC-sensor (valgfri)",
+          "vehicle_range_entity": "Køretøjets rækkeviddesensor",
+          "ev_kwh_per_100km": "Køretøjets forbrug (kWh/100km)",
+          "ev_target_soc": "EV mål-SOC (%)",
+          "ev_battery_capacity_kwh": "EV-batterikapacitet (kWh)",
+          "initial_current": "Startstrøm (A)",
+          "ev_min_current": "Minimal ladestrøm (A)",
+          "vehicle_min_current": "Køretøjets minimumsstrøm (A)"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne lader, som vises i dashboardet.",
@@ -329,7 +350,16 @@
           "ev_surplus_priority": "Rækkefølgen for fordeling af overskud mellem flere ladere. Lavere tal = højere prioritet.",
           "ev_current_control_entity": "Number-entitet brugt til at sætte ladestrømmen (A). Til Wallbox, go-eCharger og lignende ladere.",
           "daily_ev_target_max": "Soloverskud oplader op til dette og stopper derefter. Lad stå på fuld for at oplade frit fra solen.",
-          "ev_target_soc_max": "Soloverskud oplader op til denne SOC og stopper derefter. Lad stå på 100 % for at oplade frit fra solen."
+          "ev_target_soc_max": "Soloverskud oplader op til denne SOC og stopper derefter. Lad stå på 100 % for at oplade frit fra solen.",
+          "daily_ev_target": "Mål i kWh, der skal oplades fra nettet hver nat. Sæt til 0 for at deaktivere natopladning fra nettet.",
+          "vehicle_soc_entity": "Valgfri sensor, der rapporterer køretøjets aktuelle ladetilstand (0–100 %).",
+          "vehicle_range_entity": "Valgfri reel rækkeviddesensor. Ellers estimeres rækkevidden ud fra SOC × kapacitet × effektivitet.",
+          "ev_kwh_per_100km": "Bruges til at estimere rækkevidden, når der ikke er konfigureret en rækkeviddesensor.",
+          "ev_target_soc": "Mål-SOC (%), hvor SEM betragter EV'en som fuldt opladet.",
+          "ev_battery_capacity_kwh": "EV-batteriets samlede anvendelige kapacitet i kWh. Bruges til at estimere SOC og ladetid.",
+          "initial_current": "Ladestrøm som SEM starter med, før den justeres til det tilgængelige overskud.",
+          "ev_min_current": "Under dette sætter SEM opladningen på pause i stedet for at sænke strømmen yderligere.",
+          "vehicle_min_current": "Strømgulv pr. køretøj. Det effektive minimum er det højeste af denne og laderens minimumsstrøm."
         }
       },
       "ev_charger_add": {
@@ -350,7 +380,15 @@
           "ev_surplus_priority": "Overskudsprioritet (1=højeste)",
           "ev_current_control_entity": "Strømstyringsentitet (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Solopladningsgrænse (kWh)",
-          "ev_target_soc_max": "Solopladningsgrænse (SOC %)"
+          "ev_target_soc_max": "Solopladningsgrænse (SOC %)",
+          "daily_ev_target": "Natopladningsmål (kWh)",
+          "vehicle_soc_entity": "Køretøjets batteri-SOC-sensor (valgfri)",
+          "vehicle_range_entity": "Køretøjets rækkeviddesensor",
+          "ev_kwh_per_100km": "Køretøjets forbrug (kWh/100km)",
+          "ev_target_soc": "EV mål-SOC (%)",
+          "ev_battery_capacity_kwh": "EV-batterikapacitet (kWh)",
+          "initial_current": "Startstrøm (A)",
+          "ev_min_current": "Minimal ladestrøm (A)"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne lader, som vises i dashboardet.",
@@ -367,7 +405,15 @@
           "ev_surplus_priority": "Rækkefølgen for fordeling af overskud mellem flere ladere. Lavere tal = højere prioritet.",
           "ev_current_control_entity": "Number-entitet brugt til at sætte ladestrømmen (A). Til Wallbox, go-eCharger og lignende ladere.",
           "daily_ev_target_max": "Soloverskud oplader op til dette og stopper derefter. Lad stå på fuld for at oplade frit fra solen.",
-          "ev_target_soc_max": "Soloverskud oplader op til denne SOC og stopper derefter. Lad stå på 100 % for at oplade frit fra solen."
+          "ev_target_soc_max": "Soloverskud oplader op til denne SOC og stopper derefter. Lad stå på 100 % for at oplade frit fra solen.",
+          "daily_ev_target": "Mål i kWh, der skal oplades fra nettet hver nat. Sæt til 0 for at deaktivere natopladning fra nettet.",
+          "vehicle_soc_entity": "Valgfri sensor, der rapporterer køretøjets aktuelle ladetilstand (0–100 %).",
+          "vehicle_range_entity": "Valgfri reel rækkeviddesensor. Ellers estimeres rækkevidden ud fra SOC × kapacitet × effektivitet.",
+          "ev_kwh_per_100km": "Bruges til at estimere rækkevidden, når der ikke er konfigureret en rækkeviddesensor.",
+          "ev_target_soc": "Mål-SOC (%), hvor SEM betragter EV'en som fuldt opladet.",
+          "ev_battery_capacity_kwh": "EV-batteriets samlede anvendelige kapacitet i kWh. Bruges til at estimere SOC og ladetid.",
+          "initial_current": "Ladestrøm som SEM starter med, før den justeres til det tilgængelige overskud.",
+          "ev_min_current": "Under dette sætter SEM opladningen på pause i stedet for at sænke strømmen yderligere."
         }
       },
       "pv_naming": {
@@ -481,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Deye tvungen netopladning",
+        "description": "Tilslut en Deye hybrid-inverter til planlagt netopladning. Observatørtilstand er som standard TIL og aktivering FRA, så der skrives intet til inverteren, før du udtrykkeligt aktiverer det.",
+        "data": {
+          "deye_grid_charge_switch": "Netopladningskontakt (entitet)",
+          "deye_charge_current_entity": "Ladestrøm-number-entitet (A)",
+          "deye_battery_voltage_entity": "Batterispænding-sensor (entitet)",
+          "deye_battery_voltage_max_age_s": "Batterispænding maks. alder (s)",
+          "deye_max_charge_current_a": "Maks. ladestrøm (A)",
+          "deye_bms_max_charge_current_a": "BMS maks. ladestrøm (A)",
+          "deye_max_discharge_power": "Maks. afladningseffekt (W)",
+          "deye_program_control": "Styr programmets tidsrum",
+          "deye_observer_mode": "Observatørtilstand (skrivebeskyttet)",
+          "deye_actuation_enabled": "Aktivér styring (skriv til inverter)",
+          "deye_work_mode_control": "Styr arbejdstilstand",
+          "deye_work_mode_entity": "Arbejdstilstand-select-entitet",
+          "deye_work_mode_load_first_option": "Arbejdstilstandsværdi for Load First",
+          "deye_work_mode_battery_first_option": "Arbejdstilstandsværdi for Battery First",
+          "deye_force_charge_work_mode": "Arbejdstilstand ved tvungen opladning",
+          "deye_program_1_time": "Program 1 — tidsrum-select-entitet",
+          "deye_program_1_soc": "Program 1 — mål-SOC-number-entitet",
+          "deye_program_1_charge": "Program 1 — netopladning-select-entitet",
+          "deye_program_2_time": "Program 2 — tidsrum-select-entitet",
+          "deye_program_2_soc": "Program 2 — mål-SOC-number-entitet",
+          "deye_program_2_charge": "Program 2 — netopladning-select-entitet",
+          "deye_program_3_time": "Program 3 — tidsrum-select-entitet",
+          "deye_program_3_soc": "Program 3 — mål-SOC-number-entitet",
+          "deye_program_3_charge": "Program 3 — netopladning-select-entitet",
+          "deye_program_4_time": "Program 4 — tidsrum-select-entitet",
+          "deye_program_4_soc": "Program 4 — mål-SOC-number-entitet",
+          "deye_program_4_charge": "Program 4 — netopladning-select-entitet",
+          "deye_program_5_time": "Program 5 — tidsrum-select-entitet",
+          "deye_program_5_soc": "Program 5 — mål-SOC-number-entitet",
+          "deye_program_5_charge": "Program 5 — netopladning-select-entitet",
+          "deye_program_6_time": "Program 6 — tidsrum-select-entitet",
+          "deye_program_6_soc": "Program 6 — mål-SOC-number-entitet",
+          "deye_program_6_charge": "Program 6 — netopladning-select-entitet"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Valgfrit BMS-pålagt loft. 0 = ingen BMS-grænse — inverterens eget maksimum gælder.",
+          "deye_observer_mode": "Når TIL beregner og logger SEM sine Deye-handlinger, men skriver aldrig til inverteren.",
+          "deye_actuation_enabled": "Når FRA skriver SEM aldrig til inverteren, selv hvis observatørtilstand også er fra. Begge porte skal tillade det, før en kommando sendes.",
+          "deye_max_charge_current_a": "Sikker øvre grænse SEM vil kommandere på ladestrøm-entiteten."
         }
       }
     },

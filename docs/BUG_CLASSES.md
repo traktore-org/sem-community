@@ -581,6 +581,24 @@ level up. If you find yourself adding a third entry to one, ask whether the thin
 can be read out of the source instead. **Guard:** `tests/test_677_per_charger_names.py`
 (`per_charger_translation_keys()` is the shared derivation).
 
+**Fifth instance — #737, the mirror read from the schema end.** #674/#677 compared the two
+*string* files (`strings.json` ↔ `translations/`) to each other; nothing compared either against the
+**options-flow schemas**, which are the actual structure the labels mirror. So two files could agree
+perfectly and still both omit a field — and they did: six steps declared 37 `vol.Optional`/`Required`
+keys with no `data` label (the whole `deye` step block was absent from `strings.json`), rendering the
+raw `snake_case` key. The audit that opened #737 hand-counted the fields and got 37 — but the `deye`
+step builds 18 more `deye_program_N_{time,soc,charge}` keys in a comprehension, so the true count was
+55. **This is the class's signature failure mode: a count.** The manual list undercounts exactly the
+loop-built fields a human eye skips, which is why the closure is a *derivation* — the guard walks
+each `async_step_*` schema, enumerates literal keys **and** resolves comprehension-built f-string
+keys over their literal loop ranges (`range(1,7)` × `("time","soc","charge")`), and asserts each is
+declared. Genuinely runtime-named fields (`pv_naming`'s `pv_name_{slot}`, keyed on discovered PV
+strings) are the one thing a static file cannot declare; they are named in a one-entry
+`_RUNTIME_NAMED_STEPS` set with a reason, and the guard fails if that set grows silently (the #677
+tell — an exemption list is the class one level up, so this one is derived-from-unresolvable, not
+"not done yet"). **Guard:** `tests/test_737_options_flow_label_coverage.py` (schema ⊆ `strings.json`);
+it composes with `test_674` (`strings.json` == translations) to cover every language HA loads. Refs #737.
+
 ### 25. Mutual delegation — two layers each defer the action to the other — GUARDED
 **Symptom:** the intent is right, the command is issued, the logs say it was issued, and the
 thing never happens. Nothing raises, because from each layer's own point of view it behaved
