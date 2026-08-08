@@ -1258,7 +1258,6 @@ class TestTomorrowPreviewComposer:
         books, seeded with the battery level TODAY'S plan predicts for
         the morning. Provisional and labeled so."""
         fake = self._fake()
-        fake.config["battery_capacity_kwh"] = 10.0
         fake._surplus_controller = SimpleNamespace(
             get_devices_sorted=lambda: [_fake_load()])
         fake._overnight_shadow_plan = {
@@ -1276,7 +1275,6 @@ class TestTomorrowPreviewComposer:
         """Without today's plan there is no honest morning seed — the
         preview stays books-only rather than inventing a battery level."""
         fake = self._fake()
-        fake.config["battery_capacity_kwh"] = 10.0
         p = SEMCoordinator._compose_tomorrow_preview(fake)
         assert p.get("provisional") is None
 

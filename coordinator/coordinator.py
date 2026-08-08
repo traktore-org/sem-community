@@ -6021,8 +6021,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                    else None) or []
             if _sl:
                 soc_seed = float(_sl[-1].get("soc_kwh") or 0.0)
-                cap_kwh2 = float(self.config.get(
-                    "battery_capacity_kwh", 0) or 0)
+                # The SAME capacity source the plan itself walks with —
+                # the coordinator attribute, not a config key (reading a
+                # parallel source is how the clone's battery row went
+                # missing while its arbitrage line happily said /15.0).
+                cap_kwh2 = float(getattr(
+                    self, "battery_capacity_kwh", 0.0) or 0.0)
                 from .day_ledger import (build_day_slots,
                                          provisional_soc_curve)
                 from .overnight_planner import (Demand, build_night_ledger,
