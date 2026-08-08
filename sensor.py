@@ -2479,11 +2479,17 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 ),
             })
         elif self.entity_description.key == "energy_plan":
-            # (#638) SHADOW — what the joint planner WOULD do tonight.
-            # sem-overnight-plan-card renders these directly; the log lines
-            # and the ``diagnose`` stash carry the same plan in prose.
+            # (#638) SHADOW — what the joint planner WOULD do this energy
+            # day. sem-energy-plan-card renders these directly; the log
+            # lines and the ``diagnose`` stash carry the same plan in prose.
             attrs.update(_overnight_plan_attrs(
                 self.coordinator.data.get("energy_plan")))
+            # (#638 consolidation / #722) the NEXT energy day's books for
+            # the card's Tomorrow view — live, never stamped, small by
+            # construction (a handful of merged windows).
+            _tmw = self.coordinator.data.get("energy_plan_tomorrow")
+            if _tmw:
+                attrs["tomorrow"] = _tmw
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

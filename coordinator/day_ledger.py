@@ -113,3 +113,84 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
             ))
         t = slot_end
     return slots
+
+
+def _merge_windows(slots) -> list:
+    """Adjacent qualifying slots become one window — the card draws bands,
+    not slivers."""
+    out = []
+    for s in sorted(slots, key=lambda s: s.start):
+        if out and out[-1]["end"] == s.start.isoformat():
+            out[-1]["end"] = s.end.isoformat()
+        else:
+            out.append({"start": s.start.isoformat(),
+                        "end": s.end.isoformat()})
+    return out
+
+
+def tomorrow_preview(*, day_start, day_end, day_kwh, sunrise, sunset,
+                     home_w_at, price_at, level_cheap_at, stamps_at) -> dict:
+    """(#638 consolidation / #722) The NEXT energy day's books, previewed.
+
+    tintinz's Today|Tomorrow idea (#722), adopted onto the one data path:
+    the preview is built by the SAME slot machinery and the SAME tariff
+    accessors as the plan itself, anchored to the target day — which is
+    what makes it time-invariant (the #722 review's open MEDIUM was a
+    tomorrow view composed from today-anchored values, whose rows
+    changed with the hour you looked at it).
+
+    ``prices``: ``final`` when the provider prices tomorrow midday,
+    ``preliminary`` while the day-ahead is unpublished — a static/ToU
+    schedule is always known, so it always reads final. No demands, no
+    verdicts: the plan for that day honestly does not exist until it
+    stamps at ``stamps_at``.
+    """
+    slots = build_day_slots(
+        start=day_start, end=day_end, day_kwh=day_kwh,
+        sunrise=sunrise, sunset=sunset, home_w_at=home_w_at,
+        price_at=price_at, level_cheap_at=level_cheap_at,
+    )
+    probe = day_start + (day_end - day_start) / 2
+    try:
+        p = price_at(probe)
+    except Exception:  # noqa: BLE001 — unpriced, honestly
+        p = None
+    return {
+        "forecast_kwh": round(float(day_kwh), 1),
+        "prices": "final" if p is not None else "preliminary",
+        "surplus_windows": _merge_windows(
+            [s for s in slots if s.cap_override_w is not None]),
+        "cheap_windows": _merge_windows(
+            [s for s in slots
+             if s.cap_override_w is None and s.level_cheap]),
+        "night_open": day_end.isoformat(),
+        "stamps_at": stamps_at.isoformat(),
+    }
+
+
+def tariff_price_at(prov, ts):
+    """The ONE price accessor every planner surface reads (#638) — night
+    slots, day slots, the tomorrow preview. None = honestly unpriced.
+    Pure duck-typing over the provider so fakes and all three provider
+    kinds answer alike; a second copy of this logic is how a parallel
+    price path starts — add consumers, not copies."""
+    if hasattr(prov, "get_price_at"):
+        try:
+            p = prov.get_price_at(ts)
+            return float(p) if p is not None else None
+        except Exception:  # noqa: BLE001 — unpriced, honestly
+            return None
+    return None
+
+
+def tariff_cheap_at(prov, ts):
+    """The ONE cheap-level accessor (#638) — the same gate execution's
+    cheap-hours loads fire on."""
+    if hasattr(prov, "get_price_level_at"):
+        try:
+            lvl = prov.get_price_level_at(ts)
+        except Exception:  # noqa: BLE001 — no level is not cheap
+            return False
+        name = str(getattr(lvl, "value", lvl) or "").lower()
+        return name in ("cheap", "very_cheap", "negative")
+    return False

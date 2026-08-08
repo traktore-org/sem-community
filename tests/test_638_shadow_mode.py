@@ -1146,3 +1146,41 @@ def test_off_mode_load_is_not_a_demand(freeze_targets):
     plan = fake._overnight_shadow_plan
     assert plan is not None
     assert not any("heizband" in ln for ln in plan.get("summary", []))
+
+
+class TestTomorrowPreviewComposer:
+    """(#638 consolidation / #722) The coordinator side of the Tomorrow
+    preview: tomorrow's frame from the time manager, the forecast's
+    tomorrow total, the SAME tariff accessors — anchored to tomorrow's
+    date throughout."""
+
+    def _fake(self):
+        fake = _fake_self(devices=[])
+        fake.time_manager = _DayCapableTime()
+        fake._forecast_reader = SimpleNamespace(
+            forecast_data=SimpleNamespace(forecast_tomorrow_kwh=41.0))
+        return fake
+
+    def test_the_preview_composes(self):
+        p = SEMCoordinator._compose_tomorrow_preview(self._fake())
+        assert p is not None
+        assert p["forecast_kwh"] == 41.0
+        assert p["prices"] == "final"       # the fake tariff prices any hour
+        assert p["surplus_windows"], "41 kWh over a 400 W flat home"
+        # anchored to TOMORROW: night opens on the 30th, not the 29th
+        assert p["night_open"].startswith("2026-07-30T21:00")
+        assert p["stamps_at"].startswith("2026-07-30T07:00")
+
+    def test_no_frame_is_no_preview_not_a_crash(self):
+        fake = self._fake()
+        fake.time_manager = SimpleNamespace()   # no window methods at all
+        assert SEMCoordinator._compose_tomorrow_preview(fake) is None
+
+    def test_no_forecast_is_a_dark_but_priced_preview(self):
+        fake = self._fake()
+        fake._forecast_reader = None
+        p = SEMCoordinator._compose_tomorrow_preview(fake)
+        assert p is not None
+        assert p["forecast_kwh"] == 0.0
+        assert p["surplus_windows"] == []
+        assert p["prices"] == "final"

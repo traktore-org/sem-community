@@ -4143,6 +4143,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 {**_onp, "actuation": bool(getattr(
                     self, "_overnight_actuation", False))}
                 if isinstance(_onp, dict) else _onp)
+            # (#638 consolidation / #722) the NEXT energy day's books,
+            # previewed for the card's Tomorrow view — live like
+            # ``actuation``, never stamped: the plan for that day honestly
+            # does not exist yet.
+            try:
+                result["energy_plan_tomorrow"] = (
+                    self._compose_tomorrow_preview())
+            except Exception:  # noqa: BLE001 — a preview never costs a cycle
+                result["energy_plan_tomorrow"] = None
 
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()
@@ -5907,6 +5916,54 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 continue
         return windows
 
+    def _compose_tomorrow_preview(self):
+        """(#638 consolidation / #722) The next energy day's books,
+        previewed for the card's Tomorrow view — or None when the frame
+        is unknowable. Anchored to TOMORROW's date throughout (the #722
+        review's open MEDIUM was a tomorrow view composed from
+        today-anchored values, whose rows changed with the hour you
+        looked at it)."""
+        from .day_ledger import tomorrow_preview
+        from .ev_tariff_planner import resolve_deadline
+        now = dt_util.now()
+        try:
+            ns_s, ne_s = self.time_manager.get_night_window()
+            sr_s = self.time_manager.get_sunrise_time()
+            ss_s = self.time_manager.get_sunset_plus_10_time()
+
+            def _at(hhmm):
+                h, m = (int(x) for x in hhmm.split(":"))
+                return (now + timedelta(days=1)).replace(
+                    hour=h, minute=m, second=0, microsecond=0)
+
+            sunrise, sunset = _at(sr_s), _at(ss_s)
+            day_start, day_end = sunrise, _at(ns_s)
+            stamps_at = resolve_deadline(now, ne_s) or _at(ne_s)
+        except Exception:  # noqa: BLE001 — no frame, no preview
+            return None
+        if day_end <= day_start:
+            return None
+        try:
+            _fd = getattr(getattr(self, "_forecast_reader", None),
+                          "forecast_data", None)
+            day_kwh = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
+        except Exception:  # noqa: BLE001 — no forecast, dark preview
+            day_kwh = 0.0
+        try:
+            flat_home = float(self._expected_night_home_w(None))
+        except Exception:  # noqa: BLE001
+            flat_home = 300.0
+        from .day_ledger import tariff_cheap_at, tariff_price_at
+        prov = self._tariff_provider
+        return tomorrow_preview(
+            day_start=day_start, day_end=day_end, day_kwh=day_kwh,
+            sunrise=sunrise, sunset=sunset,
+            home_w_at=lambda t: flat_home,
+            price_at=lambda ts: tariff_price_at(prov, ts),
+            level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+            stamps_at=stamps_at,
+        )
+
     def _overnight_plan_tick(self, power, energy) -> None:
         """(#638) The once-per-night stamp + demand-shape replan trigger.
 
@@ -6385,28 +6442,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # has no data (the fingerprint replan re-derives later); the
             # level comes from the shared get_price_level_at accessor so the
             # plan packs exactly what execution's cheap-gate would fire on.
-            # ONE pair of accessors for BOTH horizon parts — the day slots
-            # must never grow a parallel price path (the second-channel sin).
+            # ONE pair of accessors for EVERY planner surface (night slots,
+            # day slots, the tomorrow preview) — a second copy is how a
+            # parallel price path starts (day_ledger.tariff_price_at).
+            from .day_ledger import tariff_cheap_at, tariff_price_at
             prov = self._tariff_provider
-
-            def _price_at(ts):
-                if hasattr(prov, "get_price_at"):
-                    try:
-                        p = prov.get_price_at(ts)
-                        return float(p) if p is not None else None
-                    except Exception:  # noqa: BLE001
-                        return None
-                return None
-
-            def _cheap_at(ts):
-                if hasattr(prov, "get_price_level_at"):
-                    try:
-                        lvl = prov.get_price_level_at(ts)
-                    except Exception:  # noqa: BLE001
-                        return False
-                    name = str(getattr(lvl, "value", lvl) or "").lower()
-                    return name in ("cheap", "very_cheap", "negative")
-                return False
+            _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
+            _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
 
             slots = []
             t = now.replace(minute=0, second=0, microsecond=0)

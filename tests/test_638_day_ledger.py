@@ -29,8 +29,8 @@ from custom_components.solar_energy_management.coordinator.overnight_planner imp
 TZ = timezone.utc
 
 
-def _t(h, m=0):
-    return datetime(2026, 8, 8, h, m, tzinfo=TZ)
+def _t(h, m=0, day=8):
+    return datetime(2026, 8, day, h, m, tzinfo=TZ)
 
 
 SUNRISE, SUNSET = _t(6), _t(20)
@@ -159,3 +159,56 @@ class TestThePackerRunsUnchangedOverTheDay:
         for a in plan.allocations:
             assert 9 <= a.start.hour <= 16, (
                 f"allocation at {a.start} — outside the sun window")
+
+
+class TestTomorrowPreview:
+    """(#638 consolidation / #722, tintinz's idea adopted) The NEXT energy
+    day's books, previewed before any plan exists — rendered by the Energy
+    Plan card's Tomorrow view. Same day_ledger machinery, same tariff
+    accessors: a preview must never grow its own data path (the exact
+    disease #722's today-anchored tomorrow view showed)."""
+
+    def _preview(self, **kw):
+        from custom_components.solar_energy_management.coordinator.day_ledger import (
+            tomorrow_preview,
+        )
+        args = dict(
+            day_start=_t(6, day=9), day_end=_t(21, day=9),
+            day_kwh=41.0, sunrise=_t(6, day=9), sunset=_t(20, day=9),
+            home_w_at=lambda t: 500.0,
+            price_at=lambda t: 0.28,
+            level_cheap_at=lambda t: False,
+            stamps_at=_t(6, 7, day=9),
+        )
+        args.update(kw)
+        return tomorrow_preview(**args)
+
+    def test_a_sunny_forecast_becomes_surplus_windows(self):
+        p = self._preview()
+        assert p["forecast_kwh"] == 41.0
+        assert p["surplus_windows"], "41 kWh over a 500 W house has surplus"
+        w = p["surplus_windows"][0]
+        assert w["start"] < w["end"]
+        # adjacent surplus slots merge into ONE window, not 8 slivers
+        assert len(p["surplus_windows"]) <= 2
+
+    def test_cheap_windows_come_from_the_same_level_gate(self):
+        p = self._preview(day_kwh=0.0,
+                          level_cheap_at=lambda t: t.hour in (13, 14))
+        assert len(p["cheap_windows"]) == 1
+        assert "13:00" in p["cheap_windows"][0]["start"]
+        assert "15:00" in p["cheap_windows"][0]["end"]
+
+    def test_published_prices_read_final(self):
+        assert self._preview()["prices"] == "final"
+
+    def test_an_unpublished_day_ahead_reads_preliminary(self):
+        assert self._preview(price_at=lambda t: None)["prices"] == "preliminary"
+
+    def test_the_stamp_time_is_carried(self):
+        assert "06:07" in self._preview()["stamps_at"]
+
+    def test_a_dark_unpriced_day_still_has_the_shape(self):
+        p = self._preview(day_kwh=0.0, price_at=lambda t: None)
+        assert p["surplus_windows"] == [] and p["prices"] == "preliminary"
+        assert "forecast_kwh" in p and "cheap_windows" in p
