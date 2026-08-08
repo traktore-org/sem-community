@@ -837,6 +837,84 @@ def test_an_unevaluable_mode_still_gets_planned(freeze_targets):
     assert "ev:ev_charger" in " ".join(plan["summary"])
 
 
+class _DayCapableTime(_FakeTime):
+    """A time manager that exposes the day boundary the spanning horizon
+    needs — night window, sunrise, sunset."""
+
+    def get_night_window(self):
+        return ("21:00", "07:00")
+
+    def get_sunrise_time(self):
+        return "06:00"
+
+    def get_sunset_plus_10_time(self):
+        return "20:10"
+
+
+class TestTheDayPartOfTheHorizon:
+    """The horizon-spanning change: a daytime stamp covers now → the
+    coming night's end. Expected-surplus hours arrive as price-0 slots
+    capped at the surplus (day_ledger); the night part stays exactly the
+    priced shape it always was — one ledger, one packer, no seam hour."""
+
+    def _day_fake(self, *, remaining_kwh=20.0, devices=()):
+        fake = _fake_self(devices=list(devices))
+        fake.time_manager = _DayCapableTime()
+        if remaining_kwh is not None:
+            fake._forecast_reader = SimpleNamespace(
+                forecast_data=SimpleNamespace(
+                    forecast_remaining_today_kwh=remaining_kwh))
+        return fake
+
+    def _stamp_at(self, monkeypatch, hour, fake):
+        fixed = datetime(2026, 7, 29, hour, 0,
+                         tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
+            phantom_ev_w=0, power=_power())
+        return fake._overnight_shadow_plan
+
+    def test_a_daytime_stamp_spans_into_the_night(self, freeze_targets,
+                                                  monkeypatch):
+        plan = self._stamp_at(monkeypatch, 14, self._day_fake())
+        starts = [s["start"] for s in plan["slots"]]
+        assert any("T15:00" in s for s in starts), starts
+        assert any("T23:00" in s for s in starts), starts
+        assert plan["slots"][-1]["end"].endswith("07:00:00+02:00") or \
+            "T07:00" in plan["slots"][-1]["end"]
+
+    def test_surplus_hours_are_free_and_capped(self, freeze_targets,
+                                               monkeypatch):
+        """20 kWh remaining after 14:00 over a 400 W house: early
+        afternoon is deep surplus — price 0, marked cheap."""
+        plan = self._stamp_at(monkeypatch, 14, self._day_fake())
+        by_hour = {s["start"][11:13]: s for s in plan["slots"]}
+        assert by_hour["15"]["price"] == 0.0
+        assert by_hour["15"]["cheap"] is True
+        # and the night is still the provider's curve, not the sun's
+        assert by_hour["23"]["price"] == 0.28
+
+    def test_no_forecast_degrades_to_priced_day_slots(self, freeze_targets,
+                                                      monkeypatch):
+        """No forecast reader → solar 0 → every day hour is a normal
+        priced slot. The horizon still spans; nothing free is invented."""
+        plan = self._stamp_at(
+            monkeypatch, 14, self._day_fake(remaining_kwh=None))
+        by_hour = {s["start"][11:13]: s for s in plan["slots"]}
+        assert by_hour["15"]["price"] == 0.28
+
+    def test_a_night_stamp_has_no_day_part(self, freeze_targets,
+                                           monkeypatch):
+        """In-night the horizon is the night alone — and no slot is a
+        surplus-free slot (the sun is down; day_ledger must not run)."""
+        plan = self._stamp_at(monkeypatch, 22, self._day_fake())
+        assert not any(s["start"][11:13] in ("14", "15", "16")
+                       for s in plan["slots"])
+        assert all(s["price"] is not None and s["price"] > 0
+                   for s in plan["slots"])
+
+
 class TestDisconnectedCarIsNotADemand:
     """Night 3 (2026-08-08): both machines packed kWh for unplugged cars —
     PROD 4.94 kWh, the clone 10 kWh at its 21:00 stamp. The ledger was spent

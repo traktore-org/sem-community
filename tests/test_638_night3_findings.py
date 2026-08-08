@@ -74,12 +74,16 @@ class TestPlanConnectivity:
         assert plan_connectivity("keba", {}, {}, None) is None
 
 
-@pytest.fixture
-def _freeze_2200(monkeypatch):
-    fixed = datetime(2026, 8, 8, 22, 0,
+def _freeze(monkeypatch, hour, minute=0, day=8):
+    fixed = datetime(2026, 8, day, hour, minute,
                      tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
     monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
     return fixed
+
+
+@pytest.fixture
+def _freeze_2200(monkeypatch):
+    return _freeze(monkeypatch, 22)
 
 
 def _tick_self(sig=("ask",), compute_ok=True):
@@ -92,7 +96,7 @@ def _tick_self(sig=("ask",), compute_ok=True):
 
     fake = SimpleNamespace(
         _battery_charge_scheduler=SimpleNamespace(),
-        time_manager=SimpleNamespace(is_night_mode=lambda: True),
+        time_manager=SimpleNamespace(get_night_end_time=lambda: "07:00"),
         config={"battery_capacity_kwh": 0},
         _overnight_demand_signature=lambda power: fake._sig,
         _shadow_overnight_plan=_compute,
@@ -105,10 +109,13 @@ def _tick_self(sig=("ask",), compute_ok=True):
 
 
 class TestOvernightPlanTick:
-    """The extracted once-per-night trigger, now a method the cycle calls
-    BEFORE the charging decisions (finding 2)."""
+    """The extracted trigger, called BEFORE the charging decisions
+    (finding 2) — and since the horizon-spanning change, ONCE PER ENERGY
+    DAY (night-end to night-end) rather than once per night: the plan
+    always covers now → the coming night's end, so a daytime tick stamps
+    the day+night plan and the sunrise boundary opens the next period."""
 
-    def test_the_first_tick_stamps_the_night(self, _freeze_2200):
+    def test_the_first_tick_stamps_the_period(self, _freeze_2200):
         fake = _tick_self()
         SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
         assert fake._shadow_plan_date is not None
@@ -129,12 +136,36 @@ class TestOvernightPlanTick:
         assert fake._compute_calls == ["initial", "ask changed"]
         assert fake._plan_ev_conn_sig == ("ask", "changed")
 
-    def test_outside_the_window_nothing_happens(self, _freeze_2200):
+    def test_a_daytime_tick_plans_toward_the_coming_night(self, monkeypatch):
+        """The spanning change: 14:00 is not 'outside the window' any
+        more — the day IS part of the horizon (comfort banking, load
+        scheduling into surplus windows need a daytime answer)."""
+        _freeze(monkeypatch, 14)
         fake = _tick_self()
-        fake.time_manager = SimpleNamespace(is_night_mode=lambda: False)
         SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
-        assert fake._compute_calls == []
-        assert fake._shadow_plan_date is None
+        assert fake._compute_calls == ["initial"]
+        assert fake._shadow_plan_date is not None
+
+    def test_one_period_spans_day_and_night(self, monkeypatch):
+        """A 14:00 stamp, the same evening, and 03:00 past midnight all
+        belong to ONE energy day — no re-stamp without an ask change."""
+        _freeze(monkeypatch, 14)
+        fake = _tick_self()
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        _freeze(monkeypatch, 22)
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        _freeze(monkeypatch, 3, day=9)
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == ["initial"]
+
+    def test_the_night_end_boundary_opens_the_next_period(self, monkeypatch):
+        _freeze(monkeypatch, 22)
+        fake = _tick_self()
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        # 07:30 next day — past night_end 07:00: a fresh energy day.
+        _freeze(monkeypatch, 7, minute=30, day=9)
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == ["initial", "initial"]
 
     def test_a_not_ready_world_retries_without_a_stamp(self, _freeze_2200):
         fake = _tick_self(compute_ok=False)

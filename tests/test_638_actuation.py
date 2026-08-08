@@ -96,8 +96,17 @@ class TestTheTrustRule:
             assert plan_gate(_plan(status=status), "ev:ch1", NOW) is UNCOVERED
 
     def test_a_stale_stamp_is_uncovered(self):
-        old = _plan(computed_at=NOW - timedelta(hours=15))
+        old = _plan(computed_at=NOW - timedelta(hours=25))
         assert plan_gate(old, "ev:ch1", NOW) is UNCOVERED
+
+    def test_a_morning_stamp_still_governs_its_own_night(self):
+        """(horizon-spanning) The plan now covers a whole energy day —
+        a 07:30 stamp is ~15 h old when its night blocks open, and the
+        old 14 h cap silently un-covered every daytime-stamped night.
+        Authority ends at the SPAN either way; the age cap is only the
+        backstop against yesterday's plan."""
+        morning = _plan(computed_at=NOW - timedelta(hours=15))
+        assert plan_gate(morning, "ev:ch1", NOW).covered
 
     def test_outside_the_plans_own_span_is_uncovered(self):
         """A night plan must have no say over the following afternoon —

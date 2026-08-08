@@ -5890,22 +5890,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             _sched = self._battery_charge_scheduler
             _now_l = dt_util.now()
-            # Inside the REAL night window — the same sunset-anchored
-            # max(sunset+10, earliest_start) → min(sunrise, latest_end)
-            # every night source runs on — not the battery scheduler's
-            # fixed trigger_hour. With the old 21:00 anchor a winter
-            # night (window opening ~17:00–20:30 depending on config)
-            # sat unplanned for hours (Guido, 2026-08-05). A restart at
-            # 00:48 still owes the rest of the night a plan: the window
-            # spans midnight, so is_night_mode covers it.
+            # (horizon-spanning) One plan per ENERGY DAY — night-end to
+            # night-end — not one per night: the plan always covers now →
+            # the coming night's end, so a daytime tick stamps the
+            # day+night plan (comfort banking and load scheduling into
+            # surplus windows need a daytime answer) and the sunrise
+            # boundary opens the next period. The night end is the same
+            # sunset/sunrise-anchored min(sunrise, latest_end) every
+            # night source runs on. A restart at any hour still owes the
+            # rest of the horizon a plan.
+            _night_of = None
             try:
-                _in_window = bool(self.time_manager.is_night_mode())
-            except Exception:  # noqa: BLE001 — degrade to the old anchor
-                _in_window = _now_l.hour >= 21 or _now_l.hour < 7
-            if not _in_window:
-                return
-            # One plan per NIGHT: after midnight the night began yesterday.
-            _night_of = (_now_l - timedelta(hours=12)).date()
+                from .ev_tariff_planner import resolve_deadline as _resolve
+                _ne = _resolve(_now_l, self.time_manager.get_night_end_time())
+                if _ne is not None:
+                    _night_of = _ne.date()
+            except Exception:  # noqa: BLE001 — degrade to the old night key
+                _night_of = None
+            if _night_of is None:
+                _night_of = (_now_l - timedelta(hours=12)).date()
             # (#638) DEMAND-SHAPE replan. #638 specified the triggers as
             # "price update, floor change, unplug, big deviation"; only
             # unplug shipped, so raising the EV target at 22:19 on armed
@@ -6296,30 +6299,88 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # has no data (the fingerprint replan re-derives later); the
             # level comes from the shared get_price_level_at accessor so the
             # plan packs exactly what execution's cheap-gate would fire on.
+            # ONE pair of accessors for BOTH horizon parts — the day slots
+            # must never grow a parallel price path (the second-channel sin).
             prov = self._tariff_provider
+
+            def _price_at(ts):
+                if hasattr(prov, "get_price_at"):
+                    try:
+                        p = prov.get_price_at(ts)
+                        return float(p) if p is not None else None
+                    except Exception:  # noqa: BLE001
+                        return None
+                return None
+
+            def _cheap_at(ts):
+                if hasattr(prov, "get_price_level_at"):
+                    try:
+                        lvl = prov.get_price_level_at(ts)
+                    except Exception:  # noqa: BLE001
+                        return False
+                    name = str(getattr(lvl, "value", lvl) or "").lower()
+                    return name in ("cheap", "very_cheap", "negative")
+                return False
+
             slots = []
             t = now.replace(minute=0, second=0, microsecond=0)
             if t < now:
                 t += _td(hours=1)
+            # (horizon-spanning) The DAY part — now → tonight's window
+            # open. Expected-surplus hours arrive as price-0 slots capped
+            # at the surplus W (day_ledger, sine-shaped from the scalar
+            # forecast); with no forecast the day degrades to plain
+            # priced slots — the horizon still spans, nothing free is
+            # invented. Absent only when stamped inside the night.
+            day_end = None
+            try:
+                _ns_s, _ = self.time_manager.get_night_window()
+                _de = resolve_deadline(now, _ns_s)
+                if _de is not None and _de < night_end:
+                    day_end = _de
+            except Exception:  # noqa: BLE001 — no window → night-only shape
+                day_end = None
+            if day_end is not None and t < day_end:
+                day_kwh = 0.0
+                sunrise = sunset = now
+                try:
+                    _fd = getattr(getattr(self, "_forecast_reader", None),
+                                  "forecast_data", None)
+                    day_kwh = float(getattr(
+                        _fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
+                except Exception:  # noqa: BLE001 — no forecast, priced day
+                    day_kwh = 0.0
+                try:
+                    _sr_h, _sr_m = (int(x) for x in
+                                    self.time_manager.get_sunrise_time()
+                                    .split(":"))
+                    _ss_h, _ss_m = (int(x) for x in
+                                    self.time_manager.get_sunset_plus_10_time()
+                                    .split(":"))
+                    sunrise = now.replace(hour=_sr_h, minute=_sr_m,
+                                          second=0, microsecond=0)
+                    sunset = now.replace(hour=_ss_h, minute=_ss_m,
+                                         second=0, microsecond=0)
+                except Exception:  # noqa: BLE001 — no curve, priced day
+                    day_kwh = 0.0
+                from .day_ledger import build_day_slots
+                slots.extend(build_day_slots(
+                    start=t, end=day_end, day_kwh=day_kwh,
+                    sunrise=sunrise, sunset=sunset,
+                    home_w_at=_home_at,
+                    price_at=_price_at, level_cheap_at=_cheap_at,
+                ))
+                t = day_end
             while t < night_end:
-                end = min(t + _td(hours=1), night_end)
-                price = None
-                if hasattr(prov, "get_price_at"):
-                    try:
-                        price = prov.get_price_at(t)
-                    except Exception:  # noqa: BLE001
-                        price = None
-                lvl = None
-                if hasattr(prov, "get_price_level_at"):
-                    try:
-                        lvl = prov.get_price_level_at(t)
-                    except Exception:  # noqa: BLE001
-                        lvl = None
-                lvl_name = str(getattr(lvl, "value", lvl) or "").lower()
+                # Align to market hours even after an off-hour day/night
+                # boundary (a 20:38 window open must not shift every night
+                # slot to :38 — prices change on the hour).
+                end = min((t + _td(hours=1)).replace(
+                    minute=0, second=0, microsecond=0), night_end)
                 slots.append(LedgerSlot(
                     start=t, end=end,
-                    price=float(price) if price is not None else None,
-                    level_cheap=lvl_name in ("cheap", "very_cheap", "negative"),
+                    price=_price_at(t),
+                    level_cheap=_cheap_at(t),
                     home_w=_home_at(t),
                 ))
                 t = end

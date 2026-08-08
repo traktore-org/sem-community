@@ -33,9 +33,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
-# A stamped plan can never legitimately be older than one night. Anything
-# beyond this is yesterday's plan surviving a missed restamp — do not act.
-_MAX_PLAN_AGE = timedelta(hours=14)
+# A stamped plan can never legitimately be older than one ENERGY DAY
+# (night-end to night-end): since the horizon-spanning change a 07:30
+# stamp is ~15 h old when its night blocks open, so the old 14 h cap
+# silently un-covered every daytime-stamped night. Authority already
+# ends at the plan's own SPAN; this cap is only the backstop against
+# yesterday's plan surviving a span-parse quirk.
+_MAX_PLAN_AGE = timedelta(hours=24)
 
 _EPS_KWH = 1e-6
 
