@@ -77,6 +77,44 @@ CHARGE_EFFICIENCY = 0.92       # #708 — AC-side delivered → DC-pack fraction
 MAX_ETA_MINUTES = 60           # Cap completion estimate
 MAX_HEALTH_SAMPLES = 20        # Bounded battery health sample buffer
 
+CHARGE_EFFICIENCY_MIN = 0.5    # #735 — the accepted band for the override.
+CHARGE_EFFICIENCY_MAX = 1.0    # The options dialog offers 50–100 %; anything
+                               # outside is a typo, not a rough install.
+
+
+def resolve_charge_efficiency(raw: Any) -> float:
+    """Validate an ``ev_charger_efficiency`` value, or fall back to the default.
+
+    Module-level on purpose: the config flow needs the same answer the
+    detector will act on (#735). It converts the dialog's whole-percent
+    figure into this fraction and renders the stored value back, so if it
+    validated separately the two could disagree about which settings are
+    real — a user's 45 % accepted by the form and silently ignored by the
+    booking. One band, one bool rule, one caller-visible default.
+
+    Anything outside the band means somebody typed a percentage, a sign, or
+    a word: 3.0 would claim the pack absorbed three times what the meter
+    measured, and 0.001 would stall the estimate near its starting value for
+    a whole session while looking like it worked. The floor is 0.5 rather
+    than a bare ``> 0`` because no EV onboard charger throws away half its
+    input.
+
+    ``bool`` is rejected before the float conversion — the values can arrive
+    from ``.storage/core.config_entries``, which is JSON, so a hand-edited
+    ``true`` becomes Python ``True`` and ``float(True)`` is a perfectly
+    valid-looking 1.0.
+    """
+    if raw is None or isinstance(raw, bool):
+        return CHARGE_EFFICIENCY
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return CHARGE_EFFICIENCY
+    # NaN fails both comparisons, so this also screens it out.
+    if not CHARGE_EFFICIENCY_MIN <= value <= CHARGE_EFFICIENCY_MAX:
+        return CHARGE_EFFICIENCY
+    return value
+
 
 @dataclass
 class PowerSample:
@@ -339,34 +377,11 @@ class EVTaperDetector:
         cycle and ``on_session_end``'s bootstrap — and #708 is the standing
         reminder of what happens when two halves of one calculation drift.
 
-        The key has no config-flow field yet, so the only way to set it is by
-        hand-editing ``.storage/core.config_entries``: validate rather than
-        trust. Anything outside the band means somebody typed a percentage, a
-        sign, or a word — 3.0 would otherwise claim the pack absorbed three
-        times what the meter measured, and 0.001 would stall the estimate near
-        its starting value for a whole session while looking like it worked.
-
-        The floor is 0.5 rather than a bare ``> 0``: no EV onboard charger
-        throws away half its input, so anything under it is a typo, not a
-        rough install. ``bool`` is rejected before the float conversion — that
-        storage file is JSON, so a hand-edited ``true`` arrives as Python
-        ``True`` and ``float(True)`` is a perfectly valid-looking 1.0.
-
         NOT used by ``energy_accounted_soc``: the stop ceiling deliberately
         stays on the constant. See the CHARGE_EFFICIENCY comment for why the
         override is refused there specifically.
         """
-        raw = self._config.get("ev_charger_efficiency", CHARGE_EFFICIENCY)
-        if isinstance(raw, bool):
-            return CHARGE_EFFICIENCY
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return CHARGE_EFFICIENCY
-        # NaN fails both comparisons, so this also screens it out.
-        if not 0.5 <= value <= 1.0:
-            return CHARGE_EFFICIENCY
-        return value
+        return resolve_charge_efficiency(self._config.get("ev_charger_efficiency"))
 
     def update_energy(
         self,

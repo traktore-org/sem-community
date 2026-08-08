@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.8] — 08.08.2026 (Unreleased)
+
+### ✨ Enhancements
+- 🌍 **sem-localize split per language** (#738) — the translation bundle had
+  grown to 1.2 MB, parsed by every browser to use exactly one language. It is
+  now a 68 KB loader with English inline as the fallback floor plus one lazy
+  `sem-localize.<lang>.js` per language, injected on demand and re-dispatching
+  `sem-localize-ready` so cards upgrade seamlessly. Cache tokens follow
+  `translations.json`, the `/local` www mirror carries the siblings, and the
+  documented `scripts/regenerate_localize.py` entry point now delegates to the
+  split generator so the monolith cannot silently come back.
+- 🔌 **Charger efficiency is now a setting, not a hidden storage key** (#735) —
+  **Options → EV Charger → Charger efficiency (%)**, default 92 %. SEM converts
+  the kWh your charger meters into kWh that actually landed in the pack, and
+  that conversion drives every number it reports about charge state: the SOC
+  estimate on the EV card, the virtual SOC for installs with no vehicle sensor,
+  and the first-session bootstrap. 92 % suits a warm pack on a three-phase
+  charger; single-phase at 3.7 kW or a cold start in winter runs several points
+  below it, and until now the only way to say so was to hand-edit
+  `.storage/core.config_entries`. Lower it if the estimate runs ahead of what
+  the car reports, raise it if it lags. The field offers 50–100 % — exactly the
+  range the estimator will honour, so a value that saves is a value that takes
+  effect. What you type is a percentage and what is stored stays the fraction
+  everything downstream reads, converted in one place rather than at each end;
+  a value already in storage that the estimator was ignoring now shows as the
+  default instead of as a figure outside the field's own range, which the
+  dialog would have refused to close on. The stop guard from #708 is unaffected
+  and stays on a fixed 0.92 by design — it decides when to *stop*, where erring
+  low charges longer and puts energy in the pack that cannot be taken back out.
+
 # [1.7.6-beta.7] — 07.08.2026
 
 ### ✨ Features
