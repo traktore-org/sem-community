@@ -87,3 +87,32 @@ def time_to_limit(
             return None
     hours = toward / est.rate_c_per_h
     return now + timedelta(hours=hours)
+
+
+def banking_energy_kwh(
+    *,
+    current_c: float,
+    target_c: float,
+    direction: str,
+    active_rate_c_per_h: float,
+    rated_power_w: float,
+) -> Optional[float]:
+    """kWh of running needed to bring the room from ``current`` back to
+    ``target`` at the learned ACTIVE rate (°C/h while the device runs —
+    the same least-squares learner, fed device-ON samples).
+
+    ``0.0`` = already banked, nothing to plan. ``None`` = the model
+    cannot say — an active rate that is flat or moves the room AWAY from
+    target contradicts the device's direction, and "cannot say" must
+    never read as "nothing needed" (0) or become a huge phantom demand.
+    """
+    gap_c = (current_c - target_c if direction == "cool"
+             else target_c - current_c)
+    if gap_c <= 0:
+        return 0.0
+    toward = (-active_rate_c_per_h if direction == "cool"
+              else active_rate_c_per_h)
+    if toward <= 0:
+        return None
+    hours = gap_c / toward
+    return rated_power_w * hours / 1000.0

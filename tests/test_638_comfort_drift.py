@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from custom_components.solar_energy_management.coordinator.comfort_drift import (
     DriftEstimate,
+    banking_energy_kwh,
     learn_drift,
     time_to_limit,
 )
@@ -76,3 +77,41 @@ class TestTimeToLimit:
         est = DriftEstimate(rate_c_per_h=0.8)
         assert time_to_limit(est, current_c=26.5, limit_c=26.0,
                              direction="cool", now=T0) == T0
+
+
+class TestBankingEnergy:
+    """°C to bank → kWh to plan. The ACTIVE rate (°C/h while the device
+    runs) is learned with the same least-squares learner over device-ON
+    samples; the demand's energy is the runtime that traverses the gap
+    at that rate, times the calibrated draw."""
+
+    def test_a_cooling_gap_converts_through_the_active_rate(self):
+        # 2 °C to cool at 1 °C/h active = 2 h × 1.2 kW = 2.4 kWh.
+        kwh = banking_energy_kwh(
+            current_c=26.0, target_c=24.0, direction="cool",
+            active_rate_c_per_h=-1.0, rated_power_w=1200.0)
+        assert kwh == 2.4
+
+    def test_a_heating_gap_mirrors(self):
+        kwh = banking_energy_kwh(
+            current_c=19.0, target_c=21.0, direction="heat",
+            active_rate_c_per_h=+2.0, rated_power_w=1000.0)
+        assert kwh == 1.0
+
+    def test_a_room_already_at_target_needs_nothing(self):
+        assert banking_energy_kwh(
+            current_c=23.5, target_c=24.0, direction="cool",
+            active_rate_c_per_h=-1.0, rated_power_w=1200.0) == 0.0
+
+    def test_an_active_rate_going_the_wrong_way_is_no_plan(self):
+        """A 'cooling' device whose ON-samples show the room warming is a
+        broken model, not a demand — None means 'cannot say', never 0
+        ('nothing needed') and never a huge number."""
+        assert banking_energy_kwh(
+            current_c=26.0, target_c=24.0, direction="cool",
+            active_rate_c_per_h=+0.5, rated_power_w=1200.0) is None
+
+    def test_a_flat_active_rate_is_no_plan(self):
+        assert banking_energy_kwh(
+            current_c=26.0, target_c=24.0, direction="cool",
+            active_rate_c_per_h=0.0, rated_power_w=1200.0) is None
