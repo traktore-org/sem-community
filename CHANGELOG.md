@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.6-beta.8] — 08.08.2026 (Unreleased)
 
+### 🐛 Fixes
+- 🌡️ **Comfort section no longer hides right after registering a device**
+  (#705, reported by @onkelfu on beta.7) — the goal editor's Comfort section
+  was gated on the live device payload, which only exists once the surplus
+  controller has materialized the device; right after `register_surplus_device`
+  (or a restart) the section hid and then "appeared later by itself". Every
+  non-EV/non-battery load now shows the section immediately; the live chip
+  still waits for real data.
+
 ### ✨ Enhancements
 - 🌍 **sem-localize split per language** (#738) — the translation bundle had
   grown to 1.2 MB, parsed by every browser to use exactly one language. It is
