@@ -11,9 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.8] — 08.08.2026 (Unreleased)
+# [1.7.6-beta.8] — 08.08.2026
 
 ### 🐛 Fixes
+- 🏷️ **Options-flow fields now show real labels instead of raw keys** (#737) —
+  six options steps rendered 37 `snake_case` schema keys as their labels (the
+  whole **Deye forced-grid-charge** step, **EV charger add/edit**, **battery
+  scheduler**, the #550 **Invert grid sign** toggle and the **tariff
+  classification mode**) because the keys had no `strings.json` entry, and HA
+  reads only `translations/<lang>.json` at runtime. All are labelled and
+  translated across the 16 languages — including the 18 `deye_program_*` slots
+  the original audit undercounted. A new guard
+  (`test_737_options_flow_label_coverage.py`) walks every `async_step_*` schema
+  and fails if any field ships without a label, so bug class 24 cannot regrow.
 - 🌡️ **Comfort section no longer hides right after registering a device**
   (#705, reported by @onkelfu on beta.7) — the goal editor's Comfort section
   was gated on the live device payload, which only exists once the surplus
