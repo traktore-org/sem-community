@@ -14,8 +14,8 @@
  * while the world is still warming up) so it costs nothing during the day.
  *
  * Config:
- *   type: custom:sem-overnight-plan-card
- *   entity: sensor.sem_overnight_plan   # default
+ *   type: custom:sem-energy-plan-card
+ *   entity: sensor.sem_energy_plan   # default
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
@@ -72,7 +72,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
         const liveSig = (a.actuation === true && Array.isArray(a.demands))
             ? a.demands.map(d => this._liveState(d, a.blocks)).join(',')
             : '';
+        // (#722 consolidation) the Tomorrow view re-renders when the books
+        // change — the price status flip (preliminary → final, mid-
+        // afternoon) is the one users watch for.
+        const t = a.tomorrow || {};
         const key = [s?.state, a.computed_at, a.actuation, liveSig,
+                     this._view || 'today',
+                     t.prices, t.forecast_kwh, t.stamps_at,
                      // pending-face chip reads the switch directly (attrs
                      // are empty then) — its flips must re-render too, as
                      // must the window-open time the face displays.
@@ -185,13 +191,88 @@ class SEMEnergyPlanCard extends SEMLitBase {
         </a>`;
     }
 
-    _renderIdle(act, textKey = 'overnight_idle', suffix = '') {
+    // (#722, tintinz's idea adopted) the horizon selector. Rendered only
+    // when a tomorrow preview exists — a card without the attr behaves
+    // exactly as before the consolidation.
+    _viewToggle(hasTomorrow) {
+        if (!hasTomorrow) return nothing;
+        const v = this._view || 'today';
+        const btn = (id, label) => html`
+            <button class="vbtn ${v === id ? 'vbtn-on' : ''}"
+                @click=${() => { this._view = id; this.requestUpdate(); }}>
+                ${this._t(label)}</button>`;
+        return html`<span class="vtoggle">
+            ${btn('today', 'overnight_today')}${btn('tomorrow', 'overnight_tomorrow')}
+        </span>`;
+    }
+
+    // The NEXT energy day's books, previewed — surplus and cheap bands on
+    // the same strip language, plus the honest "no plan yet" line: the
+    // plan for that day stamps at the period boundary, and pretending
+    // otherwise is exactly what this card exists not to do.
+    _renderTomorrow(t) {
+        const t0 = Date.parse(t.stamps_at ? t.stamps_at : t.night_open) || NaN;
+        // Axis: stamp time (~sunrise) → night open. Fall back to the
+        // windows themselves when either endpoint is unparseable.
+        const starts = [...(t.surplus_windows || []), ...(t.cheap_windows || [])]
+            .map(w => Date.parse(w.start)).filter(Number.isFinite);
+        const ends = [...(t.surplus_windows || []), ...(t.cheap_windows || [])]
+            .map(w => Date.parse(w.end)).filter(Number.isFinite);
+        const axis0 = Number.isFinite(t0) ? t0 : Math.min(...starts);
+        const axis1 = Date.parse(t.night_open) || Math.max(...ends);
+        const span = axis1 - axis0;
+        const hasStrip = Number.isFinite(span) && span > 0;
+        const band = (w, cls) => {
+            const left = ((Date.parse(w.start) - axis0) / span) * 100;
+            const width = ((Date.parse(w.end) - Date.parse(w.start)) / span) * 100;
+            return html`<div class="seg ${cls}"
+                style="left:${left}%;width:${Math.max(width, 1)}%"></div>`;
+        };
+        const prelim = t.prices !== 'final';
         return html`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
                         <span class="title">${this._t('overnight_plan_title')}</span>
+                        ${this._viewToggle(true)}
+                        <span class="chip ${prelim ? '' : 'chip-active'}"
+                              title="${this._t(prelim
+                                  ? 'overnight_prices_preliminary_tip'
+                                  : 'overnight_prices_final_tip')}">
+                            ${this._t(prelim ? 'overnight_prices_preliminary'
+                                             : 'overnight_prices_final')}</span>
+                        ${this._docsLink()}
+                    </div>
+                    ${hasStrip ? html`
+                        <div class="track tmw-track">
+                            ${(t.surplus_windows || []).map(w => band(w, 'tmw-sun'))}
+                            ${(t.cheap_windows || []).map(w => band(w, 'tmw-cheap'))}
+                        </div>
+                        <div class="legend">
+                            <span class="key"><i class="sw tmw-sun-key"></i>${this._t('overnight_legend_surplus')}</span>
+                            <span class="key"><i class="sw cheapkey"></i>${this._t('overnight_legend_cheap')}</span>
+                        </div>
+                    ` : nothing}
+                    <div class="idle">
+                        ☀ ${(t.forecast_kwh || 0).toFixed(1)} kWh ·
+                        🌙 ${this._hm(t.night_open)} ·
+                        ${this._format('overnight_stamps_at',
+                                       { time: this._hm(t.stamps_at) })}
+                    </div>
+                </div>
+            </ha-card>
+        `;
+    }
+
+    _renderIdle(act, textKey = 'overnight_idle', suffix = '', hasTomorrow = false) {
+        return html`
+            <ha-card>
+                <div class="wrap">
+                    <div class="head">
+                        <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
+                        <span class="title">${this._t('overnight_plan_title')}</span>
+                        ${this._viewToggle(hasTomorrow)}
                         ${this._modeChip(act)}
                         ${this._docsLink()}
                     </div>
@@ -226,16 +307,19 @@ class SEMEnergyPlanCard extends SEMLitBase {
         // on 2026-08-05. Show a slim placeholder saying when the plan
         // comes — the REAL window-open time (sunset-anchored, config-
         // aware) from sensor.sem_night_start_time, never a hardcoded hour.
+        if ((this._view || 'today') === 'tomorrow' && a.tomorrow) {
+            return this._renderTomorrow(a.tomorrow);
+        }
         if (verdict === 'pending') {
             const ns = this._hass.states['sensor.sem_night_start_time']?.state;
             const when = (ns && /^\d{1,2}:\d{2}$/.test(ns)) ? ` (~${ns})` : '';
-            return this._renderIdle(act, 'overnight_pending', when);
+            return this._renderIdle(act, 'overnight_pending', when, !!a.tomorrow);
         }
         const demands = Array.isArray(a.demands) ? a.demands : [];
         const slots = Array.isArray(a.slots) ? a.slots : [];
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
         if (verdict === 'idle' || !demands.length) {
-            return this._renderIdle(act);
+            return this._renderIdle(act, 'overnight_idle', '', !!a.tomorrow);
         }
 
         const t0 = slots.length ? Date.parse(slots[0].start) : NaN;
@@ -251,11 +335,34 @@ class SEMEnergyPlanCard extends SEMLitBase {
         // the price context lines up with the runs without a second axis.
         const cheap = this._runs(slots, t0, span, s => !!s.cheap)
             .filter(r => r.v);
+        // (consolidation) night-window shading + now marker — the context
+        // the retired schedule card used to draw, computed from the same
+        // sensor the pending face already reads. The night runs from the
+        // window-open time to the axis end (the axis IS night-end-bounded).
+        let nightLeft = null;
+        const ns = this._hass.states['sensor.sem_night_start_time']?.state;
+        if (hasStrip && ns && /^\d{1,2}:\d{2}$/.test(ns)) {
+            const [nh, nm] = ns.split(':').map(Number);
+            for (const dayOff of [0, 1]) {
+                const d = new Date(t0);
+                d.setDate(d.getDate() + dayOff);
+                d.setHours(nh, nm, 0, 0);
+                const ms = d.getTime();
+                if (ms >= t0 && ms < t1) { nightLeft = ((ms - t0) / span) * 100; break; }
+            }
+        }
+        const nowMs = Date.now();
+        const nowLeft = (hasStrip && nowMs >= t0 && nowMs < t1)
+            ? ((nowMs - t0) / span) * 100 : null;
         const cheapLayer = html`
             <div class="band">
                 ${cheap.map(r => html`
                     <div class="cheap" style="left:${r.left}%;width:${r.width}%"></div>
                 `)}
+                ${nightLeft !== null ? html`
+                    <div class="nightband" style="left:${nightLeft}%;width:${100 - nightLeft}%"></div>` : nothing}
+                ${nowLeft !== null ? html`
+                    <div class="nowline" style="left:${nowLeft}%"></div>` : nothing}
             </div>
         `;
 
@@ -312,6 +419,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                     <div class="head">
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
                         <span class="title">${this._t('overnight_plan_title')}</span>
+                        ${this._viewToggle(!!a.tomorrow)}
                         ${this._modeChip(act)}
                         ${this._docsLink()}
                         <span class="stamp">${this._hm(a.computed_at)}</span>
@@ -650,6 +758,36 @@ class SEMEnergyPlanCard extends SEMLitBase {
             .warn {
                 display: flex; align-items: center; gap: 5px;
                 margin-top: 8px; font-size: 11px; color: #ffb74d;
+            }
+            .vtoggle {
+                display: inline-flex; border: 1px solid rgba(255,255,255,0.14);
+                border-radius: 8px; overflow: hidden; margin-left: 2px;
+            }
+            .vbtn {
+                background: none; border: none; cursor: pointer;
+                font-size: 10px; padding: 2px 7px;
+                color: var(--secondary-text-color, #8a93a5);
+            }
+            .vbtn-on {
+                background: rgba(131,83,209,0.25); color: var(--primary-text-color, #fff);
+            }
+            .tmw-track { position: relative; height: 18px; margin-top: 8px; }
+            .tmw-sun {
+                position: absolute; top: 0; height: 100%;
+                background: rgba(255,152,0,0.45); border-radius: 3px;
+            }
+            .tmw-cheap {
+                position: absolute; top: 30%; height: 40%;
+                background: rgba(141,200,146,0.5); border-radius: 3px;
+            }
+            .tmw-sun-key { background: rgba(255,152,0,0.6); }
+            .nightband {
+                position: absolute; top: 0; height: 100%;
+                background: rgba(131,83,209,0.10);
+            }
+            .nowline {
+                position: absolute; top: -2px; height: calc(100% + 4px);
+                width: 2px; background: #5BC8D8; opacity: 0.8;
             }
             .arb {
                 display: flex; align-items: center; gap: 5px;

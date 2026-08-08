@@ -49,6 +49,10 @@ CARD_KEYS = [
     "overnight_legend_battery", "overnight_legend_grid",
     "overnight_legend_cheap", "overnight_fleet_partial",
     "overnight_shadow_note", "overnight_kind_ev", "overnight_kind_load",
+    "overnight_today", "overnight_tomorrow", "overnight_prices_final",
+    "overnight_prices_preliminary", "overnight_prices_final_tip",
+    "overnight_prices_preliminary_tip", "overnight_legend_surplus",
+    "overnight_stamps_at",
     "overnight_kind_battery", "overnight_kind_comfort",
     "overnight_comfort_tip", "overnight_arbitrage", "overnight_arbitrage_tip",
     "overnight_strip_omitted",
@@ -333,20 +337,21 @@ def test_card_is_in_the_bundle_entry():
         "deploy scripts only rsync; they do NOT build.")
 
 
-def test_card_is_placed_on_the_control_tab_between_schedule_and_loads():
-    """(#638 G4) With actuation the plan is a control surface, not a
-    diagnostic: Guido moved it to the Control tab between Today's Schedule
-    and Load Management (2026-08-05). Pin the ORDER, not just membership —
-    a card that drifts below Load Management silently loses the placement."""
+def test_card_is_placed_on_the_control_tab_above_loads():
+    """(#638 G4 + consolidation 2026-08-08) The Energy Plan card IS the
+    Control tab's timeline now — the old Today's Schedule card retired
+    into it (night shading, now marker, Today|Tomorrow all render from
+    the plan entity). Pin the ORDER above Load Management and pin the
+    retirement: a schedule card creeping back is a second data path."""
     tpl = (REPO / "dashboard" / "sem_dashboard_template.yaml").read_text()
     assert tpl.count("custom:sem-energy-plan-card") == 1, (
         "the plan card must live in exactly one place")
-    schedule = tpl.index("title: Today's Schedule")
+    assert "custom:sem-schedule-card" not in tpl, (
+        "the schedule card retired into the Energy Plan card — one "
+        "timeline, one data source")
     card = tpl.index("custom:sem-energy-plan-card")
     loads = tpl.index("title: Load Management")
-    assert schedule < card < loads, (
-        "Tonight's Plan belongs on the Control tab between Today's "
-        "Schedule and Load Management")
+    assert card < loads
 
 
 def test_card_localization_keys_exist_in_every_language():

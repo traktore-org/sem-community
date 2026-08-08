@@ -298,15 +298,11 @@ views:
           - type: custom:sem-control-card
             entity_prefix: sensor.sem_
 
-          # ── Schedule Timeline ──
-          - type: custom:sem-title-card
-            title: Today's Schedule
-            subtitle: Tariff windows · Night charging · Surplus forecast
-          - type: custom:sem-schedule-card
-            entity_prefix: sensor.sem_
-
           # ── Energy Plan (#638) ── the joint planner's answer for the
           # whole energy day (daylight + the coming night in one ledger).
+          # It absorbed the old Schedule Timeline (consolidation, 2026-08-08):
+          # night shading, the now marker and the Today|Tomorrow toggle all
+          # render from the plan entity — one timeline, one data source.
           # Self-hides until a plan is stamped; live chips while actuation is
           # on. Placed between the schedule and load management on Guido's
           # call (2026-08-05) — it belongs with the control surfaces, not
