@@ -6483,6 +6483,75 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ledger = build_night_ledger(
                 slots, soc_kwh=soc_kwh, floor_kwh=floor_kwh,
                 max_discharge_w=max_discharge_w, peak_limit_w=peak_w)
+            # ── Arbitrage advice (#638, the last string) ────────────────
+            # The advisor reads the SAME walked ledger the pack consumes
+            # — prices on both horizons, the home's hour-by-hour grid
+            # draw, the SOC room, the power caps, tomorrow's forecast.
+            # ADVICE ALWAYS (it is the framework's sharpest audit: if
+            # the books lie anywhere, an absurd advice is the first
+            # symptom); demand injection is config-gated OFF and nothing
+            # actuates from it (#533 state — live proof post-1.8 on
+            # Guido's call).
+            arb = None
+            try:
+                from .arbitrage import arbitrage_advice
+                try:
+                    _fd2 = getattr(getattr(self, "_forecast_reader", None),
+                                   "forecast_data", None)
+                    _tom = float(getattr(
+                        _fd2, "forecast_tomorrow_kwh", 0.0) or 0.0)
+                except Exception:  # noqa: BLE001 — no forecast, no cap
+                    _tom = 0.0
+                # Never grid-charge what tomorrow's sun fills free:
+                # tomorrow's production minus a flat 12-h daytime home
+                # draw ≈ what could reach the battery unpaid. Over-
+                # estimating the free sun UNDER-buys — restraint is the
+                # safe direction for a shadow advisor.
+                _tomorrow_free = max(0.0, _tom - flat_home_w * 12.0 / 1000.0)
+                _adv = arbitrage_advice(
+                    ledger,
+                    soc_kwh=soc_kwh, capacity_kwh=cap_kwh,
+                    max_charge_w=float(getattr(
+                        getattr(scheduler, "_config", None),
+                        "battery_max_charge_power_w", 5000.0) or 5000.0),
+                    max_discharge_w=max_discharge_w,
+                    round_trip_efficiency=float(self.config.get(
+                        "battery_roundtrip_efficiency", 0.92) or 0.92),
+                    # No flow surface yet — an options-dict override until
+                    # the mode ships for real (post-1.8).
+                    cycle_cost_per_kwh=float(self.config.get(
+                        "battery_cycle_cost_per_kwh", 0.05) or 0.05),
+                    tomorrow_free_kwh=_tomorrow_free,
+                )
+                _iso = lambda rows: [  # noqa: E731 — local shape adapter
+                    {**b, "start": b["start"].isoformat(),
+                     "end": b["end"].isoformat()} for b in rows]
+                arb = {
+                    "opportunity": _adv.opportunity,
+                    "charge_kwh": _adv.charge_kwh,
+                    "est_profit": _adv.est_profit,
+                    "reason": _adv.reason,
+                    "charge_blocks": _iso(_adv.charge_blocks),
+                    "discharge_blocks": _iso(_adv.discharge_blocks),
+                }
+                _LOGGER.info("OVERNIGHT-PLAN (%s) arbitrage: %s",
+                             tag, _adv.reason)
+                if _adv.opportunity and self.config.get(
+                        "arbitrage_shadow_demand"):
+                    # Worst priority is a hard property: the shadow cycle
+                    # must never displace a real need from a slot.
+                    labels["arbitrage:battery"] = None
+                    demands.append(Demand(
+                        id="arbitrage:battery", kind="battery",
+                        energy_kwh=float(_adv.charge_kwh),
+                        max_power_w=float(getattr(
+                            getattr(scheduler, "_config", None),
+                            "battery_max_charge_power_w", 5000.0) or 5000.0),
+                        min_power_w=0.0,
+                        deadline=night_end, priority=999, source="grid",
+                    ))
+            except Exception:  # noqa: BLE001 — advice must never cost a plan
+                arb = None
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
                               max_discharge_w=max_discharge_w,
                               peak_limit_w=peak_w)
@@ -6587,6 +6656,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (night 3, finding 3) a re-stamped night must be
                 # distinguishable from the first answer.
                 "replan_cause": replan_cause,
+                # (#638, the last string) the advisor's verdict with its
+                # numbers — always present on a full plan, None only when
+                # the advisor itself failed (never costs a plan).
+                "arbitrage": arb,
             }
             return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle

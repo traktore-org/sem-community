@@ -218,6 +218,15 @@ def test_projection_leaves_the_prose_and_the_trajectory_behind():
                           "demands", "slots", "blocks"}
 
 
+def test_the_projection_carries_the_arbitrage_advice():
+    """(#638, the last string) The advisor's verdict must reach the
+    entity — the morning plan-vs-Sankey audit reads it there."""
+    attrs = _overnight_plan_attrs(
+        {"arbitrage": {"opportunity": False, "reason": "no priced market"},
+         "demands": [], "slots": [], "blocks": []})
+    assert attrs["arbitrage"]["reason"] == "no priced market"
+
+
 def test_the_projection_carries_the_replan_cause():
     """Night-3 finding 3: a re-stamped night must be distinguishable from
     the first answer on the entity, not only in container logs (which

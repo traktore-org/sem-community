@@ -982,6 +982,65 @@ class TestComfortDemandsJoinThePlan:
         assert rows["comfort:ac1"]["status"] in ("yields", "partial")
 
 
+class TestArbitrageAdviceRidesThePlan:
+    """(#638, the last string) The advisor reads the SAME walked ledger
+    the pack consumes and publishes its verdict on every plan — advice
+    always, demand injection config-gated OFF (shadow; #533 state)."""
+
+    @pytest.fixture(autouse=True)
+    def _targets(self, freeze_targets):
+        pass
+
+    def _plan_with(self, *, soc=32.0, inject=False, devices=()):
+        fake = _fake_self(devices=list(devices))
+        if inject:
+            fake.config["arbitrage_shadow_demand"] = True
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_power(soc=soc))
+        return fake._overnight_shadow_plan
+
+    def test_the_advice_is_on_every_full_plan(self):
+        plan = self._plan_with()
+        assert "arbitrage" in plan
+        assert isinstance(plan["arbitrage"].get("reason"), str)
+
+    def test_a_low_battery_night_finds_the_valley(self):
+        """SOC 32% ≈ 0.2 kWh above the floor: home lands on the meter
+        early, the 02:00–04:00 valley (0.10) undercuts the 0.28 evening
+        — the cycle pays and the advice says so with numbers."""
+        adv = self._plan_with(soc=32.0)["arbitrage"]
+        assert adv["opportunity"] is True
+        assert adv["charge_kwh"] > 0
+        assert all("02:" in b["start"][11:14] or "03:" in b["start"][11:14]
+                   for b in adv["charge_blocks"])
+
+    def test_a_battery_that_carries_the_night_has_nothing_to_arbitrage(self):
+        """SOC 80%: the walk covers home to sunrise, home_grid_w is 0
+        in every priced hour — no import to displace, honest no."""
+        adv = self._plan_with(soc=80.0)["arbitrage"]
+        assert adv["opportunity"] is False
+
+    def test_no_demand_is_injected_by_default(self):
+        plan = self._plan_with(soc=32.0)
+        assert plan["arbitrage"]["opportunity"] is True
+        ids = [r["id"] for r in plan["demands"]]
+        assert "arbitrage:battery" not in ids
+
+    def test_the_shadow_flag_injects_the_demand_at_worst_priority(self):
+        plan = self._plan_with(soc=32.0, inject=True)
+        rows = {r["id"]: r for r in plan["demands"]}
+        assert "arbitrage:battery" in rows
+        assert rows["arbitrage:battery"]["kind"] == "battery"
+
+    def test_the_injected_demand_never_displaces_a_real_need(self):
+        """The EV floor packs first even with the arbitrage demand in
+        the list — worst priority is a hard property, not a hope."""
+        plan = self._plan_with(soc=32.0, inject=True)
+        rows = {r["id"]: r for r in plan["demands"]}
+        assert rows["ev:ev_charger"]["status"] == "fits"
+
+
 class TestDisconnectedCarIsNotADemand:
     """Night 3 (2026-08-08): both machines packed kWh for unplugged cars —
     PROD 4.94 kWh, the clone 10 kWh at its 21:00 stamp. The ledger was spent

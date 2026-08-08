@@ -151,6 +151,10 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
         # night is distinguishable from the first answer on the entity,
         # not only in container logs (which rotate too fast for evidence).
         "replan_cause": plan.get("replan_cause"),
+        # (#638, the last string) the shadow arbitrage advisor's verdict
+        # with its numbers — the morning plan-vs-Sankey audit reads it
+        # here. Small by construction (a few blocks at most).
+        "arbitrage": plan.get("arbitrage"),
     }
     try:
         oversize = len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES
