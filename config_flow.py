@@ -42,6 +42,7 @@ from .const import (
     PEAK_LIMIT_STEP_KW,
     DEFAULT_PEAK_LIMIT_UNLIMITED,
 )
+from .coordinator.ev_taper_detector import resolve_charge_efficiency
 from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
 from .hardware_detection import (
@@ -51,6 +52,41 @@ from .hardware_detection import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# #735 — ``ev_charger_efficiency`` is stored as the fraction the taper
+# detector books with (0.5–1.0), but a percentage is what a charger's
+# datasheet quotes and what the user is thinking in. The dialog is the only
+# place the two units meet, so the conversion lives here and nowhere else.
+
+
+def _efficiency_as_percent(stored: Any) -> int:
+    """Stored fraction → the whole percent the dialog shows.
+
+    Runs the value through the detector's resolver first, so a figure the
+    booking is already ignoring (a hand-edited ``92``, a stray ``3.0``) is
+    displayed as the default rather than as a number outside the box's own
+    range — which HA refuses to submit, wedging the whole dialog.
+
+    Round-trips exactly for anything the form itself wrote (whole percent →
+    multiples of 0.01). A hand-edited 0.785 shows as 78 % and saves back as
+    0.78: the field's resolution is one point, so sub-point precision cannot
+    survive a visit to the dialog. Bounded and one-way.
+    """
+    return round(resolve_charge_efficiency(stored) * 100)
+
+
+def _efficiency_from_percent(percent: Any) -> float:
+    """The dialog's whole percent → the fraction the detector reads.
+
+    Re-validating after the divide is not belt-and-braces: the step is also
+    reachable from a raw ``config_entries/options/flow`` POST, which is not
+    bound by the selector's 50–100 range.
+    """
+    try:
+        fraction = float(percent) / 100.0
+    except (TypeError, ValueError):
+        return resolve_charge_efficiency(None)
+    return resolve_charge_efficiency(fraction)
 
 
 def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
@@ -825,6 +861,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_charge_mode_entity",
     "ev_charge_mode_start",
     "ev_charge_mode_stop",
+    "ev_charger_efficiency",
     "ev_charger_service",
     "ev_charger_service_entity_id",
     "ev_chargers",
@@ -941,6 +978,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            # #735 — the only place the percent the user sees becomes the
+            # fraction everything downstream books with. Converted before the
+            # two writes below so both copies carry the same number. The
+            # membership test is for raw options-flow POSTs that omit the
+            # field; a form submit always carries it (vol.Optional default).
+            if "ev_charger_efficiency" in user_input:
+                user_input = {
+                    **user_input,
+                    "ev_charger_efficiency": _efficiency_from_percent(
+                        user_input["ev_charger_efficiency"]
+                    ),
+                }
             # Update both flat keys and ev_chargers[0] (#112)
             self._data.update(user_input)
             ev_chargers = list(self._data.get("ev_chargers") or self.config_entry.options.get("ev_chargers") or [])
@@ -1018,6 +1067,22 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=10, max=120, step=5, unit_of_measurement="kWh", mode="box"
+                    )
+                ),
+                # #735 — AC metered → DC in the pack. Sits next to capacity
+                # because the two are read together: the estimate is
+                # ``delivered kWh × efficiency ÷ capacity``. The band matches
+                # what the detector will accept, in percent (see
+                # ``_efficiency_as_percent``); offering a value the booking
+                # then discards would be a setting that silently does nothing.
+                vol.Optional(
+                    "ev_charger_efficiency",
+                    default=_efficiency_as_percent(
+                        current_config.get("ev_charger_efficiency")
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=1, unit_of_measurement="%", mode="box"
                     )
                 ),
                 # Optional real range sensor; else range is derived from

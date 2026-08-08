@@ -107,6 +107,7 @@
           "ev_total_energy_sensor": "Celkový čítač energie EV (volitelné)",
           "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "ev_charger_efficiency": "Účinnost nabíječky (%)",
           "ev_target_soc": "Cílový SOC EV (%)",
           "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
           "ev_target_soc_max": "Limit solárního nabíjení (SOC %)",
@@ -122,6 +123,7 @@
           "ev_total_energy_sensor": "Volitelný kumulativní čítač kWh energie dodané do vozidla.",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
+          "ev_charger_efficiency": "Podíl naměřené střídavé energie, který se dostane do baterie. Snižte jej, pokud odhad SOC předbíhá vozidlo. Obvykle 85-95 %, méně při jednofázovém nabíjení nebo v mrazu.",
           "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité.",
           "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
           "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce.",
@@ -157,7 +159,8 @@
           "legionella_target_temp": "Cíl dezinfekce proti legionele (°C)",
           "legionella_interval_hours": "Max. počet hodin mezi dezinfekčními cykly",
           "diagram_style": "Styl systémového diagramu",
-          "battery_assist_min_surplus": "Podpora baterie – min. solární přebytek (W)"
+          "battery_assist_min_surplus": "Podpora baterie – min. solární přebytek (W)",
+          "grid_sign_invert": "Obrátit znaménko síťového výkonu"
         },
         "data_description": {
           "update_interval": "Jak často koordinátor čte senzory a upravuje hardware. 10 s dává nejpřesnější integraci energie; hodnoty nad 30 s energii podhodnocují. Rozsah 10–60 s.",
@@ -181,7 +184,8 @@
           "hot_water_solar_target": "Cílová teplota (°C) pro ohřev teplé vody podporovaný sluncem. SEM přitopí bojler, když je k dispozici přebytek.",
           "legionella_target_temp": "Teplota (°C), které musí systém teplé vody dosáhnout během dezinfekčního cyklu proti legionele.",
           "legionella_interval_hours": "Maximální počet hodin mezi dezinfekčními cykly proti legionele, než SEM vynutí ohřev.",
-          "battery_assist_min_surplus": "Minimální skutečný solární přebytek, než smí domácí baterie pomáhat s nabíjením EV — v jakémkoli režimu nabíjení. Pod touto hodnotou je baterie vyhrazena pro dům (auto odebírá ze sítě + slunce). Výchozí 1200 W. Nastavte na 0, aby baterie podporovala EV všude, včetně noci."
+          "battery_assist_min_surplus": "Minimální skutečný solární přebytek, než smí domácí baterie pomáhat s nabíjením EV — v jakémkoli režimu nabíjení. Pod touto hodnotou je baterie vyhrazena pro dům (auto odebírá ze sítě + slunce). Výchozí 1200 W. Nastavte na 0, aby baterie podporovala EV všude, včetně noci.",
+          "grid_sign_invert": "Zapněte jen tehdy, pokud se odběr ze sítě zobrazuje jako kladná hodnota (např. Enphase). Konvence SEM je záporné = odběr; toto otočí surovou hodnotu a obejde automatickou detekci znaménka."
         }
       },
       "settings_ev": {
@@ -215,7 +219,8 @@
           "dynamic_forecast_entity": "Entita předpovědi (volitelné, zjistí se automaticky, pokud je prázdné)",
           "dynamic_feedin_entity": "Entita výkupní ceny (volitelné, pro dynamickou sazbu dodávky)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Režim klasifikace cen"
         },
         "data_description": {
           "electricity_import_rate": "Denní/jednotná sazba za odběr (měna/kWh včetně DPH). Používá se jako záloha, když není dynamické ceny.",
@@ -229,7 +234,8 @@
           "dynamic_forecast_entity": "Volitelný senzor s hodinovou předpovědí cen používanou pro chytré plánování.",
           "dynamic_feedin_entity": "Volitelný senzor poskytující aktuální výkupní cenu pro dynamickou sazbu dodávky do sítě.",
           "grid_import_power_entity": "Volitelný senzor (W) pro výkon odebíraný ze sítě. Automaticky zjištěno z panelu Energie; zde jej můžete v případě potřeby přepsat.",
-          "grid_export_power_entity": "Volitelný senzor (W) pro výkon dodávaný do sítě. Automaticky zjištěno z panelu Energie; zde jej můžete v případě potřeby přepsat."
+          "grid_export_power_entity": "Volitelný senzor (W) pro výkon dodávaný do sítě. Automaticky zjištěno z panelu Energie; zde jej můžete v případě potřeby přepsat.",
+          "tariff_classification_mode": "„Percentil“ zařazuje ceny podle dnešního rozpětí (doporučeno). „Statický“ používá pevné prahy levné/drahé."
         }
       },
       "load_management": {
@@ -289,7 +295,15 @@
           "battery_max_target_soc": "Maximální cílový SOC",
           "battery_min_deficit_kwh": "Minimální práh deficitu",
           "battery_pessimism_weight": "Pesimismus předpovědi",
-          "battery_force_charge_negative_price": "Vynutit nabíjení při záporné ceně"
+          "battery_force_charge_negative_price": "Vynutit nabíjení při záporné ceně",
+          "battery_charge_platform": "Platforma nabíjení baterie",
+          "battery_replan_interval_min": "Interval přeplánování (min)",
+          "battery_prefer_consecutive_window": "Preferovat souvislé nabíjecí okno"
+        },
+        "data_description": {
+          "battery_charge_platform": "Který střídač SEM ovládá pro plánované nabíjení ze sítě. Vyberte Deye pro zobrazení kroku zapojení Deye.",
+          "battery_replan_interval_min": "Jak často se plán nabíjení přepočítává podle nejnovější předpovědi a cen.",
+          "battery_prefer_consecutive_window": "Zapnuto: levné hodiny v jednom bloku (méně cyklů start/stop); vypnuto: jednotlivé nejlevnější hodiny, i když jsou rozptýlené."
         }
       },
       "ev_charger_edit": {
@@ -310,7 +324,16 @@
           "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)",
           "ev_current_control_entity": "Entita řízení proudu (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
-          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)"
+          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)",
+          "daily_ev_target": "Cíl nočního nabíjení (kWh)",
+          "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
+          "vehicle_range_entity": "Senzor dojezdu vozidla",
+          "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)",
+          "ev_target_soc": "Cílový SOC EV (%)",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "initial_current": "Počáteční proud (A)",
+          "ev_min_current": "Minimální nabíjecí proud (A)",
+          "vehicle_min_current": "Minimální proud vozidla (A)"
         },
         "data_description": {
           "charger_name": "Popisný název této nabíječky zobrazený na panelu.",
@@ -327,7 +350,16 @@
           "ev_surplus_priority": "Pořadí přidělování přebytku mezi více nabíječkami. Nižší číslo = vyšší priorita.",
           "ev_current_control_entity": "Entita Number použitá pro nastavení nabíjecího proudu (A). Pro Wallbox, go-eCharger a podobné nabíječky.",
           "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
-          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce."
+          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce.",
+          "daily_ev_target": "Cílový počet kWh, které se každou noc nabijí ze sítě. Nastavením na 0 noční nabíjení ze sítě vypnete.",
+          "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
+          "vehicle_range_entity": "Volitelný skutečný senzor dojezdu. Jinak se dojezd odhaduje z SOC × kapacita × účinnost.",
+          "ev_kwh_per_100km": "Slouží k odhadu dojezdu, pokud není nakonfigurován senzor dojezdu.",
+          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité.",
+          "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
+          "initial_current": "Nabíjecí proud, kterým SEM začíná, než se přizpůsobí dostupnému přebytku.",
+          "ev_min_current": "Pod touto hodnotou SEM nabíjení pozastaví, místo aby proud dále snižoval.",
+          "vehicle_min_current": "Spodní mez proudu pro vozidlo. Efektivní minimum je vyšší z této a minimálního proudu nabíječky."
         }
       },
       "ev_charger_add": {
@@ -348,7 +380,15 @@
           "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)",
           "ev_current_control_entity": "Entita řízení proudu (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
-          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)"
+          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)",
+          "daily_ev_target": "Cíl nočního nabíjení (kWh)",
+          "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
+          "vehicle_range_entity": "Senzor dojezdu vozidla",
+          "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)",
+          "ev_target_soc": "Cílový SOC EV (%)",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "initial_current": "Počáteční proud (A)",
+          "ev_min_current": "Minimální nabíjecí proud (A)"
         },
         "data_description": {
           "charger_name": "Popisný název této nabíječky zobrazený na panelu.",
@@ -365,7 +405,15 @@
           "ev_surplus_priority": "Pořadí přidělování přebytku mezi více nabíječkami. Nižší číslo = vyšší priorita.",
           "ev_current_control_entity": "Entita Number použitá pro nastavení nabíjecího proudu (A). Pro Wallbox, go-eCharger a podobné nabíječky.",
           "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
-          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce."
+          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce.",
+          "daily_ev_target": "Cílový počet kWh, které se každou noc nabijí ze sítě. Nastavením na 0 noční nabíjení ze sítě vypnete.",
+          "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
+          "vehicle_range_entity": "Volitelný skutečný senzor dojezdu. Jinak se dojezd odhaduje z SOC × kapacita × účinnost.",
+          "ev_kwh_per_100km": "Slouží k odhadu dojezdu, pokud není nakonfigurován senzor dojezdu.",
+          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité.",
+          "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
+          "initial_current": "Nabíjecí proud, kterým SEM začíná, než se přizpůsobí dostupnému přebytku.",
+          "ev_min_current": "Pod touto hodnotou SEM nabíjení pozastaví, místo aby proud dále snižoval."
         }
       },
       "pv_naming": {
@@ -479,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Deye vynucené nabíjení ze sítě",
+        "description": "Zapojte hybridní střídač Deye pro plánované nabíjení ze sítě. Režim pozorovatele je ve výchozím stavu ZAPNUTÝ a akční zásah VYPNUTÝ, takže do střídače se nic nezapíše, dokud to výslovně nepovolíte.",
+        "data": {
+          "deye_grid_charge_switch": "Přepínač nabíjení ze sítě (entita)",
+          "deye_charge_current_entity": "Číselná entita nabíjecího proudu (A)",
+          "deye_battery_voltage_entity": "Senzor napětí baterie (entita)",
+          "deye_battery_voltage_max_age_s": "Max. stáří napětí baterie (s)",
+          "deye_max_charge_current_a": "Max. nabíjecí proud (A)",
+          "deye_bms_max_charge_current_a": "Max. nabíjecí proud BMS (A)",
+          "deye_max_discharge_power": "Max. vybíjecí výkon (W)",
+          "deye_program_control": "Řídit časové úseky programu",
+          "deye_observer_mode": "Režim pozorovatele (jen ke čtení)",
+          "deye_actuation_enabled": "Povolit akční zásah (zápis do střídače)",
+          "deye_work_mode_control": "Řídit pracovní režim",
+          "deye_work_mode_entity": "Výběrová entita pracovního režimu",
+          "deye_work_mode_load_first_option": "Hodnota režimu pro „Load First“",
+          "deye_work_mode_battery_first_option": "Hodnota režimu pro „Battery First“",
+          "deye_force_charge_work_mode": "Pracovní režim při vynuceném nabíjení",
+          "deye_program_1_time": "Program 1 — výběrová entita časového úseku",
+          "deye_program_1_soc": "Program 1 — číselná entita cílového SOC",
+          "deye_program_1_charge": "Program 1 — výběrová entita nabíjení ze sítě",
+          "deye_program_2_time": "Program 2 — výběrová entita časového úseku",
+          "deye_program_2_soc": "Program 2 — číselná entita cílového SOC",
+          "deye_program_2_charge": "Program 2 — výběrová entita nabíjení ze sítě",
+          "deye_program_3_time": "Program 3 — výběrová entita časového úseku",
+          "deye_program_3_soc": "Program 3 — číselná entita cílového SOC",
+          "deye_program_3_charge": "Program 3 — výběrová entita nabíjení ze sítě",
+          "deye_program_4_time": "Program 4 — výběrová entita časového úseku",
+          "deye_program_4_soc": "Program 4 — číselná entita cílového SOC",
+          "deye_program_4_charge": "Program 4 — výběrová entita nabíjení ze sítě",
+          "deye_program_5_time": "Program 5 — výběrová entita časového úseku",
+          "deye_program_5_soc": "Program 5 — číselná entita cílového SOC",
+          "deye_program_5_charge": "Program 5 — výběrová entita nabíjení ze sítě",
+          "deye_program_6_time": "Program 6 — výběrová entita časového úseku",
+          "deye_program_6_soc": "Program 6 — číselná entita cílového SOC",
+          "deye_program_6_charge": "Program 6 — výběrová entita nabíjení ze sítě"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Volitelný strop daný BMS. 0 = žádný limit BMS; platí maximum střídače.",
+          "deye_observer_mode": "Když je ZAPNUTO, SEM své akce Deye vypočítá a zaznamená, ale do střídače nikdy nezapisuje.",
+          "deye_actuation_enabled": "Když je VYPNUTO, SEM do střídače nikdy nezapíše, i když je režim pozorovatele také vypnutý. Než se odešle příkaz, musí povolit obě brány.",
+          "deye_max_charge_current_a": "Bezpečná horní mez, kterou SEM nastaví na entitě nabíjecího proudu."
         }
       }
     },

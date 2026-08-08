@@ -172,6 +172,7 @@ class TestTheTwoBookingSitesAgreeWithEachOther:
     """
 
     ACCESSOR = "_charge_efficiency"
+    RESOLVER = "resolve_charge_efficiency"
 
     def _readers_of(self, needle, kind):
         src = (pathlib.Path(__file__).resolve().parent.parent
@@ -199,10 +200,16 @@ class TestTheTwoBookingSitesAgreeWithEachOther:
         )
 
     def test_the_ceiling_still_reads_the_bare_constant(self):
-        """Deliberate — and pinned, so the exception stays visible."""
+        """Deliberate — and pinned, so the exception stays visible.
+
+        The fallback moved out of the method into the module-level
+        ``resolve_charge_efficiency`` when the options dialog gained a field
+        and needed the same band (#735, enhancement half). The accessor now
+        only fetches the key; the resolver owns the default.
+        """
         readers = self._readers_of("CHARGE_EFFICIENCY", "name")
-        assert readers == {self.ACCESSOR, "energy_accounted_soc"}, (
-            "expected exactly two constant readers: the accessor's fallback "
+        assert readers == {self.RESOLVER, "energy_accounted_soc"}, (
+            "expected exactly two constant readers: the resolver's fallback "
             f"and the deliberately-fixed ceiling. Found: {sorted(readers)}"
         )
 

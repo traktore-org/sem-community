@@ -107,6 +107,7 @@
           "ev_total_energy_sensor": "EV totale energieteller (optioneel)",
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
+          "ev_charger_efficiency": "Laderrendement (%)",
           "ev_target_soc": "EV-doel-SOC (%)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
@@ -122,6 +123,7 @@
           "ev_total_energy_sensor": "Optionele cumulatieve kWh-teller voor energie geleverd aan het voertuig.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
+          "ev_charger_efficiency": "Deel van de gemeten AC-energie dat de accu bereikt. Verlaag dit als de laadniveauschatting op het voertuig vooruitloopt. Meestal 85-95%, lager bij eenfasig laden of kou.",
           "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
           "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
@@ -157,7 +159,8 @@
           "hot_water_solar_target": "Doeltemperatuur zonneboiler (°C)",
           "legionella_target_temp": "Legionella desinfectie doeltemperatuur (°C)",
           "legionella_interval_hours": "Maximaal aantal uren tussen desinfectiecycli",
-          "diagram_style": "Systeemdiagram stijl"
+          "diagram_style": "Systeemdiagram stijl",
+          "grid_sign_invert": "Teken van netvermogen omkeren"
         },
         "data_description": {
           "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
@@ -181,7 +184,8 @@
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren).",
           "hot_water_solar_target": "Doeltemperatuur (°C) voor zonnegenereerde warmwaterverwarming. SEM activeert de ketel wanneer er overschot beschikbaar is.",
           "legionella_target_temp": "Temperatuur (°C) die het warmwatersysteem moet bereiken tijdens een legionella-desinfectiecyclus.",
-          "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert."
+          "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert.",
+          "grid_sign_invert": "Alleen inschakelen als netafname als positieve waarde wordt weergegeven (bijv. Enphase). SEM's conventie is negatief = afname; dit keert de ruwe meting om en omzeilt de automatische tekenherkenning."
         }
       },
       "settings_ev": {
@@ -215,7 +219,8 @@
           "dynamic_forecast_entity": "Prognose-entiteit (optioneel, automatisch gedetecteerd indien leeg)",
           "dynamic_feedin_entity": "Terugleverprijs-entiteit (optioneel, voor dynamisch exporttarief)",
           "grid_import_power_entity": "Netstroom-invoersensor (optioneel, automatisch gedetecteerd via Energiedashboard)",
-          "grid_export_power_entity": "Netstroom-exportssensor (optioneel, automatisch gedetecteerd via Energiedashboard)"
+          "grid_export_power_entity": "Netstroom-exportssensor (optioneel, automatisch gedetecteerd via Energiedashboard)",
+          "tariff_classification_mode": "Prijsclassificatiemodus"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/standaard importtarief (valuta/kWh incl. btw). Wordt gebruikt als terugval wanneer dynamische prijzen niet beschikbaar zijn.",
@@ -229,7 +234,8 @@
           "dynamic_forecast_entity": "Optionele sensor met uurlijkse prijsverwachtingen voor slimme planning.",
           "dynamic_feedin_entity": "Optionele sensor die de actuele teruglever-/exportprijs levert voor dynamisch exporttarief.",
           "grid_import_power_entity": "Optionele sensor (W) voor netstroom-invoervermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig.",
-          "grid_export_power_entity": "Optionele sensor (W) voor netstroom-exportvermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig."
+          "grid_export_power_entity": "Optionele sensor (W) voor netstroom-exportvermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig.",
+          "tariff_classification_mode": "Percentiel deelt prijzen in ten opzichte van het bereik van vandaag (aanbevolen). Statisch gebruikt vaste drempels voor goedkoop/duur."
         }
       },
       "load_management": {
@@ -289,7 +295,15 @@
           "battery_max_target_soc": "Maximale doel SOC",
           "battery_min_deficit_kwh": "Minimale tekortdrempel",
           "battery_pessimism_weight": "Voorspelling pessimisme",
-          "battery_force_charge_negative_price": "Geforceerd laden bij negatieve prijs"
+          "battery_force_charge_negative_price": "Geforceerd laden bij negatieve prijs",
+          "battery_charge_platform": "Batterij-laadplatform",
+          "battery_replan_interval_min": "Herplan-interval (min)",
+          "battery_prefer_consecutive_window": "Aaneengesloten laadvenster verkiezen"
+        },
+        "data_description": {
+          "battery_charge_platform": "Welke omvormer SEM aanstuurt voor geplande netladen. Kies Deye om de Deye-bedradingsstap te tonen.",
+          "battery_replan_interval_min": "Hoe vaak het laadschema opnieuw wordt berekend op basis van de nieuwste voorspelling en prijzen.",
+          "battery_prefer_consecutive_window": "Aan: goedkope uren in één blok (minder start/stop-cycli); uit: de afzonderlijk goedkoopste uren, ook verspreid."
         }
       },
       "ev_charger_edit": {
@@ -310,7 +324,16 @@
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
+          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
+          "daily_ev_target": "Nachtlaaddoel (kWh)",
+          "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
+          "vehicle_range_entity": "Voertuig-bereiksensor",
+          "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
+          "ev_target_soc": "EV-doel-SOC (%)",
+          "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
+          "initial_current": "Startstroom (A)",
+          "ev_min_current": "Minimale laadstroom (A)",
+          "vehicle_min_current": "Voertuig minimale stroom (A)"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -327,7 +350,16 @@
           "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
           "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
+          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
+          "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie.",
+          "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
+          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
+          "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
+          "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen.",
+          "vehicle_min_current": "Stroomdrempel per voertuig. Het effectieve minimum is de hoogste van deze en de minimale laadstroom."
         }
       },
       "ev_charger_add": {
@@ -348,7 +380,15 @@
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
+          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
+          "daily_ev_target": "Nachtlaaddoel (kWh)",
+          "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
+          "vehicle_range_entity": "Voertuig-bereiksensor",
+          "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
+          "ev_target_soc": "EV-doel-SOC (%)",
+          "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
+          "initial_current": "Startstroom (A)",
+          "ev_min_current": "Minimale laadstroom (A)"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -365,7 +405,15 @@
           "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
           "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
+          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
+          "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie.",
+          "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
+          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
+          "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
+          "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen."
         }
       },
       "pv_naming": {
@@ -479,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Deye geforceerd netladen",
+        "description": "Sluit een Deye hybride omvormer aan voor gepland netladen. Waarnemersmodus staat standaard AAN en aansturing UIT, dus er wordt niets naar de omvormer geschreven tot je dit expliciet inschakelt.",
+        "data": {
+          "deye_grid_charge_switch": "Netladen-schakelaar (entiteit)",
+          "deye_charge_current_entity": "Laadstroom-numberentiteit (A)",
+          "deye_battery_voltage_entity": "Batterijspanning-sensor (entiteit)",
+          "deye_battery_voltage_max_age_s": "Batterijspanning max. leeftijd (s)",
+          "deye_max_charge_current_a": "Max. laadstroom (A)",
+          "deye_bms_max_charge_current_a": "BMS max. laadstroom (A)",
+          "deye_max_discharge_power": "Max. ontlaadvermogen (W)",
+          "deye_program_control": "Programma-tijdvakken beheren",
+          "deye_observer_mode": "Waarnemersmodus (alleen-lezen)",
+          "deye_actuation_enabled": "Aansturing inschakelen (naar omvormer schrijven)",
+          "deye_work_mode_control": "Werkmodus beheren",
+          "deye_work_mode_entity": "Werkmodus-select (entiteit)",
+          "deye_work_mode_load_first_option": "Werkmoduswaarde voor Load First",
+          "deye_work_mode_battery_first_option": "Werkmoduswaarde voor Battery First",
+          "deye_force_charge_work_mode": "Werkmodus tijdens geforceerd laden",
+          "deye_program_1_time": "Programma 1 — tijdvak-select (entiteit)",
+          "deye_program_1_soc": "Programma 1 — doel-SOC-numberentiteit",
+          "deye_program_1_charge": "Programma 1 — netladen-select (entiteit)",
+          "deye_program_2_time": "Programma 2 — tijdvak-select (entiteit)",
+          "deye_program_2_soc": "Programma 2 — doel-SOC-numberentiteit",
+          "deye_program_2_charge": "Programma 2 — netladen-select (entiteit)",
+          "deye_program_3_time": "Programma 3 — tijdvak-select (entiteit)",
+          "deye_program_3_soc": "Programma 3 — doel-SOC-numberentiteit",
+          "deye_program_3_charge": "Programma 3 — netladen-select (entiteit)",
+          "deye_program_4_time": "Programma 4 — tijdvak-select (entiteit)",
+          "deye_program_4_soc": "Programma 4 — doel-SOC-numberentiteit",
+          "deye_program_4_charge": "Programma 4 — netladen-select (entiteit)",
+          "deye_program_5_time": "Programma 5 — tijdvak-select (entiteit)",
+          "deye_program_5_soc": "Programma 5 — doel-SOC-numberentiteit",
+          "deye_program_5_charge": "Programma 5 — netladen-select (entiteit)",
+          "deye_program_6_time": "Programma 6 — tijdvak-select (entiteit)",
+          "deye_program_6_soc": "Programma 6 — doel-SOC-numberentiteit",
+          "deye_program_6_charge": "Programma 6 — netladen-select (entiteit)"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Optioneel door het BMS opgelegd maximum. 0 betekent geen BMS-limiet — het maximum van de omvormer geldt.",
+          "deye_observer_mode": "Indien AAN berekent en logt SEM zijn Deye-acties, maar schrijft nooit naar de omvormer.",
+          "deye_actuation_enabled": "Indien UIT schrijft SEM nooit naar de omvormer, zelfs als de waarnemersmodus ook uit staat. Beide poorten moeten toestaan voordat een commando wordt verzonden.",
+          "deye_max_charge_current_a": "Veilige bovengrens die SEM op de laadstroom-entiteit stuurt."
         }
       }
     },

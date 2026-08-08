@@ -107,6 +107,7 @@
           "ev_total_energy_sensor": "Contor energie totală VE (opțional)",
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "ev_charger_efficiency": "Randamentul încărcătorului (%)",
           "ev_target_soc": "SOC țintă VE (%)",
           "daily_ev_target_max": "Limită încărcare solară (kWh)",
           "ev_target_soc_max": "Limită încărcare solară (SOC %)",
@@ -122,6 +123,7 @@
           "ev_total_energy_sensor": "Contor cumulat opțional în kWh pentru energia livrată vehiculului.",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
+          "ev_charger_efficiency": "Partea din energia CA măsurată care ajunge în baterie. Reduceți valoarea dacă estimarea SOC o ia înaintea vehiculului. De obicei 85-95%, mai puțin la monofazat sau pe frig.",
           "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat.",
           "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
           "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare.",
@@ -157,7 +159,8 @@
           "legionella_target_temp": "Țintă dezinfecție anti-legionella (°C)",
           "legionella_interval_hours": "Ore maxime între ciclurile de dezinfecție",
           "diagram_style": "Stilul diagramei de sistem",
-          "battery_assist_min_surplus": "Asistență baterie – surplus solar min. (W)"
+          "battery_assist_min_surplus": "Asistență baterie – surplus solar min. (W)",
+          "grid_sign_invert": "Inversează semnul puterii din rețea"
         },
         "data_description": {
           "update_interval": "Cât de des citește coordonatorul senzorii și reglează hardware-ul. 10 s oferă cea mai precisă integrare a energiei; valorile peste 30 s vor subestima energia. Interval 10–60 s.",
@@ -181,7 +184,8 @@
           "hot_water_solar_target": "Temperatura țintă (°C) pentru încălzirea apei calde asistată solar. SEM stimulează boilerul atunci când există surplus.",
           "legionella_target_temp": "Temperatura (°C) pe care sistemul de apă caldă trebuie să o atingă în timpul unui ciclu de dezinfecție anti-legionella.",
           "legionella_interval_hours": "Numărul maxim de ore între ciclurile de dezinfecție anti-legionella înainte ca SEM să forțeze o încălzire.",
-          "battery_assist_min_surplus": "Surplusul solar real minim înainte ca bateria casei să poată ajuta la încărcarea EV — în orice mod de încărcare. Sub această valoare bateria este rezervată casei (mașina consumă din rețea + solar). Implicit 1200 W. Setați 0 pentru ca bateria să susțină EV oriunde, inclusiv pe timp de noapte."
+          "battery_assist_min_surplus": "Surplusul solar real minim înainte ca bateria casei să poată ajuta la încărcarea EV — în orice mod de încărcare. Sub această valoare bateria este rezervată casei (mașina consumă din rețea + solar). Implicit 1200 W. Setați 0 pentru ca bateria să susțină EV oriunde, inclusiv pe timp de noapte.",
+          "grid_sign_invert": "Activează doar dacă importul din rețea apare ca valoare pozitivă (de ex. Enphase). Convenția SEM este negativ = import; aceasta neagă citirea brută și ocolește detectarea automată a semnului."
         }
       },
       "settings_ev": {
@@ -215,7 +219,8 @@
           "dynamic_forecast_entity": "Entitate de prognoză (opțional, detectată automat dacă e goală)",
           "dynamic_feedin_entity": "Entitate preț de injecție (opțional, pentru tarif de export dinamic)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Mod de clasificare a prețurilor"
         },
         "data_description": {
           "electricity_import_rate": "Tarif de import de zi/unic (monedă/kWh, cu TVA inclus). Folosit ca rezervă atunci când prețul dinamic este indisponibil.",
@@ -229,7 +234,8 @@
           "dynamic_forecast_entity": "Senzor opțional cu prognoze orare de preț, folosite pentru planificarea inteligentă.",
           "dynamic_feedin_entity": "Senzor opțional care furnizează prețul curent de injecție / export pentru tariful de export dinamic.",
           "grid_import_power_entity": "Senzor opțional (W) pentru puterea importată din rețea. Detectat automat din tabloul de bord Energie; suprascrieți-l aici dacă este nevoie.",
-          "grid_export_power_entity": "Senzor opțional (W) pentru puterea exportată în rețea. Detectat automat din tabloul de bord Energie; suprascrieți-l aici dacă este nevoie."
+          "grid_export_power_entity": "Senzor opțional (W) pentru puterea exportată în rețea. Detectat automat din tabloul de bord Energie; suprascrieți-l aici dacă este nevoie.",
+          "tariff_classification_mode": "„Percentilă” încadrează prețurile față de intervalul de azi (recomandat). „Static” folosește praguri fixe ieftin/scump."
         }
       },
       "load_management": {
@@ -289,7 +295,15 @@
           "battery_max_target_soc": "SOC țintă maxim",
           "battery_min_deficit_kwh": "Prag minim de deficit",
           "battery_pessimism_weight": "Pesimismul prognozei",
-          "battery_force_charge_negative_price": "Forțează încărcarea la preț negativ"
+          "battery_force_charge_negative_price": "Forțează încărcarea la preț negativ",
+          "battery_charge_platform": "Platformă de încărcare a bateriei",
+          "battery_replan_interval_min": "Interval de replanificare (min)",
+          "battery_prefer_consecutive_window": "Preferă o fereastră de încărcare consecutivă"
+        },
+        "data_description": {
+          "battery_charge_platform": "Ce invertor comandă SEM pentru încărcarea programată din rețea. Alege Deye pentru a afișa pasul de cablare Deye.",
+          "battery_replan_interval_min": "Cât de des este recalculat planul de încărcare pe baza celei mai recente prognoze și prețuri.",
+          "battery_prefer_consecutive_window": "Pornit: orele ieftine într-un singur bloc (mai puține cicluri pornire/oprire); oprit: cele mai ieftine ore individuale, chiar dacă sunt dispersate."
         }
       },
       "ev_charger_edit": {
@@ -310,7 +324,16 @@
           "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limită încărcare solară (kWh)",
-          "ev_target_soc_max": "Limită încărcare solară (SOC %)"
+          "ev_target_soc_max": "Limită încărcare solară (SOC %)",
+          "daily_ev_target": "Țintă încărcare de noapte (kWh)",
+          "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
+          "vehicle_range_entity": "Senzor autonomie vehicul",
+          "ev_kwh_per_100km": "Consum vehicul (kWh/100km)",
+          "ev_target_soc": "SOC țintă VE (%)",
+          "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "initial_current": "Curent inițial (A)",
+          "ev_min_current": "Curent minim de încărcare (A)",
+          "vehicle_min_current": "Curent minim al vehiculului (A)"
         },
         "data_description": {
           "charger_name": "Numele prietenos al acestui încărcător, afișat în tabloul de bord.",
@@ -327,7 +350,16 @@
           "ev_surplus_priority": "Ordinea de alocare a surplusului între mai multe încărcătoare. Număr mai mic = prioritate mai mare.",
           "ev_current_control_entity": "Entitate Number folosită pentru a seta curentul de încărcare (A). Pentru Wallbox, go-eCharger și încărcătoare similare.",
           "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
-          "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare."
+          "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare.",
+          "daily_ev_target": "Ținta în kWh de încărcat din rețea în fiecare noapte. Setați 0 pentru a dezactiva încărcarea de noapte din rețea.",
+          "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
+          "vehicle_range_entity": "Senzor de autonomie real opțional. Altfel, autonomia este estimată din SOC × capacitate × eficiență.",
+          "ev_kwh_per_100km": "Folosit pentru a estima autonomia când nu este configurat un senzor de autonomie.",
+          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat.",
+          "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
+          "initial_current": "Curentul de încărcare cu care începe SEM înainte de a se ajusta la surplusul disponibil.",
+          "ev_min_current": "Sub această valoare SEM întrerupe încărcarea în loc să scadă curentul mai mult.",
+          "vehicle_min_current": "Prag minim de curent pe vehicul. Minimul efectiv este cel mai mare dintre acesta și curentul minim al încărcătorului."
         }
       },
       "ev_charger_add": {
@@ -348,7 +380,15 @@
           "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limită încărcare solară (kWh)",
-          "ev_target_soc_max": "Limită încărcare solară (SOC %)"
+          "ev_target_soc_max": "Limită încărcare solară (SOC %)",
+          "daily_ev_target": "Țintă încărcare de noapte (kWh)",
+          "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
+          "vehicle_range_entity": "Senzor autonomie vehicul",
+          "ev_kwh_per_100km": "Consum vehicul (kWh/100km)",
+          "ev_target_soc": "SOC țintă VE (%)",
+          "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
+          "initial_current": "Curent inițial (A)",
+          "ev_min_current": "Curent minim de încărcare (A)"
         },
         "data_description": {
           "charger_name": "Numele prietenos al acestui încărcător, afișat în tabloul de bord.",
@@ -365,7 +405,15 @@
           "ev_surplus_priority": "Ordinea de alocare a surplusului între mai multe încărcătoare. Număr mai mic = prioritate mai mare.",
           "ev_current_control_entity": "Entitate Number folosită pentru a seta curentul de încărcare (A). Pentru Wallbox, go-eCharger și încărcătoare similare.",
           "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
-          "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare."
+          "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare.",
+          "daily_ev_target": "Ținta în kWh de încărcat din rețea în fiecare noapte. Setați 0 pentru a dezactiva încărcarea de noapte din rețea.",
+          "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
+          "vehicle_range_entity": "Senzor de autonomie real opțional. Altfel, autonomia este estimată din SOC × capacitate × eficiență.",
+          "ev_kwh_per_100km": "Folosit pentru a estima autonomia când nu este configurat un senzor de autonomie.",
+          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat.",
+          "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
+          "initial_current": "Curentul de încărcare cu care începe SEM înainte de a se ajusta la surplusul disponibil.",
+          "ev_min_current": "Sub această valoare SEM întrerupe încărcarea în loc să scadă curentul mai mult."
         }
       },
       "pv_naming": {
@@ -479,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Deye încărcare forțată din rețea",
+        "description": "Conectează un invertor hibrid Deye pentru încărcarea programată din rețea. Modul observator este PORNIT, iar acționarea OPRITĂ implicit, astfel încât nimic nu este scris în invertor până nu activezi explicit.",
+        "data": {
+          "deye_grid_charge_switch": "Comutator încărcare din rețea (entitate)",
+          "deye_charge_current_entity": "Entitate number curent de încărcare (A)",
+          "deye_battery_voltage_entity": "Senzor tensiune baterie (entitate)",
+          "deye_battery_voltage_max_age_s": "Vârsta max. a tensiunii bateriei (s)",
+          "deye_max_charge_current_a": "Curent max. de încărcare (A)",
+          "deye_bms_max_charge_current_a": "Curent max. de încărcare BMS (A)",
+          "deye_max_discharge_power": "Putere max. de descărcare (W)",
+          "deye_program_control": "Controlează intervalele orare ale programului",
+          "deye_observer_mode": "Mod observator (doar citire)",
+          "deye_actuation_enabled": "Activează acționarea (scriere în invertor)",
+          "deye_work_mode_control": "Controlează modul de lucru",
+          "deye_work_mode_entity": "Entitate select mod de lucru",
+          "deye_work_mode_load_first_option": "Valoare mod pentru „Load First”",
+          "deye_work_mode_battery_first_option": "Valoare mod pentru „Battery First”",
+          "deye_force_charge_work_mode": "Mod de lucru în timpul încărcării forțate",
+          "deye_program_1_time": "Program 1 — entitate select interval orar",
+          "deye_program_1_soc": "Program 1 — entitate number SOC țintă",
+          "deye_program_1_charge": "Program 1 — entitate select încărcare din rețea",
+          "deye_program_2_time": "Program 2 — entitate select interval orar",
+          "deye_program_2_soc": "Program 2 — entitate number SOC țintă",
+          "deye_program_2_charge": "Program 2 — entitate select încărcare din rețea",
+          "deye_program_3_time": "Program 3 — entitate select interval orar",
+          "deye_program_3_soc": "Program 3 — entitate number SOC țintă",
+          "deye_program_3_charge": "Program 3 — entitate select încărcare din rețea",
+          "deye_program_4_time": "Program 4 — entitate select interval orar",
+          "deye_program_4_soc": "Program 4 — entitate number SOC țintă",
+          "deye_program_4_charge": "Program 4 — entitate select încărcare din rețea",
+          "deye_program_5_time": "Program 5 — entitate select interval orar",
+          "deye_program_5_soc": "Program 5 — entitate number SOC țintă",
+          "deye_program_5_charge": "Program 5 — entitate select încărcare din rețea",
+          "deye_program_6_time": "Program 6 — entitate select interval orar",
+          "deye_program_6_soc": "Program 6 — entitate number SOC țintă",
+          "deye_program_6_charge": "Program 6 — entitate select încărcare din rețea"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Plafon opțional impus de BMS. 0 înseamnă fără limită BMS — se aplică maximul invertorului.",
+          "deye_observer_mode": "Când este PORNIT, SEM calculează și înregistrează acțiunile Deye, dar nu scrie niciodată în invertor.",
+          "deye_actuation_enabled": "Când este OPRIT, SEM nu scrie niciodată în invertor, chiar dacă modul observator este de asemenea oprit. Ambele porți trebuie să permită înainte de trimiterea unei comenzi.",
+          "deye_max_charge_current_a": "Limita superioară sigură pe care SEM o va comanda pe entitatea curentului de încărcare."
         }
       }
     },

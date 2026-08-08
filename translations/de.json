@@ -107,6 +107,7 @@
           "ev_total_energy_sensor": "EV-Gesamtenergiezähler (optional)",
           "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "ev_charger_efficiency": "Ladewirkungsgrad (%)",
           "ev_target_soc": "EV-Ziel-SOC (%)",
           "daily_ev_target_max": "Solar-Ladelimit (kWh)",
           "ev_target_soc_max": "Solar-Ladelimit (SOC %)",
@@ -122,6 +123,7 @@
           "ev_total_energy_sensor": "Optionaler kumulierter kWh-Zähler für die an das Fahrzeug abgegebene Energie.",
           "vehicle_soc_entity": "Optionaler Sensor, der den aktuellen Ladezustand des Fahrzeugs meldet (0–100 %).",
           "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
+          "ev_charger_efficiency": "Anteil der gemessenen AC-Energie, der in der Batterie ankommt. Verringern Sie ihn, wenn die SOC-Schätzung dem Fahrzeug vorauseilt. Typisch 85-95 %, weniger bei einphasigem Laden oder Kälte.",
           "ev_target_soc": "Ziel-SOC (%), ab dem SEM das EV als voll geladen betrachtet.",
           "daily_ev_target_max": "Solarüberschuss lädt bis hierhin, dann Stopp. Auf Voll lassen, um frei aus der Sonne zu laden.",
           "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden.",
@@ -157,7 +159,8 @@
           "hot_water_solar_target": "Warmwasser Solar-Heizziel (°C)",
           "legionella_target_temp": "Legionellen-Desinfektionsziel (°C)",
           "legionella_interval_hours": "Max. Stunden zwischen Desinfektionszyklen",
-          "diagram_style": "Systemdiagramm-Stil"
+          "diagram_style": "Systemdiagramm-Stil",
+          "grid_sign_invert": "Vorzeichen der Netzleistung umkehren"
         },
         "data_description": {
           "update_interval": "Wie oft der Koordinator Sensoren ausliest und die Hardware nachregelt. 10 s ergibt die genaueste Energieintegration; Werte über 30 s zählen zu wenig Energie. Bereich 10–60 s.",
@@ -181,7 +184,8 @@
           "diagram_style": "Wählen Sie das Systemdiagramm für den Haus-Tab. 'SEM' verwendet das integrierte animierte Diagramm. 'K-Flow' verwendet die K-Flow HACS-Karte (muss separat installiert werden).",
           "hot_water_solar_target": "Zieltemperatur (°C) für die solarunterstützte Warmwasserbereitung. SEM heizt den Boiler auf, wenn Überschuss verfügbar ist.",
           "legionella_target_temp": "Temperatur (°C), die das Warmwassersystem während eines Legionellen-Desinfektionszyklus erreichen muss.",
-          "legionella_interval_hours": "Maximale Anzahl Stunden zwischen Legionellen-Desinfektionszyklen, bevor SEM eine Aufheizung erzwingt."
+          "legionella_interval_hours": "Maximale Anzahl Stunden zwischen Legionellen-Desinfektionszyklen, bevor SEM eine Aufheizung erzwingt.",
+          "grid_sign_invert": "Nur aktivieren, wenn Netzbezug als positiver Wert angezeigt wird (z. B. Enphase). SEMs Konvention ist negativ = Bezug; dies kehrt den Rohwert um und umgeht die automatische Vorzeichenerkennung."
         }
       },
       "settings_ev": {
@@ -215,7 +219,8 @@
           "dynamic_forecast_entity": "Prognose-Entität (optional, automatisch erkannt wenn leer)",
           "dynamic_feedin_entity": "Entität für Einspeisepreis (optional, für dynamische Einspeisevergütung)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Preis-Klassifizierungsmodus"
         },
         "data_description": {
           "electricity_import_rate": "Tag-/Einheitstarif für den Import (Währung/kWh inkl. MwSt.). Wird als Rückfallwert verwendet, wenn keine dynamische Preisgestaltung verfügbar ist.",
@@ -229,7 +234,8 @@
           "dynamic_forecast_entity": "Optionaler Sensor mit stündlichen Preisprognosen für die intelligente Planung.",
           "dynamic_feedin_entity": "Optionaler Sensor, der den aktuellen Einspeise-/Exportpreis für eine dynamische Einspeisevergütung liefert.",
           "grid_import_power_entity": "Optionaler Sensor (W) für die Netzbezugsleistung. Wird automatisch aus dem Energie-Dashboard erkannt; hier bei Bedarf überschreiben.",
-          "grid_export_power_entity": "Optionaler Sensor (W) für die Netzeinspeiseleistung. Wird automatisch aus dem Energie-Dashboard erkannt; hier bei Bedarf überschreiben."
+          "grid_export_power_entity": "Optionaler Sensor (W) für die Netzeinspeiseleistung. Wird automatisch aus dem Energie-Dashboard erkannt; hier bei Bedarf überschreiben.",
+          "tariff_classification_mode": "„Perzentil“ ordnet Preise relativ zur heutigen Spanne ein (empfohlen). „Statisch“ nutzt feste Schwellen für günstig/teuer."
         }
       },
       "load_management": {
@@ -289,7 +295,15 @@
           "battery_max_target_soc": "Maximaler Ziel-SOC",
           "battery_min_deficit_kwh": "Mindest-Defizitschwelle",
           "battery_pessimism_weight": "Prognose-Pessimismus",
-          "battery_force_charge_negative_price": "Zwangsladung bei negativem Preis"
+          "battery_force_charge_negative_price": "Zwangsladung bei negativem Preis",
+          "battery_charge_platform": "Batterie-Ladeplattform",
+          "battery_replan_interval_min": "Neuplanungsintervall (min)",
+          "battery_prefer_consecutive_window": "Zusammenhängendes Ladefenster bevorzugen"
+        },
+        "data_description": {
+          "battery_charge_platform": "Welchen Wechselrichter SEM für die geplante Netzladung ansteuert. Wähle Deye, um den Deye-Verdrahtungsschritt einzublenden.",
+          "battery_replan_interval_min": "Wie oft der Ladeplan anhand der neuesten Prognose und Preise neu berechnet wird.",
+          "battery_prefer_consecutive_window": "Ein: günstige Stunden in einem Block (weniger Start/Stopp-Zyklen); Aus: einzelne günstigste Stunden, auch wenn verstreut."
         }
       },
       "ev_charger_edit": {
@@ -310,7 +324,16 @@
           "ev_surplus_priority": "Überschuss-Priorität (1=höchste)",
           "ev_current_control_entity": "Entität zur Stromsteuerung (Number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Solar-Ladelimit (kWh)",
-          "ev_target_soc_max": "Solar-Ladelimit (SOC %)"
+          "ev_target_soc_max": "Solar-Ladelimit (SOC %)",
+          "daily_ev_target": "Nacht-Ladeziel (kWh)",
+          "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
+          "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
+          "ev_kwh_per_100km": "Fahrzeugverbrauch (kWh/100km)",
+          "ev_target_soc": "EV-Ziel-SOC (%)",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "initial_current": "Startstrom (A)",
+          "ev_min_current": "Minimaler Ladestrom (A)",
+          "vehicle_min_current": "Fahrzeug-Mindeststrom (A)"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -327,7 +350,16 @@
           "ev_surplus_priority": "Reihenfolge der Überschussverteilung auf mehrere Lader. Niedrigere Zahl = höhere Priorität.",
           "ev_current_control_entity": "Number-Entität zum Setzen des Ladestroms (A). Für Wallbox, go-eCharger und ähnliche Lader verwenden.",
           "daily_ev_target_max": "Solarüberschuss lädt bis hierhin, dann Stopp. Auf Voll lassen, um frei aus der Sonne zu laden.",
-          "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden."
+          "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden.",
+          "daily_ev_target": "Ziel-kWh, die jede Nacht aus dem Netz geladen werden sollen. Auf 0 setzen, um das nächtliche Netzladen zu deaktivieren.",
+          "vehicle_soc_entity": "Optionaler Sensor, der den aktuellen Ladezustand des Fahrzeugs meldet (0–100 %).",
+          "vehicle_range_entity": "Optionaler echter Reichweitensensor. Sonst wird die Reichweite aus SOC × Kapazität × Effizienz geschätzt.",
+          "ev_kwh_per_100km": "Wird zur Schätzung der Reichweite verwendet, wenn kein Reichweitensensor konfiguriert ist.",
+          "ev_target_soc": "Ziel-SOC (%), ab dem SEM das EV als voll geladen betrachtet.",
+          "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
+          "initial_current": "Ladestrom, mit dem SEM startet, bevor es auf den verfügbaren Überschuss hochregelt.",
+          "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken.",
+          "vehicle_min_current": "Fahrzeugspezifische Stromuntergrenze. Der effektive Mindestwert ist der höhere aus diesem und dem Lader-Mindeststrom."
         }
       },
       "ev_charger_add": {
@@ -348,7 +380,15 @@
           "ev_surplus_priority": "Überschuss-Priorität (1=höchste)",
           "ev_current_control_entity": "Entität zur Stromsteuerung (Number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Solar-Ladelimit (kWh)",
-          "ev_target_soc_max": "Solar-Ladelimit (SOC %)"
+          "ev_target_soc_max": "Solar-Ladelimit (SOC %)",
+          "daily_ev_target": "Nacht-Ladeziel (kWh)",
+          "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
+          "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
+          "ev_kwh_per_100km": "Fahrzeugverbrauch (kWh/100km)",
+          "ev_target_soc": "EV-Ziel-SOC (%)",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "initial_current": "Startstrom (A)",
+          "ev_min_current": "Minimaler Ladestrom (A)"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -365,7 +405,15 @@
           "ev_surplus_priority": "Reihenfolge der Überschussverteilung auf mehrere Lader. Niedrigere Zahl = höhere Priorität.",
           "ev_current_control_entity": "Number-Entität zum Setzen des Ladestroms (A). Für Wallbox, go-eCharger und ähnliche Lader verwenden.",
           "daily_ev_target_max": "Solarüberschuss lädt bis hierhin, dann Stopp. Auf Voll lassen, um frei aus der Sonne zu laden.",
-          "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden."
+          "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden.",
+          "daily_ev_target": "Ziel-kWh, die jede Nacht aus dem Netz geladen werden sollen. Auf 0 setzen, um das nächtliche Netzladen zu deaktivieren.",
+          "vehicle_soc_entity": "Optionaler Sensor, der den aktuellen Ladezustand des Fahrzeugs meldet (0–100 %).",
+          "vehicle_range_entity": "Optionaler echter Reichweitensensor. Sonst wird die Reichweite aus SOC × Kapazität × Effizienz geschätzt.",
+          "ev_kwh_per_100km": "Wird zur Schätzung der Reichweite verwendet, wenn kein Reichweitensensor konfiguriert ist.",
+          "ev_target_soc": "Ziel-SOC (%), ab dem SEM das EV als voll geladen betrachtet.",
+          "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
+          "initial_current": "Ladestrom, mit dem SEM startet, bevor es auf den verfügbaren Überschuss hochregelt.",
+          "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken."
         }
       },
       "pv_naming": {
@@ -479,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Deye erzwungenes Netzladen",
+        "description": "Einen Deye-Hybrid-Wechselrichter für geplantes Netzladen einbinden. Beobachtermodus ist standardmäßig EIN und die Ansteuerung AUS, sodass erst nach ausdrücklicher Freigabe auf den Wechselrichter geschrieben wird.",
+        "data": {
+          "deye_grid_charge_switch": "Netzladen-Schalter (Entität)",
+          "deye_charge_current_entity": "Ladestrom-Zahlenentität (A)",
+          "deye_battery_voltage_entity": "Batteriespannung-Sensor (Entität)",
+          "deye_battery_voltage_max_age_s": "Batteriespannung max. Alter (s)",
+          "deye_max_charge_current_a": "Max. Ladestrom (A)",
+          "deye_bms_max_charge_current_a": "BMS max. Ladestrom (A)",
+          "deye_max_discharge_power": "Max. Entladeleistung (W)",
+          "deye_program_control": "Programm-Zeitfenster steuern",
+          "deye_observer_mode": "Beobachtermodus (schreibgeschützt)",
+          "deye_actuation_enabled": "Ansteuerung aktivieren (auf Wechselrichter schreiben)",
+          "deye_work_mode_control": "Arbeitsmodus steuern",
+          "deye_work_mode_entity": "Arbeitsmodus-Auswahl (Entität)",
+          "deye_work_mode_load_first_option": "Arbeitsmodus-Wert für „Load First“",
+          "deye_work_mode_battery_first_option": "Arbeitsmodus-Wert für „Battery First“",
+          "deye_force_charge_work_mode": "Arbeitsmodus beim Zwangsladen",
+          "deye_program_1_time": "Programm 1 — Zeitfenster-Auswahl (Entität)",
+          "deye_program_1_soc": "Programm 1 — Ziel-SOC-Zahlenentität",
+          "deye_program_1_charge": "Programm 1 — Netzladen-Auswahl (Entität)",
+          "deye_program_2_time": "Programm 2 — Zeitfenster-Auswahl (Entität)",
+          "deye_program_2_soc": "Programm 2 — Ziel-SOC-Zahlenentität",
+          "deye_program_2_charge": "Programm 2 — Netzladen-Auswahl (Entität)",
+          "deye_program_3_time": "Programm 3 — Zeitfenster-Auswahl (Entität)",
+          "deye_program_3_soc": "Programm 3 — Ziel-SOC-Zahlenentität",
+          "deye_program_3_charge": "Programm 3 — Netzladen-Auswahl (Entität)",
+          "deye_program_4_time": "Programm 4 — Zeitfenster-Auswahl (Entität)",
+          "deye_program_4_soc": "Programm 4 — Ziel-SOC-Zahlenentität",
+          "deye_program_4_charge": "Programm 4 — Netzladen-Auswahl (Entität)",
+          "deye_program_5_time": "Programm 5 — Zeitfenster-Auswahl (Entität)",
+          "deye_program_5_soc": "Programm 5 — Ziel-SOC-Zahlenentität",
+          "deye_program_5_charge": "Programm 5 — Netzladen-Auswahl (Entität)",
+          "deye_program_6_time": "Programm 6 — Zeitfenster-Auswahl (Entität)",
+          "deye_program_6_soc": "Programm 6 — Ziel-SOC-Zahlenentität",
+          "deye_program_6_charge": "Programm 6 — Netzladen-Auswahl (Entität)"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Optionale vom BMS vorgegebene Obergrenze. 0 = keine BMS-Grenze; es gilt das Wechselrichter-Maximum.",
+          "deye_observer_mode": "Wenn EIN, berechnet und protokolliert SEM seine Deye-Aktionen, schreibt aber nie auf den Wechselrichter.",
+          "deye_actuation_enabled": "Wenn AUS, schreibt SEM nie auf den Wechselrichter, selbst wenn der Beobachtermodus ebenfalls aus ist. Beide Freigaben müssen erlauben, bevor ein Befehl gesendet wird.",
+          "deye_max_charge_current_a": "Sichere Obergrenze, die SEM auf der Ladestrom-Entität befiehlt."
         }
       }
     },

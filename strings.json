@@ -107,6 +107,7 @@
           "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
+          "ev_charger_efficiency": "Charger efficiency (%)",
           "ev_target_soc": "EV target SOC (%)",
           "daily_ev_target_max": "Solar charge limit (kWh)",
           "ev_target_soc_max": "Solar charge limit (SOC %)",
@@ -122,6 +123,7 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
+          "ev_charger_efficiency": "Share of the metered AC energy that reaches the battery. Lower it if the SOC estimate runs ahead of the car. Typically 85-95%, less on single-phase or in cold weather.",
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
           "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
           "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
@@ -181,7 +183,15 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "daily_ev_target_max": "Solar charge limit (kWh)",
-          "ev_target_soc_max": "Solar charge limit (SOC %)"
+          "ev_target_soc_max": "Solar charge limit (SOC %)",
+          "daily_ev_target": "Night charge target (kWh)",
+          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
+          "vehicle_range_entity": "Vehicle range sensor",
+          "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)",
+          "ev_target_soc": "EV target SOC (%)",
+          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
+          "initial_current": "Start current (A)",
+          "ev_min_current": "Minimum charge current (A)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard (e.g. 'Garage' or 'Carport').",
@@ -198,7 +208,15 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
           "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
-          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun."
+          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
+          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
+          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
+          "vehicle_range_entity": "Optional real range sensor. Otherwise range is estimated from SOC × capacity × efficiency.",
+          "ev_kwh_per_100km": "Used to estimate driving range when no range sensor is configured.",
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
+          "initial_current": "Charge current SEM begins with before ramping to match available surplus.",
+          "ev_min_current": "Below this SEM pauses charging instead of dropping the current further."
         }
       },
       "ev_charger_edit": {
@@ -219,7 +237,16 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "daily_ev_target_max": "Solar charge limit (kWh)",
-          "ev_target_soc_max": "Solar charge limit (SOC %)"
+          "ev_target_soc_max": "Solar charge limit (SOC %)",
+          "daily_ev_target": "Night charge target (kWh)",
+          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
+          "vehicle_range_entity": "Vehicle range sensor",
+          "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)",
+          "ev_target_soc": "EV target SOC (%)",
+          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
+          "initial_current": "Start current (A)",
+          "ev_min_current": "Minimum charge current (A)",
+          "vehicle_min_current": "Vehicle minimum current (A)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -236,7 +263,16 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
           "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
-          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun."
+          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
+          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
+          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
+          "vehicle_range_entity": "Optional real range sensor. Otherwise range is estimated from SOC × capacity × efficiency.",
+          "ev_kwh_per_100km": "Used to estimate driving range when no range sensor is configured.",
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
+          "initial_current": "Charge current SEM begins with before ramping to match available surplus.",
+          "ev_min_current": "Below this SEM pauses charging instead of dropping the current further.",
+          "vehicle_min_current": "Per-vehicle current floor. The effective minimum is the higher of this and the charger minimum current."
         }
       },
       "ev_charger_remove": {
@@ -277,7 +313,8 @@
           "diagram_style": "System diagram style",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "EV Target SOC (%)",
-          "vehicle_soc_entity": "Vehicle Battery SOC"
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "grid_sign_invert": "Invert grid power sign"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -301,7 +338,8 @@
           "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
           "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
           "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
-          "diagram_style": "Choose which system diagram card to use on the Home tab. 'SEM' uses the built-in animated diagram. 'K-Flow' uses the K-Flow HACS card (must be installed separately). Re-run the generate_dashboard service after changing."
+          "diagram_style": "Choose which system diagram card to use on the Home tab. 'SEM' uses the built-in animated diagram. 'K-Flow' uses the K-Flow HACS card (must be installed separately). Re-run the generate_dashboard service after changing.",
+          "grid_sign_invert": "Turn ON only if grid import shows as a positive value (e.g. Enphase). SEM's convention is negative = import; this negates the raw reading and bypasses sign auto-detection."
         }
       },
       "settings_ev": {
@@ -335,7 +373,8 @@
           "demand_charge_rate": "Demand charge rate",
           "update_interval": "Update interval (s)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Price classification mode"
         },
         "data_description": {
           "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
@@ -349,7 +388,8 @@
           "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
           "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
           "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed."
+          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed.",
+          "tariff_classification_mode": "Percentile buckets prices relative to today's range (recommended). Static uses fixed cheap/expensive thresholds."
         }
       },
       "load_management": {
@@ -407,10 +447,18 @@
           "battery_min_deficit_kwh": "Minimum Deficit Threshold",
           "battery_pessimism_weight": "Forecast Pessimism",
           "battery_precharge_trigger_hour": "Daily Evaluation Hour",
-          "battery_roundtrip_efficiency": "Round-trip Efficiency"
+          "battery_roundtrip_efficiency": "Round-trip Efficiency",
+          "battery_charge_platform": "Battery charge platform",
+          "battery_replan_interval_min": "Replan interval (min)",
+          "battery_prefer_consecutive_window": "Prefer a consecutive charge window"
         },
         "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
-        "title": "Battery Charge Scheduler"
+        "title": "Battery Charge Scheduler",
+        "data_description": {
+          "battery_charge_platform": "Which inverter SEM commands for scheduled grid charging. Choose Deye to reveal the Deye wiring step.",
+          "battery_replan_interval_min": "How often the charge schedule is recomputed against the latest forecast and prices.",
+          "battery_prefer_consecutive_window": "On keeps the cheap hours in one block (fewer start/stop cycles); off picks the individual cheapest hours even if scattered."
+        }
       },
       "pv_naming": {
         "data": {
@@ -479,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Deye forced grid charge",
+        "description": "Wire a Deye hybrid inverter for scheduled grid charging. Observer mode is ON and actuation is OFF by default, so nothing is written to the inverter until you explicitly enable it.",
+        "data": {
+          "deye_grid_charge_switch": "Grid-charge switch entity",
+          "deye_charge_current_entity": "Charge-current number entity (A)",
+          "deye_battery_voltage_entity": "Battery-voltage sensor entity",
+          "deye_battery_voltage_max_age_s": "Battery-voltage max age (s)",
+          "deye_max_charge_current_a": "Max charge current (A)",
+          "deye_bms_max_charge_current_a": "BMS max charge current (A)",
+          "deye_max_discharge_power": "Max discharge power (W)",
+          "deye_program_control": "Control program time slots",
+          "deye_observer_mode": "Observer mode (read-only)",
+          "deye_actuation_enabled": "Enable actuation (write to inverter)",
+          "deye_work_mode_control": "Control work mode",
+          "deye_work_mode_entity": "Work-mode select entity",
+          "deye_work_mode_load_first_option": "Work-mode value for Load First",
+          "deye_work_mode_battery_first_option": "Work-mode value for Battery First",
+          "deye_force_charge_work_mode": "Work mode to use while force-charging",
+          "deye_program_1_time": "Program 1 — time-slot select entity",
+          "deye_program_1_soc": "Program 1 — target-SOC number entity",
+          "deye_program_1_charge": "Program 1 — grid-charge select entity",
+          "deye_program_2_time": "Program 2 — time-slot select entity",
+          "deye_program_2_soc": "Program 2 — target-SOC number entity",
+          "deye_program_2_charge": "Program 2 — grid-charge select entity",
+          "deye_program_3_time": "Program 3 — time-slot select entity",
+          "deye_program_3_soc": "Program 3 — target-SOC number entity",
+          "deye_program_3_charge": "Program 3 — grid-charge select entity",
+          "deye_program_4_time": "Program 4 — time-slot select entity",
+          "deye_program_4_soc": "Program 4 — target-SOC number entity",
+          "deye_program_4_charge": "Program 4 — grid-charge select entity",
+          "deye_program_5_time": "Program 5 — time-slot select entity",
+          "deye_program_5_soc": "Program 5 — target-SOC number entity",
+          "deye_program_5_charge": "Program 5 — grid-charge select entity",
+          "deye_program_6_time": "Program 6 — time-slot select entity",
+          "deye_program_6_soc": "Program 6 — target-SOC number entity",
+          "deye_program_6_charge": "Program 6 — grid-charge select entity"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Optional BMS-imposed ceiling. 0 means no BMS limit — the inverter's own maximum applies.",
+          "deye_observer_mode": "When ON, SEM computes and logs its Deye actions but never writes to the inverter.",
+          "deye_actuation_enabled": "When OFF, SEM never writes to the inverter even if observer mode is also off. Both gates must permit before any command is sent.",
+          "deye_max_charge_current_a": "Safe upper limit SEM will command on the charge-current entity."
         }
       }
     },

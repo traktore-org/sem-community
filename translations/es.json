@@ -107,6 +107,7 @@
           "ev_total_energy_sensor": "Contador de energía total VE (opcional)",
           "vehicle_soc_entity": "Sensor SOC batería vehículo (opcional)",
           "ev_battery_capacity_kwh": "Capacidad batería VE (kWh)",
+          "ev_charger_efficiency": "Eficiencia del cargador (%)",
           "ev_target_soc": "SOC objetivo VE (%)",
           "daily_ev_target_max": "Límite de carga solar (kWh)",
           "ev_target_soc_max": "Límite de carga solar (SOC %)",
@@ -122,6 +123,7 @@
           "ev_total_energy_sensor": "Contador acumulado opcional en kWh de la energía entregada al vehículo.",
           "vehicle_soc_entity": "Sensor opcional que indica el estado de carga actual del vehículo (0–100 %).",
           "ev_battery_capacity_kwh": "Capacidad útil total de la batería del VE en kWh. Se utiliza para estimar el SOC y el tiempo de carga.",
+          "ev_charger_efficiency": "Parte de la energía CA medida que llega a la batería. Redúcela si la estimación del SOC se adelanta al vehículo. Normalmente 85-95 %, menos en monofásico o con frío.",
           "ev_target_soc": "SOC objetivo (%) a partir del cual SEM considera que el VE está completamente cargado.",
           "daily_ev_target_max": "El excedente solar carga hasta este valor y luego se detiene. Déjalo al máximo para cargar libremente con el sol.",
           "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol.",
@@ -157,7 +159,8 @@
           "legionella_target_temp": "Objetivo de desinfección antilegionela (°C)",
           "legionella_interval_hours": "Horas máximas entre ciclos de desinfección",
           "diagram_style": "Estilo del diagrama del sistema",
-          "battery_assist_min_surplus": "Asistencia batería – mín. excedente solar (W)"
+          "battery_assist_min_surplus": "Asistencia batería – mín. excedente solar (W)",
+          "grid_sign_invert": "Invertir el signo de la potencia de red"
         },
         "data_description": {
           "update_interval": "Con qué frecuencia el coordinador lee los sensores y ajusta el hardware. 10 s da la integración de energía más precisa; valores por encima de 30 s subestiman la energía. Rango 10–60 s.",
@@ -181,7 +184,8 @@
           "hot_water_solar_target": "Temperatura objetivo (°C) para el calentamiento del agua caliente con apoyo solar. SEM activa el boost de la caldera cuando hay excedente disponible.",
           "legionella_target_temp": "Temperatura (°C) que el sistema de agua caliente debe alcanzar durante un ciclo de desinfección antilegionela.",
           "legionella_interval_hours": "Horas máximas entre ciclos de desinfección antilegionela antes de que SEM fuerce un calentamiento.",
-          "battery_assist_min_surplus": "Excedente solar real mínimo antes de que la batería doméstica pueda ayudar a cargar el VE — en cualquier modo de carga. Por debajo de este valor la batería queda reservada para la casa (el coche toma de la red + solar). Por defecto 1200 W. Ponlo a 0 para que la batería apoye al VE en todo momento, incluso de noche."
+          "battery_assist_min_surplus": "Excedente solar real mínimo antes de que la batería doméstica pueda ayudar a cargar el VE — en cualquier modo de carga. Por debajo de este valor la batería queda reservada para la casa (el coche toma de la red + solar). Por defecto 1200 W. Ponlo a 0 para que la batería apoye al VE en todo momento, incluso de noche.",
+          "grid_sign_invert": "Actívalo solo si la importación de red aparece como valor positivo (p. ej. Enphase). La convención de SEM es negativo = importación; esto niega la lectura bruta y omite la detección automática del signo."
         }
       },
       "settings_ev": {
@@ -215,7 +219,8 @@
           "dynamic_forecast_entity": "Entidad de previsión (opcional, se detecta automáticamente si se deja vacía)",
           "dynamic_feedin_entity": "Entidad de precio de inyección (opcional, para tarifa de exportación dinámica)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Modo de clasificación de precios"
         },
         "data_description": {
           "electricity_import_rate": "Tarifa de importación diurna/plana (moneda/kWh, IVA incluido). Se utiliza como alternativa cuando el precio dinámico no está disponible.",
@@ -229,7 +234,8 @@
           "dynamic_forecast_entity": "Sensor opcional con previsiones horarias de precio utilizadas para la planificación inteligente.",
           "dynamic_feedin_entity": "Sensor opcional que proporciona el precio actual de inyección / exportación para la tarifa de exportación dinámica.",
           "grid_import_power_entity": "Sensor opcional (W) para la potencia de importación de la red. Se detecta automáticamente desde el panel Energía; puede sobrescribirlo aquí si hace falta.",
-          "grid_export_power_entity": "Sensor opcional (W) para la potencia de exportación a la red. Se detecta automáticamente desde el panel Energía; puede sobrescribirlo aquí si hace falta."
+          "grid_export_power_entity": "Sensor opcional (W) para la potencia de exportación a la red. Se detecta automáticamente desde el panel Energía; puede sobrescribirlo aquí si hace falta.",
+          "tariff_classification_mode": "Percentil clasifica los precios respecto al rango de hoy (recomendado). Estático usa umbrales fijos de barato/caro."
         }
       },
       "load_management": {
@@ -289,7 +295,15 @@
           "battery_max_target_soc": "SOC objetivo máximo",
           "battery_min_deficit_kwh": "Umbral mínimo de déficit",
           "battery_pessimism_weight": "Pesimismo de la previsión",
-          "battery_force_charge_negative_price": "Forzar carga con precio negativo"
+          "battery_force_charge_negative_price": "Forzar carga con precio negativo",
+          "battery_charge_platform": "Plataforma de carga de batería",
+          "battery_replan_interval_min": "Intervalo de replanificación (min)",
+          "battery_prefer_consecutive_window": "Preferir una ventana de carga consecutiva"
+        },
+        "data_description": {
+          "battery_charge_platform": "Qué inversor controla SEM para la carga de red programada. Elige Deye para mostrar el paso de cableado de Deye.",
+          "battery_replan_interval_min": "Con qué frecuencia se recalcula el plan de carga según la última previsión y los precios.",
+          "battery_prefer_consecutive_window": "Activado: horas baratas en un solo bloque (menos ciclos de arranque/parada); desactivado: las horas más baratas aunque estén dispersas."
         }
       },
       "ev_charger_edit": {
@@ -310,7 +324,16 @@
           "ev_surplus_priority": "Prioridad de excedente (1=máxima)",
           "ev_current_control_entity": "Entidad de control de corriente (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Límite de carga solar (kWh)",
-          "ev_target_soc_max": "Límite de carga solar (SOC %)"
+          "ev_target_soc_max": "Límite de carga solar (SOC %)",
+          "daily_ev_target": "Objetivo de carga nocturna (kWh)",
+          "vehicle_soc_entity": "Sensor SOC batería vehículo (opcional)",
+          "vehicle_range_entity": "Sensor de autonomía del vehículo",
+          "ev_kwh_per_100km": "Consumo del vehículo (kWh/100km)",
+          "ev_target_soc": "SOC objetivo VE (%)",
+          "ev_battery_capacity_kwh": "Capacidad batería VE (kWh)",
+          "initial_current": "Corriente inicial (A)",
+          "ev_min_current": "Corriente de carga mínima (A)",
+          "vehicle_min_current": "Corriente mínima del vehículo (A)"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -327,7 +350,16 @@
           "ev_surplus_priority": "Orden de reparto del excedente entre varios cargadores. Número más bajo = mayor prioridad.",
           "ev_current_control_entity": "Entidad Number utilizada para establecer la corriente de carga (A). Para Wallbox, go-eCharger y cargadores similares.",
           "daily_ev_target_max": "El excedente solar carga hasta este valor y luego se detiene. Déjalo al máximo para cargar libremente con el sol.",
-          "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol."
+          "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol.",
+          "daily_ev_target": "Objetivo de kWh a cargar desde la red cada noche. Póngalo a 0 para desactivar la carga nocturna desde la red.",
+          "vehicle_soc_entity": "Sensor opcional que indica el estado de carga actual del vehículo (0–100 %).",
+          "vehicle_range_entity": "Sensor de autonomía real opcional. De lo contrario, la autonomía se estima a partir de SOC × capacidad × eficiencia.",
+          "ev_kwh_per_100km": "Se usa para estimar la autonomía cuando no hay un sensor de autonomía configurado.",
+          "ev_target_soc": "SOC objetivo (%) a partir del cual SEM considera que el VE está completamente cargado.",
+          "ev_battery_capacity_kwh": "Capacidad útil total de la batería del VE en kWh. Se utiliza para estimar el SOC y el tiempo de carga.",
+          "initial_current": "Corriente de carga con la que SEM empieza antes de ajustarse al excedente disponible.",
+          "ev_min_current": "Por debajo de esto SEM pausa la carga en lugar de bajar más la corriente.",
+          "vehicle_min_current": "Límite inferior de corriente por vehículo. El mínimo efectivo es el mayor entre este y la corriente mínima del cargador."
         }
       },
       "ev_charger_add": {
@@ -348,7 +380,15 @@
           "ev_surplus_priority": "Prioridad de excedente (1=máxima)",
           "ev_current_control_entity": "Entidad de control de corriente (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Límite de carga solar (kWh)",
-          "ev_target_soc_max": "Límite de carga solar (SOC %)"
+          "ev_target_soc_max": "Límite de carga solar (SOC %)",
+          "daily_ev_target": "Objetivo de carga nocturna (kWh)",
+          "vehicle_soc_entity": "Sensor SOC batería vehículo (opcional)",
+          "vehicle_range_entity": "Sensor de autonomía del vehículo",
+          "ev_kwh_per_100km": "Consumo del vehículo (kWh/100km)",
+          "ev_target_soc": "SOC objetivo VE (%)",
+          "ev_battery_capacity_kwh": "Capacidad batería VE (kWh)",
+          "initial_current": "Corriente inicial (A)",
+          "ev_min_current": "Corriente de carga mínima (A)"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -365,7 +405,15 @@
           "ev_surplus_priority": "Orden de reparto del excedente entre varios cargadores. Número más bajo = mayor prioridad.",
           "ev_current_control_entity": "Entidad Number utilizada para establecer la corriente de carga (A). Para Wallbox, go-eCharger y cargadores similares.",
           "daily_ev_target_max": "El excedente solar carga hasta este valor y luego se detiene. Déjalo al máximo para cargar libremente con el sol.",
-          "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol."
+          "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol.",
+          "daily_ev_target": "Objetivo de kWh a cargar desde la red cada noche. Póngalo a 0 para desactivar la carga nocturna desde la red.",
+          "vehicle_soc_entity": "Sensor opcional que indica el estado de carga actual del vehículo (0–100 %).",
+          "vehicle_range_entity": "Sensor de autonomía real opcional. De lo contrario, la autonomía se estima a partir de SOC × capacidad × eficiencia.",
+          "ev_kwh_per_100km": "Se usa para estimar la autonomía cuando no hay un sensor de autonomía configurado.",
+          "ev_target_soc": "SOC objetivo (%) a partir del cual SEM considera que el VE está completamente cargado.",
+          "ev_battery_capacity_kwh": "Capacidad útil total de la batería del VE en kWh. Se utiliza para estimar el SOC y el tiempo de carga.",
+          "initial_current": "Corriente de carga con la que SEM empieza antes de ajustarse al excedente disponible.",
+          "ev_min_current": "Por debajo de esto SEM pausa la carga en lugar de bajar más la corriente."
         }
       },
       "pv_naming": {
@@ -479,6 +527,51 @@
           "phase_guard_inverter_l1_current_entity": "Non-negative RMS current for inverter Load/EPS phase L1.",
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
+        }
+      },
+      "deye": {
+        "title": "Carga de red forzada Deye",
+        "description": "Conecta un inversor híbrido Deye para la carga de red programada. El modo observador está activado y la actuación desactivada por defecto, así que no se escribe nada en el inversor hasta que lo habilites explícitamente.",
+        "data": {
+          "deye_grid_charge_switch": "Interruptor de carga de red (entidad)",
+          "deye_charge_current_entity": "Entidad number de corriente de carga (A)",
+          "deye_battery_voltage_entity": "Sensor de tensión de batería (entidad)",
+          "deye_battery_voltage_max_age_s": "Antigüedad máx. de tensión de batería (s)",
+          "deye_max_charge_current_a": "Corriente de carga máx. (A)",
+          "deye_bms_max_charge_current_a": "Corriente de carga máx. del BMS (A)",
+          "deye_max_discharge_power": "Potencia de descarga máx. (W)",
+          "deye_program_control": "Controlar franjas horarias del programa",
+          "deye_observer_mode": "Modo observador (solo lectura)",
+          "deye_actuation_enabled": "Habilitar actuación (escribir en el inversor)",
+          "deye_work_mode_control": "Controlar el modo de trabajo",
+          "deye_work_mode_entity": "Entidad select del modo de trabajo",
+          "deye_work_mode_load_first_option": "Valor de modo para «Load First»",
+          "deye_work_mode_battery_first_option": "Valor de modo para «Battery First»",
+          "deye_force_charge_work_mode": "Modo de trabajo durante la carga forzada",
+          "deye_program_1_time": "Programa 1 — entidad select de franja horaria",
+          "deye_program_1_soc": "Programa 1 — entidad number de SOC objetivo",
+          "deye_program_1_charge": "Programa 1 — entidad select de carga de red",
+          "deye_program_2_time": "Programa 2 — entidad select de franja horaria",
+          "deye_program_2_soc": "Programa 2 — entidad number de SOC objetivo",
+          "deye_program_2_charge": "Programa 2 — entidad select de carga de red",
+          "deye_program_3_time": "Programa 3 — entidad select de franja horaria",
+          "deye_program_3_soc": "Programa 3 — entidad number de SOC objetivo",
+          "deye_program_3_charge": "Programa 3 — entidad select de carga de red",
+          "deye_program_4_time": "Programa 4 — entidad select de franja horaria",
+          "deye_program_4_soc": "Programa 4 — entidad number de SOC objetivo",
+          "deye_program_4_charge": "Programa 4 — entidad select de carga de red",
+          "deye_program_5_time": "Programa 5 — entidad select de franja horaria",
+          "deye_program_5_soc": "Programa 5 — entidad number de SOC objetivo",
+          "deye_program_5_charge": "Programa 5 — entidad select de carga de red",
+          "deye_program_6_time": "Programa 6 — entidad select de franja horaria",
+          "deye_program_6_soc": "Programa 6 — entidad number de SOC objetivo",
+          "deye_program_6_charge": "Programa 6 — entidad select de carga de red"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Límite opcional impuesto por el BMS. 0 significa sin límite del BMS: se aplica el máximo del inversor.",
+          "deye_observer_mode": "Cuando está activado, SEM calcula y registra sus acciones Deye pero nunca escribe en el inversor.",
+          "deye_actuation_enabled": "Cuando está desactivado, SEM nunca escribe en el inversor, aunque el modo observador también esté desactivado. Ambas puertas deben permitir antes de enviar cualquier comando.",
+          "deye_max_charge_current_a": "Límite superior seguro que SEM ordenará en la entidad de corriente de carga."
         }
       }
     },
