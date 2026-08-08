@@ -5846,7 +5846,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     continue
         except Exception:  # noqa: BLE001
             pass
-        # 5. The night's price curve — a provider publishing tomorrow's
+        # 5. The SUPPLY side (the week picture, 2026-08-08): the day's
+        #    free energy is a forecast that revises through the morning
+        #    — Aug 6 was a 34-kWh day a dawn stamp would have priced at
+        #    ~55, and nothing on the ask side would have re-planned it.
+        #    The DAY TOTAL only: it moves when the provider re-publishes;
+        #    the remaining burns down every daylight minute and is time
+        #    passing, not the ask changing. 2-kWh steps.
+        try:
+            _fd = getattr(getattr(self, "_forecast_reader", None),
+                          "forecast_data", None)
+            _today = float(getattr(_fd, "forecast_today_kwh", 0.0) or 0.0)
+            sig.append(("solar", round(_today / 2.0) * 2.0))
+        except Exception:  # noqa: BLE001 — no forecast is a valid shape
+            sig.append(("solar", 0.0))
+        # 6. The night's price curve — a provider publishing tomorrow's
         #    prices mid-evening changes where everything should go.
         try:
             ups = getattr(

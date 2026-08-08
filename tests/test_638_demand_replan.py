@@ -161,3 +161,42 @@ class TestComfortAsksReplan:
         b = _coord(devices=(_comfort_ask_dev(kwh=2.5),))
         assert (a._overnight_demand_signature(_power())
                 != b._overnight_demand_signature(_power()))
+
+
+class TestTheSupplySideReplans:
+    """(#638, the week picture 2026-08-08) The day's free energy is a
+    FORECAST that revises through the morning — Aug 6 was a 34-kWh day a
+    dawn stamp would have priced at ~55. The signature watches the DAY
+    TOTAL (revised only when the provider re-publishes), never the
+    remaining (which burns down every daylight minute and is not an ask
+    change)."""
+
+    def _with_forecast(self, today, remaining):
+        c = _coord()
+        c._forecast_reader = SimpleNamespace(
+            forecast_data=SimpleNamespace(
+                forecast_today_kwh=today,
+                forecast_remaining_today_kwh=remaining))
+        return c
+
+    def test_a_provider_revision_replans(self):
+        sunny = self._with_forecast(55.0, 40.0)
+        clouded = self._with_forecast(34.0, 20.0)
+        assert (sunny._overnight_demand_signature(_power())
+                != clouded._overnight_demand_signature(_power()))
+
+    def test_the_burn_down_is_not_an_ask_change(self):
+        morning = self._with_forecast(55.0, 50.0)
+        noon = self._with_forecast(55.0, 20.0)
+        assert (morning._overnight_demand_signature(_power())
+                == noon._overnight_demand_signature(_power()))
+
+    def test_sub_step_revisions_round_away(self):
+        a = self._with_forecast(55.0, 40.0)
+        b = self._with_forecast(55.9, 40.0)
+        assert (a._overnight_demand_signature(_power())
+                == b._overnight_demand_signature(_power()))
+
+    def test_no_forecast_is_a_valid_shape(self):
+        c = _coord()
+        assert isinstance(c._overnight_demand_signature(_power()), tuple)
