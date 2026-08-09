@@ -195,13 +195,17 @@
           "daily_ev_target": "Cel ładowania nocnego (kWh)",
           "observer_mode": "Tryb obserwatora (tylko odczyt, bez sterowania sprzętem)",
           "smart_night_charging": "Zmniejsz cel nocny na podstawie prognozy na jutro",
-          "minimum_solar_power": "Minimalna moc solarna do startu ładowania EV (W)"
+          "minimum_solar_power": "Minimalna moc solarna do startu ładowania EV (W)",
+          "curtailment_probe_enabled": "Sonda ograniczenia (wykorzystaj ograniczone słońce)",
+          "export_limit_entity": "Encja limitu eksportu (opcjonalnie)"
         },
         "data_description": {
           "daily_ev_target": "Docelowa liczba kWh do naładowania z sieci każdej nocy. Ustaw 0, aby wyłączyć nocne ładowanie z sieci.",
           "observer_mode": "Gdy WŁĄCZONE, SEM wszystko monitoruje, ale nigdy nie wysyła poleceń do sprzętu.",
           "smart_night_charging": "Gdy WŁĄCZONE, SEM zmniejsza cel ładowania nocnego, jeśli jutrzejsza prognoza słoneczna jest wystarczająca.",
-          "minimum_solar_power": "Minimalna nadwyżka mocy solarnej (W) wymagana, zanim SEM rozpocznie ładowanie EV ze słońca."
+          "minimum_solar_power": "Minimalna nadwyżka mocy solarnej (W) wymagana, zanim SEM rozpocznie ładowanie EV ze słońca.",
+          "curtailment_probe_enabled": "Gdy falownik ogranicza eksport do sieci (np. przy cenach ujemnych), produkcja zatrzymuje się na poziomie zużycia, a realna energia słoneczna pozostaje niewidoczna. Opt-in: SEM na chwilę uruchamia ładowanie EV minimalnym prądem i kontynuuje tylko, gdy produkcja rośnie.",
+          "export_limit_entity": "Encja limitu eksportu falownika (wykrywana automatycznie dla Huawei, GoodWe, SolaX, Victron i innych, gdy pusta). Zaostrza detekcję i zapobiega zbędnym sondom."
         }
       },
       "settings_tariff": {

@@ -195,13 +195,17 @@
           "daily_ev_target": "Nacht-Ladeziel (kWh)",
           "observer_mode": "Beobachtermodus (nur lesen, keine Hardwaresteuerung)",
           "smart_night_charging": "Nachtziel basierend auf Prognose von morgen reduzieren",
-          "minimum_solar_power": "Minimale Solarleistung zum Starten der EV-Ladung (W)"
+          "minimum_solar_power": "Minimale Solarleistung zum Starten der EV-Ladung (W)",
+          "curtailment_probe_enabled": "Abregelungs-Sonde (begrenzte Solarenergie nutzen)",
+          "export_limit_entity": "Einspeiselimit-Entität (optional)"
         },
         "data_description": {
           "daily_ev_target": "Ziel-kWh, die jede Nacht aus dem Netz geladen werden sollen. Auf 0 setzen, um das nächtliche Netzladen zu deaktivieren.",
           "observer_mode": "Wenn EIN, überwacht SEM alles, sendet aber nie Befehle an die Hardware.",
           "smart_night_charging": "Wenn EIN, reduziert SEM das Nacht-Ladeziel, wenn die Solarprognose für morgen ausreichend ist.",
-          "minimum_solar_power": "Mindest-Solarüberschuss (W), der erforderlich ist, bevor SEM mit dem solaren EV-Laden beginnt."
+          "minimum_solar_power": "Mindest-Solarüberschuss (W), der erforderlich ist, bevor SEM mit dem solaren EV-Laden beginnt.",
+          "curtailment_probe_enabled": "Wenn der Wechselrichter die Netzeinspeisung begrenzt (z. B. bei negativen Preisen), wird die Produktion auf den Verbrauch geklemmt und echte Solarenergie bleibt unsichtbar. Opt-in: SEM startet das E-Auto kurz mit Minimalstrom und lädt nur weiter, wenn die Produktion nachzieht.",
+          "export_limit_entity": "Die Einspeiselimit-Entität des Wechselrichters (bei Huawei, GoodWe, SolaX, Victron u. a. automatisch erkannt, wenn leer). Schärft die Erkennung und verhindert unnötige Sonden."
         }
       },
       "settings_tariff": {

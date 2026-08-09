@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.10] — 09.08.2026 (Unreleased)
+
+### ✨ Enhancements
+- ☀️ **The curtailment probe — harvesting solar an export limit hides** (#743,
+  opt-in, default off) — inverters that cap grid export (permanently, or
+  dropping to 0 W at negative prices) clamp production to local consumption,
+  so the measured surplus honestly reads ~0 while the array could deliver
+  kilowatts more. Raising consumption is the only instrument that reveals the
+  hidden power, so the probe IS the measurement: when the forecast says far
+  more than the array delivers, export is pinned at ~0 and production ≈
+  consumption, SEM starts the EV at minimum amps — and keeps charging only if
+  production rises to follow within the window (a failed probe backs off for
+  15 minutes and costs ~2 minutes of minimum-amps draw). In harvest, one
+  ladder step of headroom keeps the climb alive toward the forecast, and
+  every step must be followed by production or the climb stops at the array's
+  real potential — no step is ever taken on faith. Brands that publish their
+  export limit sharpen the detection: the limit entity is auto-detected on
+  the inverter's device (Huawei active power control, GoodWe grid export
+  limit, SolaX export control, Victron max feed-in, …) — "limit active"
+  fast-tracks the probe, "no limit" suppresses false probes entirely; a
+  manual **Export-limit entity** field overrides for exotic setups. Options →
+  EV Settings, both fields labelled across all 16 languages. Requires a solar
+  forecast integration ("power now").
+
 # [1.7.6-beta.9] — 09.08.2026
 
 ### 🐛 Fixes

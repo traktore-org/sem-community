@@ -195,13 +195,17 @@
           "daily_ev_target": "Objectif de charge nocturne (kWh)",
           "observer_mode": "Mode observation (lecture seule, pas de contrôle matériel)",
           "smart_night_charging": "Réduire l'objectif nocturne selon la prévision de demain",
-          "minimum_solar_power": "Puissance solaire minimale pour démarrer la charge VE (W)"
+          "minimum_solar_power": "Puissance solaire minimale pour démarrer la charge VE (W)",
+          "curtailment_probe_enabled": "Sonde d'écrêtage (récolter le solaire limité)",
+          "export_limit_entity": "Entité de limite d'export (optionnel)"
         },
         "data_description": {
           "daily_ev_target": "Objectif en kWh à charger depuis le réseau chaque nuit. Réglez sur 0 pour désactiver la charge nocturne sur le réseau.",
           "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille tout mais n'envoie jamais de commandes au matériel.",
           "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM réduit l'objectif de charge nocturne lorsque la prévision solaire de demain est suffisante.",
-          "minimum_solar_power": "Surplus solaire minimal (W) requis avant que SEM ne démarre la charge solaire du VE."
+          "minimum_solar_power": "Surplus solaire minimal (W) requis avant que SEM ne démarre la charge solaire du VE.",
+          "curtailment_probe_enabled": "Quand l'onduleur limite l'export réseau (p. ex. prix négatifs), la production se cale sur la consommation et le solaire réel reste invisible. Opt-in : SEM démarre brièvement le VE au courant minimal et ne poursuit que si la production suit.",
+          "export_limit_entity": "L'entité de limite d'export de l'onduleur (auto-détectée pour Huawei, GoodWe, SolaX, Victron, etc. si vide). Affine la détection et évite les sondes inutiles."
         }
       },
       "settings_tariff": {

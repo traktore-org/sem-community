@@ -195,13 +195,17 @@
           "daily_ev_target": "Yölatauksen tavoite (kWh)",
           "observer_mode": "Tarkkailutila (vain luku, ei laitteiston ohjausta)",
           "smart_night_charging": "Pienennä yötavoitetta huomisen ennusteen perusteella",
-          "minimum_solar_power": "Vähimmäisaurinkoteho sähköauton latauksen käynnistämiseen (W)"
+          "minimum_solar_power": "Vähimmäisaurinkoteho sähköauton latauksen käynnistämiseen (W)",
+          "curtailment_probe_enabled": "Rajoitusanturi (hyödynnä rajoitettu aurinkoenergia)",
+          "export_limit_entity": "Vientirajaentiteetti (valinnainen)"
         },
         "data_description": {
           "daily_ev_target": "Tavoite kWh, joka ladataan verkosta joka yö. Aseta arvoon 0 poistaaksesi verkosta tapahtuvan yölatauksen käytöstä.",
           "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa kaikkea, mutta ei koskaan lähetä komentoja laitteistolle.",
           "smart_night_charging": "Kun tämä on PÄÄLLÄ, SEM pienentää yölatauksen tavoitetta, kun huomisen aurinkoennuste on riittävä.",
-          "minimum_solar_power": "Vähimmäisaurinkoylijäämä (W), joka vaaditaan ennen kuin SEM aloittaa sähköauton aurinkolatauksen."
+          "minimum_solar_power": "Vähimmäisaurinkoylijäämä (W), joka vaaditaan ennen kuin SEM aloittaa sähköauton aurinkolatauksen.",
+          "curtailment_probe_enabled": "Kun invertteri rajoittaa verkkovientiä (esim. negatiivisilla hinnoilla), tuotanto lukittuu kulutukseen ja todellinen aurinkoenergia jää näkymättömäksi. Valinnainen: SEM käynnistää auton hetkeksi miniminvirralla ja jatkaa vain, jos tuotanto seuraa.",
+          "export_limit_entity": "Invertterin vientirajaentiteetti (tunnistetaan automaattisesti Huawei, GoodWe, SolaX, Victron ym., jos tyhjä). Tarkentaa tunnistusta ja estää turhat anturit."
         }
       },
       "settings_tariff": {

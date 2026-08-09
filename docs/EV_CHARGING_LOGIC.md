@@ -273,6 +273,40 @@ Some HEMS tools bundle vendor-specific Modbus templates that write directly to i
 
 ---
 
+## The curtailment probe — harvesting solar an export limit hides
+
+Some inverters cap their grid export — permanently (a regulatory limit) or
+dynamically (dropping to **0 W when the electricity selling price is
+negative**). With the limit active, the inverter reduces production to match
+local consumption, so SEM's measured surplus honestly reads ~0 while the
+array could deliver kilowatts more. Reading harder cannot fix this — raising
+consumption is the only instrument that reveals the hidden power.
+
+**Options → EV Settings → "Curtailment probe"** (default **off**) turns on
+exactly that instrument:
+
+1. **Suspicion** — the solar forecast says far more than the array delivers,
+   export is pinned at ~0, and production ≈ consumption (the curtailment
+   signature; a merely cloudy day fails the forecast term). Brands that
+   publish their export limit sharpen this: SEM auto-detects the limit
+   entity (Huawei active power control, GoodWe grid export limit, SolaX
+   export control, Victron max feed-in, …) — "limit active" fast-tracks the
+   probe, "no limit" suppresses it entirely. The **"Export-limit entity"**
+   field overrides the autodetect for exotic setups.
+2. **Probe** — SEM starts the EV at minimum amps. If production rises to
+   follow within ~2 minutes, the curtailment was real; if not, the probe
+   backs off and won't retry for 15 minutes. A failed probe costs about two
+   minutes of minimum-amps draw — that is the price of asking, and why the
+   feature is opt-in.
+3. **Harvest** — the risen production makes the normal surplus loop
+   self-sustaining. The probe keeps offering one ladder step of headroom so
+   charging climbs toward the forecast — and every step must be followed by
+   production within its window, or the climb stops where the array's real
+   potential ends. No step is ever taken on faith.
+
+A forecast integration (Solcast, Forecast.Solar or Open-Meteo) is required —
+without a "power now" forecast there is nothing to suspect against.
+
 ## Related docs
 
 - [README — Recent Improvements](../README.md#recent-improvements) — release notes for each version

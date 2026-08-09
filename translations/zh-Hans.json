@@ -195,13 +195,17 @@
           "daily_ev_target": "夜间充电目标量 (kWh)",
           "observer_mode": "观察者模式（只读，无硬件控制）",
           "smart_night_charging": "根据明天的天气预测减少夜间目标量",
-          "minimum_solar_power": "启动电动汽车充电的最低太阳能功率 (W)"
+          "minimum_solar_power": "启动电动汽车充电的最低太阳能功率 (W)",
+          "curtailment_probe_enabled": "限发探测(利用被限制的光伏)",
+          "export_limit_entity": "输出限制实体(可选)"
         },
         "data_description": {
           "daily_ev_target": "每晚从电网充电的目标 kWh。设置为 0 可禁用夜间电网充电。",
           "observer_mode": "启用时，SEM 将监控所有数据，但绝不向硬件发送指令。",
           "smart_night_charging": "启用时，当明天的太阳能发电量预测充足时，SEM 将减少夜间充电目标量。",
-          "minimum_solar_power": "SEM 启动太阳能电动汽车充电所需的最低富余太阳能功率 (W)。"
+          "minimum_solar_power": "SEM 启动太阳能电动汽车充电所需的最低富余太阳能功率 (W)。",
+          "curtailment_probe_enabled": "当逆变器限制并网输出(如负电价时),发电量被钳制在消耗水平,真实的光伏潜力不可见。选择启用后:SEM 以最小电流短暂启动电动车充电,仅当发电量随之上升时才继续。",
+          "export_limit_entity": "逆变器的输出限制实体(留空时对华为、GoodWe、SolaX、Victron 等自动检测)。可提高检测精度并避免不必要的探测。"
         }
       },
       "settings_tariff": {

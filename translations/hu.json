@@ -195,13 +195,17 @@
           "daily_ev_target": "Éjszakai töltési cél (kWh)",
           "observer_mode": "Megfigyelő mód (csak olvasás, nincs hardvervezérlés)",
           "smart_night_charging": "Éjszakai cél csökkentése a holnapi előrejelzés alapján",
-          "minimum_solar_power": "Minimális napenergia-teljesítmény az EV-töltés indításához (W)"
+          "minimum_solar_power": "Minimális napenergia-teljesítmény az EV-töltés indításához (W)",
+          "curtailment_probe_enabled": "Korlátozás-szonda (korlátozott napenergia hasznosítása)",
+          "export_limit_entity": "Exportkorlát-entitás (opcionális)"
         },
         "data_description": {
           "daily_ev_target": "A hálózatról minden éjjel megtöltendő cél kWh. Állítsa 0-ra az éjszakai hálózati töltés kikapcsolásához.",
           "observer_mode": "Bekapcsolva a SEM mindent figyel, de soha nem küld parancsot a hardvernek.",
           "smart_night_charging": "Bekapcsolva a SEM csökkenti az éjszakai töltési célt, ha a holnapi napelemes előrejelzés elegendő.",
-          "minimum_solar_power": "A minimális napenergia-többlet (W), amely szükséges ahhoz, hogy a SEM elindítsa a napelemes EV-töltést."
+          "minimum_solar_power": "A minimális napenergia-többlet (W), amely szükséges ahhoz, hogy a SEM elindítsa a napelemes EV-töltést.",
+          "curtailment_probe_enabled": "Ha az inverter korlátozza a hálózati exportot (pl. negatív áraknál), a termelés a fogyasztáshoz tapad és a valós napenergia láthatatlan marad. Opcionális: a SEM rövid időre minimális árammal indítja az EV-t, és csak akkor folytatja, ha a termelés követi.",
+          "export_limit_entity": "Az inverter exportkorlát-entitása (üresen hagyva automatikusan felismert Huawei, GoodWe, SolaX, Victron stb. esetén). Pontosítja az észlelést és megelőzi a felesleges szondákat."
         }
       },
       "settings_tariff": {

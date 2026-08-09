@@ -128,7 +128,13 @@ def self_consumption_surplus_w(view: ChargerView) -> float:
     over-allocation of solar in multi-charger fleets.
     """
     f = view.fleet
-    available = f.solar_w - f.home_w - f.solar_committed_w
+    # #743 — granted curtailment watts count exactly like measured
+    # solar: an export-limited inverter clamps production to
+    # consumption, and the probe's grant is the bootstrap that lets
+    # the array show what it can actually deliver.
+    available = (
+        f.solar_w + f.curtailment_grant_w - f.home_w - f.solar_committed_w
+    )
     # #576 P2.2 — the EV reclaims battery-charge power (charges BEFORE the
     # battery) iff it sits above the battery in the one priority list AND SOC
     # ≥ the reserve floor AND the battery isn't under a command. Otherwise the

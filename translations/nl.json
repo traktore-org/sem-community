@@ -195,13 +195,17 @@
           "daily_ev_target": "Nachtlaaddoel (kWh)",
           "observer_mode": "Observatiemodus (alleen lezen, geen hardwarebesturing)",
           "smart_night_charging": "Nachtdoel verlagen op basis van voorspelling van morgen",
-          "minimum_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)"
+          "minimum_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)",
+          "curtailment_probe_enabled": "Curtailment-sonde (begrensde zonne-energie benutten)",
+          "export_limit_entity": "Exportlimiet-entiteit (optioneel)"
         },
         "data_description": {
           "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
           "observer_mode": "Wanneer AAN, bewaakt SEM alles maar stuurt nooit opdrachten naar hardware.",
           "smart_night_charging": "Wanneer AAN, verlaagt SEM het nachtlaaddoel wanneer de zonne-energieprognose voor morgen voldoende is.",
-          "minimum_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV."
+          "minimum_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV.",
+          "curtailment_probe_enabled": "Als de omvormer de netexport begrenst (bijv. bij negatieve prijzen), wordt de productie op het verbruik vastgezet en blijft echte zonne-energie onzichtbaar. Opt-in: SEM start de EV kort op minimale stroom en laadt alleen door als de productie meestijgt.",
+          "export_limit_entity": "De exportlimiet-entiteit van je omvormer (automatisch gedetecteerd voor Huawei, GoodWe, SolaX, Victron e.a. indien leeg). Verscherpt de detectie en voorkomt onnodige sondes."
         }
       },
       "settings_tariff": {

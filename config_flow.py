@@ -828,6 +828,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_roundtrip_efficiency",
     "charger_name",
     "charger_to_remove",
+    "curtailment_probe_enabled",
     "daily_ev_target",
     "daily_ev_target_max",
     "demand_charge_rate",
@@ -877,6 +878,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_target_soc",
     "ev_target_soc_max",
     "ev_total_energy_sensor",
+    "export_limit_entity",
     "grid_export_power_entity",
     "grid_import_power_entity",
     "grid_import_surcharge",
@@ -1762,6 +1764,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "observer_mode",
                     default=_c("observer_mode", DEFAULT_OBSERVER_MODE),
                 ): selector.BooleanSelector(),
+                # #743 — the curtailment probe (opt-in, default off): when
+                # an export-limited inverter clamps production to
+                # consumption, probe with the EV at minimum amps and
+                # harvest the solar the forecast says is hidden.
+                vol.Optional(
+                    "curtailment_probe_enabled",
+                    default=bool(_c("curtailment_probe_enabled", False)),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "export_limit_entity",
+                    description={"suggested_value": current_config.get("export_limit_entity") or None},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["number", "sensor", "select"])
+                ),
             }),
         )
 
