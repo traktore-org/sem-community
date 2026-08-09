@@ -263,7 +263,14 @@ def compose_today_plan(
 
     # === EV-specific rows (only when there's actually charging to plan for) ===
     if ev_min_remaining_kwh and ev_min_remaining_kwh > 0.1:
-        if ev_tariff_optimized and ev_tariff_waiting and ev_next_cheap_window:
+        # (#742) waiting + a window is the honest display signal
+        # REGARDLESS of who produced it: the legacy tariff mode
+        # (solar_plus_cheap) or the joint plan's overlay, which holds
+        # ALL night modes since #638 Stage 1. Gating on
+        # ev_tariff_optimized left a min_plus_solar hold invisible —
+        # the Energy Plan card said WAITS·00:00 while this strip drew
+        # the reactive prediction (live, 08.08 23:10).
+        if ev_tariff_waiting and ev_next_cheap_window:
             if now < ev_next_cheap_window < horizon:
                 rows.append(PlanRow(
                     when=ev_next_cheap_window,
@@ -282,7 +289,7 @@ def compose_today_plan(
         # Min-reached estimate
         if ev_effective_rate_kw and ev_effective_rate_kw > 0.3:
             charge_start = ev_next_cheap_window if (
-                ev_tariff_optimized and ev_tariff_waiting and ev_next_cheap_window
+                ev_tariff_waiting and ev_next_cheap_window
             ) else night_start
             if charge_start and charge_start > now:
                 hours_to_min = ev_min_remaining_kwh / ev_effective_rate_kw
