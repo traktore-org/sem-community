@@ -982,6 +982,52 @@ class TestComfortDemandsJoinThePlan:
         assert rows["comfort:ac1"]["status"] in ("yields", "partial")
 
 
+class TestThePartialFirstSlot:
+    """(live, 00:01 on 09.08) The midnight rollover re-planned while a
+    block was RUNNING; the new plan's earliest slot was the next full
+    hour, so the continuation paused ~58 min on a flat tariff. The
+    ledger now starts AT the stamp: a partial first slot to the next
+    market boundary, then the grid."""
+
+    def test_a_mid_hour_stamp_starts_at_the_stamp(self, freeze_targets,
+                                                  monkeypatch):
+        fixed = datetime(2026, 7, 29, 23, 41,
+                         tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
+        fake = _fake_self(devices=[])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
+            phantom_ev_w=0, power=_power())
+        slots = fake._overnight_shadow_plan["slots"]
+        assert "23:41:00" in slots[0]["start"]
+        assert "00:00:00" in slots[0]["end"]
+        assert "00:00:00" in slots[1]["start"]
+
+    def test_the_packer_can_continue_into_the_partial_slot(
+            self, freeze_targets, monkeypatch):
+        """The point of the whole fix: the interrupted 0.6 kWh lands NOW,
+        not at the next full hour."""
+        fixed = datetime(2026, 7, 29, 23, 41,
+                         tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
+        fake = _fake_self(devices=[])
+        # the live scenario's FLAT tariff: every hour equal, so the
+        # packer's cheapest-first tie-breaks to the EARLIEST slot — the
+        # partial one. (With a real cheap valley the packer correctly
+        # prefers the valley; that separate behavior stays pinned by the
+        # existing price tests.)
+        fake._tariff_provider = SimpleNamespace(
+            get_price_at=lambda t: 0.28)
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(),
+            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        blocks = fake._overnight_shadow_plan["blocks"]
+        ev = [b for b in blocks if b["id"] == "ev:ev_charger"]
+        assert ev and "23:41:00" in ev[0]["start"], (
+            "flat price: the EV's first block continues AT the stamp, "
+            "not at the next full hour")
+
+
 class TestArbitrageAdviceRidesThePlan:
     """(#638, the last string) The advisor reads the SAME walked ledger
     the pack consumes and publishes its verdict on every plan — advice

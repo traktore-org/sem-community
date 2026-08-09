@@ -6696,9 +6696,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _step_s = market_step_s(prov)
 
             slots = []
-            t = align_to_step(now, _step_s)
-            if t < now:
-                t += _td(seconds=_step_s)
+            # Start AT the stamp (the 00:01 midnight-pause finding,
+            # 09.08): the first slot is the PARTIAL remainder of the
+            # current market interval, so a mid-interval re-plan can
+            # continue an interrupted run instead of pausing it to the
+            # next boundary. The loop's aligned ends return to the grid
+            # from the second slot on; the gate's stamp-authority rule
+            # (c45326f) now simply has a slot where it always claimed
+            # authority.
+            t = now.replace(microsecond=0)
             # (horizon-spanning) The DAY part — now → tonight's window
             # open. Expected-surplus hours arrive as price-0 slots capped
             # at the surplus W (day_ledger, sine-shaped from the scalar

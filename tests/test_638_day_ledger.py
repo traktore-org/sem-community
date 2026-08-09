@@ -83,6 +83,18 @@ def _slots(**kw):
 
 
 class TestDaySlots:
+    def test_an_odd_start_yields_a_partial_first_slot_then_aligned(self):
+        """(the midnight pause, live 00:01 on 09.08) A re-plan mid-hour
+        must be able to CONTINUE an interrupted run — the ledger models
+        the remainder of the current interval as a real, priced slot,
+        then returns to the market grid. Without it, the earliest slot
+        was the next full hour and an in-progress block paused ~58 min
+        for no economic reason."""
+        slots = _slots(start=_t(8, 17))
+        assert slots[0].start == _t(8, 17)
+        assert slots[0].end == _t(9), "partial first slot ends ON the grid"
+        assert slots[1].start == _t(9) and slots[1].end == _t(10)
+
     def test_slots_tile_the_window_hourly(self):
         slots = _slots()
         assert len(slots) == 10

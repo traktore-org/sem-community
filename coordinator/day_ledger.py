@@ -77,7 +77,15 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
     slots = []
     t = start
     while t < end:
-        slot_end = min(t + timedelta(seconds=step_s), end)
+        # Ends align to the market grid: an odd start (a mid-interval
+        # re-plan — the 00:01 midnight-pause finding, 09.08) yields a
+        # PARTIAL first slot to the next boundary, then full steps — so
+        # an interrupted run can continue NOW instead of pausing to the
+        # next full hour.
+        aligned = align_to_step(t + timedelta(seconds=step_s), step_s)
+        if aligned <= t:
+            aligned = t + timedelta(seconds=step_s)
+        slot_end = min(aligned, end)
         hours = (slot_end - t).total_seconds() / 3600.0
         if hours <= 0:
             break
