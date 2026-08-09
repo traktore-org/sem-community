@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.9] — 08.08.2026 (Unreleased)
 
 ### 🐛 Fixes
+- 🔋 **The charging badge honors the 500 W actual-charging floor** (#739,
+  live on PROD 08.08.2026) — `binary_sensor.sem_ev_charging` said
+  "Charging" at 140 W standby with the charger disabled: the published
+  badge was the raw brand charging boolean (the signal the codebase itself
+  documents to distrust — KEBA's lags ~5 s, numeric state codes read truthy
+  at idle), and the plug-sensor physics inference's 100 W threshold sat
+  BELOW the box's own standby draw, inferring a phantom connection. Both
+  now use the one floor every adapter's `actual_charging` already applies
+  (500 W — a real ≥6 A charge is ≥1.38 kW, so no genuine charge is ever
+  suppressed), whenever a power source is configured; installs with only a
+  charging boolean keep the raw signal. Per-charger entries are judged on
+  their own power reading and the fleet flag follows the gated map.
 - 💶 **Fixed Time-of-Use plans now classify by their tiers, not by a
   rolling window** (#728, second round — @Azlinon's weekend test) — a
   fixed-tier plan's cheap/normal/expensive are structural (the plan's 2–5
