@@ -32,6 +32,66 @@ _CYCLE_KEYWORDS = (
 )
 _CYCLES_UNSET = object()  # cache sentinel distinct from a None result
 
+# #743 — export-limit entity autodetection. The curtailment probe's
+# physics signature is brand-agnostic; brands that PUBLISH their export
+# limit sharpen it (True fast-tracks the probe, False suppresses false
+# probes entirely). Curated per-brand keyword list, same maintenance
+# story as the battery-cycles autodetect (#593): a new brand's entity
+# name goes here, tests in test_743_export_limit_autodetect.py.
+EXPORT_LIMIT_KEYWORDS = (
+    "export_limit",            # generic / GoodWe (grid_export_limit)
+    "export_limitation",       # SolarEdge modbus packs
+    "export_control",          # SolaX (export_control_user_limit)
+    "feed_in_limit",           # generic feed-in naming
+    "maximum_feed_in",         # Victron ESS
+    "max_feed_in",             # Victron ESS (short form)
+    "active_power_control",    # Huawei (wlcrs/huawei_solar)
+    "einspeiselimit",          # DE-named templates
+    "einspeisebegrenzung",     # DE-named templates
+    "zero_export",             # zero-export toggles
+)
+
+
+def parse_export_limited(state, unit) -> "Optional[bool]":
+    """Entity state → tri-state export-limit reading (#743).
+
+    True = a ~0-export limit is ACTIVE, False = not limiting,
+    None = unreadable (the physics signature decides). Handles the
+    supported shapes: Huawei's string states ("Limited to X W" /
+    "Unlimited"), numeric W / kW / % limits, bare numbers as watts.
+    """
+    if state is None:
+        return None
+    s = str(state).strip()
+    if s.lower() in ("unknown", "unavailable", "none", ""):
+        return None
+    low = s.lower()
+    if "unlimited" in low or "no limit" in low or low in ("off", "disabled"):
+        return False
+    if "zero" in low:
+        return True
+    # "Limited to 5000 W" → the number inside decides.
+    import re as _re
+    m = _re.search(r"(-?\d+(?:[.,]\d+)?)", s)
+    if not m:
+        return None
+    try:
+        value = float(m.group(1).replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+    u = str(unit or "").strip().lower()
+    if u == "%":
+        return value <= 1.0
+    if u == "kw":
+        return value <= 0.05
+    if u in ("w", ""):
+        # Huawei's string carries the unit in the text, not the attr.
+        if "kw" in low and u == "":
+            return value <= 0.05
+        return value <= 50.0
+    return None
+
+
 # #739 — the one "actually charging" power floor, shared by the published
 # charging badge and the plug-sensor physics inference. Matches the
 # adapters' own convention (``keba.py: handshake_power_w = 500``;
@@ -3367,6 +3427,41 @@ class SensorReader:
             except Exception as e:  # noqa: BLE001 — best-effort autodetect
                 _LOGGER.debug("Battery cycles autodetect failed: %s", e)
         self._cycles_sensor_cache = result
+        return result
+
+    def detect_export_limit_entity(
+        self, solar_anchor_entity: Optional[str],
+    ) -> Optional[str]:
+        """#743 — autodetect the inverter's export-limit entity on the
+        same device as the solar power sensor (the #593 keyword-scan
+        pattern). Brands covered by ``EXPORT_LIMIT_KEYWORDS``; the
+        manual ``export_limit_entity`` config override wins upstream.
+        Cached per reader instance; returns an entity id or None.
+        """
+        if getattr(self, "_export_limit_cache", _CYCLES_UNSET) is not _CYCLES_UNSET:
+            return self._export_limit_cache
+        result = None
+        if solar_anchor_entity and "." in solar_anchor_entity:
+            try:
+                registry = er.async_get(self.hass)
+                anchor = registry.async_get(solar_anchor_entity)
+                if anchor and anchor.device_id:
+                    for entry in er.async_entries_for_device(
+                        registry, anchor.device_id,
+                    ):
+                        if entry.domain not in ("number", "sensor", "select"):
+                            continue
+                        name = entry.entity_id.split(".", 1)[1]
+                        if any(k in name for k in EXPORT_LIMIT_KEYWORDS):
+                            _LOGGER.info(
+                                "Auto-detected export-limit entity: %s (#743)",
+                                entry.entity_id,
+                            )
+                            result = entry.entity_id
+                            break
+            except Exception as e:  # noqa: BLE001 — best-effort autodetect
+                _LOGGER.debug("Export-limit autodetect failed: %s", e)
+        self._export_limit_cache = result
         return result
 
     def _auto_detect_battery_soc(self, battery_power_entity: str) -> Optional[str]:

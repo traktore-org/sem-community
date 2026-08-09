@@ -6124,7 +6124,116 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             forecast_remaining_kwh=float(forecast_remaining),
             battery_priority=battery_priority,
             battery_commanded=self._battery_commanded(),
+            curtailment_grant_w=self._curtailment_grant_w(power),
         )
+
+    def _curtailment_grant_w(self, power) -> float:
+        """#743 — one probe tick per cycle; the grant rides the fleet
+        state into every charger's surplus. Opt-in
+        (``curtailment_probe_enabled``, default off) — disabled, the
+        probe stays in state 'off' and this returns 0.0 every cycle.
+        See ``coordinator/curtailment.py`` for the state machine.
+        """
+        try:
+            from .curtailment import CurtailmentProbe, ProbeInputs
+
+            probe = getattr(self, "_curtailment_probe", None)
+            if probe is None:
+                probe = CurtailmentProbe()
+                self._curtailment_probe = probe
+            enabled = bool(self.config.get("curtailment_probe_enabled", False))
+            if not enabled:
+                # Cheap early-out, but tick once so the state reads 'off'.
+                probe.tick(
+                    ProbeInputs(
+                        enabled=False, expected_w=0.0, production_w=0.0,
+                        export_w=0.0, home_w=0.0, battery_charge_w=0.0,
+                        ev_draw_w=0.0, ev_connected=False,
+                        ev_wants_solar=False, probe_floor_w=0.0,
+                    ),
+                    now=time.monotonic(),
+                )
+                return 0.0
+
+            # Dampened forecast "power now" — no forecast, no suspicion.
+            expected_w = 0.0
+            try:
+                forecast = self._cycle_forecast
+                if forecast.available:
+                    expected_w = float(
+                        self._forecast_tracker.apply_dampening(
+                            forecast.power_now_w / 1000.0,
+                        ) * 1000.0
+                    )
+            except Exception:  # noqa: BLE001
+                expected_w = 0.0
+
+            from ..consts.ev_charge_modes import effective_charge_mode_for
+            from .sensor_reader import parse_export_limited
+
+            solar_modes = ("solar_only", "min_plus_solar", "solar_plus_cheap")
+            chargers = [
+                c for c in (self.config.get("ev_chargers") or [])
+                if isinstance(c, dict)
+            ] or [{}]
+            wants_solar = False
+            floor_w = 4140.0
+            for cfg in chargers:
+                try:
+                    mode = effective_charge_mode_for(self.hass, self.config, cfg)
+                except Exception:  # noqa: BLE001
+                    mode = None
+                if mode in solar_modes:
+                    wants_solar = True
+                    floor_w = (
+                        float(cfg.get("ev_min_current")
+                              or self.config.get("ev_min_current") or 6)
+                        * float(cfg.get("ev_voltage")
+                                or self.config.get("ev_voltage") or 230)
+                        * float(cfg.get("ev_phases")
+                                or self.config.get("ev_phases") or 3)
+                    )
+                    break
+
+            # Brand sharpening: manual override wins, else autodetect on
+            # the solar sensor's device (Huawei/GoodWe/SolaX/Victron/…).
+            export_limited = None
+            limit_entity = (
+                self.config.get("export_limit_entity")
+                or self._sensor_reader.detect_export_limit_entity(
+                    self.config.get("solar_production_sensor"),
+                )
+            )
+            if limit_entity:
+                st = self.hass.states.get(limit_entity)
+                if st is not None:
+                    export_limited = parse_export_limited(
+                        st.state,
+                        st.attributes.get("unit_of_measurement"),
+                    )
+
+            grant = self._curtailment_probe.tick(
+                ProbeInputs(
+                    enabled=True,
+                    expected_w=expected_w,
+                    production_w=float(power.solar_power or 0.0),
+                    export_w=float(power.grid_export_power or 0.0),
+                    home_w=float(power.home_consumption_power or 0.0),
+                    battery_charge_w=float(power.battery_charge_power or 0.0),
+                    # FLEET-READ: the probe reasons about the whole
+                    # house's energy balance (production vs total local
+                    # consumption) — the fleet sum is the correct term.
+                    ev_draw_w=float(power.ev_power or 0.0),
+                    ev_connected=bool(power.ev_connected),
+                    ev_wants_solar=wants_solar,
+                    probe_floor_w=floor_w,
+                    export_limited=export_limited,
+                ),
+                now=time.monotonic(),
+            )
+            return float(grant or 0.0)
+        except Exception:  # noqa: BLE001 — the probe must never break a cycle
+            return 0.0
 
     def _battery_commanded(self) -> bool:
         """True iff the home battery is under an explicit charge/discharge

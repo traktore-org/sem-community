@@ -195,13 +195,17 @@
           "daily_ev_target": "Meta de carga noturna (kWh)",
           "observer_mode": "Modo observador (somente leitura, sem controlo de hardware)",
           "smart_night_charging": "Reduzir a meta noturna com base na previsão de amanhã",
-          "minimum_solar_power": "Potência solar mínima para iniciar o carregamento do VE (W)"
+          "minimum_solar_power": "Potência solar mínima para iniciar o carregamento do VE (W)",
+          "curtailment_probe_enabled": "Sonda de restrição (aproveitar solar limitada)",
+          "export_limit_entity": "Entidade de limite de exportação (opcional)"
         },
         "data_description": {
           "daily_ev_target": "kWh alvo a carregar da rede em cada noite. Defina 0 para desativar o carregamento noturno a partir da rede.",
           "observer_mode": "Quando LIGADO, o SEM monitoriza tudo, mas nunca envia comandos ao hardware.",
           "smart_night_charging": "Quando LIGADO, o SEM reduz a meta de carga noturna quando a previsão solar de amanhã é suficiente.",
-          "minimum_solar_power": "Excedente solar mínimo (W) necessário antes de o SEM iniciar o carregamento solar do VE."
+          "minimum_solar_power": "Excedente solar mínimo (W) necessário antes de o SEM iniciar o carregamento solar do VE.",
+          "curtailment_probe_enabled": "Quando o inversor limita a exportação (p. ex. com preços negativos), a produção fica presa ao consumo e o solar real permanece invisível. Opt-in: o SEM liga o VE brevemente na corrente mínima e só continua se a produção acompanhar.",
+          "export_limit_entity": "A entidade de limite de exportação do inversor (autodetetada para Huawei, GoodWe, SolaX, Victron e outros se vazia). Refina a deteção e evita sondas desnecessárias."
         }
       },
       "settings_tariff": {

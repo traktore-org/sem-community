@@ -195,13 +195,17 @@
           "daily_ev_target": "Cíl nočního nabíjení (kWh)",
           "observer_mode": "Režim pozorovatele (pouze čtení)",
           "smart_night_charging": "Snížit noční cíl na základě předpovědi",
-          "minimum_solar_power": "Minimální solární výkon pro nabíjení (W)"
+          "minimum_solar_power": "Minimální solární výkon pro nabíjení (W)",
+          "curtailment_probe_enabled": "Sonda omezení (využít omezenou solární energii)",
+          "export_limit_entity": "Entita limitu exportu (volitelné)"
         },
         "data_description": {
           "daily_ev_target": "Cílový počet kWh, které se každou noc nabijí ze sítě. Nastavením na 0 noční nabíjení ze sítě vypnete.",
           "observer_mode": "Je-li ZAPNUTO, SEM vše sleduje, ale nikdy neposílá příkazy do hardwaru.",
           "smart_night_charging": "Je-li ZAPNUTO, SEM sníží cíl nočního nabíjení, pokud je zítřejší solární předpověď dostatečná.",
-          "minimum_solar_power": "Minimální přebytečný solární výkon (W) potřebný k tomu, aby SEM zahájil solární nabíjení EV."
+          "minimum_solar_power": "Minimální přebytečný solární výkon (W) potřebný k tomu, aby SEM zahájil solární nabíjení EV.",
+          "curtailment_probe_enabled": "Když střídač omezí export do sítě (např. při záporných cenách), výroba se zasekne na spotřebě a skutečná solární energie zůstane neviditelná. Volitelné: SEM krátce spustí nabíjení EV minimálním proudem a pokračuje, jen pokud výroba stoupá.",
+          "export_limit_entity": "Entita limitu exportu střídače (automaticky detekována pro Huawei, GoodWe, SolaX, Victron a další, pokud je prázdná). Zpřesňuje detekci a brání zbytečným sondám."
         }
       },
       "settings_tariff": {

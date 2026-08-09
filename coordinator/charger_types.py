@@ -587,6 +587,12 @@ class FleetContext:
     solar_w: float = 0.0
     """Solar production this cycle (W)."""
 
+    curtailment_grant_w: float = 0.0
+    """#743 — bootstrap watts the curtailment probe grants when an
+    export-limited inverter hides real solar behind clamped
+    production. Added to the surplus exactly like measured solar;
+    0.0 whenever the probe is off/idle."""
+
     home_w: float = 0.0
     """Home consumption (W). Pre-priority-attribution this was
     the slack variable; post-#349 it's a first-class demand."""
@@ -756,6 +762,12 @@ class FleetCycleState:
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None
     battery_commanded: bool = False
+    # #743 — the curtailment probe's surplus grant (W). An export-limited
+    # inverter clamps production to consumption, hiding real solar from
+    # the measured surplus; the probe grants bootstrap watts that decide()
+    # treats exactly like measured solar (see coordinator/curtailment.py).
+    # 0.0 = probe off/idle — the entire feature disappears from the math.
+    curtailment_grant_w: float = 0.0
 
 
 @dataclass(frozen=True)

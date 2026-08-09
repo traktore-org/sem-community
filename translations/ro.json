@@ -195,13 +195,17 @@
           "daily_ev_target": "Țintă încărcare de noapte (kWh)",
           "observer_mode": "Mod observator (doar citire, fără control hardware)",
           "smart_night_charging": "Reduce ținta de noapte în funcție de prognoza de mâine",
-          "minimum_solar_power": "Putere solară minimă pentru a începe încărcarea EV (W)"
+          "minimum_solar_power": "Putere solară minimă pentru a începe încărcarea EV (W)",
+          "curtailment_probe_enabled": "Sondă de limitare (valorifică solarul limitat)",
+          "export_limit_entity": "Entitatea limitei de export (opțional)"
         },
         "data_description": {
           "daily_ev_target": "Ținta în kWh de încărcat din rețea în fiecare noapte. Setați 0 pentru a dezactiva încărcarea de noapte din rețea.",
           "observer_mode": "Când este ACTIV, SEM monitorizează totul, dar nu trimite niciodată comenzi către hardware.",
           "smart_night_charging": "Când este ACTIVĂ, SEM reduce ținta de încărcare de noapte atunci când prognoza solară de mâine este suficientă.",
-          "minimum_solar_power": "Puterea solară minimă de surplus (W) necesară înainte ca SEM să înceapă încărcarea solară a VE."
+          "minimum_solar_power": "Puterea solară minimă de surplus (W) necesară înainte ca SEM să înceapă încărcarea solară a VE.",
+          "curtailment_probe_enabled": "Când invertorul limitează exportul în rețea (de ex. la prețuri negative), producția se fixează pe consum, iar solarul real rămâne invizibil. Opt-in: SEM pornește scurt EV-ul la curent minim și continuă doar dacă producția crește.",
+          "export_limit_entity": "Entitatea limitei de export a invertorului (autodetectată pentru Huawei, GoodWe, SolaX, Victron și altele dacă e goală). Rafinează detecția și previne sondele inutile."
         }
       },
       "settings_tariff": {

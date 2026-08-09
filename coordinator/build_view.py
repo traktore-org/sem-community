@@ -134,6 +134,11 @@ def build_charger_view(
     # and passes a fleet-level kwarg directly.
     fleet = FleetContext(
         solar_w=float(getattr(power_reading, "solar_power", 0.0) or 0.0),
+        # #743 — the curtailment probe's grant rides the same one-place
+        # thread as every other fleet input.
+        curtailment_grant_w=float(
+            getattr(fleet_state, "curtailment_grant_w", 0.0) or 0.0,
+        ),
         home_w=float(getattr(power_reading, "home_consumption_power", 0.0) or 0.0),
         battery_charge_w=float(getattr(power_reading, "battery_charge_power", 0.0) or 0.0),
         battery_discharge_w=float(getattr(power_reading, "battery_discharge_power", 0.0) or 0.0),

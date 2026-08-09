@@ -195,13 +195,17 @@
           "daily_ev_target": "Mål for nattlading (kWh)",
           "observer_mode": "Observatørmodus (skrivebeskyttet, ingen maskinvarestyring)",
           "smart_night_charging": "Reduser nattmålet basert på morgendagens prognose",
-          "minimum_solar_power": "Minimum soleffekt for å starte EV-lading (W)"
+          "minimum_solar_power": "Minimum soleffekt for å starte EV-lading (W)",
+          "curtailment_probe_enabled": "Begrensningssonde (høst begrenset solenergi)",
+          "export_limit_entity": "Eksportgrense-entitet (valgfritt)"
         },
         "data_description": {
           "daily_ev_target": "Mål i kWh som skal lades fra nettet hver natt. Sett til 0 for å deaktivere nattlading fra nettet.",
           "observer_mode": "Når denne er PÅ, overvåker SEM alt, men sender aldri kommandoer til maskinvaren.",
           "smart_night_charging": "Når denne er PÅ, reduserer SEM målet for nattlading når morgendagens solprognose er tilstrekkelig.",
-          "minimum_solar_power": "Minste soloverskudd (W) som kreves før SEM starter sollading av elbilen."
+          "minimum_solar_power": "Minste soloverskudd (W) som kreves før SEM starter sollading av elbilen.",
+          "curtailment_probe_enabled": "Når inverteren begrenser netteksporten (f.eks. ved negative priser), låses produksjonen til forbruket og reell solenergi forblir usynlig. Valgfritt: SEM starter bilen kort på minimumsstrøm og fortsetter bare hvis produksjonen følger etter.",
+          "export_limit_entity": "Inverterens eksportgrense-entitet (autodetekteres for Huawei, GoodWe, SolaX, Victron m.fl. hvis tom). Skjerper deteksjonen og hindrer unødvendige sonder."
         }
       },
       "settings_tariff": {

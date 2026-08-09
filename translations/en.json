@@ -195,13 +195,17 @@
           "daily_ev_target": "Night charge target (kWh)",
           "observer_mode": "Observer mode (read-only, no hardware control)",
           "smart_night_charging": "Reduce night target based on tomorrow's forecast",
-          "minimum_solar_power": "Minimum solar power to start EV charging (W)"
+          "minimum_solar_power": "Minimum solar power to start EV charging (W)",
+          "curtailment_probe_enabled": "Curtailment probe (harvest limited solar)",
+          "export_limit_entity": "Export-limit entity (optional)"
         },
         "data_description": {
           "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
           "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
           "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient.",
-          "minimum_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging."
+          "minimum_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
+          "curtailment_probe_enabled": "When your inverter caps grid export (e.g. at negative prices), production clamps to consumption and real solar stays invisible. Opt-in: SEM briefly starts the EV at minimum amps and keeps charging only if production rises to follow.",
+          "export_limit_entity": "Your inverter's export-limit entity (auto-detected for Huawei, GoodWe, SolaX, Victron and others when empty). Sharpens curtailment detection and prevents unnecessary probes."
         }
       },
       "settings_tariff": {
