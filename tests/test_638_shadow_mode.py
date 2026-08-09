@@ -1316,6 +1316,28 @@ class TestTomorrowPreviewComposer:
         # the configured EV charger asks its daily target
         assert any(a["kind"] == "ev" for a in p["known_asks"])
 
+    def test_a_peak_only_meter_channel_asks_nothing(self):
+        """(Guido, 09.08, PROD screenshot: 'Pro4PM consumption for sure is
+        not correct') — three peak_only distribution-board metering
+        channels showed 10 kWh asks in the Tomorrow view. The preview
+        must mirror the demand builder's intent gate (finding #1, PROD
+        night 1): a device SEM never proactively runs — off / peak_only —
+        asks nothing tomorrow, whatever its min-runtime × rated product."""
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceControlMode,
+        )
+        meter = _fake_load(did="pro4pm_ch3")
+        meter.control_mode = DeviceControlMode.PEAK_ONLY
+        meter.daily_min_runtime_sec = 10 * 3600
+        meter.rated_power = 1000.0
+        fake = self._fake()
+        fake._surplus_controller = SimpleNamespace(
+            get_devices_sorted=lambda: [meter, _fake_load()])
+        p = SEMCoordinator._compose_tomorrow_preview(fake)
+        labels = [a["label"] for a in p["known_asks"] if a["kind"] == "load"]
+        assert "pro4pm_ch3" not in labels
+        assert "pump" in labels  # the SURPLUS-mode sibling still asks
+
     def test_the_provisional_pack_places_tomorrows_asks(self):
         """(Guido: 'predict the battery level and when the devices get
         surplus — pull it together') — the asks pack into tomorrow's own

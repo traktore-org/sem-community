@@ -6044,9 +6044,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # plan honestly does not exist until it stamps.
         asks = []
         try:
+            from ..devices.base import DeviceControlMode as _DCM
             _ctrl = getattr(self, "_surplus_controller", None)
             for _dev in (_ctrl.get_devices_sorted() if _ctrl else []):
                 try:
+                    # The preview must mirror the demand builder's intent
+                    # gate (finding #1, PROD night 1 — and again 09.08:
+                    # three peak_only Pro4PM metering channels showed
+                    # 10 kWh asks). A device SEM never proactively runs —
+                    # off / peak_only — asks nothing tomorrow.
+                    if getattr(_dev, "control_mode", _DCM.SURPLUS) \
+                            != _DCM.SURPLUS:
+                        continue
                     _min_s = float(getattr(_dev, "daily_min_runtime_sec", 0)
                                    or 0)
                     _rated = float(getattr(_dev, "rated_power", 0.0) or 0.0)
