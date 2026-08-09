@@ -402,13 +402,18 @@ views:
           # (#638: Tonight's Plan moved to the Control tab, between
           # Today's Schedule and Load Management — Guido, 2026-08-05.)
 
-          # ══════════════════════════════════════════════════════
-          # 1b. GRID CARD
-          # ══════════════════════════════════════════════════════
-          - type: custom:sem-grid-card
+          # (2026-08-09 System-tab challenge, Guido: the grid card is
+          # GONE — all six of its sections had grown better homes and it
+          # was read-only echo: hero + today totals → Home/Energy/Costs,
+          # peak + load control + surplus + tariff → the Control card's
+          # own sections (same sensors, plus the controls to act).
+          # System = health & diagnostics only. sem-grid-card stays in
+          # the bundle for hand-placed copies; retires at 1.8.)
 
           # ══════════════════════════════════════════════════════
-          # 3. FORECAST SPARKLINE (sem-chart-card replaces apexcharts)
+          # 3. FORECAST QUALITY (the one surface showing forecast
+          #    vs actual — "is my forecast trustworthy" is a health
+          #    question, so it lives here)
           # ══════════════════════════════════════════════════════
           - type: custom:sem-chart-card
             preset: forecast
