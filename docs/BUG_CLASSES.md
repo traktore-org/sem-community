@@ -362,6 +362,18 @@ implementation records ownership, so it can't drift back into the device layer a
 to BOTH `compute`-side (block activation) AND a force-expiry/goal-gate section (stop running) in
 the imperative `update()` — AND to `compute_load_intent`'s precedence — AND to the family
 guard's parametrize list. Any new *activation* path must go through `_activate_owned`.
+**Instance 6 — the class crosses into chargers: a loop-level `continue` IS a gate.** The #193
+night gate `continue`d `off`/`solar_only` chargers out of the per-charger loop in the two night
+states — before the adapter, the reconciler, `decide()` or `actuate()` ever ran for that charger.
+"Skip" silently meant "no supervision": a KEBA auto-starting masterless at night (#740, live on
+PROD 08.08.2026) drew unpoliced until a day state returned, because the one component whose job
+is stopping rogue sessions was gated out along with the night budget. **Fixed** (develop,
+1.7.6-beta.9): `_police_opted_out_charger` runs a minimal reconcile pass (OFF for `off`, IDLE for
+`solar_only` — the #552 idle-settled row makes a rogue draw an immediate DISABLE) before the
+`continue`. **Guard:** `tests/test_740_night_gate_police.py`, incl. a source pin that the gate
+polices before it continues. **Lesson:** audit every `continue`/early-`return` that skips a
+device's iteration — each one is a gate, and the question is the class's own: *who stops the
+device this branch stops watching?*
 
 ### 18. Forced-marker set in one pass, leaks because another pass didn't clear it — PARTIAL
 **Symptom:** a transient control marker (`_offpeak_forced`, `_batt_overnight_forced`) set when
@@ -1191,6 +1203,25 @@ so a one-time repair could not have closed it — only a rule that fires on the 
 (2) dead code that nothing asserts is merely waste, but **dead code with a green test that
 cannot fail is *claimed coverage*, and that is what keeps it alive for years.** The
 `SEM_SENSORS` test asserted a dict literal against itself.
+
+### 36. Idle/lagging EV signal read as an active charge — the 500 W floor bypassed at a surface — GUARDED
+**Symptom:** a user-facing "Charging" surface (badge, inference, notification) is on while the
+box idles at standby draw (~110–140 W on KEBA) with the charger disabled. **Root shape:** the
+codebase's own canon says the brand charging boolean is informational (`keba.py:
+handshake_power_w = 500`, it lags ~5 s per #289; `charger_types.py`: "prefer `power_w > 500`")
+— but a surface reads the raw boolean or uses a sub-standby power threshold, bypassing the
+floor the adapters all apply. Two instances shipped side by side (#739, live on PROD
+08.08.2026): the published `binary_sensor.sem_ev_charging` was the raw boolean (a numeric idle
+state code reads truthy through the `float(s) > 0` fallback), and the #285+1 plug-lying physics
+inference used `> 100 W` — *below* the box's own standby draw, so idle power inferred a phantom
+connection. **Closure:** ONE constant (`sensor_reader.EV_ACTIVE_CHARGE_FLOOR_W = 500`) feeds
+both the badge gate (`_gate_ev_charging_on_power` — applied whenever a power source is
+configured; boolean-only installs keep the raw signal) and all physics-inference sites; the
+inference's boolean leg reads the *gated* badge. A real ≥6 A charge is ≥1.38 kW, so the floor
+can never suppress a genuine charge. **Guard:** `tests/test_739_charging_badge_floor.py` +
+the phantom-standby corner in `test_ev_connected_physics_defence.py`. **Watch:** any NEW
+surface that answers "is the car charging?" must derive from the gated badge or compare power
+against `EV_ACTIVE_CHARGE_FLOOR_W` — never the raw brand boolean, never an ad-hoc threshold.
 
 ### Second pass — the 8 findings the session-limit interrupted (verified 2026-07-25)
 
