@@ -1917,10 +1917,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             night = bool(self.time_manager.is_night_mode())
         except Exception:
             night = None
-        st.management = LayerRecord(
-            LayerStatus.OK, "policy inputs",
-            {"soc": soc, "connected": connected, "night": night},
-        )
+        mgmt = {"soc": soc, "connected": connected, "night": night}
+        # #743 — the curtailment probe's last tick, when the feature has
+        # ever run. Opt-in, so an install that never enabled it keeps the
+        # record it always had.
+        curtailment = getattr(self, "_curtailment_last", None)
+        if curtailment:
+            mgmt["curtailment"] = dict(curtailment)
+        st.management = LayerRecord(LayerStatus.OK, "policy inputs", mgmt)
 
         amps = int(getattr(sem_data, "calculated_current", 0) or 0)
         reason = str(getattr(sem_data, "charging_strategy_reason", "") or "")
@@ -6153,6 +6157,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ),
                     now=time.monotonic(),
                 )
+                self._curtailment_last = {"state": probe.state, "grant_w": 0.0}
                 return 0.0
 
             # Dampened forecast "power now" — no forecast, no suspicion.
@@ -6231,8 +6236,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ),
                 now=time.monotonic(),
             )
-            return float(grant or 0.0)
+            grant = float(grant or 0.0)
+            # Every tick records the terms it judged (#743). A probe that
+            # DECLINES leaves no trace in the meters, so without this a
+            # live "why didn't it fire?" has six indistinguishable
+            # answers. Read-only; the trace copies it, nothing reads it
+            # back into a decision.
+            self._curtailment_last = {
+                "state": probe.state,
+                "grant_w": round(grant),
+                "expected_w": round(expected_w),
+                "production_w": round(float(power.solar_power or 0.0)),
+                "export_w": round(float(power.grid_export_power or 0.0)),
+                "export_limited": export_limited,
+                "limit_entity": limit_entity or None,
+                "wants_solar": wants_solar,
+                "floor_w": round(floor_w),
+            }
+            return grant
         except Exception:  # noqa: BLE001 — the probe must never break a cycle
+            self._curtailment_last = {"state": "error", "grant_w": 0.0}
             return 0.0
 
     def _battery_commanded(self) -> bool:
