@@ -2917,6 +2917,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ):
                         per_cfg = _chargers_by_id.get(cid, {})
                         if not self._mode_allows_night_charging(per_cfg):
+                            # #740 night sibling: skip means "no night
+                            # budget", not "no supervision" — a box that
+                            # auto-starts masterless at night must still
+                            # be converged to stopped by its reconciler.
+                            try:
+                                await self._police_opted_out_charger(
+                                    cid, ev_dev, per_cfg, power,
+                                )
+                            except Exception as _pol_exc:  # noqa: BLE001
+                                _LOGGER.warning(
+                                    "night-gate police failed for %s: %s",
+                                    cid, _pol_exc,
+                                )
                             continue  # mode opts this charger out of night
 
                     # v1.6.7: the swap/restore dance that used to live

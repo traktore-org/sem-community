@@ -11,9 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.9] — 08.08.2026 (Unreleased)
+# [1.7.6-beta.9] — 09.08.2026
 
 ### 🐛 Fixes
+- 🔋 **The charging badge honors the 500 W actual-charging floor** (#739,
+  live on PROD 08.08.2026) — `binary_sensor.sem_ev_charging` said
+  "Charging" at 140 W standby with the charger disabled: the published
+  badge was the raw brand charging boolean (the signal the codebase itself
+  documents to distrust — KEBA's lags ~5 s, numeric state codes read truthy
+  at idle), and the plug-sensor physics inference's 100 W threshold sat
+  BELOW the box's own standby draw, inferring a phantom connection. Both
+  now use the one floor every adapter's `actual_charging` already applies
+  (500 W — a real ≥6 A charge is ≥1.38 kW, so no genuine charge is ever
+  suppressed), whenever a power source is configured; installs with only a
+  charging boolean keep the raw signal. Per-charger entries are judged on
+  their own power reading and the fleet flag follows the gated map.
+- 💶 **Fixed Time-of-Use plans now classify by their tiers, not by a
+  rolling window** (#728, second round — @Azlinon's weekend test) — a
+  fixed-tier plan's cheap/normal/expensive are structural (the plan's 2–5
+  named rates), and the rolling percentile window leaked exactly where the
+  reporter predicted: Saturday's flat publish flooded it (the ordinary mid
+  rate outranked into *expensive*), the genuine 3× peak collapsed into the
+  flat-day guard (all four breakpoints landed inside the flooded tier,
+  spread 0.0000 → *normal*), and 55 steady weekend hours converged to
+  all-NORMAL. When the curve is a small set of repeating discrete values —
+  detected, not configured — SEM now classifies by distinct value tier
+  (cheapest → cheap, middle → normal, highest → expensive), stable across
+  any window and any publish event; a 7-day tier ledger carries the weekday
+  rates through the flat weekend. The percentile window remains for
+  genuinely continuous curves (Nordpool / Tibber / Amber untouched). And a
+  level once displayed for a past hour is never rewritten — the price
+  history is append-only in both modes.
 - 🔌 **The quota-stop: the wallbox's own language for "no"** (#553/#545,
   live-proven on the real P30) — `keba.disable` invites the war: the box
   auto-starts, the car begs, SEM kills, every ~90 s, all night. And the old
@@ -46,6 +74,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until the next SEM start sequence re-arms the charging failsafe. Mid-charge
   behavior unchanged (a dead controller still lands the car on the charging
   floor, never on 0). Same `keba_arm_failsafe` opt-out as before.
+- 🌙 **The night gate skips participation, not supervision** (#740, the
+  latent night sibling) — in the two night states an `off` / `solar_only`
+  charger was `continue`d out of the per-charger loop before its reconciler
+  ever ran, so a box auto-starting masterless at night drew unpoliced until
+  a day state returned (the gate-blocks-activation-but-doesn't-stop-the-
+  running-device class, 5th sighting). An opted-out charger now gets a
+  minimal reconcile pass before the skip: a rogue draw converges to DISABLE
+  immediately, a converged charger emits nothing (no churn against the
+  quota-hold).
 
 # [1.7.6-beta.8] — 08.08.2026
 

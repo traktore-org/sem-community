@@ -40,6 +40,16 @@ _CYCLES_UNSET = object()  # cache sentinel distinct from a None result
 _SOC_NAME_KEYWORDS = ("soc", "state_of_charge", "batterieladung",
                       "battery_level", "charge_level")
 
+# #739 — the one "actually charging" power floor, shared by the published
+# charging badge and the plug-sensor physics inference. Matches the
+# adapters' own convention (``keba.py: handshake_power_w = 500``;
+# ``charger_types.py``: "prefer power_w > 500 … treat ``charging`` as
+# informational"). KEBA idles at ~110–140 W; a real ≥6 A charge is
+# ≥1.38 kW single-phase — 500 W separates the two with margin on both
+# sides. The previous 100 W sat BELOW the standby draw, so an idle box
+# inferred a phantom connection (#739, live on PROD 08.08.2026).
+EV_ACTIVE_CHARGE_FLOOR_W = 500.0
+
 # Known patterns for split grid power sensors — single source of truth.
 # GRID_TRIGGER_HINTS is derived from these and used in __init__.py to
 # pre-filter new sensor events. Adding a new brand here automatically
@@ -2071,19 +2081,10 @@ class SensorReader:
         # ~6 kWh past the Max ceiling because SEM wasn't even watching.
         #
         # Current cannot flow without a connection. If we see active
-        # charging power (>100 W rules out KEBA's own standby draw) or
-        # the charging_state sensor reports True, infer connection — the
-        # plug sensor is wrong.
-        if not readings.ev_connected and (
-            readings.ev_charging or readings.ev_power > 100
-        ):
-            _LOGGER.warning(
-                "ev_connected inferred from physics: plug sensor reported off but "
-                "ev_power=%.0fW / ev_charging=%s. Treating as connected. (Upstream "
-                "charger-integration bug protection — see #285+1 in CHANGELOG.)",
-                readings.ev_power, readings.ev_charging,
-            )
-            readings.ev_connected = True
+        # charging power (the 500 W floor rules out KEBA's own standby
+        # draw, #739) or the gated charging badge is on, infer
+        # connection — the plug sensor is wrong.
+        self._infer_fleet_connection_from_physics(readings)
 
         # #584 follow-up: mirror the physics defence into the per-charger
         # map. build_charger_view now reads that map FIRST, so a fleet-only
@@ -2962,17 +2963,9 @@ class SensorReader:
         self._read_ev_connection_status(readings, ev_chargers)
 
         # Physics-based defence against upstream plug-sensor quirks.
-        # Same logic as the energy-dashboard path — see comment there for
-        # the full PROD repro (#285+1).
-        if not readings.ev_connected and (
-            readings.ev_charging or readings.ev_power > 100
-        ):
-            _LOGGER.warning(
-                "ev_connected inferred from physics: plug sensor reported off but "
-                "ev_power=%.0fW / ev_charging=%s. Treating as connected.",
-                readings.ev_power, readings.ev_charging,
-            )
-            readings.ev_connected = True
+        # Same logic as the energy-dashboard path — see the helper for
+        # the full PROD repro (#285+1) and the #739 floor.
+        self._infer_fleet_connection_from_physics(readings)
 
         # #584 follow-up — see the energy-dashboard path for the rationale.
         self._infer_per_charger_connection_from_physics(readings)
@@ -3281,6 +3274,7 @@ class SensorReader:
             readings.ev_charging = self._read_binary_sensor(
                 self.config.ev_charging_sensor, "ev_charging"
             )
+            self._gate_ev_charging_on_power(readings, ev_chargers)
             return
 
         any_connected = False
@@ -3327,6 +3321,83 @@ class SensorReader:
             any_charging if has_pc_charging or not single_or_legacy
             else self._read_binary_sensor(self.config.ev_charging_sensor, "ev_charging")
         )
+        self._gate_ev_charging_on_power(readings, ev_chargers)
+
+    def _gate_ev_charging_on_power(
+        self, readings: PowerReadings, ev_chargers: list,
+    ) -> None:
+        """#739 — the published charging badge honors the 500 W floor.
+
+        ``readings.ev_charging`` was the raw brand charging boolean — the
+        signal the codebase itself documents to distrust (KEBA's lags
+        ~5 s (#289); numeric state codes read truthy at idle through the
+        ``float(s) > 0`` fallback). At 140 W standby the badge said
+        "Charging" with the charger disabled. Whenever a power source is
+        configured, the badge now requires actual draw above
+        ``EV_ACTIVE_CHARGE_FLOOR_W`` — the same rule every adapter's
+        ``actual_charging`` already applies. Installs with only a
+        charging boolean keep the raw signal (nothing better exists).
+
+        Per-charger entries are judged on their OWN power reading; the
+        fleet flag is re-OR'd from the gated map so the two can't
+        disagree.
+        """
+        # Per-charger: gate each entry that has its own power reading.
+        gated_any = False
+        for cid, was_charging in list(
+            readings.ev_charging_per_charger.items()
+        ):
+            if not was_charging:
+                continue
+            pc_power = readings.ev_power_per_charger.get(cid)
+            if pc_power is None:
+                continue  # no power source for THIS charger — keep raw
+            if float(pc_power) <= EV_ACTIVE_CHARGE_FLOOR_W:
+                readings.ev_charging_per_charger[cid] = False
+                gated_any = True
+        if gated_any:
+            readings.ev_charging = any(
+                readings.ev_charging_per_charger.values()
+            )
+
+        # Fleet: gate only when a power source exists (flat/legacy key or
+        # any nested per-charger power sensor — the fleet sum is real).
+        power_available = bool(
+            getattr(self.config, "ev_power_sensor", None)
+            or any(
+                c.get("ev_charging_power_sensor") for c in ev_chargers
+            )
+        )
+        if (
+            power_available
+            and readings.ev_charging
+            and float(readings.ev_power or 0.0) <= EV_ACTIVE_CHARGE_FLOOR_W
+        ):
+            readings.ev_charging = False
+
+    def _infer_fleet_connection_from_physics(
+        self, readings: PowerReadings,
+    ) -> None:
+        """Physics defence against a lying plug sensor (#285+1), shared
+        by the energy-dashboard and legacy read paths.
+
+        Current cannot flow without a connection: if actual charging
+        power flows (above ``EV_ACTIVE_CHARGE_FLOOR_W`` — #739 raised
+        this from 100 W, which sat below KEBA's own standby draw) or the
+        gated charging badge is on, the plug sensor is wrong.
+        """
+        if not readings.ev_connected and (
+            readings.ev_charging
+            or readings.ev_power > EV_ACTIVE_CHARGE_FLOOR_W
+        ):
+            _LOGGER.warning(
+                "ev_connected inferred from physics: plug sensor reported off "
+                "but ev_power=%.0fW / ev_charging=%s. Treating as connected. "
+                "(Upstream charger-integration bug protection — see #285+1 "
+                "in CHANGELOG.)",
+                readings.ev_power, readings.ev_charging,
+            )
+            readings.ev_connected = True
 
     def _infer_per_charger_connection_from_physics(
         self, readings: PowerReadings,
@@ -3341,16 +3412,17 @@ class SensorReader:
         multi-charger fleets — the exact bug #285+1 fixed.
 
         Attribution is per-charger: only flip a charger whose own power
-        sensor shows draw (>100 W rules out standby) or whose own charging
-        sensor reads on. The legacy reader path doesn't populate
-        ``ev_power_per_charger``, so there it relies on the charging map.
+        sensor shows draw (the 500 W floor rules out standby, #739) or
+        whose own charging sensor reads on. The legacy reader path
+        doesn't populate ``ev_power_per_charger``, so there it relies on
+        the charging map.
         """
         for cid, connected in list(readings.ev_connected_per_charger.items()):
             if connected:
                 continue
             pc_power = readings.ev_power_per_charger.get(cid, 0.0) or 0.0
             pc_charging = readings.ev_charging_per_charger.get(cid, False)
-            if pc_power > 100 or pc_charging:
+            if pc_power > EV_ACTIVE_CHARGE_FLOOR_W or pc_charging:
                 _LOGGER.warning(
                     "ev_connected_per_charger[%s] inferred from physics: plug "
                     "sensor reported off but power=%.0fW / charging=%s. Treating "

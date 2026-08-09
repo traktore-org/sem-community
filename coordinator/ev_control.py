@@ -656,6 +656,97 @@ class EVControlMixin:
         """
         return max(0.0, float(remaining_kwh))
 
+    async def _police_opted_out_charger(
+        self, cid: str, ev_dev, charger_cfg: dict, power,
+    ) -> None:
+        """Police a charger the #193 night gate is about to skip (#740).
+
+        In NIGHT_CHARGING_ACTIVE / TARIFF_WAITING_FOR_CHEAP an ``off`` /
+        ``solar_only`` charger is ``continue``d out of the per-charger
+        loop — before its adapter, reconciler, decide() or actuate()
+        run. "Skip" must mean "no night budget", NOT "no supervision":
+        a box that auto-starts masterless at night (the #740 war) would
+        otherwise draw unpoliced until a day state returns — the
+        gate-blocks-activation-but-doesn't-stop-the-running-device
+        class again.
+
+        This is the minimal reconcile pass: OFF for ``off`` (immediate
+        DISABLE while drawing), IDLE for ``solar_only`` (the #552
+        idle-settled row gives a rogue self-start the same immediate
+        DISABLE). Converged emits nothing — no churn against the
+        quota-hold, which deliberately leaves the box enabled but
+        suspended.
+        """
+        from .actuate import actuate
+        from .charger_reconciler import (
+            DEFAULT_IDLE_DISABLE_THRESHOLD,
+            ChargerReconciler,
+        )
+        from .charger_types import ChargerDecision, ChargerIntent, ChargerPower
+
+        # This charger's draw — build_view's own resolution: the
+        # per-charger reading when sensor_reader has one, else the
+        # fleet sum (single-charger setups: the sum IS this charger).
+        per = getattr(power, "ev_power_per_charger", None) or {}
+        if cid in per:
+            this_w = float(per[cid] or 0.0)
+        else:
+            # FLEET-READ: single-charger fallback, same contract as
+            # build_view.py:95-100 — multi-charger always has a
+            # per-charger entry above.
+            this_w = float(getattr(power, "ev_power", 0.0) or 0.0)
+
+        adapter_cache = getattr(self, "_charger_adapters", None)
+        if adapter_cache is None:
+            adapter_cache = {}
+            self._charger_adapters = adapter_cache
+        adapter = adapter_cache.get(cid)
+        if adapter is None or adapter._device is not ev_dev:
+            from .charger_adapters import adapter_for
+            adapter = adapter_for(ev_dev)
+            adapter_cache[cid] = adapter
+
+        rec_cache = getattr(self, "_charger_reconcilers", None)
+        if rec_cache is None:
+            rec_cache = {}
+            self._charger_reconcilers = rec_cache
+        reconciler = rec_cache.get(cid)
+        if reconciler is None:
+            reconciler = ChargerReconciler(
+                charger_id=cid,
+                heartbeat_s=float(
+                    getattr(ev_dev, "watchdog_refresh_interval_s", 5.0),
+                ),
+                idle_disable_threshold=DEFAULT_IDLE_DISABLE_THRESHOLD,
+            )
+            rec_cache[cid] = reconciler
+
+        mode = str(charger_cfg.get("charge_mode", "off"))
+        intent = (
+            ChargerIntent.DISABLE if mode == "off" else ChargerIntent.IDLE
+        )
+        decision = ChargerDecision(
+            charger_id=cid,
+            mode=mode,
+            intent=intent,
+            reason=f"night gate — {mode} opts out of night charging; "
+                   "policing only (#740)",
+            bridgeable=False,
+        )
+        cp = ChargerPower(
+            charger_id=cid,
+            power_w=this_w,
+            connected=bool(
+                (getattr(power, "ev_connected_per_charger", None) or {})
+                .get(cid, getattr(power, "ev_connected", False)),
+            ),
+            charging=bool(
+                (getattr(power, "ev_charging_per_charger", None) or {})
+                .get(cid, getattr(power, "ev_charging", False)),
+            ),
+        )
+        await actuate(decision, adapter, cp, reconciler)
+
     def _this_charger_power(self, ev, power) -> float:
         """Return the per-charger power reading in watts (#315 multi-charger fix).
 

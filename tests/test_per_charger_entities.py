@@ -742,7 +742,10 @@ class TestPerChargerAggregation:
                 "sensor.solar": MagicMock(state="5000", attributes={"unit_of_measurement": "W"}),
                 "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
                 "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
-                "sensor.wb_active_power": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                # #739: a real charge (>500 W) — at 0 W the badge floor
+                # would honestly gate the flat boolean off; this test
+                # pins the fallback PLUMBING, so give it real draw.
+                "sensor.wb_active_power": MagicMock(state="1400", attributes={"unit_of_measurement": "W"}),
                 "binary_sensor.wb_cable_connected": MagicMock(state="on"),
                 "binary_sensor.flat_charging": MagicMock(state="on"),
             }

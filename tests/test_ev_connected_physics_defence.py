@@ -7,12 +7,19 @@ peaked at 8 kW. SEM correctly trusted the lying plug sensor and
 stopped supervising the EV. The car drew 6 kWh past the configured
 Max ceiling because SEM wasn't even watching.
 
-The fix: if either ``ev_charging`` is True OR ``ev_power > 100 W``,
-infer ``ev_connected = True`` regardless of what the plug sensor
-says. Current cannot flow without a connection — physics says no.
+The fix: if either the (power-gated, #739) ``ev_charging`` badge is
+True OR ``ev_power`` exceeds the 500 W actual-charging floor, infer
+``ev_connected = True`` regardless of what the plug sensor says.
+Current cannot flow without a connection — physics says no.
 
-These tests pin the four corners of the truth table to lock the
-defence against regression.
+#739 raised the floor from 100 W (below KEBA's own ~110–140 W standby
+draw, which inferred phantom connections) and gates the charging
+boolean on the same floor whenever a power sensor exists to
+contradict it — a truthy boolean at standby is the lagging/idle-state
+signal the codebase documents to distrust.
+
+These tests pin the corners of the truth table to lock the defence
+against regression.
 """
 import pytest
 from unittest.mock import MagicMock, patch
@@ -72,16 +79,33 @@ class TestPhysicsDefence:
         assert readings.ev_connected is True
 
     def test_plug_off_but_charging_state_on_triggers_override(self):
-        """The 2026-05-29 PROD repro shape — charging_state=on, plug lying off."""
+        """The 2026-05-29 PROD repro shape — charging_state=on, plug lying
+        off, and real draw flowing (the repro peaked at 8 kW).
+
+        #739 note: with a power sensor configured, a truthy charging
+        boolean at 0 W no longer carries the override alone — that is
+        exactly the lagging/idle-state signal the badge floor distrusts.
+        Real draw is the physics that overrides a lying plug sensor."""
         reader = _build_reader(
-            plug_state="off", charging_state="on", charging_power_w=0,
+            plug_state="off", charging_state="on", charging_power_w=8000,
         )
         readings = reader._read_from_legacy_config()
         assert readings.ev_connected is True, (
-            "When ev_charging is True, ev_connected MUST be inferred True "
-            "regardless of the plug sensor — current can't flow without a "
-            "connection. PROD #285+1 regime."
+            "When real charging power flows, ev_connected MUST be inferred "
+            "True regardless of the plug sensor — current can't flow "
+            "without a connection. PROD #285+1 regime."
         )
+
+    def test_plug_off_charging_on_at_standby_stays_disconnected(self):
+        """#739 — the phantom corner: a truthy charging signal (lagging
+        boolean / numeric idle state code) at standby draw must NOT
+        invent a connection when a power sensor contradicts it."""
+        reader = _build_reader(
+            plug_state="off", charging_state="on", charging_power_w=140,
+        )
+        readings = reader._read_from_legacy_config()
+        assert readings.ev_connected is False
+        assert readings.ev_charging is False
 
     def test_plug_off_but_power_over_100w_triggers_override(self):
         """The other half of the 2026-05-29 PROD repro — charging_state could
