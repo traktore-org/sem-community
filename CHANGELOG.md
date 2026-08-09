@@ -62,6 +62,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until the next SEM start sequence re-arms the charging failsafe. Mid-charge
   behavior unchanged (a dead controller still lands the car on the charging
   floor, never on 0). Same `keba_arm_failsafe` opt-out as before.
+- 🌙 **The night gate skips participation, not supervision** (#740, the
+  latent night sibling) — in the two night states an `off` / `solar_only`
+  charger was `continue`d out of the per-charger loop before its reconciler
+  ever ran, so a box auto-starting masterless at night drew unpoliced until
+  a day state returned (the gate-blocks-activation-but-doesn't-stop-the-
+  running-device class, 5th sighting). An opted-out charger now gets a
+  minimal reconcile pass before the skip: a rogue draw converges to DISABLE
+  immediately, a converged charger emits nothing (no churn against the
+  quota-hold).
 
 # [1.7.6-beta.8] — 08.08.2026
 
