@@ -33,7 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fast-tracks the probe, "no limit" suppresses false probes entirely; a
   manual **Export-limit entity** field overrides for exotic setups. Options →
   EV Settings, both fields labelled across all 16 languages. Requires a solar
-  forecast integration ("power now").
+  forecast integration ("power now"). Every tick records the terms it judged
+  into the per-cycle trace (`diagnose` service) — a probe that DECLINES leaves
+  no mark in the meters, so without that record "why didn't it fire?" has six
+  indistinguishable answers.
+
+### 🐛 Fixes
+- 🔍 **Export-limit autodetect had no anchor on Energy-Dashboard installs**
+  (#743) — SEM takes its solar sensor from HA's Energy Dashboard on most
+  setups, leaving `solar_production_sensor` empty; that empty key was the only
+  anchor the device scan got, so the brand sharpening never ran on the very
+  Huawei install it was written for. The ED-resolved solar power (or the
+  lifetime-yield counter, when solar power is derived) now anchors the scan.
+  Found live on HA-PROD.
 
 # [1.7.6-beta.9] — 09.08.2026
 
