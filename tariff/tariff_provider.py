@@ -429,6 +429,20 @@ class DynamicTariffProvider(TariffProvider):
         # (#728).
         self._percentile_breaks: Optional[Dict[str, Any]] = None
         self._percentile_breaks_for: Optional[str] = None  # window key
+        # #728 (Azlinon's weekend test): fixed Time-of-Use plans are
+        # classified by their distinct rate values, not by the rolling
+        # window. The ledger remembers each rounded price and the newest
+        # slot that carried it, so a flat weekend still knows 0.10 is
+        # the plan's cheap tier even when the cache holds nothing else.
+        # Entries unseen for 7 days age out (plan changes).
+        self._tier_ledger: Dict[float, datetime] = {}
+        self._tier_memo: Optional[List[float]] = None
+        self._tier_memo_for: Optional[tuple] = None
+        # #728: a level, once displayed for a past slot, is never
+        # rewritten — re-ranking the past at read time made Friday's
+        # honest very_expensive read "normal" on Saturday. Keyed by
+        # slot timestamp, pruned past 48 h.
+        self._level_history: Dict[datetime, PriceLevel] = {}
         # #359 follow-up — surface which classifier path produced the most
         # recent ``price_level`` via the ``tariff_classifier_path`` sensor
         # attribute. Lets users see WHY their classification is what it
@@ -1056,9 +1070,9 @@ class DynamicTariffProvider(TariffProvider):
         self._prices_cache = prices
         self._percentile_breaks = None  # invalidate to force recompute
         self._percentile_breaks_for = None
+        self._tier_memo_for = None  # cache changed — re-detect tiers (#728)
         if self.classification_mode == "percentile" and prices:
-            for p in prices:
-                p.level = self._classify_price(p.price)
+            self._apply_levels(prices)
 
         # Re-key the memo with the real detected gap (the provisional
         # key used the previous parse's gap — a first parse on a 15-min
@@ -1111,6 +1125,24 @@ class DynamicTariffProvider(TariffProvider):
             return PriceLevel.NEGATIVE
 
         if self.classification_mode == "percentile":
+            # #728 second round: a fixed-tier plan's cheap/normal/
+            # expensive are STRUCTURAL — the plan's 2–5 named rates —
+            # not relative to the last 24 h. The rolling window leaks
+            # exactly where @Azlinon predicted: a flat weekend floods
+            # it (0.15 outranks into expensive at Friday's publish, the
+            # genuine 0.30 peak collapses into the flat-day guard, and
+            # 55 steady hours converge to all-NORMAL). When the curve
+            # is a small set of repeating discrete values — detected,
+            # not configured — classify by distinct value tier instead:
+            # stable across any window and any publish event.
+            tiers = self._discrete_tiers()
+            if tiers is not None:
+                level = self._tier_level(tiers, price)
+                self._last_classifier_path = "tou_tiers(" + ",".join(
+                    f"{t:g}:{self._tier_level(tiers, t).value}"
+                    for t in tiers
+                ) + ")"
+                return level
             breaks = self._get_percentile_breaks()
             if breaks is not None:
                 # _get_percentile_breaks sets the active-path string in
@@ -1187,6 +1219,120 @@ class DynamicTariffProvider(TariffProvider):
         below = bisect_left(sorted_values, price)
         equal = bisect_right(sorted_values, price) - below
         return below + (equal - 1) / 2.0
+
+    # #728: the plan's tier count maps onto the level scale center-out.
+    # Two rates have no middle; the common 4-tier shape (super-off-peak /
+    # off-peak / mid / peak) grows a deeper cheap end, not a second peak.
+    _TIER_LEVELS: Dict[int, tuple] = {
+        2: (PriceLevel.CHEAP, PriceLevel.EXPENSIVE),
+        3: (PriceLevel.CHEAP, PriceLevel.NORMAL, PriceLevel.EXPENSIVE),
+        4: (PriceLevel.VERY_CHEAP, PriceLevel.CHEAP,
+            PriceLevel.NORMAL, PriceLevel.EXPENSIVE),
+        5: (PriceLevel.VERY_CHEAP, PriceLevel.CHEAP, PriceLevel.NORMAL,
+            PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE),
+    }
+
+    def _tier_level(self, tiers: List[float], price: float) -> PriceLevel:
+        """Map ``price`` onto its nearest tier's level."""
+        levels = self._TIER_LEVELS[len(tiers)]
+        idx = min(range(len(tiers)), key=lambda i: abs(tiers[i] - price))
+        return levels[idx]
+
+    def _discrete_tiers(self) -> Optional[List[float]]:
+        """The plan's distinct rate values, when the tariff is a fixed
+        Time-of-Use plan — else ``None`` and the percentile window runs.
+
+        Detection, not configuration (#728): a ToU curve repeats a
+        handful of values (24 hourly slots over 2–5 rates), a real
+        market curve barely repeats at all. Discrete iff the ledger
+        holds 2–5 distinct rounded values AND the current cache repeats
+        its values ≥3× on average — RienduPre's Tibber day (17 distinct
+        in 24 h, a few incidental repeats) stays percentile.
+
+        The ledger outlives the cache so the flat weekend still knows
+        the weekday tiers; entries unseen for 7 days age out. All
+        timestamps involved come from the cache itself, so the ledger
+        is wall-clock-free. Falls back to a ledger reset if a provider
+        switches between naive and aware timestamps mid-flight.
+        """
+        cache = self._prices_cache
+        if not cache:
+            return None
+        memo_key = (
+            len(cache), cache[0].timestamp, cache[-1].timestamp,
+        )
+        if self._tier_memo_for == memo_key:
+            return self._tier_memo
+
+        valid = [
+            (round(p.price, 4), p.timestamp)
+            for p in cache if p.price is not None
+        ]
+        result: Optional[List[float]] = None
+        if valid:
+            try:
+                for v, ts in valid:
+                    prev = self._tier_ledger.get(v)
+                    if prev is None or ts > prev:
+                        self._tier_ledger[v] = ts
+                newest = max(self._tier_ledger.values())
+                cutoff = newest - timedelta(days=7)
+                self._tier_ledger = {
+                    v: ts for v, ts in self._tier_ledger.items()
+                    if ts >= cutoff
+                }
+            except TypeError:
+                # naive/aware mix across parses — start the ledger over
+                # from the current cache.
+                self._tier_ledger = {}
+                for v, ts in valid:
+                    prev = self._tier_ledger.get(v)
+                    if prev is None or ts > prev:
+                        self._tier_ledger[v] = ts
+            distinct_now = {v for v, _ in valid}
+            tiers = sorted(self._tier_ledger)
+            if (
+                2 <= len(tiers) <= 5
+                and len(valid) >= 6
+                and len(valid) / len(distinct_now) >= 3
+            ):
+                result = tiers
+
+        self._tier_memo = result
+        self._tier_memo_for = memo_key
+        return result
+
+    def _apply_levels(self, prices: List[PricePoint]) -> None:
+        """Classify every cached point — but never rewrite the past.
+
+        The old model re-ranked ALL points against the current window on
+        every re-parse, so a morning that honestly displayed "expensive"
+        re-read as "normal" once the flat weekend dominated the window
+        (#728, @Azlinon's screenshots). A slot that is fully over keeps
+        the last level it displayed while live; current and future slots
+        reclassify freely. History is pruned past 48 h.
+        """
+        now = dt_util.now()
+        interval = self._detect_interval(prices)
+
+        def _c(ts: datetime) -> datetime:
+            if ts.tzinfo is None and now.tzinfo is not None:
+                return ts.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+            if ts.tzinfo is not None and now.tzinfo is None:
+                return _as_local(ts).replace(tzinfo=None)
+            return ts
+
+        for p in prices:
+            ts = _c(p.timestamp)
+            if ts + interval <= now and ts in self._level_history:
+                p.level = self._level_history[ts]
+            else:
+                p.level = self._classify_price(p.price)
+                self._level_history[ts] = p.level
+
+        cutoff = now - timedelta(hours=48)
+        for ts in [t for t in self._level_history if t < cutoff]:
+            del self._level_history[ts]
 
     def _get_percentile_breaks(self) -> Optional[Dict[str, Any]]:
         """Compute percentile breakpoints over a rolling ~24h window.

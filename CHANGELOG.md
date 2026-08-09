@@ -14,6 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.9] — 08.08.2026 (Unreleased)
 
 ### 🐛 Fixes
+- 💶 **Fixed Time-of-Use plans now classify by their tiers, not by a
+  rolling window** (#728, second round — @Azlinon's weekend test) — a
+  fixed-tier plan's cheap/normal/expensive are structural (the plan's 2–5
+  named rates), and the rolling percentile window leaked exactly where the
+  reporter predicted: Saturday's flat publish flooded it (the ordinary mid
+  rate outranked into *expensive*), the genuine 3× peak collapsed into the
+  flat-day guard (all four breakpoints landed inside the flooded tier,
+  spread 0.0000 → *normal*), and 55 steady weekend hours converged to
+  all-NORMAL. When the curve is a small set of repeating discrete values —
+  detected, not configured — SEM now classifies by distinct value tier
+  (cheapest → cheap, middle → normal, highest → expensive), stable across
+  any window and any publish event; a 7-day tier ledger carries the weekday
+  rates through the flat weekend. The percentile window remains for
+  genuinely continuous curves (Nordpool / Tibber / Amber untouched). And a
+  level once displayed for a past hour is never rewritten — the price
+  history is append-only in both modes.
 - 🔌 **The quota-stop: the wallbox's own language for "no"** (#553/#545,
   live-proven on the real P30) — `keba.disable` invites the war: the box
   auto-starts, the car begs, SEM kills, every ~90 s, all night. And the old
