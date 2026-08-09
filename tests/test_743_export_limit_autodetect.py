@@ -11,10 +11,13 @@ supported inverters as well"). Two pieces, both here:
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     EXPORT_LIMIT_KEYWORDS,
+    SensorReader,
     parse_export_limited,
 )
 
@@ -67,3 +70,51 @@ class TestTheKeywords:
     ])
     def test_unrelated_entities_do_not_match(self, name):
         assert not any(k in name for k in EXPORT_LIMIT_KEYWORDS), name
+
+
+class _Stub:
+    """The reader's autodetect, hosted on the two attributes it reads."""
+    detect_export_limit_entity = SensorReader.detect_export_limit_entity
+    _resolve_solar_anchor = SensorReader._resolve_solar_anchor
+
+    def __init__(self, ed_config=None):
+        self.hass = None          # registry lookup raises → best-effort None
+        self._energy_dashboard_config = ed_config
+
+
+class TestTheAnchor:
+    """Live on HA-PROD 09.08.2026: SEM takes its solar sensor from the
+    Energy Dashboard, so ``solar_production_sensor`` is not in config at
+    all — the autodetect was handed None and never scanned, on the very
+    Huawei install the feature was written for. The ED-resolved solar
+    entity is the anchor of record when config has none.
+    """
+
+    def test_falls_back_to_the_energy_dashboard_solar_entity(self):
+        ed = SimpleNamespace(
+            solar_power="sensor.inverter_eingangsleistung", solar_energy=None,
+        )
+        s = _Stub(ed)
+        assert s._resolve_solar_anchor(None) == "sensor.inverter_eingangsleistung"
+
+    def test_falls_back_to_the_solar_energy_counter(self):
+        """Power may be derived (stat_rate) with no power entity; the
+        lifetime-yield counter sits on the same inverter device."""
+        ed = SimpleNamespace(
+            solar_power=None, solar_energy="sensor.inverter_gesamtenergieertrag",
+        )
+        s = _Stub(ed)
+        assert (
+            s._resolve_solar_anchor(None)
+            == "sensor.inverter_gesamtenergieertrag"
+        )
+
+    def test_configured_sensor_still_wins(self):
+        ed = SimpleNamespace(solar_power="sensor.ed_solar", solar_energy=None)
+        s = _Stub(ed)
+        assert s._resolve_solar_anchor("sensor.configured") == "sensor.configured"
+
+    def test_no_anchor_anywhere_is_not_an_error(self):
+        s = _Stub(None)
+        assert s._resolve_solar_anchor(None) is None
+        assert s.detect_export_limit_entity(None) is None

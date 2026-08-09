@@ -3429,6 +3429,27 @@ class SensorReader:
         self._cycles_sensor_cache = result
         return result
 
+    def _resolve_solar_anchor(
+        self, solar_anchor_entity: Optional[str],
+    ) -> Optional[str]:
+        """Which entity names the inverter device (#743).
+
+        The configured ``solar_production_sensor`` when there is one —
+        but most installs (HA-PROD included) leave it empty and let SEM
+        take solar from the Energy Dashboard, so the ED-resolved solar
+        entity is the anchor of record. Power first; if solar power is
+        derived rather than read (``stat_rate``), the lifetime-yield
+        counter sits on the same device and anchors just as well.
+        """
+        if solar_anchor_entity:
+            return solar_anchor_entity
+        ed = getattr(self, "_energy_dashboard_config", None)
+        if ed is None:
+            return None
+        return getattr(ed, "solar_power", None) or getattr(
+            ed, "solar_energy", None,
+        ) or None
+
     def detect_export_limit_entity(
         self, solar_anchor_entity: Optional[str],
     ) -> Optional[str]:
@@ -3441,6 +3462,11 @@ class SensorReader:
         if getattr(self, "_export_limit_cache", _CYCLES_UNSET) is not _CYCLES_UNSET:
             return self._export_limit_cache
         result = None
+        solar_anchor_entity = self._resolve_solar_anchor(solar_anchor_entity)
+        if not solar_anchor_entity:
+            # The Energy-Dashboard config can arrive after the first
+            # cycle — no anchor yet is "ask again", not "none exists".
+            return None
         if solar_anchor_entity and "." in solar_anchor_entity:
             try:
                 registry = er.async_get(self.hass)
