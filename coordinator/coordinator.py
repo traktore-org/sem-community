@@ -562,6 +562,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._session_data_per_charger: Dict[str, SessionData] = {}
         self._last_ev_connected = False
         self._last_ev_connected_per_charger: Dict[str, bool] = {}
+        # #708 — {charger_id: (last usable vehicle-SOC reading, the instant
+        # it was taken)}. An unavailable entity rewrites its own
+        # ``last_changed``, so the live state cannot date the reading it no
+        # longer holds; this remembers it. In-memory only — after a restart
+        # SEM honestly reports "unknown" until the sensor answers again.
+        self._soc_last_seen: Dict[str, tuple] = {}
 
         # Battery session tracking
         self._battery_session = BatterySessionData()
@@ -7225,6 +7231,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
             per_charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
             per_charger_vehicle_soc: Optional[float] = None
+            # Explicit per-iteration reset: the provenance memo below reads
+            # this, and a charger without a SOC entity must not inherit the
+            # previous charger's state object (#708 / the #616 class).
+            soc_state = None
             if per_charger_soc_entity:
                 soc_state = self.hass.states.get(per_charger_soc_entity)
                 if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
@@ -7246,18 +7256,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#440) Per-charger skip-decision latch removed alongside the
             # skip-decision wiring — charge mode is the sole authority
             # on whether to charge at night now.
-            # #708 — sensor age for the card's staleness display. From
-            # ``last_changed`` deliberately: a poll that re-publishes the
+            #
+            # #708 — provenance of the SOC reading: WHAT was last read and
+            # WHEN. The instant comes from the reading's own
+            # ``last_changed``, deliberately: a poll that re-publishes the
             # same value bumps only ``last_reported``, and for steering a
             # value that hasn't CHANGED in 28 minutes of charging is
             # exactly as stale as one that wasn't re-published.
+            #
+            # It is remembered, equally deliberately. When an entity goes
+            # unavailable HA writes a NEW state, so reading ``last_changed``
+            # off the live entity dates the OUTAGE, not the reading — a
+            # sensor dead for half an hour reported "0 min ago", and the
+            # card's info line lost the value it was explaining at the
+            # moment the estimate took over the gauge. The age of a reading
+            # is measured from the reading, so we keep the last usable one.
+            if per_charger_vehicle_soc is not None and soc_state is not None:
+                self._soc_last_seen[cid] = (
+                    per_charger_vehicle_soc, soc_state.last_changed
+                )
+            _seen = self._soc_last_seen.get(cid) if per_charger_soc_entity else None
+            soc_last: Optional[float] = None
+            soc_last_at: Optional[str] = None
             soc_age_min: Optional[float] = None
-            if per_charger_soc_entity:
-                _soc_state = self.hass.states.get(per_charger_soc_entity)
-                if _soc_state is not None and _soc_state.last_changed is not None:
-                    soc_age_min = round(
-                        (dt_util.utcnow() - _soc_state.last_changed).total_seconds() / 60
-                    )
+            if _seen is not None and _seen[1] is not None:
+                soc_last, _seen_at = _seen
+                soc_last_at = _seen_at.isoformat()
+                soc_age_min = round(
+                    (dt_util.utcnow() - _seen_at).total_seconds() / 60
+                )
 
             result[cid] = {
                 "estimated_soc": round(soc, 1) if soc is not None else None,
@@ -7281,6 +7308,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if (det_ea := detector.energy_accounted_soc()) is not None
                     else None
                 ),
+                # #708 — provenance: the last usable reading and the instant
+                # it was taken. The card renders "Car: {soc}% ({age} min
+                # ago)" from these, so the line survives the sensor it
+                # describes going unavailable. A TIMESTAMP, not an age: an
+                # age attribute moves every minute and would re-arm the
+                # #581 recorder churn; the card ticks the clock itself.
+                "vehicle_soc_last": soc_last,
+                "vehicle_soc_last_at": soc_last_at,
                 "vehicle_soc_age_min": soc_age_min,
                 "estimate_stop_active": detector._estimate_stop_active,
             }

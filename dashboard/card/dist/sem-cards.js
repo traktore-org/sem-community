@@ -3159,16 +3159,16 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         </span>
                     `:q}
                 </div>
-            </div>`}_rangeHandleStart(e,t,i,s,r,a){e.stopPropagation(),e.preventDefault();const o=e.currentTarget.closest(".range-track");if(!o)return;const n="min"===t?i:s,l="min"===t?s:i,c=this._hass?.states[n],d=parseFloat(c?.attributes?.step)||(a>50?1:.5),p=a-r||1,h=e=>{const i=o.getBoundingClientRect();let s=(e-i.left)/(i.width||1);s=Math.max(0,Math.min(1,s));let n=Math.round((r+s*p)/d)*d;const c=this._entityVal(l,"min"===t?a:r);return n="min"===t?Math.min(n,c):Math.max(n,c),Math.max(r,Math.min(a,n))},_=e=>{this._freezeEntity(n,h(e.clientX)),this.requestUpdate()},g=e=>{window.removeEventListener("pointermove",_),window.removeEventListener("pointerup",g),window.removeEventListener("pointercancel",g),this._setNumber(n,h(e.clientX))};window.addEventListener("pointermove",_),window.addEventListener("pointerup",g),window.addEventListener("pointercancel",g)}_renderChargerSection(e,t){const i=dt[t%dt.length],s=this._val(`charger_${e}_power`,0),r=this._val(`charger_${e}_session_energy_external`,0),a=this._val(`charger_${e}_session_energy`,0),o=r>0?r:a,n=this._val(`charger_${e}_daily_energy`,0),l=this._val("energy_ev_solar_percentage",0),{soc:c,isEstimate:d}=function(e,t,i,s){const r=null!=e?e:s<=1?t??null:null;return null!=r?{soc:r,isEstimate:!1}:null!=i?{soc:i,isEstimate:!0}:{soc:null,isEstimate:!1}}(this._val(`charger_${e}_vehicle_soc`,null),this._val("vehicle_soc",null),this._val(`charger_${e}_estimated_soc`,null),this._chargers.length),p=this._stateAttrs(`sensor.sem_charger_${e}_estimated_soc`),h=p.energy_accounted_soc,_=!0===p.estimate_stop_active,g=this._val(`charger_${e}_vehicle_soc`,null);let u=null;const f=this._hass?.states[`sensor.sem_charger_${e}_vehicle_soc`];f?.last_changed&&(u=Math.round((Date.now()-new Date(f.last_changed).getTime())/6e4));const m=e=>(this._t(e)||"").replace(/\{soc\}/g,null!=g?Math.round(g):"—").replace(/\{age\}/g,null!=u?u:"—").replace(/\{est\}/g,null!=h?Math.round(h):"—"),y=null!=g&&null!=h&&null!=u&&u>=5&&h-g>=1,v=this._chargerName(e),x=this._hass?.states[`binary_sensor.sem_charger_${e}_connected`],b="on"===x?.state,$=s>50,w=$?this._t("charging"):b?this._t("connected"):this._t("idle"),k=this._val(`charger_${e}_commanded_current`,0),S=this._entityVal(`number.sem_charger_${e}_minimum_current`,6),C=this._entityVal(`number.sem_charger_${e}_ev_battery_capacity_kwh`,40),z=this._entityVal(`number.sem_charger_${e}_ev_kwh_per_100km`,18),M=`select.sem_charger_${e}_charge_mode`,E=this._stateAttrs(M),D=this._stateStr(M)||"min_plus_solar",F=E.options||["solar_only","min_plus_solar","always_max","off"],I={solar_only:this._t("charge_mode_solar_only"),solar_plus_cheap:this._t("charge_mode_solar_plus_cheap"),min_plus_solar:this._t("charge_mode_min_plus_solar"),always_max:this._t("charge_mode_always_max"),off:this._t("charge_mode_off")},B=Math.round(this._entityVal("number.sem_battery_buffer_soc",70)),P=Math.round(this._entityVal("number.sem_battery_priority_soc",30)),N=e=>(this._t(e)||"").replace(/\{buffer\}/g,B).replace(/\{priority\}/g,P),A=N(`charge_mode_hint_${D}_surplus`),T=N(`charge_mode_hint_${D}_overnight`),L=N(`charge_mode_hint_${D}_battery`),R=`select.sem_charger_${e}_ev_target_type`,O=this._stateStr(R)||"kwh",U=this._stateAttrs(R).options||["kwh"],H="soc"===O,j=H?`number.sem_charger_${e}_target_soc`:`number.sem_charger_${e}_daily_ev_target`,G=H?`number.sem_charger_${e}_target_soc_max`:`number.sem_charger_${e}_daily_ev_target_max`,K=`time.sem_charger_${e}_target_time`,V=this._stateStr(K),Y=V?V.slice(0,5):"—",X=this._stateAttrs(`${this._prefix}charging_state`),Z=!1===X.ev_deadline_reachable,J=X.ev_next_cheap_window;let Q="";if(J)try{const e=new Date(J);isNaN(e)||(Q=e.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZone:this._hass?.config?.time_zone||void 0}))}catch(e){}const ee="solar_plus_cheap"===D&&Q,te=this._entityVal(j,H?80:10),ie=H?Math.max(0,(te-c)/100*C):Math.max(0,te-n),se=z>0?Math.round(ie/z*100):null,re=U.length>1?W`<select class="ct-unit" .value=${O}
+            </div>`}_rangeHandleStart(e,t,i,s,r,a){e.stopPropagation(),e.preventDefault();const o=e.currentTarget.closest(".range-track");if(!o)return;const n="min"===t?i:s,l="min"===t?s:i,c=this._hass?.states[n],d=parseFloat(c?.attributes?.step)||(a>50?1:.5),p=a-r||1,h=e=>{const i=o.getBoundingClientRect();let s=(e-i.left)/(i.width||1);s=Math.max(0,Math.min(1,s));let n=Math.round((r+s*p)/d)*d;const c=this._entityVal(l,"min"===t?a:r);return n="min"===t?Math.min(n,c):Math.max(n,c),Math.max(r,Math.min(a,n))},_=e=>{this._freezeEntity(n,h(e.clientX)),this.requestUpdate()},g=e=>{window.removeEventListener("pointermove",_),window.removeEventListener("pointerup",g),window.removeEventListener("pointercancel",g),this._setNumber(n,h(e.clientX))};window.addEventListener("pointermove",_),window.addEventListener("pointerup",g),window.addEventListener("pointercancel",g)}_renderChargerSection(e,t){const i=dt[t%dt.length],s=this._val(`charger_${e}_power`,0),r=this._val(`charger_${e}_session_energy_external`,0),a=this._val(`charger_${e}_session_energy`,0),o=r>0?r:a,n=this._val(`charger_${e}_daily_energy`,0),l=this._val("energy_ev_solar_percentage",0),{soc:c,isEstimate:d}=function(e,t,i,s){const r=null!=e?e:s<=1?t??null:null;return null!=r?{soc:r,isEstimate:!1}:null!=i?{soc:i,isEstimate:!0}:{soc:null,isEstimate:!1}}(this._val(`charger_${e}_vehicle_soc`,null),this._val("vehicle_soc",null),this._val(`charger_${e}_estimated_soc`,null),this._chargers.length),p=this._stateAttrs(`sensor.sem_charger_${e}_estimated_soc`),h=p.energy_accounted_soc,_=!0===p.estimate_stop_active,g=this._val(`charger_${e}_vehicle_soc`,null),u=p.vehicle_soc_last??g;let f=null;const m=Date.parse(p.vehicle_soc_last_at??"");Number.isNaN(m)||(f=Math.round((Date.now()-m)/6e4));const y=e=>(this._t(e)||"").replace(/\{soc\}/g,null!=u?Math.round(u):"—").replace(/\{age\}/g,null!=f?f:"—").replace(/\{est\}/g,null!=h?Math.round(h):"—"),v=null!=u&&null!=h&&null!=f&&f>=5&&(h-u>=1||null==g),x=this._chargerName(e),b=this._hass?.states[`binary_sensor.sem_charger_${e}_connected`],$="on"===b?.state,w=s>50,k=w?this._t("charging"):$?this._t("connected"):this._t("idle"),S=this._val(`charger_${e}_commanded_current`,0),C=this._entityVal(`number.sem_charger_${e}_minimum_current`,6),z=this._entityVal(`number.sem_charger_${e}_ev_battery_capacity_kwh`,40),M=this._entityVal(`number.sem_charger_${e}_ev_kwh_per_100km`,18),E=`select.sem_charger_${e}_charge_mode`,D=this._stateAttrs(E),F=this._stateStr(E)||"min_plus_solar",I=D.options||["solar_only","min_plus_solar","always_max","off"],B={solar_only:this._t("charge_mode_solar_only"),solar_plus_cheap:this._t("charge_mode_solar_plus_cheap"),min_plus_solar:this._t("charge_mode_min_plus_solar"),always_max:this._t("charge_mode_always_max"),off:this._t("charge_mode_off")},P=Math.round(this._entityVal("number.sem_battery_buffer_soc",70)),N=Math.round(this._entityVal("number.sem_battery_priority_soc",30)),A=e=>(this._t(e)||"").replace(/\{buffer\}/g,P).replace(/\{priority\}/g,N),T=A(`charge_mode_hint_${F}_surplus`),L=A(`charge_mode_hint_${F}_overnight`),R=A(`charge_mode_hint_${F}_battery`),O=`select.sem_charger_${e}_ev_target_type`,U=this._stateStr(O)||"kwh",H=this._stateAttrs(O).options||["kwh"],j="soc"===U,G=j?`number.sem_charger_${e}_target_soc`:`number.sem_charger_${e}_daily_ev_target`,K=j?`number.sem_charger_${e}_target_soc_max`:`number.sem_charger_${e}_daily_ev_target_max`,V=`time.sem_charger_${e}_target_time`,Y=this._stateStr(V),X=Y?Y.slice(0,5):"—",Z=this._stateAttrs(`${this._prefix}charging_state`),J=!1===Z.ev_deadline_reachable,Q=Z.ev_next_cheap_window;let ee="";if(Q)try{const e=new Date(Q);isNaN(e)||(ee=e.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZone:this._hass?.config?.time_zone||void 0}))}catch(e){}const te="solar_plus_cheap"===F&&ee,ie=this._entityVal(G,j?80:10),se=j?Math.max(0,(ie-c)/100*z):Math.max(0,ie-n),re=M>0?Math.round(se/M*100):null,ae=H.length>1?W`<select class="ct-unit" .value=${U}
                     @click=${e=>e.stopPropagation()}
-                    @change=${e=>this._selectOption(R,e.target.value)}>
-                    ${U.map(e=>W`<option value=${e} ?selected=${e===O}>${"soc"===e?"%":"kWh"}</option>`)}
-                </select>`:W`<span class="ct-unit-static">${H?"%":"kWh"}</span>`;return W`
+                    @change=${e=>this._selectOption(O,e.target.value)}>
+                    ${H.map(e=>W`<option value=${e} ?selected=${e===U}>${"soc"===e?"%":"kWh"}</option>`)}
+                </select>`:W`<span class="ct-unit-static">${j?"%":"kWh"}</span>`;return W`
             <div class="charger-section">
                 <div class="charger-header">
                     <div class="charger-dot" style="background:${i}"></div>
-                    <span class="charger-name">${v}</span>
-                    <span class="charger-status" style="color:${$?i:""}">${w}${k>0?W` <span class="charger-set">(${Math.round(k)}&nbsp;A)</span>`:q}</span>
+                    <span class="charger-name">${x}</span>
+                    <span class="charger-status" style="color:${w?i:""}">${k}${S>0?W` <span class="charger-set">(${Math.round(S)}&nbsp;A)</span>`:q}</span>
                 </div>
 
                 <div class="charger-body">
@@ -3180,7 +3180,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="charger-metrics">
                         <div class="cm-row">
                             <span class="cm-label">${this._t("power")}</span>
-                            <span class="cm-value" style="color:${$?i:""}">${ge(s)}</span>
+                            <span class="cm-value" style="color:${w?i:""}">${ge(s)}</span>
                         </div>
                         <div class="cm-row">
                             <span class="cm-label">${this._t("today")}</span>
@@ -3204,23 +3204,23 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 ${_?W`
                 <div class="soc-info-708 soc-info-708-stop">
                     <ha-icon icon="mdi:check-circle-outline" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
-                    <span>${m("soc_target_reached_est")}<br>
-                        <small>${m("soc_confirms_next_update")}</small></span>
-                </div>`:y?W`
+                    <span>${y("soc_target_reached_est")}<br>
+                        <small>${y("soc_confirms_next_update")}</small></span>
+                </div>`:v?W`
                 <div class="soc-info-708">
                     <ha-icon icon="mdi:information-outline" style="--mdc-icon-size:14px;color:#5BC8D8"></ha-icon>
-                    <span>${m("soc_info_line")}</span>
+                    <span>${y("soc_info_line")}</span>
                 </div>`:q}
 
                 <div class="charge-target-group">
                     <div class="ct-title">
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
                         ${this._t("charge_target")}
-                        ${null!=se&&se>0?W`<span class="ct-range">· +${se} km</span>`:q}
+                        ${null!=re&&re>0?W`<span class="ct-range">· +${re} km</span>`:q}
                         <span class="ct-spacer"></span>
-                        ${re}
+                        ${ae}
                     </div>
-                    ${this._renderRangeSlider(j,G,H)}
+                    ${this._renderRangeSlider(G,K,j)}
                     <!-- #277 Phase B.2: one named Charge mode selector
                          replaces the legacy ev_grid_charging + nested
                          ev_tariff_mode toggles. Options come from the HA
@@ -3233,12 +3233,12 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <span class="ct-label">${this._t("charge_mode")}</span>
                         <span class="ct-ctl">
                             <select class="ct-mode-select"
-                                    .value=${D}
+                                    .value=${F}
                                     @click=${e=>e.stopPropagation()}
-                                    @change=${e=>this._selectOption(M,e.target.value)}>
-                                ${F.map(e=>W`
-                                    <option value=${e} ?selected=${e===D}>
-                                        ${I[e]||e}
+                                    @change=${e=>this._selectOption(E,e.target.value)}>
+                                ${I.map(e=>W`
+                                    <option value=${e} ?selected=${e===F}>
+                                        ${B[e]||e}
                                     </option>`)}
                             </select>
                         </span>
@@ -3247,38 +3247,38 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="ct-subhint">
                         <div class="ct-hint-row">
                             <span class="ct-hint-label">${this._t("hint_label_surplus")}:</span>
-                            <span class="ct-hint-text">${A}</span>
-                        </div>
-                        <div class="ct-hint-row">
-                            <span class="ct-hint-label">${this._t("hint_label_overnight")}:</span>
                             <span class="ct-hint-text">${T}</span>
                         </div>
                         <div class="ct-hint-row">
-                            <span class="ct-hint-label">${this._t("hint_label_battery")}:</span>
+                            <span class="ct-hint-label">${this._t("hint_label_overnight")}:</span>
                             <span class="ct-hint-text">${L}</span>
                         </div>
-                        ${ee?W`
+                        <div class="ct-hint-row">
+                            <span class="ct-hint-label">${this._t("hint_label_battery")}:</span>
+                            <span class="ct-hint-text">${R}</span>
+                        </div>
+                        ${te?W`
                             <div class="ct-hint-row ct-hint-extra">
                                 <span class="ct-hint-label">${this._t("ev_next_cheap")}:</span>
-                                <span class="ct-hint-text"><b style="color:#8DC892">${Q}</b></span>
+                                <span class="ct-hint-text"><b style="color:#8DC892">${ee}</b></span>
                             </div>
                         `:q}
                     </div>
-                    `:ee?W`
+                    `:te?W`
                         <div class="ct-cheap-hint">
                             <span class="ct-hint-label">${this._t("ev_next_cheap")}:</span>
-                            <b style="color:#8DC892">${Q}</b>
+                            <b style="color:#8DC892">${ee}</b>
                         </div>
                     `:q}
                     <div class="ct-row clickable"
-                        @click=${()=>this.dispatchEvent(new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:K}}))}>
+                        @click=${()=>this.dispatchEvent(new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:V}}))}>
                         <span class="ct-label">${this._t("ev_charge_by")}</span>
                         <span class="ct-ctl ct-time">
                             <ha-icon icon="mdi:clock-end" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
-                            ${Y}
+                            ${X}
                         </span>
                     </div>
-                    ${Z?W`
+                    ${J?W`
                         <div class="ct-warn">
                             <ha-icon icon="mdi:clock-alert" style="--mdc-icon-size:14px;color:#f06292"></ha-icon>
                             <span>${this._t("ev_deadline_unreachable_short")}</span>
@@ -3295,7 +3295,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             @click=${()=>{const t=new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:`number.sem_charger_${e}_minimum_current`}});this.dispatchEvent(t)}}
                         >
                             <ha-icon icon="mdi:speedometer-slow" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
-                            <span class="setting-value">${this._fmt(S,0)}A</span>
+                            <span class="setting-value">${this._fmt(C,0)}A</span>
                         </div>
                         ${this._showHelp?W`<div class="setting-help">${this._t("tile_help_min_amps")}</div>`:q}
                     </div>
@@ -3305,7 +3305,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             @click=${()=>{const t=new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:`number.sem_charger_${e}_ev_battery_capacity_kwh`}});this.dispatchEvent(t)}}
                         >
                             <ha-icon icon="mdi:car-battery" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
-                            <span class="setting-value">${this._fmt(C,0)} kWh</span>
+                            <span class="setting-value">${this._fmt(z,0)} kWh</span>
                         </div>
                         ${this._showHelp?W`<div class="setting-help">${this._t("tile_help_capacity")}</div>`:q}
                     </div>
@@ -3315,7 +3315,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             @click=${()=>{const t=new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:`number.sem_charger_${e}_ev_kwh_per_100km`}});this.dispatchEvent(t)}}
                         >
                             <ha-icon icon="mdi:map-marker-distance" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                            <span class="setting-value">${this._fmt(z,0)} kWh/100km</span>
+                            <span class="setting-value">${this._fmt(M,0)} kWh/100km</span>
                         </div>
                         ${this._showHelp?W`<div class="setting-help">${this._t("tile_help_consumption")}</div>`:q}
                     </div>

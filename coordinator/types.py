@@ -1331,6 +1331,18 @@ class SEMData:
                     f"charger_{cid}_estimate_stop_active": bool(
                         intel.get("estimate_stop_active")
                     ),
+                    # #708 — provenance of the reading the card's info line
+                    # quotes: WHAT was last read and WHEN. Both move only
+                    # when a NEW reading arrives, so neither adds recorder
+                    # churn. The age is derived from the timestamp
+                    # client-side — that is why the per-minute
+                    # ``vehicle_soc_age_min`` is deliberately NOT published.
+                    f"charger_{cid}_vehicle_soc_last": intel.get(
+                        "vehicle_soc_last"
+                    ),
+                    f"charger_{cid}_vehicle_soc_last_at": intel.get(
+                        "vehicle_soc_last_at"
+                    ),
                 })
         except Exception as e:
             _LOGGER.warning("Per-charger intelligence to_dict failed: %s", e)
