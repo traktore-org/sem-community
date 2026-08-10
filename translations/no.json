@@ -1451,7 +1451,7 @@
     },
     "soc_cap_unenforceable": {
       "title": "Kan ikke håndheve ladegrensen på {target} %: {name}",
-      "description": "**{name}** er satt til et prosentvis lademål, men kjøretøyet ditt rapporterer ikke ladenivået sitt akkurat nå, så SEM kan ikke stoppe ved **{target} %** — det fortsetter å lade til bilen selv trapper ned (nesten full).\n\nHvis dashbordet ditt viser en batteriprosent, er det SEMs *estimerte* SOC, som bevisst ignoreres for den harde grensen (den kan drifte). For å håndheve grensen kobler du en **reell SOC-sensor for kjøretøyet** til denne laderen (Konfigurasjon → EV → Kjøretøyets SOC-entitet). Denne reparasjonen forsvinner automatisk så snart en reell SOC-avlesning er tilgjengelig igjen."
+      "description": "**{name}** er satt til et lademål i prosent, men kjøretøyet rapporterer ikke ladenivået sitt akkurat nå, så SEM kan ikke stoppe *nøyaktig* ved **{target}%**.\n\nDen lader likevel ikke i blinde: fra den siste ekte avlesningen i denne økten teller den energien som faktisk er levert, og stopper når den målte summen når målet ditt — overskridelsen er bare det bilen har tatt siden den avlesningen. Har det ikke kommet noen ekte avlesning i det hele tatt i denne økten (eller startet SEM på nytt midt i ladingen), mangler referansepunktet, og ladingen fortsetter til bilen selv trapper ned nær fullt.\n\nFor en grense som treffer, koble en **ekte SOC-sensor for kjøretøyet** til denne laderen (Konfigurasjon → EV → Kjøretøyets SOC-entitet). Batteriprosenten på dashbordet er SEMs *estimerte* SOC, som bevisst ignoreres for den harde grensen (den kan drifte). Denne reparasjonen forsvinner automatisk så snart en ekte SOC-avlesning er tilgjengelig igjen."
     }
   },
   "selector": {

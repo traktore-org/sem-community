@@ -33,7 +33,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fast-tracks the probe, "no limit" suppresses false probes entirely; a
   manual **Export-limit entity** field overrides for exotic setups. Options →
   EV Settings, both fields labelled across all 16 languages. Requires a solar
-  forecast integration ("power now").
+  forecast integration ("power now"). Every tick records the terms it judged
+  into the per-cycle trace (`diagnose` service) — a probe that DECLINES leaves
+  no mark in the meters, so without that record "why didn't it fire?" has six
+  indistinguishable answers.
+
+### 🐛 Fixes
+- 🔌 **The "can't enforce the SOC cap" repair fired for chargers with no car
+  on them** (#708, reported by @Azlinon) — the gate asked whether *the fleet*
+  was charging, so with one car on a SOC target and a second EVSE idle, both
+  boxes raised the repair and the empty one announced its own target. It now
+  asks whether **this** charger has a vehicle connected
+  (`_last_ev_connected_per_charger`, the same map the virtual-SOC decay uses);
+  a charger the map hasn't seen yet defaults to connected, so missing tracking
+  can never silence a warning that matters. An AST guard now walks every
+  per-charger repair raiser and fails CI on a fleet-scoped gate. The repair's
+  own text was wrong too, and is rewritten in all 16 languages: SEM does **not**
+  simply charge to taper — from the last real reading of the session it counts
+  delivered energy and stops on the measured total; the taper fallback applies
+  only when no reading has arrived at all.
+- 🚗 **A stop SEM commanded read as "the car is full"** (#708, reported by
+  @Azlinon) — the taper-to-full anchor fires on "declining, then under 50 W for
+  ~30 s". A car finishing and a charger SEM just switched off produce the
+  identical reading, so a mid-session stop pinned virtual SOC at 100 % and the
+  night's charge was skipped on it. The anchor now requires that SEM has not
+  **withdrawn** an offer it made — withdrawal, not absence: observer mode zeroes
+  every setpoint and an uncontrolled box never had one, and taper-to-full must
+  keep working there. Second door closed at the same time: the declining phase
+  was a one-way latch, so a car that dipped and came back to full tilt was still
+  remembered as tapering; it now clears when the draw returns to ≥ 70 % of
+  session peak (`TAPER_RATIO_DETECTED` read backwards) and re-latches on the
+  next real decline.
+- 🕐 **The SOC provenance line vanished exactly when it was needed** (#708,
+  reported by @Azlinon) — "Car: 63 % (12 min ago) · est. now ~71 %" dropped the
+  moment the vehicle-SOC sensor went unavailable, which is the same moment the
+  card promotes the *estimate* to the main gauge: the estimate took over the
+  display precisely when its provenance disappeared. Both keyed off the same
+  live mirror going null. Underneath sat a measurement bug — an unavailable
+  entity writes a NEW state, so `last_changed` dated the **outage**, not the
+  reading, and a sensor dead for half an hour reported "0 min ago". SEM now
+  remembers the last usable reading and the instant it was taken and publishes
+  both as attributes, so the line survives the sensor it describes. Published as
+  a timestamp rather than an age on purpose: an age attribute moves every minute
+  and would re-arm the #581 recorder churn — the card ticks the clock itself.
+- 🔍 **Export-limit autodetect had no anchor on Energy-Dashboard installs**
+  (#743) — SEM takes its solar sensor from HA's Energy Dashboard on most
+  setups, leaving `solar_production_sensor` empty; that empty key was the only
+  anchor the device scan got, so the brand sharpening never ran on the very
+  Huawei install it was written for. The ED-resolved solar power (or the
+  lifetime-yield counter, when solar power is derived) now anchors the scan.
+  Found live on HA-PROD.
 
 # [1.7.6-beta.9] — 09.08.2026
 

@@ -534,28 +534,41 @@ class SEMEVStatusCard extends SEMLitBase {
         );
         // #708 — stale-sensor info line (approved Option A): the gauge keeps
         // showing exactly what the car reports; the session energy-accounted
-        // estimate appears as a separate line with the sensor's age, and a
+        // estimate appears as a separate line with the reading's age, and a
         // "target reached (estimated)" line explains an estimate-based stop.
-        // Sensor age comes client-side from the vehicle_soc mirror's own
-        // last_changed — no extra server data, no recorder churn.
+        //
+        // The reading and its instant come from the server. They used to be
+        // read off the live vehicle_soc mirror, which coupled this line to
+        // the very failure it exists to explain: when the sensor goes
+        // unavailable the mirror nulls, so the gauge promoted the estimate
+        // and the line that said WHY vanished in the same frame. Worse, an
+        // unavailable entity rewrites its own last_changed, so the age read
+        // "0 min ago" for a sensor that had been dead for half an hour.
+        // The instant (not a pre-computed age) is what's published, so the
+        // clock still ticks here and the attribute stays recorder-quiet.
         const estAttrs708 = this._stateAttrs(`sensor.sem_charger_${id}_estimated_soc`);
         const eaSoc708 = estAttrs708.energy_accounted_soc;
         const estStop708 = estAttrs708.estimate_stop_active === true;
         const vSoc708 = this._val(`charger_${id}_vehicle_soc`, null);
+        const lastSoc708 = estAttrs708.vehicle_soc_last ?? vSoc708;
         let socAge708 = null;
-        const vSocState708 = this._hass?.states[`sensor.sem_charger_${id}_vehicle_soc`];
-        if (vSocState708?.last_changed) {
-            socAge708 = Math.round(
-                (Date.now() - new Date(vSocState708.last_changed).getTime()) / 60000);
+        const lastAt708 = Date.parse(estAttrs708.vehicle_soc_last_at ?? '');
+        if (!Number.isNaN(lastAt708)) {
+            socAge708 = Math.round((Date.now() - lastAt708) / 60000);
         }
         const fmt708 = (key) => (this._t(key) || '')
-            .replace(/\{soc\}/g, vSoc708 != null ? Math.round(vSoc708) : '—')
+            .replace(/\{soc\}/g, lastSoc708 != null ? Math.round(lastSoc708) : '—')
             .replace(/\{age\}/g, socAge708 != null ? socAge708 : '—')
             .replace(/\{est\}/g, eaSoc708 != null ? Math.round(eaSoc708) : '—');
-        // Only show while the estimate meaningfully leads the sensor and the
-        // sensor is actually stale (>= 5 min) — display users see no change.
-        const showSocInfo708 = vSoc708 != null && eaSoc708 != null
-            && socAge708 != null && socAge708 >= 5 && (eaSoc708 - vSoc708) >= 1;
+        // Show while the estimate meaningfully leads the last reading and
+        // that reading is actually stale (>= 5 min) — display users see no
+        // change. The lead requirement is waived when the sensor is OFFLINE:
+        // there the provenance IS the message, because the gauge has already
+        // switched to the estimate and nothing else says so.
+        const socOffline708 = vSoc708 == null;
+        const showSocInfo708 = lastSoc708 != null && eaSoc708 != null
+            && socAge708 != null && socAge708 >= 5
+            && ((eaSoc708 - lastSoc708) >= 1 || socOffline708);
         // (#440) nights / chargeNeeded / needsCharge / chargeIcon / chargeColor /
         // chargeText removed — the underlying skip decision is gone.
         const name = this._chargerName(id);

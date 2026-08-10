@@ -1451,7 +1451,7 @@
     },
     "soc_cap_unenforceable": {
       "title": "Laadlimiet van {target}% kan niet worden afgedwongen: {name}",
-      "description": "**{name}** is ingesteld op een procentueel laaddoel, maar je voertuig rapporteert op dit moment geen laadniveau, waardoor SEM niet kan stoppen bij **{target}%** — er wordt doorgeladen tot de auto zelf terugregelt (bijna vol).\n\nAls je dashboard een batterijpercentage toont, is dat SEM's *geschatte* SOC, die bewust genegeerd wordt voor de harde limiet (deze kan afwijken). Koppel een **echte voertuig-SOC-sensor** aan deze lader om de limiet af te dwingen (Configuratie → EV → Voertuig-SOC-entiteit). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-waarde beschikbaar is."
+      "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Configuratie → EV → Voertuig-SOC-entiteit). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is."
     }
   },
   "selector": {

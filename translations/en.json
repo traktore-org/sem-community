@@ -1451,7 +1451,7 @@
     },
     "soc_cap_unenforceable": {
       "title": "Can't enforce the {target}% charge limit: {name}",
-      "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop at **{target}%** — it will keep charging until the car itself tapers (near full).\n\nIf your dashboard shows a battery %, that's SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). To enforce the cap, wire a **real vehicle SOC sensor** for this charger (Configuration → EV → Vehicle SOC entity). This repair clears automatically as soon as a real SOC reading is available again."
+      "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop *exactly* at **{target}%**.\n\nIt isn't charging blind, though: from the last real reading this session it counts the energy actually delivered and stops once that measured total reaches your target — the overshoot is only what the car took since that reading. If no real reading has arrived at all this session (or SEM restarted mid-charge) there is nothing to count from, and charging runs until the car itself tapers near full.\n\nFor a cap that lands on the number, wire a **real vehicle SOC sensor** for this charger (Configuration → EV → Vehicle SOC entity). The battery % on the dashboard is SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). This repair clears automatically as soon as a real SOC reading is available again."
     }
   },
   "selector": {

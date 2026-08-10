@@ -2466,10 +2466,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
               and self.entity_description.key.endswith("_estimated_soc")):
             # #708 — the stale-sensor overshoot guard rides as attributes
             # of the per-charger Estimated SOC sensor (no new entities):
-            # the session energy-accounted SOC and whether it is what
-            # currently holds the charge stopped. The card's info line
-            # reads these; sensor age is computed client-side from the
-            # vehicle_soc mirror's own last_changed (no churn here).
+            # the session energy-accounted SOC, whether it is what
+            # currently holds the charge stopped, and the provenance of the
+            # reading the card's info line quotes.
+            #
+            # The age was originally computed client-side off the
+            # vehicle_soc mirror's own ``last_changed``. That measured the
+            # wrong interval: an entity going unavailable writes a new
+            # state, so a dead sensor dated itself "0 min ago" and the info
+            # line lost the value it was explaining exactly when the
+            # estimate took over the gauge. The server now publishes the
+            # last usable reading and the instant it was taken; the card
+            # still does the subtraction, so nothing here moves per minute.
             cid_708 = self.entity_description.key[
                 len("charger_"):-len("_estimated_soc")
             ]
@@ -2479,6 +2487,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 ),
                 "estimate_stop_active": self.coordinator.data.get(
                     f"charger_{cid_708}_estimate_stop_active"
+                ),
+                "vehicle_soc_last": self.coordinator.data.get(
+                    f"charger_{cid_708}_vehicle_soc_last"
+                ),
+                "vehicle_soc_last_at": self.coordinator.data.get(
+                    f"charger_{cid_708}_vehicle_soc_last_at"
                 ),
             })
         elif self.entity_description.key == "energy_plan":

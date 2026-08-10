@@ -253,13 +253,21 @@ def raise_soc_cap_unenforceable(
 ) -> None:
     """File a repair when an SOC-% charge target can't be enforced (#526).
 
-    A charger set to a ``%`` target needs a readable vehicle SOC to stop at
-    the cap. When the car isn't reporting SOC (asleep / no real sensor — the
-    dashboard may still show an *estimated* SOC, which SEM deliberately
-    ignores for the cap), SEM keeps charging until the car tapers. That
-    surprised RienduPre ("car charged past 80%"). Surface it as a persistent,
-    actionable repair instead of silently overshooting. Cleared the moment a
-    real SOC reading returns (or the target is no longer SOC-based).
+    A charger set to a ``%`` target needs a readable vehicle SOC to stop
+    exactly at the cap. When the car isn't reporting SOC (asleep / no real
+    sensor — the dashboard may still show an *estimated* SOC, which SEM
+    deliberately ignores for the cap), the stop lands approximately: from the
+    last real reading of the session SEM counts delivered energy and stops on
+    that measured total, so the overshoot is only what the car took since the
+    reading. With no reading at all this session (or a restart mid-charge)
+    there is nothing to count from and it runs to the car's own taper — the
+    case that surprised RienduPre ("car charged past 80%"). Surface it as a
+    persistent, actionable repair instead of silently overshooting. Cleared
+    the moment a real SOC reading returns (or the target is no longer
+    SOC-based).
+
+    (#708) Raised per charger and gated on THIS charger's connection state at
+    the call site — see ``coordinator._maybe_warn_soc_cap``.
     """
     try:
         ir.async_create_issue(
