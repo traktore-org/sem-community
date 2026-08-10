@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.10] — 09.08.2026 (Unreleased)
+# [1.7.6-beta.10] — 10.08.2026
 
 ### ✨ Enhancements
 - ☀️ **The curtailment probe — harvesting solar an export limit hides** (#743,
