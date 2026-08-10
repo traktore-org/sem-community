@@ -1898,6 +1898,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     charger_service=ev_charger_service,
                     charger_id=charger_id,
                     charger_name=charger_name,
+                    # (#748) hand the stop switch + status sensor to load
+                    # management so pattern discovery excludes them instead of
+                    # rediscovering the stop switch as a smart plug (the third
+                    # duplicate row). Reuse the device's already-resolved values.
+                    start_stop_entity=ev_device.start_stop_entity,
+                    status_entity=(ev_device.charging_status_entity or None),
                 )
 
         # Backward compat: _ev_device points to primary (first) charger

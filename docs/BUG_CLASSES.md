@@ -212,6 +212,36 @@ none of these (e.g. a climate-only HP with a separately-named ED energy counter)
 through — but ED individual devices are *defined by* their energy sensor, so that overlap is the
 realistic one.
 
+**Fourth instance — #748 (@jappish84), and the variant worth naming: the fold was at the DISPLAY
+layer, so it never de-persisted.** One Garo charger showed **three** rows: the authoritative
+`load_device_ev_charger`, an ED `individual_device` ("Billaddare") whose control entity is the
+charger's start/stop switch, and a `smart_switch` `load_device_garo_laddbox` that appeared the moment
+the user wired up start/stop (as #700's own reply advised). Three independent faults, each in this
+class's spirit but each a distinct mechanism: **(1)** `_configured_charger_entities()` knew only the
+charger's *power* entity — a charger is also its `start_stop_entity`/`current_entity`/`status_entity`,
+so #700's identity fold couldn't see "Billaddare" (matched by its control entity, not its power
+sensor); **(2)** the `smart_switch` discovery glob is `switch.*` with **no charger exclusion**, so a
+switch already claimed as a charger's stop control was rediscovered as a smart plug — which is *why
+wiring up start/stop creates a row*; **(3) the decisive one:** #700's fold lived inside
+`get_devices_for_sensor` (the card payload) and never removed the row from `LoadManagement._devices`,
+while `_sync_to_load_manager` **spares every `load_device_*` key** (#436) — so a persisted bogus row is
+immortal (survives restart, registry sync, and reappears in diagnostics + the load-management loop,
+`is_controllable: true`, acting on the charger's stop switch behind the EV controller's back). **The
+tell for this variant:** a suppression that reads correct because *the card* is correct, while the
+same duplicate is still live one layer down. A display fold hides a row; it does not remove it. Ask of
+any dedup: does it mutate the *authoritative store* (`LoadManagement._devices` / the persisted config),
+or only the payload a card renders? **Closure:** widen the identity set to EVERY entity a charger
+declares (plumbed through the charger rows in `_charger_priority_rows`, #748); add a **data-layer
+reconcile** (`_prune_charger_duplicate_lm_rows`) that drops any `LoadManagement` row sharing a
+charger's entity — except the authoritative `load_device_<charger_id>` rows — and **de-persists** it
+via `_save_device_configuration`, so existing installs lose the duplicate on upgrade instead of
+carrying it forever; and exclude charger-claimed entities at the point of discovery
+(`discover_controllable_devices(excluded_entities=…)`, fed from `register_ev_charger`'s now-stored stop
+switch + status sensor). **Guard:** `tests/test_748_charger_duplicate_depersist.py` asserts at the
+`LoadManagement._devices` (data) level — the smart-switch row and the ED-control-entity row are both
+gone while the authoritative charger row survives — *not* that the card happens not to render them.
+Refs #628 #700 #748.
+
 ### 13. Single-charger-in-list read as legacy (`len(ev_chargers) > 1` guard) — GUARDED
 **Symptom:** a lone EV charger configured through the config-flow (its sensors stored in
 `ev_chargers[0]`, NOT the flat top-level keys) has a fleet-level quantity silently read from the
@@ -1306,3 +1336,42 @@ Cross-cutting lesson from this pass: **class 8 is under-counted in the ledger.**
 the eight are checks that cannot fail, and each one was previously read as evidence of
 health. The meta-test in #660 ("every check must be demonstrably fireable") is the
 structural close for the whole class — prefer it over fixing the instances one at a time.
+
+---
+
+### 37. Display/derived surface recomputes an authoritative decision from a weaker signal — GUARDED
+**Symptom:** a card shows the *opposite* of what a device's own entity says — a switch reads
+`on`, the priority list renders the row "Off". The control layer behaves correctly; only the
+surface lies, so it reads as a UI glitch rather than a logic bug. **Root shape:** an
+authoritative predicate exists (SEM already knows and stores the device's control entity, and
+the control path reads it), but a *display/derived* path recomputes the same decision **inline
+from a weaker proxy** instead of reading the authoritative source — and the two drift. The
+proxy is lossy in a corner the author didn't picture: here on/off was inferred from
+`power > 0`, but a switch-controlled load idling below its power sensor's reporting floor (a
+Shelly PM, a Powercalc-backed `light.*` under a watt) publishes `0 W`, so power alone reads ON
+as OFF. A cousin of class 11 (there a *corrected* value leaks onto a raw display field; here a
+*weaker* value is recomputed in place of the authoritative one) and of the "Duplicated
+mechanism" meta-class (two copies of one predicate). **Live catch (#745, @Azlinon, split from
+#744):** `features/device_registry.py::get_devices_for_sensor` (the `sem_controllable_devices_count`
+card payload) computed `is_on = current_power > 0` for every Energy-Dashboard row, ignoring
+`device.control_entity` entirely — while `load_management` reads the switch authoritatively via
+`LoadDeviceDiscovery.get_device_current_state`. **Where it lives:** the ED-row builder in
+`get_devices_for_sensor`. **Assessed and left as-is (correctly):** the service / surplus-direct /
+EV-charger rows there derive `is_on` from the controller's own `is_active` / charger state (the
+authoritative belief), and the battery row from charge power (a passive sink with no switch) —
+none is a power-only recompute of a known switch. **Closure:** one shared switch-aware predicate,
+`resolve_load_is_on(hass, control_entity, power)` — the device's own on/off-domain control entity
+(`switch`/`light`/`input_boolean`/…) is authoritative, power is the fallback only when there is no
+readable on/off entity (a `number.*` amperage control, an integration service, an unavailable
+switch). It is the display twin of `get_device_current_state`; both read the switch first and
+differ only in the fallback for an *unreadable* switch — control fails safe to OFF (never assume a
+device runs), display falls back to observed power (never hide a drawing device), documented at
+both sites so the difference reads as a decision, not drift. **Guard:**
+`tests/test_745_load_on_off_from_state.py` — the reporter's `switch=on / 0 W` case reads ON in the
+payload (RED against the pre-fix `power > 0`), the fallback shapes, and a parity test pinning that
+the display and control predicates return the *same* verdict for a readable switch (so they cannot
+silently diverge again). Refs #744 #745.
+**Sweep question:** for every card/attribute/derived field that answers a yes/no or state question
+the *control* layer also answers — does it read the authoritative source (the entity, the
+controller's belief), or recompute it from a proxy (power, a name, a threshold)? If recomputed,
+name the corner where the proxy and the truth disagree.

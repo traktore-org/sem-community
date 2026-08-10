@@ -234,8 +234,15 @@ class LoadManagementCoordinator:
             energy_dashboard_devices = await self._device_discovery.discover_from_energy_dashboard()
             _LOGGER.info("Energy Dashboard discovery: found %s devices", len(energy_dashboard_devices))
 
-            # Then, pattern-based discovery for additional devices
-            pattern_discovered = self._device_discovery.discover_controllable_devices()
+            # Then, pattern-based discovery for additional devices.
+            # (#748) Exclude every entity a configured charger already owns (its
+            # stop switch, current number, power / status sensors) so the
+            # ``switch.*`` smart-switch glob doesn't rediscover the charger's
+            # own start/stop switch as a smart plug — the third duplicate row.
+            excluded_entities = self._charger_claimed_entities()
+            pattern_discovered = self._device_discovery.discover_controllable_devices(
+                excluded_entities=excluded_entities
+            )
             _LOGGER.info("Pattern-based discovery: found %s devices", len(pattern_discovered))
 
             # Merge discoveries - Energy Dashboard takes priority
@@ -285,6 +292,32 @@ class LoadManagementCoordinator:
         except Exception as e:
             _LOGGER.error("Device discovery failed: %s", e, exc_info=True)
 
+    def _charger_claimed_entities(self) -> set:
+        """(#748) Every entity owned by a registered EV charger — its current
+        control / power sensor, its start/stop switch and its status sensor.
+        Pattern discovery excludes these so a charger's own stop switch is not
+        rediscovered as a smart plug. Reads the charger rows registered by
+        ``register_ev_charger`` (device_type ``ev_charger``); an install with
+        no charger yields an empty set (no exclusion). Never raises."""
+        claimed: set = set()
+        try:
+            for info in self._devices.values():
+                if not isinstance(info, dict) or info.get("device_type") != "ev_charger":
+                    continue
+                for key in (
+                    "switch_entity", "power_entity", "charger_service",
+                    "start_stop_entity", "status_entity",
+                ):
+                    ent = info.get(key)
+                    # charger_service is a "domain.service" string, not an
+                    # entity — but it can never match a switch/power entity_id,
+                    # so including it is harmless and keeps the set simple.
+                    if ent:
+                        claimed.add(ent)
+        except Exception:  # pragma: no cover - defensive
+            return claimed
+        return claimed
+
     async def register_ev_charger(
         self,
         current_control_entity: str = None,
@@ -294,6 +327,8 @@ class LoadManagementCoordinator:
         charger_service: str = None,
         charger_id: str = "ev_charger",
         charger_name: str = "EV Charger",
+        start_stop_entity: str = None,
+        status_entity: str = None,
     ):
         """Register EV charger as a load management device.
 
@@ -368,6 +403,13 @@ class LoadManagementCoordinator:
                 "is_controllable": True,
                 "control_type": "current",  # Special flag: use current control instead of switch
                 "charger_id": charger_id,  # #436: lets callers / card map back to ev_chargers[i].id
+                # (#748) the charger's stop switch / status sensor. Stored so
+                # pattern discovery can EXCLUDE them: a switch already claimed
+                # as this charger's start/stop is not a smart plug, and without
+                # this it was rediscovered as ``load_device_<slug>`` — the third
+                # duplicate row. Kept even when None so the key always exists.
+                "start_stop_entity": start_stop_entity,
+                "status_entity": status_entity,
             }
 
             # Save configuration
