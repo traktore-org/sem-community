@@ -149,6 +149,9 @@ class EVTaperDetector:
         self._full_detected: bool = False
         self._last_setpoint: float = 0.0
         self._settling_counter: int = 0
+        # #708 — has SEM offered current at any point this session? Gates
+        # the taper-to-full anchor: see the withdrawal note in ``update``.
+        self._sem_has_offered: bool = False
         # #438 — current-session energy accumulator, integrated from
         # the per-call (power, timestamp) tuples. The taper-to-full
         # gate requires this to exceed FULL_SESSION_ENERGY_MIN_KWH
@@ -258,9 +261,45 @@ class EVTaperDetector:
             self._settling_counter -= 1
         self._last_setpoint = current_setpoint
 
+        # #708 — SEM's own hand on the charge. Every stop path in
+        # devices/base.py (deactivate, the session stop, the quota-hold
+        # branch) zeroes ``_current_setpoint``, so a withdrawal is visible
+        # right here. Once SEM has taken back an offer it made, the 0 W
+        # that follows is SEM's doing and carries no information about the
+        # pack — a car finishing and a charger SEM switched off read
+        # identically at the meter.
+        #
+        # ABSENCE of an offer is not WITHDRAWAL of one. Observer mode
+        # zeroes every setpoint (_zero_charger_setpoints) and an
+        # uncontrolled box never had one; there SEM withdrew nothing, the
+        # taper is the only evidence available, and it must still count.
+        # That is why the term is a transition, not ``setpoint > 0``.
+        if current_setpoint > 0:
+            self._sem_has_offered = True
+        sem_withdrew_offer = self._sem_has_offered and current_setpoint <= 0
+
         # Track session peak (only from sustained readings > threshold)
         if ev_power > self._session_peak_w and ev_power > SESSION_PEAK_MIN:
             self._session_peak_w = ev_power
+
+        # #708 — the decline belongs to the charge that produced it.
+        # ``_analyze`` latches ``_declining_phase`` on the first declining
+        # five-minute window and nothing short of ``reset_session`` clears
+        # it, so a car that dips and then comes back to full tilt is still
+        # remembered as tapering — and the next pause it takes reads as
+        # the end of the charge.
+        #
+        # The threshold is TAPER_RATIO_DETECTED read backwards: below 70 %
+        # of session peak *plus* a declining trend is what confirms a
+        # taper, so at or above 70 % the charge is by definition not in
+        # one. A genuine taper passing back down through that band clears
+        # the latch here and is re-latched by ``_analyze`` at the end of
+        # this same cycle, while the trend is still declining.
+        if (self._declining_phase
+                and self._session_peak_w > 0
+                and ev_power >= self._session_peak_w
+                * TAPER_RATIO_DETECTED / 100.0):
+            self._declining_phase = False
 
         # Append sample
         self._buffer.append(PowerSample(
@@ -272,10 +311,12 @@ class EVTaperDetector:
 
         # Check for full charge (0W after declining from a real charging session)
         # Require peak > 3000W and 3 consecutive low-power samples (~30s)
-        # to avoid false triggers from brief BMS power dips
+        # to avoid false triggers from brief BMS power dips — and (#708)
+        # that SEM has not just withdrawn the offer that was feeding it.
         if (self._declining_phase
                 and ev_power < FULL_POWER_THRESHOLD
-                and self._session_peak_w > 3000):
+                and self._session_peak_w > 3000
+                and not sem_withdrew_offer):
             self._full_confirm_count = getattr(self, '_full_confirm_count', 0) + 1
         else:
             self._full_confirm_count = 0
@@ -642,6 +683,7 @@ class EVTaperDetector:
         self._full_confirm_count = 0
         self._settling_counter = 0
         self._last_setpoint = 0.0
+        self._sem_has_offered = False  # #708 — withdrawal is session-scoped
         self._session_start_soc = None
         # #708 — the anchor is meaningless across sessions (unknown car,
         # unknown driving in between); the bootstrap in get_virtual_soc
