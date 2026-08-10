@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.11] — 10.08.2026
+
+### 🐛 Fixes
+- 🔌 **One physical EV charger produced three rows in the Device priority list**
+  (#748, reported by @jappish84 via #628) — #700's charger-identity fold that
+  was meant to collapse the duplicate ran only in the card payload, so it
+  never removed the row from load management: the duplicates stayed live,
+  `controllable`, and could act on the charger's own start/stop switch behind
+  the EV controller's back. Three defects, all fixed at the identity/data
+  layer. (1) A charger is now identified by *every* entity it declares — its
+  start/stop switch, current-limit number, status sensor and control entities,
+  not only its power sensor — so the fold finally catches an Energy-Dashboard
+  row (e.g. a Swedish "Billaddare") keyed on the stop switch. (2) Smart-switch
+  auto-discovery no longer rediscovers a switch already wired as a charger's
+  start/stop as if it were a separate smart plug — which is what *added* the
+  third row when the user configured start/stop. (3) A new data-layer reconcile
+  drops any load-management row that shares a configured charger's entity —
+  keeping only the authoritative per-charger row — and **de-persists** it, so
+  existing installs shed the stale duplicate on upgrade instead of carrying it
+  forever. It runs even on installs with no Energy-Dashboard individual devices,
+  and fails safe if a charger is missing its id.
+
 # [1.7.6-beta.10] — 10.08.2026
 
 ### ✨ Enhancements
