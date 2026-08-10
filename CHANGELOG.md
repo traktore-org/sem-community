@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.12] — 10.08.2026
+
+### 🐛 Fixes
+- 🔌 **A device that is ON read "Off" in the Device priority list** (#745,
+  reported by @Azlinon via #744) — load-management on/off in the card payload
+  was inferred from **power alone**, so a switch-controlled load whose own power
+  sensor idles below its reporting floor (a Shelly PM, or a Powercalc-backed
+  `light.*` drawing under a watt, publishes `0 W`) rendered "Off" while
+  `switch.x` / `light.x` said `on`. The control layer already reads the switch
+  authoritatively; only the display payload had diverged to a power-only copy,
+  so the two on/off predicates drifted. The card row now prefers the device's
+  **own control-entity state** — a `switch` / `light` / `input_boolean` is
+  authoritative — and falls back to power only when there is no readable on/off
+  entity (a current `number.*`, an integration service, an unavailable switch).
+  The control path is unchanged; this is purely the displayed state.
+
 # [1.7.6-beta.11] — 10.08.2026
 
 ### 🐛 Fixes
