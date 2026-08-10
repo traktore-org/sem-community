@@ -1445,7 +1445,7 @@
     },
     "soc_cap_unenforceable": {
       "title": "Nie można wymusić limitu ładowania {target}%: {name}",
-      "description": "**{name}** ma ustawiony procentowy cel ładowania, ale Twój pojazd nie raportuje w tej chwili swojego stanu naładowania, więc SEM nie może zatrzymać ładowania przy **{target}%** — będzie ładował dalej, aż samochód sam ograniczy moc (blisko pełnego naładowania).\n\nJeśli na pulpicie widzisz procent baterii, to *szacowany* SOC obliczany przez SEM, który jest celowo pomijany przy twardym limicie (może się rozjeżdżać). Aby wymusić limit, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → EV → Encja SOC pojazdu). Ta naprawa znika automatycznie, gdy tylko rzeczywisty odczyt SOC będzie ponownie dostępny."
+      "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → EV → Encja SOC pojazdu). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC."
     }
   },
   "selector": {

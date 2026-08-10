@@ -5919,13 +5919,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         went past 80%"). Surface it as a persistent repair instead of silently
         overshooting; clear it the moment a real SOC returns or the charger
         stops / isn't on a SOC target.
+
+        (#708) ``charging_state`` is the FLEET state — the per-charger loop
+        hands the same value to every charger, so one car drawing raised the
+        repair on every box in the fleet, each naming its own target. Live on
+        beta.9 with two EVSEs and one car (Azlinon). That is the fleet-read
+        class (#616): a per-charger surface gated on a fleet term. The
+        connected state is the missing per-charger half —
+        ``_last_ev_connected_per_charger[cid]``, the same map the virtual-SOC
+        decay gates on (#648) and the source of
+        ``binary_sensor.sem_charger_<id>_connected``.
+
+        A charger the map has not seen yet (first cycle after a restart, or no
+        connected sensor) defaults to True: the fallback is the pre-#708
+        behaviour, so missing tracking can never silently disable the cap
+        warning on a charger that does have a car on it.
         """
         cfg = charger_cfg or {}
         ttype = (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
                  or self.config.get("ev_target_type") or "kwh")
+        connected = (getattr(self, "_last_ev_connected_per_charger", None)
+                     or {}).get(cid, True)
         charging = charging_state in self.SOLAR_CHARGING_STATES
         from . import repair_issues as _ri
-        if ttype == "soc" and real_soc is None and charging:
+        if ttype == "soc" and real_soc is None and charging and connected:
             target = self._resolve_target(cfg, "ev_target_soc", "max", 80, 100)
             _ri.raise_soc_cap_unenforceable(
                 self.hass, cid, name=cfg.get("name") or "EV", target_soc=target,
