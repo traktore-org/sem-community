@@ -29,7 +29,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers import entity_registry as er
 
 from ..ha_energy_reader import read_energy_dashboard_config, get_all_individual_devices
-from .load_device_discovery import LoadDeviceDiscovery
+from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 from ..devices.base import (
     SwitchDevice,
     CurrentControlDevice,
@@ -1026,15 +1026,23 @@ class UnifiedDeviceRegistry:
                 continue
             # Get live power reading
             current_power = 0.0
-            is_on = False
             if device.power_sensor:
                 state = self.hass.states.get(device.power_sensor)
                 if state and state.state not in ("unknown", "unavailable"):
                     try:
                         current_power = float(state.state)
-                        is_on = current_power > 0
                     except (ValueError, TypeError):
                         pass
+            # (#745) On/off must prefer the device's OWN control-entity state.
+            # A switch/light idling below its power sensor's reporting floor
+            # still reads 0 W here, so a device that is genuinely ON showed
+            # "Off". load_management already reads the switch (via
+            # get_device_current_state); this card payload had diverged to
+            # power-only — the two on/off predicates drifted. Route both through
+            # resolve_load_is_on so a known switch is authoritative and only a
+            # controlless/number/unavailable row falls back to power.
+            is_on = resolve_load_is_on(
+                self.hass, device.control_entity, current_power)
 
             result[did] = {
                 "name": device.name,

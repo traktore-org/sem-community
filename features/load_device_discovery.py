@@ -14,6 +14,44 @@ from ..ha_energy_reader import read_energy_dashboard_config, get_all_individual_
 _LOGGER = logging.getLogger(__name__)
 
 
+# (#745) Domains whose entity STATE is an authoritative on/off answer for a
+# load. A device's own ``switch.*`` / ``light.*`` / ``input_boolean.*`` is the
+# ground truth for "is it on" even when its power sensor idles below its
+# reporting floor — a Shelly PM or a Powercalc-backed light drawing under a watt
+# publishes ``0 W``, so power alone reads it as OFF while the switch says ON. A
+# ``number.*`` current control (EV amperage) or an integration *service* string
+# carries no on/off state, so those fall back to power.
+_ONOFF_CONTROL_DOMAINS = frozenset(
+    {"switch", "light", "input_boolean", "fan", "humidifier", "siren", "remote"}
+)
+
+
+def resolve_load_is_on(
+    hass: HomeAssistant, control_entity: Optional[str], current_power: float
+) -> bool:
+    """(#745) Authoritative on/off for a load row.
+
+    Prefer the device's OWN control entity when it is an on/off-semantic domain:
+    its state is ground truth even when the power sensor reads ``0 W`` below its
+    reporting floor. Fall back to ``power > 0`` when there is no such entity, it
+    is unavailable/unknown, or its domain has no on/off state (a current
+    ``number.*``, an integration service). This is the DISPLAY-side twin of the
+    control-side :meth:`LoadDeviceDiscovery.get_device_current_state`; both read
+    the switch first, and differ only in the fallback for an unreadable switch —
+    control fails safe to OFF (never assume a device is running), display falls
+    back to observed power (never hide a device that is drawing). The
+    ``get_devices_for_sensor`` card payload had lost the switch read entirely,
+    reporting the opposite of what the switch said — that is the bug.
+    """
+    if control_entity and isinstance(control_entity, str):
+        domain = control_entity.split(".", 1)[0]
+        if domain in _ONOFF_CONTROL_DOMAINS:
+            state = hass.states.get(control_entity)
+            if state and state.state not in ("unknown", "unavailable", None, ""):
+                return str(state.state).strip().lower() in ("on", "true", "1")
+    return (current_power or 0) > 0
+
+
 class LoadDeviceDiscovery:
     """Auto-discover controllable devices for load management."""
 
@@ -666,6 +704,15 @@ class LoadDeviceDiscovery:
 
         For devices with switch_entity = None (e.g., service-based EV charger),
         the 'is_on' state is determined by whether power consumption > 0.
+
+        (#745) This is the CONTROL-side on/off predicate (load-management reads
+        it to shed/restore). The DISPLAY-side twin is the module-level
+        :func:`resolve_load_is_on` (the card payload). Both read the switch
+        first; they differ only in the fallback for an unreadable switch —
+        control fails safe to OFF here (a switch present but not ``on`` is not
+        treated as on regardless of power), display falls back to observed
+        power. Keep the two in step: a change to how a switch's state maps to
+        on/off belongs in both.
         """
         switch_entity = device_info.get("switch_entity")  # May be None for service-based devices
         power_entity = device_info.get("power_entity")
