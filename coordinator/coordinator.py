@@ -825,6 +825,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "name": getattr(dev, "name", cid),
                 "priority_seed": int(getattr(dev, "priority", 3) or 3),
                 "power_entity": ent,
+                # (#748) the charger's OTHER declared entities, so the registry's
+                # identity fold + data-layer reconcile recognise an ED row or a
+                # discovered switch that names the charger's stop switch /
+                # current number / status sensor — not only its power sensor.
+                # #700's fold saw only power_entity and missed "Billaddare"
+                # (keyed on the stop switch). Empty strings ("" defaults on the
+                # status / offer sensors) normalize to None; the registry
+                # filters falsy entries.
+                "control_entity": getattr(dev, "entity_id", None) or None,
+                "current_entity": getattr(dev, "current_entity_id", None) or None,
+                "current_sensor_entity": getattr(dev, "current_sensor_entity_id", None) or None,
+                "status_entity": getattr(dev, "charging_status_entity", None) or None,
+                "start_stop_entity": getattr(dev, "start_stop_entity", None) or None,
+                "charge_mode_entity": getattr(dev, "charge_mode_entity", None) or None,
+                "service_entity": getattr(dev, "charger_service_entity_id", None) or None,
                 "current_power_w": pw,
                 "is_on": pw > 50.0,
                 # min = the surplus threshold to start (the meaningful "rating");

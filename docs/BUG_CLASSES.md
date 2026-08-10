@@ -212,6 +212,36 @@ none of these (e.g. a climate-only HP with a separately-named ED energy counter)
 through — but ED individual devices are *defined by* their energy sensor, so that overlap is the
 realistic one.
 
+**Fourth instance — #748 (@jappish84), and the variant worth naming: the fold was at the DISPLAY
+layer, so it never de-persisted.** One Garo charger showed **three** rows: the authoritative
+`load_device_ev_charger`, an ED `individual_device` ("Billaddare") whose control entity is the
+charger's start/stop switch, and a `smart_switch` `load_device_garo_laddbox` that appeared the moment
+the user wired up start/stop (as #700's own reply advised). Three independent faults, each in this
+class's spirit but each a distinct mechanism: **(1)** `_configured_charger_entities()` knew only the
+charger's *power* entity — a charger is also its `start_stop_entity`/`current_entity`/`status_entity`,
+so #700's identity fold couldn't see "Billaddare" (matched by its control entity, not its power
+sensor); **(2)** the `smart_switch` discovery glob is `switch.*` with **no charger exclusion**, so a
+switch already claimed as a charger's stop control was rediscovered as a smart plug — which is *why
+wiring up start/stop creates a row*; **(3) the decisive one:** #700's fold lived inside
+`get_devices_for_sensor` (the card payload) and never removed the row from `LoadManagement._devices`,
+while `_sync_to_load_manager` **spares every `load_device_*` key** (#436) — so a persisted bogus row is
+immortal (survives restart, registry sync, and reappears in diagnostics + the load-management loop,
+`is_controllable: true`, acting on the charger's stop switch behind the EV controller's back). **The
+tell for this variant:** a suppression that reads correct because *the card* is correct, while the
+same duplicate is still live one layer down. A display fold hides a row; it does not remove it. Ask of
+any dedup: does it mutate the *authoritative store* (`LoadManagement._devices` / the persisted config),
+or only the payload a card renders? **Closure:** widen the identity set to EVERY entity a charger
+declares (plumbed through the charger rows in `_charger_priority_rows`, #748); add a **data-layer
+reconcile** (`_prune_charger_duplicate_lm_rows`) that drops any `LoadManagement` row sharing a
+charger's entity — except the authoritative `load_device_<charger_id>` rows — and **de-persists** it
+via `_save_device_configuration`, so existing installs lose the duplicate on upgrade instead of
+carrying it forever; and exclude charger-claimed entities at the point of discovery
+(`discover_controllable_devices(excluded_entities=…)`, fed from `register_ev_charger`'s now-stored stop
+switch + status sensor). **Guard:** `tests/test_748_charger_duplicate_depersist.py` asserts at the
+`LoadManagement._devices` (data) level — the smart-switch row and the ED-control-entity row are both
+gone while the authoritative charger row survives — *not* that the card happens not to render them.
+Refs #628 #700 #748.
+
 ### 13. Single-charger-in-list read as legacy (`len(ev_chargers) > 1` guard) — GUARDED
 **Symptom:** a lone EV charger configured through the config-flow (its sensors stored in
 `ev_chargers[0]`, NOT the flat top-level keys) has a fleet-level quantity silently read from the
