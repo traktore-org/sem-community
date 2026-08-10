@@ -26,12 +26,24 @@ class LoadDeviceDiscovery:
         """Get all available entity IDs."""
         return list(self.hass.states.async_entity_ids())
 
-    def discover_controllable_devices(self) -> Dict[str, Dict]:
+    def discover_controllable_devices(
+        self, excluded_entities: Optional[set] = None
+    ) -> Dict[str, Dict]:
         """Discover devices that have both power monitoring and switch control.
+
+        Args:
+            excluded_entities: entity_ids already claimed by a configured
+                charger (its stop switch, current number, power/status
+                sensors). (#748) The ``smart_switch`` pattern is ``switch.*``
+                with no charger exclusion, so a switch already wired as a
+                charger's start/stop control was rediscovered as a smart plug —
+                the third duplicate row. Any switch OR power sensor in this set
+                is skipped: the charger owns it.
 
         Returns:
             Dict with device_id as key, device info as value
         """
+        excluded = excluded_entities or set()
         discovered_devices = {}
         all_entities = self.get_all_entities()
         _LOGGER.info(f"Starting discovery with {len(all_entities)} total entities")
@@ -46,10 +58,24 @@ class LoadDeviceDiscovery:
             _LOGGER.info(f"Device type '{device_type}': found {len(switches)} switches matching pattern '{switch_pattern}'")
 
             for switch_entity in switches:
+                # (#748) a switch already claimed as a charger's start/stop
+                # control is not a smart plug — the charger owns it.
+                if switch_entity in excluded:
+                    _LOGGER.debug(
+                        "Skipping %s: claimed by a configured charger", switch_entity
+                    )
+                    continue
                 # Try to find corresponding power sensor
                 power_entity = self._find_corresponding_power_sensor(
                     switch_entity, power_pattern, all_entities
                 )
+
+                if power_entity and power_entity in excluded:
+                    _LOGGER.debug(
+                        "Skipping %s: power sensor %s claimed by a configured charger",
+                        switch_entity, power_entity,
+                    )
+                    continue
 
                 if power_entity:
                     _LOGGER.debug(f"Found power sensor for {switch_entity}: {power_entity}")

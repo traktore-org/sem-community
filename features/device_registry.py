@@ -538,6 +538,17 @@ class UnifiedDeviceRegistry:
 
     async def async_refresh_devices(self) -> None:
         """Read Energy Dashboard, discover controls, build device list, sync."""
+        # (#748) Reconcile persisted charger-duplicate rows FIRST, before the
+        # early-returns below. A persisted ``load_device_<slug>`` smart-switch
+        # dup is immortal regardless of ED shape (the sync's prune spares every
+        # ``load_device_*`` key), so an install with a charger but NO Energy
+        # Dashboard individual devices — where the two returns below skip the
+        # sync entirely — would otherwise keep its duplicate forever. This pass
+        # depends only on the charger rows + LoadManagement._devices, not on the
+        # ED, so it runs on every refresh (incl. the 35 s rediscovery, by which
+        # time the charger rows are populated).
+        await self._reconcile_charger_dups_and_persist()
+
         energy_config = await read_energy_dashboard_config(self.hass)
         if not energy_config:
             _LOGGER.info("Energy Dashboard not configured, no devices to register")
@@ -632,7 +643,19 @@ class UnifiedDeviceRegistry:
 
         # Sync to both systems
         self._sync_to_surplus_controller()
-        self._sync_to_load_manager()
+        # (#748) _sync_to_load_manager now also drops charger-duplicate rows
+        # from LoadManagement._devices (the data-layer fold #700 never did) —
+        # including any ED row it just re-added that names a charger entity. If
+        # it removed any, de-persist immediately — the row lives in
+        # LoadManagement's OWN store and is otherwise reloaded on every restart
+        # (its prune spares all load_device_* keys). Without this, the fix only
+        # helps installs that never had the duplicate.
+        if self._sync_to_load_manager():
+            try:
+                await self._load_manager._save_device_configuration()
+            except Exception as e:  # never let a persist hiccup break discovery
+                _LOGGER.debug(
+                    "#748 de-persist after charger-dup prune failed: %s", e)
 
         # (#586) Re-apply the runtime snapshot onto the rebuilt devices.
         self._restore_accrued_runtimes(runtime_snapshot)
@@ -772,7 +795,7 @@ class UnifiedDeviceRegistry:
                     device.device_id,
                 )
 
-    def _sync_to_load_manager(self) -> None:
+    def _sync_to_load_manager(self) -> bool:
         """Populate LoadManagement._devices dict from registry devices.
 
         Removes old pattern-discovered / manually-added devices that aren't
@@ -789,7 +812,7 @@ class UnifiedDeviceRegistry:
         ``load_device_*`` key so the multi-charger fix actually sticks.
         """
         if not self._load_manager:
-            return
+            return False
 
         # Remove old non-registry, non-EV devices
         old_ids = [
@@ -841,9 +864,104 @@ class UnifiedDeviceRegistry:
 
             self._load_manager._devices[device_id] = device_info
 
+        # (#748) DATA-LAYER charger-duplicate reconcile — the twin of the #700
+        # display fold. #700 suppressed the duplicate only in
+        # get_devices_for_sensor (the card payload); it never removed the row
+        # from LoadManagement._devices, and _sync_to_load_manager's prune above
+        # deliberately SPARES every ``load_device_*`` key (#436) — so a
+        # persisted smart-switch row (``load_device_<slug>``) that shares the
+        # charger's stop switch, and any ED row re-added just above that names a
+        # charger entity, survived here: controllable, sheddable, acting on the
+        # charger behind the EV controller's back. Drop them now, at the
+        # registry (identity) level — the authoritative per-charger rows
+        # (``load_device_<charger_id>``) are kept.
+        pruned = self._prune_charger_duplicate_lm_rows()
+
         _LOGGER.info(
             "Synced %d devices to LoadManagement", len(self._devices)
         )
+        return pruned
+
+    async def _reconcile_charger_dups_and_persist(self) -> None:
+        """(#748) Drop charger-duplicate LoadManagement rows and de-persist if
+        anything changed. Idempotent — safe to call more than once per refresh.
+        Never raises: a persist hiccup must not break device discovery."""
+        try:
+            if self._prune_charger_duplicate_lm_rows() and self._load_manager:
+                await self._load_manager._save_device_configuration()
+        except Exception as e:  # never let a persist hiccup break discovery
+            _LOGGER.debug("#748 charger-dup reconcile/persist failed: %s", e)
+
+    def _prune_charger_duplicate_lm_rows(self) -> bool:
+        """(#748) Remove LoadManagement rows whose power / control / energy
+        entity belongs to a configured charger — the data-layer version of the
+        #700 identity fold. Everything that shares a charger's declared entity
+        is a duplicate of that charger and is deleted; the authoritative
+        per-charger rows (``load_device_<charger_id>``) ARE the chargers and are
+        kept. Returns True if it removed anything, so the caller can de-persist.
+        Never raises: a bad row must not break the device sync."""
+        lm = self._load_manager
+        if not lm or not self._ev_charger_rows:
+            return False
+        # Fail SAFE, not open: if any charger row lacks an id we cannot build
+        # the protected authoritative set for it, and pruning could then delete
+        # that charger's own load row (it names charger entities by design). A
+        # populated row always carries an id (``_charger_priority_rows`` sets
+        # it); a missing one is a bug upstream — prune nothing rather than risk
+        # shedding the authoritative charger.
+        if any(not c.get("id") for c in self._ev_charger_rows):
+            _LOGGER.debug(
+                "#748 skipping charger-dup prune: a charger row has no id")
+            return False
+        charger_entities = self._configured_charger_entities()
+        # The authoritative rows: one per configured charger, keyed by its id
+        # (register_ev_charger → ``load_device_<charger_id>``). These name a
+        # charger entity BY DESIGN (their own current/power entity) and must
+        # never be pruned as duplicates of themselves.
+        authoritative = {
+            f"load_device_{c.get('id')}" for c in self._ev_charger_rows
+        }
+        removed: List[str] = []
+        for did, info in list(getattr(lm, "_devices", {}).items()):
+            if did in authoritative:
+                continue
+            control = info.get("control") or {}
+            # Direct entity-string identity: any entity the row names that the
+            # charger declares (power sensor, stop switch, current number,
+            # status sensor, control/service).
+            string_candidates = [
+                info.get("power_entity"),
+                info.get("switch_entity"),
+                info.get("energy_entity"),
+                control.get("entity"),
+                control.get("service"),
+            ]
+            # Registry-device identity (same HA device as the charger): kept
+            # NARROW — only the power / energy sensors, exactly like the #700
+            # display fold. A shared-device match on an arbitrary control/switch
+            # entity would be broader than the card path and could catch a
+            # co-located but separate load; the string match above already
+            # covers a switch/number that IS a charger entity.
+            device_candidates = [
+                info.get("power_entity"),
+                info.get("energy_entity"),
+            ]
+            hit = any(e and e in charger_entities for e in string_candidates) or any(
+                self._same_registry_device_as_charger(e)
+                for e in device_candidates if e
+            )
+            if hit:
+                removed.append(did)
+        for did in removed:
+            try:
+                del lm._devices[did]
+            except KeyError:  # pragma: no cover - defensive
+                continue
+            _LOGGER.info(
+                "#748 dropped charger-duplicate load row %s "
+                "(shares a configured charger's entity)", did,
+            )
+        return bool(removed)
 
     def get_devices_for_sensor(self) -> Dict[str, Dict[str, Any]]:
         """Return dict formatted for the controllable_devices_count sensor attributes."""
@@ -885,6 +1003,11 @@ class UnifiedDeviceRegistry:
             # the charger's own device is charger telemetry).
             same_charger = (
                 (device.power_sensor and device.power_sensor in charger_entities)
+                # (#748) an ED / manually-mapped row whose CONTROL entity is
+                # the charger's own stop switch / current number is the same
+                # physical charger — the exact "Billaddare" miss #700 left.
+                or (device.control_entity and device.control_entity in charger_entities)
+                or (device.energy_sensor and device.energy_sensor in charger_entities)
                 or self._same_registry_device_as_charger(device.power_sensor)
                 or self._same_registry_device_as_charger(device.energy_sensor)
             )
@@ -1153,13 +1276,44 @@ class UnifiedDeviceRegistry:
         """
         self._ev_charger_rows = list(chargers or [])
 
+    # (#748) Every row key a configured charger may carry that names a HA
+    # entity BELONGING to the physical charger — not just its power sensor.
+    # A charger is identified by ANY of these; an ED row or a discovered
+    # switch that names one of them is the same physical charger and must
+    # fold. #700's fold looked only at ``power_entity`` and so missed
+    # "Billaddare", whose control entity is the charger's start/stop switch.
+    _CHARGER_ENTITY_KEYS = (
+        "power_entity",
+        "control_entity",
+        "current_entity",
+        "current_sensor_entity",
+        "status_entity",
+        "start_stop_entity",
+        "charge_mode_entity",
+        "service_entity",
+    )
+
     def _configured_charger_entities(self) -> set:
-        """Power entities of configured chargers — used to suppress the ED
-        ``is_ev`` duplicate row for the same physical charger."""
-        return {
-            c.get("power_entity") for c in self._ev_charger_rows
-            if c.get("power_entity")
-        }
+        """(#576/#700/#748) EVERY HA entity a configured charger declares —
+        power sensor, start/stop switch, current-limit number, status sensor,
+        charge-mode select and control/service entities. A charger is
+        identified by ANY of these, not only its power sensor: an ED row or a
+        discovered switch naming the charger's *stop* control is the same
+        physical charger and must fold, exactly as one naming its power sensor
+        does. Used both to suppress the ED duplicate row (card) and, at the
+        data layer, to keep the charger's own entities out of load discovery.
+
+        Only populated for the keys the coordinator plumbs into the charger
+        rows (``_charger_priority_rows``, #748) — a legacy row that carries
+        only ``power_entity`` degrades to the old power-only behaviour, never
+        an error."""
+        entities: set = set()
+        for c in self._ev_charger_rows:
+            for key in self._CHARGER_ENTITY_KEYS:
+                ent = c.get(key)
+                if ent:
+                    entities.add(ent)
+        return entities
 
     def _same_registry_device_as_charger(self, entity_id) -> bool:
         """(#700) Does ``entity_id`` live on the same HA registry device as a
