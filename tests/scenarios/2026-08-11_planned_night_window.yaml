@@ -1,0 +1,83 @@
+name: "2026-08-11 planned night window — the one gate drives the wait (#638)"
+
+coverage:
+  - mode: min_plus_solar
+    regime: planned_night_window
+    issue: "#638"
+
+description: |
+  The one-gate regime scenario: a STAMPED joint plan with an EV block
+  opening 48 minutes into the night. Before the block the charger must
+  WAIT on the plan's authority (tariff_waiting state, zero amps); the
+  cycle after the block opens it must charge.
+
+  The harness freezes dt_util.now at 2026-05-28T14:12:00Z + t, so the
+  plan below is written against that epoch: stamped 14:00Z (fresh),
+  slot span 14:00–18:00Z, the EV's block 15:00–16:00Z. At t=0 (14:12Z)
+  the gate is covered and OUT of block with 4.14 kWh still deliverable
+  against a 3.0 kWh floor → the overlay holds. From t=2880 (15:00Z)
+  the gate is in-block → the overlay raises the floor amps and the
+  charger goes active.
+
+  No tariff provider exists in this scenario AT ALL — that is the
+  point. Post-retirement (C3) the wait can only come from the plan;
+  a wait appearing here proves the one gate drives it, and the
+  charge phase proves the hold releases at the planned boundary,
+  not at a price boundary.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_priority_soc: 30
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 3.0
+  target_peak_limit: 10.0
+  is_night: true
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 3.0
+
+overnight_plan:
+  computed_at: "2026-05-28T14:00:00+00:00"
+  fits: true
+  demands:
+    - id: "ev:ev_charger"
+      status: "fits"
+  slots:
+    - {start: "2026-05-28T14:00:00+00:00", end: "2026-05-28T15:00:00+00:00"}
+    - {start: "2026-05-28T15:00:00+00:00", end: "2026-05-28T16:00:00+00:00"}
+    - {start: "2026-05-28T16:00:00+00:00", end: "2026-05-28T17:00:00+00:00"}
+    - {start: "2026-05-28T17:00:00+00:00", end: "2026-05-28T18:00:00+00:00"}
+  blocks:
+    - id: "ev:ev_charger"
+      start: "2026-05-28T15:00:00+00:00"
+      end: "2026-05-28T16:00:00+00:00"
+      power_w: 4140.0
+
+cycle_seconds: 300
+
+timeline:
+  - t: 0
+    solar_power: 0
+    grid_power: -500
+    battery_power: 0
+    battery_soc: 60
+    ev_power: 0
+    ev_connected: true
+
+  - t: 3000
+
+expect:
+  # Phase pins: idle on the PLAN'S authority before the block (the reason
+  # quotes the joint plan, so a plain idle can't fake a pass), charging
+  # at the night floor (canonical min_pv) once the block opens.
+  strategy_at:
+    - t: 0
+      substring: "outside the planned window"
+    - t: 3000
+      substring: "min_pv"
+  # And the run as a whole must reach the charge phase (no vacuous pass).
+  strategy_substring: "min_pv"
