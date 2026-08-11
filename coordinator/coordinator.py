@@ -902,6 +902,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._overnight_shadow_plan = plan
             self._shadow_plan_date = period
             self._plan_ev_conn_sig = _tuples(state.get("sig"))
+            # (#638 C4c) re-seat the scheduler's SCHEDULED verdict so the
+            # restored night's battery block can actuate before the next
+            # evaluation window re-derives the WHAT.
+            _bcs = getattr(self, "_battery_charge_scheduler", None)
+            if _bcs is not None:
+                from .battery_charge_scheduler import restore_battery_verdict
+                restore_battery_verdict(_bcs, state.get("battery_verdict"))
             _LOGGER.info(
                 "OVERNIGHT-PLAN (#638): restored the stamped plan for "
                 "period %s (computed %s) — the reboot does not reshuffle "
@@ -4264,10 +4271,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["battery_scheduler_target_soc"] = bcs.decision.target_soc
             result["battery_scheduler_deficit_kwh"] = bcs.decision.deficit_kwh
             result["battery_scheduler_reason"] = bcs.decision.reason
-            if bcs.decision.schedule:
-                result["battery_scheduler_schedule"] = bcs.decision.schedule.as_dict()
-            else:
-                result["battery_scheduler_schedule"] = {}
+            # (#638 C4c) the schedule view now derives from the stamped
+            # plan's battery blocks — same dict shape as the deleted
+            # NightChargeSchedule.as_dict, ev_w honestly 0.
+            from .battery_charge_scheduler import schedule_view_from_plan
+            result["battery_scheduler_schedule"] = schedule_view_from_plan(
+                getattr(self, "_overnight_shadow_plan", None), dt_util.now())
 
             # Predictor sensors (#3)
             result["predictor_training_status"] = self._predictor.training_status
@@ -5824,43 +5833,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if hasattr(self._tariff_provider, "get_current_import_rate"):
             current_price = self._tariff_provider.get_current_import_rate()
 
-        ev_kwh_needed = 0.0
-        ev_max_power = 0.0
-        if self._ev_devices:
-            daily_target = self.config.get("daily_ev_target", 10)
-            ev_today = self._energy_calculator._get_daily("ev_charging")
-            ev_kwh_needed = max(0, daily_target - ev_today)
-            first_charger = next(iter(self._ev_devices.values()), None)
-            if first_charger and hasattr(first_charger, "max_power_w"):
-                ev_max_power = first_charger.max_power_w
-            else:
-                ev_max_power = self.config.get("ev_max_power_w", 11000)
-
-        tariff_provider = None
-        if hasattr(self._tariff_provider, "find_cheapest_hours"):
-            tariff_provider = self._tariff_provider
-
+        # (#638 one-gate C4) The phantom EV co-model is gone with the
+        # scheduler's window pick (#652's model dies here): the joint plan
+        # carries the real per-charger demands, so the scheduler needs
+        # neither an EV estimate nor the tariff's cheap hours — the
+        # provider is still handed over for the price fingerprint that
+        # drives its replan trigger.
         scheduler.evaluate(
             current_soc=power.battery_soc,
             forecast_tomorrow_kwh=forecast_tomorrow,
             expected_consumption_kwh=expected_consumption,
             off_peak_rate=off_peak_rate,
             peak_rate=peak_rate,
-            tariff_provider=tariff_provider,
+            tariff_provider=self._tariff_provider,
             correction_factor=correction,
-            ev_kwh_needed=ev_kwh_needed,
-            ev_max_power_w=ev_max_power,
             forecast_available=forecast.available,
             forecast_age_hours=forecast_age,
             current_price=current_price,
         )
 
         # (#638 G3) SHADOW: the joint overnight plan, computed + logged next
-        # to the reactive planners it will eventually replace. Never actuates,
-        # never breaks the cycle. Also logs the scheduler's phantom EV model
-        # against the real per-charger map — the #652 evidence line.
-        self._shadow_overnight_plan(scheduler, energy, ev_kwh_needed,
-                                    ev_max_power, power)
+        # to the reactive planners it replaced.
+        self._shadow_overnight_plan(scheduler, energy, power)
 
     def _overnight_plan_gate(self, demand_id: str, now=None):
         """(#638 G4) The trust-rule verdict for one demand against tonight's
@@ -6340,7 +6334,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     or not getattr(power, "battery_soc_unavailable", False)
                 )
                 if _batt_ready and self._shadow_overnight_plan(
-                        _sched, energy, None, None, power,
+                        _sched, energy, power,
                         replan_cause=cause):
                     self._shadow_plan_date = _night_of
                     self._plan_ev_conn_sig = _demand_sig
@@ -6350,18 +6344,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _st = getattr(self, "_storage", None)
                     if _st is not None:
                         try:
+                            from .battery_charge_scheduler import (
+                                serialize_battery_verdict,
+                            )
                             _st.set_overnight_plan_state({
                                 "plan": self._overnight_shadow_plan,
                                 "period": _night_of.isoformat(),
                                 "sig": _demand_sig,
+                                # (#638 C4c) the WHAT beside the WHEN — a
+                                # reboot mid-block outside the evaluation
+                                # window must still actuate.
+                                "battery_verdict": serialize_battery_verdict(
+                                    getattr(_sched, "_decision", None)
+                                    if _sched is not None else None),
                             })
                         except Exception:  # noqa: BLE001 — persist is best-effort
                             pass
         except Exception:  # noqa: BLE001 — shadow must never break the cycle
             _LOGGER.debug("shadow overnight trigger skipped", exc_info=True)
 
-    def _shadow_overnight_plan(self, scheduler, energy, phantom_ev_kwh,
-                               phantom_ev_w, power=None,
+    def _shadow_overnight_plan(self, scheduler, energy, power=None,
                                replan_cause="initial") -> bool:
         """#638 G3 — compute the joint overnight plan in shadow mode.
 
@@ -6909,18 +6911,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                               peak_limit_w=peak_w)
             real_ev = round(sum(d.energy_kwh for d in demands
                                 if d.kind == "ev"), 2)
-            # The #652 phantom-vs-real comparison only exists when the battery
-            # scheduler actually ran its own EV model this evaluation.
-            phantom_txt = (
-                f"{phantom_ev_kwh:.1f} kWh @ {phantom_ev_w:.0f} W"
-                if phantom_ev_kwh is not None and phantom_ev_w is not None
-                else "n/a (scheduler off)")
             _LOGGER.info(
                 "OVERNIGHT-PLAN (%s #638): %d demand(s), %d slot(s), "
-                "est cost %.2f, fits=%s | EV model — scheduler(phantom): "
-                "%s vs real per-charger map: %.1f kWh (#652)",
+                "est cost %.2f, fits=%s | EV %.1f kWh (per-charger map)",
                 tag, len(demands), len(slots), plan.total_cost, plan.fits,
-                phantom_txt, real_ev,
+                real_ev,
             )
             if plan.takeover is not None:
                 _LOGGER.info(

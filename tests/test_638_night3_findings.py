@@ -89,8 +89,7 @@ def _freeze_2200(monkeypatch):
 def _tick_self(sig=("ask",), compute_ok=True):
     calls = []
 
-    def _compute(scheduler, energy, phantom_kwh, phantom_w, power=None,
-                 replan_cause="initial"):
+    def _compute(scheduler, energy, power=None, replan_cause="initial"):
         calls.append(replan_cause)
         return compute_ok
 

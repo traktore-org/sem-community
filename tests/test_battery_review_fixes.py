@@ -22,10 +22,8 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.forc
     ChargeCommand,
 )
 from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
-    NightChargeSchedule,
     SchedulerDecision,
     SchedulerState,
-    TimeSlot,
 )
 
 
@@ -73,33 +71,3 @@ def test_scheduler_decision_has_charge_power_field():
 
 
 # ── H3: is_active_now respects the real slot boundaries ─────────────────
-
-def _slot(start_offset_h, dur_h, batt_w=4000.0):
-    now = dt_util.now()
-    start = now + timedelta(hours=start_offset_h)
-    return TimeSlot(start=start, end=start + timedelta(hours=dur_h),
-                    battery_power_w=batt_w)
-
-
-def test_is_active_now_true_inside_slot():
-    sch = NightChargeSchedule(slots=[_slot(-0.5, 1.0)])  # started 30m ago, 1h long
-    assert sch.is_active_now() is True
-
-
-def test_is_active_now_false_before_slot():
-    # #532 review H3: a slot 2h in the future must NOT count as "now" — this is
-    # the premature-force-charge bug (charged at 21:00 for a 23:00 slot).
-    sch = NightChargeSchedule(slots=[_slot(2.0, 1.0)])
-    assert sch.is_active_now() is False
-
-
-def test_is_active_now_false_after_slot():
-    sch = NightChargeSchedule(slots=[_slot(-3.0, 1.0)])  # ended 2h ago
-    assert sch.is_active_now() is False
-
-
-def test_is_active_now_true_when_no_slots():
-    # No per-slot detail → legacy "charge whenever scheduled" behaviour.
-    assert NightChargeSchedule(slots=[]).is_active_now() is True
-
-

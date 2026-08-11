@@ -68,8 +68,7 @@ CARD_KEYS = [
 def test_plan_carries_structured_rows_beside_the_prose(freeze_targets):
     fake = _fake_self(devices=[_fake_load()])
     SEMCoordinator._shadow_overnight_plan(
-        fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=10.0,
-        phantom_ev_w=11000.0, power=_power())
+        fake, _scheduler(), energy=MagicMock(), power=_power())
     plan = fake._overnight_shadow_plan
 
     # The prose the logs and the soak notes quote is UNCHANGED.
@@ -106,8 +105,7 @@ def test_takeover_is_published_for_the_battery_row(freeze_targets):
     latter, so the two must agree."""
     fake = _fake_self(devices=[_fake_load()])
     SEMCoordinator._shadow_overnight_plan(
-        fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=10.0,
-        phantom_ev_w=11000.0, power=_power())
+        fake, _scheduler(), energy=MagicMock(), power=_power())
     plan = fake._overnight_shadow_plan
     first_grid = next((s["start"] for s in plan["slots"]
                        if s["home_grid_w"] > 0), None)
@@ -122,8 +120,7 @@ def test_no_demand_night_has_the_same_shape(freeze_targets, monkeypatch):
                         lambda coord, energy: {})
     fake = _fake_self(devices=[_idle_load()])
     SEMCoordinator._shadow_overnight_plan(
-        fake, _scheduler(deficit=0.0), energy=MagicMock(), phantom_ev_kwh=0.0,
-        phantom_ev_w=0.0, power=_power())
+        fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
     plan = fake._overnight_shadow_plan
     assert isinstance(plan, dict)
     assert plan["demands"] == [] and plan["slots"] == [] and plan["blocks"] == []
@@ -152,8 +149,7 @@ def test_state_never_exceeds_has_limit(freeze_targets):
     write — the entity would go unavailable rather than merely look wrong."""
     fake = _fake_self(devices=[_fake_load()])
     SEMCoordinator._shadow_overnight_plan(
-        fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=10.0,
-        phantom_ev_w=11000.0, power=_power())
+        fake, _scheduler(), energy=MagicMock(), power=_power())
     state = _overnight_plan_state(fake._overnight_shadow_plan)
     assert isinstance(state, str) and 0 < len(state) <= 255
 

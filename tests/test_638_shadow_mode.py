@@ -153,8 +153,7 @@ def freeze_targets(monkeypatch):
 def test_shadow_plan_computes_and_stashes(freeze_targets):
     fake = _fake_self(devices=[_fake_load()])
     SEMCoordinator._shadow_overnight_plan(
-        fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=10.0,
-        phantom_ev_w=11000.0, power=_power())
+        fake, _scheduler(), energy=MagicMock(), power=_power())
     plan = fake._overnight_shadow_plan
     assert plan is not None
     assert plan["fits"] is True
@@ -175,8 +174,7 @@ def test_shadow_never_breaks_the_cycle():
     debug log — the battery pipeline continues."""
     fake = SimpleNamespace(config={}, _overnight_shadow_plan="untouched")
     SEMCoordinator._shadow_overnight_plan(
-        fake, object(), energy=None, phantom_ev_kwh=0, phantom_ev_w=0,
-        power=None)
+        fake, object(), energy=None, power=None)
     # No exception escaped. A hostile fake with no devices legitimately
     # reaches the LOUD no-demands answer (a dict), dies earlier (stash
     # untouched), or clears — never raises into the pipeline.
@@ -195,7 +193,7 @@ def test_no_demands_is_a_loud_valid_answer(freeze_targets, monkeypatch):
     fake = _fake_self(devices=[_idle_load()])
     ok = SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     assert ok is True                       # a real answer — stampable
     plan = fake._overnight_shadow_plan
     assert plan is not None
@@ -213,7 +211,7 @@ def test_warmup_world_retries_not_stamps(freeze_targets, monkeypatch):
     fake = _fake_self(devices=[])
     ok = SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     assert ok is False
     assert fake._overnight_shadow_plan is None
 
@@ -237,7 +235,7 @@ def test_shadow_fires_without_the_battery_scheduler(monkeypatch):
                         lambda coord, energy: {"ev_charger": 2.0})
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=None, phantom_ev_w=None, power=_power())
+        power=_power())
     assert fake._overnight_shadow_plan is not None
 
 
@@ -249,7 +247,7 @@ def test_shadow_respects_the_peak_cap(freeze_targets):
     fake = _fake_self(devices=[])
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     plan = fake._overnight_shadow_plan
     assert plan is not None
     import re
@@ -273,7 +271,7 @@ def test_the_peak_cap_comes_from_the_execution_authority(freeze_targets):
     fake._get_peak_limit_w = lambda: 5000.0     # e.g. a load-manager override
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     import re
     allocs = fake._overnight_shadow_plan["allocations"]
     assert allocs, "the EV should still fit under a 5 kW cap"
@@ -297,7 +295,7 @@ def test_the_peak_cap_falls_back_to_the_config_key_in_kw(freeze_targets):
     fake._get_peak_limit_w = _boom
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     import re
     allocs = fake._overnight_shadow_plan["allocations"]
     assert allocs, "5.0 kW read as 5 W would leave the charger nothing to fit in"
@@ -318,7 +316,7 @@ def test_the_plan_stops_at_the_level_execution_holds(freeze_targets):
     fake._get_peak_limit_w = lambda: 5000.0
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     import re
     allocs = fake._overnight_shadow_plan["allocations"]
     assert allocs, "4.8 kW still clears the charger's 4140 W floor — must fit"
@@ -337,7 +335,7 @@ def test_a_configured_hysteresis_widens_the_margin(freeze_targets):
     fake.config["peak_hysteresis"] = 0.5
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     import re
     allocs = fake._overnight_shadow_plan["allocations"]
     assert allocs, "4.5 kW still clears the charger's 4140 W floor"
@@ -354,7 +352,7 @@ def test_a_cap_below_the_hysteresis_is_still_a_cap(freeze_targets):
     fake._get_peak_limit_w = lambda: 150.0      # < the 200 W hysteresis
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     plan = fake._overnight_shadow_plan
     joined = " | ".join(plan["allocations"] + plan["summary"])
     assert "inf" not in joined, f"cap collapsed into no-cap: {joined}"
@@ -393,7 +391,7 @@ def test_soc_not_ready_retries(freeze_targets):
     fake = _fake_self(devices=[])
     ok = SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=SimpleNamespace(battery_soc=None))
+        power=SimpleNamespace(battery_soc=None))
     assert ok is False
     assert fake._overnight_shadow_plan is None
 
@@ -413,7 +411,7 @@ class TestPartialFleetIsNotReady:
         power = _partial_power()
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+            power=power)
         assert ok is False, "a half-resolved fleet must not stamp the night"
         assert fake._overnight_shadow_plan is None
 
@@ -424,7 +422,7 @@ class TestPartialFleetIsNotReady:
         power = _fleet_power(76.5, read=2, known=2, configured=2)
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+            power=power)
         assert ok is True
         assert fake._overnight_shadow_plan is not None
 
@@ -434,7 +432,7 @@ class TestPartialFleetIsNotReady:
         fake = _fake_self(devices=[_fake_load()])
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_power(soc=76.5))
+            power=_power(soc=76.5))
         assert ok is True
 
     def test_the_wait_is_bounded(self, freeze_targets):
@@ -447,7 +445,7 @@ class TestPartialFleetIsNotReady:
             coord_mod.dt_util.now() - timedelta(seconds=601))
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_partial_power())
+            power=_partial_power())
         assert ok is True, "the night must still get a plan eventually"
         plan = fake._overnight_shadow_plan
         assert plan is not None
@@ -459,7 +457,7 @@ class TestPartialFleetIsNotReady:
         fake = _fake_self(devices=[_fake_load()])
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_partial_power())
+            power=_partial_power())
         assert fake._shadow_partial_since == coord_mod.dt_util.now()
 
     def test_a_config_gap_plans_now_but_says_it_is_a_subset(self,
@@ -473,7 +471,7 @@ class TestPartialFleetIsNotReady:
         assert power.battery_soc_partial is False, "nothing to wait for"
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+            power=power)
         assert ok is True
         assert (fake._overnight_shadow_plan["battery_fleet_partial"]
                 == "battery fleet partial: 1/2 units")
@@ -486,7 +484,6 @@ class TestPartialFleetIsNotReady:
             coord_mod.dt_util.now() - timedelta(seconds=601))
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0,
             power=_fleet_power(76.5, read=2, known=2, configured=2))
         assert ok is True
         assert fake._shadow_partial_since is None
@@ -503,7 +500,7 @@ class TestPartialFleetIsNotReady:
         fake = _fake_self(devices=[_idle_load()])
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_partial_power())
+            power=_partial_power())
         assert ok is False, "a half-read fleet is not a night's answer"
         assert fake._overnight_shadow_plan is None
 
@@ -517,7 +514,6 @@ class TestPartialFleetIsNotReady:
         fake = _fake_self(devices=[_idle_load()])
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0,
             power=_fleet_power(65.0, read=1, known=1, configured=2))
         assert ok is True
         plan = fake._overnight_shadow_plan
@@ -803,7 +799,7 @@ def test_off_mode_charger_is_not_a_demand(freeze_targets):
     fake._mode_allows_night_charging = lambda cfg: False
     ok = SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     assert ok is True, "an opted-out charger is an answer, not a warm-up world"
     plan = fake._overnight_shadow_plan
     assert plan is not None
@@ -821,7 +817,7 @@ def test_a_night_capable_charger_is_still_a_demand(freeze_targets):
     fake._mode_allows_night_charging = lambda cfg: calls.append(cfg) or True
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     joined = " ".join(fake._overnight_shadow_plan["summary"])
     assert "ev:ev_charger" in joined
     # Asked with THIS charger's config, not the global one (#634: solar_only's
@@ -838,7 +834,7 @@ def test_an_unevaluable_mode_still_gets_planned(freeze_targets):
     fake._mode_allows_night_charging = _boom
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     plan = fake._overnight_shadow_plan
     assert plan is not None
     assert "ev:ev_charger" in " ".join(plan["summary"])
@@ -878,8 +874,7 @@ class TestTheDayPartOfTheHorizon:
                          tzinfo=coord_mod.dt_util.DEFAULT_TIME_ZONE)
         monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
         SEMCoordinator._shadow_overnight_plan(
-            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-            phantom_ev_w=0, power=_power())
+            fake, _scheduler(), energy=MagicMock(), power=_power())
         return fake._overnight_shadow_plan
 
     def test_a_daytime_stamp_spans_into_the_night(self, freeze_targets,
@@ -945,8 +940,7 @@ class TestComfortDemandsJoinThePlan:
     def test_a_comfort_ask_becomes_a_demand(self, freeze_targets):
         fake = _fake_self(devices=[_comfort_dev()])
         SEMCoordinator._shadow_overnight_plan(
-            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-            phantom_ev_w=0, power=_power())
+            fake, _scheduler(), energy=MagicMock(), power=_power())
         plan = fake._overnight_shadow_plan
         rows = {r["id"]: r for r in plan["demands"]}
         assert "comfort:ac1" in rows
@@ -958,8 +952,7 @@ class TestComfortDemandsJoinThePlan:
         must skip it, not crash on it (and its runtime demand stays)."""
         fake = _fake_self(devices=[_fake_load()])
         SEMCoordinator._shadow_overnight_plan(
-            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-            phantom_ev_w=0, power=_power())
+            fake, _scheduler(), energy=MagicMock(), power=_power())
         ids = [r["id"] for r in fake._overnight_shadow_plan["demands"]]
         assert "load:pump" in ids
         assert not any(i.startswith("comfort:") for i in ids)
@@ -971,8 +964,7 @@ class TestComfortDemandsJoinThePlan:
         dev.comfort_plan_demand = _boom
         fake = _fake_self(devices=[dev])
         SEMCoordinator._shadow_overnight_plan(
-            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-            phantom_ev_w=0, power=_power())
+            fake, _scheduler(), energy=MagicMock(), power=_power())
         assert fake._overnight_shadow_plan is not None
 
     def test_comfort_banks_only_cheap_or_free_energy(self, freeze_targets):
@@ -984,7 +976,7 @@ class TestComfortDemandsJoinThePlan:
         fake = _fake_self(devices=[_comfort_dev()])
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+            power=_power())
         rows = {r["id"]: r for r in fake._overnight_shadow_plan["demands"]}
         assert rows["comfort:ac1"]["status"] in ("yields", "partial")
 
@@ -1003,8 +995,7 @@ class TestThePartialFirstSlot:
         monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
         fake = _fake_self(devices=[])
         SEMCoordinator._shadow_overnight_plan(
-            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-            phantom_ev_w=0, power=_power())
+            fake, _scheduler(), energy=MagicMock(), power=_power())
         slots = fake._overnight_shadow_plan["slots"]
         assert "23:41:00" in slots[0]["start"]
         assert "00:00:00" in slots[0]["end"]
@@ -1027,7 +1018,7 @@ class TestThePartialFirstSlot:
             get_price_at=lambda t: 0.28)
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+            power=_power())
         blocks = fake._overnight_shadow_plan["blocks"]
         ev = [b for b in blocks if b["id"] == "ev:ev_charger"]
         assert ev and "23:41:00" in ev[0]["start"], (
@@ -1050,7 +1041,7 @@ class TestArbitrageAdviceRidesThePlan:
             fake.config["arbitrage_shadow_demand"] = True
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_power(soc=soc))
+            power=_power(soc=soc))
         return fake._overnight_shadow_plan
 
     def test_the_advice_is_on_every_full_plan(self):
@@ -1126,7 +1117,7 @@ class TestSlotsFollowTheMarket:
         fake._tariff_provider = _Fake15MinTariff()
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=1.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+            power=_power())
         slots = fake._overnight_shadow_plan["slots"]
         firsts = [s for s in slots if s["start"][11:13] == "22"]
         assert len(firsts) == 4, f"expected 4 quarter slots in hour 22: {firsts}"
@@ -1138,7 +1129,7 @@ class TestSlotsFollowTheMarket:
         fake = _fake_self(devices=[])
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=1.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+            power=_power())
         slots = fake._overnight_shadow_plan["slots"]
         assert all(s["start"][14:16] == "00" for s in slots), (
             "no curve granularity signal → hourly, exactly as before")
@@ -1161,7 +1152,7 @@ class TestDisconnectedCarIsNotADemand:
         power.ev_connected_per_charger = {"ev_charger": False}
         ok = SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+            power=power)
         assert ok is True, "an absent car is an answer, not a warm-up world"
         joined = " ".join(fake._overnight_shadow_plan["summary"])
         assert "ev:ev_charger" not in joined, joined
@@ -1176,7 +1167,7 @@ class TestDisconnectedCarIsNotADemand:
         power.ev_connected_per_charger = {"ev_charger": True}
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+            power=power)
         assert "ev:ev_charger" in " ".join(
             fake._overnight_shadow_plan["summary"])
 
@@ -1188,7 +1179,7 @@ class TestDisconnectedCarIsNotADemand:
         power.ev_connected = False
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+            power=power)
         assert "ev:ev_charger" in " ".join(
             fake._overnight_shadow_plan["summary"])
 
@@ -1199,7 +1190,7 @@ class TestDisconnectedCarIsNotADemand:
         power.ev_connected = False
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=power)
+            power=power)
         joined = " ".join(fake._overnight_shadow_plan["summary"])
         assert "ev:ev_charger" not in joined, joined
 
@@ -1212,15 +1203,13 @@ class TestReplanCauseIsOnThePayload:
     def test_the_full_plan_carries_the_cause(self, freeze_targets):
         fake = _fake_self(devices=[_fake_load()])
         SEMCoordinator._shadow_overnight_plan(
-            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-            phantom_ev_w=0, power=_power(), replan_cause="ask changed")
+            fake, _scheduler(), energy=MagicMock(), power=_power(), replan_cause="ask changed")
         assert fake._overnight_shadow_plan["replan_cause"] == "ask changed"
 
     def test_the_default_is_initial(self, freeze_targets):
         fake = _fake_self(devices=[_fake_load()])
         SEMCoordinator._shadow_overnight_plan(
-            fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-            phantom_ev_w=0, power=_power())
+            fake, _scheduler(), energy=MagicMock(), power=_power())
         assert fake._overnight_shadow_plan["replan_cause"] == "initial"
 
     def test_the_no_demand_answer_carries_it_too(self, freeze_targets):
@@ -1228,7 +1217,7 @@ class TestReplanCauseIsOnThePayload:
         fake._mode_allows_night_charging = lambda cfg: False
         SEMCoordinator._shadow_overnight_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(),
-            phantom_ev_kwh=0, phantom_ev_w=0, power=_power(),
+            power=_power(),
             replan_cause="ask changed")
         assert fake._overnight_shadow_plan["replan_cause"] == "ask changed"
 
@@ -1245,7 +1234,7 @@ def test_off_mode_load_is_not_a_demand(freeze_targets):
     fake = _fake_self(devices=[off])
     SEMCoordinator._shadow_overnight_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(),
-        phantom_ev_kwh=0, phantom_ev_w=0, power=_power())
+        power=_power())
     plan = fake._overnight_shadow_plan
     assert plan is not None
     assert not any("heizband" in ln for ln in plan.get("summary", []))

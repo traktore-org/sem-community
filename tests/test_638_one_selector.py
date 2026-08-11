@@ -27,11 +27,10 @@ REPO = Path(__file__).resolve().parent.parent
 # The selector's home — its own internal use is legitimate.
 SELECTOR_HOME = "tariff/tariff_provider.py"
 
-# Files still calling the selector, shrinking with the retirement commits.
-# C3 removed coordinator/ev_control.py; C4 → remove battery_charge_scheduler.
-ALLOWLIST: frozenset[str] = frozenset({
-    "coordinator/battery_charge_scheduler.py",
-})
+# EMPTY since C4 — the joint planner is the one selector left. This is the
+# permanent pin: any new find_cheapest_hours caller anywhere fails CI.
+# (C3 removed ev_control's pick; C4 removed the battery scheduler's.)
+ALLOWLIST: frozenset[str] = frozenset()
 
 
 def _python_files():

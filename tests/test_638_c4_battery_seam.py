@@ -145,3 +145,120 @@ class TestNegativePriceMarksItself:
         neg = src.index("Negative tariff override")
         nxt = src.index("Forecast fallback")
         assert "price_forced=True" in src[neg:nxt]
+
+
+@pytest.mark.unit
+class TestTheSchedulerNoLongerPicksWindows:
+    """C4b — evaluate() keeps the economics, loses the window pick and
+    the phantom EV co-model (#652's model dies with it)."""
+
+    def test_evaluate_has_no_phantom_ev_params(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            BatteryChargeScheduler,
+        )
+        params = inspect.signature(BatteryChargeScheduler.evaluate).parameters
+        assert "ev_kwh_needed" not in params
+        assert "ev_max_power_w" not in params
+
+    def test_the_decision_has_no_window_fields(self):
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            SchedulerDecision, SchedulerState,
+        )
+        d = SchedulerDecision(state=SchedulerState.IDLE)
+        assert not hasattr(d, "charge_windows")
+        assert not hasattr(d, "schedule")
+
+    def test_the_schedule_classes_are_gone(self):
+        import custom_components.solar_energy_management.coordinator.battery_charge_scheduler as bcs
+        assert not hasattr(bcs, "NightChargeSchedule")
+        assert not hasattr(bcs, "TimeSlot")
+
+
+@pytest.mark.unit
+class TestTheScheduleEntityDerivesFromThePlan:
+    """C4c — sensor.battery_scheduler_schedule keeps its dict shape, now
+    read from the stamped plan's battery blocks. ev_w is honestly 0: the
+    joint plan carries EV blocks under their own ids."""
+
+    def _plan(self):
+        return {
+            "computed_at": "2026-08-11T21:00:00+00:00",
+            "blocks": [
+                {"id": "battery", "start": "2026-08-12T03:00:00+00:00",
+                 "end": "2026-08-12T05:00:00+00:00", "power_w": 3000.0,
+                 "price": 0.12},
+                {"id": "ev:keba", "start": "2026-08-12T01:00:00+00:00",
+                 "end": "2026-08-12T02:00:00+00:00", "power_w": 4140.0,
+                 "price": 0.10},
+            ],
+        }
+
+    def test_shape_matches_the_old_entity(self):
+        from datetime import datetime, timezone
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            schedule_view_from_plan,
+        )
+        now = datetime(2026, 8, 12, 3, 30, tzinfo=timezone.utc)
+        view = schedule_view_from_plan(self._plan(), now)
+        assert set(view) == {"slots", "total_battery_kwh", "total_ev_kwh",
+                             "total_kwh", "estimated_cost", "peak_limit_w"}
+        assert len(view["slots"]) == 1  # ONLY the battery's blocks
+        s = view["slots"][0]
+        assert set(s) == {"start", "end", "battery_w", "ev_w", "total_w",
+                          "price", "active"}
+        assert s["battery_w"] == 3000.0 and s["ev_w"] == 0
+        assert s["active"] is True          # 03:30 is inside 03:00-05:00
+        assert view["total_battery_kwh"] == 6.0
+        assert view["estimated_cost"] == round(6.0 * 0.12, 3)
+
+    def test_no_plan_is_an_empty_dict(self):
+        from datetime import datetime, timezone
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            schedule_view_from_plan,
+        )
+        now = datetime(2026, 8, 12, 3, 30, tzinfo=timezone.utc)
+        assert schedule_view_from_plan(None, now) == {}
+        assert schedule_view_from_plan({"blocks": []}, now) == {}
+
+
+@pytest.mark.unit
+class TestTheVerdictSurvivesTheReboot:
+    """C4c — the WHAT persists beside the plan: a reboot mid-block outside
+    the evaluation window must still actuate the restored night."""
+
+    def test_roundtrip(self):
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            SchedulerDecision, SchedulerState,
+            restore_battery_verdict, serialize_battery_verdict,
+        )
+        d = SchedulerDecision(
+            state=SchedulerState.SCHEDULED, target_soc=85.0,
+            deficit_kwh=4.2, charge_power_w=3000.0, duration_min=120,
+        )
+        payload = serialize_battery_verdict(d)
+        assert payload["state"] == "scheduled"
+        sched = SimpleNamespace(_decision=None)
+        restore_battery_verdict(sched, payload)
+        r = sched._decision
+        assert r is not None
+        assert r.state is SchedulerState.SCHEDULED
+        assert r.target_soc == 85.0 and r.charge_power_w == 3000.0
+
+    def test_non_scheduled_serializes_to_none(self):
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            SchedulerDecision, SchedulerState, serialize_battery_verdict,
+        )
+        assert serialize_battery_verdict(
+            SchedulerDecision(state=SchedulerState.NOT_NEEDED)) is None
+        assert serialize_battery_verdict(None) is None
+
+    def test_junk_restores_to_nothing(self):
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            restore_battery_verdict,
+        )
+        sched = SimpleNamespace(_decision=None)
+        restore_battery_verdict(sched, {"state": "banana"})
+        assert sched._decision is None
+        restore_battery_verdict(sched, "not-a-dict")
+        assert sched._decision is None

@@ -121,8 +121,7 @@ class TestEvDemandsCarryTheAntiCycleWindow:
 
         with patch.object(onp, "pack_night", side_effect=spy):
             SEMCoordinator._shadow_overnight_plan(
-                fake, _scheduler(), energy=MagicMock(), phantom_ev_kwh=0,
-                phantom_ev_w=0, power=_power())
+                fake, _scheduler(), energy=MagicMock(), power=_power())
         ev = [d for d in captured.get("demands", []) if d.id.startswith("ev:")]
         assert ev, "the fake world must produce an EV demand"
         assert ev[0].min_run_s >= 900, "EV blocks must be >= 15 min"
