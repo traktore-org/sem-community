@@ -1309,6 +1309,46 @@ class UnifiedDeviceRegistry:
         in :meth:`get_devices_for_sensor` while any charger is configured.
         """
         self._ev_charger_rows = list(chargers or [])
+        # (#748 seam) This is the moment SEM LEARNS which entities belong to a
+        # charger — and the registry's first sync happens before it, at
+        # async_initialize, when the coordinator has not handed a roster over
+        # yet. Without this the fold in _sync_to_surplus_controller has nothing
+        # to match on that first pass, and a duplicate sits registered and
+        # controllable until the 35 s re-discovery: a window on every restart
+        # in which load management can reach the charger's own stop switch.
+        # Re-check the surplus roster when the charger identity set actually
+        # CHANGES — not on each of the 8640 daily cycles handing over the same
+        # list.
+        try:
+            entities = self._configured_charger_entities()
+            if entities != getattr(self, "_last_charger_entity_set", None):
+                self._last_charger_entity_set = set(entities)
+                self._drop_charger_duplicate_surplus_devices(entities)
+        except Exception as e:  # noqa: BLE001 — never break the cycle handover
+            _LOGGER.debug("#748 charger-roster resync skipped: %s", e)
+
+    def _drop_charger_duplicate_surplus_devices(self, charger_entities: set) -> None:
+        """(#748 seam) Unregister any ALREADY-registered surplus device that the
+        current charger roster now identifies as the charger itself.
+
+        Only ever removes; re-adding is :meth:`_sync_to_surplus_controller`'s
+        job. Service-registered devices are left alone — the user named those
+        explicitly, and ownership-by-construction is what #559 established."""
+        if not charger_entities:
+            return
+        for device in list(self._devices):
+            did = device.device_id
+            if did in self._service_registrations:
+                continue
+            if did not in self._surplus_controller._devices:
+                continue
+            if not self._is_charger_duplicate(device, charger_entities):
+                continue
+            self._surplus_controller.unregister_device(did)
+            _LOGGER.info(
+                "#748 unregistered surplus device %s — the charger roster "
+                "identifies it as a configured charger's own entity", did,
+            )
 
     # (#748) Every row key a configured charger may carry that names a HA
     # entity BELONGING to the physical charger — not just its power sensor.

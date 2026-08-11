@@ -124,6 +124,49 @@ class TestSurplusControllerFold:
 
 
 @pytest.mark.unit
+class TestStartupWindow:
+    """The registry syncs at ``async_initialize``, but the charger roster is
+    handed over by the coordinator's own cycle — so on the first sync after a
+    restart there are no chargers yet and the fold has nothing to match. The
+    duplicate would then be live and controllable until the 35 s re-discovery.
+
+    Closing it at the moment the fact becomes KNOWN — the roster arriving —
+    is the whole fix: ``set_ev_chargers`` is where SEM first learns which
+    entities belong to a charger."""
+
+    def test_roster_arriving_drops_an_already_registered_duplicate(self):
+        sc = SurplusController(MagicMock())
+        dup = _billaddare()
+        # Startup: no chargers known yet → the duplicate registers.
+        reg = _reg(sc, [dup], charger_rows=[])
+        reg._sync_to_surplus_controller()
+        assert dup.device_id in sc._devices
+        # First coordinator cycle hands over the charger roster.
+        reg.set_ev_chargers([CHARGER_ROW])
+        assert dup.device_id not in sc._devices
+
+    def test_unrelated_device_survives_the_roster_arriving(self):
+        sc = SurplusController(MagicMock())
+        dish = _dishwasher()
+        reg = _reg(sc, [dish], charger_rows=[])
+        reg._sync_to_surplus_controller()
+        reg.set_ev_chargers([CHARGER_ROW])
+        assert dish.device_id in sc._devices
+
+    def test_same_roster_every_cycle_is_a_no_op(self):
+        """``set_ev_chargers`` is called EVERY 10 s cycle. It must not rescan
+        the surplus roster 8640 times a day for a roster that never changed."""
+        sc = SurplusController(MagicMock())
+        reg = _reg(sc, [_dishwasher()], charger_rows=[])
+        reg._sync_to_surplus_controller()
+        reg.set_ev_chargers([CHARGER_ROW])
+        sc.unregister_device = MagicMock()
+        for _ in range(5):
+            reg.set_ev_chargers([CHARGER_ROW])
+        sc.unregister_device.assert_not_called()
+
+
+@pytest.mark.unit
 class TestPlannerRoster:
     """The #638 planner packs ``get_devices_sorted()``. Whatever survives the
     fold above is what it sees — assert at that surface, because that is the

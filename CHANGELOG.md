@@ -24,9 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controller's back — the exact hazard beta.11 set out to close — while the
   card showed nothing, because the display fold hid the row it could not
   remove. The overnight planner (#638) packs its load demands from that same
-  roster, so the one physical charger could also be planned twice. The fold now
-  runs where the device is **registered**, not only where it is read, and the
-  three rosters share one predicate so they cannot drift apart again.
+  roster, so a duplicate carrying a minimum-runtime goal could additionally
+  enter the night ledger twice — once as the charger, once as a load. The fold
+  now runs where the device is **registered**, not only where it is read, and
+  the three rosters share one predicate so they cannot drift apart again. It
+  also runs the moment the charger roster arrives, closing the ~35 s window
+  after every restart in which the registry has synced but does not yet know
+  which entities belong to a charger.
 
 # [1.7.6-beta.13] — 11.08.2026
 
