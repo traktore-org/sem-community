@@ -826,6 +826,11 @@ class SessionData:
     solar_share_pct: float = 0
     cost_chf: float = 0
     avg_power_w: float = 0
+    disconnect_streak: int = 0
+    """(#753) Consecutive cycles the car has read disconnected. The
+    session ends only when this reaches the debounce threshold — a
+    warm-up or UDP-blip 'False' is a sensor stumbling, not a car
+    leaving. Never persisted; resets naturally on boot."""
 
 
 @dataclass
