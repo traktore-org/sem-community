@@ -208,6 +208,25 @@ class BatteryControlAdapter(ABC):
         return value and NOT record intent when False (#589)."""
         if not self._force_discharge_entity:
             return True  # no-op needed — benign success
+        # (#749) ONE validation rule with the discharge-limit path: reject
+        # non-power units (a current-native number would take watts as
+        # amperes), reject unreadable states, and SCALE to the entity's
+        # native unit (a kW setpoint gets 3.0, not 3000 — which its range
+        # clamp would otherwise turn into full tilt). Refusal is loud and
+        # returns False so the caller never records intent (#589).
+        from ..power_control import native_power_scale
+        scale = native_power_scale(self._hass, self._force_discharge_entity)
+        if scale is None or scale <= 0:
+            if not getattr(self, "_fd_unit_refused_logged", False):
+                self._fd_unit_refused_logged = True
+                _LOGGER.warning(
+                    "Battery: forcible-discharge write to %s REFUSED — the "
+                    "entity's unit is not a supported power unit (or its "
+                    "state is unreadable). Pick a W/kW power setpoint for "
+                    "'Forcible-discharge power entity' (#749)",
+                    self._force_discharge_entity,
+                )
+            return False
         # Clamp to the control entity's actual min/max (#523, mirrors the EV
         # #487 fix). A Sessy setpoint maxes at roughly ±2200 W, but the
         # computed charge/discharge power can exceed that (e.g. a fleet
@@ -219,12 +238,15 @@ class BatteryControlAdapter(ABC):
         attrs = getattr(st, "attributes", None) if st is not None else None
         _requested = watts
         if isinstance(attrs, dict):
+            # (#749) the entity's min/max are NATIVE units — scale them to
+            # watts so the clamp, the de-dup and every log stay in W; only
+            # the service-call value converts back at the boundary.
             lo = attrs.get("min")
             if isinstance(lo, (int, float)):
-                watts = max(float(lo), watts)
+                watts = max(float(lo) * scale, watts)
             hi = attrs.get("max")
             if isinstance(hi, (int, float)):
-                watts = min(float(hi), watts)
+                watts = min(float(hi) * scale, watts)
         # #531: a silent clamp hides a real mismatch (fleet power > a single
         # unit's setpoint range). Surface it once per clamped write so the
         # cause is visible in the log instead of a mysteriously-capped battery.
@@ -251,7 +273,9 @@ class BatteryControlAdapter(ABC):
                 domain = "number"
             await self._hass.services.async_call(
                 domain, "set_value",
-                {"entity_id": self._force_discharge_entity, "value": watts},
+                # (#749) the one place watts become the entity's native unit.
+                {"entity_id": self._force_discharge_entity,
+                 "value": watts / scale},
                 blocking=True,
             )
             self._last_force_discharge_w = watts
