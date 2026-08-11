@@ -212,7 +212,16 @@ def compute_load_intent(
     if getattr(device, "daily_targets_met", False):
         tier1_headroom_w = 0.0
     effective = float(remaining_surplus_w) + float(tier1_headroom_w)
-    if effective >= threshold and can_start:
+    # (#688) the start RESERVE: a fresh start needs margin on top of the
+    # threshold (600 W pump, 800 W ask), so the start itself plus the next
+    # cloud doesn't flip the surplus negative and cycle the device. STARTS
+    # only — a running load keeps the plain threshold; reserving against a
+    # healthy run would CREATE the cycling this prevents.
+    start_bar = threshold
+    if not active:
+        start_bar = threshold + max(
+            0.0, float(getattr(device, "start_reserve_w", 0.0) or 0.0))
+    if effective >= start_bar and can_start:
         battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
         src = "tier1_battery" if battery_assisted else "solar"
         return LoadIntent(True, rated, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")

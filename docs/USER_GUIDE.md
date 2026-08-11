@@ -188,6 +188,25 @@ untouched when you turn it off.
 
 ---
 
+## Multiple heat pumps and climate units (#685)
+
+The dedicated **Heat Pump (SG-Ready)** section configures ONE unit — it
+models the SG-Ready relay pair, and most installs have one such interface.
+**Multiple units are supported through climate devices instead**: add each
+unit's `climate.*` entity (an Ecobee, a Nest, any thermostat-controlled
+heat pump or AC) as a surplus device. Every unit then gets, independently:
+
+- its own priority slot in the one device list,
+- its own comfort band (target / offset / limit) with the learned drift
+  model — including pre-cool/pre-heat banking through the energy plan,
+- its own power sensor. Units with split metering (compressor on one
+  circuit, air handler on another) sum their sensors with a
+  [template sensor](https://www.home-assistant.io/integrations/template/)
+  first and use that as the device's power entity.
+
+The SG-Ready section and climate devices can coexist: one SG-Ready unit
+plus any number of climate-managed units.
+
 ## Hot Water and Heat Pump (v1.7.3 hardening)
 
 SEM works alongside your existing heating system — it only boosts with solar surplus, it does NOT replace your boiler or heat pump's normal heating schedule. Your existing system continues to handle baseline heating as usual. SEM adds a solar boost layer on top: when surplus solar power is available, SEM heats the water further to store energy that would otherwise be exported.

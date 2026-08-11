@@ -7062,6 +7062,15 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${this._renderOptionToggle("battery_discharge_protection_enabled","config_batt_protection",t,"config_help_batt_protection",!0)}
             ${this._renderZoneKnob("number.sem_battery_max_discharge_power","battery_max_discharge_power",e,"config_help_batt_max_discharge")}
             ${this._renderPicker("battery_discharge_control_entity","config_batt_discharge_entity","number",null,t,"config_help_batt_discharge_entity")}
+        `}_renderTextOption(e,t,i,s,r){const a=i[e]??"",o=this._saveStatus[e];return W`
+            <div class="row">
+                <span class="lbl" title="${s?this._t(s):""}">${this._t(t)}</span>
+                <input type="text" class="txt-opt" .value=${String(a)}
+                       placeholder="${r||""}"
+                       @keydown=${e=>{"Enter"===e.key&&e.target.blur()}}
+                       @blur=${t=>{const i=t.target.value.trim();i!==String(a)&&this._saveOption(e,i,e)}} />
+                ${"saving"===o?W`<span class="sv">…</span>`:"ok"===o?W`<span class="sv ok">✓</span>`:"err"===o?W`<span class="sv err">!</span>`:q}
+            </div>
         `}_renderTariff(e){const t=this._options||{},i=this._hass?.states["sensor.sem_tariff_current_import_rate"],s=i?i.state:"—",r=i?.attributes?.unit_of_measurement||"",a=this._hass?.config?.currency||"EUR",o=[{value:"static",label:this._t("config_tariff_mode_static")},{value:"dynamic",label:this._t("config_tariff_mode_dynamic")},{value:"calendar",label:this._t("config_tariff_mode_calendar")}],n=[{value:"percentile",label:this._t("config_tariff_class_percentile")},{value:"static",label:this._t("config_tariff_class_static")}],l=t.tariff_mode||"static";return W`
             <div class="readonly-row tariff-rate-row">
                 <ha-icon icon="mdi:flash" style="--mdc-icon-size:18px;color:#ff9800"></ha-icon>
@@ -7095,7 +7104,13 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             ${this._renderBatteryDischargePicker(s,e,t)}
                             ${this._renderBatteryStrategyPicker(s,e,t)}`)}`:W`
                         ${this._renderPicker("battery_force_discharge_control_entity","config_force_discharge_entity","number",null,t,"config_help_force_discharge_entity")}
-                        ${this._renderPicker("battery_strategy_control_entity","config_strategy_entity","select",null,t,"config_help_strategy_entity")}`})()}
+                        ${this._renderPicker("battery_strategy_control_entity","config_strategy_entity","select",null,t,"config_help_strategy_entity")}
+                        ${t.battery_strategy_control_entity?W`
+                            ${this._renderTextOption("battery_strategy_active_value","config_strategy_val_active",t,"config_help_strategy_values","api")}
+                            ${this._renderTextOption("battery_strategy_idle_value","config_strategy_val_idle",t,"config_help_strategy_values","eco")}
+                            ${this._renderTextOption("battery_strategy_self_consume_value","config_strategy_val_selfc",t,"config_help_strategy_values","nom")}
+                            ${this._renderTextOption("battery_strategy_off_value","config_strategy_val_off",t,"config_help_strategy_values","idle")}
+                        `:q}`})()}
                 ${this._renderOptionToggle("battery_setpoint_bidirectional","config_battery_bidirectional",t,"config_help_battery_bidirectional",!1)}
             `:q}
             ${""}
@@ -7620,7 +7635,19 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 .pv-name-power {
                     font-size: 0.7em; color: var(--secondary-text-color, ${e.textSec});
                 }
-                .pv-name-input {
+                .txt-opt {
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 6px;
+                color: var(--primary-text-color, #e1e1e1);
+                font-size: 12px;
+                padding: 3px 8px;
+                width: 110px;
+            }
+            .sv { font-size: 11px; }
+            .sv.ok { color: #8DC892; }
+            .sv.err { color: #f06292; }
+            .pv-name-input {
                     flex: 1; min-width: 0;
                     background: var(--secondary-background-color, ${e.surface});
                     border: 1px solid var(--divider-color, ${e.surfaceBorder});

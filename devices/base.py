@@ -753,6 +753,8 @@ class ComfortBandMixin:
     comfort_target: float = 0.0
     comfort_offset: float = 0.0
     comfort_limit: float = 0.0
+    # (#688) extra watts a fresh START needs on top of the threshold.
+    start_reserve_w: float = 0.0
 
     def _comfort_direction(self) -> str:
         return "heat"

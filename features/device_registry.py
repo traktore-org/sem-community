@@ -322,6 +322,9 @@ class UnifiedDeviceRegistry:
         # (#688) per-load anti-cycling (minutes) — overrides the SwitchDevice
         # default window. Absent keeps the constructor default (never 0).
         "min_on_time_min", "min_off_time_min",
+        # (#688, the remaining half) extra watts a fresh start needs on top
+        # of the threshold — 0 (default) = today's behaviour.
+        "start_reserve_w",
         # (#705) thermal comfort band — Phase 1 consumes them on climate
         # devices; stored against any device (Phase 2 opens switch loads).
         "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",

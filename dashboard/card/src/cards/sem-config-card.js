@@ -931,6 +931,30 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    // (#751) a free-text option row — the four power-strategy VALUES a
+    // non-Sessy select needs mapped. Same _saveOption path and status
+    // chrome as every other row; Enter or blur saves.
+    _renderTextOption(key, labelKey, opts, helpKey, placeholder) {
+        const val = opts[key] ?? '';
+        const status = this._saveStatus[key];
+        return html`
+            <div class="row">
+                <span class="lbl" title="${helpKey ? this._t(helpKey) : ''}">${this._t(labelKey)}</span>
+                <input type="text" class="txt-opt" .value=${String(val)}
+                       placeholder="${placeholder || ''}"
+                       @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                       @blur=${(e) => {
+                           const v = e.target.value.trim();
+                           if (v !== String(val)) this._saveOption(key, v, key);
+                       }} />
+                ${status === 'saving' ? html`<span class="sv">…</span>`
+                  : status === 'ok' ? html`<span class="sv ok">✓</span>`
+                  : status === 'err' ? html`<span class="sv err">!</span>`
+                  : nothing}
+            </div>
+        `;
+    }
+
     _renderTariff(T) {
         const opts = this._options || {};
         const rateEntity = this._hass?.states['sensor.sem_tariff_current_import_rate'];
@@ -1006,7 +1030,21 @@ class SEMConfigCard extends SEMLitBase {
                             'config_help_force_discharge_entity')}
                         ${this._renderPicker('battery_strategy_control_entity',
                             'config_strategy_entity', 'select', null, opts,
-                            'config_help_strategy_entity')}`;
+                            'config_help_strategy_entity')}
+                        ${opts['battery_strategy_control_entity'] ? html`
+                            ${this._renderTextOption('battery_strategy_active_value',
+                                'config_strategy_val_active', opts,
+                                'config_help_strategy_values', 'api')}
+                            ${this._renderTextOption('battery_strategy_idle_value',
+                                'config_strategy_val_idle', opts,
+                                'config_help_strategy_values', 'eco')}
+                            ${this._renderTextOption('battery_strategy_self_consume_value',
+                                'config_strategy_val_selfc', opts,
+                                'config_help_strategy_values', 'nom')}
+                            ${this._renderTextOption('battery_strategy_off_value',
+                                'config_strategy_val_off', opts,
+                                'config_help_strategy_values', 'idle')}
+                        ` : nothing}`;
                 })()}
                 ${this._renderOptionToggle('battery_setpoint_bidirectional',
                     'config_battery_bidirectional', opts,
@@ -2368,7 +2406,19 @@ class SEMConfigCard extends SEMLitBase {
                 .pv-name-power {
                     font-size: 0.7em; color: var(--secondary-text-color, ${T.textSec});
                 }
-                .pv-name-input {
+                .txt-opt {
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 6px;
+                color: var(--primary-text-color, #e1e1e1);
+                font-size: 12px;
+                padding: 3px 8px;
+                width: 110px;
+            }
+            .sv { font-size: 11px; }
+            .sv.ok { color: #8DC892; }
+            .sv.err { color: #f06292; }
+            .pv-name-input {
                     flex: 1; min-width: 0;
                     background: var(--secondary-background-color, ${T.surface});
                     border: 1px solid var(--divider-color, ${T.surfaceBorder});
