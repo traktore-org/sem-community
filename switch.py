@@ -157,8 +157,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             # config option, then RestoreEntity takes over across reboots.
             self._is_on = coordinator.config_entry.options.get("vacation_mode", False)
         elif description.key == "overnight_actuation":
-            # #638 G4 — same persistence pattern again; default OFF (shadow).
-            self._is_on = coordinator.config_entry.options.get("overnight_actuation", False)
+            # #638 G4/C8 — same persistence pattern again; default ON since
+            # the one-gate build (the plan is the only night-window source
+            # left; the switch is the kill-switch).
+            self._is_on = coordinator.config_entry.options.get("overnight_actuation", True)
         else:
             self._is_on = False
 

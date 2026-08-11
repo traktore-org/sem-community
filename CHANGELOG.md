@@ -11,6 +11,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unnumbered — the one-gate build, on feature/638-joint-energy-planner] — 11.08.2026
+
+> Branch-only. Takes its version number at merge time (the beta-number
+> collision lesson): the autopilot owns develop's number space.
+
+### ✨ The one-gate unification (#638)
+- 🎯 **One selector left.** The EV's private cheap-window pick and the battery
+  scheduler's own window pick are DELETED — the joint plan's blocks are the
+  only WHEN for scheduled energy use. A CI ratchet fails any new
+  `find_cheapest_hours` caller forever.
+- 🔋 **Battery: scheduler says WHAT, plan says WHEN.** `decide_battery`
+  force-charges only inside the plan's battery block; the SCHEDULED verdict
+  survives reboots beside the plan; the schedule entity derives from the
+  plan's blocks (same shape). The negative-price override stays reactive and
+  bypasses the gate. Closes the #652 phantom-EV model.
+- 🌡️ **Comfort banking actuates.** `comfort:` demands merge with `load:`
+  demands per device (the ID mismatch that kept banking runs from ever
+  firing); a WILLING band runs inside its planned block — the one sanctioned
+  place the plan creates a run.
+- 💱 **Arbitrage sell path wired, valve closed** (#533 stands): plan says
+  WHEN, live economics say WHETHER, per-battery mode says MAY; power capped
+  at the block-implied watts and fleet-split.
+- 🛡️ **Fail-open, per family, visibly:** EV uncovered → charges at the floor;
+  battery → no force-charge; every verdict change logged once
+  (`#638 coverage:`) and shown on the card as a translated "reactive — why"
+  chip. 12 new i18n keys ×16 languages.
+- 📇 **"Not scheduled tonight"** on the Energy Plan card: every deliberate
+  exclusion named with its why (mode / no car connected).
+- ⚙️ **`overnight_actuation` defaults ON** — with the selectors retired,
+  default-off would silently remove cheap-window timing; the switch remains
+  the kill-switch.
+- 📏 **One planning peak** — the EV's peak-managed rate now sizes against the
+  same hysteresis-adjusted level the ledger plans with (night top-up amps
+  drop by one hysteresis band: intended).
+
 # [1.7.6-beta.13] — 11.08.2026
 
 ### 🐛 Fixes

@@ -367,8 +367,60 @@ unreachable floor is never gated, and a peak shed still wins over any
 planned window.
 
 Flip it with `switch.sem_overnight_actuation` (Config category on the SEM
-device; persisted across restarts, default **off**). The card's chip, the
-sensor's `actuation` attribute and the log tag all reflect the live state.
+device; persisted across restarts, default **on** since the one-gate build —
+see the next section). The card's chip, the sensor's `actuation` attribute
+and the log tag all reflect the live state.
+
+## The one gate (the unification)
+
+Since the one-gate build there is **no second window-picker anywhere**:
+
+- the EV's private cheap-window selection (`find_cheapest_hours` inside
+  `ev_control`) is deleted — the plan's blocks are the only WHEN for the
+  night, and a CI ratchet (`tests/test_638_one_selector.py`) fails on any
+  new caller;
+- the battery scheduler keeps the WHAT (deficit, break-even economics,
+  target SOC, charge power) and the plan owns the WHEN — `decide_battery`
+  force-charges only inside the plan's `battery` block;
+- comfort banking actuates through the same gate (`comfort:` demands merge
+  with `load:` demands per device);
+- the arbitrage sell blocks actuate through the same trust rules — wired,
+  but every default keeps that path dormant.
+
+**Fail-open directions, per family** (each deliberate, each named in the
+`#638 coverage` log line and on the card's "reactive" chip):
+
+| Demand | Plan does not cover → | Why this direction |
+|---|---|---|
+| EV | **charge** at the deadline/top-up floor | the floor is a guarantee; an expensive night is a visible bug, a missed floor is a stranded car |
+| Battery pre-charge | **no force-charge** | pre-charge is optimization, not guarantee |
+| Loads | their own reactive rules | deficit/price/reserve gates keep deciding whether |
+| Comfort banking | **no banking run** | banking has no reactive run reason — it exists only as a planned block |
+| Arbitrage sell | **no sell** | selling is opt-in twice (mode + toggle) and plan-timed |
+
+Reactive gates that are NOT window selection stay live and senior:
+the solar_plus_cheap daytime price pause, the battery's negative-price
+override, peak shed, reserve SOC, anti-cycle timers, deadline forcing.
+
+## How to read tonight's plan
+
+The **Energy Plan** card (Control tab) is the one answer:
+
+- **A row per demand** — the window strip shows *when*, the tooltip shows
+  the blocks with power and price (*why this window: it was the cheapest
+  the constraints allowed*), and the kWh cell shows *how much* of the need
+  fits. A yielding row says why in the packer's own words.
+- **Chips** — while actuation is on, each row carries its live state:
+  steering now, waiting for its block, done — or **"reactive — why"**
+  when the plan does not cover the demand right now (no plan yet, plan
+  outdated, could not fit it, actuation off). Reactive is visible, never
+  silent.
+- **"Not scheduled tonight"** — every device the collector deliberately
+  left out, with its why: the charge mode excludes night charging, or no
+  car is connected. An absent row is never a mystery.
+- **The kill-switch** — `switch.sem_overnight_actuation` turns the plan's
+  authority off entirely; every device then runs on its reactive rules
+  and the card says so.
 
 ## The road ahead (the verification ladder)
 

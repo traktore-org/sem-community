@@ -624,9 +624,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#638 G4) actuation opt-in — the plan's blocks feed the existing
         # night signals only while this is True. Seeded from the persisted
         # option, then driven live by ``switch.sem_overnight_actuation``
-        # (same persistence pattern as observer/vacation mode). Default OFF:
-        # a fresh deploy of this branch still runs pure shadow.
-        self._overnight_actuation = config.get("overnight_actuation", False)
+        # (same persistence pattern as observer/vacation mode). Default ON
+        # since the one-gate build (C8): the private cheap-window selectors
+        # are retired, so with actuation off a solar_plus_cheap install
+        # would have NO cheap-window timing at all — default-off would be
+        # a silent feature regression. The switch is the kill-switch.
+        self._overnight_actuation = config.get("overnight_actuation", True)
         # (#638 G4) EV connection signature at stamp time — a plug/unplug
         # during the night re-derives the plan (the doc's replan trigger).
         self._plan_ev_conn_sig = None
@@ -4230,9 +4233,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # flipping the switch mid-night must change the chip on the next
             # cycle, not on the next stamp.
             _onp = getattr(self, "_overnight_shadow_plan", None)
+            # (#638 C7) ``coverage`` rides LIVE beside ``actuation``: a
+            # demand falling to the reactive layer mid-night must change
+            # the card on the next cycle, not on the next stamp.
             result["energy_plan"] = (
-                {**_onp, "actuation": bool(getattr(
-                    self, "_overnight_actuation", False))}
+                {**_onp,
+                 "actuation": bool(getattr(
+                     self, "_overnight_actuation", False)),
+                 "coverage": self._plan_coverage_view()}
                 if isinstance(_onp, dict) else _onp)
             # (#638 consolidation / #722) the NEXT energy day's books,
             # previewed for the card's Tomorrow view — live like
@@ -5868,6 +5876,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # to the reactive planners it replaced.
         self._shadow_overnight_plan(scheduler, energy, power)
 
+    def _plan_coverage_view(self) -> dict:
+        """(#638 C7) The per-demand verdict map, user-shaped: ``covered``
+        or the gate's named doubt. The card renders this as the
+        "reactive — why" chip — the user-facing twin of the
+        ``#638 coverage`` log line."""
+        seen = getattr(self, "_plan_coverage_seen", None) or {}
+        out = {}
+        for demand_id, state in seen.items():
+            try:
+                covered, reason = state
+            except (TypeError, ValueError):
+                continue
+            out[str(demand_id)] = "covered" if covered else (
+                str(reason) or "uncovered")
+        return out
+
     def _overnight_plan_gate(self, demand_id: str, now=None):
         """(#638 G4) The trust-rule verdict for one demand against tonight's
         stamped plan. UNCOVERED (→ callers change nothing) whenever actuation
@@ -7008,6 +7032,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     [f"ev not planned, no car connected: "
                      f"{', '.join(disconnected)}"] if disconnected else []),
                 "allocations": [a.reason for a in plan.allocations],
+                # (#638 C7) Every device deliberately left out, with a
+                # MACHINE why — the card translates per user language.
+                # Prose in ``summary`` is for logs, not for rendering.
+                "not_scheduled": (
+                    [{"id": f"ev:{c}", "why": "mode"} for c in mode_opted_out]
+                    + [{"id": f"ev:{c}", "why": "disconnected"}
+                       for c in disconnected]),
                 # None on a whole fleet. A string here means the battery
                 # figures above cover a SUBSET — the plan is still the best
                 # available answer, but it is not the fleet's answer (#638
