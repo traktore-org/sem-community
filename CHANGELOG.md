@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.13] — 11.08.2026
+
+### 🐛 Fixes
+- 🔌 **Power-only loads still read "Off" and showed ~1 kW** (#744, reported by
+  @Azlinon) — the follow-up to beta.12. That fix taught the priority card to
+  read a load's **switch**, but a load with **no** on/off entity (a Shelly Plus
+  PM mini at a sustained 400 W, a furnace blower at 250 W, a Powercalc-backed
+  light) still read "Off" and showed the 1 kW placeholder. Root cause: SEM took
+  a load's live-power sensor only from the Energy Dashboard's `stat_rate` link,
+  which HA's individual-device UI never collects — so `power_sensor` was empty,
+  live watts read `0`, and the power fallback said "Off". Solar/grid/battery
+  already recover this by finding the companion power sensor on the energy
+  sensor's own device; loads now do too. On a multi-channel device (a Shelly
+  2PM) each channel maps to its own power sensor. The derivation is display-only
+  — it never changes which loads SEM can control or shed. (by @traktore-org in #744)
+
 # [1.7.6-beta.12] — 10.08.2026
 
 ### 🐛 Fixes
