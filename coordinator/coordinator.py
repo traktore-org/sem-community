@@ -575,6 +575,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Session cost tracking (primary charger + per-charger dict)
         self._session_data = SessionData()
+        # (#753) the warm-up reference: a 'disconnect' in the first two
+        # minutes after boot is the sensor stack loading, not the car.
+        import time as _time
+        self._boot_monotonic = _time.monotonic()
         self._session_data_per_charger: Dict[str, SessionData] = {}
         self._last_ev_connected = False
         self._last_ev_connected_per_charger: Dict[str, bool] = {}

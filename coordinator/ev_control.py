@@ -785,8 +785,25 @@ class EVControlMixin:
         update_interval = self.config.get("update_interval", DEFAULT_UPDATE_INTERVAL)
         hours = update_interval / 3600.0
 
-        # Detect session end: EV was connected, now disconnected
+        # Detect session end: EV was connected, now disconnected.
+        # (#753) A disconnect is only real once CONFIRMED: never inside the
+        # boot warm-up window (the connection sensor publishes False before
+        # its integration has loaded — PROD 2026-08-11: a restart's warm-up
+        # 'unplug' finalized a 6 kWh session and restarted it at 1.6 kWh,
+        # silently rewriting the session's cost and solar share), and only
+        # after three consecutive disconnected cycles (which also absorbs
+        # the KEBA UDP blip family, #35/#595). While the disconnect is
+        # unconfirmed the edge stays armed: _last_ev_connected keeps its
+        # True so this branch re-evaluates every cycle.
         if self._last_ev_connected and not power.ev_connected:
+            import time as _time
+            _boot = getattr(self, "_boot_monotonic", None)
+            in_warmup = (_boot is not None
+                         and _time.monotonic() - _boot < 120.0)
+            self._session_data.disconnect_streak += 1
+            if in_warmup or self._session_data.disconnect_streak < 3:
+                return
+            self._session_data.disconnect_streak = 0
             # Session ended — update lifetime stats and keep data for display
             if self._session_data.active and self._session_data.energy_kwh > 0.1:
                 if self._storage:
@@ -808,6 +825,7 @@ class EVControlMixin:
             return
 
         self._last_ev_connected = power.ev_connected
+        self._session_data.disconnect_streak = 0  # (#753) blip absorbed
 
         # Detect session start: EV charging and no active session.
         # v1.6.8: per-charger power. ``_update_session_tracking`` is called

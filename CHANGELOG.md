@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.14] — 11.08.2026
 
 ### 🐛 Fixes
+- 🔌 **A restart mid-charge silently rewrote the session** (#753, spotted
+  live by Guido: top chip 1.6 kWh vs the charger's own 6.0 kWh) — the #282
+  session persistence worked, but the restart's sensor warm-up published a
+  false "disconnected", the end-detection finalized the session and a fresh
+  one started when charging resumed — amputating session cost and solar
+  share. A disconnect now only counts once CONFIRMED: never in the first
+  two minutes after boot, and only after three consecutive disconnected
+  cycles (which also absorbs the KEBA UDP blip family).
 - ⚡ **Load shedding never throttled the EV charger** (#747, reported by
   @Azlinon) — peak reached CRITICAL, the freezers shed, and the EVSE held
   32 A: the load manager's deliberate charger exclusion assumed decide()
