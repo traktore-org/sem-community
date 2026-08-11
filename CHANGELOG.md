@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [1.7.6-beta.14] — 11.08.2026
 
 ### 🐛 Fixes
+- ⚡ **Load shedding never throttled the EV charger** (#747, reported by
+  @Azlinon) — peak reached CRITICAL, the freezers shed, and the EVSE held
+  32 A: the load manager's deliberate charger exclusion assumed decide()
+  peak-manages the EV, but the peak state never reached the daytime
+  decision at all. The peak posture now resolves once per cycle into the
+  fleet state and decide() applies a senior clamp in EVERY mode
+  (always_max included): SHEDDING clamps to the effective minimum current,
+  EMERGENCY idles the charger. The EV throttles before anyone's freezer.
+- 🔋 **"Forcible-discharge power entity" wrote raw watts with no unit
+  validation** (#749, reported by @praun) — a kW-native setpoint received
+  3000 (full tilt after its range clamp) and a current-native number would
+  take watts as amperes. The write now shares the discharge-limit path's
+  one validation rule: non-power units refuse loudly, kW scales at the
+  service-call boundary, and the de-dup threshold stays honest watts.
 - 🔌 **The charger-duplicate fold never reached the surplus roster** (#748
   follow-up, found by audit) — beta.11 removed a duplicate charger row from
   the card and from load management, but the registry syncs to **two** systems
