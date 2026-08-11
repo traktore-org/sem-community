@@ -4211,6 +4211,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             _np_c.next_cheap_start
                             if _np_c and _np_c.next_cheap_start else None
                         ),
+                        # (#742) the joint plan's blocks drive the strip
+                        # when covered; None = reactive fallback.
+                        ev_plan_blocks=self._ev_blocks_for(_cid) if _cid else None,
                         ev_effective_rate_kw=_ev_rate_kw,
                         ev_target_eta=_ev_target_eta,
                         ev_target_kwh=_ev_target_kwh,
@@ -5879,6 +5882,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#638 G3) SHADOW: the joint overnight plan, computed + logged next
         # to the reactive planners it replaced.
         self._shadow_overnight_plan(scheduler, energy, power)
+
+    def _ev_blocks_for(self, cid: str, now=None) -> "Optional[list]":
+        """(#742) THIS charger's blocks from the stamped plan — only when
+        the gate covers the demand. The today-strip's rows come from these;
+        None keeps the composer's reactive fallback."""
+        gate = self._overnight_plan_gate(f"ev:{cid}", now)
+        if not getattr(gate, "covered", False):
+            return None
+        plan = getattr(self, "_overnight_shadow_plan", None)
+        if not isinstance(plan, dict):
+            return None
+        blocks = [b for b in (plan.get("blocks") or [])
+                  if b.get("id") == f"ev:{cid}"]
+        return blocks or None
 
     def _plan_coverage_view(self) -> dict:
         """(#638 C7) The per-demand verdict map, user-shaped: ``covered``
