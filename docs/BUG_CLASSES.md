@@ -267,6 +267,27 @@ switch + status sensor). **Guard:** `tests/test_748_charger_duplicate_depersist.
 gone while the authoritative charger row survives — *not* that the card happens not to render them.
 Refs #628 #700 #748.
 
+**Fifth instance — the same fix, one roster short. "The data layer" was not one place.** #748 moved
+the fold from the display to the data layer and stopped there, because `LoadManagement._devices`
+*read* like the data layer. The registry syncs to **two** downstream systems, and the second —
+`SurplusController._devices`, populated by `_sync_to_surplus_controller` — had no charger-identity
+fold at all. So the duplicate stayed registered as an independent surplus device: the daytime surplus
+loop could still reach the charger's own stop switch behind the EV controller — the very hazard the
+fix announced closed — and the card showed nothing, because the display fold hid the row it could not
+remove. That roster is also what the #638 overnight planner packs (`get_devices_sorted()`), so a
+duplicate carrying a minimum-runtime goal could enter the night ledger twice. **The tell:** a fix
+phrased as "display layer vs data layer" — a two-term framing for a fan-out. Ask instead: *how many
+rosters are built from this source, and does the rule run in each?* Count the writers, not the layers.
+**Second tell — a fold that runs only at sync time is blind at startup:** the registry syncs at
+`async_initialize`, but the charger roster arrives later on the coordinator's own cycle, so on the
+first pass `_configured_charger_entities()` is empty and the fold matches nothing. **Closure:** ONE
+predicate (`_is_charger_duplicate`) called by every roster builder — card payload and
+`_sync_to_surplus_controller` — plus `set_ev_chargers` re-checking the surplus roster when the charger
+identity set *changes*, which is the moment SEM first learns the fact. **Guard:**
+`tests/test_748_surplus_seam.py` asserts on `SurplusController._devices` (the raw registration dict,
+not the filtered `get_devices_sorted()` view — a read-site fold would fail it) and on the planner's
+roster, and pins the restart window and the every-cycle no-op. Refs #628 #700 #748 #638.
+
 ### 13. Single-charger-in-list read as legacy (`len(ev_chargers) > 1` guard) — GUARDED
 **Symptom:** a lone EV charger configured through the config-flow (its sensors stored in
 `ev_chargers[0]`, NOT the flat top-level keys) has a fleet-level quantity silently read from the
