@@ -154,6 +154,11 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
         # (08-08) the idle answer's why — the card shows it so a quiet
         # plan reads as an answer, never as a disappearance.
         "why": plan.get("why"),
+        # (#638 C7) what will NOT be done and why — the card's
+        # "not scheduled tonight" list, machine keys the card translates.
+        "not_scheduled": plan.get("not_scheduled") or [],
+        # (#638 C7) per-demand plan-vs-reactive attribution, live.
+        "coverage": plan.get("coverage") or {},
         # (#638, the last string) the shadow arbitrage advisor's verdict
         # with its numbers — the morning plan-vs-Sankey audit reads it
         # here. Small by construction (a few blocks at most).
