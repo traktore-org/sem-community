@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.14] — 11.08.2026
+
+### 🐛 Fixes
+- 🔌 **The charger-duplicate fold never reached the surplus roster** (#748
+  follow-up, found by audit) — beta.11 removed a duplicate charger row from
+  the card and from load management, but the registry syncs to **two** systems
+  and `_sync_to_surplus_controller` had no charger-identity fold at all. So an
+  Energy-Dashboard row whose *control* entity is a configured charger's
+  start/stop switch was still registered as an independent surplus device: the
+  daytime surplus loop could reach for the charger's stop switch behind the EV
+  controller's back — the exact hazard beta.11 set out to close — while the
+  card showed nothing, because the display fold hid the row it could not
+  remove. The overnight planner (#638) packs its load demands from that same
+  roster, so a duplicate carrying a minimum-runtime goal could additionally
+  enter the night ledger twice — once as the charger, once as a load. The fold
+  now runs where the device is **registered**, not only where it is read, and
+  the three rosters share one predicate so they cannot drift apart again. It
+  also runs the moment the charger roster arrives, closing the ~35 s window
+  after every restart in which the registry has synced but does not yet know
+  which entities belong to a charger.
+
 # [1.7.6-beta.13] — 11.08.2026
 
 ### 🐛 Fixes
