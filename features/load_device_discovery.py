@@ -9,7 +9,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
 
 from ..const import LOAD_MANAGEMENT_DEVICE_PATTERNS
-from ..ha_energy_reader import read_energy_dashboard_config, get_all_individual_devices
+from ..ha_energy_reader import (
+    read_energy_dashboard_config,
+    get_all_individual_devices,
+    _find_load_power_sensor,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -189,6 +193,15 @@ class LoadDeviceDiscovery:
             switch_entity = None
             if control and control.get("type") == "switch":
                 switch_entity = control.get("entity")
+
+            # (#744) Derive the load's own companion power sensor when the Energy
+            # Dashboard carries no power link (the common case — its UI collects
+            # only the kWh sensor), so a power-only load reads real watts instead
+            # of 0. AFTER control discovery on purpose: the derived sensor must
+            # not widen brand-based control eligibility (see device_registry /
+            # BUG_CLASSES #10). Read-only; control already decided above.
+            if not power_sensor:
+                power_sensor = _find_load_power_sensor(self.hass, energy_sensor)
 
             # Validate power sensor if provided
             if power_sensor:
