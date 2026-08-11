@@ -414,6 +414,11 @@ class BatteryView:
     scheduler says WHAT (deficit, target, power, economics); this says
     WHEN. ``None``/uncovered ⇒ no force-charge — pre-charge is
     optimization, not guarantee."""
+    arbitrage_sell: "Any" = None
+    """(#638 one-gate C6) The plan's WHEN for the arbitrage sell —
+    ``(in_block, per_battery_power_w)`` from ``arbitrage_sell_gate``,
+    already fleet-split by the pipeline. ``None``/closed ⇒ no sell this
+    cycle regardless of the live economics verdict."""
 
 
 # ─────────────────────────────────────────────────────────────────

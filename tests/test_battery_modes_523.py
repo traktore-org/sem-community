@@ -27,7 +27,7 @@ from custom_components.solar_energy_management.consts.battery_modes import (
 
 
 def _view(*, mode="auto", reserve=None, soc=80.0, sched=None, cfg_extra=None,
-          ev_charging=False, charging_state="idle"):
+          ev_charging=False, charging_state="idle", sell=None):
     cfg = {"battery_max_discharge_power": 4000, "battery_max_charge_power_w": 5000}
     if mode is not None:
         cfg["battery_mode"] = mode
@@ -43,6 +43,9 @@ def _view(*, mode="auto", reserve=None, soc=80.0, sched=None, cfg_extra=None,
         ev_charging=ev_charging,
         home_consumption_w=500.0,
         scheduler_decision=sched,
+        # (#638 C6) the plan's sell WHEN — tests that assert the MODE/floor
+        # semantics of a sell verdict open the block explicitly.
+        arbitrage_sell=sell,
     )
 
 
@@ -143,6 +146,7 @@ def test_allow_arbitrage_sells_even_with_global_off():
     d = decide_battery(_view(
         mode="allow_arbitrage", sched=_arb_verdict(),
         cfg_extra={"battery_grid_arbitrage_enabled": False},
+        sell=(True, 4000.0),  # (#638 C6) plan block open — WHEN satisfied
     ))
     assert d.intent is BatteryIntent.FORCE_DISCHARGE
 
@@ -151,10 +155,12 @@ def test_auto_sells_only_when_global_on():
     on = decide_battery(_view(
         mode="auto", sched=_arb_verdict(),
         cfg_extra={"battery_grid_arbitrage_enabled": True},
+        sell=(True, 4000.0),  # (#638 C6) plan block open
     ))
     off = decide_battery(_view(
         mode="auto", sched=_arb_verdict(),
         cfg_extra={"battery_grid_arbitrage_enabled": False},
+        sell=(True, 4000.0),
     ))
     assert on.intent is BatteryIntent.FORCE_DISCHARGE
     assert off.intent is BatteryIntent.NORMAL
@@ -175,6 +181,7 @@ def test_arbitrage_floor_uses_per_battery_reserve_value():
         mode="allow_arbitrage", soc=80.0, reserve=40,
         sched=_arb_verdict(floor=10.0),
         cfg_extra={"battery_grid_arbitrage_enabled": True},
+        sell=(True, 4000.0),  # (#638 C6) plan block open
     ))
     assert d.intent is BatteryIntent.FORCE_DISCHARGE
     assert d.floor_soc == 40  # per-battery reserve wins over verdict's 10

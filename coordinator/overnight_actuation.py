@@ -283,3 +283,44 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
     return PlanVerdict(hold=True,
                        until=min(untils) if untils else None,
                        reason=holds[0].reason)
+
+
+def arbitrage_sell_gate(plan, now: datetime) -> Tuple[bool, float]:
+    """(#638 C6) The plan's WHEN for the arbitrage SELL.
+
+    Reads the stamped plan's ``arbitrage.discharge_blocks`` under the same
+    trust discipline as :func:`plan_gate` — fresh stamp, well-formed rows,
+    decline on any doubt. Returns ``(in_block, power_w)`` where power is
+    the BLOCK-IMPLIED watts (kwh over the block's hours): the advisor
+    bounded delivery by the home's own grid draw, so this keeps the sell
+    an avoided-import delivery, never an export-at-max. The live
+    economics (``evaluate_arbitrage``) stay the WHETHER; the per-battery
+    mode gates stay the MAY — this function only answers WHEN.
+    """
+    closed = (False, 0.0)
+    if not isinstance(plan, dict):
+        return closed
+    try:
+        computed = _parse_dt(plan.get("computed_at"))
+        if computed is None or now - computed > _MAX_PLAN_AGE:
+            return closed
+        arb = plan.get("arbitrage")
+        if not isinstance(arb, dict):
+            return closed
+        for b in arb.get("discharge_blocks") or []:
+            start = _parse_dt(b.get("start"))
+            end = _parse_dt(b.get("end"))
+            try:
+                kwh = float(b.get("kwh") or 0.0)
+            except (TypeError, ValueError):
+                return closed
+            if start is None or end is None or kwh <= 0.0:
+                return closed
+            if start <= now < end:
+                hours = (end - start).total_seconds() / 3600.0
+                if hours <= 0:
+                    return closed
+                return (True, kwh / hours * 1000.0)
+        return closed
+    except (TypeError, ValueError, KeyError):
+        return closed

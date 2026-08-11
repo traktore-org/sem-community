@@ -5480,16 +5480,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         _charge_active = (
             scheduler_decision is not None and scheduler_decision.should_charge
         )
+        # #691: the LIMIT_DISCHARGE home split (and the C6 sell split) must
+        # divide by the batteries that actually CONSUME the budget — a
+        # mode=off battery never gets the clamp, and batteries sharing one
+        # discharge-limit entity are a single actuation surface.
+        _n_cfg = len(getattr(power, "batteries", {}) or {})
+        _eff_battery_count = effective_battery_count(
+            [self._per_battery_config(i, _n_cfg) for i in range(_n_cfg)]
+        ) if _n_cfg else 1
+
         # Evaluate arbitrage ONLY when globally enabled. In v1.7.3 the global
         # toggle is forced off (#533) so this whole block is dormant — automatic
         # battery→grid arbitrage is deactivated for the stable release.
         #
-        # The per-battery ``allow_arbitrage`` opt-in (which used to run the
-        # economic check even with the global toggle off) is intentionally NOT
-        # honoured here for v1.7.3: it's removed from the selector and a stale
-        # ``allow_arbitrage`` config goes dormant (behaves like ``auto`` — no
-        # selling) rather than quietly selling to grid. Restored in v1.7.4.
-        _any_allow_arb = False  # v1.7.3: per-battery arbitrage opt-in disabled (#533)
+        # (#638 one-gate C6) The per-battery ``allow_arbitrage`` opt-in scan
+        # is real again — the v1.7.3 hardcode is gone. Every DEFAULT stays
+        # dormant (#533 stands): no battery ships in allow_arbitrage mode and
+        # the global toggle defaults off; a user must open the valve, and the
+        # sell then fires only inside the plan's own sell block.
+        _any_allow_arb = any(
+            str(self._per_battery_config(i, _n_cfg).get(
+                "battery_mode", "auto") or "auto").lower() == "allow_arbitrage"
+            for i in range(_n_cfg)
+        ) if _n_cfg else False
         # Market signals are computed ONCE here (#533) and carried on the
         # FleetContext below — single source of truth, no ad-hoc tariff/power
         # reads in the decision. ``None`` unless arbitrage is being evaluated
@@ -5542,16 +5555,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning("Export arbitrage evaluate failed: %s", e)
 
-        # #691: the LIMIT_DISCHARGE home split must divide by the batteries
-        # that actually CONSUME the budget — a mode=off battery never gets
-        # the clamp, and batteries sharing one discharge-limit entity are a
-        # single actuation surface. len(power.batteries) counted configured
-        # rows: 2 configured / 1 off / home 1 kW → the controlled battery
-        # was clamped to 500 W and the grid imported the rest (SolarEdge).
-        _n_cfg = len(getattr(power, "batteries", {}) or {})
-        _eff_battery_count = effective_battery_count(
-            [self._per_battery_config(i, _n_cfg) for i in range(_n_cfg)]
-        ) if _n_cfg else 1
+        # (#638 C6) The plan's WHEN for the arbitrage sell, computed once
+        # per cycle and fleet-split — decide_battery receives the per-
+        # battery share (the #531/#691 treatment).
+        from .overnight_actuation import arbitrage_sell_gate
+        _sell_in, _sell_total_w = arbitrage_sell_gate(
+            getattr(self, "_overnight_shadow_plan", None), dt_util.now())
+        _arb_sell = (_sell_in, _sell_total_w / max(1, _eff_battery_count))
 
         # Shared fleet context — same for every battery this cycle.
         fleet = FleetContext(
@@ -5707,6 +5717,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#638 one-gate C4) the joint plan's WHEN for the battery
                 # demand — same helper, same coverage log as every consumer.
                 plan_gate=self._overnight_plan_gate("battery"),
+                # (#638 one-gate C6) the plan's WHEN for the sell, pre-split.
+                arbitrage_sell=_arb_sell,
             )
 
             # 3. Decide
