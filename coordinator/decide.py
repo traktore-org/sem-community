@@ -261,7 +261,18 @@ def effective_min_amps(cfg: dict, fallback: int = 6) -> int:
     Returns:
         ``min(ev_max_current, max(loadpoint_min, vehicle_min or 0))`` as int.
     """
-    loadpoint_min = int(cfg.get("ev_min_current", fallback)) if isinstance(cfg, dict) else fallback
+    # (#750) present-as-None is the classic config trap (the or-chain
+    # precedent): a key that exists with value None must fall back, not
+    # crash the decide layer with a TypeError.
+    if isinstance(cfg, dict):
+        _raw_min = cfg.get("ev_min_current", fallback)
+        try:
+            loadpoint_min = (int(_raw_min)
+                             if _raw_min not in (None, "") else fallback)
+        except (TypeError, ValueError):
+            loadpoint_min = fallback
+    else:
+        loadpoint_min = fallback
     effective = loadpoint_min
     if isinstance(cfg, dict):
         v = cfg.get("vehicle_min_current")

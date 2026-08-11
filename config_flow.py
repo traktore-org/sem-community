@@ -1327,7 +1327,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("initial_current", 10),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=32, step=1,
+                        min=1, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1336,7 +1336,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("ev_min_current", 6),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=16, step=1,
+                        min=1, max=16, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1522,7 +1522,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("initial_current", self._data.get("initial_current", 10)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=32, step=1,
+                        min=1, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1531,7 +1531,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("ev_min_current", self._data.get("ev_min_current", 6)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=16, step=1,
+                        min=1, max=16, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1547,7 +1547,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     description={"suggested_value": charger.get("vehicle_min_current")},
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=32, step=1,
+                        min=1, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
