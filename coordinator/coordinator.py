@@ -5695,6 +5695,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ),
                 scheduler_decision=scheduler_decision,
                 grid_funded_load_w=self._surplus_controller.grid_funded_draw_w(),
+                # (#638 one-gate C4) the joint plan's WHEN for the battery
+                # demand — same helper, same coverage log as every consumer.
+                plan_gate=self._overnight_plan_gate("battery"),
             )
 
             # 3. Decide

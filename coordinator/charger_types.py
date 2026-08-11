@@ -407,6 +407,13 @@ class BatteryView:
     inverter's self-consumption logic covers the load from the battery
     and the Battery/Grid picker choices behave identically
     (observed live, PROD 2026-07-22)."""
+    plan_gate: "Any" = None
+    """(#638 one-gate C4) The joint plan's trust-rule verdict for the
+    ``battery`` demand this cycle (a ``PlanGate``, typed ``Any`` for the
+    same import-lightness reason as ``scheduler_decision``). The
+    scheduler says WHAT (deficit, target, power, economics); this says
+    WHEN. ``None``/uncovered ⇒ no force-charge — pre-charge is
+    optimization, not guarantee."""
 
 
 # ─────────────────────────────────────────────────────────────────

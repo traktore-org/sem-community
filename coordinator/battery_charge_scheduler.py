@@ -187,6 +187,11 @@ class SchedulerDecision:
     STOP_FORCE_DISCHARGE, whereas the night scheduler's same-named states stop
     a force-CHARGE. Without this the stop relied on a Huawei-only coincidence
     (its stop-charge service also clears a forcible discharge)."""
+    price_forced: bool = False
+    """(#638 one-gate C4) True only on the negative-price override —
+    being PAID to consume is a reactive price gate, so decide_battery
+    bypasses the plan gate for it. Every other SCHEDULED verdict
+    force-charges only inside the joint plan's battery block."""
     reason: str = ""
     evaluated_at: Optional[datetime] = None
 
@@ -486,6 +491,7 @@ class BatteryChargeScheduler:
                 hours_needed=hours_needed,
                 schedule=schedule,
                 charge_power_w=self._config.battery_max_charge_power_w,
+                price_forced=True,
                 reason=f"Negative price ({current_price:.3f}/kWh) — charging to {target_soc:.0f}%",
                 evaluated_at=now,
             )

@@ -156,16 +156,54 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         state_value = getattr(state, "value", state) if state is not None else None
 
         if state_value == "scheduled":
-            in_window = _now_in_window(view)
-            if in_window:
+            # (#638 one-gate C4) The scheduler owns WHAT (deficit, target,
+            # power, economics); the joint plan owns WHEN. The old
+            # ``_now_in_window`` read the scheduler's OWN window pick —
+            # the second selector this build retires.
+            sched_power = float(getattr(sched, "charge_power_w", 0.0) or 0.0)
+            if bool(getattr(sched, "price_forced", False)):
+                # Negative price: being PAID to consume is a reactive
+                # price gate, not window selection — bypasses the plan.
                 return BatteryDecision(
                     battery_id=rt.battery_id,
                     intent=BatteryIntent.FORCE_CHARGE,
                     target_soc=getattr(sched, "target_soc", 0.0),
-                    charge_power_w=getattr(sched, "charge_power_w", 0.0),
+                    charge_power_w=sched_power,
                     duration_min=getattr(sched, "duration_min", 60),
-                    reason=f"scheduler SCHEDULED → force charge in window",
+                    reason="negative price — charging regardless of plan",
                 )
+            gate = view.plan_gate
+            if gate is not None and getattr(gate, "covered", False):
+                if getattr(gate, "in_block", False):
+                    block_w = float(
+                        getattr(gate, "block_power_w", 0.0) or 0.0)
+                    power = min(sched_power, block_w) if block_w > 0 \
+                        else sched_power
+                    return BatteryDecision(
+                        battery_id=rt.battery_id,
+                        intent=BatteryIntent.FORCE_CHARGE,
+                        target_soc=getattr(sched, "target_soc", 0.0),
+                        charge_power_w=power,
+                        duration_min=getattr(sched, "duration_min", 60),
+                        reason="scheduler SCHEDULED → plan block open — "
+                               "force charge",
+                    )
+                nxt = getattr(gate, "next_block_start", None)
+                when = f" (opens {nxt:%H:%M})" if nxt else ""
+                return BatteryDecision(
+                    battery_id=rt.battery_id,
+                    intent=BatteryIntent.STOP_FORCE_CHARGE,
+                    reason="scheduler SCHEDULED — outside the planned "
+                           f"block{when}",
+                )
+            why = getattr(gate, "reason", "") if gate is not None else "no gate"
+            return BatteryDecision(
+                battery_id=rt.battery_id,
+                intent=BatteryIntent.STOP_FORCE_CHARGE,
+                reason=f"scheduled but the plan does not cover the battery "
+                       f"({why or 'uncovered'}) — pre-charge is "
+                       "optimization, not guarantee",
+            )
 
         # Export arbitrage — the scheduler decided to SELL to the grid
         # this cycle (#523). Pure actuation of the scheduler's verdict, the
@@ -359,34 +397,3 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     )
 
 
-def _now_in_window(view: "BatteryView") -> bool:
-    """Whether the current time falls inside a SCHEDULED window.
-
-    Pure: reads ``view.scheduler_decision.schedule`` if populated.
-    The schedule's TimeSlot list is the per-cycle truth — if the
-    scheduler decided SCHEDULED but the time isn't yet inside a
-    slot, we DON'T force-charge yet (this happens in the gap
-    between evaluation at 21:00 and the first charge slot).
-    """
-    sched = view.scheduler_decision
-    if sched is None:
-        return False
-    schedule = getattr(sched, "schedule", None)
-    if schedule is None:
-        # Decision is SCHEDULED but no time-slot data — treat as
-        # "charge whenever scheduler says scheduled" (back-compat
-        # with pre-time-slot scheduler version).
-        return True
-    slots = getattr(schedule, "slots", None) or []
-    if not slots:
-        return True
-    # Pure check: any slot's start <= now <= start + duration?
-    # ``now`` should come from view.fleet, but for simplicity defer
-    # to the schedule's own helper if it has one.
-    helper = getattr(schedule, "is_active_now", None)
-    if callable(helper):
-        try:
-            return bool(helper())
-        except Exception:
-            return False
-    return True
