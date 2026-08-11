@@ -4401,9 +4401,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 weather_state = state
                 break
             weather_condition = weather_state.state if weather_state else STATE_UNKNOWN
-            self._forecast_tracker.update(
-                forecast_data.forecast_today_kwh, energy.daily_solar, weather_condition,
-            )
+            # (#743, 1.8 half) a day the probe CONFIRMED curtailed teaches
+            # nothing: measured solar is clamped to consumption, and learning
+            # from it sinks the dampening factor — every dampened consumer
+            # (fleet remaining-solar, forecast night target) then under-plans
+            # exactly the hidden kilowatts the probe reveals.
+            if getattr(self, "_curtailment_day", None) == dt_util.now().date():
+                _LOGGER.debug(
+                    "Forecast tracker: skipping today's sample — curtailment "
+                    "confirmed, measured solar is not the sky's answer (#743)")
+            else:
+                self._forecast_tracker.update(
+                    forecast_data.forecast_today_kwh, energy.daily_solar, weather_condition,
+                )
             tracker_data = self._forecast_tracker.get_data()
             # (#544) forecast_corrected_tomorrow removed — dead sensor.
         except (ValueError, TypeError, AttributeError) as e:
@@ -7798,6 +7808,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # live "why didn't it fire?" has six indistinguishable
             # answers. Read-only; the trace copies it, nothing reads it
             # back into a decision.
+            from .curtailment import marks_day_curtailed
+            if marks_day_curtailed(probe.state):
+                # (#743) today's measured solar is clamped to consumption —
+                # a poisoned sample for the dampening tracker.
+                self._curtailment_day = dt_util.now().date()
             self._curtailment_last = {
                 "state": probe.state,
                 "grant_w": round(grant),
