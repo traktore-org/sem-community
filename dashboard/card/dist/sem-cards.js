@@ -4564,7 +4564,9 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             .detail {
                 font-size: 11px; opacity: 0.65; line-height: 1.2;
             }
-        `}},{name:"SEM Today's Plan",description:"Forward-looking schedule combining tariff, solar, and EV"});const vt={ev:{icon:"mdi:ev-station",color:"#8DC892",label:"overnight_kind_ev"},load:{icon:"mdi:power-plug",color:"#5BC8D8",label:"overnight_kind_load"},battery:{icon:"mdi:home-battery",color:"#f06292",label:"overnight_kind_battery"},comfort:{icon:"mdi:thermometer",color:"#4db6ac",label:"overnight_kind_comfort"}},yt={actuation:{docs:"https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#actuation-g4"},arbitrage:{docs:"https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#the-arbitrage-advisor"}},xt={fits:{icon:"mdi:check-circle",color:"#8DC892"},partial:{icon:"mdi:circle-slice-4",color:"#ff9800"},yields:{icon:"mdi:alert-circle-outline",color:"#f06292"}};class bt extends Se{setConfig(e){super.setConfig(e),this._entity=e.entity||"sensor.sem_energy_plan"}set hass(e){this._hass=e;const t=e?.states[this._entity],i=t?.attributes||{},s=!0===i.actuation&&Array.isArray(i.demands)?i.demands.map(e=>this._liveState(e,i.blocks)).join(","):"",r=i.tomorrow||{},a=[t?.state,i.computed_at,i.actuation,s,this._view||"today",r.prices,r.forecast_kwh,r.stamps_at,e?.states["switch.sem_overnight_actuation"]?.state,e?.states["sensor.sem_night_start_time"]?.state,e?.language].join("|"),o="function"==typeof semLocalize;(a!==this._lastKey||o&&!this._localizeReady)&&(this._lastKey=a,this._lang=e?.language,this._localizeReady=o,this.requestUpdate())}get hass(){return this._hass}_liveState(e,t){if(!e||"battery"===e.kind)return null;if("fits"!==e.status)return"reactive";const i=Date.now();let s=null,r=!1;for(const a of Array.isArray(t)?t:[]){if(a.id!==e.id)continue;const t=Date.parse(a.start),o=Date.parse(a.end);if(Number.isFinite(t)&&Number.isFinite(o)){if(r=!0,t<=i&&i<o)return"now";t>i&&(null===s||t<s)&&(s=t)}}return null!==s?"wait:"+s:r?"done":null}_liveChip(e){if(!e)return q;if("now"===e)return W`<span class="live now">▶ ${this._t("overnight_live_now")}</span>`;if(e.startsWith("wait:")){const t=this._hm(new Date(Number(e.slice(5))).toISOString());return W`<span class="live wait">${this._format("overnight_live_wait",{time:t})||t}</span>`}return"done"===e?W`<span class="live done">${this._t("overnight_live_done")}</span>`:W`<span class="live react">${this._t("overnight_live_reactive")}</span>`}_hm(e){return e?ue(e,this._hass?.config?.time_zone||void 0):"—"}_format(e,t){let i=this._t(e);if(!i||i===e)return null;for(const[e,s]of Object.entries(t||{}))i=i.replace(new RegExp("\\{"+e+"\\}","g"),s);return i}_runs(e,t,i,s){const r=[];for(const t of e){const e=s(t),i=Date.parse(t.start),a=Date.parse(t.end);if(!Number.isFinite(i)||!Number.isFinite(a))continue;const o=r[r.length-1];o&&o.v===e&&Math.abs(o.endMs-i)<1e3?o.endMs=a:r.push({v:e,startMs:i,endMs:a})}return r.map(e=>({v:e.v,left:(e.startMs-t)/i*100,width:(e.endMs-e.startMs)/i*100}))}_modeChip(e){return W`<span class="chip ${e?"chip-active":""}"
+        `}},{name:"SEM Today's Plan",description:"Forward-looking schedule combining tariff, solar, and EV"});const vt={ev:{icon:"mdi:ev-station",color:"#8DC892",label:"overnight_kind_ev"},load:{icon:"mdi:power-plug",color:"#5BC8D8",label:"overnight_kind_load"},battery:{icon:"mdi:home-battery",color:"#f06292",label:"overnight_kind_battery"},comfort:{icon:"mdi:thermometer",color:"#4db6ac",label:"overnight_kind_comfort"}},yt={actuation:{docs:"https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#actuation-g4"},arbitrage:{docs:"https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#the-arbitrage-advisor"}},xt={fits:{icon:"mdi:check-circle",color:"#8DC892"},partial:{icon:"mdi:circle-slice-4",color:"#ff9800"},yields:{icon:"mdi:alert-circle-outline",color:"#f06292"}};class bt extends Se{setConfig(e){super.setConfig(e),this._entity=e.entity||"sensor.sem_energy_plan"}set hass(e){this._hass=e;const t=e?.states[this._entity],i=t?.attributes||{},s=!0===i.actuation&&Array.isArray(i.demands)?i.demands.map(e=>this._liveState(e,i.blocks)).join(","):"",r=i.tomorrow||{},a=i.coverage?Object.entries(i.coverage).map(([e,t])=>e+"="+t).join(","):"",o=[t?.state,i.computed_at,i.actuation,s,a,this._view||"today",r.prices,r.forecast_kwh,r.stamps_at,e?.states["switch.sem_overnight_actuation"]?.state,e?.states["sensor.sem_night_start_time"]?.state,e?.language].join("|"),n="function"==typeof semLocalize;(o!==this._lastKey||n&&!this._localizeReady)&&(this._lastKey=o,this._lang=e?.language,this._localizeReady=n,this.requestUpdate())}get hass(){return this._hass}_liveState(e,t){if(!e||"battery"===e.kind)return null;if("fits"!==e.status)return"reactive";const i=Date.now();let s=null,r=!1;for(const a of Array.isArray(t)?t:[]){if(a.id!==e.id)continue;const t=Date.parse(a.start),o=Date.parse(a.end);if(Number.isFinite(t)&&Number.isFinite(o)){if(r=!0,t<=i&&i<o)return"now";t>i&&(null===s||t<s)&&(s=t)}}return null!==s?"wait:"+s:r?"done":null}_covKey(e){if(!e||"covered"===e)return null;if(e.startsWith("verdict"))return"overnight_cov_yields";return{"no plan":"overnight_cov_no_plan","stale stamp":"overnight_cov_stale","outside span":"overnight_cov_outside","not in plan":"overnight_cov_not_in_plan","actuation off":"overnight_cov_actuation_off"}[e]||"overnight_cov_unreadable"}_covChip(e){const t=this._covKey(e);return t?W`<span class="chip chip-reactive"
+            title="${this._t("overnight_reactive_tip")} — ${this._t(t)}"
+            >${this._t("overnight_reactive")} · ${this._t(t)}</span>`:q}_liveChip(e){if(!e)return q;if("now"===e)return W`<span class="live now">▶ ${this._t("overnight_live_now")}</span>`;if(e.startsWith("wait:")){const t=this._hm(new Date(Number(e.slice(5))).toISOString());return W`<span class="live wait">${this._format("overnight_live_wait",{time:t})||t}</span>`}return"done"===e?W`<span class="live done">${this._t("overnight_live_done")}</span>`:W`<span class="live react">${this._t("overnight_live_reactive")}</span>`}_hm(e){return e?ue(e,this._hass?.config?.time_zone||void 0):"—"}_format(e,t){let i=this._t(e);if(!i||i===e)return null;for(const[e,s]of Object.entries(t||{}))i=i.replace(new RegExp("\\{"+e+"\\}","g"),s);return i}_runs(e,t,i,s){const r=[];for(const t of e){const e=s(t),i=Date.parse(t.start),a=Date.parse(t.end);if(!Number.isFinite(i)||!Number.isFinite(a))continue;const o=r[r.length-1];o&&o.v===e&&Math.abs(o.endMs-i)<1e3?o.endMs=a:r.push({v:e,startMs:i,endMs:a})}return r.map(e=>({v:e.v,left:(e.startMs-t)/i*100,width:(e.endMs-e.startMs)/i*100}))}_modeChip(e){return W`<span class="chip ${e?"chip-active":""}"
             title="${this._t(e?"overnight_active_note":"overnight_shadow_note")}">${this._t(e?"overnight_active":"overnight_shadow")}</span>`}_docsLink(e="actuation"){return W`<a class="docs-link" href="${yt[e].docs}" target="_blank"
             rel="noopener" title="${this._t("config_docs")}">
             <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:13px"></ha-icon>
@@ -4736,31 +4738,32 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         `:q}
                         <div class="stat" title="${b}">${$}</div>
 
-                        ${r.map(e=>{const t=vt[e.kind]||vt.load,i=xt[e.status]||xt.yields,r=z[e.id]||[],a=e.label||this._t(t.label),l="fits"===e.status?`${(e.planned_kwh||0).toFixed(1)} kWh`:`${(e.planned_kwh||0).toFixed(1)}/${(e.needed_kwh||0).toFixed(1)} kWh`,p=[a,"comfort"===e.kind?this._t("overnight_comfort_tip"):null,r.map(e=>`${this._hm(e.start)}–${this._hm(e.end)} · ${(e.power_w/1e3).toFixed(1)} kW`).join("\n")||null,`${(e.planned_kwh||0).toFixed(1)} / ${(e.needed_kwh||0).toFixed(1)} kWh · ${this._t("overnight_est")} ${(e.est_cost||0).toFixed(2)} ${w}`,e.note||null].filter(Boolean).join("\n"),h=s?this._liveState(e,o):null,_=e.note||("fits"!==e.status?this._format("overnight_yield_reason",{planned:(e.planned_kwh||0).toFixed(1),needed:(e.needed_kwh||0).toFixed(1)}):null);return W`
-                                <div class="lbl ${h?"col":""}" title="${p}">
+                        ${r.map(e=>{const t=vt[e.kind]||vt.load,r=xt[e.status]||xt.yields,a=z[e.id]||[],l=e.label||this._t(t.label),p="fits"===e.status?`${(e.planned_kwh||0).toFixed(1)} kWh`:`${(e.planned_kwh||0).toFixed(1)}/${(e.needed_kwh||0).toFixed(1)} kWh`,h=[l,"comfort"===e.kind?this._t("overnight_comfort_tip"):null,a.map(e=>`${this._hm(e.start)}–${this._hm(e.end)} · ${(e.power_w/1e3).toFixed(1)} kW${null!=e.price?` · ${e.price}`:""}`).join("\n")||null,`${(e.planned_kwh||0).toFixed(1)} / ${(e.needed_kwh||0).toFixed(1)} kWh · ${this._t("overnight_est")} ${(e.est_cost||0).toFixed(2)} ${w}`,e.note||null].filter(Boolean).join("\n"),_=s?this._liveState(e,o):null,g=e.note||("fits"!==e.status?this._format("overnight_yield_reason",{planned:(e.planned_kwh||0).toFixed(1),needed:(e.needed_kwh||0).toFixed(1)}):null);return W`
+                                <div class="lbl ${_?"col":""}" title="${h}">
                                     <div class="lname">
                                         <ha-icon icon="${t.icon}" style="--mdc-icon-size:13px;color:${t.color}"></ha-icon>
-                                        <span class="name">${a}</span>
+                                        <span class="name">${l}</span>
                                     </div>
-                                    ${this._liveChip(h)}
+                                    ${this._liveChip(_)}
+                                    ${s?this._covChip((i.coverage||{})[e.id]):q}
                                 </div>
                                 ${d?W`
                                     <div class="track">
                                         ${f}
-                                        ${r.map(e=>{const i=(Date.parse(e.start)-n)/c*100,s=(Date.parse(e.end)-Date.parse(e.start))/c*100;return W`
+                                        ${a.map(e=>{const i=(Date.parse(e.start)-n)/c*100,s=(Date.parse(e.end)-Date.parse(e.start))/c*100;return W`
                                                 <div class="seg run"
                                                      title="${this._hm(e.start)}–${this._hm(e.end)} · ${Math.round(e.power_w)} W"
                                                      style="left:${i}%;width:${Math.max(s,1.2)}%;background:${t.color}"></div>
                                             `})}
                                     </div>
                                 `:q}
-                                <div class="stat" title="${p}">
-                                    <ha-icon icon="${i.icon}" style="--mdc-icon-size:13px;color:${i.color}"></ha-icon>
-                                    <span>${l}</span>
+                                <div class="stat" title="${h}">
+                                    <ha-icon icon="${r.icon}" style="--mdc-icon-size:13px;color:${r.color}"></ha-icon>
+                                    <span>${p}</span>
                                 </div>
-                                ${_?W`
+                                ${g?W`
                                     <div class="lbl"></div>
-                                    <div class="note">${_}</div>
+                                    <div class="note">${g}</div>
                                     ${d?W`<div class="stat"></div>`:q}
                                 `:q}
                             `})}
@@ -4784,6 +4787,20 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <div class="warn">
                             <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:13px;color:#ff9800"></ha-icon>
                             <span>${this._t("overnight_fleet_partial")}</span>
+                        </div>
+                    `:q}
+
+                    ${(i.not_scheduled||[]).length?W`
+                        <div class="notsched">
+                            <div class="notsched-h">${this._t("overnight_not_scheduled")}</div>
+                            ${i.not_scheduled.map(e=>W`
+                                <div class="notsched-row">
+                                    <ha-icon icon="mdi:sleep"
+                                             style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
+                                    <span class="nsname">${(e.id||"").split(":").pop()}</span>
+                                    <span class="nswhy">${this._t("overnight_why_"+e.why)}</span>
+                                </div>
+                            `)}
                         </div>
                     `:q}
 
@@ -4823,6 +4840,32 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 padding: 1px 6px; border-radius: 8px;
                 background: rgba(131,83,209,0.18); color: #b39ddb;
                 border: 1px solid rgba(131,83,209,0.35);
+            }
+            .chip-reactive {
+                border-color: rgba(255, 152, 0, 0.6);
+                color: #ff9800;
+            }
+            .notsched {
+                margin-top: 6px;
+                padding-top: 6px;
+                border-top: 1px solid rgba(255, 255, 255, 0.06);
+            }
+            .notsched-h {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: var(--secondary-text-color, #8a93a5);
+                margin-bottom: 2px;
+            }
+            .notsched-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                color: var(--secondary-text-color, #8a93a5);
+            }
+            .notsched-row .nsname {
+                color: var(--primary-text-color, #e1e1e1);
             }
             .chip-active {
                 background: rgba(141,200,146,0.18); color: #8DC892;

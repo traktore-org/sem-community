@@ -76,7 +76,10 @@ class SEMEnergyPlanCard extends SEMLitBase {
         // change — the price status flip (preliminary → final, mid-
         // afternoon) is the one users watch for.
         const t = a.tomorrow || {};
-        const key = [s?.state, a.computed_at, a.actuation, liveSig,
+        const covSig = a.coverage
+            ? Object.entries(a.coverage).map(([k, v]) => k + '=' + v).join(',')
+            : '';
+        const key = [s?.state, a.computed_at, a.actuation, liveSig, covSig,
                      this._view || 'today',
                      t.prices, t.forecast_kwh, t.stamps_at,
                      // pending-face chip reads the switch directly (attrs
@@ -119,6 +122,32 @@ class SEMEnergyPlanCard extends SEMLitBase {
         if (next !== null) return 'wait:' + next;
         // fits with no blocks at all = zero-need demand; no chip either.
         return sawValid ? 'done' : null;
+    }
+
+    // (#638 C7) the gate's named doubt, translated — never internal
+    // jargon on a rendered surface.
+    _covKey(reason) {
+        if (!reason || reason === 'covered') return null;
+        if (reason.startsWith('verdict')) return 'overnight_cov_yields';
+        const m = {
+            'no plan': 'overnight_cov_no_plan',
+            'stale stamp': 'overnight_cov_stale',
+            'outside span': 'overnight_cov_outside',
+            'not in plan': 'overnight_cov_not_in_plan',
+            'actuation off': 'overnight_cov_actuation_off',
+        };
+        return m[reason] || 'overnight_cov_unreadable';
+    }
+
+    // (#638 C7) the reactive-fallback chip — the user-facing twin of the
+    // "#638 coverage" log line: a demand the plan does not cover right now
+    // is visibly reactive, never silently so.
+    _covChip(reason) {
+        const key = this._covKey(reason);
+        if (!key) return nothing;
+        return html`<span class="chip chip-reactive"
+            title="${this._t('overnight_reactive_tip')} — ${this._t(key)}"
+            >${this._t('overnight_reactive')} · ${this._t(key)}</span>`;
     }
 
     // (#638 G4) chip renderer for a live state string.
@@ -574,7 +603,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                 d.kind === 'comfort'
                                     ? this._t('overnight_comfort_tip') : null,
                                 mine.map(b => `${this._hm(b.start)}–${this._hm(b.end)} · ${
-                                    (b.power_w / 1000).toFixed(1)} kW`).join('\n') || null,
+                                    (b.power_w / 1000).toFixed(1)} kW${
+                                    b.price != null ? ` · ${b.price}` : ''}`).join('\n') || null,
                                 `${(d.planned_kwh || 0).toFixed(1)} / ${(d.needed_kwh || 0).toFixed(1)} kWh`
                                     + ` · ${this._t('overnight_est')} ${(d.est_cost || 0).toFixed(2)} ${currency}`,
                                 d.note || null,
@@ -598,6 +628,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                         <span class="name">${name}</span>
                                     </div>
                                     ${this._liveChip(live)}
+                                    ${act ? this._covChip((a.coverage || {})[d.id]) : nothing}
                                 </div>
                                 ${hasStrip ? html`
                                     <div class="track">
@@ -647,6 +678,20 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         </div>
                     ` : nothing}
 
+                    ${(a.not_scheduled || []).length ? html`
+                        <div class="notsched">
+                            <div class="notsched-h">${this._t('overnight_not_scheduled')}</div>
+                            ${a.not_scheduled.map(r => html`
+                                <div class="notsched-row">
+                                    <ha-icon icon="mdi:sleep"
+                                             style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
+                                    <span class="nsname">${(r.id || '').split(':').pop()}</span>
+                                    <span class="nswhy">${this._t('overnight_why_' + r.why)}</span>
+                                </div>
+                            `)}
+                        </div>
+                    ` : nothing}
+
                     ${a.arbitrage ? html`
                         <div class="arb" title="${this._t('overnight_arbitrage_tip')}">
                             <ha-icon icon="mdi:swap-vertical-bold"
@@ -690,6 +735,32 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 padding: 1px 6px; border-radius: 8px;
                 background: rgba(131,83,209,0.18); color: #b39ddb;
                 border: 1px solid rgba(131,83,209,0.35);
+            }
+            .chip-reactive {
+                border-color: rgba(255, 152, 0, 0.6);
+                color: #ff9800;
+            }
+            .notsched {
+                margin-top: 6px;
+                padding-top: 6px;
+                border-top: 1px solid rgba(255, 255, 255, 0.06);
+            }
+            .notsched-h {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: var(--secondary-text-color, #8a93a5);
+                margin-bottom: 2px;
+            }
+            .notsched-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                color: var(--secondary-text-color, #8a93a5);
+            }
+            .notsched-row .nsname {
+                color: var(--primary-text-color, #e1e1e1);
             }
             .chip-active {
                 background: rgba(141,200,146,0.18); color: #8DC892;
