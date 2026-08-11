@@ -855,4 +855,32 @@ def decide(view: ChargerView) -> ChargerDecision:
                 result, bridgeable=False,
                 reason=f"{result.reason} [structural: {why}]",
             )
+
+    # (#747) PEAK SHED is a guarantee, senior to every mode — always_max
+    # included: its "grid backfill expected" promise ends where the house's
+    # peak defense begins. The load manager's actuation exclusion stays
+    # (#649: one writer per device); THIS clamp is the compensating control
+    # that exclusion always assumed, firing on the FIRST cycle of a shed
+    # level — before the LM's delayed progressive shed reaches anyone's
+    # freezer. Only real charging offers clamp; idle/disable have nothing
+    # to shed.
+    peak = getattr(view.fleet, "peak_state", "normal") or "normal"
+    if peak in ("shedding", "emergency") and result.intent in (
+            ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
+        if peak == "emergency":
+            return replace(
+                result, intent=ChargerIntent.IDLE, commanded_amps=0,
+                budget_w=0.0, bridgeable=False,
+                reason=f"{result.reason} [peak EMERGENCY — EV sheds first]",
+            )
+        min_a = effective_min_amps(dict(view.config), 6)
+        if (result.intent is ChargerIntent.CHARGE_MAX
+                or result.commanded_amps > min_a):
+            wpa = (float(view.config.get("ev_phases") or 3)
+                   * float(view.config.get("ev_voltage") or 230))
+            return replace(
+                result, intent=ChargerIntent.CHARGE_AT_AMPS,
+                commanded_amps=min_a, budget_w=min_a * wpa,
+                reason=f"{result.reason} [peak SHEDDING — clamped to {min_a}A]",
+            )
     return result

@@ -152,6 +152,8 @@ def build_charger_view(
         grid_export_w=float(getattr(power_reading, "grid_export_power", 0.0) or 0.0),
         is_night=fleet_state.is_night,
         tariff_level=fleet_state.tariff_level,
+        # (#747) the peak posture rides the one-place thread.
+        peak_state=getattr(fleet_state, "peak_state", "normal"),
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),

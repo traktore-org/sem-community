@@ -83,6 +83,19 @@ def _native_power_scale(
     return 1.0
 
 
+def native_power_scale(
+    hass,
+    entity_id: str,
+    *,
+    require_explicit_unit: bool = False,
+) -> float | None:
+    """Public face of :func:`_native_power_scale` (#749): the forcible-
+    discharge setpoint write shares the ONE validation rule with the
+    discharge-limit path instead of growing a second, laxer one."""
+    return _native_power_scale(
+        hass, entity_id, require_explicit_unit=require_explicit_unit)
+
+
 def is_valid_power_control_entity(
     hass,
     entity_id: str,
