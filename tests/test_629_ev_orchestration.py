@@ -376,6 +376,10 @@ class TestLoadDrawReducesNightRate630:
         host.time_manager.get_night_end_time = MagicMock(return_value="06:00")
         host.time_manager.get_night_window_hours = MagicMock(return_value=8.0)
         host._get_peak_limit_w = MagicMock(return_value=12000)
+        # (one-gate C1) the night rate sizes against the hysteresis-adjusted
+        # planning peak — bind the real accessor over the stubbed raw cap.
+        host._planning_peak_w = types.MethodType(
+            EVControlMixin._planning_peak_w, host)
         host._expected_night_home_w = MagicMock(return_value=600)
         host._ev_device = None
         cfg = {"ev_min_current": 6, "ev_phases": 3}

@@ -107,6 +107,13 @@ def _fake_self(devices=()):
         # (#638 finding #3) when the fleet first came up short, or None.
         _shadow_partial_since=None,
     )
+    # The ONE planning-peak accessor (one-gate C1): the fake keeps stubbing
+    # the execution authority (_get_peak_limit_w) and the REAL hysteresis
+    # math runs on top — the same numbers the old inline ledger block made.
+    from custom_components.solar_energy_management.coordinator.ev_control import (
+        EVControlMixin,
+    )
+    fake._planning_peak_w = lambda: EVControlMixin._planning_peak_w(fake)
     return fake
 
 

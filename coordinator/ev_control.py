@@ -196,7 +196,7 @@ class EVControlMixin:
         # NOT the charger max. Using the learned overnight consumption pattern (or
         # the rolling monthly average) here is what stops the planner waiting for a
         # cheap window it can't fill at the peak-limited rate and then missing Min.
-        peak_limit_w = self._get_peak_limit_w()
+        peak_limit_w = self._planning_peak_w()
         expected_home_w = self._expected_night_home_w(energy, window_h)
         # Subtract draw already committed to higher-priority chargers this cycle
         # so the fleet shares one peak budget (#274/H1).
@@ -429,6 +429,36 @@ class EVControlMixin:
             except Exception:
                 pass
         return self.config.get("target_peak_limit", 5.0) * 1000
+
+    def _planning_peak_w(self) -> float:
+        """The peak level PLANNING may size against — cap minus hysteresis.
+
+        The limit is a SHED THRESHOLD, not a target to sit on (#638 finding
+        #6): LoadManager goes SHEDDING at ``peak >= target`` on the 15-minute
+        rolling average, then sheds down to ``target - hysteresis``. An
+        allocation booked AT the cap is exactly the one execution kills, so
+        everything forward-looking — the night ledger's headroom AND the EV's
+        peak-managed rate — sizes against this ONE number. Two copies of the
+        subtraction is how the plan and the EV drifted a hysteresis band
+        apart (one-gate build, 2026-08-11).
+
+        Semantics carried over from the ledger's inline block:
+        ``math.inf`` (unlimited) passes through; 0 stays 0 (the packer's
+        "no limit configured" sentinel); a cap smaller than the hysteresis
+        clamps at 1 W, never 0 — collapsing to the sentinel would flip a
+        TIGHT house into an unlimited one.
+        """
+        from ..consts.core import DEFAULT_PEAK_HYSTERESIS
+        try:
+            peak_w = float(self._get_peak_limit_w())
+        except Exception:  # noqa: BLE001 — no load manager yet (early startup)
+            peak_w = float(
+                self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+        if peak_w > 0.0 and math.isfinite(peak_w):
+            hyst_w = float(self.config.get(
+                "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS) or 0.0) * 1000.0
+            peak_w = max(1.0, peak_w - hyst_w)
+        return peak_w
 
     def _peak_limit_unlimited(self) -> bool:
         """True when this install declared it has no grid ceiling (#716).
