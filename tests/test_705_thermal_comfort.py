@@ -677,7 +677,10 @@ class TestComfortPlanDemand:
         hours = (ask["deadline"] - self.now).total_seconds() / 3600.0
         assert 2.5 < hours < 3.5
         # 0.5 °C back to target at 1 °C/h active = 0.5 h × 1.2 kW
-        assert ask["energy_kwh"] == pytest.approx(0.6, abs=0.01)
+        # (#705 Ph3) the ask now banks the FULL band: edge = target −
+        # offset = 22.0, gap 2.5 °C at 1 °C/h on 1.2 kW → 3.0 kWh (was
+        # 0.6 to target only — half a pre-cool).
+        assert ask["energy_kwh"] == pytest.approx(3.0, abs=0.01)
 
     def test_a_room_holding_itself_is_no_ask(self):
         dev = self._warming_ac(off_rate=-0.1)

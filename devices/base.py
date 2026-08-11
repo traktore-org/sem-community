@@ -944,6 +944,9 @@ class ComfortBandMixin:
             return None
         kwh = banking_energy_kwh(
             current_c=temp, target_c=target_c, direction=direction,
+            # (#705 Ph3) bank the FULL band — the edge is where the run
+            # naturally stops (the state flips to banked there).
+            offset_c=_offset_c,
             active_rate_c_per_h=on.rate_c_per_h,
             rated_power_w=float(getattr(self, "rated_power", 0.0) or 0.0))
         if not kwh:

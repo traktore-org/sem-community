@@ -96,18 +96,28 @@ def banking_energy_kwh(
     direction: str,
     active_rate_c_per_h: float,
     rated_power_w: float,
+    offset_c: float = 0.0,
 ) -> Optional[float]:
-    """kWh of running needed to bring the room from ``current`` back to
-    ``target`` at the learned ACTIVE rate (°C/h while the device runs —
-    the same least-squares learner, fed device-ON samples).
+    """kWh of running needed to bring the room from ``current`` to the
+    band's EDGE — ``target − offset`` for cool, ``target + offset`` for
+    heat — at the learned ACTIVE rate (°C/h while the device runs).
+
+    (#705 Ph3) The edge, not the target, is the honest pre-cool/pre-heat
+    depth: buying the full band in the cheap/free window is what lets the
+    room COAST through the expensive one, and the run's natural stop
+    already agrees (crossing the edge flips the band to ``banked``).
+    ``offset_c=0`` keeps the target-depth behaviour for callers without
+    a band offset.
 
     ``0.0`` = already banked, nothing to plan. ``None`` = the model
     cannot say — an active rate that is flat or moves the room AWAY from
     target contradicts the device's direction, and "cannot say" must
     never read as "nothing needed" (0) or become a huge phantom demand.
     """
-    gap_c = (current_c - target_c if direction == "cool"
-             else target_c - current_c)
+    edge_c = (target_c - offset_c if direction == "cool"
+              else target_c + offset_c)
+    gap_c = (current_c - edge_c if direction == "cool"
+             else edge_c - current_c)
     if gap_c <= 0:
         return 0.0
     toward = (-active_rate_c_per_h if direction == "cool"
