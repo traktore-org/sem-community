@@ -680,6 +680,13 @@ class FleetContext:
     Distinct from ``battery_assist_min_surplus_w`` (an export-surplus
     floor, solar − home); this one is raw production."""
 
+    peak_state: str = "normal"
+    """(#747) The load manager's peak posture this cycle (normal /
+    warning / shedding / emergency). decide() applies a SENIOR clamp on
+    shed levels — the EV throttles before anyone's freezer sheds. The
+    actuation exclusion in load_management stays (#649: one writer per
+    device); this is the other half of its premise, finally real."""
+
     forecast_remaining_kwh: float = 0.0
     """Solar forecast remaining today (kWh), dampened by the
     ``ForecastTracker``. The ``solar_only`` regime uses this to
@@ -758,6 +765,8 @@ class FleetCycleState:
     is_night: bool = False
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
+    # (#747) the load manager's peak posture, resolved once per cycle.
+    peak_state: str = "normal"
     # #576 — fleet-level priority-list inputs (one home battery). Threaded
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None

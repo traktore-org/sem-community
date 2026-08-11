@@ -6158,9 +6158,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:
                 battery_priority = None
 
+        # (#747) the peak posture, resolved the same way the surplus
+        # update resolves it — ONE vocabulary for both engines.
+        from .surplus_controller import effective_peak_state
+        try:
+            _peak_state = effective_peak_state(
+                self._load_manager.get_state() if self._load_manager else None,
+                bool(getattr(self, "_vpp_shed_loads", False)),
+            )
+        except Exception:  # noqa: BLE001 — no LM yet (early startup)
+            _peak_state = None
+        # Enum → its string value; absent → "normal" (fresh install / LM off).
+        _peak_state = str(getattr(_peak_state, "value", _peak_state)
+                          or "normal").lower()
+
         return FleetCycleState(
             power=power,
             config=self.config,
+            peak_state=_peak_state,
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
