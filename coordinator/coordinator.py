@@ -6699,6 +6699,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                        f"battery_deficit={deficit:.2f} kWh")
                 _LOGGER.info(
                     "OVERNIGHT-PLAN (shadow #638): no overnight demands — %s", why)
+                # (#638 C7 follow-up, Guido's first live look) The card
+                # renders translated SENTENCES from these codes; the raw
+                # prose above stays for logs/diagnose — a rendered surface
+                # showing `ev_targets={...}` read as unfinished.
+                why_codes = []
+                if targets and not disconnected and not mode_opted_out                         and all(v <= 0.05 for v in targets.values()):
+                    why_codes.append("ev_target_met")
+                if loads_seen and not loads_eligible:
+                    why_codes.append("no_load_needs_night")
+                if deficit <= 0.05:
+                    why_codes.append("battery_no_deficit")
                 self._overnight_shadow_plan = {
                     "computed_at": now.isoformat(),
                     "fits": True,
@@ -6706,6 +6717,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # card, not only in diagnose — "the plan disappeared"
                     # was a correct idle answer nobody could read.
                     "why": why,
+                    "why_codes": why_codes,
+                    "not_scheduled": (
+                        [{"id": f"ev:{c}", "why": "mode"}
+                         for c in mode_opted_out]
+                        + [{"id": f"ev:{c}", "why": "disconnected"}
+                           for c in disconnected]),
                     "summary": [f"no overnight demands tonight ({why})"],
                     # (#638 G3c) Same keys as a full plan, empty — the card
                     # renders "nothing needs the night" from the SHAPE, not

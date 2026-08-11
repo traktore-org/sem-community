@@ -122,3 +122,46 @@ class TestActuationDefaultsOn:
         src = Path(__file__).resolve().parent.parent.joinpath(
             "switch.py").read_text()
         assert 'options.get("overnight_actuation", True)' in src
+
+
+@pytest.mark.unit
+class TestTheQuietFaceSpeaksInSentences:
+    """(Guido, first live look at the card) The raw diagnostic line
+    (`ev_targets={...}, mode_opted_out=[]...`) looked unfinished on the
+    rendered face. The idle payload now carries machine CODES the card
+    translates; the prose stays for logs/diagnose only."""
+
+    def test_the_idle_payload_carries_why_codes(self, monkeypatch):
+        from custom_components.solar_energy_management.coordinator import (
+            ev_night_targets,
+        )
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {"ev_charger": 0.0})
+        from .test_638_shadow_mode import _idle_load
+        fake = _fake_self(devices=[_idle_load()])
+        ok = SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
+        assert ok is True
+        plan = fake._overnight_shadow_plan
+        assert plan["demands"] == []
+        assert plan["why_codes"] == [
+            "ev_target_met", "no_load_needs_night", "battery_no_deficit"]
+        assert plan["not_scheduled"] == []
+
+    def test_an_idle_night_with_an_unplugged_car_names_it(self, monkeypatch):
+        from custom_components.solar_energy_management.coordinator import (
+            ev_night_targets,
+        )
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {"ev_charger": 4.0})
+        from .test_638_shadow_mode import _idle_load
+        fake = _fake_self(devices=[_idle_load()])
+        power = _power()
+        power.ev_connected_per_charger = {"ev_charger": False}
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(), power=power)
+        plan = fake._overnight_shadow_plan
+        assert {"id": "ev:ev_charger", "why": "disconnected"} \
+            in plan["not_scheduled"]
+        # The EV code must NOT claim "target met" — the car is absent.
+        assert "ev_target_met" not in plan["why_codes"]

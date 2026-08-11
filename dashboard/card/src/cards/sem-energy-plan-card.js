@@ -371,7 +371,15 @@ class SEMEnergyPlanCard extends SEMLitBase {
         `;
     }
 
-    _renderIdle(act, textKey = 'overnight_idle', suffix = '', hasTomorrow = false, why = '') {
+    _renderIdle(act, textKey = 'overnight_idle', suffix = '', hasTomorrow = false,
+                why = '', whyCodes = [], notSched = []) {
+        // (#638 C7) translated sentences from the machine codes; the raw
+        // diagnostic prose survives only as the hover tooltip. Rendering
+        // it verbatim read as an unfinished placeholder (Guido, first
+        // live look at the one-gate card).
+        const sentences = (whyCodes || [])
+            .map(c => this._t('overnight_whyc_' + c))
+            .filter(Boolean).join(' · ');
         return html`
             <ha-card>
                 <div class="wrap">
@@ -383,7 +391,22 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         ${this._docsLink()}
                     </div>
                     <div class="idle">${this._t(textKey)}${suffix}</div>
-                    ${why ? html`<div class="why" title="${why}">${why}</div>` : nothing}
+                    ${sentences
+                        ? html`<div class="why" title="${why}">${sentences}</div>`
+                        : (why ? html`<div class="why" title="${why}">${why}</div>` : nothing)}
+                    ${(notSched || []).length ? html`
+                        <div class="notsched">
+                            <div class="notsched-h">${this._t('overnight_not_scheduled')}</div>
+                            ${notSched.map(r => html`
+                                <div class="notsched-row">
+                                    <ha-icon icon="mdi:sleep"
+                                             style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
+                                    <span class="nsname">${(r.id || '').split(':').pop()}</span>
+                                    <span class="nswhy">${this._t('overnight_why_' + r.why)}</span>
+                                </div>
+                            `)}
+                        </div>
+                    ` : nothing}
                 </div>
             </ha-card>
         `;
@@ -426,7 +449,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
         const slots = Array.isArray(a.slots) ? a.slots : [];
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
         if (verdict === 'idle' || !demands.length) {
-            return this._renderIdle(act, 'overnight_idle', '', !!a.tomorrow, a.why || '');
+            return this._renderIdle(act, 'overnight_idle', '', !!a.tomorrow,
+                a.why || '', a.why_codes || [], a.not_scheduled || []);
         }
 
         const t0 = slots.length ? Date.parse(slots[0].start) : NaN;

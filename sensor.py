@@ -157,6 +157,8 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
         # (#638 C7) what will NOT be done and why — the card's
         # "not scheduled tonight" list, machine keys the card translates.
         "not_scheduled": plan.get("not_scheduled") or [],
+        # (#638 C7) the quiet face's machine codes → translated sentences.
+        "why_codes": plan.get("why_codes") or [],
         # (#638 C7) per-demand plan-vs-reactive attribution, live.
         "coverage": plan.get("coverage") or {},
         # (#638, the last string) the shadow arbitrage advisor's verdict

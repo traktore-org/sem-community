@@ -4654,7 +4654,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     </div>
                 </div>
             </ha-card>
-        `}_renderIdle(e,t="overnight_idle",i="",s=!1,r=""){return W`
+        `}_renderIdle(e,t="overnight_idle",i="",s=!1,r="",a=[],o=[]){const n=(a||[]).map(e=>this._t("overnight_whyc_"+e)).filter(Boolean).join(" · ");return W`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
@@ -4665,10 +4665,23 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         ${this._docsLink()}
                     </div>
                     <div class="idle">${this._t(t)}${i}</div>
-                    ${r?W`<div class="why" title="${r}">${r}</div>`:q}
+                    ${n?W`<div class="why" title="${r}">${n}</div>`:r?W`<div class="why" title="${r}">${r}</div>`:q}
+                    ${(o||[]).length?W`
+                        <div class="notsched">
+                            <div class="notsched-h">${this._t("overnight_not_scheduled")}</div>
+                            ${o.map(e=>W`
+                                <div class="notsched-row">
+                                    <ha-icon icon="mdi:sleep"
+                                             style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
+                                    <span class="nsname">${(e.id||"").split(":").pop()}</span>
+                                    <span class="nswhy">${this._t("overnight_why_"+e.why)}</span>
+                                </div>
+                            `)}
+                        </div>
+                    `:q}
                 </div>
             </ha-card>
-        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation||void 0===i.actuation&&"on"===this._hass.states["switch.sem_overnight_actuation"]?.state;if("tomorrow"===(this._view||"today")&&i.tomorrow)return this._renderTomorrow(i.tomorrow);if("pending"===t){const e=this._hass.states["sensor.sem_night_start_time"]?.state,t=e&&/^\d{1,2}:\d{2}$/.test(e)?` (~${e})`:"";return this._renderIdle(s,"overnight_pending",t,!!i.tomorrow)}const r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s,"overnight_idle","",!!i.tomorrow,i.why||"");const n=a.length?Date.parse(a[0].start):NaN,l=a.length?Date.parse(a[a.length-1].end):NaN,c=l-n,d=a.length>0&&Number.isFinite(c)&&c>0,p=this._runs(a,n,c,e=>!!e.cheap).filter(e=>e.v);let h=null;const _=this._hass.states["sensor.sem_night_start_time"]?.state;if(d&&_&&/^\d{1,2}:\d{2}$/.test(_)){const[e,t]=_.split(":").map(Number);for(const i of[0,1]){const s=new Date(n);s.setDate(s.getDate()+i),s.setHours(e,t,0,0);const r=s.getTime();if(r>=n&&r<l){h=(r-n)/c*100;break}}}const g=Date.now(),u=d&&g>=n&&g<l?(g-n)/c*100:null,f=W`
+        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation||void 0===i.actuation&&"on"===this._hass.states["switch.sem_overnight_actuation"]?.state;if("tomorrow"===(this._view||"today")&&i.tomorrow)return this._renderTomorrow(i.tomorrow);if("pending"===t){const e=this._hass.states["sensor.sem_night_start_time"]?.state,t=e&&/^\d{1,2}:\d{2}$/.test(e)?` (~${e})`:"";return this._renderIdle(s,"overnight_pending",t,!!i.tomorrow)}const r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s,"overnight_idle","",!!i.tomorrow,i.why||"",i.why_codes||[],i.not_scheduled||[]);const n=a.length?Date.parse(a[0].start):NaN,l=a.length?Date.parse(a[a.length-1].end):NaN,c=l-n,d=a.length>0&&Number.isFinite(c)&&c>0,p=this._runs(a,n,c,e=>!!e.cheap).filter(e=>e.v);let h=null;const _=this._hass.states["sensor.sem_night_start_time"]?.state;if(d&&_&&/^\d{1,2}:\d{2}$/.test(_)){const[e,t]=_.split(":").map(Number);for(const i of[0,1]){const s=new Date(n);s.setDate(s.getDate()+i),s.setHours(e,t,0,0);const r=s.getTime();if(r>=n&&r<l){h=(r-n)/c*100;break}}}const g=Date.now(),u=d&&g>=n&&g<l?(g-n)/c*100:null,f=W`
             <div class="band">
                 ${p.map(e=>W`
                     <div class="cheap" style="left:${e.left}%;width:${e.width}%"></div>
