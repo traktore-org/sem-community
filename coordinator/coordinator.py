@@ -5864,12 +5864,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """(#638 G4) The trust-rule verdict for one demand against tonight's
         stamped plan. UNCOVERED (→ callers change nothing) whenever actuation
         is off, no plan is stamped, the plan is stale/out-of-span, or this
-        demand's verdict is not ``fits`` — see overnight_actuation.plan_gate."""
-        from .overnight_actuation import UNCOVERED, plan_gate
+        demand's verdict is not ``fits`` — see overnight_actuation.plan_gate.
+
+        (audit 2026-08-11) Every verdict CHANGE is logged with its reason —
+        the one line that says which layer drove a demand's night. Without
+        it the fail-open fallback is invisible in every soak artifact."""
+        from .overnight_actuation import (
+            PlanGate, coverage_transition, plan_gate,
+        )
         if not getattr(self, "_overnight_actuation", False):
-            return UNCOVERED
-        return plan_gate(getattr(self, "_overnight_shadow_plan", None),
-                         demand_id, now or dt_util.now())
+            gate = PlanGate(reason="actuation off")
+        else:
+            gate = plan_gate(getattr(self, "_overnight_shadow_plan", None),
+                             demand_id, now or dt_util.now())
+        seen = getattr(self, "_plan_coverage_seen", None)
+        if seen is None:
+            seen = self._plan_coverage_seen = {}
+        msg = coverage_transition(seen, demand_id, gate)
+        if msg:
+            _LOGGER.info("#638 coverage: %s", msg)
+        return gate
 
     def _overnight_demand_signature(self, power) -> tuple:
         """(#638) What the night is being ASKED for, as a comparable value.

@@ -65,6 +65,10 @@ class PlanGate:
     # published reason's "(until HH:MM)" and the card countdown all quote
     # THIS instant, so the story the user reads is the instant the
     # decision actually used.
+    # (audit 2026-08-11) An uncovered gate NAMES its doubt. The fail-open
+    # fallback used to be invisible — no artifact said whether a night was
+    # plan-driven or legacy-driven. Covered gates carry no doubt ("").
+    reason: str = ""
 
 
 UNCOVERED = PlanGate()
@@ -90,16 +94,16 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
     is always safe.
     """
     if not isinstance(plan, dict):
-        return UNCOVERED
+        return PlanGate(reason="no plan")
     try:
         computed = _parse_dt(plan.get("computed_at"))
         if computed is None or now - computed > _MAX_PLAN_AGE:
-            return UNCOVERED
+            return PlanGate(reason="stale stamp")
         slots = plan.get("slots") or []
         span_start = _parse_dt(slots[0].get("start")) if slots else None
         span_end = _parse_dt(slots[-1].get("end")) if slots else None
         if span_start is None or span_end is None:
-            return UNCOVERED
+            return PlanGate(reason="no span")
         # The plan's authority begins at the STAMP, not at the first slot.
         # Slots start on the next full hour, so a 22:00:55 stamp opens a
         # 23:00 grid — and gating on the slot span alone left every demand
@@ -109,11 +113,13 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         # opinion about the whole night it was computed for.
         span_start = min(span_start, computed)
         if not (span_start <= now < span_end):
-            return UNCOVERED
+            return PlanGate(reason="outside span")
         row = next((r for r in plan.get("demands") or []
                     if r.get("id") == demand_id), None)
-        if row is None or row.get("status") != "fits":
-            return UNCOVERED
+        if row is None:
+            return PlanGate(reason="not in plan")
+        if row.get("status") != "fits":
+            return PlanGate(reason=f"verdict {row.get('status')}")
 
         in_block = False
         block_power = 0.0
@@ -124,13 +130,18 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
                 continue
             start = _parse_dt(b.get("start"))
             end = _parse_dt(b.get("end"))
-            power = float(b.get("power_w") or 0.0)
+            try:
+                power = float(b.get("power_w") or 0.0)
+            except (TypeError, ValueError):
+                # Junk power_w is a malformed BLOCK, not an unreadable plan
+                # — the reason must point at the row that broke trust.
+                return PlanGate(reason="malformed block")
             if start is None or end is None or power <= 0.0:
                 # ANY malformed block distrusts the whole demand: acting on
                 # a partial view of its blocks (wrong remaining_kwh, wrong
                 # membership) is worse than declining. Same direction as the
                 # outer except — UNCOVERED, i.e. pre-G4 behaviour.
-                return UNCOVERED
+                return PlanGate(reason="malformed block")
             if start <= now < end:
                 in_block = True
                 block_power = max(block_power, power)
@@ -144,7 +155,27 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
                         remaining_kwh=round(remaining, 6),
                         next_block_start=None if in_block else next_start)
     except (TypeError, ValueError, KeyError, IndexError):
-        return UNCOVERED
+        return PlanGate(reason="unreadable plan")
+
+
+def coverage_transition(seen: dict, demand_id: str,
+                        gate: PlanGate) -> Optional[str]:
+    """The once-per-change log guard for the gate's verdict.
+
+    ``seen`` is the caller's memory (demand_id → last (covered, reason)).
+    Returns a log-ready line on first sight and on every change — including
+    recovery to covered — and None on a repeat, so the 10-second cycle
+    never floods a night's logs. The uncovered line says who decides,
+    because the soak reads it to attribute the night to a layer.
+    """
+    state = (gate.covered, gate.reason)
+    if seen.get(demand_id) == state:
+        return None
+    seen[demand_id] = state
+    if gate.covered:
+        return f"{demand_id}: plan COVERS — planned blocks drive the signals"
+    return (f"{demand_id}: plan does not cover "
+            f"({gate.reason or 'unknown'}) — the reactive layer decides alone")
 
 
 def ev_overlay(

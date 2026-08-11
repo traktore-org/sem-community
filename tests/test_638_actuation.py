@@ -82,22 +82,22 @@ class TestTheTrustRule:
     """UNCOVERED on any doubt — the safe direction is always 'no say'."""
 
     def test_no_plan_is_uncovered(self):
-        assert plan_gate(None, "ev:ch1", NOW) is UNCOVERED
-        assert plan_gate("not-a-dict", "ev:ch1", NOW) is UNCOVERED
-        assert plan_gate({}, "ev:ch1", NOW) is UNCOVERED
+        assert not plan_gate(None, "ev:ch1", NOW).covered
+        assert not plan_gate("not-a-dict", "ev:ch1", NOW).covered
+        assert not plan_gate({}, "ev:ch1", NOW).covered
 
     def test_a_missing_demand_is_uncovered(self):
-        assert plan_gate(_plan(), "ev:other", NOW) is UNCOVERED
+        assert not plan_gate(_plan(), "ev:other", NOW).covered
 
     def test_a_yielding_demand_is_uncovered(self):
         """The plan could not place the full floor — it has nothing to
         promise, so the reactive layer keeps this demand entirely."""
         for status in ("yields", "partial"):
-            assert plan_gate(_plan(status=status), "ev:ch1", NOW) is UNCOVERED
+            assert not plan_gate(_plan(status=status), "ev:ch1", NOW).covered
 
     def test_a_stale_stamp_is_uncovered(self):
         old = _plan(computed_at=NOW - timedelta(hours=25))
-        assert plan_gate(old, "ev:ch1", NOW) is UNCOVERED
+        assert not plan_gate(old, "ev:ch1", NOW).covered
 
     def test_a_morning_stamp_still_governs_its_own_night(self):
         """(horizon-spanning) The plan now covers a whole energy day —
@@ -112,7 +112,7 @@ class TestTheTrustRule:
         """A night plan must have no say over the following afternoon —
         a daytime cheap window is not the plan's to block."""
         afternoon = NOW.replace(hour=14) + timedelta(days=1)
-        assert plan_gate(_plan(), "ev:ch1", afternoon) is UNCOVERED
+        assert not plan_gate(_plan(), "ev:ch1", afternoon).covered
 
     def test_a_malformed_block_distrusts_the_whole_demand(self):
         """Acting on a partial view of a demand's blocks (wrong
@@ -120,7 +120,7 @@ class TestTheTrustRule:
         malformed data resolves to UNCOVERED, never to an exception."""
         p = _plan(blocks=[{"id": "ev:ch1", "start": "garbage", "end": None,
                            "power_w": "x"}])
-        assert plan_gate(p, "ev:ch1", NOW) is UNCOVERED
+        assert not plan_gate(p, "ev:ch1", NOW).covered
 
     def test_a_fits_demand_inside_its_block_is_covered(self):
         p = _plan(blocks=[_block("ev:ch1", 23, 1, 4140)])
@@ -361,7 +361,7 @@ class TestAuthorityBeginsAtTheStamp:
             plan_gate, UNCOVERED,
         )
         now = datetime.fromisoformat("2026-08-05T21:30:00+02:00")
-        assert plan_gate(self._plan(), "load:heizband", now) is UNCOVERED
+        assert not plan_gate(self._plan(), "load:heizband", now).covered
 
 
 class TestStage2NextBlockStart:
