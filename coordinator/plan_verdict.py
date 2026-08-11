@@ -56,6 +56,13 @@ class PlanVerdict:
     # so the card and the decision quote ONE source instead of composing
     # two stories that can disagree.
 
+    in_block: bool = False
+    # (#638 one-gate C5) The RUN half of the verdict: one of this
+    # device's planned blocks is open right now. For most loads this is
+    # advisory (their reactive run reasons stand on their own); for a
+    # WILLING comfort band it is the one sanctioned place the plan
+    # CREATES a run — banking has no reactive run reason at all.
+
 
 NO_OPINION = PlanVerdict()
 """The absence of a plan. Distinct from ``PlanVerdict(hold=False)`` only

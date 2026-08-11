@@ -21,13 +21,13 @@ from custom_components.solar_energy_management.coordinator.overnight_actuation i
     UNCOVERED,
     PlanGate,
     ev_overlay,
-    load_window,
     plan_gate,
 )
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     compute_load_intent,
 )
 from custom_components.solar_energy_management.coordinator.plan_verdict import (
+    NO_OPINION,
     PlanVerdict,
 )
 from custom_components.solar_energy_management.devices.base import (
@@ -220,38 +220,39 @@ def _load(**kw):
 
 @pytest.mark.unit
 class TestTheLoadWindowGate:
-    """plan_window is an AND-gate on the starts — never a run reason."""
+    """The verdict is an AND-gate on the starts — never a run reason
+    (except the C5 comfort clause, which requires a WILLING band)."""
 
     def test_cheap_hours_blocked_outside_the_planned_window(self):
         intent = compute_load_intent(
             _load(), remaining_surplus_w=0.0, price_is_cheap=True,
-            is_night=True, plan_window=False)
+            is_night=True, plan=PlanVerdict(hold=True, reason="outside window"))
         assert not intent.on
 
     def test_cheap_hours_fires_inside_the_planned_window(self):
         intent = compute_load_intent(
             _load(), remaining_surplus_w=0.0, price_is_cheap=True,
-            is_night=True, plan_window=True)
+            is_night=True, plan=PlanVerdict(in_block=True))
         assert intent.on and intent.source == "cheap_grid"
 
     def test_no_plan_leaves_todays_behaviour(self):
         intent = compute_load_intent(
             _load(), remaining_surplus_w=0.0, price_is_cheap=True,
-            is_night=True, plan_window=None)
+            is_night=True, plan=NO_OPINION)
         assert intent.on and intent.source == "cheap_grid"
 
     def test_tier2_blocked_outside_the_planned_window(self):
         dev = _load(battery_eligible_overnight=True, top_up_policy="solar_only")
         intent = compute_load_intent(
             dev, remaining_surplus_w=0.0, is_night=True,
-            soc_above_reserve=True, plan_window=False)
+            soc_above_reserve=True, plan=PlanVerdict(hold=True, reason="outside window"))
         assert not intent.on
 
     def test_tier2_fires_inside_the_planned_window(self):
         dev = _load(battery_eligible_overnight=True, top_up_policy="solar_only")
         intent = compute_load_intent(
             dev, remaining_surplus_w=0.0, is_night=True,
-            soc_above_reserve=True, plan_window=True)
+            soc_above_reserve=True, plan=PlanVerdict(in_block=True))
         assert intent.on and intent.source == "tier2_battery"
 
     def test_the_window_never_creates_a_run(self):
@@ -260,7 +261,7 @@ class TestTheLoadWindowGate:
         dev = _load(has_runtime_deficit=False)
         intent = compute_load_intent(
             dev, remaining_surplus_w=0.0, price_is_cheap=True,
-            is_night=True, plan_window=True)
+            is_night=True, plan=PlanVerdict(in_block=True))
         assert not intent.on
 
     def test_the_window_does_not_override_the_price_gate(self):
@@ -268,18 +269,8 @@ class TestTheLoadWindowGate:
         clause still refuses; execution's gate stays the guarantee."""
         intent = compute_load_intent(
             _load(), remaining_surplus_w=0.0, price_is_cheap=False,
-            is_night=True, plan_window=True)
+            is_night=True, plan=PlanVerdict(in_block=True))
         assert not intent.on
-
-
-@pytest.mark.unit
-class TestLoadWindowHelper:
-    def test_uncovered_means_no_say(self):
-        assert load_window(UNCOVERED) is None
-
-    def test_covered_maps_to_the_block_membership(self):
-        assert load_window(PlanGate(covered=True, in_block=True)) is True
-        assert load_window(PlanGate(covered=True, in_block=False)) is False
 
 
 @pytest.mark.unit
@@ -333,25 +324,23 @@ class TestAuthorityBeginsAtTheStamp:
 
     def test_the_pre_first_slot_sliver_is_covered_and_vetoes(self):
         from custom_components.solar_energy_management.coordinator.overnight_actuation import (
-            load_window, plan_gate,
+            plan_gate,
         )
         now = datetime.fromisoformat("2026-08-05T22:00:57+02:00")
         gate = plan_gate(self._plan(), "load:heizband", now)
         assert gate.covered, "stamped+fresh plan must own the whole night"
-        assert gate.in_block is False
-        assert load_window(gate) is False, (
+        assert gate.in_block is False, (
             "the live regression: block at 23:00, now 22:00:57 — the gate "
             "said 'no opinion' and the reactive pass started the device"
         )
 
     def test_inside_the_block_still_opens(self):
         from custom_components.solar_energy_management.coordinator.overnight_actuation import (
-            load_window, plan_gate,
+            plan_gate,
         )
         now = datetime.fromisoformat("2026-08-05T23:30:00+02:00")
         gate = plan_gate(self._plan(), "load:heizband", now)
         assert gate.covered and gate.in_block
-        assert load_window(gate) is True
 
     def test_before_the_stamp_stays_uncovered(self):
         """No retroactive authority: a cycle evaluated before computed_at

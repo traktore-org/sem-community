@@ -128,7 +128,6 @@ def compute_load_intent(
     is_shed_target: bool = False,
     soc_above_reserve: bool = False,
     is_night: bool = True,
-    plan_window: Optional[bool] = None,
     plan: "PlanVerdict" = NO_OPINION,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
@@ -142,12 +141,9 @@ def compute_load_intent(
     mode = getattr(device, "control_mode", DeviceControlMode.SURPLUS)
     active = bool(getattr(device, "is_active", False))
     held = device.get_current_consumption() if active else 0.0
-    # (#638 Stage 3) Loads consult the same PlanVerdict the EV does. The
-    # legacy bool still folds in for un-migrated callers; the verdict wins
-    # when both are given.
-    if plan_window is False and not plan.hold:
-        plan = PlanVerdict(hold=True,
-                           reason="joint overnight plan: outside the planned window")
+    # (#638 Stage 3) Loads consult the same PlanVerdict the EV does —
+    # the one gate, no side channels (the legacy plan_window bool died
+    # in the C5 merge).
     plan_hold = plan.hold
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
@@ -221,12 +217,22 @@ def compute_load_intent(
         src = "tier1_battery" if battery_assisted else "solar"
         return LoadIntent(True, rated, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")
 
+    # (#638 C5) Comfort banking: a WILLING band inside its planned block.
+    # The ONE sanctioned place the plan CREATES a run — banking has no
+    # reactive run reason at all (a willing room otherwise only rides
+    # free surplus). Forced rooms never land here: forcing lives on the
+    # deficit paths, and a forced room's comfort_state is not "willing".
+    if (plan.in_block and can_start
+            and getattr(device, "comfort_state", "") == "willing"):
+        return LoadIntent(True, rated, "cheap_grid",
+                          plan.reason or "joint plan: comfort banking block open")
+
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
     # in daytime (caught live at 09:10 in full sun).
-    # (#638 G4) ``plan_window is False`` = the joint overnight plan placed
-    # this load's blocks elsewhere tonight — an extra AND-gate on the start,
-    # never a run reason. None (no trusted plan) leaves behaviour untouched.
+    # (#638 G4) ``plan_hold`` = the joint overnight plan placed this
+    # load's blocks elsewhere tonight — an extra AND-gate on the start,
+    # never a run reason. No trusted plan leaves behaviour untouched.
     if (deficit and can_start and is_night
             and not plan_hold
             and getattr(device, "battery_eligible_overnight", False)
@@ -1346,6 +1352,35 @@ class SurplusController:
         # Only for "surplus" mode devices — off-peak is a form of proactive activation (#49).
         # #508 W2: suppressed while the peak is at risk — a cheap-tariff
         # runtime deficit must not push grid import over the limit.
+        # (#638 C5) Comfort-banking pass — the imperative twin of the
+        # willing+in_block clause in compute_load_intent. PROD runs THESE
+        # passes: a run that lives only in the desired-state path is a run
+        # that never happens. A WILLING band whose planned comfort block is
+        # open banks now; forced rooms stay with the deficit passes.
+        if not peak_freeze:
+            for device in devices:
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue
+                if device.is_active or device.stop_condition_met:
+                    continue
+                if getattr(device, "comfort_state", "") != "willing":
+                    continue
+                _pv = self._plan_windows.get(device.device_id)
+                if _pv is None or not getattr(_pv, "in_block", False):
+                    continue
+                if not device.can_activate():
+                    continue
+                consumed = await _activate_owned(device, device.min_power_threshold)
+                if consumed > 0:
+                    device._offpeak_forced = True
+                    device._offpeak_forced_date = _load_meter_day(device)
+                    active_count += 1
+                    remaining_surplus -= consumed
+                    _LOGGER.info(
+                        "Comfort banking: %s runs in its planned block (%.0fW)",
+                        device.name, consumed,
+                    )
+
         if price_level in ("cheap", "very_cheap", "negative") and not peak_freeze:
             for device in devices:
                 if device.control_mode != DeviceControlMode.SURPLUS:

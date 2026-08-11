@@ -235,7 +235,8 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
     if not gate.covered:
         return NO_OPINION
     if gate.in_block:
-        return PlanVerdict(hold=False, reason="joint overnight plan: in planned block")
+        return PlanVerdict(hold=False, in_block=True,
+                           reason="joint overnight plan: in planned block")
     if gate.remaining_kwh + _EPS_KWH < deficit_kwh:
         return NO_OPINION
     when = (f" — block opens at {gate.next_block_start:%H:%M}"
@@ -247,12 +248,38 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
     )
 
 
-def load_window(gate: PlanGate) -> Optional[bool]:
-    """The load-side window verdict: ``None`` = the plan has no say
-    (behave as today), ``True`` = inside this load's planned block,
-    ``False`` = the plan placed this load elsewhere tonight — don't
-    start it now. Callers apply this ONLY as an extra AND-gate on the
-    existing start conditions; it never creates a run reason."""
-    if not gate.covered:
+def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
+                     *, deficit_kwh: float):
+    """(#638 C5) One device, two demands — the merged verdict.
+
+    A device carries its runtime deficit (``load:``) and its comfort
+    banking ask (``comfort:``). Either demand in-block → a run verdict;
+    a hold only when EVERY covered demand holds (a demand whose verdict
+    failed open keeps its reactive layer); the earliest block start wins
+    ``until``. ``None`` = the plan has no say over this device.
+    """
+    from .plan_verdict import PlanVerdict
+    covered = [g for g in (load_gate, comfort_gate) if g.covered]
+    if not covered:
         return None
-    return gate.in_block
+    if any(g.in_block for g in covered):
+        return PlanVerdict(in_block=True,
+                           reason="joint overnight plan: in planned block")
+    holds = []
+    if load_gate.covered:
+        lv = load_verdict(load_gate, deficit_kwh=deficit_kwh)
+        if not lv.hold:
+            # The load half failed open — no hold may stand over the
+            # device's reactive deficit run.
+            return None
+        holds.append(lv)
+    if comfort_gate.covered:
+        holds.append(PlanVerdict(
+            hold=True, until=comfort_gate.next_block_start,
+            reason="joint overnight plan: comfort block later"))
+    if not holds:
+        return None
+    untils = [h.until for h in holds if h.until is not None]
+    return PlanVerdict(hold=True,
+                       until=min(untils) if untils else None,
+                       reason=holds[0].reason)
