@@ -6463,6 +6463,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # dead last (#638).
                     priority=ev_prio,
                     source="grid",   # never-EV-from-battery (standing rule)
+                    # (#638 one-gate C3) The contactor's anti-cycle window
+                    # moved from the retired dwell hysteresis into the
+                    # packer's #688 quantization: a 15-minute jagged market
+                    # cannot hand the charger scattered quarter-hour blocks.
+                    min_run_s=int(self.config.get(
+                        "ev_min_block_minutes", 15)) * 60,
+                    min_gap_s=int(self.config.get(
+                        "ev_min_block_minutes", 15)) * 60,
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)

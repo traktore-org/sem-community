@@ -28,9 +28,8 @@ REPO = Path(__file__).resolve().parent.parent
 SELECTOR_HOME = "tariff/tariff_provider.py"
 
 # Files still calling the selector, shrinking with the retirement commits.
-# C3 → remove coordinator/ev_control.py; C4 → remove battery_charge_scheduler.
+# C3 removed coordinator/ev_control.py; C4 → remove battery_charge_scheduler.
 ALLOWLIST: frozenset[str] = frozenset({
-    "coordinator/ev_control.py",
     "coordinator/battery_charge_scheduler.py",
 })
 
