@@ -28,7 +28,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import entity_registry as er
 
-from ..ha_energy_reader import read_energy_dashboard_config, get_all_individual_devices
+from ..ha_energy_reader import (
+    read_energy_dashboard_config,
+    get_all_individual_devices,
+    _find_load_power_sensor,
+)
 from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 from ..devices.base import (
     SwitchDevice,
@@ -591,6 +595,22 @@ class UnifiedDeviceRegistry:
                 control = self._discovery.discover_control_for_energy_device(
                     energy_sensor, power_sensor
                 )
+
+            # (#744) The Energy Dashboard's individual-device UI collects only the
+            # kWh energy sensor — ``stat_rate``/``stat_power`` is virtually never
+            # set for a load, so ``power_sensor`` is None here and the priority
+            # payload reads 0 W: a power-only Shelly PM mini at 400 W renders
+            # "Off" and shows the 1 kW rated placeholder (@Azlinon, beta.12).
+            # Derive the load's OWN companion power sensor from its HA device,
+            # mirroring solar/grid/battery (``_derive_missing_power_sensors``,
+            # #250) and the #600 load factory. Done AFTER control discovery ON
+            # PURPOSE: control/shed eligibility keys off the ED-configured power
+            # link (brand matching in ``_find_control_by_integration``), so a
+            # DERIVED sensor must never reach it — a display fix must not turn a
+            # load controllable. The derived value feeds the payload, the surplus
+            # sync and the load-manager sync (all read ``device.power_sensor``).
+            if not power_sensor:
+                power_sensor = _find_load_power_sensor(self.hass, energy_sensor)
 
             # Priority override from drag-and-drop wins; else the default seed.
             # (#576) non-EV loads seed BELOW the battery band so the default

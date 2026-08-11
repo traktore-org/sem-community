@@ -165,7 +165,32 @@ multilingual keyword coverage per brand — #597 added Huawei's `charge_discharg
 **Open siblings:** the `solar` list (`pv_power`/`solar_power`/`production_power`) and `grid` list are
 still English-shaped — Huawei's `inverter_input_power` / German PV slugs are *not* covered; sweep them
 if a Huawei/localized user reports solar or grid reading 0 (grid already matches via `power_meter`).
-Refs #250 #274 #597.
+**Missing-wiring sibling (#744, @Azlinon, 2026-08-11) — the derivation existed but was never called
+for LOADS.** The keyword gap above is one facet; the sharper one is a source where the whole
+derivation is *absent*. The Energy Dashboard's individual-device UI collects only the kWh energy
+sensor, so a load's `stat_rate`/`stat_power` is virtually always empty → `UnifiedDevice.power_sensor`
+is `None` → the Load-Management priority payload (`get_devices_for_sensor`) reads 0 W, so a power-only
+load with no discoverable on/off entity (a Shelly PM mini at 400 W, a furnace blower at 250 W) renders
+"Off" and shows the 1 kW rated placeholder. solar/grid/battery recovered this in
+`_derive_missing_power_sensors` and the SurplusController's device factory did in #600
+(`surplus_device_from_spec`), but the registry/DISPLAY path that feeds the payload, the surplus sync
+AND the load-manager sync never derived. **Closure:** a load-tuned `_find_load_power_sensor(hass,
+energy_sensor)` (same device-scoped `device_class=power` scan) called in BOTH ED consumers
+(`device_registry.async_refresh_devices`, `load_device_discovery.discover_from_energy_dashboard`)
+when the ED carries no power link. Two design constraints, each learned from the adversarial review:
+(a) it is called **AFTER** control discovery and does **no brand matching**, because the derived
+sensor must not reach `_find_control_by_integration` (whose `power_lower` brand match would turn the
+load `is_controllable` → shed-eligible — a *display* fix must never widen *control*); (b) it prefers
+a candidate whose object_id shares the energy sensor's **stem** (`channel_a_energy` → `channel_a_power`,
+never the sibling channel) so a multi-channel Shelly 2PM doesn't cross-wire its two loads' watts —
+the plain shortest-name scan the #250 sources use has no such affinity (fine there — single-instance
+sources; loads are where multi-channel devices live). **Guard:** `tests/test_744_load_power_derivation.py`
+(kWh-only load derives its companion; explicit `stat_rate` still wins; stem affinity picks the right
+channel; energy/reactive sensors excluded; a power-only 400 W load reads ON end-to-end in the priority
+payload; and a brand-named *derived* sensor does NOT make a controlless load controllable). **Sweep
+question:** for every power/energy figure a surface derives from an Energy-Dashboard entity, is the
+companion power sensor *derived* when the ED has no `stat_rate`, or assumed present — and does that
+derivation leak into a *control* decision? Refs #250 #274 #597 #600 #744.
 
 ### 11. Corrected value overwrites a raw display field (paired-figure basis mismatch) — GUARDED
 **Symptom:** two figures shown side by side on a card disagree in a way that reads as a
@@ -1375,3 +1400,15 @@ silently diverge again). Refs #744 #745.
 the *control* layer also answers — does it read the authoritative source (the entity, the
 controller's belief), or recompute it from a proxy (power, a name, a threshold)? If recomputed,
 name the corner where the proxy and the truth disagree.
+**Known-open sibling (#744, flagged for Guido) — the authoritative read is UNREACHABLE for lights.**
+`resolve_load_is_on` prefers the control entity for the whole `_ONOFF_CONTROL_DOMAINS`
+(`switch`/`light`/`input_boolean`/`fan`/`humidifier`/`siren`/`remote`), but control *discovery*
+(`load_device_discovery._find_control_in_device` / `_find_control_by_name`) only ever populates
+`switch`/`number`/`input_boolean` — never `light.*` etc. So a `light`-controlled ED load keeps
+`control_entity=None` and falls back to power; the #745 light-awareness is inert. The #744 power
+derivation (class #10) makes such a load read ON *via measured watts* (the reporter's floods draw
+real power), which covers the reported case — but a light genuinely "on" below its power floor would
+still read Off. Closing it means discovering `light.*` (and the other on/off domains) as control
+entities, which ALSO makes them `is_controllable` → **auto-shed-eligible fleet-wide**
+(`load_management._get_devices_for_shedding` sheds any controllable, non-critical device). That is a
+load-shed *policy* change, not a display fix — Guido's call before it ships.

@@ -603,6 +603,93 @@ def _find_power_sensor_on_device(
         return None
 
 
+# (#744) Object-id suffixes stripped to compare a load's energy and power
+# sensors for SAME-appliance affinity (a Shelly 2PM's ``channel_a_energy`` must
+# map to ``channel_a_power``, never the other channel's).
+_LOAD_STEM_SUFFIXES = (
+    "_total_energy", "_energy_total", "_energy", "_consumption", "_verbrauch",
+    "_active_power", "_power", "_leistung",
+)
+
+
+def _load_object_stem(entity_id: str) -> str:
+    """The object_id of ``entity_id`` with a trailing energy/power token removed,
+    so an energy sensor and its companion power sensor on the same appliance
+    share a stem (``sensor.channel_a_energy`` / ``sensor.channel_a_power`` →
+    ``channel_a``).
+
+    Covers the mainstream shape where a channel index PRECEDES the measurement
+    token (``switch_0_power`` / ``phase_a_energy``). It does NOT match a trailing
+    index AFTER the token (``shellyem_power_2`` / ``shellyem_energy_2`` → distinct
+    stems): those simply lose affinity and fall back to the shortest-name pick —
+    the same result as before #744, never worse. Stripping the index too would
+    collapse ALL of a device's channels to one stem and defeat the affinity, so
+    it is intentionally left alone."""
+    obj = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    obj = obj.lower()
+    for suffix in _LOAD_STEM_SUFFIXES:
+        if obj.endswith(suffix):
+            return obj[: -len(suffix)]
+    return obj
+
+
+def _find_load_power_sensor(
+    hass: Optional[HomeAssistant], energy_entity: str
+) -> Optional[str]:
+    """(#744) Companion power sensor for an Energy-Dashboard LOAD row.
+
+    Same device-scoped, ``device_class=power`` scan as
+    :func:`_find_power_sensor_on_device`, but tuned for loads: it PREFERS the
+    candidate whose object_id shares the energy sensor's stem, so a multi-channel
+    device (a Shelly 2PM's ``channel_a`` / ``channel_b``) maps each energy sensor
+    to its OWN channel's power sensor instead of whichever the registry lists
+    first — the wrong-channel mis-pick the plain scan is prone to. Ties fall back
+    to the shortest name.
+
+    This is a DISPLAY / live-power read helper: it feeds ``UnifiedDevice.power_sensor``,
+    the surplus sync and the load-manager sync, and is called AFTER control
+    discovery so the derived sensor never widens brand-based control/shed
+    eligibility (control keys off the ED-configured ``stat_rate`` only). It does
+    no brand matching for the same reason.
+    """
+    if not energy_entity or hass is None:
+        return None
+    try:
+        registry = er.async_get(hass)
+        energy_entry = registry.async_get(energy_entity)
+        if not energy_entry or not energy_entry.device_id:
+            return None
+
+        want_stem = _load_object_stem(energy_entity)
+        candidates: List[str] = []
+        for entry in er.async_entries_for_device(registry, energy_entry.device_id):
+            if entry.domain != "sensor" or entry.disabled_by is not None:
+                continue
+            eid = entry.entity_id
+            if any(x in eid.lower() for x in _POWER_DERIVE_EXCLUDE):
+                continue
+            state = hass.states.get(eid)
+            if not state:
+                continue
+            dc = state.attributes.get("device_class")
+            if dc != "power" and not is_power_unit(state):
+                continue
+            candidates.append(eid)
+
+        if not candidates:
+            return None
+
+        # Same-appliance stem first, then shortest name (favours the device's
+        # own/total power over a per-phase variant).
+        candidates.sort(
+            key=lambda eid: (0 if _load_object_stem(eid) == want_stem else 1, len(eid))
+        )
+        return candidates[0]
+    except Exception as e:  # noqa: BLE001 — best-effort, never block discovery
+        _LOGGER.warning("Load power derivation failed for %s: %s", energy_entity, e)
+        return None
+
+
 def _derive_missing_power_sensors(
     hass: Optional[HomeAssistant], config: EnergyDashboardConfig,
 ) -> None:
