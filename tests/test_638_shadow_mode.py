@@ -886,16 +886,30 @@ class TestTheDayPartOfTheHorizon:
         assert plan["slots"][-1]["end"].endswith("07:00:00+02:00") or \
             "T07:00" in plan["slots"][-1]["end"]
 
-    def test_surplus_hours_are_free_and_capped(self, freeze_targets,
-                                               monkeypatch):
-        """20 kWh remaining after 14:00 over a 400 W house: early
-        afternoon is deep surplus — price 0, marked cheap."""
+    def test_surplus_hours_are_priced_at_what_the_sun_is_worth(
+            self, freeze_targets, monkeypatch):
+        """20 kWh remaining after 14:00 over a 400 W house: early afternoon
+        is deep surplus, capped and marked cheap — and priced at the feed-in
+        revenue it costs to consume it (#755), not at zero. Zero made solar
+        win by fiat; the export rate makes it win on the numbers, and lets a
+        genuinely cheaper night hour beat it."""
         plan = self._stamp_at(monkeypatch, 14, self._day_fake())
         by_hour = {s["start"][11:13]: s for s in plan["slots"]}
-        assert by_hour["15"]["price"] == 0.0
+        assert by_hour["15"]["price"] == pytest.approx(0.075)
         assert by_hour["15"]["cheap"] is True
         # and the night is still the provider's curve, not the sun's
         assert by_hour["23"]["price"] == 0.28
+
+    def test_without_a_feed_in_tariff_the_sun_really_is_free(
+            self, freeze_targets, monkeypatch):
+        """Nothing is forgone by self-consuming a kWh nobody would have paid
+        for, so on those installs the surplus slot prices at 0 — the same
+        arithmetic, not a special case."""
+        fake = self._day_fake()
+        fake.config["electricity_export_rate"] = 0.0
+        plan = self._stamp_at(monkeypatch, 14, fake)
+        by_hour = {s["start"][11:13]: s for s in plan["slots"]}
+        assert by_hour["15"]["price"] == 0.0
 
     def test_no_forecast_degrades_to_priced_day_slots(self, freeze_targets,
                                                       monkeypatch):

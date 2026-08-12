@@ -2450,6 +2450,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._restore_ev_wpa(self._storage.get_ev_wpa_state())
             self._restore_overnight_plan(
                 self._storage.get_overnight_plan_state())
+            # (#755) The night's outcome record restores beside the plan it
+            # measures. A reboot mid-night that kept the plan but lost the
+            # actuals would produce a night whose "took N kWh" starts at the
+            # reboot — a quietly wrong number in the morning report and, worse,
+            # a quietly wrong training sample.
+            self._restore_demand_outcomes(
+                self._storage.get_demand_outcome_state())
 
             # (#640) The legionella-timestamp restore MOVED to the hot_water
             # registration site in __init__.py — this first-refresh block runs
@@ -3768,6 +3775,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # added), never reassigned, so this alias stays valid.
             core_result = result
 
+            # (#755) The third number. The plan writes down what each demand
+            # ASKED and what the packer PROMISED it; what it actually DID was
+            # never recorded, so "fits" has never been checked against
+            # reality. Taken here, after the cycle's decisions, so the gate
+            # sampled is the one this cycle's actuation actually obeyed.
+            self._record_demand_outcomes(dt_util.now(), power)
+
             # Add per-charger data (#131): power + session
             per_charger_soc: Dict[str, float] = {}
             for cid, ev_dev in self._ev_devices.items():
@@ -4258,6 +4272,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._compose_tomorrow_preview(power))
             except Exception:  # noqa: BLE001 — a preview never costs a cycle
                 result["energy_plan_tomorrow"] = None
+            # (#755 pillar 4) Last night's verdict, on its OWN key. It has to
+            # outlive the plan: ``energy_plan`` empties out in daylight, which
+            # is exactly when somebody reads what the night taught.
+            result["energy_plan_review"] = getattr(
+                self, "_demand_review", None)
 
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()
@@ -6082,6 +6101,158 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 continue
         return windows
 
+    def _record_demand_outcomes(self, now, power) -> None:
+        """(#755 pillar 1) Write down what each planned demand actually DID.
+
+        The plan has always recorded two of the three numbers that matter —
+        what a demand ASKED for and what the packer PROMISED it. The third was
+        never written, so "fits" was a claim nobody checked, the morning report
+        had nothing to compare, and a learning layer would have nothing to
+        read.
+
+        Called once per cycle after the decisions are taken. The night is keyed
+        on ``_shadow_plan_date`` (the stamped energy day), NOT on the plan's
+        ``computed_at``: a re-stamp because the ask changed is the SAME night
+        and must keep the record it has accumulated so far.
+
+        Every sample carries whether it was MEASURED (see ``demand_outcome``'s
+        draw helpers). Nothing downstream re-decides that question.
+        """
+        from .demand_outcome import (
+            DemandOutcomeRecorder, battery_draw, device_draw, ev_draw,
+        )
+        rec = getattr(self, "_demand_outcomes", None)
+        if rec is None:
+            rec = self._demand_outcomes = DemandOutcomeRecorder()
+
+        plan = getattr(self, "_overnight_shadow_plan", None)
+        night = getattr(self, "_shadow_plan_date", None)
+        if not isinstance(plan, dict) or night is None:
+            # The stamp cleared: the night is over, not paused. Seal it so a
+            # later night can never append to yesterday's record.
+            if rec.open_records():
+                self._seal_demand_outcomes()
+            return
+
+        key = str(night)
+        if rec.night != key:
+            # (#755 pillar 2) The plan's own claim about the night travels
+            # WITH the night, so the morning compares the claim that was
+            # actually made — a re-stamp restates it and the comparison
+            # follows rather than being judged against a superseded one.
+            _sc = plan.get("self_consumption") or {}
+            rec.open_night(key, plan.get("demands") or [],
+                           predicted_share=_sc.get("share"))
+
+        # The meter side of the same question, integrated over the SAME
+        # window under the same gap guard — never a calendar-day sensor.
+        try:
+            rec.observe_totals(
+                now,
+                solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),
+                # ``grid_export_power`` is the canonical derived split
+                # (calculate_derived); re-deriving max(0, grid_power) here
+                # would open a second sign path — the exact mistake #129
+                # and the #588 sign work were about.
+                export_w=float(
+                    getattr(power, "grid_export_power", 0.0) or 0.0))
+        except Exception:  # noqa: BLE001
+            pass
+
+        devices = {}
+        try:
+            for d in self._surplus_controller.get_devices_sorted():
+                devices[getattr(d, "device_id", None)] = d
+        except Exception:  # noqa: BLE001 — a bad device list costs no record
+            pass
+        charger_count = len(getattr(self, "_ev_devices", None) or {}) or 1
+
+        for record in rec.open_records():
+            did = record.demand_id
+            try:
+                gate = self._overnight_plan_gate(did, now)
+                if did.startswith("ev:"):
+                    cid = did[3:]
+                    _dev = (getattr(self, "_ev_devices", None) or {}).get(cid)
+                    draw = ev_draw(
+                        cid, power, charger_count,
+                        # The canonical per-charger read (#643) — never a
+                        # second path to the same number.
+                        charger_w=self._charger_power_w(cid, power, _dev),
+                        has_own_sensor=bool(
+                            getattr(_dev, "power_entity_id", None)))
+                elif did == "battery":
+                    draw = battery_draw(power)
+                else:
+                    dev = devices.get(did.split(":", 1)[-1])
+                    # A device can leave the list mid-night (reload, removal).
+                    # Recording 0 kWh as fact would teach "it never ran".
+                    draw = device_draw(dev) if dev is not None else (0.0, False)
+                rec.observe(now, did, power_w=draw[0], measured=draw[1],
+                            in_block=bool(gate.in_block),
+                            covered=bool(gate.covered))
+            except Exception:  # noqa: BLE001 — one odd demand won't cost the rest
+                continue
+
+        self._persist_demand_outcomes()
+
+    def _seal_demand_outcomes(self) -> None:
+        """Close the open night into history and persist it."""
+        rec = getattr(self, "_demand_outcomes", None)
+        if rec is None:
+            return
+        closed = rec.close_night()
+        for r in closed:
+            _LOGGER.info(
+                "#755 outcome: %s asked %.2f, planned %.2f, took %.2f kWh "
+                "(%.2f in-block)%s",
+                r.demand_id, r.asked_kwh, r.planned_kwh, r.actual_kwh,
+                r.in_block_kwh, "" if r.measured else " [estimated]")
+        self._persist_demand_outcomes()
+        self._refresh_demand_review()
+
+    def _refresh_demand_review(self) -> None:
+        """(#755 pillar 4) Recompute the user-facing verdict.
+
+        Only when a night CLOSES (and once at boot, from the restored
+        record): the inputs cannot change in between, while the plan sensor
+        this rides on is read every cycle.
+        """
+        from .demand_review import review_night
+        rec = getattr(self, "_demand_outcomes", None)
+        if rec is None:
+            self._demand_review = None
+            return
+        try:
+            self._demand_review = review_night(
+                rec.history(), rec.night_summaries())
+        except Exception:  # noqa: BLE001 — a verdict never costs a cycle
+            _LOGGER.debug("demand review skipped", exc_info=True)
+            self._demand_review = None
+
+    def _persist_demand_outcomes(self) -> None:
+        rec = getattr(self, "_demand_outcomes", None)
+        store = getattr(self, "_storage", None)
+        if rec is None or store is None:
+            return
+        try:
+            store.set_demand_outcome_state(rec.get_state())
+        except Exception:  # noqa: BLE001 — persist is best-effort
+            pass
+
+    def _restore_demand_outcomes(self, state) -> None:
+        """Re-seat the night's record after a restart (durable store)."""
+        from .demand_outcome import DemandOutcomeRecorder
+        rec = getattr(self, "_demand_outcomes", None)
+        if rec is None:
+            rec = self._demand_outcomes = DemandOutcomeRecorder()
+        try:
+            rec.restore_state(state or {})
+        except Exception:  # noqa: BLE001 — a bad payload costs the record, not the cycle
+            _LOGGER.debug("demand outcome restore skipped", exc_info=True)
+        # A restart must not blank last night's verdict — it is read all day.
+        self._refresh_demand_review()
+
     def _compose_tomorrow_preview(self, power=None):
         """(#638 consolidation / #722) The next energy day's books,
         previewed for the card's Tomorrow view — or None when the frame
@@ -6892,6 +7063,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     sunrise=sunrise, sunset=sunset,
                     home_w_at=_home_at,
                     price_at=_price_at, level_cheap_at=_cheap_at,
+                    # (#755) The sun is not free — it costs the feed-in you
+                    # forgo. At 0 the packer preferred solar by fiat and a
+                    # night hour cheaper than the export rate could never
+                    # win; priced, the preference is economic and can lose.
+                    export_rate=float(self.config.get(
+                        "electricity_export_rate", 0.075) or 0.0),
                     step_s=_step_s,
                 ))
                 t = day_end
@@ -7024,6 +7201,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # cap)" back apart: the packer already has this as dataclasses,
             # so publish the fields, not the sentence. Both stay — the
             # strings are what the log lines and the soak notes quote.
+            from .self_consumption import predict_self_consumption
             kind_of = {d.id: d.kind for d in demands}
             rows = [{
                 "id": r.demand_id,
@@ -7100,6 +7278,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # numbers — always present on a full plan, None only when
                 # the advisor itself failed (never costs a plan).
                 "arbitrage": arb,
+                # (#755 pillar 2) The share of the horizon's solar this
+                # schedule expects to keep, and how much of the keeping is
+                # the plan's own doing rather than the house being awake.
+                # Stated up front so the morning can be a comparison
+                # instead of an anecdote.
+                "self_consumption": predict_self_consumption(
+                    ledger, blocks).as_dict(),
             }
             return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle

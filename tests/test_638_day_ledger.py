@@ -104,9 +104,14 @@ class TestDaySlots:
 
     def test_a_surplus_hour_is_a_free_capped_slot(self):
         """Noon on a 20 kWh day is well past 2 kW of surplus over a 500 W
-        house: the sun is free (price 0, cheap) but finite (cap = surplus),
-        and the home is already paid for (home_w 0 — it runs on the same
-        sun, not on the ledger's battery walk)."""
+        house: the sun is cheap but finite (cap = surplus), and the home is
+        already paid for (home_w 0 — it runs on the same sun, not on the
+        ledger's battery walk).
+
+        Price 0 here because this fixture passes no ``export_rate``, and with
+        no feed-in tariff nothing is forgone by consuming your own kWh. Where
+        one IS configured the slot prices at it (#755) — see
+        ``test_755_self_consumption.py::TestTheSunIsNotFree``."""
         noon = [s for s in _slots() if s.start.hour == 12][0]
         assert noon.price == 0.0
         assert noon.level_cheap is True

@@ -73,6 +73,14 @@ class LedgerSlot:
     price: Optional[float]
     level_cheap: bool = False
     home_w: float = 0.0
+    # (#755) the world this slot was built from. A day slot derived its
+    # surplus from solar minus house and then threw both away, so nothing
+    # downstream could say how much solar a slot carried — which made a
+    # predicted self-consumption share impossible to compute. ``home_w``
+    # keeps its old meaning (the NET draw that rides the ledger walk; zero
+    # on a surplus slot, where the house runs on the same sun).
+    solar_w: float = 0.0
+    home_gross_w: float = 0.0
     # computed by the walk:
     soc_kwh: float = 0.0            # battery energy at slot START
     home_grid_w: float = 0.0        # home's share on the METER this slot

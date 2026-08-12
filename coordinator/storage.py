@@ -491,6 +491,19 @@ class SEMStorage:
         re-plan-on-boot, never to a corrupt night."""
         self._energy_data["overnight_plan"] = dict(state)
 
+    # (#755) The third number: what each demand actually DID. Durable on
+    # purpose — a night spans midnight and the daily bucket empties there,
+    # so the per-device runtime accumulators cannot carry a night's outcome.
+    # This is also the learner's only training set, which makes losing it at
+    # boot a slow, silent regression rather than a visible one.
+    def get_demand_outcome_state(self) -> Dict[str, Any]:
+        """(#755) The open night's per-demand record plus night history."""
+        return self._energy_data.get("demand_outcomes", {})
+
+    def set_demand_outcome_state(self, state: Dict[str, Any]) -> None:
+        """(#755) Persist the outcome record; delayed-save like the stamp."""
+        self._energy_data["demand_outcomes"] = dict(state)
+
     def get_ev_wpa_state(self) -> Dict[str, float]:
         """Get the persisted per-charger measured-W/A EMA."""
         return self._energy_data.get("ev_wpa_ema", {})

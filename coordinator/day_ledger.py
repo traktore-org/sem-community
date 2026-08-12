@@ -65,6 +65,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                     sunrise: datetime, sunset: datetime,
                     home_w_at, price_at, level_cheap_at,
                     surplus_margin_w: float = DEFAULT_SURPLUS_MARGIN_W,
+                    export_rate: float = 0.0,
                     step_s: int = 3600) -> list:
     """Tile ``[start, end)`` into day-shaped ``LedgerSlot``s.
 
@@ -73,6 +74,13 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
     / ``level_cheap_at(t)`` — the SAME tariff accessors the night slots
     are built from; a raising provider degrades to an honestly unpriced
     slot, exactly like the night path.
+
+    ``export_rate`` (#755) — what a kWh earns if it leaves the property, and
+    therefore what consuming it here costs. Pricing a surplus slot at zero
+    made the sun win every comparison by fiat; at the feed-in rate the
+    preference becomes economic and can correctly LOSE to a night hour that
+    is cheaper than the feed-in. Left at 0 the sun is free again, which is
+    also right: with no export tariff, exporting earns nothing.
     """
     slots = []
     t = start
@@ -100,8 +108,10 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
         if surplus_w >= surplus_margin_w:
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
-                price=0.0, level_cheap=True, home_w=0.0,
+                price=max(0.0, float(export_rate or 0.0)),
+                level_cheap=True, home_w=0.0,
                 cap_override_w=surplus_w,
+                solar_w=solar_w, home_gross_w=home_w,
             ))
         else:
             price = None
@@ -118,6 +128,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 start=t, end=slot_end,
                 price=price, level_cheap=cheap,
                 home_w=max(0.0, home_w - solar_w),
+                solar_w=solar_w, home_gross_w=home_w,
             ))
         t = slot_end
     return slots

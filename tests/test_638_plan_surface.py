@@ -384,11 +384,18 @@ def test_generated_localize_bundle_is_in_sync():
 def test_card_asks_only_for_keys_that_exist():
     """The inverse guard: any ``_t('...')`` in the card source must be a key
     we actually ship. Catches a typo the CARD_KEYS list would otherwise
-    happily bless."""
+    happily bless.
+
+    Both patterns anchor on what CLOSES the literal — a comma or the call's
+    own paren. A key built by concatenation (``'overnight_review_' + code``)
+    is a prefix, not a key, and belongs to whichever test owns that code
+    list (#755: ``test_755_demand_review.py``); matching it here would
+    report the prefix as a missing translation forever.
+    """
     import re
     src = CARD_SRC.read_text(encoding="utf-8")
     asked = set(re.findall(r"_t\(\s*'([a-z0-9_]+)'\s*\)", src))
-    asked |= set(re.findall(r"_format\(\s*'([a-z0-9_]+)'", src))
+    asked |= set(re.findall(r"_format\(\s*'([a-z0-9_]+)'\s*[,)]", src))
     data = json.loads(
         (REPO / "dashboard" / "translations.json").read_text(encoding="utf-8"))
     unknown = sorted(k for k in asked if k not in data["en"])

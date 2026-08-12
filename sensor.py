@@ -2514,6 +2514,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             _tmw = self.coordinator.data.get("energy_plan_tomorrow")
             if _tmw:
                 attrs["tomorrow"] = _tmw
+            # (#755 pillar 4) What the record has to say — machine codes the
+            # card translates. Published on its own key so it survives the
+            # daytime hours when there is no plan to project.
+            _review = self.coordinator.data.get("energy_plan_review")
+            if _review:
+                attrs["review"] = _review
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

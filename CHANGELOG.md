@@ -46,6 +46,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same hysteresis-adjusted level the ledger plans with (night top-up amps
   drop by one hysteresis band: intended).
 
+### 🧠 The learning layer (#755) — the plan learns what it got wrong
+
+- 📓 **The third number.** The plan recorded what each demand ASKED and what
+  the packer PROMISED; what it actually DID was never written down. A
+  per-demand outcome recorder now integrates real power across the night —
+  one unit, straight through midnight, in the durable store — and splits it
+  two ways: inside the planned block vs. outside, and covered by the gate
+  vs. not. "Fits" is now a claim somebody checks.
+- 🚫 **An estimate may never be recorded as a measurement.** Every sample
+  carries a `measured` flag; one estimated sample marks the whole night
+  untrainable, silence is not a measurement of zero, and a gap in the record
+  (restart, dead sensor) is refused rather than integrated across. This is
+  the #743/#744/#753 bug class nailed shut at the recorder's door — and
+  again at the learner's.
+- ☀️ **Self-consumption is an objective now, not a side effect.** The night
+  ledger prices a surplus slot at the feed-in revenue it costs to consume it
+  (`electricity_export_rate`, default 0.075) instead of at zero. Solar used
+  to win by fiat; now it wins on the numbers — and a genuinely cheaper night
+  hour is allowed to beat it. With no export tariff the rate is 0 and the sun
+  really is free. Each night also records its predicted vs. achieved solar
+  share.
+- 📈 **The learner reads only the nights that can teach.** A night may LOWER
+  an ask only if the demand got its full grant and stopped on its own;
+  everything else is censored from above and can only raise a floor. The
+  suggestion is a high percentile of the teaching nights (never a mean —
+  interruption noise runs one direction), gated behind a cold-start minimum,
+  and it never writes anything: it suggests.
+- 🗣️ **The morning verdict, on the card, in 16 languages.** "What the record
+  shows" gives every demand one line — *still learning · the ask matches
+  what it uses · usually needs about 7.4 kWh of the 10.0 kWh asked · uses the
+  full ask every night, it may need more* — plus the night's solar-share
+  line. It rides its own attribute so it survives the daytime hours, which is
+  exactly when it gets read.
+
 # [1.7.6-beta.15 candidate] — 12.08.2026
 
 ### 🐛 Fixes

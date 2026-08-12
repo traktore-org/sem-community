@@ -371,6 +371,52 @@ class SEMEnergyPlanCard extends SEMLitBase {
         `;
     }
 
+    // (#755) What the record shows — the closed night's per-demand verdict.
+    // It reads its OWN attribute, not the plan's, because the plan empties
+    // out in daylight and daylight is exactly when somebody reads what the
+    // night taught. Codes in, sentences out: the module never ships prose.
+    _renderReview() {
+        const rv = this._hass?.states?.[this._entity]?.attributes?.review;
+        if (!rv) return nothing;
+        const rows = [];
+        for (const d of (rv.demands || [])) {
+            const text = this._format('overnight_review_' + d.code, {
+                nights: d.nights,
+                asked: (d.asked_kwh || 0).toFixed(1),
+                suggested: (d.suggested_kwh == null
+                    ? '' : Number(d.suggested_kwh).toFixed(1)),
+                actual: (d.last_kwh || 0).toFixed(1),
+            });
+            if (text) rows.push({ d, text, k: KINDS[d.kind] || KINDS.load });
+        }
+        const sc = rv.self_consumption;
+        const scText = sc ? this._format('overnight_review_' + sc.code, {
+            actual: Math.round((sc.actual_share || 0) * 100),
+            predicted: Math.round((sc.predicted_share || 0) * 100),
+        }) : null;
+        if (!rows.length && !scText) return nothing;
+        return html`
+            <div class="review">
+                <div class="rev-h">${this._t('overnight_review_title')}</div>
+                ${rows.map(r => html`
+                    <div class="rev-row">
+                        <ha-icon icon="${r.k.icon}"
+                                 style="--mdc-icon-size:12px;color:${r.k.color}"></ha-icon>
+                        <span class="rev-name">${(r.d.demand_id || '').split(':').pop()}</span>
+                        <span class="rev-txt">${r.text}</span>
+                    </div>
+                `)}
+                ${scText ? html`
+                    <div class="rev-row">
+                        <ha-icon icon="mdi:solar-power-variant"
+                                 style="--mdc-icon-size:12px;color:#ff9800"></ha-icon>
+                        <span class="rev-txt wide">${scText}</span>
+                    </div>
+                ` : nothing}
+            </div>
+        `;
+    }
+
     _renderIdle(act, textKey = 'overnight_idle', suffix = '', hasTomorrow = false,
                 why = '', whyCodes = [], notSched = []) {
         // (#638 C7) translated sentences from the machine codes; the raw
@@ -407,6 +453,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             `)}
                         </div>
                     ` : nothing}
+                    ${this._renderReview()}
                 </div>
             </ha-card>
         `;
@@ -728,6 +775,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         </div>
                     ` : nothing}
 
+                    ${this._renderReview()}
+
                     <div class="foot">${this._t(act
                         ? 'overnight_active_note' : 'overnight_shadow_note')}</div>
                 </div>
@@ -786,6 +835,33 @@ class SEMEnergyPlanCard extends SEMLitBase {
             .notsched-row .nsname {
                 color: var(--primary-text-color, #e1e1e1);
             }
+            /* (#755) the record's verdict — same visual weight as the
+               not-scheduled list: a footnote, not a headline. */
+            .review {
+                margin-top: 6px;
+                padding-top: 6px;
+                border-top: 1px solid rgba(255, 255, 255, 0.06);
+            }
+            .rev-h {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: var(--secondary-text-color, #8a93a5);
+                margin-bottom: 2px;
+            }
+            .rev-row {
+                display: flex;
+                align-items: baseline;
+                gap: 6px;
+                font-size: 11px;
+                color: var(--secondary-text-color, #8a93a5);
+            }
+            .rev-row ha-icon { align-self: center; }
+            .rev-name {
+                color: var(--primary-text-color, #e1e1e1);
+                white-space: nowrap;
+            }
+            .rev-txt { min-width: 0; }
             .chip-active {
                 background: rgba(141,200,146,0.18); color: #8DC892;
                 border-color: rgba(141,200,146,0.40);

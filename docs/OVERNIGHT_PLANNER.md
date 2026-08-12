@@ -422,6 +422,57 @@ The **Energy Plan** card (Control tab) is the one answer:
   authority off entirely; every device then runs on its reactive rules
   and the card says so.
 
+## What the record shows (#755)
+
+A plan that is never checked is a guess with a chart. So every night the
+planner writes down a third number beside the two it already had:
+
+| The number | Where it comes from |
+|---|---|
+| **asked** | what the device said it needed |
+| **planned** | what the packer promised it |
+| **actual** | what it really drew, integrated across the night |
+
+The night is one unit — the recorder accumulates straight through midnight
+and lives in the durable store, so a reboot at 02:00 does not halve it. It
+also keeps the two splits that answer *"did the plan actually drive this?"*:
+energy **inside** the planned block vs. outside, and time **covered** by the
+gate vs. uncovered.
+
+**Only measured nights teach.** If any sample was an estimate rather than a
+reading, the night is marked untrainable. A demand with no samples at all is
+not "zero" — it is silence. A hole in the record (restart, a sensor that went
+away) is refused, never integrated across. A guessed number must never end up
+teaching a model that later makes decisions.
+
+**Reading the morning line.** The card's *What the record shows* section says
+one thing per demand:
+
+- *still learning — N clean nights so far* — not enough evidence yet. It says
+  so instead of guessing.
+- *the ask matches what it uses* — nothing to change.
+- *usually needs about X kWh of the Y kWh asked* — the demand consistently
+  stops short of its ask. Lowering the ask frees the night for something else.
+- *uses the full ask every night — it may need more* — it never got to stop on
+  its own, so the true need is unknown but at least this much.
+
+The last two are the whole trick. A night may only *lower* an ask if the
+demand got its **full** grant and stopped by itself; a night that was cut
+short by the plan (or that ran its ask dry) can only push a **floor** upward.
+The suggestion is a high percentile of the teaching nights, not an average —
+interruptions only ever push a night's energy down, so an average would drift
+low forever.
+
+**SEM never applies these itself.** They are recommendations; you change the
+target, or you don't.
+
+**The solar line** compares the share of your own solar the plan predicted
+you would keep against what you actually kept — the reason the ledger now
+prices a surplus hour at what feeding it in would have earned, instead of at
+zero. Free-by-definition solar always won; priced solar has to win on the
+numbers, which lets a genuinely cheaper night hour beat it. Without a feed-in
+tariff the rate is zero and the sun really is free.
+
 ## The road ahead (the verification ladder)
 
 1. **Baseline** — nightly measurements of the unchanged reactive system:
