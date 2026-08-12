@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own cap on every adoption and climbed geometrically. Calibration now
   requires a real power sensor; the energy deriver stays a display/runtime
   estimate — a guessed number never teaches the model (the #743/#753 class).
+- 🔍 **EV stop-decision internals reach the diagnostics download** (#708,
+  promised to @Azlinon) — the taper latch, session peak, SOC anchor (+ its
+  timestamp) and the stability give-up streak/backoff are now in the
+  download; no more guessing from source. The "SOC anchored at 100%"
+  announcement now reports the observation: the charge completed.
+
 
 # [1.7.6-beta.14] — 11.08.2026
 

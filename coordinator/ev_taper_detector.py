@@ -217,6 +217,25 @@ class EVTaperDetector:
     # Public API — called each coordinator cycle
     # ------------------------------------------------------------------
 
+    def diagnostics_view(self) -> dict:
+        """(#708) The stop-decision internals for the diagnostics download.
+
+        Every report of the taper family needed someone reading the source
+        to guess what should have happened — the give-up machinery lives in
+        charge_stability, but the latch, the peak and the anchor live here.
+        """
+        return {
+            "declining_phase": bool(self._declining_phase),
+            "session_peak_w": float(self._session_peak_w),
+            "soc_anchored": bool(self._soc_anchored),
+            "soc_anchor_value": self._soc_anchor_value,
+            "soc_anchor_session_kwh": self._soc_anchor_session_kwh,
+            "last_full_at": self._last_full_timestamp,
+            "estimated_soc": self._estimated_soc,
+            "energy_since_full_kwh": round(
+                float(self._energy_since_full or 0.0), 3),
+        }
+
     def update(
         self,
         ev_power: float,
@@ -340,7 +359,9 @@ class EVTaperDetector:
                 if self._hw_total_last is not None:
                     self._hw_total_at_full = self._hw_total_last
                 _LOGGER.info(
-                    "EV full charge detected at %s (peak=%.0fW, session=%.2fkWh ≥ floor=%.2fkWh, hw_total=%.1f) — SOC anchored at 100%%",
+                    # (#708) report the OBSERVATION — "anchored at 100%"
+                    # asserted something SEM cannot know.
+                    "EV charge complete at %s (peak=%.0fW, session=%.2fkWh ≥ floor=%.2fkWh, hw_total=%.1f)",
                     self._last_full_timestamp, self._session_peak_w,
                     self._current_session_energy_kwh, floor_kwh,
                     self._hw_total_at_full if self._hw_total_at_full is not None else 0,
