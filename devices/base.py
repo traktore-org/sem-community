@@ -410,6 +410,14 @@ class ControllableDevice(ABC):
         rated = getattr(self, "rated_power", None)
         if rated is None or not self.hass or not self.is_active:
             return
+        # (#744) CALIBRATION ONLY FROM A REAL POWER SENSOR. The energy
+        # deriver is a display/runtime-credit estimate: a 0.01 kWh tick
+        # over a short window reads as ~1 kW instant, and feeding that to
+        # this up-only ratchet climbed a 24 W load to 1 kW geometrically
+        # (the deriver's cap is 2x rated and re-bases on every adoption).
+        # An estimate must never teach the model — the #743/#753 class.
+        if not self.power_entity_id:
+            return
         observed = self.observed_power_w()
         if observed is None:
             return
