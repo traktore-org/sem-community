@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.15 candidate] — 12.08.2026
+
+### 🐛 Fixes
+- 📏 **A 24 W load calibrated itself to ~1 kW** (#744, @Azlinon) — for loads
+  without a power sensor, the energy-tick estimate (0.01 kWh over a short
+  window ≈ 1 kW instant) fed the up-only rated-power ratchet, which re-based
+  its own cap on every adoption and climbed geometrically. Calibration now
+  requires a real power sensor; the energy deriver stays a display/runtime
+  estimate — a guessed number never teaches the model (the #743/#753 class).
+
 # [1.7.6-beta.14] — 11.08.2026
 
 ### 🐛 Fixes
