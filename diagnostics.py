@@ -154,6 +154,28 @@ async def async_get_config_entry_diagnostics(
     coordinator: SEMCoordinator = entry.runtime_data
     data = coordinator.data if coordinator.data else {}
 
+    # (#708) EV stop-decision internals — the taper latch, session peak,
+    # SOC anchor (+ age via last_full_at) and the stability give-up
+    # streak/backoff. Promised to @Azlinon: no more guessing from source.
+    ev_stability: dict[str, Any] = {}
+    try:
+        dets = getattr(coordinator, "_ev_taper_detectors", None) or {}
+        single = getattr(coordinator, "_ev_taper_detector", None)
+        if not dets and single is not None:
+            dets = {"primary": single}
+        ev_stability["taper"] = {
+            cid: det.diagnostics_view()
+            for cid, det in dets.items()
+            if hasattr(det, "diagnostics_view")
+        }
+        stab = getattr(coordinator, "_charge_stability", None)
+        if stab is not None and hasattr(stab, "snapshot_timers"):
+            import time as _time
+            ev_stability["stability_timers"] = stab.snapshot_timers(
+                _time.monotonic())
+    except Exception:  # noqa: BLE001 — diagnostics must never fail the download
+        ev_stability["error"] = "collection failed"
+
     # Load manager info
     load_mgr = getattr(coordinator, "_load_manager", None)
     load_info = {}
@@ -484,6 +506,7 @@ async def async_get_config_entry_diagnostics(
         # exact defect this issue fixes.
         "appliance_schedules": data.get("diag_appliance_schedules"),
         "load_management": load_info,
+        "ev_stability": ev_stability,
         "energy_dashboard": ed_info,
         "battery_sign": battery_sign_info,
         "split_grid_discovery": split_grid_info,

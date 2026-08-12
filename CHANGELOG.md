@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.15 candidate] — 12.08.2026
+
+### 🐛 Fixes
+- 🔍 **EV stop-decision internals reach the diagnostics download** (#708,
+  promised to @Azlinon) — the taper latch, session peak, SOC anchor (+ its
+  timestamp) and the stability give-up streak/backoff are now in the
+  download; no more guessing from source. The "SOC anchored at 100%"
+  announcement now reports the observation: the charge completed.
+
 # [1.7.6-beta.14] — 11.08.2026
 
 ### 🐛 Fixes
