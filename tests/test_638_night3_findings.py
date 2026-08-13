@@ -135,6 +135,26 @@ class TestOvernightPlanTick:
         assert fake._compute_calls == ["initial", "ask changed"]
         assert fake._plan_ev_conn_sig == ("ask", "changed")
 
+    def test_a_cold_world_neither_compares_nor_stamps(self, _freeze_2200):
+        """(P3 provocation, 13.08) The reboot restamped a restored plan
+        with cause 'ask changed': the first tick ran at 11:13:26, the
+        device runtimes restored at 11:13:37 — the restored (warm)
+        signature was compared against one computed from un-restored
+        state. A cold world is not a changed night: until the runtime
+        restore has run, the tick keeps the seated plan and retries."""
+        fake = _tick_self()
+        fake._runtimes_restored = False
+        fake._plan_ev_conn_sig = ("warm",)   # the restored stamp's sig
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == [], "a cold tick must not stamp"
+        assert fake._plan_ev_conn_sig == ("warm",), (
+            "a cold tick must not touch the restored signature"
+        )
+        # Restore completes → the tick resumes normally next cycle.
+        fake._runtimes_restored = True
+        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == ["initial"]
+
     def test_a_daytime_tick_plans_toward_the_coming_night(self, monkeypatch):
         """The spanning change: 14:00 is not 'outside the window' any
         more — the day IS part of the horizon (comfort banking, load

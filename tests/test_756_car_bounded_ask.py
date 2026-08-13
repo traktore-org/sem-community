@@ -73,6 +73,56 @@ class TestPlanCarFullness:
         assert plan_car_fullness(_Boom()) is None
 
 
+class TestEagerPerChargerRestore:
+    """(P3 provocation, 13.08) The per-charger detectors were created and
+    restored LAZILY inside the EV cycle block — so the first boot tick
+    computed the signature's fullness term from an empty registry and
+    restamped a warm restored plan with 'ask changed'. The primary
+    detector already restores eagerly in the setup restore block; the
+    per-charger fleet now restores beside it."""
+
+    def test_stored_chargers_come_back_warm(self) -> None:
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SEMCoordinator.__new__(SEMCoordinator)
+        c.config = {}
+        c._ev_taper_detectors = {}
+        SEMCoordinator._restore_per_charger_detectors(c, {
+            "chargers": {"keba": {
+                "soc_anchored": True, "energy_since_full": 0.0,
+            }},
+        })
+        assert "keba" in c._ev_taper_detectors
+        assert c._ev_taper_detectors["keba"].still_full is True
+
+    def test_a_warm_detector_is_never_clobbered(self) -> None:
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SEMCoordinator.__new__(SEMCoordinator)
+        c.config = {}
+        live = _detector(True, 4.0)   # drew 4 kWh this session
+        c._ev_taper_detectors = {"keba": live}
+        SEMCoordinator._restore_per_charger_detectors(c, {
+            "chargers": {"keba": {
+                "soc_anchored": True, "energy_since_full": 0.0,
+            }},
+        })
+        assert c._ev_taper_detectors["keba"] is live
+
+    def test_garbage_state_restores_nothing_quietly(self) -> None:
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SEMCoordinator.__new__(SEMCoordinator)
+        c.config = {}
+        c._ev_taper_detectors = {}
+        SEMCoordinator._restore_per_charger_detectors(c, None)
+        SEMCoordinator._restore_per_charger_detectors(c, {"chargers": "junk"})
+        assert c._ev_taper_detectors == {}
+
+
 class TestTheSignatureSeesTheCar:
     """Anchoring full happens mid-night with the plug still in — nothing
     else in the signature moves, so without this term the stamped plan

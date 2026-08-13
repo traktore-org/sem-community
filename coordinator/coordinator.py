@@ -480,6 +480,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (first-update restore) and for a bare single-charger install.
         self._ev_taper_detector_default = EVTaperDetector(config)  # Primary fallback
         self._ev_taper_detectors: Dict[str, EVTaperDetector] = {}  # Per-charger (#112)
+        # (P3, 13.08) The overnight plan tick holds off until the device
+        # runtime restore has run — a cold-world demand signature must not
+        # invalidate a warm restored stamp. Flipped in
+        # ``_restore_device_runtimes`` (called unconditionally at setup and
+        # re-invoked by the registry's rediscovery hook).
+        self._runtimes_restored: bool = False
 
         # Calculation integrity checker (runs every cycle)
         self._health_check = HealthCheck()
@@ -2428,6 +2434,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Restore EV intelligence state (#106)
             ev_intel_state = self._storage.get_ev_intelligence_state()
             self._ev_taper_detector.restore_state(ev_intel_state)
+            # (#756/P3) …and the whole per-charger fleet, EAGERLY. The
+            # detectors used to be created+restored lazily inside the EV
+            # cycle block, so the first boot tick computed the demand
+            # signature's fullness term from an empty registry and
+            # restamped a warm restored plan with "ask changed".
+            self._restore_per_charger_detectors(ev_intel_state)
 
             # (#645) Restore the date the virtual-SOC daily decay last ran.
             # Must happen before the first rollover check, otherwise the
@@ -6562,6 +6574,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _night_of = None
             if _night_of is None:
                 _night_of = (_now_l - timedelta(hours=12)).date()
+            # (P3, 13.08) A COLD world is not a changed night. The first
+            # boot ticks run before the device-runtime restore (and, until
+            # the eager fix above, before the per-charger detectors), so a
+            # signature computed here reads wrong deficits and a cold
+            # fullness term — and comparing it against the restored stamp's
+            # warm signature restamped the night on every reboot
+            # (11:13:26 restamp vs 11:13:37 restore, P3 provocation).
+            # Neither compare NOR stamp until the restore has run; the tick
+            # retries within a cycle. Default True: only the real setup
+            # path sets False, so bare test fakes keep their behaviour.
+            if not getattr(self, "_runtimes_restored", True):
+                return
             # (#638) DEMAND-SHAPE replan. #638 specified the triggers as
             # "price update, floor change, unplug, big deviation"; only
             # unplug shipped, so raising the EV target at 22:19 on armed
@@ -9341,6 +9365,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return 15.0  # Safe default
 
     # Solar charging state sets
+    def _restore_per_charger_detectors(self, ev_intel_state) -> None:
+        """(#756/P3) Warm every stored per-charger taper detector at setup.
+
+        The demand signature's fullness term and the collector's car-full
+        gate both read ``_ev_taper_detectors`` — state that exists in
+        storage at boot but used to materialize lazily, one EV cycle in.
+        A signature computed from the cold registry is not the same night
+        as one computed from the warm one, and the tick restamped a
+        restored plan over exactly that difference. A detector that
+        already exists (accrued live state) is never clobbered.
+        """
+        try:
+            chargers = (ev_intel_state or {}).get("chargers") or {}
+            if not isinstance(chargers, dict):
+                return
+            for cid, per_charger_state in chargers.items():
+                if cid in self._ev_taper_detectors:
+                    continue
+                if not isinstance(per_charger_state, dict):
+                    continue
+                det = EVTaperDetector(self.config)
+                det.restore_state(per_charger_state)
+                self._ev_taper_detectors[str(cid)] = det
+        except Exception as e:  # noqa: BLE001 — a bad payload must not fail setup
+            _LOGGER.warning(
+                "#756: per-charger detector restore skipped (%s) — the "
+                "fleet warms lazily as before", e,
+            )
+
     def _restore_device_runtimes(self) -> None:
         """Restore device runtimes from storage onto empty devices.
 
@@ -9364,7 +9417,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         midnight fills yesterday's accrued onto a fresh device) self-corrects:
         the next ``update_daily_runtime(today)`` detects the rollover and
         resets accrued to 0 within one cycle — the same rebase #586 relies on.
+
+        (P3, 13.08) Running at all is also a SIGNAL: ``_runtimes_restored``
+        flips here and gates the overnight plan tick — a demand signature
+        computed before this ran reads zero accrued runtime (wrong
+        deficits), and comparing that cold signature against a restored
+        stamp's warm one restamped the night on every reboot. Set BEFORE
+        the storage guard: an install with no storage has nothing to wait
+        for, and a tick gated on a flag that never flips would never plan.
         """
+        self._runtimes_restored = True
         if not self._storage:
             return
         runtimes = self._storage.get_device_runtimes()
