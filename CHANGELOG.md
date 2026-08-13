@@ -115,6 +115,18 @@ shapes the demand set must ride the re-plan signature.
   the whole property: covered + in-block + every tier-2 gate green ⇒ the
   device starts.
 
+### 🔍 A silently skipped reconciliation now says so (#628)
+
+- 👁️ **Counter-backing is visible.** The all-or-nothing rule (a partial
+  counter read must never adopt) is correct — but the skip was invisible,
+  so a category with an unreadable counter ran as a pure stopwatch
+  indefinitely and the first symptom was a numbers-don't-match report
+  weeks later. Now: one transition-gated line when a category flips
+  counter-backed ↔ unbacked (a healthy boot stays silent; a counter dead
+  *from* boot logs, because that is exactly the invisible case), and the
+  diagnostics download carries per-category backed/skipped cycle counts —
+  "was export ever reconciled on this install?" becomes one look.
+
 ### 🪵 A log line is a transition, not a heartbeat (#762)
 
 - 📉 **The debug firehose is off.** Measured on the test rig: a *steady*

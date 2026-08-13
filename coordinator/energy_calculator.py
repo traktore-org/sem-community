@@ -17,6 +17,8 @@ from .types import (
 from ..utils.time_manager import TimeManager
 from .units import energy_state_to_kwh
 
+from ..utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
 
 # Minimum power thresholds to prevent ghost accumulation
@@ -201,6 +203,15 @@ class EnergyCalculator:
         # ``_reconcile_metered_energy``. Keyed by category:
         # {"grid_import": ["sensor.p1_import"], ...}.
         self._meter_counter_entities: Dict[str, List[str]] = {}
+        # (#628 visibility) Whether each configured category's last
+        # reconciliation attempt was counter-backed (None = never tried),
+        # plus today's backed/skipped tallies for the diagnostics download.
+        # The all-or-nothing skip used to be SILENT — a category with an
+        # unreadable counter ran as a pure stopwatch indefinitely, and the
+        # first symptom was a numbers-don't-match report weeks later.
+        self._backing_state: Dict[str, Optional[bool]] = {}
+        self._backing_tally: Dict[str, Dict[str, int]] = {}
+        self._backing_tally_date: Optional[str] = None
         self._meter_counter_enabled: bool = False
         self._meter_counter_logged: bool = False
         self._meter_baselines: Dict[str, Dict[str, Any]] = {}
@@ -1462,6 +1473,44 @@ class EnergyCalculator:
         for accumulators, key in periods:
             accumulators[key] = accumulators.get(key, 0.0) + delta
 
+    def _tally_backing(self, category: str, today_str: str, backed: bool) -> None:
+        """(#628 visibility) Count and announce counter-backing transitions.
+
+        The all-or-nothing skip is correct but was invisible. One
+        transition-gated INFO line per flip (the #762 alternation pattern)
+        and per-day tallies for diagnostics — "was export ever reconciled
+        on this install?" becomes one look instead of a 19-comment thread.
+        A healthy boot (first read complete) stays silent; a counter that
+        is dead FROM boot logs, because that is exactly the invisible case.
+        """
+        if self._backing_tally_date != today_str:
+            self._backing_tally_date = today_str
+            self._backing_tally = {}
+        tally = self._backing_tally.setdefault(
+            category, {"backed": 0, "skipped": 0})
+        tally["backed" if backed else "skipped"] += 1
+        prev = self._backing_state.get(category)
+        if prev is backed:
+            return
+        self._backing_state[category] = backed
+        if not backed:
+            log_on_change(
+                _LOGGER, f"backing:{category}", logging.INFO,
+                "%s: no longer counter-backed — a configured counter is "
+                "unreadable; the daily row runs on power integration alone "
+                "until it returns", category,
+            )
+        elif prev is False:
+            log_on_change(
+                _LOGGER, f"backing:{category}", logging.INFO,
+                "%s: counter-backed again — reconciliation resumed", category,
+            )
+
+    def counter_backing_today(self) -> Dict[str, Dict[str, int]]:
+        """(#628 visibility) Today's per-category backed/skipped cycle
+        counts, for the diagnostics download."""
+        return {k: dict(v) for k, v in self._backing_tally.items()}
+
     def _reconcile_metered_energy(
         self,
         category: str,
@@ -1542,11 +1591,13 @@ class EnergyCalculator:
             # Partial read — see ALL-OR-NOTHING above. Do NOT touch the
             # baselines: the missing counter kept counting while it was
             # unavailable, and its delta is still owed once it returns.
+            self._tally_backing(category, today_str, backed=False)
             return
 
         # (#628) Complete read — this category's daily row is the hardware's
         # this cycle, so the home balance may build on it.
         self._counter_backed.add(category)
+        self._tally_backing(category, today_str, backed=True)
 
         # A counter that went BACKWARDS since its last reading (meter reboot,
         # a daily-type register resetting at midnight) invalidates the whole
