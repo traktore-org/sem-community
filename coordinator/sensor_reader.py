@@ -19,6 +19,8 @@ from .units import (
     temperature_state_to_celsius,
 )
 
+from ..utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
 
 # #593 — battery lifetime-cycle sensor autodetect keywords (EN + DE + common
@@ -3125,7 +3127,10 @@ class SensorReader:
 
         state = self.hass.states.get(entity_id)
         if not state or state.state in ("unknown", "unavailable", None):
-            _LOGGER.debug(f"Sensor {entity_id} ({name}) unavailable")
+            # (#762) edge-logged: one line when it goes silent, one when it
+            # comes back (below) — not 359 repeats per outage day.
+            log_on_change(_LOGGER, f"avail:{entity_id}", logging.DEBUG,
+                          f"Sensor {entity_id} ({name}) unavailable")
             # Track unavailability for transition detection
             self._sensor_unavailable.add(entity_id)
             # (#758) Battery POWER is the one reading whose 0.0 fallback is a
@@ -3178,7 +3183,11 @@ class SensorReader:
             # gracefully instead of spamming".
             if entity_id in self._sensor_unavailable:
                 self._sensor_unavailable.discard(entity_id)
-                _LOGGER.debug(
+                # (#762) SAME gate key as the outage line: the alternation
+                # resets the gate, so the NEXT outage logs again instead of
+                # being suppressed as "unchanged".
+                log_on_change(
+                    _LOGGER, f"avail:{entity_id}", logging.DEBUG,
                     "Sensor %s (%s) recovered — now reading %.1f",
                     entity_id, name, value,
                 )

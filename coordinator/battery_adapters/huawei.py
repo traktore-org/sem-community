@@ -20,6 +20,8 @@ from ..charger_types import BatteryIntent
 from ..power_control import async_write_power_setpoint, prepare_power_setpoint
 from .base import BatteryControlAdapter
 
+from ...utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -451,7 +453,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
 
     async def _apply_discharge_limit(self, watts: float) -> None:
         if not self._discharge_control_entity:
-            _LOGGER.debug(
+            log_on_change(   # (#762) a standing config gap is one line, not 806/day
+                _LOGGER, "no_discharge_entity", logging.DEBUG,
                 "HuaweiBatteryAdapter: no battery_discharge_control_entity "
                 "configured — skipping limit %.0f W", watts,
             )

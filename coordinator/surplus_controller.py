@@ -24,6 +24,8 @@ from homeassistant.core import HomeAssistant
 from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
 from .plan_verdict import NO_OPINION, PlanVerdict
 
+from ..utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
 
 # Defaults
@@ -321,14 +323,21 @@ def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
     # reconcile_all at update()'s top is separate and permitted — see there.)
     observed = device.get_current_consumption() if active else 0.0
     name = getattr(device, "name", None) or getattr(device, "device_id", "?")
+    # (#762) transition-gated: a WOULD that has not changed is not news —
+    # ~950 INFO lines/day on .175 for decisions holding perfectly still.
+    # One key per device: ACTIVATE→ADJUST→DEACTIVATE edges all log.
+    _key = f"observer:{getattr(device, 'device_id', name)}"
     if intent.on and not active:
-        _LOGGER.info("OBSERVER · WOULD ACTIVATE %s @ %.0fW [source=%s] — %s",
-                     name, intent.power_w, intent.source, intent.reason)
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD ACTIVATE %s @ %.0fW [source=%s] — %s",
+                      name, intent.power_w, intent.source, intent.reason)
     elif not intent.on and active:
-        _LOGGER.info("OBSERVER · WOULD DEACTIVATE %s — %s", name, intent.reason)
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD DEACTIVATE %s — %s", name, intent.reason)
     elif intent.on and active and intent.source is not None:
-        _LOGGER.info("OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
-                     name, intent.power_w, intent.source, intent.reason)
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
+                      name, intent.power_w, intent.source, intent.reason)
     # else: idle, or on-but-not-SEM-driven (source is None) → no command to log.
     return observed
 

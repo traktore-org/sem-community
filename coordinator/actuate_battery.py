@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from .charger_types import BatteryIntent
 from .power_control import prepare_power_setpoint
+from ..utils.log_gate import log_on_change
 
 if TYPE_CHECKING:  # pragma: no cover
     from .battery_adapters.base import BatteryControlAdapter
@@ -36,7 +37,8 @@ async def actuate_battery(
     """
     if decision.intent is BatteryIntent.OFF:
         await adapter.command_off()
-        _LOGGER.debug(
+        log_on_change(   # (#762) transition-gated
+            _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): OFF (hands-off) — %s",
             decision.battery_id, decision.reason,
         )
@@ -44,7 +46,8 @@ async def actuate_battery(
 
     if decision.intent is BatteryIntent.NORMAL:
         await adapter.command_normal()
-        _LOGGER.debug(
+        log_on_change(   # (#762) 1424 identical lines/day on .175
+            _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): NORMAL — %s",
             decision.battery_id, decision.reason,
         )
@@ -52,7 +55,8 @@ async def actuate_battery(
 
     if decision.intent is BatteryIntent.LIMIT_DISCHARGE:
         await adapter.command_limit_discharge(decision.discharge_limit_w)
-        _LOGGER.debug(
+        log_on_change(   # (#762) the watts wobble; the gate strips digits
+            _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): LIMIT_DISCHARGE %.0f W — %s",
             decision.battery_id, decision.discharge_limit_w, decision.reason,
         )
@@ -60,7 +64,8 @@ async def actuate_battery(
 
     if decision.intent is BatteryIntent.FORCE_CHARGE:
         if not adapter.supports_forced_charge:
-            _LOGGER.warning(
+            log_on_change(   # (#762) once per episode, not per cycle
+                _LOGGER, f"actuate:{decision.battery_id}", logging.WARNING,
                 "actuate_battery(%s): adapter does not support forced "
                 "charge — decision dropped (%s)",
                 decision.battery_id, decision.reason,

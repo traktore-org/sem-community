@@ -115,6 +115,26 @@ shapes the demand set must ride the re-plan signature.
   the whole property: covered + in-block + every tier-2 gate green ⇒ the
   device starts.
 
+### 🪵 A log line is a transition, not a heartbeat (#762)
+
+- 📉 **The debug firehose is off.** Measured on the test rig: a *steady*
+  system repeated the same six decision lines ~8,000 times a day
+  (`decide_battery → normal` 1423×, `Charging strategy: idle` 1792×,
+  `Scheduled delayed save` 1930×, …), which shrank the host's log ring to
+  ~2 minutes — burying the once-per-night lines that matter — and drowned
+  the excerpt HA's native "Enable debug logging" toggle hands you. Every
+  measured offender now goes through one shared gate: an unchanged
+  decision is silent, every change logs, a flap logs each edge. Wobbling
+  measurements inside a reason (`limit 594 W` → `602 W`) don't count as
+  change — the decision does. The zero-information delayed-save heartbeat
+  is deleted outright; sensor outages log one line going silent and one
+  coming back.
+- 🤫 **At default log level SEM stays quiet** (0 INFO lines in a measured
+  2-minute PROD window) — nothing changes for normal installs. Debug is
+  the standard HA flow: the integration page's *Enable debug logging*
+  button (the manifest declares its loggers), which now produces a
+  readable story instead of a heartbeat dump.
+
 ### 🐛 Found by auditing the branch as a whole (#757, #758)
 
 - ⛔ **A stop repeated 1800 times is not a stop** (#757) — the one-gate build

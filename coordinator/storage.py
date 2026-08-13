@@ -590,7 +590,8 @@ class SEMStorage:
                 }
 
             self._energy_store.async_delay_save(get_data, ENERGY_SAVE_DELAY)
-            _LOGGER.debug("Scheduled delayed save of energy data")
+            # (#762) No heartbeat here: scheduling a save is not an event
+            # (1930 identical lines/day on .175). Saves log on completion/failure.
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to schedule energy data save: %s", e)
 

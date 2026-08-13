@@ -77,6 +77,7 @@ from ..tariff.tariff_provider import _local_date as _tariff_local_date
 from ..analytics.pv_performance import PVPerformanceAnalyzer
 from ..analytics.consumption_predictor import ConsumptionPredictor
 from .ev_taper_detector import EVTaperDetector
+from ..utils.log_gate import log_on_change
 from ..analytics.energy_assistant import EnergyAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -3302,7 +3303,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # from "SEM commanding, EV refused → really full".
                         if decision.commanded_amps > self._last_commanded_amps_fleet:
                             self._last_commanded_amps_fleet = decision.commanded_amps
-                        _LOGGER.debug(
+                        # (#762) transition-gated — 833 identical idle
+                        # lines per day on .175.
+                        log_on_change(
+                            _LOGGER, f"decide_ev:{cid}", logging.DEBUG,
                             "decide %s mode=%s → intent=%s amps=%d budget=%.0fW :: %s",
                             cid, per_mode, decision.intent.value,
                             decision.commanded_amps, decision.budget_w, decision.reason,
@@ -5788,7 +5792,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # 3. Decide
             decision = decide_battery(view)
-            _LOGGER.debug(
+            # (#762) transition-gated: 1423 identical lines per steady
+            # day on .175. An unchanged intent is silent; every change
+            # (and each edge of a flap) logs.
+            log_on_change(
+                _LOGGER, f"decide_battery:{battery_id}", logging.DEBUG,
                 "decide_battery(%s) → intent=%s :: %s",
                 battery_id, decision.intent.value, decision.reason,
             )
@@ -8415,7 +8423,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (The #545 observe-only assist-headroom diagnostic was retired here
         # once #545 shipped + closed — the chicken-and-egg is fixed.)
 
-        _LOGGER.debug(
+        # (#762) transition-gated — 1792 identical idle lines per day.
+        log_on_change(
+            _LOGGER, "charging_strategy", logging.DEBUG,
             "Charging strategy: %s — %s",
             strategy, reason,
         )

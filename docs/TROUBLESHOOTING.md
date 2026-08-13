@@ -454,7 +454,21 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 
 ## Debug logging
 
-To enable detailed logging for SEM, add this to your `configuration.yaml`:
+**The easiest way** is Home Assistant's built-in flow — no YAML, no restart:
+
+1. **Settings → Devices & Services → Solar Energy Management → Enable debug logging**
+2. Reproduce the problem.
+3. Click **Disable debug logging** — Home Assistant downloads a log excerpt
+   you can attach to a bug report.
+
+At the normal log level SEM is quiet by design: a healthy install adds
+essentially nothing to your Home Assistant log. Debug logs are
+**transition-based** — SEM logs when a decision *changes* (charging intent,
+battery command, a sensor going silent or coming back), not the same
+unchanged state every cycle. A quiet debug log therefore means the system
+is steady, not that logging is broken.
+
+Alternatively, via `configuration.yaml` (persists across restarts):
 
 ```yaml
 logger:
@@ -462,8 +476,6 @@ logger:
   logs:
     custom_components.solar_energy_management: debug
 ```
-
-Restart Home Assistant after adding this. Debug logs will appear in **Settings > System > Logs**.
 
 To enable logging for a specific module only:
 
@@ -474,6 +486,9 @@ logger:
     custom_components.solar_energy_management.coordinator.charging_control: debug
     custom_components.solar_energy_management.coordinator.surplus_controller: debug
 ```
+
+Levels can also be changed at runtime without a restart via
+**Developer tools → Actions → `logger.set_level`**.
 
 ---
 
