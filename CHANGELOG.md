@@ -80,6 +80,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line. It rides its own attribute so it survives the daytime hours, which is
   exactly when it gets read.
 
+### 🌙 What the first actuation night taught (#756, #759, #760)
+
+N1 (12→13.08 on the .175 rig) ran the whole machine end-to-end — zero
+errors, clean hand-back — and caught three ways a plan can describe a
+night that cannot happen. All three are the same lesson: **the collector
+must mirror every gate the executor enforces**, and every input that
+shapes the demand set must ride the re-plan signature.
+
+- 🚗 **The ask is bounded by the car, not the calendar** (#756) — the night
+  target is `target − daily` off a counter that rolls at midnight, so at
+  00:01 a car at 100 % was asked for its full 20 kWh — and under the peak
+  cap the phantom displaced the real loads (the heizband went fits→yields
+  at exactly 00:01; the morning unplug flipped it straight back). The
+  taper detector's "still full" — anchored at a completed charge with
+  nothing drawn since — is now the collector's third mirrored gate, the
+  card lists the car under "not scheduled tonight — car is already full"
+  (×16 languages), and the fullness flag rides the signature so the car
+  filling up mid-night re-plans.
+- 🌤️ **A forecast wiggle is not a changed night** (#759) — the raw solar
+  forecast sat in the demand signature, and a value living at a bucket
+  edge (66.9↔67.1 around the 67 boundary) re-planned the night four times
+  in 110 seconds, flipping every demand's coverage each time. The term now
+  anchors with 3 kWh hysteresis: jitter orbits the anchor forever, a real
+  provider revision re-anchors once, and a transient forecast outage keeps
+  the anchor instead of flapping to zero and back.
+- 🔥 **A stopped load is not a demand** (#760) — the heizband's comfort
+  band read the room at 22.01 °C (past target+offset → banked), which is
+  a hard stop the intent enforces ABOVE the tier-2 clause — the executor
+  rightly refused all night, while the plan packed 2.0 kWh and said
+  fits+COVERED. The stop condition is now the fourth mirrored gate, and
+  it rides the signature so the room cooling back into the band re-plans
+  and re-admits the demand within a cycle. An in-process oracle now pins
+  the whole property: covered + in-block + every tier-2 gate green ⇒ the
+  device starts.
+
 ### 🐛 Found by auditing the branch as a whole (#757, #758)
 
 - ⛔ **A stop repeated 1800 times is not a stop** (#757) — the one-gate build

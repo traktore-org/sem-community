@@ -1254,6 +1254,25 @@ def test_off_mode_load_is_not_a_demand(freeze_targets):
     assert not any("heizband" in ln for ln in plan.get("summary", []))
 
 
+def test_a_stopped_load_is_not_a_demand(freeze_targets):
+    """#760 (N1, .175): the heizband's comfort band read the room at
+    22.01 °C ≥ target+offset → banked → ``stop_condition_met`` — and
+    compute_load_intent's clause 3 kills the intent ABOVE the tier-2
+    clause, every cycle, covered or not. The executor was right; the
+    plan packed 2.0 kWh anyway and said fits+COVERED all night. The
+    fourth unmirrored gate (mode #1, connectivity #4, car-full #756):
+    the demand builder mirrors the intent's hard stops."""
+    stopped = _fake_load(did="heizband")
+    stopped.stop_condition_met = True
+    fake = _fake_self(devices=[stopped])
+    SEMCoordinator._shadow_overnight_plan(
+        fake, _scheduler(deficit=0.0), energy=MagicMock(),
+        power=_power())
+    plan = fake._overnight_shadow_plan
+    assert plan is not None
+    assert not any("heizband" in ln for ln in plan.get("summary", []))
+
+
 class TestTomorrowPreviewComposer:
     """(#638 consolidation / #722) The coordinator side of the Tomorrow
     preview: tomorrow's frame from the time manager, the forecast's

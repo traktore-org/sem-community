@@ -81,6 +81,18 @@ class TestARealChangeReplans:
         assert (c._overnight_demand_signature(_power(connected=True))
                 != c._overnight_demand_signature(_power(connected=False)))
 
+    def test_a_stop_condition_clearing_changes_the_signature(self):
+        """#760: a banked comfort band is a hard stop the collector now
+        mirrors — so the stop CLEARING mid-night (the room cooled below
+        target−offset) must re-plan, or the demand it re-admits stays
+        invisible until an unrelated trigger fires."""
+        dev = _dev("heizband", 2.0)
+        dev.stop_condition_met = True
+        c = _coord(devices=[dev])
+        before = c._overnight_demand_signature(_power())
+        dev.stop_condition_met = False
+        assert c._overnight_demand_signature(_power()) != before
+
     def test_a_new_load_deficit_changes_the_signature(self):
         quiet = _coord(devices=())
         asking = _coord(devices=(_dev("heizband", 2.0),))
@@ -200,3 +212,40 @@ class TestTheSupplySideReplans:
     def test_no_forecast_is_a_valid_shape(self):
         c = _coord()
         assert isinstance(c._overnight_demand_signature(_power()), tuple)
+
+    def test_the_n1_bucket_edge_oscillation_is_one_night(self):
+        """(#759) Quantizing cannot damp a value that LIVES at a bucket
+        edge. N1 (.175, 13.08): the dampened forecast wobbled 66.9↔67.1
+        around the 67 boundary, the 2-kWh rounding turned that into
+        66↔68, and each flip was a full replan — four restamps in 110 s,
+        coverage changing hands every 20 s. Same coordinator, same night,
+        sub-hysteresis jitter: ONE signature."""
+        c = self._with_forecast(66.9, 40.0)
+        first = c._overnight_demand_signature(_power())
+        for raw in (67.1, 66.9, 67.3, 66.8, 67.1):
+            c._forecast_reader.forecast_data.forecast_today_kwh = raw
+            assert c._overnight_demand_signature(_power()) == first, (
+                f"forecast jitter to {raw} kWh re-planned the night"
+            )
+
+    def test_a_real_revision_on_the_same_coordinator_still_replans(self):
+        """The hysteresis must not eat the week picture: a genuine
+        provider revision (clouds rolling in) re-plans."""
+        c = self._with_forecast(66.9, 40.0)
+        first = c._overnight_demand_signature(_power())
+        c._forecast_reader.forecast_data.forecast_today_kwh = 60.0
+        assert c._overnight_demand_signature(_power()) != first
+
+    def test_a_transient_forecast_outage_keeps_the_anchor(self):
+        """A one-cycle unreadable forecast used to flip the term to 0.0
+        and back — two replans for one hiccup. Degrade to the last
+        anchored value, not to a different night."""
+        c = self._with_forecast(66.9, 40.0)
+        first = c._overnight_demand_signature(_power())
+
+        class _Boom:
+            @property
+            def forecast_data(self):
+                raise RuntimeError("reader down")
+        c._forecast_reader = _Boom()
+        assert c._overnight_demand_signature(_power()) == first

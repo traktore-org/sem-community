@@ -5998,21 +5998,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             (str(k), bool(v)) for k, v in
             (getattr(power, "ev_connected_per_charger", None) or {}).items()
         )) or (("fleet", bool(getattr(power, "ev_connected", False))),)))
-        # 2. Per-charger ask: floor, deadline, mode.
+        # 2. Per-charger ask: floor, deadline, mode — and whether the car
+        #    is still full (#756). Anchoring full happens mid-night with
+        #    the plug still in; nothing else here moves, so without this
+        #    term the stamped plan keeps its phantom EV blocks until an
+        #    unrelated trigger fires.
         for cfg in (self.config.get("ev_chargers") or []):
             try:
                 cid = str(cfg.get("id") or "")
+                from .ev_availability import plan_car_fullness
+                _full = bool(plan_car_fullness(
+                    getattr(self, "_ev_taper_detectors", {}).get(cid)))
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
                     str(cfg.get("ev_target_time") or ""),
                     str(cfg.get("charge_mode") or ""),
+                    _full,
                 ))
             except Exception:  # noqa: BLE001 — one odd charger cfg is not fatal
                 continue
         # 3. Each load's remaining runtime deficit — the loads' equivalent of
         #    a floor. Rounded to 6-minute steps: a deficit shrinks every
         #    cycle while a device runs, and that is NOT a demand change.
+        #    The stop flag (#760) is a demand-set input: the collector skips
+        #    a stopped load, so the stop clearing mid-night (the room cooled
+        #    back into the band) must re-plan to re-admit it.
         controller = getattr(self, "_surplus_controller", None)
         for dev in (controller.get_devices_sorted() if controller else []):
             try:
@@ -6020,7 +6031,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     continue
                 deficit_h = max(0.0, (dev.daily_min_runtime_sec
                                       - dev._daily_runtime_accumulated_sec) / 3600.0)
-                sig.append(("load", str(dev.device_id), round(deficit_h * 10) / 10))
+                sig.append(("load", str(dev.device_id), round(deficit_h * 10) / 10,
+                            bool(getattr(dev, "stop_condition_met", False))))
             except Exception:  # noqa: BLE001
                 continue
         # 4. Each engaged band's plannable ask (#638 Phase 3) — a comfort
@@ -6056,9 +6068,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _fd = getattr(getattr(self, "_forecast_reader", None),
                           "forecast_data", None)
             _today = float(getattr(_fd, "forecast_today_kwh", 0.0) or 0.0)
-            sig.append(("solar", round(_today / 2.0) * 2.0))
+            # (#759) Quantizing alone cannot damp a value that LIVES at a
+            # bucket edge: on N1 the dampened forecast wobbled 66.9↔67.1
+            # around the 67 boundary, the rounding turned that into 66↔68,
+            # and every flip was a full replan — coverage changed hands
+            # every 20 s and no load could start under it. So the term is
+            # computed from an ANCHOR that only moves when the raw value
+            # has moved ≥ 3 kWh (1.5 buckets) away from it: jitter orbits
+            # the anchor forever, a real provider revision re-anchors once.
+            _anchor = getattr(self, "_sig_solar_anchor", None)
+            if _anchor is None or abs(_today - _anchor) >= 3.0:
+                self._sig_solar_anchor = _anchor = _today
+            sig.append(("solar", round(_anchor / 2.0) * 2.0))
         except Exception:  # noqa: BLE001 — no forecast is a valid shape
-            sig.append(("solar", 0.0))
+            # A transient read failure keeps the anchor: flipping to 0.0
+            # and back would be two replans for one hiccup (#759).
+            _anchor = getattr(self, "_sig_solar_anchor", None)
+            sig.append(("solar",
+                        round(_anchor / 2.0) * 2.0 if _anchor is not None
+                        else 0.0))
         # 6. The night's price curve — a provider publishing tomorrow's
         #    prices mid-evening changes where everything should go.
         try:
@@ -6657,6 +6685,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                          if isinstance(c, dict)}
             mode_opted_out = []
             disconnected = []
+            car_full = []
             for cid, kwh in targets.items():
                 cfg = cfg_by_id.get(cid, {})
                 # Mirror the execution gate (finding #4, TEST night 2026-07-30).
@@ -6686,9 +6715,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # precedent). The plug-in re-plans within a cycle because
                 # connection is term 1 of the demand signature — proven
                 # live on the clone: connect 00:07:32, stamp same second.
-                from .ev_availability import plan_connectivity
+                from .ev_availability import plan_car_fullness, plan_connectivity
                 if plan_connectivity(cid, cfg, self.config, power) is False:
                     disconnected.append(cid)
+                    continue
+                # (#756, N1) A car that is KNOWN full is not a demand. The
+                # target map answers ``target − daily`` off the calendar
+                # counter, which rolls at midnight — at 00:01 the ask for a
+                # 100 % car jumped to the full 20 kWh and the phantom
+                # displaced the real loads under the peak cap (sim_heizband
+                # fits→yields at exactly 00:01; the morning unplug flipped
+                # it straight back). Only the detector's definite yes skips;
+                # an unknown car is planned — the two gates above set the
+                # precedent.
+                if plan_car_fullness(
+                        getattr(self, "_ev_taper_detectors", {}).get(cid)):
+                    car_full.append(cid)
                     continue
                 if kwh <= 0.05:
                     continue
@@ -6741,6 +6783,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
                         continue
                     if not getattr(dev, "has_runtime_deficit", False):
+                        continue
+                    # (#760, N1) The intent's HARD STOP outranks the deficit:
+                    # a banked comfort band (room already past target+offset)
+                    # sets ``stop_condition_met`` and clause 3 kills the run
+                    # ABOVE tier-2 — every cycle, covered or not. The
+                    # heizband spent a whole night packed fits+COVERED while
+                    # the executor was rightly refusing. Fourth mirrored
+                    # gate (mode, connectivity, car-full, this); the stop
+                    # state rides the demand signature, so it CLEARING
+                    # re-plans and re-admits the demand within a cycle.
+                    if getattr(dev, "stop_condition_met", False):
                         continue
                     night_ok = (getattr(dev, "battery_eligible_overnight", False)
                                 or getattr(dev, "top_up_policy", "") == "cheap_hours")
@@ -6933,7 +6986,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         [{"id": f"ev:{c}", "why": "mode"}
                          for c in mode_opted_out]
                         + [{"id": f"ev:{c}", "why": "disconnected"}
-                           for c in disconnected]),
+                           for c in disconnected]
+                        + [{"id": f"ev:{c}", "why": "car_full"}
+                           for c in car_full]),
                     "summary": [f"no overnight demands tonight ({why})"],
                     # (#638 G3c) Same keys as a full plan, empty — the card
                     # renders "nothing needs the night" from the SHAPE, not
@@ -7273,7 +7328,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "not_scheduled": (
                     [{"id": f"ev:{c}", "why": "mode"} for c in mode_opted_out]
                     + [{"id": f"ev:{c}", "why": "disconnected"}
-                       for c in disconnected]),
+                       for c in disconnected]
+                    + [{"id": f"ev:{c}", "why": "car_full"}
+                       for c in car_full]),
                 # None on a whole fleet. A string here means the battery
                 # figures above cover a SUBSET — the plan is still the best
                 # available answer, but it is not the fleet's answer (#638

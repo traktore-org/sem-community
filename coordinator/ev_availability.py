@@ -47,3 +47,24 @@ def plan_connectivity(cid, charger_cfg, full_config, power):
     if has_sensor:
         return bool(getattr(power, "ev_connected", False))
     return None
+
+
+def plan_car_fullness(detector):
+    """Tri-state fullness for the night demand collector (#756).
+
+    ``True`` when THIS charger's taper detector says the car is still
+    full — anchored at a completed charge with nothing drawn since (the
+    same predicate that pins estimated_soc to 100). ``None`` for
+    everything else, including no detector and a broken one: only a
+    definite yes skips a demand, the ``plan_connectivity`` precedent.
+
+    Why it exists: ``build_night_target_map`` answers ``target − daily``
+    off the calendar counter, which rolls at midnight — on N1 the ask for
+    a 100 % car jumped to the full 20 kWh at 00:01 and the phantom
+    displaced the real loads under the peak cap. The counter knows the
+    calendar; the detector knows the car.
+    """
+    try:
+        return True if getattr(detector, "still_full", False) else None
+    except Exception:  # noqa: BLE001 — an unreadable detector has no opinion
+        return None

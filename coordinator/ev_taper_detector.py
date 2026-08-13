@@ -999,6 +999,18 @@ class EVTaperDetector:
         return self._full_detected
 
     @property
+    def still_full(self) -> bool:
+        """Anchored at a completed charge with nothing drawn since (#756).
+
+        The same predicate the SOC estimate pins itself to 100 % on
+        (``_soc_anchored and _energy_since_full < 0.1``), published under
+        one honest name so the night demand collector does not reach into
+        privates. An unanchored detector has no completed-charge reference
+        and therefore no opinion — it must never read as a full car.
+        """
+        return bool(self._soc_anchored) and float(self._energy_since_full) < 0.1
+
+    @property
     def battery_health_pct(self) -> float:
         """Estimated EV battery health (%)."""
         return self._battery_health_pct
