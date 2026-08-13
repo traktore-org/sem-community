@@ -11,9 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.15 candidate] — 12.08.2026
+# [1.7.6-beta.15 candidate] — 13.08.2026
 
 ### 🐛 Fixes
+- 🔋 **Battery STOP flooded the Modbus bus between charge blocks** (#757, from
+  Guido's release/1.8 audit) — while the scheduler is idle/target-reached it
+  repeats a STOP_FORCE_CHARGE verdict every cycle, and each brand adapter
+  re-issued the inverter stop each time (~1800 writes/night on the single
+  serial link, colliding with the huawei_solar read coordinators — the #538
+  failure one layer up). The stop now fires once, on the transition, and stays
+  silent afterwards (the command_off pattern), with honest retry so a failed
+  stop still retries instead of stranding the charge. Swept across Huawei,
+  generic and GoodWe; Deye was already safe.
 - 📏 **A 24 W load calibrated itself to ~1 kW** (#744, @Azlinon) — for loads
   without a power sensor, the energy-tick estimate (0.01 kWh over a short
   window ≈ 1 kW instant) fed the up-only rated-power ratchet, which re-based
