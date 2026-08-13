@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.16 candidate] — 13.08.2026
+# [1.7.6-beta.16] — 13.08.2026
 
 ### 🐛 Fixes
 - 🚗 **A stop war strobed a Mercedes into a latched charging fault** (#763,
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refinement for this wiring follows once the reporter's ena-register data
   answers who re-closes the contactor.
 
-# [1.7.6-beta.15 candidate] — 13.08.2026
+# [1.7.6-beta.15] — 13.08.2026
 
 ### 🐛 Fixes
 - 🔋 **Battery STOP flooded the Modbus bus between charge blocks** (#757, from
