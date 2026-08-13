@@ -1433,3 +1433,51 @@ still read Off. Closing it means discovering `light.*` (and the other on/off dom
 entities, which ALSO makes them `is_controllable` → **auto-shed-eligible fleet-wide**
 (`load_management._get_devices_for_shedding` sheds any controllable, non-critical device). That is a
 load-shed *policy* change, not a display fix — Guido's call before it ships.
+
+---
+
+### 38. Idempotency-free repeat command floods a shared bus (a STOP re-issued every cycle) — GUARDED
+**Symptom:** a control command that should fire ONCE on a state transition is re-issued to the
+inverter on **every** coordinator cycle, hammering the single serial Modbus link until the
+`huawei_solar` read coordinators collide (transaction-ID mismatches, read timeouts). No symptom
+until the repeating verdict actually occurs — the write is individually correct, only its
+*frequency* is wrong. **Root shape:** the decision layer legitimately emits the same intent every
+cycle while a condition holds (an idle / target-reached / SCHEDULED-outside-window verdict), and the
+actuator dispatches it unconditionally ("the adapter de-dups", `actuate_battery.py`), but the
+brand adapter's command has **no "already in this state" guard** — so a level is written as if it
+were an edge. Distinct from class 4 (that is a *swallowed* command reporting false success); here
+the command lands fine, just far too often. The honest-retry half is shared with class 4: once the
+idempotency guard exists, a *failed* stop must NOT record the intent, or the guard suppresses the
+retry and strands the op. **First instance (#538):** the discharge-limit write —
+`command_normal` re-issued max every cycle; closed by `_apply_discharge_limit`'s live-state guard
+(`huawei.py`). **Second instance (#757, one layer up):** `command_stop_force_charge` re-issued
+`huawei_solar.stop_forcible_charge` every cycle between planned charge blocks (~1800 writes/night),
+and recorded STOP even on a failed stop. **Where it lives:** every `command_*` on the battery
+adapters (`battery_adapters/huawei.py` · `generic.py` · `goodwe.py` · `deye.py`) and the
+`ChargeController.stop_forced_charge` layer they delegate to (`force_charge.py`); the same shape is
+latent in any per-cycle actuator write. **Closure:** the `command_off` pattern (base.py:187) at the
+INTENT layer — each `command_stop_force_charge` no-ops once `_last_intent is STOP_FORCE_CHARGE`, and
+records STOP only when the delegated stop actually landed (honest retry → a failed stop retries
+instead of stranding). Deliberately NOT at the `stop_forced_charge` source layer: an `if not
+_active` guard there looks equivalent but strands a boot orphan — after a restart the in-memory
+`_active` is False while the inverter may still be force-charging, and for GoodWe/Generic that
+unconditional stop is the *only* boot-orphan clear (no snapshot, no status reconcile like Huawei's
+`_maybe_clear_startup_orphan` / Deye's persistent snapshot). The idempotency guard must key on the
+recorded *intent*, which honest-retry keeps truthful, not on a flag that lies across restarts.
+`deye.py` was already safe (snapshot cleared after restore + write-and-verify). **Guard:**
+`tests/test_757_stop_force_charge_idempotent.py` — counts the real HA service calls a *second* stop
+makes (must be zero) across all three brands, pins that a FAILED stop is not recorded and retries,
+AND that the FIRST stop on a fresh (post-restart) adapter still reaches the inverter.
+**Open sibling — the mirror-image FORCE_CHARGE flood (flagged for Guido):** `command_force_charge`
+has the same shape on the paired command — the scheduler emits FORCE_CHARGE every *in-window* cycle
+(`decide_battery.py`), and `start_forced_charge` re-issues `forcible_charge_soc` /
+`select_option "Eco Charge"` / `switch.turn_on` each time with no transition guard. Left unfixed
+here because the Huawei `forcible_charge_soc` carries a `duration` — a per-cycle re-issue may be
+*load-bearing* (refreshing the duration so the charge isn't cut off mid-window when
+`duration_min` < window). Closing it safely needs the duration semantics resolved first (does the
+scheduler set duration to the full remaining window, or rely on re-issue?), so it is a design call,
+not a mechanical guard. **Sweep question:** for every per-cycle actuator write, is it guarded on
+"already in this state" — and if the decision layer can repeat the same intent every cycle, does the
+adapter turn that level back into an edge, or write it each time? And does the "already in this
+state" signal survive a restart, or does it lie about the hardware on a fresh adapter?
+Refs #538 #757.

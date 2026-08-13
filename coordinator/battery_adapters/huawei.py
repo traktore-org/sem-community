@@ -414,6 +414,15 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
+        # Already stopped — stay silent (#757). A SCHEDULED-outside-window or
+        # idle/target-reached verdict repeats STOP_FORCE_CHARGE every cycle;
+        # re-issuing stop_forcible_charge each time floods the single serial
+        # Modbus link and collides with the huawei_solar read coordinators
+        # (transaction-ID mismatches, read timeouts — the #538 failure, one
+        # layer up). Issue the stop on the TRANSITION and no-op afterwards:
+        # the command_off pattern (base.py:187).
+        if self._last_intent is BatteryIntent.STOP_FORCE_CHARGE:
+            return
         # STOP any forced op — also clears an arbitrage discharge (#523),
         # so the scheduler's idle/target-reached verdict can't leave the
         # battery silently selling to grid. Forcible discharge and forced
@@ -421,14 +430,24 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # both; only fall through to the charge adapter when not forcing.
         if await self._maybe_clear_startup_orphan():
             self._forcible_charging = False
+            self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
         if await self._stop_forcible():
             self._forcible_charging = False
+            self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
-        await self._charge_adapter.stop_forced_charge()
+        # #757 honest retry: record STOP only when the stop actually landed.
+        # A failed stop must NOT record the intent, or the guard above would
+        # suppress the retry and strand the LUNA2000 charging (#589 class 4).
+        from .force_charge import ChargeCommandStatus
+        status = await self._charge_adapter.stop_forced_charge()
+        if status.status is ChargeCommandStatus.FAILED:
+            self._last_error = f"stop_forced_charge failed: {status.message}"
+            return
         self._forcible_charging = False
+        self._last_error = None
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
 
     # ─── Helpers ───────────────────────────────────────────────
