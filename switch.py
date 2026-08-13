@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Dict, Optional
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -221,6 +221,24 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
     def is_on(self) -> bool:
         """Return true if switch is on."""
         return self._is_on
+
+    @property
+    def extra_state_attributes(self) -> Optional[Dict[str, Any]]:
+        """(#764) The observer switch carries observer mode's WOULD
+        decisions — the standard simulation surface. A fresh reader gets
+        the current per-device would-state without history; a sim bridge
+        subscribes to the ``solar_energy_management_observer_decision``
+        event for the edges. Empty when observing is off: the map would
+        be stale the moment live actuation resumes."""
+        if self.entity_description.key != "observer_mode":
+            return None
+        try:
+            decisions = getattr(
+                getattr(self.coordinator, "_surplus_controller", None),
+                "observer_decisions", {}) or {}
+        except Exception:  # noqa: BLE001 — attributes must never break the entity
+            decisions = {}
+        return {"would_decisions": dict(decisions) if self._is_on else {}}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""

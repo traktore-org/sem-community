@@ -306,7 +306,7 @@ def _clear_source_markers(device: "ControllableDevice") -> None:
 
 
 def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
-                            active: bool) -> float:
+                            active: bool, controller=None) -> float:
     """OBSERVER mode = the layer-3 intercept, in one place.
 
     Management (layer 1) + decision (layer 2) already ran live against the real
@@ -317,6 +317,14 @@ def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
     hardware risk. This is why observer mode needs no separate ``observe_only``
     path — a clean layer cut makes it a one-line branch in the actuator.
     """
+    # (#764) Record the would-decision on the controller's standard surface
+    # BEFORE the log lines — the surface can never drift from what the log
+    # says. Optional: bare callers keep the pure behavior.
+    if controller is not None:
+        try:
+            controller.record_observer_decision(device, intent, active=active)
+        except Exception:  # noqa: BLE001 — the surface must never break the seam
+            pass
     # Deliberately NOTHING is mutated here — not even the surplus debounce timer
     # (the H2 reset in the actuating path). Observer is a pure shadow: each cycle
     # independently says "given reality now, I would do X". (Belief-sync via
@@ -376,7 +384,7 @@ async def _deactivate_owned(device: "ControllableDevice") -> bool:
 
 
 async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
-                         *, observer: bool = False) -> float:
+                         *, observer: bool = False, controller=None) -> float:
     """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
     the management layer's ``intent``. This is the SINGLE place a load is actuated.
 
@@ -391,7 +399,8 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
     active = bool(getattr(device, "is_active", False))
 
     if observer:
-        return _reconcile_load_observe(device, intent, active)
+        return _reconcile_load_observe(device, intent, active,
+                                       controller=controller)
 
     if intent.on and not active:
         if not device.can_activate():
@@ -524,6 +533,47 @@ class SurplusController:
     - LIFO deactivation when surplus drops
     """
 
+    def record_observer_decision(self, device, intent: "LoadIntent",
+                                 *, active: bool) -> None:
+        """(#764) Publish one device's WOULD decision on the standard surface.
+
+        The map (``observer_decisions``) always carries the CURRENT
+        would-state — a fresh reader needs no history. The bus event fires
+        only on decision TRANSITIONS, judged on the digit-stripped
+        action/source/reason (the #762 rule: a wobbling watt number is not
+        an edge). ``hold`` means no command would be sent — the device is
+        where SEM wants it.
+        """
+        import re as _re
+        if intent.on and not active:
+            action = "activate"
+        elif not intent.on and active:
+            action = "deactivate"
+        elif intent.on and active and intent.source is not None:
+            action = "adjust"
+        else:
+            action = "hold"
+        did = str(getattr(device, "device_id", "") or "")
+        payload = {
+            "device_id": did,
+            "name": str(getattr(device, "name", "") or did),
+            "action": action,
+            "power_w": float(intent.power_w or 0.0),
+            "source": intent.source,
+            "reason": intent.reason,
+        }
+        self.observer_decisions[did] = payload
+        edge_key = _re.sub(r"-?\d+(?:[.,]\d+)?", "#",
+                           f"{action}|{intent.source}|{intent.reason}")
+        if self._observer_decision_keys.get(did) == edge_key:
+            return
+        self._observer_decision_keys[did] = edge_key
+        try:
+            self.hass.bus.async_fire(
+                "solar_energy_management_observer_decision", dict(payload))
+        except Exception:  # noqa: BLE001 — the event must never break the seam
+            pass
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -531,6 +581,13 @@ class SurplusController:
     ):
         self.hass = hass
         self.regulation_offset = regulation_offset
+        # (#764) Observer mode's WOULD decisions, published as a standard
+        # surface: this map rides the observer-mode switch's attributes
+        # (a fresh session reads the current would-state instantly) and a
+        # bus event fires on every decision TRANSITION — so a simulation
+        # bridge is a five-line HA automation, not an SSH log scraper.
+        self.observer_decisions: Dict[str, dict] = {}
+        self._observer_decision_keys: Dict[str, str] = {}
         self.max_export_w: float = 0  # 0 = no limit. E.g., 10000 for 10kW export limit
         self._devices: Dict[str, ControllableDevice] = {}
         self._allocation_data = SurplusAllocationData()
@@ -823,7 +880,8 @@ class SurplusController:
         allocations: List[SurplusAllocation] = []
         active_count = 0
         for device in devices:
-            await reconcile_load(device, intents[device.device_id], observer=observer)
+            await reconcile_load(device, intents[device.device_id],
+                                 observer=observer, controller=self)
             active = bool(device.is_active)
             consumption = device.get_current_consumption() if active else 0.0
             if active:

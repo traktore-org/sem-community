@@ -115,6 +115,22 @@ shapes the demand set must ride the re-plan signature.
   the whole property: covered + in-block + every tier-2 gate green ⇒ the
   device starts.
 
+### 🧪 Simulation is a standard feature now (#764)
+
+- 👁️ **Observer mode publishes its WOULD decisions** — the per-device map
+  rides `switch.sem_observer_mode`'s `would_decisions` attribute (fresh
+  reads, no history needed), and every decision *transition* fires a
+  `solar_energy_management_observer_decision` bus event (edges, never a
+  heartbeat — a wobbling watt is not a transition). A closed-loop
+  simulation of any device is now a five-line HA automation instead of an
+  SSH log scraper.
+- 📖 **`docs/SIMULATION.md`** — the standard workflow, written down: observer
+  mode as the simulation boundary, simulating every input with plain HA
+  entities, running scenario cases back to back in minutes, and the
+  provocation set (stamp loss, reboot survival, kill-switch). Born from the
+  N2 campaign night, where the whole edge-case matrix ran in one evening on
+  the dedicated rig.
+
 ### 🔍 A silently skipped reconciliation now says so (#628)
 
 - 👁️ **Counter-backing is visible.** The all-or-nothing rule (a partial
