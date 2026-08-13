@@ -193,7 +193,10 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     ``initial_current`` (decouples from the misleading "night"
     #     prefix — the value is the session-start ramp current, applied
     #     whenever a session begins). Display: "Vehicle Start Amps".
-    VERSION = 16
+    # v17 (#758): write ``overnight_actuation`` down explicitly on upgrade
+    #     and announce it once. The v1.8 plan drives hardware; the default
+    #     is on, and a default nobody was told about is not consent.
+    VERSION = 17
 
     @staticmethod
     @callback

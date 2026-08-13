@@ -10,7 +10,12 @@ from datetime import datetime, timedelta
 import pytest
 
 from custom_components.solar_energy_management.coordinator.overnight_planner import (
-    Allocation, Demand, OvernightPlan, PriceSlot, plan_overnight,
+    Allocation, Demand, OvernightPlan,
+)
+# (#758) The flat-slot night is a fixture, not a shipping entry point — see
+# synthetic_night.py for exactly which four things it pretends about a night.
+from custom_components.solar_energy_management.tests.synthetic_night import (
+    PriceSlot, pack_flat_night,
 )
 
 T0 = datetime(2026, 7, 28, 22, 0)
@@ -40,7 +45,7 @@ class TestBasicPacking:
         slots = _slots([0.30, 0.28, 0.25, 0.10, 0.12, 0.27])
         ev = Demand(id="ev", kind="ev", energy_kwh=8, max_power_w=4000,
                     min_power_w=1400, priority=0)
-        plan = plan_overnight([ev], slots)
+        plan = pack_flat_night([ev], slots)
         assert _by_id(plan, "ev").status == "fits"
         assert {a.price for a in _allocs(plan, "ev")} == {0.10, 0.12}
 
@@ -51,7 +56,7 @@ class TestBasicPacking:
         ev = Demand(id="ev", kind="ev", energy_kwh=4, max_power_w=4000,
                     min_power_w=1400, priority=0,
                     deadline=T0 + timedelta(hours=2))
-        plan = plan_overnight([ev], slots)
+        plan = pack_flat_night([ev], slots)
         r = _by_id(plan, "ev")
         assert r.status == "fits"
         assert all(a.price >= 0.28 for a in _allocs(plan, "ev"))
@@ -60,7 +65,7 @@ class TestBasicPacking:
         slots = _slots([0.10, 0.20])
         ev = Demand(id="ev", kind="ev", energy_kwh=5, max_power_w=4000,
                     min_power_w=1400, priority=0)
-        plan = plan_overnight([ev], slots)
+        plan = pack_flat_night([ev], slots)
         r = _by_id(plan, "ev")
         assert r.status == "fits"
         assert r.planned_kwh == pytest.approx(5.0, abs=0.01)   # not 8 kWh
@@ -76,7 +81,7 @@ class TestCompetition:
                     min_power_w=1400, priority=0)
         heater = Demand(id="heater", kind="load", energy_kwh=2,
                         max_power_w=2000, min_power_w=2000, priority=1)
-        plan = plan_overnight([ev, heater], slots)
+        plan = pack_flat_night([ev, heater], slots)
         assert _by_id(plan, "ev").status == "fits"
         assert _by_id(plan, "heater").status == "fits"
         assert _allocs(plan, "ev")[0].price == 0.10          # priority wins the cheapest
@@ -91,7 +96,7 @@ class TestCompetition:
                    min_power_w=1400, priority=0)
         b = Demand(id="b", kind="load", energy_kwh=4, max_power_w=4000,
                    min_power_w=4000, priority=5)
-        plan = plan_overnight([a, b], slots)
+        plan = pack_flat_night([a, b], slots)
         assert _by_id(plan, "a").status == "fits"
         assert _by_id(plan, "b").status == "yields"
         assert not plan.fits
@@ -101,7 +106,7 @@ class TestCompetition:
         slots = _slots([0.10, 0.12], cap_w=2000)
         d = Demand(id="hw", kind="load", energy_kwh=6, max_power_w=2000,
                    min_power_w=2000, priority=0)
-        plan = plan_overnight([d], slots)
+        plan = pack_flat_night([d], slots)
         r = _by_id(plan, "hw")
         assert r.status == "partial"
         assert r.planned_kwh == pytest.approx(4.0, abs=0.01)
@@ -122,7 +127,7 @@ class TestDeviceFloors:
                     min_power_w=1400, priority=0)
         batt = Demand(id="battery", kind="battery", energy_kwh=1,
                       max_power_w=3000, min_power_w=0, priority=1)
-        plan = plan_overnight([ev, batt], slots)
+        plan = pack_flat_night([ev, batt], slots)
         assert all(a.price == 0.20 for a in _allocs(plan, "ev"))
         assert _allocs(plan, "battery")[0].price == 0.10
         assert _by_id(plan, "ev").status == "fits"
@@ -134,7 +139,7 @@ class TestDeviceFloors:
         slots = _slots([0.10, 0.30], cap_w=1500)
         d = Demand(id="pump", kind="load", energy_kwh=1, max_power_w=2000,
                    min_power_w=2000, priority=0)
-        plan = plan_overnight([d], slots)
+        plan = pack_flat_night([d], slots)
         assert _by_id(plan, "pump").status == "yields"
 
 
@@ -149,13 +154,13 @@ class TestPlanQuality:
             Demand(id="battery", kind="battery", energy_kwh=4,
                    max_power_w=3000, priority=2),
         ]
-        p1 = plan_overnight(demands, slots)
-        p2 = plan_overnight(list(reversed(demands)), slots)
+        p1 = pack_flat_night(demands, slots)
+        p2 = pack_flat_night(list(reversed(demands)), slots)
         assert p1 == p2                       # input order must not matter
 
     def test_every_allocation_has_a_one_line_reason(self):
         slots = _slots([0.10, 0.20], cap_w=6000)
-        plan = plan_overnight(
+        plan = pack_flat_night(
             [Demand(id="ev", kind="ev", energy_kwh=6, max_power_w=4000,
                     min_power_w=1400, priority=0)], slots)
         for a in plan.allocations:
@@ -164,15 +169,15 @@ class TestPlanQuality:
 
     def test_total_cost_is_the_sum_of_allocations(self):
         slots = _slots([0.10, 0.20], cap_w=6000)
-        plan = plan_overnight(
+        plan = pack_flat_night(
             [Demand(id="ev", kind="ev", energy_kwh=6, max_power_w=4000,
                     min_power_w=1400, priority=0)], slots)
         assert plan.total_cost == pytest.approx(
             sum(a.energy_kwh * a.price for a in plan.allocations), abs=1e-6)
 
     def test_zero_need_fits_trivially_and_empty_inputs_are_safe(self):
-        assert plan_overnight([], []).fits is True
-        plan = plan_overnight(
+        assert pack_flat_night([], []).fits is True
+        plan = pack_flat_night(
             [Demand(id="ev", kind="ev", energy_kwh=0, max_power_w=4000)], [])
         assert _by_id(plan, "ev").status == "fits"
 
@@ -192,7 +197,7 @@ class TestBatterySourcedDemands:
         heater = Demand(id="heater", kind="load", energy_kwh=4,
                         max_power_w=4000, min_power_w=4000, priority=1,
                         source="battery")
-        plan = plan_overnight([ev, heater], slots, battery_budget_kwh=10)
+        plan = pack_flat_night([ev, heater], slots, battery_budget_kwh=10)
         assert _by_id(plan, "ev").status == "fits"
         assert _by_id(plan, "heater").status == "fits"
 
@@ -201,7 +206,7 @@ class TestBatterySourcedDemands:
         heater = Demand(id="heater", kind="load", energy_kwh=4,
                         max_power_w=2000, min_power_w=2000, priority=0,
                         source="battery")
-        plan = plan_overnight([heater], slots, battery_budget_kwh=1.0)
+        plan = pack_flat_night([heater], slots, battery_budget_kwh=1.0)
         r = _by_id(plan, "heater")
         assert r.status == "partial"
         assert r.planned_kwh == pytest.approx(1.0, abs=0.01)
@@ -214,7 +219,7 @@ class TestBatterySourcedDemands:
         heater = Demand(id="heater", kind="load", energy_kwh=1,
                         max_power_w=2000, min_power_w=2000, priority=0,
                         source="battery")
-        plan = plan_overnight([heater], slots, battery_budget_kwh=5)
+        plan = pack_flat_night([heater], slots, battery_budget_kwh=5)
         a = _allocs(plan, "heater")[0]
         assert a.start == T0                    # earliest, not cheapest
         assert a.price == 0.0
@@ -227,7 +232,7 @@ class TestBatterySourcedDemands:
                    min_power_w=2000, priority=0, source="battery")
         b = Demand(id="b", kind="load", energy_kwh=2, max_power_w=2000,
                    min_power_w=2000, priority=5, source="battery")
-        plan = plan_overnight([a, b], slots, battery_budget_kwh=2.0)
+        plan = pack_flat_night([a, b], slots, battery_budget_kwh=2.0)
         assert _by_id(plan, "a").status == "fits"
         assert _by_id(plan, "b").status == "yields"     # budget went to a
 
@@ -248,7 +253,7 @@ class TestEnsembleScenario:
             Demand(id="battery", kind="battery", energy_kwh=3,
                    max_power_w=3000, priority=2),
         ]
-        plan = plan_overnight(demands, slots)
+        plan = pack_flat_night(demands, slots)
         assert plan.fits, plan.summary_lines()
         # No slot exceeds its cap.
         used = {}

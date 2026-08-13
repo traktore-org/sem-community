@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line. It rides its own attribute so it survives the daytime hours, which is
   exactly when it gets read.
 
-### 🐛 Found by auditing the branch as a whole (#757)
+### 🐛 Found by auditing the branch as a whole (#757, #758)
 
 - ⛔ **A stop repeated 1800 times is not a stop** (#757) — the one-gate build
   changed the *shape* of the battery decision: `decide_battery` now returns
@@ -90,6 +90,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read coordinator uses. Every adapter's stop is now a no-op when nothing is
   being forced — the #538 idempotency treatment, one layer up. A stop that
   fails still leaves the intent alone, so the next cycle retries.
+- 🔔 **Nothing switches on silently on upgrade** (#758) — night actuation
+  drives real hardware and defaults to on, which is right for a fresh
+  install (the user chose the feature) and wrong for an upgrade (nobody
+  chose anything). The migration writes the value down — same answer,
+  recorded instead of implied — and posts one notification naming the
+  kill-switch. An install that had already turned it off is never touched.
+- 🕳️ **A dead battery meter is no longer recorded as an idle battery**
+  (#758) — `battery_power` falls back to 0.0 W when its sensor cannot be
+  read, and the night ledger recorded that as a measured zero, which is
+  exactly the "silence is not a measurement" contract the learning layer is
+  built on. The reading now carries whether anyone actually looked.
+- 📦 **The plan's byte budget counts everything that lands on the entity**
+  (#758) — the trim ran before `tomorrow` and the morning `review` were
+  appended, and HA's recorder drops *all* attributes above 16 KiB. Going
+  over did not truncate the plan; it erased it from history. One place adds,
+  one place counts, and a second pass drops the extras (saying so) if
+  dropping the timeline was not enough.
+- 🔌 **The kill-switch is asked by every caller** (#758) — the arbitrage sell
+  gate reached the plan directly, so a user who turned night actuation off
+  still had the plan discharging their battery to the grid.
+- 🧹 **The planner entry point the tests used does not ship** (#758) — a
+  flat-slot "compat" adapter with no production caller, and two test corpora
+  pointed at it, proving things about a night that cannot happen (every slot
+  cheap, no house load, an infinite battery, no peak limit). Moved to
+  `tests/synthetic_night.py` with its four fictions written down; the tests
+  that matter now drive the real `build_night_ledger` + `pack_night` pair.
+  The #653 orphan guard, which had only ever walked class bodies, now reads
+  module scope too — and immediately found a second one.
 
 # [1.7.6-beta.15 candidate] — 12.08.2026
 

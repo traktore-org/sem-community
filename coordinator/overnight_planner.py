@@ -351,34 +351,9 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
     )
 
 
-# ---------------------------------------------------------------------------
-# Compat: the flat-slot API used by the (parked) shadow hook and early corpus.
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class PriceSlot:
-    start: datetime
-    end: datetime
-    price: float
-    cap_w: float
-
-    @property
-    def hours(self) -> float:
-        return max(0.0, (self.end - self.start).total_seconds() / 3600.0)
-
-
-def plan_overnight(demands, slots, battery_budget_kwh=float("inf")):
-    """Thin adapter: flat slots (explicit cap, no home, no trajectory) →
-    ledger. Battery-sourced demands draw a synthetic battery holding the
-    given budget above a zero floor. Kept so the shadow hook and the
-    original corpus semantics stay valid; new callers build a real ledger."""
-    budget = (1e9 if battery_budget_kwh == float("inf")
-              else float(battery_budget_kwh))
-    ledger = [LedgerSlot(start=s.start, end=s.end, price=s.price,
-                         level_cheap=True, home_w=0.0,
-                         cap_override_w=float(s.cap_w)) for s in slots]
-    ledger = build_night_ledger(
-        ledger, soc_kwh=budget, floor_kwh=0.0,
-        max_discharge_w=1e9, peak_limit_w=0.0)
-    return pack_night(demands, ledger, floor_kwh=0.0,
-                      max_discharge_w=1e9, peak_limit_w=0.0)
+# (#758) ``PriceSlot`` + ``plan_overnight`` lived here as a "compat" flat-slot
+# adapter with no production caller — the coordinator builds a real ledger and
+# calls ``build_night_ledger`` + ``pack_night``. Two corpora used the adapter,
+# so those tests were proving things about a night that cannot happen (every
+# slot cheap, no house load, an infinite battery, no peak limit). The adapter
+# is now ``tests/synthetic_night.py``, where its assumptions are stated.

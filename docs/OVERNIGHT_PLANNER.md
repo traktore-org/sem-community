@@ -1,12 +1,16 @@
 # The Joint Energy Planner — how SEM plans the energy day (#638)
 
-> **Status: actuation available, off by default.** The planner computes and
-> logs *the plan for the whole energy day* — daylight and the coming night
-> in one ledger. With `switch.sem_overnight_actuation` **off** (the
-> default) that is all it does — pure shadow, every real decision made by
-> SEM's reactive layer. Switched **on**, the plan's windows feed the
-> *existing* night signals — see [Actuation](#actuation-g4) and
-> [Where to see it](#where-to-see-it).
+> **Status: actuation on by default.** The planner computes *the plan for
+> the whole energy day* — daylight and the coming night in one ledger — and
+> the plan's windows drive the *existing* night signals: see
+> [Actuation](#actuation-g4) and [Where to see it](#where-to-see-it).
+> `switch.sem_overnight_actuation` is the kill-switch: turn it **off** and
+> the planner goes back to pure shadow, every real decision made by SEM's
+> reactive layer, exactly as before this build.
+>
+> Upgrading from an older SEM? The upgrade writes that choice down for you
+> (it is on) and posts one notification saying so — nothing switches on
+> silently, and an install that had already turned it off keeps it off.
 
 ## The problem in one picture
 
@@ -483,6 +487,8 @@ tariff the rate is zero and the sun really is free.
    every night, compared each morning. *(done — six findings fixed)*
 4. **Actuation** *(current)* — the plan's output feeds the *existing*
    signals (the EV's night amps, the loads' window gates), behind
-   `switch.sem_overnight_actuation`, default off. The reconcilers do not
-   change. Soaking: shadow-verify nights with the switch off, then flip
-   it and compare the same nights acted.
+   `switch.sem_overnight_actuation`, on by default since the one-gate
+   build (with the selectors retired, off would mean *no* cheap-window
+   timing at all). The reconcilers do not change. Soaking: shadow-verify
+   nights with the switch off, then flip it and compare the same nights
+   acted.

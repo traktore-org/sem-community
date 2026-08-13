@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -109,8 +109,18 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
+def _overnight_plan_attrs(
+    plan: Any, extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """(#638) Project tonight's stashed plan into entity attributes.
+
+    ``extra`` is for the payloads that ride on the SAME state but do not
+    come from the plan — ``tomorrow``, the #755 ``review``. They belong
+    here rather than at the call site because the byte budget below is
+    the whole point of this function: the recorder weighs the finished
+    state, not the part of it this projection happened to build, and a
+    trim computed before the last two writers is a trim that does not
+    trim (#758). One place adds, one place counts.
 
     Three things are deliberately not copied wholesale:
 
@@ -127,7 +137,9 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
     reduced card beats an entity whose attributes disappear from history.
     """
     if not isinstance(plan, dict):
-        return {}
+        # Daytime: no plan to project, but the review still has to reach the
+        # card — it is the record of LAST night, not of tonight's.
+        return {k: v for k, v in (extra or {}).items() if v}
     attrs: Dict[str, Any] = {
         "computed_at": plan.get("computed_at"),
         "fits": plan.get("fits"),
@@ -166,14 +178,27 @@ def _overnight_plan_attrs(plan: Any) -> Dict[str, Any]:
         # here. Small by construction (a few blocks at most).
         "arbitrage": plan.get("arbitrage"),
     }
-    try:
-        oversize = len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES
-    except (TypeError, ValueError):  # pragma: no cover — defensive
-        oversize = True
-    if oversize:
+    for key, value in (extra or {}).items():
+        if value:
+            attrs[key] = value
+    def _too_big() -> bool:
+        try:
+            return len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES
+        except (TypeError, ValueError):  # pragma: no cover — defensive
+            return True
+
+    if _too_big():
         attrs["slots"] = []
         attrs["blocks"] = []
         attrs["timeline_omitted"] = True
+    # (#758) The timeline is the biggest term, but it is not the only one,
+    # and going over means the recorder keeps NOTHING. If dropping it was
+    # not enough, drop what rode along and say so — the plan itself is what
+    # this entity is for.
+    if extra and _too_big():
+        for key in extra:
+            attrs.pop(key, None)
+        attrs["extras_omitted"] = True
     return attrs
 
 
@@ -2506,20 +2531,22 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # (#638) SHADOW — what the joint planner WOULD do this energy
             # day. sem-energy-plan-card renders these directly; the log
             # lines and the ``diagnose`` stash carry the same plan in prose.
+            # (#758) ``tomorrow`` and ``review`` go THROUGH the projection,
+            # not around it: they land on this same state, so they have to
+            # be inside the recorder's byte budget, not appended after it.
+            #   tomorrow — (#638 consolidation / #722) the NEXT energy day's
+            #     books for the card's Tomorrow view; live, never stamped.
+            #   review   — (#755 pillar 4) what the record has to say, as
+            #     machine codes the card translates. Survives the daytime
+            #     hours when there is no plan to project.
             attrs.update(_overnight_plan_attrs(
-                self.coordinator.data.get("energy_plan")))
-            # (#638 consolidation / #722) the NEXT energy day's books for
-            # the card's Tomorrow view — live, never stamped, small by
-            # construction (a handful of merged windows).
-            _tmw = self.coordinator.data.get("energy_plan_tomorrow")
-            if _tmw:
-                attrs["tomorrow"] = _tmw
-            # (#755 pillar 4) What the record has to say — machine codes the
-            # card translates. Published on its own key so it survives the
-            # daytime hours when there is no plan to project.
-            _review = self.coordinator.data.get("energy_plan_review")
-            if _review:
-                attrs["review"] = _review
+                self.coordinator.data.get("energy_plan"),
+                extra={
+                    "tomorrow": self.coordinator.data.get(
+                        "energy_plan_tomorrow"),
+                    "review": self.coordinator.data.get("energy_plan_review"),
+                },
+            ))
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

@@ -21,7 +21,11 @@ import re
 import pytest
 
 from custom_components.solar_energy_management.coordinator.overnight_planner import (
-    Demand, PriceSlot, plan_overnight,
+    Demand,
+)
+# (#758) see synthetic_night.py — a flat-price fixture, not a shipping API.
+from custom_components.solar_energy_management.tests.synthetic_night import (
+    PriceSlot, pack_flat_night,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -55,7 +59,7 @@ class TestPackOrderFollowsTheOneList:
         towel = Demand(id="load:towel", kind="load", energy_kwh=2.0,
                        max_power_w=1000, min_power_w=1000,
                        priority=5, source="battery")
-        plan = plan_overnight([towel, heizband], _slots([0.36] * 8),
+        plan = pack_flat_night([towel, heizband], _slots([0.36] * 8),
                               battery_budget_kwh=3.0)
         assert _by_id(plan, "load:heizband").status == "fits"
         assert _by_id(plan, "load:towel").status in ("partial", "yields")
@@ -68,7 +72,7 @@ class TestPackOrderFollowsTheOneList:
         light = Demand(id="load:light", kind="load", energy_kwh=4.0,
                        max_power_w=4800, min_power_w=4800,
                        priority=14, source="grid")
-        plan = plan_overnight([light, ev], _slots([0.36], cap_w=5000))
+        plan = pack_flat_night([light, ev], _slots([0.36], cap_w=5000))
         assert _by_id(plan, "ev:main").status == "fits"
         assert _by_id(plan, "load:light").status == "yields"
 

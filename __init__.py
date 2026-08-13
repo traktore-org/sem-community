@@ -1282,6 +1282,74 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 17:
+        # (#758) v1.8 turns the overnight plan into an ACTUATOR: its blocks
+        # drive the EV charger, the battery and the cheap-hours loads. The
+        # kill switch is ``switch.sem_overnight_actuation``, and it defaults
+        # to on — correct for a fresh install, where the user chose the
+        # feature, and wrong for an UPGRADE, where nobody chose anything.
+        # RestoreEntity cannot help: the switch is new, so there is no prior
+        # state to restore and every upgrading install lands on the default.
+        #
+        # So the migration writes the value down. Not to change it — the
+        # answer is the same True — but to turn an implied default into a
+        # recorded decision, and to say so once, in the one place a user
+        # reliably reads. An explicit False is never touched: someone who
+        # already turned it off has decided, and a migration that overrides
+        # a decision is worse than one that never ran.
+        try:
+            new_options = {**accumulated_options}
+            announce = "overnight_actuation" not in new_options
+            if announce:
+                new_options["overnight_actuation"] = True
+            hass.config_entries.async_update_entry(
+                entry, data={**accumulated_data}, options=new_options,
+                version=17, minor_version=1,
+            )
+            accumulated_options = new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v17 failed — keeping original "
+                "config: %s", entry.version, e,
+            )
+            return False
+        if announce:
+            # Deliberately OUTSIDE the migration's try: the option is
+            # already written and the entry already bumped. An
+            # announcement that cannot be delivered (no notification
+            # service in a minimal hass, a busy bus) is a missed message,
+            # not a failed migration — failing here would roll a user
+            # back over a notification.
+            try:
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM now plans your night",
+                        "message": (
+                            "This version lets the overnight plan drive the "
+                            "hardware: your EV charger, battery and "
+                            "cheap-hours devices now run in the windows the "
+                            "plan picks, instead of only being advised.\n\n"
+                            "It is **on**. To go back to the purely reactive "
+                            "behaviour, turn off "
+                            "`switch.sem_overnight_actuation` — the plan "
+                            "stays visible on the Energy Plan card either "
+                            "way.\n\n"
+                            "[How to read tonight's plan]"
+                            "(https://github.com/traktore-org/sem-community/"
+                            "blob/main/docs/OVERNIGHT_PLANNER.md)"
+                        ),
+                        "notification_id": "sem_overnight_actuation_v18",
+                    },
+                    blocking=False,
+                )
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.warning(
+                    "#758: overnight-actuation notice not delivered (%s) — "
+                    "the option is written; the switch is "
+                    "switch.sem_overnight_actuation", e,
+                )
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 

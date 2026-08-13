@@ -193,6 +193,13 @@ class PowerReadings:
     grid_export_power: float = 0.0
     battery_charge_power: float = 0.0
     battery_discharge_power: float = 0.0
+    # (#758) True when a battery POWER sensor was offline this cycle.
+    # ``battery_power`` falls back to 0.0 on an unreadable sensor, and
+    # ``max(0, 0.0)`` is indistinguishable from a battery that is genuinely
+    # idle — so anything that RECORDS the draw (the #755 night ledger, the
+    # morning verdict) has to know which of the two it is looking at. The
+    # SOC twin above is ``battery_soc_unavailable``; this is the power side.
+    battery_power_unavailable: bool = False
 
     # Battery state
     battery_soc: float = 0.0

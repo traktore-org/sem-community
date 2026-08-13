@@ -108,8 +108,20 @@ def ev_draw(charger_id: str, power, charger_count: int = 1,
 
 
 def battery_draw(power) -> Draw:
-    """The battery's charge power — always from a real sensor."""
-    return Draw(float(getattr(power, "battery_charge_power", 0.0) or 0.0), True)
+    """The battery's charge power, and whether a sensor actually said so.
+
+    ``battery_charge_power`` is ``max(0, battery_power)``, and
+    ``battery_power`` is 0.0 when its sensor could not be read — so an
+    offline battery meter and an idle battery produce the same number.
+    This used to return ``measured=True`` for both, which put a confident
+    zero in the night ledger and made the morning verdict say the battery
+    took none of what it asked for when the truth was that nobody looked.
+
+    Contract 1 of #755: silence is never a measurement of zero.
+    """
+    unavailable = bool(getattr(power, "battery_power_unavailable", False))
+    watts = float(getattr(power, "battery_charge_power", 0.0) or 0.0)
+    return Draw(watts, not unavailable)
 
 
 @dataclass

@@ -5602,9 +5602,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#638 C6) The plan's WHEN for the arbitrage sell, computed once
         # per cycle and fleet-split — decide_battery receives the per-
         # battery share (the #531/#691 treatment).
-        from .overnight_actuation import arbitrage_sell_gate
-        _sell_in, _sell_total_w = arbitrage_sell_gate(
-            getattr(self, "_overnight_shadow_plan", None), dt_util.now())
+        #
+        # (#758) Behind the same kill switch as every other plan-driven
+        # action. ``_overnight_plan_gate`` opens with "actuation off" when
+        # the switch is down; this gate reached the plan directly, so a user
+        # who turned night actuation off still had the plan discharging the
+        # battery to the grid. A kill switch that some callers ask is not a
+        # kill switch.
+        _sell_in, _sell_total_w = False, 0.0
+        if getattr(self, "_overnight_actuation", False):
+            from .overnight_actuation import arbitrage_sell_gate
+            _sell_in, _sell_total_w = arbitrage_sell_gate(
+                getattr(self, "_overnight_shadow_plan", None), dt_util.now())
         _arb_sell = (_sell_in, _sell_total_w / max(1, _eff_battery_count))
 
         # Shared fleet context — same for every battery this cycle.

@@ -140,6 +140,36 @@ def _public_methods() -> dict[str, str]:
     return found
 
 
+def _public_functions() -> dict[str, str]:
+    """name → ``file:line`` for MODULE-LEVEL public functions.
+
+    (#758) The scan above walks ``ClassDef`` bodies only, so a public
+    function at module scope was invisible to it — which is how
+    ``overnight_planner.plan_overnight`` survived: a flat-slot adapter with
+    no production caller and a large test corpus pointed straight at it,
+    exactly the #653 fingerprint one indentation level out.
+
+    Reachability is a different question here. A method is reached as
+    ``obj.name(...)``, so the dotted-name search finds it; a function is
+    imported and then called bare, so it needs a bare-name search with its
+    own ``def`` removed — otherwise every function looks like it calls
+    itself into existence.
+    """
+    found: dict[str, str] = {}
+    for pkg in _PACKAGES:
+        for path in sorted((_ROOT / pkg).rglob("*.py")):
+            tree = ast.parse(path.read_text())
+            for node in tree.body:
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if node.name.startswith("_"):
+                    continue
+                found.setdefault(
+                    node.name, f"{path.relative_to(_ROOT)}:{node.lineno}",
+                )
+    return found
+
+
 def _production_text() -> str:
     parts = []
     for path in _ROOT.rglob("*.py"):
@@ -157,10 +187,19 @@ def _production_text() -> str:
 def _orphans() -> dict[str, str]:
     blob = _production_text()
     out = {}
-    for name, where in _public_methods().items():
+    methods = _public_methods()
+    for name, where in methods.items():
         if re.search(r"\.%s\b" % re.escape(name), blob):
             continue
         if re.search(r"""['"]%s['"]""" % re.escape(name), blob):
+            continue
+        out[name] = where
+    for name, where in _public_functions().items():
+        if name in methods:      # also a method somewhere — judged above
+            continue
+        # Strip the definition itself; anything left is a reference.
+        rest = re.sub(r"\bdef\s+%s\b" % re.escape(name), "", blob)
+        if re.search(r"\b%s\b" % re.escape(name), rest):
             continue
         out[name] = where
     return out
