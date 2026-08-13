@@ -39,9 +39,6 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
 from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
     ChargeCommandStatus,
     ChargeStatus,
-    HuaweiChargeAdapter,
-    GoodWeChargeAdapter,
-    GenericChargeAdapter,
 )
 
 
@@ -60,54 +57,6 @@ def _write_calls(hass: MagicMock) -> int:
     services + any set_value/select_option/turn_off write. Read-only calls
     (none here) would be excluded."""
     return hass.services.async_call.await_count
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Source layer: ChargeController.stop_forced_charge is idempotent on _active
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _huawei_charge_ctl():
-    hass = _make_hass()
-    return HuaweiChargeAdapter(hass, {"inverter_device_id": "dev-1"}), hass
-
-
-def _goodwe_charge_ctl():
-    hass = _make_hass()
-    return GoodWeChargeAdapter(
-        hass, {"inverter_work_mode_entity": "select.wm",
-                "inverter_normal_work_mode": "General"},
-    ), hass
-
-
-def _generic_charge_ctl():
-    hass = _make_hass()
-    return GenericChargeAdapter(
-        hass, {"battery_force_charge_switch": "switch.fc"},
-    ), hass
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "factory",
-    [_huawei_charge_ctl, _goodwe_charge_ctl, _generic_charge_ctl],
-    ids=["huawei", "goodwe", "generic"],
-)
-async def test_charge_controller_stop_is_transition_only(factory) -> None:
-    """An active stop issues ONE write; the next stop (already inactive)
-    issues NONE — the source-layer flood guard."""
-    ctl, hass = factory()
-    ctl._active = True
-
-    status = await ctl.stop_forced_charge()
-    assert status.status is ChargeCommandStatus.IDLE
-    assert ctl.is_active is False
-    assert _write_calls(hass) == 1  # the real stop landed
-
-    hass.services.async_call.reset_mock()
-    status2 = await ctl.stop_forced_charge()
-    assert status2.status is ChargeCommandStatus.IDLE
-    # Nothing active → NO second Modbus write (the #757 flood is gone).
-    hass.services.async_call.assert_not_awaited()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +124,32 @@ async def test_repeated_stop_writes_once(factory) -> None:
     await adapter.command_stop_force_charge()  # already stopped
     # No new writes — the second verdict is a pure no-op.
     assert _write_calls(hass) == after_first
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "factory",
+    [_make_huawei, _make_generic, _make_goodwe],
+    ids=["huawei", "generic", "goodwe"],
+)
+async def test_boot_orphan_stop_still_reaches_inverter(factory) -> None:
+    """Regression guard: the idempotency guard must NOT gate the FIRST stop on
+    the in-memory ``_active``/last_intent flag. After a restart a fresh adapter
+    has last_intent=None and the delegate's ``_active``=False, while the
+    inverter may still be force-charging (an orphan from the prior lifetime).
+    The transition stop MUST reach the hardware — a naive ``if not _active``
+    source guard would strand GoodWe/Generic charging from grid unsupervised.
+    """
+    adapter, hass = factory()
+    # Fresh-boot state: nothing recorded, delegate believes it is idle.
+    assert adapter.last_intent is None
+    assert adapter._charge_adapter._active is False
+
+    await adapter.command_stop_force_charge()
+
+    # The stop actually reached the inverter (orphan cleared, not skipped).
+    assert _write_calls(hass) >= 1
+    assert adapter.last_intent is BatteryIntent.STOP_FORCE_CHARGE
 
 
 # ─────────────────────────────────────────────────────────────────────────────

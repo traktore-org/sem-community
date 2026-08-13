@@ -144,19 +144,15 @@ class HuaweiChargeAdapter(BatteryChargeAdapter):
             )
 
     async def stop_forced_charge(self) -> ChargeStatus:
-        """Stop forced charge via huawei_solar.stop_forcible_charge."""
-        # Idempotency (#757): a stop is a TRANSITION, not a level. With no
-        # forced charge active there is nothing to cancel — return without
-        # issuing the service, so an idle/target-reached scheduler verdict that
-        # repeats every cycle can't flood the single serial Modbus link and
-        # collide with the huawei_solar read coordinators (the #538 failure,
-        # one layer up). ``_active`` is set by ``start_forced_charge`` and
-        # cleared here — the ``_apply_discharge_limit``/``command_off`` guard.
-        if not self._active:
-            return ChargeStatus(
-                status=ChargeCommandStatus.IDLE,
-                message="Forced charge already stopped",
-            )
+        """Stop forced charge via huawei_solar.stop_forcible_charge.
+
+        Deliberately unconditional (no ``_active`` short-circuit): after a
+        restart the in-memory ``_active`` is False while the inverter may still
+        be force-charging (an orphan from the prior lifetime), so the first
+        stop MUST reach the hardware. The #757 per-cycle flood is closed one
+        layer up, at ``command_stop_force_charge``'s ``_last_intent`` guard —
+        which only ever calls this once, on the transition.
+        """
         device_id = self.config.get("inverter_device_id", "")
         if not device_id:
             return ChargeStatus(
@@ -264,15 +260,14 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
             )
 
     async def stop_forced_charge(self) -> ChargeStatus:
-        """Restore normal work mode."""
-        # Idempotency (#757): stop is a transition. Nothing active → no
-        # select_option write, so a repeating idle verdict can't flood the
-        # link. Mirrors the Huawei stop guard + the command_off pattern.
-        if not self._active:
-            return ChargeStatus(
-                status=ChargeCommandStatus.IDLE,
-                message="Forced charge already stopped",
-            )
+        """Restore normal work mode.
+
+        Unconditional by design — this restore is GoodWe's only boot-orphan
+        clear (no persistent snapshot, no status-sensor reconcile), so after a
+        restart it must fire even though the in-memory ``_active`` is False.
+        The #757 per-cycle flood is closed by the ``_last_intent`` guard in
+        ``command_stop_force_charge``, which calls this only on the transition.
+        """
         work_mode_entity = self.config.get("inverter_work_mode_entity", "")
         normal_mode = self.config.get("inverter_normal_work_mode", "General")
 
@@ -369,15 +364,14 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             )
 
     async def stop_forced_charge(self) -> ChargeStatus:
-        """Disable forced charge switch."""
-        # Idempotency (#757): stop is a transition. Nothing active → no
-        # switch write, so a repeating idle verdict can't flood the link.
-        # Mirrors the Huawei stop guard + the command_off pattern.
-        if not self._active:
-            return ChargeStatus(
-                status=ChargeCommandStatus.IDLE,
-                message="Forced charge already stopped",
-            )
+        """Disable forced charge switch.
+
+        Unconditional by design — this ``turn_off`` is the generic adapter's
+        only boot-orphan clear (no persistent snapshot, no status reconcile),
+        so after a restart it must fire even though the in-memory ``_active``
+        is False. The #757 per-cycle flood is closed by the ``_last_intent``
+        guard in ``command_stop_force_charge`` (called only on the transition).
+        """
         charge_switch = self.config.get("battery_force_charge_switch", "")
 
         try:
