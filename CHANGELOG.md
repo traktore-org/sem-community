@@ -80,6 +80,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line. It rides its own attribute so it survives the daytime hours, which is
   exactly when it gets read.
 
+### 🐛 Found by auditing the branch as a whole (#757)
+
+- ⛔ **A stop repeated 1800 times is not a stop** (#757) — the one-gate build
+  changed the *shape* of the battery decision: `decide_battery` now returns
+  STOP_FORCE_CHARGE on every cycle a SCHEDULED battery sits outside its
+  block, so a 21:00 verdict with an 02:00 window asked the inverter to stop
+  a charge it was not doing, all evening, on the same serial Modbus link the
+  read coordinator uses. Every adapter's stop is now a no-op when nothing is
+  being forced — the #538 idempotency treatment, one layer up. A stop that
+  fails still leaves the intent alone, so the next cycle retries.
+
 # [1.7.6-beta.15 candidate] — 12.08.2026
 
 ### 🐛 Fixes

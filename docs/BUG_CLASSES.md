@@ -1433,3 +1433,31 @@ still read Off. Closing it means discovering `light.*` (and the other on/off dom
 entities, which ALSO makes them `is_controllable` → **auto-shed-eligible fleet-wide**
 (`load_management._get_devices_for_shedding` sheds any controllable, non-critical device). That is a
 load-shed *policy* change, not a display fix — Guido's call before it ships.
+
+### 38. A command's CALL SITE changes shape and turns a transition into a per-cycle repeat — GUARDED
+**Symptom:** nothing visibly breaks. The device does the right thing; the bus underneath it does
+not. On a shared serial link the tell is second-hand — read timeouts, "invalid response", a
+coordinator that goes unavailable for a cycle — and it is attributed to the link, not to us.
+**Root shape:** a write is correct *as a transition* ("stop forcing") and was authored where a
+transition is what happens — one edge, one write. Later, a **different layer** changes the shape
+of the decision that produces it: the caller stops asking "did this change?" and starts asking
+"what should be true now?", every cycle. The write itself was never guarded, because at the time
+it was written there was nothing to guard against. Nobody edits the command; the *frequency* is a
+property of the caller, and the caller is a file away. Distinct from plain missing idempotency:
+the code was fine until an unrelated refactor moved the caller from edge-triggered to
+level-triggered. **Live catches:** #538 — `command_normal` rewrote the same 5000 W discharge limit
+every cycle, colliding with `huawei_solar`'s read coordinator on the one Modbus transaction ID.
+#757 (second occurrence, caught in the branch audit before ship) — the #638 one-gate build made
+`decide_battery` return `STOP_FORCE_CHARGE` on *every* cycle a SCHEDULED battery sits outside its
+plan block, so a 21:00 verdict with an 02:00 window asked the inverter ~1800 times to stop a charge
+it was not doing. **Closure:** the command is a no-op when the hardware is already in the commanded
+state, decided from `_last_intent` — the record of what the hardware was **last told**, which may
+only be set on a write that actually landed, so a failed write leaves it alone and the next cycle
+retries (honest-retry discipline). Belt-and-braces: never stay silent while we *believe* the thing
+is running (`_forcible_charging`). **Guard:** `tests/test_757_stop_force_charge_idempotency.py` —
+per adapter, the repeat is silent, the first stop and a stop-while-believed-charging both write,
+and a failed write does not poison the retry.
+**Sweep question:** for every hardware write, ask *who calls it and how often* — not whether the
+write is correct. If the caller is a per-cycle decision function (a reconciler, a `decide_*`, a
+"desired state" pass), the write must be idempotent at its own door; a write that is only safe
+because its historical caller was edge-triggered is one refactor away from a storm.

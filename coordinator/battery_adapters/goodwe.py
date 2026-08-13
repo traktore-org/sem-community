@@ -76,6 +76,8 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
             self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
+        if self._force_charge_already_stopped():
+            return  # (#757) already stopped — a repeat is noise, not a command
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
         await self._charge_adapter.stop_forced_charge()
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE

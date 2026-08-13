@@ -427,8 +427,24 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             self._forcible_charging = False
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
-        await self._charge_adapter.stop_forced_charge()
+        # (#757) Everything above is a real edge — an orphan cleared, a
+        # forcible discharge cancelled. Below is the steady state, and
+        # the steady state is where the storm lived: hours of "stop" for
+        # a battery that stopped at the first one. Ask the shared
+        # predicate, then honour its contract — record the intent ONLY on
+        # a stop that landed, so a dropped Modbus write is retried next
+        # cycle instead of being remembered as a success.
+        if self._force_charge_already_stopped():
+            return
+        from .force_charge import ChargeCommandStatus
+        status = await self._charge_adapter.stop_forced_charge()
+        if getattr(status, "status", None) is ChargeCommandStatus.FAILED:
+            self._last_error = (
+                f"stop_forced_charge failed: {getattr(status, 'message', '')}"
+            )
+            return
         self._forcible_charging = False
+        self._last_error = None
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
 
     # ─── Helpers ───────────────────────────────────────────────

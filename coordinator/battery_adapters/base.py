@@ -193,6 +193,32 @@ class BatteryControlAdapter(ABC):
             self._last_error = None
             self._last_intent = BatteryIntent.OFF
 
+    def _force_charge_already_stopped(self) -> bool:
+        """True when a STOP_FORCE_CHARGE would command nothing (#757).
+
+        Stopping something that is already stopped is not a command — it
+        is noise on the wire. That distinction did not matter while the
+        stop was issued once, at the transition out of a forced charge.
+        The one-gate build (#638 C4) changed the shape of the decision:
+        ``decide_battery`` now returns STOP_FORCE_CHARGE on EVERY cycle
+        the scheduler is SCHEDULED and the plan block is not open, so a
+        21:00 verdict with a 02:00 block asks ~1800 times. On a single
+        serial Modbus link that is the #538 collision class, one layer up.
+
+        The predicate is deliberately the ``command_off`` shape (see
+        above): ``_last_intent`` is the record of what the HARDWARE was
+        last told, so it may only be set on a write that actually landed.
+        Every caller therefore has to keep the honest-retry discipline —
+        a failed stop leaves the intent alone and the next cycle tries
+        again. ``_forcible_charging`` is the Huawei-only belt-and-braces
+        (absent elsewhere, hence the ``getattr``): if we believe a charge
+        is running, we never stay silent.
+        """
+        return (
+            self._last_intent is BatteryIntent.STOP_FORCE_CHARGE
+            and not getattr(self, "_forcible_charging", False)
+        )
+
     async def _write_force_discharge(self, watts: float) -> bool:
         """De-dup'd write of the battery power setpoint. ``watts`` is a
         SIGNED setpoint on a bidirectional control entity: ``> 0`` =
