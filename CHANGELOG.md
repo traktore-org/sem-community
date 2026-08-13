@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.16 candidate] — 13.08.2026
+
+### 🐛 Fixes
+- 🚗 **A stop war strobed a Mercedes into a latched charging fault** (#763,
+  @onkelfu) — on a Modbus-integrated KEBA P30 (generic number+switch
+  control), SEM's stop works, but the box re-closes the contactor on the
+  car's retry at its stored 6 A; SEM stopped it again every 10 s cycle, and
+  ~2 h of aborted handshakes latched the car's charging fault (physical
+  replug required). The reconciler now counts stop→redraw round-trips and
+  after three declares a **ceasefire**: it stands down for 30 min and warns
+  once — a strobing contactor is worse for the car than a few kWh of
+  unplanned minimum-current charge. The mirror of the #536 enable backoff;
+  a charge episode or a quiet spell ends the war. The durable-stop
+  refinement for this wiring follows once the reporter's ena-register data
+  answers who re-closes the contactor.
+
 # [1.7.6-beta.15 candidate] — 13.08.2026
 
 ### 🐛 Fixes

@@ -598,3 +598,99 @@ def test_effective_max_current_no_entity_returns_config_max():
         current_entity_id=None)
     assert dev.effective_max_current() == 32.0
     assert adapter_for(dev).max_current_a == 32
+
+
+# ── #763 — the stop-war ceasefire ────────────────────────────────────────────
+# onkelfu's Mercedes + Modbus KEBA: SEM's stop WORKS (contactor opens), the
+# box re-closes on the car's retry at its stored 6 A, SEM stops it again —
+# each round-trip aborts one handshake, and after ~2 h of 0↔4.1 kW the car
+# latches a charging fault only a physical replug clears. The #536 backoff
+# exists for the ENABLE direction; this is its mirror: after N successful
+# stop→redraw round-trips, SEM stands down for a long window and SAYS SO,
+# because a strobing contactor is worse for the car than 6 A of unplanned
+# charge. A round-trip = the draw REAPPEARING after our stop settled; a
+# steady draw that never stops is the #627/#548 family, not this.
+
+def _war_round(rec, t):
+    """One full stop-war round-trip at time t: box re-closed (draw), SEM
+    disables, box opens (settled)."""
+    a = rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=t)
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=t + 5)
+    return a
+
+
+def test_three_stop_war_rounds_trigger_ceasefire():
+    rec = _rec()
+    assert _war_round(rec, 10.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 30.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 50.0) == [Action(ActionKind.DISABLE)]
+    # Fourth self-start within the window: ceasefire — no DISABLE, say why.
+    actions = rec.reconcile(
+        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=70.0)
+    assert Action(ActionKind.DISABLE) not in actions
+    assert actions[0].kind is ActionKind.REPORT_STOP_WAR
+
+
+def test_ceasefire_holds_for_the_backoff_window():
+    rec = _rec()
+    for t in (10.0, 30.0, 50.0):
+        _war_round(rec, t)
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=70.0)
+    # Deep inside the backoff the box may draw — SEM does not cut it.
+    actions = rec.reconcile(
+        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=900.0)
+    assert Action(ActionKind.DISABLE) not in actions
+
+
+def test_ceasefire_expires_into_one_probe():
+    rec = _rec()
+    for t in (10.0, 30.0, 50.0):
+        _war_round(rec, t)
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=70.0)
+    # After the window one DISABLE probe goes out — if the box comes back
+    # again, the next ceasefire follows without re-counting from zero.
+    actions = rec.reconcile(
+        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=70.0 + 1801.0)
+    assert actions == [Action(ActionKind.DISABLE)]
+
+
+def test_quiet_spell_resets_the_war_counter():
+    rec = _rec()
+    _war_round(rec, 10.0)
+    _war_round(rec, 30.0)
+    # 15 quiet minutes: the box gave up on its own — not a war anymore.
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=1000.0)
+    assert _war_round(rec, 1010.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 1030.0) == [Action(ActionKind.DISABLE)]
+    # Only the third round of the NEW episode may trigger the ceasefire —
+    # proving the old rounds aged out.
+    actions = rec.reconcile(
+        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=1050.0)
+    assert actions == [Action(ActionKind.DISABLE)]
+
+
+def test_a_charge_episode_ends_the_war():
+    rec = _rec()
+    for t in (10.0, 30.0, 50.0):
+        _war_round(rec, t)
+    # SEM wants to charge again — the war state must not suppress it.
+    actions = rec.reconcile(
+        DesiredState.CHARGE, 10, _obs(charging=False), now=70.0)
+    assert actions == [Action(ActionKind.START_AND_WRITE, 10)]
+    # And back to idle: a fresh episode counts from zero.
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=80.0)
+    assert _war_round(rec, 90.0)[0].kind in (ActionKind.NONE, ActionKind.DISABLE)
+
+
+def test_user_off_gets_the_same_protection():
+    """The OFF row disables every cycle too — same box, same car, same
+    fault. The ceasefire covers both."""
+    rec = _rec()
+    for t in (10.0, 30.0, 50.0):
+        a = rec.reconcile(DesiredState.OFF, 0, _obs(charging=True, power=4100.0), now=t)
+        assert a == [Action(ActionKind.DISABLE)]
+        rec.reconcile(DesiredState.OFF, 0, _obs(charging=False), now=t + 5)
+    actions = rec.reconcile(
+        DesiredState.OFF, 0, _obs(charging=True, power=4100.0), now=70.0)
+    assert Action(ActionKind.DISABLE) not in actions
+    assert actions[0].kind is ActionKind.REPORT_STOP_WAR

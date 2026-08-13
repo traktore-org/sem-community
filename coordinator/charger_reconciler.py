@@ -40,6 +40,7 @@ class ActionKind(Enum):
     START_AND_WRITE = auto()  # open a session + arm failsafe + write (amps)
     ENABLE = auto()         # re-assert the start/stop switch ON (#536 — Wallbox)
     REPORT_ENABLE_BLOCKED = auto()  # enable switch unavailable/locked — surface it (#536)
+    REPORT_STOP_WAR = auto()        # box keeps re-starting against our stop — cease fire (#763)
     REPORT_STOP_UNENFORCEABLE = auto()  # no mechanism can open the contactor (#627)
 
 
@@ -103,6 +104,13 @@ def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]
 # Task 11 moved idle ownership wholly into the reconciler.
 DEFAULT_IDLE_DISABLE_THRESHOLD: int = 4
 
+# #763 — stop-war ceasefire tuning. Rounds are settled→redraw edges; the
+# backoff is deliberately LONG (one aborted handshake per half hour instead
+# of six per minute), and a quiet spell means the box gave up on its own.
+STOP_WAR_ROUNDS: int = 3
+STOP_WAR_BACKOFF_S: float = 1800.0
+STOP_WAR_QUIET_RESET_S: float = 600.0
+
 
 class ChargerReconciler:
     """Per-charger convergence engine. One instance per charger, cached
@@ -162,6 +170,20 @@ class ChargerReconciler:
         # policy says idle, disable immediately. The grace re-arms on every
         # genuine CHARGE→IDLE transition (the only wind-down there is).
         self._idle_settled: bool = True
+        # #763 — the stop-war ceasefire, the #536 backoff's mirror. SEM's
+        # stop WORKS (contactor opens) but the box re-closes on the car's
+        # retry at its stored setpoint; every stop→redraw round-trip aborts
+        # one handshake, and ~2 h of that latched a Mercedes' charging
+        # fault (onkelfu, Modbus KEBA #763). After STOP_WAR_ROUNDS
+        # round-trips SEM stands down for STOP_WAR_BACKOFF_S and reports —
+        # a strobing contactor is worse for the car than a few kWh of
+        # unplanned 6 A charge. A round is the settled→drawing EDGE; a
+        # steady draw that never opens is the #627/#548 family, not this.
+        self._stop_war_rounds: int = 0
+        self._stop_war_last_round_at: float = 0.0
+        self._stop_war_backoff_until: float = 0.0
+        self._stop_war_draw_seen: bool = False
+        self._stop_war_reported: bool = False
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
@@ -184,6 +206,13 @@ class ChargerReconciler:
                 # Row 2 — already converged. THE spam fix: issue nothing.
                 self._consecutive_idle_count = 0
                 self._idle_settled = True  # #552 — wind-down complete
+                # #763 — the draw edge is over; a long quiet spell means
+                # the box gave up on its own and the war is history.
+                self._stop_war_draw_seen = False
+                if (self._stop_war_rounds
+                        and now - self._stop_war_last_round_at
+                        > STOP_WAR_QUIET_RESET_S):
+                    self._stop_war_rounds = 0
                 return [Action(ActionKind.NONE)]
             if not observed.stop_controllable:
                 # #627 — SEM has no mechanism that can open this contactor.
@@ -194,6 +223,29 @@ class ChargerReconciler:
                 # out of the house batteries either way.
                 return [Action(ActionKind.DISABLE),
                         Action(ActionKind.REPORT_STOP_UNENFORCEABLE)]
+            # #763 — stop-war ceasefire, covering BOTH the OFF row and the
+            # settled-rogue row below (same box, same car, same fault). A
+            # war round is the settled→drawing EDGE: our stop landed, the
+            # box came back. The wind-down flicker grace never counts —
+            # that draw is our own session ending.
+            if desired is DesiredState.OFF or self._idle_settled:
+                if now < self._stop_war_backoff_until:
+                    # Ceasefire holds: no DISABLE, the box may finish its
+                    # 6 A session. Reported once per onset at apply.
+                    return [Action(ActionKind.REPORT_STOP_WAR)]
+                if not self._stop_war_draw_seen:
+                    self._stop_war_draw_seen = True
+                    if (self._stop_war_rounds
+                            and now - self._stop_war_last_round_at
+                            > STOP_WAR_QUIET_RESET_S):
+                        self._stop_war_rounds = 0
+                    self._stop_war_rounds += 1
+                    self._stop_war_last_round_at = now
+                    if self._stop_war_rounds > STOP_WAR_ROUNDS:
+                        self._stop_war_backoff_until = (
+                            now + STOP_WAR_BACKOFF_S)
+                        return [Action(ActionKind.REPORT_STOP_WAR)]
+
             if desired is DesiredState.OFF:
                 if not observed.enable_controllable:
                     # #548 — the contactor is app/cloud-locked (Wallbox
@@ -216,6 +268,12 @@ class ChargerReconciler:
             if self._consecutive_idle_count < self._idle_disable_threshold:
                 return [Action(ActionKind.NONE)]
             return [Action(ActionKind.DISABLE)]
+
+        # desired is CHARGE — reset idle grace, and end any stop war: SEM
+        # wanting the box to charge dissolves the disagreement (#763).
+        self._stop_war_rounds = 0
+        self._stop_war_backoff_until = 0.0
+        self._stop_war_draw_seen = False
 
         # desired is CHARGE — reset idle grace.
         #
@@ -393,6 +451,8 @@ class ChargerReconciler:
             # warning so the NEXT unenforceable episode warns again.
             if action.kind is not ActionKind.REPORT_STOP_UNENFORCEABLE:
                 self._stop_unenforceable_warned = False
+            if action.kind is not ActionKind.REPORT_STOP_WAR:
+                self._stop_war_reported = False
             if action.kind is ActionKind.ENABLE:
                 # #536 — re-assert the start/stop switch (idempotent).
                 await adapter.ensure_enabled()
@@ -407,6 +467,30 @@ class ChargerReconciler:
                 report = getattr(adapter, "report_enable_blocked", None)
                 if report is not None:
                     await report()
+            elif action.kind is ActionKind.REPORT_STOP_WAR:
+                # #763 — once per ONSET (the #700 pattern): the ceasefire
+                # holds for half an hour and re-warning every 10 s cycle
+                # would be its own flood. Re-armed below when any other
+                # action lands (the war ended or the intent moved).
+                if not self._stop_war_reported:
+                    self._stop_war_reported = True
+                    _LOGGER.warning(
+                        "reconcile(%s): stop war detected — the charger keeps "
+                        "restarting itself against SEM's stop (%d stop→redraw "
+                        "round-trips). Standing down for %.0f min so the car "
+                        "is not strobed into a charging fault; it may charge "
+                        "at the box's stored minimum meanwhile. Likely cause: "
+                        "the wallbox's own auto-start/authorization re-closes "
+                        "the contactor on the car's retry — disable charger-"
+                        "side auto-start, or give SEM a stop mechanism the "
+                        "box respects. — %s",
+                        self.charger_id, self._stop_war_rounds,
+                        STOP_WAR_BACKOFF_S / 60.0, decision.reason)
+                else:
+                    _LOGGER.debug(
+                        "reconcile(%s): stop-war ceasefire holding (%d rounds)",
+                        self.charger_id, self._stop_war_rounds)
+                continue
             elif action.kind is ActionKind.REPORT_STOP_UNENFORCEABLE:
                 # #627 — the stop is structurally impossible on this config.
                 # (#700) Once per ONSET, not per cycle: the condition persists
