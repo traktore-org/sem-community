@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [1.7.6-beta.18 candidate] — 14.08.2026
+# [1.7.6-beta.18] — 14.08.2026
 
 ### 🐛 Fixes
 - 🔋 **One battery counted twice — home read ~2× while charging** (#761,
