@@ -149,6 +149,36 @@ class LoadDeviceDiscovery:
         _LOGGER.info(f"Discovery complete: found {len(discovered_devices)} controllable devices")
         return discovered_devices
 
+    def _is_light_fixture(self, energy_sensor: str) -> bool:
+        """(#744) Is this ED consumer a light fixture — a device whose only
+        on/off surface is ``light.*``?
+
+        Lights have no energy-management use case: not shiftable, not a
+        surplus sink, and shedding a 30 W dimmer is user-hostile for
+        savings that round to zero. They only ever arrived in SEM as a
+        side effect of Energy-Dashboard consumption monitoring — and then
+        displayed wrong on/off state, because a dimmer idling below its
+        power sensor's floor is exactly the shape the power heuristic
+        cannot judge (Azlinon's Matter dimmers, #744/#745). HA's own
+        dashboard keeps monitoring them; SEM skips them at import. A
+        metering smart PLUG feeding a lamp is kept — the switch is a real
+        control surface. The explicit ``register_surplus_device`` path is
+        deliberately unfiltered (a relay exposed as ``light.*`` is a user
+        decision, not a discovery guess).
+        """
+        try:
+            entry = self._entity_registry.async_get(energy_sensor)
+            if not entry or not entry.device_id:
+                return False
+            siblings = entity_registry.async_entries_for_device(
+                self._entity_registry, entry.device_id,
+                include_disabled_entities=True,
+            )
+            domains = {e.entity_id.split(".", 1)[0] for e in siblings}
+            return "light" in domains and "switch" not in domains
+        except Exception:  # noqa: BLE001 — an unreadable registry filters nothing
+            return False
+
     async def discover_from_energy_dashboard(self) -> Dict[str, Dict]:
         """Discover devices from HA Energy Dashboard individual devices.
 
@@ -182,6 +212,18 @@ class LoadDeviceDiscovery:
             power_sensor = device.get("power_sensor")
             name = device.get("name", "")
             is_ev = device.get("is_ev", False)
+
+            # (#744) Lights are filtered out at the door — see
+            # _is_light_fixture. One line says so, so an absent row is a
+            # decision, not a mystery.
+            if not is_ev and self._is_light_fixture(energy_sensor):
+                _LOGGER.info(
+                    "Skipping Energy Dashboard device '%s' (%s): light "
+                    "fixture — monitored by HA's Energy Dashboard, not "
+                    "imported into SEM (no energy-management use case)",
+                    name, energy_sensor,
+                )
+                continue
 
             # Generate device ID from energy sensor
             device_id = self._generate_device_id_from_energy_sensor(energy_sensor)

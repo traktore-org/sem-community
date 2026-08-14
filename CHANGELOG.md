@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.17] — 14.08.2026
+
+### 🐛 Fixes
+- 💡 **Lights are filtered out at the Energy Dashboard import** (#744,
+  @Azlinon) — lighting has no energy-management use case: not shiftable,
+  not a surplus sink, and shedding a 30 W dimmer is user-hostile for
+  savings that round to zero. Lights only ever entered SEM as a side
+  effect of ED consumption monitoring, and then displayed wrong on/off
+  state (Matter dimmers reading On while off — a dimmer idling below its
+  power sensor's floor is exactly the shape the power heuristic cannot
+  judge). Auto-import now skips any ED device whose only on/off surface
+  is ``light.*``, with one log line saying so. A metering smart plug
+  feeding a lamp keeps its row (the plug is a real control), and the
+  explicit ``register_surplus_device`` path stays unfiltered for the
+  rare relay-exposed-as-light case. HA's dashboard is a consumption
+  ledger; SEM's device list is a control roster — the two are no longer
+  conflated.
+
 # [1.7.6-beta.16] — 13.08.2026
 
 ### 🐛 Fixes
