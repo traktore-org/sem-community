@@ -507,6 +507,38 @@ def _extract_battery_config(source: Dict[str, Any], config: EnergyDashboardConfi
         )
 
 
+def _derive_battery_power_if_unrepresented(hass, config) -> None:
+    """Derive a combined battery power sensor ONLY when the battery has no
+    power representation at all (#761).
+
+    A two-sensor ``power_config`` (#551) leaves ``battery_power`` unset BY
+    DESIGN — the reader computes net = to − from from the pair. The
+    original guard checked only ``battery_power``, so the derive added the
+    device's combined sensor BESIDE the pair: two power representations of
+    one physical battery, enumerated as units b1+b2 with identical values
+    and summed — battery read 2× while charging and home followed
+    (jappish84, #761; every two-sensor install since the derive shipped).
+    A pair — or an inverted single (#551) — IS the power representation.
+    """
+    if (config.battery_power or config.battery_power_pairs
+            or config.battery_power_from):
+        return
+    battery_energy = config.battery_charge_energy or config.battery_discharge_energy
+    if not battery_energy:
+        return
+    found = _find_power_sensor_on_device(
+        hass, battery_energy, _POWER_DERIVE_RULES["battery"],
+    )
+    if found:
+        config.battery_power = found
+        config.battery_power_list.append(found)
+        config.derived_power["battery"] = found
+        _LOGGER.info(
+            "Derived battery power sensor %s from energy device "
+            "(no stat_rate in Energy Dashboard)", found,
+        )
+
+
 def _extract_ev_from_devices(
     device_consumption: List[Dict[str, Any]], config: EnergyDashboardConfig
 ) -> None:
@@ -737,19 +769,7 @@ def _derive_missing_power_sensors(
             )
 
     # Battery: battery_power* (positive=charge per SEM; sign auto-detected later).
-    battery_energy = config.battery_charge_energy or config.battery_discharge_energy
-    if not config.battery_power and battery_energy:
-        found = _find_power_sensor_on_device(
-            hass, battery_energy, _POWER_DERIVE_RULES["battery"],
-        )
-        if found:
-            config.battery_power = found
-            config.battery_power_list.append(found)
-            config.derived_power["battery"] = found
-            _LOGGER.info(
-                "Derived battery power sensor %s from energy device "
-                "(no stat_rate in Energy Dashboard)", found,
-            )
+    _derive_battery_power_if_unrepresented(hass, config)
 
 
 # (#698) Same-measurement variant tokens: two energy sensors whose object_ids

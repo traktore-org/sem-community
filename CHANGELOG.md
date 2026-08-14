@@ -11,10 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unnumbered — the one-gate build, on feature/638-joint-energy-planner] — 11.08.2026
+# [2.0.0-beta.1] — 14.08.2026
 
-> Branch-only. Takes its version number at merge time (the beta-number
-> collision lesson): the autopilot owns develop's number space.
+> **Why 2.0 and not 1.8.** This release changes what an existing install does
+> with no config change: `overnight_actuation` now defaults **ON**, the EV's
+> and the battery scheduler's private cheap-window pickers are **deleted** (a
+> `solar_plus_cheap` install's night timing now comes from the joint plan, not
+> from the path it has been running), an uncovered battery no longer
+> force-charges, and the phantom-EV model is gone (#652). That is a major
+> version by definition, not by size.
 
 ### ✨ The one-gate unification (#638)
 - 🎯 **One selector left.** The EV's private cheap-window pick and the battery
@@ -229,9 +234,69 @@ shapes the demand set must ride the re-plan signature.
   The #653 orphan guard, which had only ever walked class bodies, now reads
   module scope too — and immediately found a second one.
 
-# [1.7.6-beta.15 candidate] — 12.08.2026
+# [1.7.6-beta.18] — 14.08.2026
 
 ### 🐛 Fixes
+- 🔋 **One battery counted twice — home read ~2× while charging** (#761,
+  @jappish84) — a two-sensor battery `power_config` (the #551 "Two
+  sensors" mode) leaves the combined `battery_power` unset *by design*
+  (net = charge − discharge from the pair). The battery power deriver
+  only checked that field, so it added the device's combined power sensor
+  BESIDE the pair: two power representations of one physical battery,
+  enumerated as units b1+b2 with identical values and summed. Battery
+  read double while charging, and home — derived from the balance —
+  followed (12.7 kW against a real 1.1 kW). Affects every two-sensor
+  battery install since the deriver shipped; the derive now runs only
+  when the battery has **no power representation at all** (pair and
+  inverted-single count as representations). The sign-inversion half of
+  the report was resolved live with the one-tap battery-sign flip.
+
+# [1.7.6-beta.17] — 14.08.2026
+
+### 🐛 Fixes
+- 💡 **Lights are filtered out at the Energy Dashboard import** (#744,
+  @Azlinon) — lighting has no energy-management use case: not shiftable,
+  not a surplus sink, and shedding a 30 W dimmer is user-hostile for
+  savings that round to zero. Lights only ever entered SEM as a side
+  effect of ED consumption monitoring, and then displayed wrong on/off
+  state (Matter dimmers reading On while off — a dimmer idling below its
+  power sensor's floor is exactly the shape the power heuristic cannot
+  judge). Auto-import now skips any ED device whose only on/off surface
+  is ``light.*``, with one log line saying so. A metering smart plug
+  feeding a lamp keeps its row (the plug is a real control), and the
+  explicit ``register_surplus_device`` path stays unfiltered for the
+  rare relay-exposed-as-light case. HA's dashboard is a consumption
+  ledger; SEM's device list is a control roster — the two are no longer
+  conflated.
+
+# [1.7.6-beta.16] — 13.08.2026
+
+### 🐛 Fixes
+- 🚗 **A stop war strobed a Mercedes into a latched charging fault** (#763,
+  @onkelfu) — on a Modbus-integrated KEBA P30 (generic number+switch
+  control), SEM's stop works, but the box re-closes the contactor on the
+  car's retry at its stored 6 A; SEM stopped it again every 10 s cycle, and
+  ~2 h of aborted handshakes latched the car's charging fault (physical
+  replug required). The reconciler now counts stop→redraw round-trips and
+  after three declares a **ceasefire**: it stands down for 30 min and warns
+  once — a strobing contactor is worse for the car than a few kWh of
+  unplanned minimum-current charge. The mirror of the #536 enable backoff;
+  a charge episode or a quiet spell ends the war. The durable-stop
+  refinement for this wiring follows once the reporter's ena-register data
+  answers who re-closes the contactor.
+
+# [1.7.6-beta.15] — 13.08.2026
+
+### 🐛 Fixes
+- 🔋 **Battery STOP flooded the Modbus bus between charge blocks** (#757, from
+  Guido's release/1.8 audit) — while the scheduler is idle/target-reached it
+  repeats a STOP_FORCE_CHARGE verdict every cycle, and each brand adapter
+  re-issued the inverter stop each time (~1800 writes/night on the single
+  serial link, colliding with the huawei_solar read coordinators — the #538
+  failure one layer up). The stop now fires once, on the transition, and stays
+  silent afterwards (the command_off pattern), with honest retry so a failed
+  stop still retries instead of stranding the charge. Swept across Huawei,
+  generic and GoodWe; Deye was already safe.
 - 📏 **A 24 W load calibrated itself to ~1 kW** (#744, @Azlinon) — for loads
   without a power sensor, the energy-tick estimate (0.01 kWh over a short
   window ≈ 1 kW instant) fed the up-only rated-power ratchet, which re-based

@@ -423,10 +423,12 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # both; only fall through to the charge adapter when not forcing.
         if await self._maybe_clear_startup_orphan():
             self._forcible_charging = False
+            self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
         if await self._stop_forcible():
             self._forcible_charging = False
+            self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
         # (#757) Everything above is a real edge — an orphan cleared, a

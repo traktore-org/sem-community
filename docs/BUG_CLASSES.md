@@ -1434,6 +1434,8 @@ entities, which ALSO makes them `is_controllable` → **auto-shed-eligible fleet
 (`load_management._get_devices_for_shedding` sheds any controllable, non-critical device). That is a
 load-shed *policy* change, not a display fix — Guido's call before it ships.
 
+---
+
 ### 38. A command's CALL SITE changes shape and turns a transition into a per-cycle repeat — GUARDED
 **Symptom:** nothing visibly breaks. The device does the right thing; the bus underneath it does
 not. On a shared serial link the tell is second-hand — read timeouts, "invalid response", a
@@ -1454,10 +1456,42 @@ it was not doing. **Closure:** the command is a no-op when the hardware is alrea
 state, decided from `_last_intent` — the record of what the hardware was **last told**, which may
 only be set on a write that actually landed, so a failed write leaves it alone and the next cycle
 retries (honest-retry discipline). Belt-and-braces: never stay silent while we *believe* the thing
-is running (`_forcible_charging`). **Guard:** `tests/test_757_stop_force_charge_idempotency.py` —
-per adapter, the repeat is silent, the first stop and a stop-while-believed-charging both write,
-and a failed write does not poison the retry.
+is running (`_forcible_charging`). **Where it lives:** every `command_*` on the battery adapters
+(`battery_adapters/huawei.py` · `generic.py` · `goodwe.py` · `deye.py`) and the
+`ChargeController.stop_forced_charge` layer they delegate to (`force_charge.py`); the same shape is
+latent in any per-cycle actuator write. Distinct from class 4 (that is a *swallowed* command
+reporting false success); here the command lands fine, just far too often — but the honest-retry
+half is shared with class 4.
+**Where the guard may NOT go — two placements that look equivalent and are not.** (a) Not at the
+`stop_forced_charge` *source* layer: an `if not _active` guard there strands a boot orphan — after a
+restart the in-memory `_active` is False while the inverter may still be force-charging, and for
+GoodWe/Generic that unconditional stop is the *only* boot-orphan clear (no snapshot, no status
+reconcile like Huawei's `_maybe_clear_startup_orphan` / Deye's persistent snapshot). The guard must
+key on the recorded *intent*, which honest-retry keeps truthful, not on a flag that lies across
+restarts. (b) Not at the *top* of `command_stop_force_charge` on Huawei: the two real edges
+(`_maybe_clear_startup_orphan`, `_stop_forcible`) run first, and a top-of-function return would skip
+them — re-opening #532, the LUNA2000 left selling to grid after a restart. The predicate belongs
+*after* the edges and must carry the `_forcible_charging` belt-and-braces so we never stay silent
+while we believe a force is running. (Both placements were authored independently for #757 — on the
+release branch and on develop — and the difference only showed up at the merge. `deye.py` was
+already safe: snapshot cleared after restore + write-and-verify.)
+**Guard:** `tests/test_757_stop_force_charge_idempotency.py` + `test_757_stop_force_charge_idempotent.py`
+— per adapter: the repeat is silent (zero real HA service calls on a second stop), the FIRST stop on
+a fresh post-restart adapter still reaches the inverter, a stop-while-believed-charging still writes,
+and a failed write is not recorded so the next cycle retries.
 **Sweep question:** for every hardware write, ask *who calls it and how often* — not whether the
 write is correct. If the caller is a per-cycle decision function (a reconciler, a `decide_*`, a
 "desired state" pass), the write must be idempotent at its own door; a write that is only safe
-because its historical caller was edge-triggered is one refactor away from a storm.
+because its historical caller was edge-triggered is one refactor away from a storm. And: does the
+"already in this state" signal survive a restart, or does it lie about the hardware on a fresh
+adapter?
+**Open sibling — the mirror-image FORCE_CHARGE flood (flagged for Guido):** `command_force_charge`
+has the same shape on the paired command — the scheduler emits FORCE_CHARGE every *in-window* cycle
+(`decide_battery.py`), and `start_forced_charge` re-issues `forcible_charge_soc` /
+`select_option "Eco Charge"` / `switch.turn_on` each time with no transition guard. Left unfixed
+here because the Huawei `forcible_charge_soc` carries a `duration` — a per-cycle re-issue may be
+*load-bearing* (refreshing the duration so the charge isn't cut off mid-window when
+`duration_min` < window). Closing it safely needs the duration semantics resolved first (does the
+scheduler set duration to the full remaining window, or rely on re-issue?), so it is a design call,
+not a mechanical guard.
+Refs #538 #757.

@@ -78,8 +78,18 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
     async def command_stop_force_charge(self) -> None:
         if self._force_charge_already_stopped():
             return  # (#757) already stopped — a repeat is noise, not a command
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        await self._charge_adapter.stop_forced_charge()
+        ok = await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        from .force_charge import ChargeCommandStatus
+        status = await self._charge_adapter.stop_forced_charge()
+        # #757 honest retry: a failed stop must not record the intent, or the
+        # guard above would suppress the retry (#589 class 4).
+        if status.status is ChargeCommandStatus.FAILED:
+            self._last_error = f"stop_forced_charge failed: {status.message}"
+            return
+        if not ok:
+            self._last_error = "mutual-exclusion zero-write failed on stop"
+            return
+        self._last_error = None
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
 
     async def _apply_discharge_limit(self, watts: float) -> None:
