@@ -14,12 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [2.0.0-beta.1] — 14.08.2026
 
 > **Why 2.0 and not 1.8.** This release changes what an existing install does
-> with no config change: `overnight_actuation` now defaults **ON**, the EV's
-> and the battery scheduler's private cheap-window pickers are **deleted** (a
-> `solar_plus_cheap` install's night timing now comes from the joint plan, not
-> from the path it has been running), an uncovered battery no longer
-> force-charges, and the phantom-EV model is gone (#652). That is a major
-> version by definition, not by size.
+> without the user changing anything:
+>
+> - **Night actuation is on by default.** The migration writes the value down
+>   explicitly and tells you where the kill-switch is (#758) — the answer is
+>   recorded rather than implied, and an install that had already turned it
+>   off is never touched. But an install that never made the choice now has
+>   SEM driving hardware overnight.
+> - **The private cheap-window pickers are deleted.** A `solar_plus_cheap`
+>   install's night timing now comes from the joint plan, not from the code
+>   path it has been running. Same intent, different decision-maker.
+> - **An uncovered battery no longer force-charges** — deliberate, with a
+>   named reason on the card rather than silence.
+> - **The phantom-EV model is gone** (#652), so the battery scheduler no
+>   longer sizes its window against a car it invented.
+>
+> Any one of those is a major bump. Calling it 1.8 would invite people to
+> upgrade expecting minor-release behavior. The number is about
+> compatibility, not size.
 
 ### ✨ The one-gate unification (#638)
 - 🎯 **One selector left.** The EV's private cheap-window pick and the battery
