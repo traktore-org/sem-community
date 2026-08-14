@@ -284,7 +284,7 @@ shapes the demand set must ride the re-plan signature.
   measurement SEM doesn't have (#755). The pool is pinned to the measured
   SOC every cycle so integration drift can't invent stored energy, and an
   offline SOC sensor pins nothing, because silence is not a measurement of
-  an empty battery. The stored-grid-share sensor reads **unknown, not 0 %**,
+  an empty battery. The stored-grid-share sensor shows **no value, not 0 %**,
   until the pool holds energy whose origin SEM actually watched arrive — a
   freshly restarted install claiming "nothing was bought" off an empty pool
   was the same contract violation one layer up (caught on the .175 soak's

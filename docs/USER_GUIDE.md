@@ -977,9 +977,10 @@ offline, SEM leaves the figures alone rather than reading silence as an
 empty battery.
 
 Right after installing (or restarting into) this version, the stored-share
-sensor reads **unknown** rather than 0 % — SEM has not yet watched any
-charge arrive, and "unknown" is the honest answer until the first charging
-cycle fills the pool. It becomes a number on its own from there.
+sensor shows **no value** (unavailable) rather than 0 % — SEM has not yet
+watched any charge arrive, and no answer is the honest answer until the
+first charging cycle fills the pool. It becomes a number on its own from
+there.
 
 ### True Baseload — the house SEM does not touch (#773)
 

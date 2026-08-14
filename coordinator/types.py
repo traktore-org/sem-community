@@ -592,7 +592,7 @@ class PerformanceMetrics:
     # merely time-shifted, not own generation. ``None`` until the pool has
     # ATTRIBUTED content — an empty (or purely SOC-pinned) pool publishing
     # "0 % bought" was the arc's own contract-1 violation, caught on the
-    # .175 soak's first night. The sensor reads unknown, not zero.
+    # .175 soak's first night. The sensor shows no value, not zero.
     battery_stored_grid_share: float | None = None
     # Removed (#669): solar_efficiency / battery_efficiency. Both were
     # hardcoded constants wearing the name of a measurement
