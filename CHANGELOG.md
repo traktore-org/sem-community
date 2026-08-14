@@ -125,7 +125,12 @@ shapes the demand set must ride the re-plan signature.
   the comparison knows one rule: a shared timestamp's price changing
   replans, tomorrow's curve landing replans, a past slot expiring is
   silence. An old-format stored signature replans once after upgrade,
-  never crashes.
+  never crashes. Second sighting the same day, next term over: a RUNNING
+  load's shrinking deficit crossed a 0.1 h bucket every 6 minutes — one
+  replan per bucket for as long as it ran. Shrinking-but-nonzero is now
+  silence too (the plan working is not the ask changing); a deficit
+  growing, a demand appearing or vanishing, or the stop flag flipping
+  stays news.
 - 👁️ **Belief follows the switch, every cycle** (#766) — `is_active` was a
   belief only SEM's own activate/deactivate (plus one-shot adoption at
   registration) ever updated, so a switch turned ON outside SEM — an

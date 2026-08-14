@@ -127,33 +127,57 @@ def demand_signature_changed(old, new) -> bool:
         return False
     try:
         def _split(sig):
-            rest, price = [], ()
+            rest, price, loads = [], (), {}
             for term in sig:
                 if isinstance(term, tuple) and term and term[0] == "price":
                     price = term[1] if len(term) > 1 else ()
+                elif (isinstance(term, tuple) and len(term) >= 3
+                        and term[0] == "load"):
+                    loads[term[1]] = term[2:]
                 else:
                     rest.append(term)
-            return tuple(rest), price
+            return tuple(rest), price, loads
 
-        old_rest, old_price = _split(old)
-        new_rest, new_price = _split(new)
+        old_rest, old_price, old_loads = _split(old)
+        new_rest, new_price, new_loads = _split(new)
         if old_rest != new_rest:
             return True
 
-        def _as_map(pairs):
-            m = {}
-            for item in pairs:
-                if not (isinstance(item, tuple) and len(item) == 2):
-                    raise ValueError("old-format price term")
-                m[item[0]] = item[1]
-            return m
+        # (#765, second sighting) A RUNNING load's deficit shrinks through
+        # the 0.1 h buckets — one replan per bucket, every 6 minutes, for
+        # as long as it runs. Shrinking-but-nonzero is the plan WORKING;
+        # news is: a demand appearing or vanishing, a deficit GROWING, or
+        # any other field (the #760 stop flag) moving.
+        if set(old_loads) != set(new_loads):
+            return True
+        for did, new_term in new_loads.items():
+            old_term = old_loads[did]
+            if old_term[1:] != new_term[1:]:
+                return True                      # stop flag etc. moved
+            if new_term[0] > old_term[0]:
+                return True                      # the deficit grew
+        return _price_changed(old_price, new_price)
 
-        old_map, new_map = _as_map(old_price), _as_map(new_price)
-        if set(new_map) - set(old_map):
-            return True                      # tomorrow landed / new slots
-        return any(old_map.get(k) != v for k, v in new_map.items())
     except Exception:  # noqa: BLE001 — unknown shapes replan once, safely
         return True
+
+
+def _price_changed(old_price, new_price) -> bool:
+    """(#765) Shared-timestamp price change or new slots = news; a past
+    slot expiring off the window = silence. Raises on old-format terms —
+    the caller's except turns that into one safe restamp."""
+    def _as_map(pairs):
+        m = {}
+        for item in pairs:
+            if not (isinstance(item, tuple) and len(item) == 2):
+                raise ValueError("old-format price term")
+            m[item[0]] = item[1]
+        return m
+
+    old_map, new_map = _as_map(old_price), _as_map(new_price)
+    if set(new_map) - set(old_map):
+        return True                          # tomorrow landed / new slots
+    return any(old_map.get(k) != v for k, v in new_map.items())
 
 
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):

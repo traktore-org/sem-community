@@ -321,3 +321,43 @@ class TestThePriceWindowSlides:
         old_format = tuple(
             (("price", (0.42, 0.12)) if x[0] == "price" else x) for x in new)
         assert demand_signature_changed(old_format, new) is True
+
+
+class TestAShrinkingDeficitIsProgress:
+    """(#765 second sighting, PROD 14.08 midday) licht_og_guest_plug's
+    deficit crossed a 0.1 h bucket every 6 minutes of running — one replan
+    per bucket, ~30 per run. The term-3 comment always promised "a
+    shrinking deficit is NOT a demand change"; the comparison now keeps
+    that promise: shrink-but-nonzero is the plan WORKING, while a deficit
+    growing, a demand appearing or vanishing, or the stop flag flipping is
+    real news."""
+
+    def _sig(self, deficit_h, stop=False, did="plug"):
+        dev = _dev(did, deficit_h)
+        dev.stop_condition_met = stop
+        return _coord(devices=(dev,))._overnight_demand_signature(_power())
+
+    def _changed(self, old, new):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            demand_signature_changed,
+        )
+        return demand_signature_changed(old, new)
+
+    def test_running_progress_is_silence(self):
+        assert self._changed(self._sig(1.4), self._sig(1.3)) is False
+        assert self._changed(self._sig(1.3), self._sig(0.1)) is False
+
+    def test_a_growing_deficit_replans(self):
+        assert self._changed(self._sig(1.3), self._sig(1.5)) is True
+
+    def test_a_vanishing_demand_replans(self):
+        quiet = _coord()._overnight_demand_signature(_power())
+        assert self._changed(self._sig(1.3), quiet) is True
+
+    def test_a_new_demand_replans(self):
+        quiet = _coord()._overnight_demand_signature(_power())
+        assert self._changed(quiet, self._sig(1.3)) is True
+
+    def test_a_stop_flag_flip_replans_even_while_shrinking(self):
+        assert self._changed(self._sig(1.4, stop=False),
+                             self._sig(1.3, stop=True)) is True
