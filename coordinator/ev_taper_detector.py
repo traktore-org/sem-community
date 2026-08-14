@@ -77,6 +77,14 @@ CHARGE_EFFICIENCY = 0.92       # #708 — AC-side delivered → DC-pack fraction
 MAX_ETA_MINUTES = 60           # Cap completion estimate
 MAX_HEALTH_SAMPLES = 20        # Bounded battery health sample buffer
 
+ANCHOR_REFUTED_KWH = 0.1       # #774 — how far past its own estimate the pack
+                               # may be filled before the reference is called
+                               # stale. Same 0.1 kWh the detector already treats
+                               # as "still at 100 %", read from the other side:
+                               # below it is rounding and cell balancing, above
+                               # it the car demonstrably had room we didn't know
+                               # about.
+
 CHARGE_EFFICIENCY_MIN = 0.5    # #735 — the accepted band for the override.
 CHARGE_EFFICIENCY_MAX = 1.0    # The options dialog offers 50–100 %; anything
                                # outside is a typo, not a rough install.
@@ -171,6 +179,10 @@ class EVTaperDetector:
         # SOC anchor: set True after first reliable SOC reference point
         # (taper detection, car API calibration, or first session bootstrap)
         self._soc_anchored: bool = False
+        # #774 — energy delivered in excess of the deficit the anchor claimed
+        # was left. Session-scoped and NOT persisted: it is evidence about the
+        # reference currently held, and a restart drops both together.
+        self._energy_over_anchor_kwh: float = 0.0
 
         # SOC calibration: track real SOC for syncing virtual SOC
         self._last_real_soc: Optional[float] = None
@@ -355,6 +367,7 @@ class EVTaperDetector:
                 self._energy_since_full = 0.0
                 self._estimated_soc = 100.0
                 self._soc_anchored = True
+                self._energy_over_anchor_kwh = 0.0  # fresh reference (#774)
                 # Snapshot hardware counter at full for drift-free tracking
                 if self._hw_total_last is not None:
                     self._hw_total_at_full = self._hw_total_last
@@ -517,9 +530,41 @@ class EVTaperDetector:
             return
 
         efficiency = self._charge_efficiency()
-        self._energy_since_full = max(
-            0.0, self._energy_since_full - ev_energy_increment_kwh * efficiency
-        )
+        delivered = ev_energy_increment_kwh * efficiency
+
+        # #774 — the meter outranks the estimate. A pack that accepts energy
+        # had room for it, so anything delivered beyond the deficit the anchor
+        # claimed was left is proof the reference is stale. The PROD shape:
+        # charge to full, unplug, drive, replug the SAME day. ``reset_session``
+        # keeps ``_soc_anchored``/``_energy_since_full``, and the only path
+        # that raises the deficit — ``apply_daily_decay`` — runs at rollover
+        # WHILE DISCONNECTED, so it never saw the drive. The clamp below then
+        # pins the deficit at zero for the whole next charge, and ``still_full``
+        # reads True against 8.7 kW at the meter (#755 contract 1, inverted).
+        #
+        # The answer is to drop the reference, not to invent a replacement:
+        # how far the car was actually driven is unknowable, only that it was
+        # further than we thought. ``update_energy`` is deliberately inert
+        # while unanchored (#245) and the display gate renders an unanchored
+        # zero-deficit detector as unknown — the honest reading. The next real
+        # reference (sensor, taper anchor, ``on_session_end`` bootstrap) re-arms
+        # it. ``_full_detected`` returns above this line, so the taper anchor
+        # is never overturned by its own post-full trickle.
+        overdraw = delivered - self._energy_since_full
+        if overdraw > 0:
+            self._energy_over_anchor_kwh += overdraw
+            if self._energy_over_anchor_kwh > ANCHOR_REFUTED_KWH:
+                _LOGGER.info(
+                    "EV SOC reference refuted: pack accepted %.2f kWh more than "
+                    "the %.2f kWh it was believed to be missing — un-anchoring "
+                    "until a real reading (#774)",
+                    self._energy_over_anchor_kwh, self._energy_since_full,
+                )
+                self._soc_anchored = False
+                self._energy_over_anchor_kwh = 0.0
+                return
+
+        self._energy_since_full = max(0.0, self._energy_since_full - delivered)
         self._estimated_soc = min(
             100.0, 100.0 - (self._energy_since_full / capacity * 100.0)
         )
@@ -559,6 +604,7 @@ class EVTaperDetector:
                 self._soc_anchor_session_kwh = self._current_session_energy_kwh
             self._last_real_soc = vehicle_soc
             self._soc_anchored = True
+            self._energy_over_anchor_kwh = 0.0  # fresh reference (#774)
             # Track session start SOC for health calculation
             if self._session_start_soc is None:
                 self._session_start_soc = vehicle_soc
@@ -687,6 +733,7 @@ class EVTaperDetector:
             self._estimated_soc = min(100.0, pre_charge_soc + soc_added)
             self._energy_since_full = (100.0 - self._estimated_soc) / 100.0 * capacity
             self._soc_anchored = True
+            self._energy_over_anchor_kwh = 0.0  # fresh reference (#774)
             _LOGGER.info(
                 "SOC bootstrapped from first session: %.1f kWh delivered "
                 "(%.1f%% added) → estimated SOC %.1f%%",
@@ -716,6 +763,9 @@ class EVTaperDetector:
         self._current_session_energy_kwh = 0.0
         self._last_energy_timestamp = None
         self._last_energy_power_w = 0.0
+        # #774 — evidence against the anchor belongs to the session that
+        # produced it; the anchor itself deliberately survives the disconnect.
+        self._energy_over_anchor_kwh = 0.0
 
     # ------------------------------------------------------------------
     # Persistence

@@ -246,6 +246,21 @@ shapes the demand set must ride the re-plan signature.
   The #653 orphan guard, which had only ever walked class bodies, now reads
   module scope too — and immediately found a second one.
 
+### 🐛 Found on PROD hardware (#774)
+
+- 🔌 **A car drawing 8.7 kW is not a full car** (#774) — the Energy Plan card
+  read "not scheduled tonight: car is already full" while the charger pushed
+  8760 W into it. The virtual-SOC deficit is only ever *raised* by a vehicle-SOC
+  reading or the daily driving decay, and that decay runs at midnight rollover
+  **while the car is disconnected** — so charge-to-full → unplug → drive →
+  replug the *same day* leaves the "full" reference standing, and the deficit,
+  clamped at zero, can never move off the floor no matter how many kWh flow in.
+  Energy delivered beyond what the reference says the pack was missing now
+  refutes that reference: SEM drops it and reports the SOC as unknown until a
+  real reading, a taper anchor, or the session bootstrap re-arms it. How far
+  the car was actually driven is unknowable — only that it was further than we
+  thought — and inventing the replacement number is what caused this.
+
 # [1.7.6-beta.18] — 14.08.2026
 
 ### 🐛 Fixes
