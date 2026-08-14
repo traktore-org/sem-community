@@ -112,6 +112,50 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
 from .publish_diag import format_battery_sign_diag as _format_battery_sign_diag
 
 
+def demand_signature_changed(old, new) -> bool:
+    """(#765) Did the night's ASK really change between two signatures?
+
+    Every term compares strictly except ``price``, which gets the one rule
+    the sliding window needs: a price differing at a SHARED absolute
+    timestamp is a change, NEW timestamps (tomorrow's curve landing) are a
+    change, and a PAST slot expiring off the front of the window is
+    silence — time passing is not the night changing. An unrecognizable
+    shape (a stored signature from an older build) reads as changed: one
+    restamp after an upgrade, never a crash, never a stale night.
+    """
+    if old == new:
+        return False
+    try:
+        def _split(sig):
+            rest, price = [], ()
+            for term in sig:
+                if isinstance(term, tuple) and term and term[0] == "price":
+                    price = term[1] if len(term) > 1 else ()
+                else:
+                    rest.append(term)
+            return tuple(rest), price
+
+        old_rest, old_price = _split(old)
+        new_rest, new_price = _split(new)
+        if old_rest != new_rest:
+            return True
+
+        def _as_map(pairs):
+            m = {}
+            for item in pairs:
+                if not (isinstance(item, tuple) and len(item) == 2):
+                    raise ValueError("old-format price term")
+                m[item[0]] = item[1]
+            return m
+
+        old_map, new_map = _as_map(old_price), _as_map(new_price)
+        if set(new_map) - set(old_map):
+            return True                      # tomorrow landed / new slots
+        return any(old_map.get(k) != v for k, v in new_map.items())
+    except Exception:  # noqa: BLE001 — unknown shapes replan once, safely
+        return True
+
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -6115,8 +6159,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ) or []
             # 96 entries: a full day even on a 15-min market (48 was
             # only 12 h there — tomorrow's curve landing late missed it).
+            # (#765) ABSOLUTE keys, not window order: the upcoming window
+            # slides every hour, and fingerprinting its contents by
+            # position made a past slot dropping off read as "the night
+            # changed" — 10 restamps in one N2 night with prices at
+            # absolute timestamps identical throughout. Pairs of
+            # (timestamp, price) let demand_signature_changed apply the
+            # one rule that matters; index keys are the fallback for
+            # providers whose points carry no timestamp.
             sig.append(("price", tuple(
-                round(float(p.price), 2) for p in ups[:96]
+                ((p.timestamp.isoformat()
+                  if getattr(p, "timestamp", None) is not None else i),
+                 round(float(p.price), 2))
+                for i, p in enumerate(ups[:96])
                 if getattr(p, "price", None) is not None
             )))
         except Exception:  # noqa: BLE001 — no tariff is a valid shape
@@ -6616,7 +6671,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "restamping the period")
             if (getattr(self, "_shadow_plan_date", None) == _night_of
                     and self._plan_ev_conn_sig is not None
-                    and _demand_sig != self._plan_ev_conn_sig):
+                    and demand_signature_changed(
+                        self._plan_ev_conn_sig, _demand_sig)):
                 _LOGGER.info(
                     "OVERNIGHT-PLAN (#638): the night's demands changed "
                     "(%s → %s) — replanning",

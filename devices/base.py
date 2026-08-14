@@ -1076,6 +1076,62 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
     def device_type(self) -> DeviceType:
         return DeviceType.SWITCH
 
+    # (#766) Domains whose entity state IS an on/off truth. observed_on()'s
+    # climate fallthrough deliberately reads any mode-string as "on", so the
+    # per-cycle belief sync must be stricter: a charger's current-control
+    # number reporting "6.0" is not a running load.
+    _BELIEF_SYNC_DOMAINS = ("switch", "input_boolean", "light", "fan")
+
+    def sync_belief_to_observation(self) -> bool:
+        """(#766) Per-cycle twin of ``adopt_if_running``: belief follows
+        the switch.
+
+        ``is_active`` is SEM's belief, updated only by its own
+        activate()/deactivate() and the one-shot adoption at registration
+        — so a switch turning ON later (an external actuator, a user's
+        hand, a box self-start) was invisible: never seen active, never
+        deactivated, runtime never accrued (the N2 pool ran 00:00→07:50
+        against an idle belief). Called for every load at the top of the
+        surplus walk. Returns True when the belief moved.
+
+        An external ON adopts with ``_sem_owned = True`` — the same
+        semantics ``adopt_if_running`` established for the restart case:
+        the device comes under normal control, so goal gates and force
+        expiry can stop it. An external OFF releases the belief without
+        commanding anything: the user already acted; SEM's books follow.
+        """
+        if not self.entity_id or not self.hass:
+            return False
+        if self.entity_id.split(".", 1)[0] not in self._BELIEF_SYNC_DOMAINS:
+            return False
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return False
+        observed = str(state.state).lower()
+        if observed == "on" and not self.is_active:
+            self._status.state = DeviceState.ACTIVE
+            self._status.current_consumption_w = self.rated_power
+            self._status.allocated_power_w = self.rated_power
+            self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated
+            self._sem_owned = True
+            _LOGGER.info(
+                "%s: switch %s turned ON outside SEM — belief adopted, "
+                "under normal control (#766)", self.name, self.entity_id,
+            )
+            return True
+        if observed == "off" and self.is_active:
+            self._status.state = DeviceState.IDLE
+            self._status.current_consumption_w = 0.0
+            self._status.allocated_power_w = 0.0
+            self._last_deactivated = datetime.now()
+            _LOGGER.info(
+                "%s: switch %s turned OFF outside SEM — belief released "
+                "(#766)", self.name, self.entity_id,
+            )
+            return True
+        return False
+
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a switch that is physically ON at (re-)registration.
 

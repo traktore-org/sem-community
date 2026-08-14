@@ -249,3 +249,75 @@ class TestTheSupplySideReplans:
                 raise RuntimeError("reader down")
         c._forecast_reader = _Boom()
         assert c._overnight_demand_signature(_power()) == first
+
+
+class TestThePriceWindowSlides:
+    """(#765, N2 night) The price term fingerprinted ``upcoming_prices[:96]``
+    — a SLIDING window. Every hour the leading (now past) slot dropped off,
+    the tuple changed, and the plan restamped: 10 restamps in one night with
+    prices at absolute timestamps identical throughout. The term now carries
+    (absolute timestamp, price) pairs and the comparison knows one rule: a
+    shared timestamp's price changing replans, NEW timestamps (tomorrow's
+    curve landing) replan, a past slot expiring is silence."""
+
+    def _coord_with_prices(self, pairs):
+        from types import SimpleNamespace as NS
+        import datetime
+        pts = [NS(price=p, timestamp=datetime.datetime.fromisoformat(ts))
+               for ts, p in pairs]
+        c = _coord(prices=())
+        c._tariff_provider = NS(
+            get_tariff_data=lambda: NS(upcoming_prices=pts))
+        return c
+
+    def test_a_past_slot_expiring_is_not_a_changed_night(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            demand_signature_changed,
+        )
+        full = [("2026-08-14T22:00:00+02:00", 0.42),
+                ("2026-08-14T23:00:00+02:00", 0.12),
+                ("2026-08-15T00:00:00+02:00", 0.10)]
+        old = self._coord_with_prices(full)._overnight_demand_signature(_power())
+        new = self._coord_with_prices(full[1:])._overnight_demand_signature(_power())
+        assert demand_signature_changed(old, new) is False
+
+    def test_a_revised_price_at_a_shared_timestamp_replans(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            demand_signature_changed,
+        )
+        old = self._coord_with_prices([
+            ("2026-08-14T23:00:00+02:00", 0.12)])._overnight_demand_signature(_power())
+        new = self._coord_with_prices([
+            ("2026-08-14T23:00:00+02:00", 0.30)])._overnight_demand_signature(_power())
+        assert demand_signature_changed(old, new) is True
+
+    def test_tomorrows_curve_landing_replans(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            demand_signature_changed,
+        )
+        today = [("2026-08-14T23:00:00+02:00", 0.12)]
+        old = self._coord_with_prices(today)._overnight_demand_signature(_power())
+        new = self._coord_with_prices(
+            today + [("2026-08-15T01:00:00+02:00", 0.08)]
+        )._overnight_demand_signature(_power())
+        assert demand_signature_changed(old, new) is True
+
+    def test_every_other_term_still_compares_strictly(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            demand_signature_changed,
+        )
+        a = self._coord_with_prices([("2026-08-14T23:00:00+02:00", 0.12)])
+        old = a._overnight_demand_signature(_power())
+        a.config["ev_chargers"][0]["daily_ev_target"] = 9.9
+        new = a._overnight_demand_signature(_power())
+        assert demand_signature_changed(old, new) is True
+
+    def test_a_stored_old_format_signature_replans_once_never_crashes(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            demand_signature_changed,
+        )
+        new = self._coord_with_prices(
+            [("2026-08-14T23:00:00+02:00", 0.12)])._overnight_demand_signature(_power())
+        old_format = tuple(
+            (("price", (0.42, 0.12)) if x[0] == "price" else x) for x in new)
+        assert demand_signature_changed(old_format, new) is True

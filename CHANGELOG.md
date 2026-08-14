@@ -115,6 +115,28 @@ shapes the demand set must ride the re-plan signature.
   the whole property: covered + in-block + every tier-2 gate green ⇒ the
   device starts.
 
+### 🌙 What the second campaign night taught (#765, #766)
+
+- 🕰️ **Time passing is not the night changing** (#765) — the price term
+  fingerprinted the *sliding* upcoming-prices window, so a past slot
+  dropping off the front restamped the plan every hour on the hour (10
+  restamps in a night with prices at absolute timestamps identical
+  throughout). The term now carries (absolute timestamp, price) pairs and
+  the comparison knows one rule: a shared timestamp's price changing
+  replans, tomorrow's curve landing replans, a past slot expiring is
+  silence. An old-format stored signature replans once after upgrade,
+  never crashes.
+- 👁️ **Belief follows the switch, every cycle** (#766) — `is_active` was a
+  belief only SEM's own activate/deactivate (plus one-shot adoption at
+  registration) ever updated, so a switch turned ON outside SEM — an
+  external actuator, a user's hand, a box self-start — stayed invisible:
+  never seen active, never deactivated, runtime never accrued (the N2 pool
+  ran 00:00→07:50 against an idle belief, honestly flagged unmeasurable by
+  the outcome recorder). Every load now syncs belief to observation each
+  cycle — the per-cycle twin of the restart adoption, strictly for
+  on/off-domain control entities so a charger's current number can never
+  read as ON.
+
 ### 🧪 Simulation is a standard feature now (#764)
 
 - 👁️ **Observer mode publishes its WOULD decisions** — the per-device map

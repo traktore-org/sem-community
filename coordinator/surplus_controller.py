@@ -981,6 +981,18 @@ class SurplusController:
         # (#638 G4) stamp this cycle's joint-plan window verdicts for the
         # intent path AND the imperative passes below.
         self._plan_windows = dict(plan_windows or {})
+        # (#766) Belief follows the switch, every cycle — the per-cycle twin
+        # of adopt_if_running. Without it, a switch turned ON outside SEM's
+        # own activate() (an external actuator, a user, a box self-start)
+        # stays invisible: never seen active, never deactivated, runtime
+        # never accrued (the N2 pool ran 00:00→07:50 on an idle belief).
+        for _dev in self._devices.values():
+            try:
+                _sync = getattr(_dev, "sync_belief_to_observation", None)
+                if callable(_sync):
+                    _sync()
+            except Exception:  # noqa: BLE001 — one device never stalls the walk
+                continue
         peak_freeze = peak_state in (
             LoadManagementState.WARNING,
             LoadManagementState.SHEDDING,
