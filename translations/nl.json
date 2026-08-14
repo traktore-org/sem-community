@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "VPP-gebeurtenis"
+      },
+      "heat_pump_energy_today": {
+        "name": "Warmtepomp vandaag"
+      },
+      "heat_pump_energy_month": {
+        "name": "Warmtepomp deze maand"
+      },
+      "heat_pump_energy_year": {
+        "name": "Warmtepomp dit jaar"
+      },
+      "heat_pump_energy_total": {
+        "name": "Warmtepomp totaal"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Warmtepomp verschoven vandaag"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Vandaag laden uit zon"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Vandaag laden uit net"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Vandaag kosten netladen"
+      },
+      "battery_stored_grid_share": {
+        "name": "Opgeslagen energie uit net"
       }
     },
     "binary_sensor": {

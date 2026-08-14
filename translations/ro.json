@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "Eveniment VPP"
+      },
+      "heat_pump_energy_today": {
+        "name": "Pompă de căldură azi"
+      },
+      "heat_pump_energy_month": {
+        "name": "Pompă de căldură luna aceasta"
+      },
+      "heat_pump_energy_year": {
+        "name": "Pompă de căldură anul acesta"
+      },
+      "heat_pump_energy_total": {
+        "name": "Pompă de căldură total"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Pompă de căldură mutată azi"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Azi încărcare din solar"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Azi încărcare din rețea"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Azi cost încărcare din rețea"
+      },
+      "battery_stored_grid_share": {
+        "name": "Energie stocată din rețea"
       }
     },
     "binary_sensor": {

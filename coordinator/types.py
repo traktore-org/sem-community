@@ -17,9 +17,7 @@ from typing import TYPE_CHECKING, Dict, Any, List, Optional
 from enum import Enum
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from .charger_types import (
-        BatteryPower, BatteryRuntime, InverterPower, InverterRuntime,
-    )
+    from .charger_types import BatteryPower, InverterPower
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -370,20 +368,19 @@ class PowerFlows:
 class EnergyTotals:
     """Daily/monthly energy totals.
 
-    v1.7.0 arch follow-up: ``daily_solar`` / ``daily_battery_charge``
-    / ``daily_battery_discharge`` are populated as plain fields by
-    sensor_reader for single-device installs. Multi-device installs
-    populate ``per_inverter`` / ``per_battery`` dicts and the
-    legacy fields stay at 0 — the ``daily_solar_view`` /
-    ``daily_battery_charge_view`` / ``daily_battery_discharge_view``
-    @property accessors compute from the dicts and fall back to the
-    legacy field when the dict is empty.
+    (#771) These are FLEET rows, and that is now the whole story. A
+    ``per_inverter`` / ``per_battery`` pair of dicts used to sit here with
+    three ``daily_*_view`` properties summing them — declared in the v1.7.0
+    arch follow-up as the multi-device future, never wired to a writer. No
+    install ever put a number in either dict, so every view property returned
+    its legacy fallback on every path, and #771's ask to reconcile
+    ``Σ per_battery`` against the fleet row had nothing to reconcile.
 
-    The properties don't shadow the fields (Python dataclass
-    semantics) — consumers must read ``.daily_solar_view`` etc.
-    to get the per-device-aware value. ``to_dict()`` already emits
-    the legacy fields; the view properties become the canonical
-    sensor source once multi-device installs are common.
+    They were deleted rather than filled in: a breakdown is worth having when
+    something produces it and something checks it, and the two must arrive
+    together. The live breakdowns (per-charger kWh, the per-charger origin
+    split, per-string kWh) are reconciled in
+    ``HealthCheck.check_ledger_partitions``.
     """
     # Daily totals (kWh)
     daily_solar: float = 0.0
@@ -393,6 +390,21 @@ class EnergyTotals:
     daily_grid_export: float = 0.0
     daily_battery_charge: float = 0.0
     daily_battery_discharge: float = 0.0
+
+    # (#770) The same charge, split by where it came from. A kWh off the
+    # roof is free; a kWh bought in the cheap valley cost money, and until
+    # now both discharged against the full import price and the difference
+    # was called savings.
+    #
+    # ENERGY only. What that grid charge COST lives on ``CostData`` and the
+    # share of the stored energy that was bought lives on
+    # ``PerformanceMetrics`` — both were briefly parked here, where the #666
+    # guard reads ``daily_*`` as "an accumulator category" and swept them in.
+    # A currency written through ``_accumulate_cost`` under a different key
+    # name would have passed that sweep vacuously, which is the kind of
+    # false coverage the guard exists to prevent.
+    daily_battery_charge_solar: float = 0.0
+    daily_battery_charge_grid: float = 0.0
 
     # Monthly totals (kWh)
     monthly_solar: float = 0.0
@@ -420,34 +432,6 @@ class EnergyTotals:
     # (TotalActiveProduction / Gesamtenergieertrag). Monthly/Yearly stay
     # period-scoped; this is the apples-to-apples anchor vs the inverter.
     lifetime_solar: float = 0.0
-
-    # v1.7.0 arch follow-up — per-device runtime dicts.
-    # Populated by sensor_reader on multi-device installs. Empty on
-    # single-device installs → the view properties fall back to the
-    # legacy fields. See ``coordinator/charger_types.py`` for the
-    # runtime dataclass shapes.
-    per_inverter: "Dict[str, InverterRuntime]" = field(default_factory=dict)
-    per_battery: "Dict[str, BatteryRuntime]" = field(default_factory=dict)
-
-    @property
-    def daily_solar_view(self) -> float:
-        """Per-device-aware daily solar kWh. Falls back to
-        ``daily_solar`` when no per-inverter data."""
-        if not self.per_inverter:
-            return self.daily_solar
-        return sum(i.daily_kwh for i in self.per_inverter.values())
-
-    @property
-    def daily_battery_charge_view(self) -> float:
-        if not self.per_battery:
-            return self.daily_battery_charge
-        return sum(b.daily_charge_kwh for b in self.per_battery.values())
-
-    @property
-    def daily_battery_discharge_view(self) -> float:
-        if not self.per_battery:
-            return self.daily_battery_discharge
-        return sum(b.daily_discharge_kwh for b in self.per_battery.values())
 
 
 @dataclass
@@ -542,6 +526,10 @@ class CostData:
     daily_net_cost: float = 0.0
     daily_battery_savings: float = 0.0
     daily_total_savings: float = 0.0   # #351 M2 — solar + battery savings
+    # (#770) What today's grid charging of the battery cost. It sits beside
+    # the savings it has to be read against: charge at 0.11, discharge
+    # against 0.28, and only the spread was ever saved.
+    daily_battery_grid_cost: float = 0.0
 
     monthly_costs: float = 0.0
     monthly_savings: float = 0.0
@@ -581,6 +569,11 @@ class PerformanceMetrics:
     """System performance metrics."""
     self_consumption_rate: float = 0.0  # % of solar used locally
     autarky_rate: float = 0.0  # % of consumption from own generation
+    # (#770) % of what is IN the battery right now that was bought, not
+    # harvested. It belongs next to autarky because it is the correction
+    # autarky applies: a grid-charged discharge is grid supply that was
+    # merely time-shifted, not own generation.
+    battery_stored_grid_share: float = 0.0
     # Removed (#669): solar_efficiency / battery_efficiency. Both were
     # hardcoded constants wearing the name of a measurement
     # (``85.0 if solar_power > 0 else 0.0``), emitted every cycle and read by
@@ -730,6 +723,24 @@ class HeatPumpSensorData:
     heat_pump_temperature_reading_path: Optional[str] = None
     heat_pump_offpeak_path: Optional[str] = None
     heat_pump_current_temperature: Optional[float] = None
+    # (#769) The ledger row. On a heat-pump house this is the largest
+    # controllable load in the building and it had no kWh anywhere — it
+    # disappeared into the ``home`` residual (#767) exactly like an
+    # unmonitored kettle. ``shifted`` is the part SEM caused: energy booked
+    # while SG-Ready was asking for BOOST or FORCE_ON, as opposed to energy
+    # the pump would have taken from its own thermostat anyway. Without that
+    # separation "SG-Ready shifted X kWh" is a claim, not a measurement.
+    heat_pump_energy_today: float = 0.0
+    heat_pump_energy_month: float = 0.0
+    heat_pump_energy_year: float = 0.0
+    heat_pump_energy_total: float = 0.0
+    heat_pump_energy_shifted_today: float = 0.0
+    heat_pump_energy_shifted_total: float = 0.0
+    # Provenance, carried from the device (#768): counter / power / rated /
+    # none. ``measured`` is False when the figure is ``rated_power`` × runtime,
+    # which may be displayed but never fed back as training data (#755).
+    heat_pump_energy_source: str = "none"
+    heat_pump_energy_measured: bool = False
 
 
 @dataclass
@@ -984,6 +995,13 @@ class SEMData:
             "daily_grid_export_energy": self.energy.daily_grid_export,
             "daily_battery_charge_energy": self.energy.daily_battery_charge,
             "daily_battery_discharge_energy": self.energy.daily_battery_discharge,
+            # (#770) Where today's battery charge came from, and what the
+            # bought part cost. Without these the savings figure credits a
+            # grid-charged kWh with the full import price it never earned.
+            "daily_battery_charge_solar": self.energy.daily_battery_charge_solar,
+            "daily_battery_charge_grid": self.energy.daily_battery_charge_grid,
+            "daily_battery_grid_cost": self.costs.daily_battery_grid_cost,
+            "battery_stored_grid_share": self.performance.battery_stored_grid_share,
 
             # Monthly energy
             "monthly_solar_yield_energy": self.energy.monthly_solar,
@@ -1221,6 +1239,19 @@ class SEMData:
             "heat_pump_temperature_reading_path": self.heat_pump.heat_pump_temperature_reading_path,
             "heat_pump_offpeak_path": self.heat_pump.heat_pump_offpeak_path,
             "heat_pump_current_temperature": self.heat_pump.heat_pump_current_temperature,
+            # (#769) The ledger row. ``shifted_today`` is the part of today's
+            # kWh that SEM caused — booked while SG-Ready asked for BOOST or
+            # FORCE_ON. The provenance pair is deliberately NOT published as
+            # entities: it belongs on the attributes of the figure it
+            # qualifies, not as two more numbers to read.
+            "heat_pump_energy_today": self.heat_pump.heat_pump_energy_today,
+            "heat_pump_energy_month": self.heat_pump.heat_pump_energy_month,
+            "heat_pump_energy_year": self.heat_pump.heat_pump_energy_year,
+            "heat_pump_energy_total": self.heat_pump.heat_pump_energy_total,
+            "heat_pump_energy_shifted_today": self.heat_pump.heat_pump_energy_shifted_today,
+            "heat_pump_energy_shifted_total": self.heat_pump.heat_pump_energy_shifted_total,
+            "heat_pump_energy_source": self.heat_pump.heat_pump_energy_source,
+            "heat_pump_energy_measured": self.heat_pump.heat_pump_energy_measured,
 
             # Hot water (#454)
             "hot_water_registered": self.hot_water.hot_water_registered,

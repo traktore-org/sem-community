@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "VPP-händelse"
+      },
+      "heat_pump_energy_today": {
+        "name": "Värmepump idag"
+      },
+      "heat_pump_energy_month": {
+        "name": "Värmepump denna månad"
+      },
+      "heat_pump_energy_year": {
+        "name": "Värmepump i år"
+      },
+      "heat_pump_energy_total": {
+        "name": "Värmepump totalt"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Värmepump flyttad idag"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Idag laddning från sol"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Idag laddning från nät"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Idag kostnad nätladdning"
+      },
+      "battery_stored_grid_share": {
+        "name": "Lagrad energi från nät"
       }
     },
     "binary_sensor": {

@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "VPP-tapahtuma"
+      },
+      "heat_pump_energy_today": {
+        "name": "Lämpöpumppu tänään"
+      },
+      "heat_pump_energy_month": {
+        "name": "Lämpöpumppu tässä kuussa"
+      },
+      "heat_pump_energy_year": {
+        "name": "Lämpöpumppu tänä vuonna"
+      },
+      "heat_pump_energy_total": {
+        "name": "Lämpöpumppu yhteensä"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Lämpöpumppu siirretty tänään"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Tänään lataus auringosta"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Tänään lataus verkosta"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Tänään verkkolatauksen kustannus"
+      },
+      "battery_stored_grid_share": {
+        "name": "Varastoitu energia verkosta"
       }
     },
     "binary_sensor": {

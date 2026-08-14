@@ -22,7 +22,10 @@ class TestInverterPowerType:
         i = InverterPower(inverter_id="sun2000")
         assert i.inverter_id == "sun2000"
         assert i.power_w == 0.0
-        assert i.daily_kwh == 0.0
+        # (#771) ``daily_kwh`` is gone: sensor_reader builds this snapshot
+        # from an instantaneous power read and never had a per-inverter
+        # energy counter to fill it from, so it was 0.0 on every install
+        # ever — a measurement-shaped default (#755 contract 1).
         assert i.name == ""
 
     def test_frozen(self):

@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "VPP-hændelse"
+      },
+      "heat_pump_energy_today": {
+        "name": "Varmepumpe i dag"
+      },
+      "heat_pump_energy_month": {
+        "name": "Varmepumpe denne måned"
+      },
+      "heat_pump_energy_year": {
+        "name": "Varmepumpe i år"
+      },
+      "heat_pump_energy_total": {
+        "name": "Varmepumpe total"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Varmepumpe flyttet i dag"
+      },
+      "daily_battery_charge_solar": {
+        "name": "I dag opladning fra sol"
+      },
+      "daily_battery_charge_grid": {
+        "name": "I dag opladning fra net"
+      },
+      "daily_battery_grid_cost": {
+        "name": "I dag omkostning netopladning"
+      },
+      "battery_stored_grid_share": {
+        "name": "Lagret energi fra nettet"
       }
     },
     "binary_sensor": {

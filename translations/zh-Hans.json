@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "VPP 事件"
+      },
+      "heat_pump_energy_today": {
+        "name": "热泵今日"
+      },
+      "heat_pump_energy_month": {
+        "name": "热泵本月"
+      },
+      "heat_pump_energy_year": {
+        "name": "热泵今年"
+      },
+      "heat_pump_energy_total": {
+        "name": "热泵总计"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "热泵今日转移"
+      },
+      "daily_battery_charge_solar": {
+        "name": "今日光伏充电"
+      },
+      "daily_battery_charge_grid": {
+        "name": "今日电网充电"
+      },
+      "daily_battery_grid_cost": {
+        "name": "今日电网充电成本"
+      },
+      "battery_stored_grid_share": {
+        "name": "来自电网的储存电量"
       }
     },
     "binary_sensor": {

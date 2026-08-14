@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "Událost VPP"
+      },
+      "heat_pump_energy_today": {
+        "name": "Tepelné čerpadlo dnes"
+      },
+      "heat_pump_energy_month": {
+        "name": "Tepelné čerpadlo tento měsíc"
+      },
+      "heat_pump_energy_year": {
+        "name": "Tepelné čerpadlo letos"
+      },
+      "heat_pump_energy_total": {
+        "name": "Tepelné čerpadlo celkem"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Tepelné čerpadlo přesunuto dnes"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Dnes nabíjení ze slunce"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Dnes nabíjení ze sítě"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Dnes náklady nabíjení ze sítě"
+      },
+      "battery_stored_grid_share": {
+        "name": "Uložená energie ze sítě"
       }
     },
     "binary_sensor": {

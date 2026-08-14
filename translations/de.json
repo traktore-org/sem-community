@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "VPP-Ereignis"
+      },
+      "heat_pump_energy_today": {
+        "name": "Wärmepumpe heute"
+      },
+      "heat_pump_energy_month": {
+        "name": "Wärmepumpe diesen Monat"
+      },
+      "heat_pump_energy_year": {
+        "name": "Wärmepumpe dieses Jahr"
+      },
+      "heat_pump_energy_total": {
+        "name": "Wärmepumpe gesamt"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Wärmepumpe verschoben heute"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Heute Ladung aus Solar"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Heute Ladung aus Netz"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Heute Kosten Netzladung"
+      },
+      "battery_stored_grid_share": {
+        "name": "Gespeicherte Energie aus Netz"
       }
     },
     "binary_sensor": {

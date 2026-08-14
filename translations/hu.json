@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "VPP-esemény"
+      },
+      "heat_pump_energy_today": {
+        "name": "Hőszivattyú ma"
+      },
+      "heat_pump_energy_month": {
+        "name": "Hőszivattyú ebben a hónapban"
+      },
+      "heat_pump_energy_year": {
+        "name": "Hőszivattyú idén"
+      },
+      "heat_pump_energy_total": {
+        "name": "Hőszivattyú összesen"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Hőszivattyú áthelyezve ma"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Ma töltés napelemből"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Ma töltés hálózatról"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Ma hálózati töltés költsége"
+      },
+      "battery_stored_grid_share": {
+        "name": "Tárolt energia hálózatról"
       }
     },
     "binary_sensor": {

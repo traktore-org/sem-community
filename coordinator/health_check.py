@@ -25,7 +25,9 @@ nothing. What is NOT by construction is a cross-producer invariant — e.g. the
 per-string sensors versus the inverter total — and that's what remains here.
 """
 import logging
-from .types import PowerReadings, PowerFlows, CostData
+from typing import Iterable, Mapping, Optional
+
+from .types import CostData, EnergyFlows, EnergyTotals, PowerFlows, PowerReadings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +45,12 @@ class HealthCheck:
     # — long enough that a stale sensor or a rounding wobble has cleared,
     # short enough that a wrong formula is reported the same session.
     _CLAMP_CYCLES = 30
+
+    # (#771) Tolerance for a per-device breakdown against the fleet row it
+    # decomposes. See ``_reconcile_partition`` for why both numbers are what
+    # they are — and why only the over-count direction is checked at all.
+    _PARTITION_REL_TOL = 0.10
+    _PARTITION_ABS_FLOOR_KWH = 0.5
 
     def __init__(self) -> None:
         self._violation_count: int = 0
@@ -230,6 +238,145 @@ class HealthCheck:
 
         return violations
 
+    def _reconcile_partition(
+        self,
+        label: str,
+        members: Mapping[str, float],
+        fleet_total: float,
+        live_ids: Optional[Iterable[str]] = None,
+    ) -> Optional[str]:
+        """(#771) One breakdown against the fleet row it decomposes.
+
+        Over-count only. The rationale is the same one that kept the
+        per-string POWER check alive through #660 and killed everything
+        around it: a shortfall has several correct explanations, so checking
+        it would fire on healthy hardware every day, and a check that cries
+        wolf gets muted. An EXCESS has none — the same physical energy is
+        being counted under two ids.
+
+        Legitimate shortfalls, for the record: string discovery caps at 4
+        slots; each charger's daily bucket rolls at its own ``Charge by``
+        deadline while the fleet EV day falls back to midnight when two
+        chargers disagree (#723); ``_reconcile_solar_energy`` corrects
+        ``daily_solar`` upward from the hardware counter (#556).
+        """
+        if not members:
+            # No breakdown is not a disagreement — single-charger and
+            # single-string installs never populate one.
+            return None
+
+        total = sum(float(v or 0.0) for v in members.values())
+        fleet = float(fleet_total or 0.0)
+        # 10 % or 0.5 kWh, whichever is larger. The band is the energy twin of
+        # ``check_flows``: per-string members are frequently DC (V×I
+        # synthesised) against an AC fleet row, so inverter efficiency alone
+        # puts a healthy sum 2–5 % over. The absolute floor keeps the relative
+        # band from being meaningless before dawn, when every row is ~0.
+        tolerance = max(
+            self._PARTITION_ABS_FLOOR_KWH, self._PARTITION_REL_TOL * abs(fleet)
+        )
+        excess = total - fleet
+        if excess <= tolerance:
+            return None
+
+        # Name the members, biggest first, and mark the ones that are no
+        # longer configured — a stale member IS the suspect, and saying so is
+        # the difference between "something is wrong" and "delete this id".
+        live = set(live_ids) if live_ids is not None else None
+        listed = ", ".join(
+            f"{mid}={float(kwh or 0.0):.2f}kWh"
+            + (" [no longer configured]" if live is not None and mid not in live else "")
+            for mid, kwh in sorted(
+                members.items(), key=lambda kv: -float(kv[1] or 0.0)
+            )
+        )
+        return (
+            f"{label}: members sum to {total:.2f}kWh against a fleet total of "
+            f"{fleet:.2f}kWh — {excess:.2f}kWh over the {tolerance:.2f}kWh "
+            f"band. One physical quantity is counted twice (a renamed or "
+            f"removed id whose bucket is still published). Members: {listed}"
+        )
+
+    def check_ledger_partitions(
+        self,
+        energy: EnergyTotals,
+        energy_flows: EnergyFlows | None = None,
+        per_charger_daily: Mapping[str, float] | None = None,
+        live_charger_ids: Iterable[str] | None = None,
+    ) -> list[str]:
+        """(#771) The three published breakdowns vs their fleet rows.
+
+        The #628 identity checks the fleet rows only, so a per-device
+        misattribution moves no total and is invisible: the per-charger card
+        shows a wrong number confidently and nothing anywhere disagrees.
+
+        Note what is absent. Issue #771's table also lists a ``per_battery``
+        charge/discharge breakdown; there is no such ledger. The dicts that
+        carried that name had no production writer, so a reconciler over them
+        would have been unfireable — the #660 failure mode, rebuilt. They are
+        deleted instead; ``tests/test_771_ledger_partitions.py`` holds the
+        ratchet against re-adding data-shaped surface with nothing behind it.
+        """
+        violations: list[str] = []
+
+        # 1. Per-charger daily kWh vs the fleet EV day. The sharpest of the
+        #    three — the members are integrated in the coordinator from each
+        #    charger's own reading, the fleet row in EnergyCalculator from
+        #    ``power.ev_power``. Two producers, two inputs, one quantity.
+        v = self._reconcile_partition(
+            "Per-charger daily EV energy",
+            per_charger_daily or {},
+            getattr(energy, "daily_ev", 0.0),
+            live_charger_ids,
+        )
+        if v:
+            violations.append(v)
+
+        if energy_flows is not None:
+            # 2. The per-charger ORIGIN split — what the per-charger cost and
+            #    savings figures are built on.
+            per_charger = getattr(energy_flows, "per_charger", None) or {}
+            if per_charger:
+                fleet_ev = (
+                    float(getattr(energy_flows, "solar_to_ev", 0.0) or 0.0)
+                    + float(getattr(energy_flows, "grid_to_ev", 0.0) or 0.0)
+                    + float(getattr(energy_flows, "battery_to_ev", 0.0) or 0.0)
+                )
+                v = self._reconcile_partition(
+                    "Per-charger EV origin split",
+                    {
+                        cid: (
+                            float(getattr(c, "solar_to_ev", 0.0) or 0.0)
+                            + float(getattr(c, "grid_to_ev", 0.0) or 0.0)
+                            + float(getattr(c, "battery_to_ev", 0.0) or 0.0)
+                        )
+                        for cid, c in per_charger.items()
+                    },
+                    fleet_ev,
+                    live_charger_ids,
+                )
+                if v:
+                    violations.append(v)
+
+            # 3. Per-PV-string daily kWh vs the solar day. No live-id set is
+            #    passed: the strings a cloudy cycle reports are not the strings
+            #    that exist, so "not live this cycle" would libel healthy
+            #    hardware. The member list alone identifies the duplicate.
+            per_string = getattr(energy_flows, "per_string", None) or {}
+            if per_string:
+                v = self._reconcile_partition(
+                    "Per-PV-string daily energy",
+                    {
+                        sid: float(getattr(s, "energy_kwh", 0.0) or 0.0)
+                        for sid, s in per_string.items()
+                    },
+                    getattr(energy, "daily_solar", 0.0),
+                )
+                if v:
+                    violations.append(v)
+
+        return violations
+
     def check_clamps(self, clamp_engagement: dict[str, float]) -> list[str]:
         """(#660) Report clamps that have been engaged for too long.
 
@@ -286,6 +433,10 @@ class HealthCheck:
         costs: CostData | None = None,
         clamp_engagement: dict[str, float] | None = None,
         home_hold_active: bool = False,
+        energy: EnergyTotals | None = None,
+        energy_flows: EnergyFlows | None = None,
+        per_charger_daily: Mapping[str, float] | None = None,
+        live_charger_ids: Iterable[str] | None = None,
     ) -> list[str]:
         """Run all health checks and return violations list.
 
@@ -293,6 +444,12 @@ class HealthCheck:
         They fed a range check on values their producer had already clamped
         into that range; ``clamp_engagement`` carries the same two metrics
         with the information still attached.
+
+        (#771) ``flows`` is the instantaneous :class:`PowerFlows`;
+        ``energy_flows`` is the integrated :class:`EnergyFlows`. The partition
+        check needs the latter — the two are one letter apart and mean
+        different things, which is why they are separate parameters rather
+        than one polymorphic one.
         """
         violations = self.check_power_balance(power, home_hold_active)
         if flows is not None:
@@ -300,6 +457,13 @@ class HealthCheck:
         violations += self.check_clamps(clamp_engagement or {})
         if costs is not None:
             violations += self.check_costs(costs)
+        if energy is not None:
+            violations += self.check_ledger_partitions(
+                energy,
+                energy_flows=energy_flows,
+                per_charger_daily=per_charger_daily,
+                live_charger_ids=live_charger_ids,
+            )
 
         if violations:
             self._violation_count += len(violations)

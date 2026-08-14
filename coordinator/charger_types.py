@@ -146,8 +146,11 @@ class InverterPower:
     power_w: float = 0.0
     """Instantaneous AC output (W). ≥ 0 by SEM convention."""
 
-    daily_kwh: float = 0.0
-    """Calendar-reset daily AC energy (kWh)."""
+    # (#771) ``daily_kwh`` used to sit here. ``sensor_reader`` builds this
+    # snapshot from an instantaneous power read and has no per-inverter energy
+    # counter to fill it from, so it was 0.0 on every install ever — a
+    # measurement-shaped default, which is #755 contract 1. Per-inverter daily
+    # energy needs a producer before it needs a field.
 
     name: str = ""
     """Human-readable label (e.g. "SUN2000-1") for dashboard display."""
@@ -190,8 +193,8 @@ class BatteryPower:
     """Nameplate capacity for this unit. Used by the fleet SOC
     weighted average + battery_assist budget math."""
 
-    daily_charge_kwh: float = 0.0
-    daily_discharge_kwh: float = 0.0
+    # (#771) ``daily_charge_kwh`` / ``daily_discharge_kwh`` deleted — same
+    # reason as ``InverterPower.daily_kwh``: nothing ever wrote them.
 
     name: str = ""
 
@@ -201,38 +204,21 @@ class BatteryPower:
 # ─────────────────────────────────────────────────────────────────
 #
 # Runtime types are MUTABLE — they hold per-cycle state that evolves
-# across the coordinator's lifetime: daily kWh accumulators,
-# availability flags, last-known values used by smoothing fallbacks.
-# Live in ``SEMCoordinator._per_inverter`` / ``_per_battery`` dicts.
+# across the coordinator's lifetime: availability flags, last-known
+# values used by smoothing fallbacks.
 #
 # Distinct from the FROZEN ``InverterPower`` / ``BatteryPower``
 # types above — those are snapshots of the per-cycle SENSOR reading.
 # The runtime is the persistent record across cycles.
-
-@dataclass
-class InverterRuntime:
-    """Coordinator-level state for ONE inverter.
-
-    Inverters are observed-only in SEM (no command surface — the
-    inverter integration owns its own modes). So the runtime is
-    thin: daily kWh accumulator, last-known availability, name for
-    display. No adapter, no intent, no decide loop — those concepts
-    have no inverter analog.
-    """
-
-    inverter_id: str
-    daily_kwh: float = 0.0
-    daily_kwh_date: str = ""
-    last_known_w: float = 0.0
-    """Last non-zero / non-stale power reading. Used by sensor
-    smoothing when an inverter goes briefly unavailable
-    mid-cycle (sensor lag, MQTT hiccup)."""
-    available: bool = True
-    """False when the inverter's primary sensor is
-    ``unavailable`` / ``unknown``. Drives the
-    ``sensor.sem_inverter_<id>_available`` binary sensor."""
-    name: str = ""
-
+#
+# (#771) There is no ``InverterRuntime``. There was one — declared in the
+# v1.7.0 arch follow-up alongside its per-inverter dict on ``EnergyTotals``,
+# with a daily-kWh accumulator, an availability flag and a docstring claiming
+# it drove a ``sensor.sem_inverter_<id>_available`` binary sensor. Nothing
+# ever constructed one, on any path, so every field on it was dead and the
+# binary sensor never existed. It is deleted rather than wired up: inverters
+# are observed-only, and their fleet total is already reconciled against the
+# per-string breakdown in ``HealthCheck.check_ledger_partitions``.
 
 @dataclass
 class BatteryRuntime:
@@ -246,9 +232,10 @@ class BatteryRuntime:
     """
 
     battery_id: str
-    daily_charge_kwh: float = 0.0
-    daily_discharge_kwh: float = 0.0
-    daily_kwh_date: str = ""
+    # (#771) No ``daily_charge_kwh`` / ``daily_discharge_kwh`` /
+    # ``daily_kwh_date`` — the coordinator builds this runtime from a power
+    # reading (``_run_battery_pipeline``) and never had a per-battery energy
+    # counter to fill them from. The fleet battery rows are the real ledger.
     last_known_soc: float = 0.0
     last_known_w: float = 0.0
     capacity_kwh: float = 0.0
@@ -259,34 +246,29 @@ class BatteryRuntime:
 
 
 # ─────────────────────────────────────────────────────────────────
-# Per-device flow attribution slices (Group A + B Step 5 mirror)
+# (#771) There are no per-inverter / per-battery flow slices
 # ─────────────────────────────────────────────────────────────────
 #
-# Mirror of ``ChargerFlows`` (per-charger EV-side share of the fleet
-# attribution). Strings are SOURCES; inverters are sources too;
-# batteries are bidirectional (source when discharging, destination
-# when charging). The attribution algorithm in
-# ``flow_calculator.calculate_power_flows`` produces these slices
-# in priority order, so the conservation invariant
+# ``InverterFlows`` and ``BatteryFlows`` were declared here as the
+# per-inverter and per-battery mirrors of ``ChargerFlows``, above a
+# comment asserting that
 #   sum(flows.per_inverter[i].solar_to_X) == flows.solar_to_X
-# holds by construction.
-
-@dataclass(frozen=True)
-class InverterFlows:
-    """Per-inverter share of the fleet solar_to_X flows."""
-    inverter_id: str
-    solar_to_home: float = 0.0
-    solar_to_ev: float = 0.0
-    solar_to_battery: float = 0.0
-    solar_to_grid: float = 0.0
-
-
-@dataclass(frozen=True)
-class BatteryFlows:
-    """Per-battery share of battery_to_X flows (discharge side)."""
-    battery_id: str
-    battery_to_home: float = 0.0
-    battery_to_ev: float = 0.0
+# "holds by construction". It did not hold by construction or any
+# other way: ``PowerFlows`` has ``per_charger`` and nothing else, so
+# there was no container for the slices, and ``flow_calculator``
+# never built one. The invariant was a claim about an algorithm that
+# does not exist, and the only tests were frozen-dataclass shape pins
+# — theorems about ``@dataclass(frozen=True)``.
+#
+# That is #771's complaint in its purest form: a per-device row that
+# READS as reconciled against the fleet identity while nothing
+# computes it. Deleted rather than filled in, because filling it in
+# means writing the attribution first and the type after.
+#
+# ``ChargerFlows`` stays and is real: ``flow_calculator`` fills
+# ``PowerFlows.per_charger`` in priority order and integrates it into
+# ``EnergyFlows.per_charger``, which is what
+# ``HealthCheck.check_ledger_partitions`` reconciles.
 
 
 # ─────────────────────────────────────────────────────────────────

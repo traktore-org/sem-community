@@ -207,6 +207,33 @@ heat pump or AC) as a surplus device. Every unit then gets, independently:
 The SG-Ready section and climate devices can coexist: one SG-Ready unit
 plus any number of climate-managed units.
 
+### How much did SG-Ready actually shift? (#769)
+
+The SG-Ready unit has its own energy row, on the same footing as the EV:
+
+| Sensor | What it answers |
+|---|---|
+| `sensor.sem_heat_pump_energy_today` | kWh the pump used today |
+| `sensor.sem_heat_pump_energy_month` / `_year` / `_total` | the same over longer horizons |
+| `sensor.sem_heat_pump_energy_shifted_today` | of today's kWh, **how much SEM caused** |
+
+"Shifted" counts only the energy booked while SEM was asking for more —
+SG-Ready in **BOOST** or **FORCE_ON**. Energy the pump took on its own
+thermostat (NORMAL) is deliberately excluded, because that is energy that
+would have been used anyway. The difference between the two numbers is the
+honest answer to "is SG-Ready doing anything for me?"
+
+**Where the figure comes from.** If you gave the heat pump an energy counter
+entity, the row is the counter's own delta — a measurement. If it has only a
+power sensor, SEM integrates it. With neither, the figure is `rated_power ×
+runtime` and is flagged as an **estimate**: it is shown, but never fed back
+into SEM's learning (see [SIMULATION.md](SIMULATION.md) and #755). A sensor
+that cannot be read is recorded as *blind* — SEM does not record a silent
+sensor as a pump drawing zero watts.
+
+**The day rolls at sunrise, not midnight** — the same boundary the pump's
+runtime uses — so "today" means the same thing everywhere in SEM.
+
 ## Hot Water and Heat Pump (v1.7.3 hardening)
 
 SEM works alongside your existing heating system — it only boosts with solar surplus, it does NOT replace your boiler or heat pump's normal heating schedule. Your existing system continues to handle baseline heating as usual. SEM adds a solar boost layer on top: when surplus solar power is available, SEM heats the water further to store energy that would otherwise be exported.
@@ -916,9 +943,42 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_daily_savings` — today's solar savings
 - `sensor.sem_monthly_*` — monthly equivalents
 
+### Where the stored energy came from (#770)
+
+A kWh discharged from the battery is only a saving if it was free when it
+went in. SEM charges the battery from the grid on purpose — in the cheap
+overnight valley, ahead of a poor forecast — and that energy was **bought**,
+not made. Four sensors keep the two apart:
+
+| Sensor | What it answers |
+|---|---|
+| `sensor.sem_daily_battery_charge_solar` | of today's charging, how much came off the roof |
+| `sensor.sem_daily_battery_charge_grid` | …and how much was bought |
+| `sensor.sem_daily_battery_grid_cost` | what the bought part cost |
+| `sensor.sem_battery_stored_grid_share` | % of what is **in** the battery right now that was bought |
+
+`sensor.sem_daily_savings` now pays only the difference: a kWh bought at
+0.30 and discharged against 0.30 saved nothing — it was moved, not made —
+while a kWh bought at 0.10 in the valley and displacing 0.30 at breakfast
+saves 0.20. Energy that was already stored before SEM started watching has
+no known origin and keeps the full credit; it is not penalised for a
+measurement SEM never took.
+
+`sensor.sem_autarky_rate` follows the same rule: battery discharge counts as
+your own supply only for the solar-charged share. The rest is grid supply
+that was merely time-shifted, which is worth money but is not independence.
+(`sensor.sem_self_consumption_rate` is unaffected — it measures how much of
+your *solar* stayed home, and that answer never depended on the battery's
+origin.)
+
+The pool is checked against the battery's measured SOC every cycle, so
+integration drift cannot invent stored energy. If the SOC sensor goes
+offline, SEM leaves the figures alone rather than reading silence as an
+empty battery.
+
 ### Performance Sensors (%)
 - `sensor.sem_self_consumption_rate` — % of solar used locally
-- `sensor.sem_autarky_rate` — % of consumption from solar+battery
+- `sensor.sem_autarky_rate` — % of consumption from solar+battery (grid-charged battery counts as grid, #770)
 - `sensor.sem_pv_performance_vs_forecast` — actual yield vs Solcast/Forecast.Solar prediction
 - `sensor.sem_pv_daily_specific_yield` — kWh per kWp installed
 - `sensor.sem_pv_estimated_annual_degradation` — long-term PV health

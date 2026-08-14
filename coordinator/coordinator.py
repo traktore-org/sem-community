@@ -3783,6 +3783,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._energy_calculator, "clamp_engagement", {},
                 ),
                 home_hold_active=getattr(self, "_home_hold_active", False),
+                # (#771) The three published per-device breakdowns, so they
+                # can be reconciled against the fleet rows they decompose.
+                # ``live_charger_ids`` is what makes the diagnostic
+                # actionable: a member that is no longer configured is the
+                # one whose stale bucket is inflating the sum.
+                energy=energy,
+                energy_flows=energy_flows,
+                per_charger_daily=dict(self._daily_ev_per_charger),
+                live_charger_ids=[
+                    str(c.get("id"))
+                    for c in (self.config.get("ev_chargers") or [])
+                    if c.get("id")
+                ],
             )
 
             # Step 12: Notifications (extracted for readability, #29)
@@ -4749,6 +4762,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._load_meter_day = meter_day   # observability/back-compat
             for device in self._surplus_controller._devices.values():
                 device.update_daily_runtime(meter_day)
+            # (#769) The tick that accrued the energy is the tick that files
+            # it. Same meter day, so the device's four horizons all rest on
+            # the one day boundary.
+            self._file_device_energy(meter_day)
         except (AttributeError, TypeError) as e:
             _LOGGER.debug("Device runtime update failed: %s", e)
 
@@ -4882,6 +4899,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hp_controller
         )
 
+        # (#769) Read the ledger row back out. The device booked the kWh
+        # (#768) and the seam filed it; here it becomes four horizons plus
+        # the SEM-caused split. ``shifted`` sums the SG-Ready states that
+        # mean "SEM asked for this" — energy booked in NORMAL is energy the
+        # pump's own thermostat would have taken anyway, and keeping the two
+        # apart is what makes "SG-Ready shifted X kWh" a measurement.
+        hp_ledger = {
+            "daily_kwh": 0.0, "monthly_kwh": 0.0,
+            "yearly_kwh": 0.0, "lifetime_kwh": 0.0,
+        }
+        hp_shifted_today = 0.0
+        hp_shifted_total = 0.0
+        _calc = getattr(self, "_energy_calculator", None)
+        if _calc is not None and hp_controller is not None:
+            try:
+                _day = getattr(hp_controller, "_daily_runtime_meter_day", None) \
+                    or self.time_manager.get_current_meter_day_sunrise_based()
+                hp_ledger = _calc.get_device_energy("heat_pump", _day)
+                hp_shifted_today = _calc.get_device_shifted("heat_pump", _day)
+                hp_shifted_total = _calc.get_device_shifted(
+                    "heat_pump", _day, lifetime=True
+                )
+            except (AttributeError, TypeError, ValueError):
+                pass
+
         heat_pump_data = HeatPumpSensorData(
             heat_pump_registered=registered_flag,
             heat_pump_mode=hp_mode,
@@ -4900,6 +4942,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             heat_pump_temperature_reading_path=_hp_attr("_last_temperature_reading_path"),
             heat_pump_offpeak_path=_hp_attr("_last_offpeak_path"),
             heat_pump_current_temperature=hp_current_temp,
+            heat_pump_energy_today=hp_ledger["daily_kwh"],
+            heat_pump_energy_month=hp_ledger["monthly_kwh"],
+            heat_pump_energy_year=hp_ledger["yearly_kwh"],
+            heat_pump_energy_total=hp_ledger["lifetime_kwh"],
+            heat_pump_energy_shifted_today=hp_shifted_today,
+            heat_pump_energy_shifted_total=hp_shifted_total,
+            heat_pump_energy_source=getattr(
+                hp_controller, "daily_energy_source", "none"
+            ) or "none",
+            heat_pump_energy_measured=bool(getattr(
+                hp_controller, "daily_energy_is_measured", False
+            )),
         )
 
         # ── Hot water data (#454) ───────────────────────────────────
@@ -9524,6 +9578,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             device = self._surplus_controller.get_device(device_id)
             if not device:
                 continue
+            # (#768) The day's ENERGY restores independently of the runtime,
+            # under its own emptiness guard: a load with no runtime goal accrues
+            # zero seconds forever, so the ``accumulated_sec > 0`` test below
+            # would let this run re-fill a live value on every rebuild.
+            # Class-qualified on purpose: the runtime-restore tests drive this
+            # method with a duck-typed coordinator (#622), which has no bound
+            # methods of its own.
+            SEMCoordinator._restore_device_energy(device, data)
             # Never overwrite a live value — only fill a device that came back
             # empty (fresh object, nothing accrued yet). Mirrors the in-memory
             # _restore_accrued_runtimes contract so the two restore paths agree.
@@ -9540,24 +9602,75 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except (KeyError, ValueError) as e:
                 _LOGGER.debug("Failed to restore runtime for %s: %s", device_id, e)
 
+    @staticmethod
+    def _restore_device_energy(device, data: Dict[str, Any]) -> None:
+        """(#768) Fill a fresh device's daily energy from storage.
+
+        Only ever fills — a device that already booked energy this session
+        keeps its live value, and a restored counter baseline is never pushed
+        onto a device that has already read its counter. A stale meter day
+        needs no guard here for the same reason the runtime doesn't: the next
+        ``update_daily_runtime`` sees the rollover and zeroes both.
+        """
+        try:
+            if float(getattr(device, "_daily_energy_kwh", 0.0) or 0.0) == 0.0:
+                device._daily_energy_kwh = float(data.get("accumulated_kwh") or 0.0)
+            if getattr(device, "_energy_counter_last_kwh", None) is None:
+                baseline = data.get("counter_baseline_kwh")
+                if baseline is not None:
+                    device._energy_counter_last_kwh = float(baseline)
+        except (AttributeError, TypeError, ValueError) as e:
+            _LOGGER.debug("Failed to restore daily energy for %s: %s",
+                          getattr(device, "device_id", "?"), e)
+
+    def _file_device_energy(self, meter_day) -> None:
+        """(#769) File each device's just-booked kWh into the ledger.
+
+        The device knows what it consumed (#768) and, where it has modes worth
+        telling apart, which bucket to file it under; the ledger knows about
+        periods. This is the seam, and it is deliberately thin: no decision, no
+        estimate, no reinterpretation of the number on the way through.
+
+        A device that booked nothing this cycle is not filed at all — a device
+        with an unreadable meter must not be recorded as one that consumed
+        zero (#755 contract 1).
+        """
+        calc = getattr(self, "_energy_calculator", None)
+        if calc is None:
+            return
+        for device in self._surplus_controller._devices.values():
+            increment = getattr(device, "last_cycle_energy_kwh", 0.0) or 0.0
+            if not increment:
+                continue
+            calc.accumulate_device_energy(
+                device.device_id, increment, meter_day,
+                split=getattr(device, "energy_split_label", None),
+            )
+
     def _persist_device_runtimes(self) -> None:
-        """Save device runtimes to storage."""
+        """Save device runtimes — and, for EVERY device, the day's energy.
+
+        (#768) The runtime half is gated on the device having a runtime goal;
+        the energy half is not, deliberately. The loads that silently vanish
+        into ``home`` (#767) are precisely the auto-discovered ones nobody
+        configured a target on.
+        """
         if not self._storage:
             return
         for device in self._surplus_controller._devices.values():
-            # (#620) persist for a cap-ONLY device too — otherwise a restart
-            # loses its accrued runtime and the daily_max cap resets to 0, so
-            # it could run past the cap it had already hit.
-            _has_target = (
-                device.daily_min_runtime_sec > 0
-                or getattr(device, "daily_max_runtime_sec", 0) > 0
+            if not device._daily_runtime_meter_day:
+                continue  # never ran a cycle — nothing to stamp it with
+            # The row used to be written only for a device with a runtime goal
+            # (#620: including a cap-ONLY one, so a restart can't lose the cap
+            # it had already hit). Now every device gets one, and the accrued
+            # seconds ride along for free.
+            self._storage.set_device_runtime(
+                device.device_id,
+                device._daily_runtime_accumulated_sec,
+                device._daily_runtime_meter_day.isoformat(),
+                accumulated_kwh=getattr(device, "_daily_energy_kwh", 0.0),
+                counter_baseline_kwh=getattr(device, "_energy_counter_last_kwh", None),
             )
-            if _has_target and device._daily_runtime_meter_day:
-                self._storage.set_device_runtime(
-                    device.device_id,
-                    device._daily_runtime_accumulated_sec,
-                    device._daily_runtime_meter_day.isoformat(),
-                )
 
     def get_ed_config_detail(self) -> Optional[Dict[str, Any]]:
         """Full Energy Dashboard mapping (entity IDs + power source) per source.

@@ -1181,6 +1181,33 @@
       },
       "vpp_event": {
         "name": "Evento VPP"
+      },
+      "heat_pump_energy_today": {
+        "name": "Bomba de calor hoje"
+      },
+      "heat_pump_energy_month": {
+        "name": "Bomba de calor este mês"
+      },
+      "heat_pump_energy_year": {
+        "name": "Bomba de calor este ano"
+      },
+      "heat_pump_energy_total": {
+        "name": "Bomba de calor total"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Bomba de calor deslocada hoje"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Carga solar hoje"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Carga da rede hoje"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Custo de carga da rede hoje"
+      },
+      "battery_stored_grid_share": {
+        "name": "Energia armazenada da rede"
       }
     },
     "binary_sensor": {

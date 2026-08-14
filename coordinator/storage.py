@@ -88,6 +88,12 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # once-per-year cost seeding flag — both also reset on every restart.
     "rate_history",
     "yearly_cost_seeded",
+    # (#770) the battery's cost basis — which pools of the stored energy came
+    # off the roof and which were bought, and for how much. Without this the
+    # store forgets every purchase at restart and the next discharge is
+    # credited the full import price again, which is the bug the whole row
+    # exists to fix.
+    "battery_provenance",
 )
 
 
@@ -381,13 +387,25 @@ class SEMStorage:
     def set_device_runtime(
         self, device_id: str, accumulated_sec: float, meter_day: str,
         accumulated_kwh: float = 0.0,
+        counter_baseline_kwh: Optional[float] = None,
     ) -> None:
-        """Persist a device's daily runtime (+ energy progress, #559)."""
+        """Persist a device's daily runtime and daily energy.
+
+        ``accumulated_kwh`` was a #559 leftover — a slot no caller ever wrote
+        and nothing ever read. #768 fills it: the device's measured (or, when
+        flagged, estimated) energy for the meter day.
+
+        ``counter_baseline_kwh`` is the last reading of the device's own energy
+        counter. Restoring it is what lets a same-day restart book the energy
+        the meter recorded while HA was down instead of re-baselining and
+        losing it.
+        """
         if "device_runtimes" not in self._daily_data:
             self._daily_data["device_runtimes"] = {}
         self._daily_data["device_runtimes"][device_id] = {
             "accumulated_sec": accumulated_sec,
             "accumulated_kwh": accumulated_kwh,
+            "counter_baseline_kwh": counter_baseline_kwh,
             "meter_day": meter_day,
         }
 

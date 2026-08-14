@@ -195,6 +195,32 @@ class ControllableDevice(ABC):
         self._daily_runtime_meter_day: Optional[date] = None
         self._offpeak_forced: bool = False
 
+        # (#768) Daily ENERGY, beside the daily runtime and reset with it.
+        #
+        # Not the surface #559 deleted. That was a daily energy BUDGET —
+        # ``daily_max_energy_kwh`` and friends, knobs the device steered
+        # against, wired to nothing. This is the opposite direction: what the
+        # device actually used, so the energy balance stops absorbing every
+        # controlled load into ``home`` (#767). It gates no decision, and the
+        # freeze guard in test_559_goal_engine stays green.
+        #
+        # ``_daily_energy_source`` is the provenance, and it is the point:
+        # "counter" and "power" are MEASURED, "rated" is an ESTIMATE that may
+        # never be fed back as training data (#755 contract 1), "none" means
+        # the device has no consumption signal at all.
+        self._daily_energy_kwh: float = 0.0
+        self._daily_energy_source: str = "none"
+        # Seconds the chosen MEASURED source could not be read. A sensor that
+        # is unavailable is not a device drawing zero watts — the gap is
+        # recorded rather than silently booked as 0 kWh.
+        self._daily_energy_blind_s: float = 0.0
+        self._energy_counter_last_kwh: Optional[float] = None
+        self._energy_last_power_w: Optional[float] = None
+        # (#769) What the LAST cycle booked. The running total above answers
+        # "how much today"; the ledger needs "how much just now" to file it
+        # under a period and a mode. Never persisted — it describes one cycle.
+        self._last_cycle_energy_kwh: float = 0.0
+
         # (#620) Battery use, two tiers gated by the existing Buffer + Reserve
         # SoC. Tier 1 (``battery_assist_enabled``) = the "Solar + battery" mode:
         # the battery assists this device above the Buffer SoC when real surplus
@@ -341,11 +367,22 @@ class ControllableDevice(ABC):
         # Reset on meter day rollover
         if self._daily_runtime_meter_day is not None and meter_day != self._daily_runtime_meter_day:
             _LOGGER.debug(
-                "%s: daily runtime reset (%.0fs) on meter day rollover",
+                "%s: daily runtime reset (%.0fs, %.3f kWh via %s) on meter day rollover",
                 self.name, self._daily_runtime_accumulated_sec,
+                self._daily_energy_kwh, self._daily_energy_source,
             )
             self._daily_runtime_accumulated_sec = 0.0
             self._daily_runtime_last_check = now
+            # (#768) The day's energy goes with the day's runtime. The counter
+            # BASELINE deliberately survives: re-reading it would book the
+            # whole lifetime total into the first cycle of the new day.
+            self._daily_energy_kwh = 0.0
+            self._daily_energy_blind_s = 0.0
+            # (#769) The rollover cycle re-anchors ``_daily_runtime_last_check``
+            # to now, so ``elapsed`` is 0 and the accrual below never runs — the
+            # previous cycle's increment would otherwise survive the day change
+            # and be filed a second time, under the new day.
+            self._last_cycle_energy_kwh = 0.0
         self._daily_runtime_meter_day = meter_day
 
         # Don't accumulate the daily solar budget when SEM isn't managing the
@@ -358,15 +395,171 @@ class ControllableDevice(ABC):
         # no control entity / entity unavailable) falls back to belief, so
         # devices without a readable entity behave exactly as before.
         _really_on = self.is_active and self.observed_on() is not False
-        if self._daily_runtime_last_check is not None and _really_on and _managed:
-            elapsed = (now - self._daily_runtime_last_check).total_seconds()
-            if 0 < elapsed <= 120:  # ignore jumps > 120s (restart recovery)
-                self._daily_runtime_accumulated_sec += elapsed
+        elapsed = 0.0
+        if self._daily_runtime_last_check is not None:
+            _e = (now - self._daily_runtime_last_check).total_seconds()
+            if 0 < _e <= 120:  # ignore jumps > 120s (restart recovery)
+                elapsed = _e
+        if elapsed and _really_on and _managed:
+            self._daily_runtime_accumulated_sec += elapsed
+
+        # (#768) Energy accrues on the SAME tick and the same elapsed window,
+        # but under different gates: runtime answers "did SEM run it", energy
+        # answers "what left the house". A device switched to Off, or running
+        # on its own thermostat, still consumes — and the balance wants that.
+        if elapsed:
+            self._accrue_daily_energy(elapsed, _really_on)
 
         if self.is_active:
             self.calibrate_rated_power()
 
         self._daily_runtime_last_check = now
+
+    def _accrue_daily_energy(self, elapsed_s: float, really_on: bool) -> None:
+        """(#768) Book this cycle's energy, and say where the number came from.
+
+        A fixed order, best evidence first:
+
+        1. the energy counter's delta — MEASURED, and the meter's OWN integral
+        2. the power sensor, integrated over the cycle — MEASURED, but our
+           integral of someone else's instant
+        3. ``rated_power`` × runtime — an ESTIMATE, flagged as one and never
+           usable as training data (#755 contract 1)
+
+        Note this ranking is the REVERSE of ``observed_power_w``'s, on purpose:
+        asked for POWER the sensor is direct and the counter derived; asked for
+        ENERGY the counter is direct and the power sensor derived.
+
+        Sources 1 and 2 accrue regardless of ``control_mode`` and of whether SEM
+        believes the device is running: the energy balance wants what left the
+        house, not what SEM ordered. Only the estimate is gated on the device
+        actually being on — there is nothing to estimate from otherwise.
+        """
+        # (#769) Every cycle starts owing nothing. Whatever gets booked below
+        # is also this cycle's INCREMENT, which is what the ledger files under
+        # a period and an attribution bucket. A cycle that books nothing leaves
+        # this at 0.0 — and a nothing is not a zero measurement, which is why
+        # the blind seconds are counted separately.
+        self._last_cycle_energy_kwh = 0.0
+
+        if self.hass and self.energy_entity_id:
+            self._accrue_from_counter(elapsed_s)
+            return
+        if self.hass and self.power_entity_id:
+            self._accrue_from_power(elapsed_s)
+            return
+
+        rated = getattr(self, "rated_power", None) or 0.0
+        if rated <= 0:
+            # No counter, no power sensor, no plate rating: the device has no
+            # consumption signal at all. Say so rather than book a zero.
+            self._daily_energy_source = "none"
+            return
+        self._daily_energy_source = "rated"
+        if really_on:
+            self._book_energy(rated * elapsed_s / 3_600_000.0)
+
+    def _book_energy(self, kwh: float) -> None:
+        """(#769) The one place energy lands on a device.
+
+        Two numbers, one write: the day's running total and this cycle's
+        increment. They are written together so they cannot disagree — a
+        second accrual path that updated only one of them is exactly the
+        kind of quiet divergence #767 exists to end.
+        """
+        self._daily_energy_kwh += kwh
+        self._last_cycle_energy_kwh += kwh
+
+    def _accrue_from_counter(self, elapsed_s: float) -> None:
+        """The counter delta. Unit-normalized (#641/#708: a Wh counter read raw
+        books 1000x)."""
+        kwh = energy_state_to_kwh(self.hass.states.get(self.energy_entity_id))
+        if kwh is None:
+            # #755 contract 1 — a sensor that can't be read is not a device
+            # drawing zero watts. Record the blindness; book nothing.
+            self._daily_energy_blind_s += elapsed_s
+            return
+
+        self._daily_energy_source = "counter"
+        last = self._energy_counter_last_kwh
+        self._energy_counter_last_kwh = kwh
+        if last is None:
+            return  # first read of the day/session: a baseline, not a delta
+        delta = kwh - last
+        if delta < 0:
+            # A TOTAL_INCREASING counter that went backwards rebooted; it has
+            # not un-consumed its lifetime energy. Re-baseline (done above),
+            # book nothing.
+            _LOGGER.debug(
+                "%s: energy counter %s went backwards (%.3f -> %.3f kWh) — "
+                "re-baselined, no energy booked",
+                self.name, self.energy_entity_id, last, kwh,
+            )
+            return
+        # Deliberately NO plausibility ceiling here. ``rated_power`` is a
+        # learned guess and is routinely far below a real device's draw, so
+        # discarding a meter delta for exceeding it would be the #774 error
+        # again — an estimate overruling a measurement. A delta that spans a
+        # blind gap is real energy that really was consumed today; the blind
+        # seconds beside it say the coverage was interrupted.
+        self._book_energy(delta)
+
+    def _accrue_from_power(self, elapsed_s: float) -> None:
+        """Trapezoid the power sensor over the cycle."""
+        watts = power_state_to_watts(self.hass.states.get(self.power_entity_id))
+        if watts is None:
+            self._daily_energy_blind_s += elapsed_s
+            self._energy_last_power_w = None  # don't bridge across the gap
+            return
+
+        self._daily_energy_source = "power"
+        previous = self._energy_last_power_w
+        self._energy_last_power_w = watts
+        mean_w = watts if previous is None else (previous + watts) / 2.0
+        self._book_energy(mean_w * elapsed_s / 3_600_000.0)
+
+    @property
+    def daily_energy_kwh(self) -> float:
+        """(#768) Energy this device consumed today, in kWh."""
+        return self._daily_energy_kwh
+
+    @property
+    def daily_energy_source(self) -> str:
+        """Where ``daily_energy_kwh`` came from: counter / power / rated / none."""
+        return self._daily_energy_source
+
+    @property
+    def daily_energy_blind_s(self) -> float:
+        """Seconds today the chosen measured source could not be read."""
+        return self._daily_energy_blind_s
+
+    @property
+    def daily_energy_is_measured(self) -> bool:
+        """True only when a meter produced the number. ``rated`` is an estimate
+        and must never be fed back as a measurement (#755 contract 1)."""
+        return self._daily_energy_source in ("counter", "power")
+
+    @property
+    def last_cycle_energy_kwh(self) -> float:
+        """(#769) What THIS cycle booked, in kWh.
+
+        ``daily_energy_kwh`` is a running total and cannot be filed; the
+        ledger needs the delta, so it can put it under a period and — where
+        the device names one — an attribution bucket.
+        """
+        return self._last_cycle_energy_kwh
+
+    @property
+    def energy_split_label(self) -> Optional[str]:
+        """(#769) The bucket this cycle's energy belongs to, or None.
+
+        A device that has modes worth telling apart names them here and the
+        ledger keeps a sub-total per name beside the device total. The heat
+        pump uses its SG-Ready state, which is what makes "energy SEM shifted"
+        separable from "energy the pump would have used anyway". Ordinary
+        loads have nothing to split and return None.
+        """
+        return None
 
     def observed_power_w(self) -> Optional[float]:
         """#600 — the device's live consumption in W: the power sensor if
@@ -709,6 +902,13 @@ class ControllableDevice(ABC):
             "desired_state": self.desired_state,
             "observed_on": obs,
             "sem_owned": self._sem_owned,
+            # (#768) The day's energy, with its provenance attached. Present on
+            # EVERY device, not only ones with runtime goals configured — the
+            # energy balance (#767) needs the unconfigured loads most of all.
+            "daily_energy_kwh": round(self._daily_energy_kwh, 3),
+            "daily_energy_source": self._daily_energy_source,
+            "daily_energy_measured": self.daily_energy_is_measured,
+            "daily_energy_blind_s": round(self._daily_energy_blind_s, 1),
         }
         if (self.daily_min_runtime_sec > 0 or self.daily_max_runtime_sec > 0
                 or self.battery_assist_enabled or self.battery_eligible_overnight):

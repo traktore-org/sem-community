@@ -246,6 +246,52 @@ shapes the demand set must ride the re-plan signature.
   The #653 orphan guard, which had only ever walked class bodies, now reads
   module scope too — and immediately found a second one.
 
+### ⚖️ Closing the energy balance (#767)
+
+- 🔌 **Every controlled load now counts its own kWh** (#768) — SEM accrued
+  *seconds* per device and nothing else, so a pool pump, heizband or heat pump
+  disappeared into the `home` residual, which is computed as a leftover and
+  therefore can never complain. Each device now books a daily energy figure
+  every cycle, in a fixed order of evidence: its energy counter's delta first,
+  then its power sensor integrated over the cycle, and only if it has neither,
+  `rated_power` × runtime — the last flagged as an ESTIMATE that may never be
+  fed back as a measurement (#755). A sensor that can't be read is recorded as
+  blind seconds, not as a device drawing zero watts. Persisted per meter day,
+  counter baseline included, so a same-day restart books the energy the meter
+  saw while HA was down instead of losing it.
+- 🌡️ **The heat pump gets a ledger row** (#769) — on a heat-pump house the
+  largest controllable load in the building had no kWh anywhere. It now has
+  the same four horizons every other consumer has (today / month / year /
+  total), keyed off the **sunrise** meter day the device itself rolls on, so
+  there is one day boundary in the system rather than two that disagree every
+  morning. Alongside them: **Shifted today** — the part SEM actually caused,
+  counted only while SG-Ready was asking for BOOST or FORCE_ON. Energy the
+  pump's own thermostat would have taken anyway is kept out of that number,
+  which is what turns "SG-Ready shifted X kWh" from a claim into a
+  measurement. The split mechanism is generic (a device names its own
+  bucket), so the additional heat pumps of #685 arrive with it already
+  working.
+- 🔋 **A bought kWh does not become free by sitting in the battery** (#770) —
+  every discharge was credited at the full import price as if the battery
+  only ever held sunshine. On a house that charges in the cheap valley that
+  is not a saving, it is a purchase moved a few hours; and the one-gate
+  build just made grid charging routine, so the error was about to grow.
+  The battery is now inventory with a cost basis: each charge is filed as
+  solar or grid by the flow that caused it (fleet-split by per-battery
+  charge power), each discharge draws proportionally, and savings pay only
+  the difference between what a kWh cost and what it displaced. Energy of
+  unknown origin keeps the old full credit — it is not punished for a
+  measurement SEM doesn't have (#755). The pool is pinned to the measured
+  SOC every cycle so integration drift can't invent stored energy, and an
+  offline SOC sensor pins nothing, because silence is not a measurement of
+  an empty battery. **Autarky is corrected with it**: battery discharge is
+  own supply only for the solar-charged share; the rest is grid supply that
+  was time-shifted. Four new sensors make the number auditable — today's
+  charge from solar, from grid, what the grid part cost, and the grid share
+  of what is stored right now. (Self-consumption was checked and is already
+  correct — it is measured against solar, not against the battery, so it
+  was never affected.)
+
 ### 🐛 Found on PROD hardware (#774)
 
 - 🔌 **A car drawing 8.7 kW is not a full car** (#774) — the Energy Plan card

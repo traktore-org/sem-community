@@ -472,6 +472,38 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
+    # (#770) The charge, split by origin. One number for free roof energy and
+    # bought valley energy is what made savings and ROI credit a grid-charged
+    # kWh with the full import price it never earned — and the joint planner
+    # made grid charging the norm, not the exception.
+    SensorEntityDescription(
+        key="daily_battery_charge_solar",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="daily_battery_charge_grid",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="daily_battery_grid_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="CHF",  # replaced by hass.config.currency
+        suggested_display_precision=2,
+    ),
+    # What is IN the battery right now, not what went in today — the figure
+    # autarky needs, because a grid-charged discharge is grid supply that was
+    # merely time-shifted.
+    SensorEntityDescription(
+        key="battery_stored_grid_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
     SensorEntityDescription(
         key="daily_ev_energy",
         device_class=SensorDeviceClass.ENERGY,
@@ -1248,6 +1280,42 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="heat_pump_registration_status",
         entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # (#769) The heat pump's ledger row — the same four horizons every other
+    # consumer already had. On a heat-pump house this is the largest
+    # controllable load in the building and until now it had no kWh anywhere:
+    # it vanished into the ``home`` residual (#767). ``shifted_today`` is the
+    # part SEM caused, split out by SG-Ready state, which is what turns
+    # "SG-Ready shifted X kWh" from a claim into a measurement.
+    SensorEntityDescription(
+        key="heat_pump_energy_today",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_month",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_year",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_total",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_shifted_today",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
 
     # ============================================================================
@@ -2184,7 +2252,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if description.key in ["daily_savings", "monthly_savings", "daily_costs", "monthly_costs",
                                "monthly_power_cost", "load_balancing_savings_potential",
                                "daily_battery_savings", "monthly_battery_savings",
-                               "battery_discharge_value"]:
+                               "battery_discharge_value",
+                               # (#770) what today's grid-charging cost
+                               "daily_battery_grid_cost"]:
             self._attr_native_unit_of_measurement = coordinator.hass.config.currency
 
     async def async_added_to_hass(self) -> None:

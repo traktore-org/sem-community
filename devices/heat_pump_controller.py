@@ -172,6 +172,18 @@ class HeatPumpController(SetpointDevice):
         return self._hp_status
 
     @property
+    def energy_split_label(self) -> str:
+        """(#769) File this cycle's kWh under the SG-Ready state it ran in.
+
+        On a heat-pump house this is the difference between a claim and a
+        measurement. Energy booked in BOOST or FORCE_ON is energy SEM asked
+        for; energy booked in NORMAL is energy the pump would have taken from
+        its own thermostat anyway. Summed over a winter, the first number is
+        "how much SG-Ready actually shifted" — which today is unanswerable.
+        """
+        return f"sg{int(self._hp_status.sg_ready_state)}"
+
+    @property
     def needs_offpeak_activation(self) -> bool:
         """Temperature-aware override: don't force-boost if already warm.
 

@@ -103,6 +103,14 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "daily_grid_export_energy": {"sem_energy", "sem_grid", "sem_daily", "sem_primary", "sem_graph"},
     "daily_battery_charge_energy": {"sem_energy", "sem_battery", "sem_daily", "sem_primary"},
     "daily_battery_discharge_energy": {"sem_energy", "sem_battery", "sem_daily", "sem_primary"},
+    # (#770) The same charge, told apart by origin — plus what the bought
+    # part cost and how much of what is stored right now was bought. The
+    # cost row carries sem_energy like every other money sensor here; no
+    # sem_cost token exists and inventing one fails the #670 both-ways check.
+    "daily_battery_charge_solar": {"sem_energy", "sem_battery", "sem_daily", "sem_secondary"},
+    "daily_battery_charge_grid": {"sem_energy", "sem_battery", "sem_daily", "sem_secondary"},
+    "daily_battery_grid_cost": {"sem_energy", "sem_battery", "sem_daily", "sem_secondary"},
+    "battery_stored_grid_share": {"sem_battery", "sem_secondary"},
     # Removed (#667): daily_solar_yield (sensor.py:254 — use daily_solar_energy)
     # and daily_ev_consumption (no such entity; daily_ev_energy is the one).
     # Both are labelled above — repointing would have double-labelled them.
@@ -186,6 +194,15 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "heat_pump_mode": {"sem_status", "sem_primary"},
     "heat_pump_sg_ready_state": {"sem_status", "sem_secondary"},
     "heat_pump_solar_boost": {"sem_status", "sem_secondary"},
+    # (#769) The ledger row — energy, not status, so it labels like every
+    # other consumer's kWh. ``shifted`` is the SEM-caused part.
+    "heat_pump_energy_today": {"sem_energy", "sem_daily", "sem_primary"},
+    "heat_pump_energy_month": {"sem_energy", "sem_monthly", "sem_secondary"},
+    # No sem_yearly / sem_lifetime token exists and inventing one would fail
+    # the #670 both-ways check — every label must be attached AND defined.
+    "heat_pump_energy_year": {"sem_energy", "sem_secondary"},
+    "heat_pump_energy_total": {"sem_energy", "sem_secondary"},
+    "heat_pump_energy_shifted_today": {"sem_energy", "sem_daily", "sem_secondary"},
 
     # PV analytics (Phase 5)
     "pv_daily_specific_yield": {"sem_energy", "sem_solar", "sem_daily", "sem_secondary"},
