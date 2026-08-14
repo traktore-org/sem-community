@@ -805,3 +805,62 @@ class TestValidateEnergyDashboardSensors:
         # All should be False since nothing is configured
         for key, value in results.items():
             assert value is False
+
+
+class TestBatteryDeriveRespectsPairs:
+    """(#761, jappish84) The #744-era battery power deriver saw
+    ``battery_power`` unset and derived the device's combined sensor —
+    but a two-sensor power_config (#551) leaves it unset BY DESIGN ("the
+    reader computes net = to − from"). The derive then created a SECOND
+    power representation of the same physical battery: units b1 (derived
+    combined) + b2 (the pair), identical values, summed — battery read
+    2× while charging and home followed. The deriver's guard is "no
+    power representation AT ALL", pairs included."""
+
+    def _config_with_pair(self):
+        from custom_components.solar_energy_management.ha_energy_reader import (
+            EnergyDashboardConfig, _extract_battery_config,
+        )
+        config = EnergyDashboardConfig()
+        _extract_battery_config({
+            "stat_energy_from": "sensor.batt_discharge_total",
+            "stat_energy_to": "sensor.batt_charge_total",
+            "power_config": {
+                "stat_rate_from": "sensor.batt_discharge_power",
+                "stat_rate_to": "sensor.batt_charge_power",
+            },
+        }, config)
+        return config
+
+    def test_a_pair_is_a_power_representation(self):
+        from custom_components.solar_energy_management import ha_energy_reader as her
+        config = self._config_with_pair()
+        assert config.battery_power_pairs
+        assert not config.battery_power
+        # The derive step must NOT add a combined sensor beside the pair.
+        from unittest.mock import MagicMock, patch
+        with patch.object(her, "_find_power_sensor_on_device",
+                          return_value="sensor.batt_combined_power") as find:
+            her._derive_battery_power_if_unrepresented(MagicMock(), config)
+        find.assert_not_called()
+        assert config.battery_power_list == []
+        assert config.battery_power is None
+
+    def test_a_counters_only_battery_still_derives(self):
+        """The derive exists for a reason: counters with NO power
+        representation anywhere still want a live power source."""
+        from custom_components.solar_energy_management.ha_energy_reader import (
+            EnergyDashboardConfig, _extract_battery_config,
+        )
+        from custom_components.solar_energy_management import ha_energy_reader as her
+        config = EnergyDashboardConfig()
+        _extract_battery_config({
+            "stat_energy_from": "sensor.batt_discharge_total",
+            "stat_energy_to": "sensor.batt_charge_total",
+        }, config)
+        from unittest.mock import MagicMock, patch
+        with patch.object(her, "_find_power_sensor_on_device",
+                          return_value="sensor.batt_combined_power"):
+            her._derive_battery_power_if_unrepresented(MagicMock(), config)
+        assert config.battery_power == "sensor.batt_combined_power"
+        assert config.battery_power_list == ["sensor.batt_combined_power"]

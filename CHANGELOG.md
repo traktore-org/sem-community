@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.18 candidate] — 14.08.2026
+
+### 🐛 Fixes
+- 🔋 **One battery counted twice — home read ~2× while charging** (#761,
+  @jappish84) — a two-sensor battery `power_config` (the #551 "Two
+  sensors" mode) leaves the combined `battery_power` unset *by design*
+  (net = charge − discharge from the pair). The battery power deriver
+  only checked that field, so it added the device's combined power sensor
+  BESIDE the pair: two power representations of one physical battery,
+  enumerated as units b1+b2 with identical values and summed. Battery
+  read double while charging, and home — derived from the balance —
+  followed (12.7 kW against a real 1.1 kW). Affects every two-sensor
+  battery install since the deriver shipped; the derive now runs only
+  when the battery has **no power representation at all** (pair and
+  inverted-single count as representations). The sign-inversion half of
+  the report was resolved live with the one-tap battery-sign flip.
+
 # [1.7.6-beta.17] — 14.08.2026
 
 ### 🐛 Fixes
