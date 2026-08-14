@@ -2109,8 +2109,11 @@ class EnergyCalculator:
 
         # (#770) How much of what is stored right now was bought. Published
         # beside autarky because it is the correction autarky applies below.
-        metrics.battery_stored_grid_share = round(
-            self._battery_provenance.fleet_grid_fraction() * 100, 1
+        # None (→ sensor unknown) until the pool has attributed content —
+        # a share the pool never measured must not read as "0 % bought".
+        _share = self._battery_provenance.fleet_grid_share_measured()
+        metrics.battery_stored_grid_share = (
+            None if _share is None else round(_share * 100, 1)
         )
 
         # Self consumption rate = (solar - export) / solar — direction-of-
@@ -2493,6 +2496,13 @@ class EnergyCalculator:
             "home_kwh": round(home, 3),
             "controlled_kwh": round(controlled, 3),
             "measured": estimated == 0.0,
+            # The SIZE of the estimated portion, not just its presence: the
+            # estimate's error is bounded by the estimate itself, so the
+            # drift check can accept a day whose estimate is too small to
+            # move a verdict. Gating on the boolean alone made one meterless
+            # pool pump silence the check forever (.175's first sealed day
+            # — and most houses').
+            "estimated_kwh": round(estimated, 3),
             "devices": devices,
         })
 

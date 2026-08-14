@@ -406,17 +406,31 @@ class HealthCheck:
     _BASELOAD_ABS_TOL_KWH = 2.0
     _BASELOAD_REL_TOL = 0.5
     _BASELOAD_MIN_REFERENCE_DAYS = 3
+    # A day is usable when its ESTIMATED portion is too small to move a
+    # verdict — a quarter of the absolute band. Gating on "no estimate
+    # anywhere" (the boolean ``measured``) made one meterless pool pump
+    # silence the check forever: .175's very first sealed day, and any
+    # house with any meterless device. Dormant-by-default is the #660
+    # death by other means. The estimate's error is bounded by the
+    # estimate itself, so a bounded estimate cannot flip a comparison
+    # the 2 kWh band would pass.
+    _BASELOAD_EST_TOL_KWH = 0.5
 
     def check_baseload_drift(self, history: list) -> list[str]:
         """(#773) Does the leftover behave like a house?
 
-        Compares the newest SEALED, MEASURED day against the median of the
-        measured days before it. #628 discipline throughout: an unmeasured
-        day (an estimate in the mirror, a missing home row) is a GAP — it
+        Compares the newest SEALED, USABLE day against the median of the
+        usable days before it. Usable means the day's estimated portion is
+        bounded (≤ ``_BASELOAD_EST_TOL_KWH``) — small enough that its worst-
+        case error cannot move a verdict. #628 discipline for the rest: a
+        day with an unbounded estimate or a missing home row is a GAP — it
         neither feeds the reference nor is itself judged, because comparing
-        an estimate against measurements fires on healthy hardware and gets
-        muted. Fewer than ``_BASELOAD_MIN_REFERENCE_DAYS`` measured
-        reference days: silent.
+        an estimate-of-unknown-size against measurements fires on healthy
+        hardware and gets muted. Rows sealed before ``estimated_kwh``
+        existed fall back to the strict boolean: ``measured`` means an
+        estimate of exactly zero; unmeasured-with-unknown-size stays a gap
+        and ages out of the 14-day window. Fewer than
+        ``_BASELOAD_MIN_REFERENCE_DAYS`` usable reference days: silent.
 
         A breach NAMES its suspect — the term (a device id, or the home row
         itself) whose own day-over-day move best explains the step — because
@@ -426,11 +440,19 @@ class HealthCheck:
         """
         if not history:
             return []
-        measured = [
-            r for r in history
-            if isinstance(r, dict) and r.get("measured")
-            and r.get("baseload_kwh") is not None
-        ]
+
+        def _usable(r) -> bool:
+            if not isinstance(r, dict) or r.get("baseload_kwh") is None:
+                return False
+            est = r.get("estimated_kwh")
+            if est is None:
+                return bool(r.get("measured"))
+            try:
+                return float(est) <= self._BASELOAD_EST_TOL_KWH
+            except (TypeError, ValueError):
+                return False
+
+        measured = [r for r in history if _usable(r)]
         if len(measured) < self._BASELOAD_MIN_REFERENCE_DAYS + 1:
             return []
         latest = measured[-1]

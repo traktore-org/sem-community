@@ -60,9 +60,14 @@ def _hc() -> HealthCheck:
     return HealthCheck()
 
 
-def _seal(day, baseload, *, measured=True, home=None, devices=None):
-    """One sealed day of history, in the shape the calculator writes."""
-    return {
+def _seal(day, baseload, *, measured=True, home=None, devices=None,
+          estimated_kwh=None):
+    """One sealed day of history, in the shape the calculator writes.
+
+    ``estimated_kwh=None`` omits the key — the pre-fix (legacy) row shape,
+    which the restore-compat tests below rely on.
+    """
+    row = {
         "date": str(day),
         "baseload_kwh": baseload,
         "home_kwh": home if home is not None else baseload + 2.0,
@@ -71,6 +76,9 @@ def _seal(day, baseload, *, measured=True, home=None, devices=None):
         "measured": measured,
         "devices": devices or {},
     }
+    if estimated_kwh is not None:
+        row["estimated_kwh"] = estimated_kwh
+    return row
 
 
 def _history(*days):
@@ -268,6 +276,88 @@ class TestBaseloadDriftNamesItsSuspect773:
         history = self._steady(kwh=5.0) + [
             _seal(TODAY, 6.8, home=8.8, devices={"pool": 2.0})]
         assert hc.check_baseload_drift(history) == []
+
+
+# ───────────────────────────────────────────────────────────────────────
+# 3b. a bounded estimate does not silence the check
+# ───────────────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+class TestABoundedEstimateStillCounts773:
+    """The .175 soak's very first sealed day was ``measured: false`` — one
+    meterless pool pump (0.21 kWh estimated, rated×runtime) made the whole
+    day ineligible, and a house with ANY meterless device would starve the
+    drift check of reference days forever. Dormant-by-default is the #660
+    death by other means.
+
+    The honest rule is not "no estimate anywhere" but "no estimate big
+    enough to move the verdict": the estimate's error is bounded by the
+    estimated kWh itself, so a day whose estimated portion is well inside
+    the 2 kWh band cannot flip a comparison. The seal records the size;
+    eligibility reads the size; ``measured`` stays strict — it is the
+    published purity flag, not the eligibility gate."""
+
+    def _steady(self, n=4, kwh=6.0, est=0.3):
+        return [
+            _seal(TODAY - timedelta(days=n - i), kwh, measured=False,
+                  estimated_kwh=est, devices={"pool": 2.0})
+            for i in range(n)
+        ]
+
+    def test_a_small_estimate_does_not_silence_the_check(self) -> None:
+        hc = _hc()
+        history = self._steady() + [
+            _seal(TODAY, 14.0, home=16.0, measured=False,
+                  estimated_kwh=0.3, devices={"pool": 2.0})]
+        assert len(hc.check_baseload_drift(history)) == 1
+
+    def test_a_boring_bounded_day_stays_silent(self) -> None:
+        hc = _hc()
+        history = self._steady() + [
+            _seal(TODAY, 6.4, measured=False, estimated_kwh=0.3,
+                  devices={"pool": 2.0})]
+        assert hc.check_baseload_drift(history) == []
+
+    def test_a_large_estimate_is_still_a_gap(self) -> None:
+        """An estimate a quarter the size of the band CAN move the verdict
+        — that day neither fires nor feeds the reference."""
+        hc = _hc()
+        history = self._steady() + [
+            _seal(TODAY, 14.0, home=16.0, measured=False,
+                  estimated_kwh=5.0, devices={"pool": 2.0})]
+        assert hc.check_baseload_drift(history) == []
+
+    def test_a_legacy_unmeasured_day_stays_a_gap(self) -> None:
+        """Rows sealed before this fix carry no ``estimated_kwh``. An
+        unmeasured legacy row has an estimate of UNKNOWN size — treating
+        it as bounded would compare against an unbounded error, so it
+        stays a gap and ages out of the 14-day window."""
+        hc = _hc()
+        history = self._steady() + [
+            _seal(TODAY, 14.0, home=16.0, measured=False,
+                  devices={"pool": 2.0})]
+        assert hc.check_baseload_drift(history) == []
+
+    def test_a_legacy_measured_day_is_still_eligible(self) -> None:
+        """The inverse compat rule: legacy ``measured: true`` means a
+        recorded estimate of exactly zero."""
+        hc = _hc()
+        history = [
+            _seal(TODAY - timedelta(days=4 - i), 6.0, devices={"pool": 2.0})
+            for i in range(4)
+        ] + [_seal(TODAY, 14.0, home=16.0, devices={"pool": 2.0})]
+        assert len(hc.check_baseload_drift(history)) == 1
+
+    def test_the_seal_records_the_estimate_size(self) -> None:
+        calc = _calc()
+        yesterday = TODAY - timedelta(days=1)
+        calc._daily_accumulators[f"home_{yesterday}"] = 10.0
+        calc.accumulate_controlled_load(4.0, yesterday, estimated=False)
+        calc.accumulate_controlled_load(0.25, yesterday, estimated=True)
+        calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
+        sealed = calc.baseload_history[-1]
+        assert sealed["estimated_kwh"] == pytest.approx(0.25)
+        assert sealed["measured"] is False
 
 
 # ───────────────────────────────────────────────────────────────────────

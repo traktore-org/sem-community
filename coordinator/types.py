@@ -589,8 +589,11 @@ class PerformanceMetrics:
     # (#770) % of what is IN the battery right now that was bought, not
     # harvested. It belongs next to autarky because it is the correction
     # autarky applies: a grid-charged discharge is grid supply that was
-    # merely time-shifted, not own generation.
-    battery_stored_grid_share: float = 0.0
+    # merely time-shifted, not own generation. ``None`` until the pool has
+    # ATTRIBUTED content — an empty (or purely SOC-pinned) pool publishing
+    # "0 % bought" was the arc's own contract-1 violation, caught on the
+    # .175 soak's first night. The sensor reads unknown, not zero.
+    battery_stored_grid_share: float | None = None
     # Removed (#669): solar_efficiency / battery_efficiency. Both were
     # hardcoded constants wearing the name of a measurement
     # (``85.0 if solar_power > 0 else 0.0``), emitted every cycle and read by

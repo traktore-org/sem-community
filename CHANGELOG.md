@@ -284,7 +284,11 @@ shapes the demand set must ride the re-plan signature.
   measurement SEM doesn't have (#755). The pool is pinned to the measured
   SOC every cycle so integration drift can't invent stored energy, and an
   offline SOC sensor pins nothing, because silence is not a measurement of
-  an empty battery. **Autarky is corrected with it**: battery discharge is
+  an empty battery. The stored-grid-share sensor reads **unknown, not 0 %**,
+  until the pool holds energy whose origin SEM actually watched arrive — a
+  freshly restarted install claiming "nothing was bought" off an empty pool
+  was the same contract violation one layer up (caught on the .175 soak's
+  first night). **Autarky is corrected with it**: battery discharge is
   own supply only for the solar-charged share; the rest is grid supply that
   was time-shifted. Four new sensors make the number auditable — today's
   charge from solar, from grid, what the grid part cost, and the grid share
@@ -328,9 +332,14 @@ shapes the demand set must ride the re-plan signature.
   finding (a double-count or a sign error) and clamping it would hide
   exactly the fault the number exists to expose. Its day-to-day drift is a
   free sensor-health check with the #628 discipline: a day without a home
-  row is a refused gap (never a zero), an estimated day displays but never
-  trains or compares, and a breach names its suspect — the device or the
-  home row whose own day-over-day move explains the step. The
+  row is a refused gap (never a zero), and a breach names its suspect — the
+  device or the home row whose own day-over-day move explains the step.
+  Each sealed day records the *size* of its estimated portion, and the
+  drift check accepts a day whose estimate is too small to move a verdict
+  (≤ 0.5 kWh against the 2 kWh band) — gating on "no estimate anywhere"
+  would let one meterless pool pump silence the check forever, which is
+  dormancy wearing discipline's clothes. Days with a larger estimate stay
+  gaps: they display but never train or compare. The
   controlled-loads subtrahend is a midnight-keyed mirror booked at the
   filing seam, because device days roll at sunrise and subtracting across
   that boundary is the #703/#704 bug class.

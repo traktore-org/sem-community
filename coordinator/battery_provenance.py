@@ -292,6 +292,29 @@ class BatteryProvenance:
             return 0.0
         return sum(p.grid_kwh for p in self._pools.values()) / total
 
+    def fleet_grid_share_measured(self) -> Optional[float]:
+        """The published twin of :meth:`fleet_grid_fraction` — honest about
+        not knowing.
+
+        ``None`` until the pool holds energy whose origin SEM actually
+        watched arrive (the ATTRIBUTED content, solar or grid). A pool that
+        is empty, or holds only SOC-pinned UNKNOWN energy, has no opinion:
+        0.0 from it would publish "nothing was bought" with the confidence
+        of a measurement — which the .175 soak caught on the arc's own
+        first night (#755 contract 1: silence is not a measurement of
+        zero).
+
+        Autarky keeps :meth:`fleet_grid_fraction`'s 0.0 on purpose — its
+        degrade path IS the legacy full-credit answer, and the rate math
+        cannot take an ``unknown``. Only the published share may say so.
+        """
+        attributed = sum(
+            p.solar_kwh + p.grid_kwh for p in self._pools.values()
+        )
+        if attributed <= 0:
+            return None
+        return self.fleet_grid_fraction()
+
     def implied_savings_rate(self, import_rate: float) -> float:
         """Currency saved per kWh discharged from what is stored RIGHT NOW.
 

@@ -467,6 +467,60 @@ class TestAutarkyStopsCountingBoughtEnergyAsOwn:
 
 
 # ───────────────────────────────────────────────────────────────────────
+# 4b. an empty pool has no opinion
+# ───────────────────────────────────────────────────────────────────────
+
+class TestAnEmptyPoolHasNoOpinion:
+    """The .175 soak caught the arc violating its own contract: a freshly
+    restarted install published ``battery_stored_grid_share = 0.0`` — "none
+    of the stored energy was bought" — off a pool that had never watched a
+    single charge arrive. Silence is not a measurement of zero (#755
+    contract 1). The share is only a number once the pool holds energy whose
+    origin SEM actually attributed; until then the published value is
+    ``None`` and the sensor reads unknown."""
+
+    def test_an_empty_pool_reports_unknown(self) -> None:
+        assert BatteryProvenance().fleet_grid_share_measured() is None
+
+    def test_a_pool_of_pure_soc_pin_is_still_unknown(self) -> None:
+        """The SOC pin parks unseen energy as UNKNOWN — real energy, origin
+        never observed. grid/total would say 0 % bought with the same
+        confidence as a measured 0, which is the lie one step later."""
+        p = BatteryProvenance()
+        p.reconcile_fleet_to_stored(8.0)
+        assert p.fleet_grid_share_measured() is None
+
+    def test_attributed_content_reports_the_fraction(self) -> None:
+        """Once any origin is attributed the share is grid/total — the
+        unknown part counts as not-bought, mirroring the savings math
+        (unknown keeps the legacy full-rate credit)."""
+        p = BatteryProvenance()
+        p.charge("fleet", solar_kwh=2.0, grid_kwh=2.0, import_rate=0.30)
+        assert p.fleet_grid_share_measured() == pytest.approx(0.5)
+        p.reconcile_fleet_to_stored(8.0)  # 4 attributed + 4 unknown
+        assert p.fleet_grid_share_measured() == pytest.approx(0.25)
+
+    def test_the_published_share_degrades_to_unknown(self) -> None:
+        """calculate_performance must publish None, not round(0.0)."""
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyTotals,
+        )
+        c = _calc()
+        m = c.calculate_performance(MagicMock(), EnergyTotals(), None)
+        assert m.battery_stored_grid_share is None
+
+    def test_the_published_share_is_a_number_once_measured(self) -> None:
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyTotals,
+        )
+        c = _calc()
+        c._battery_provenance.charge(
+            "fleet", solar_kwh=3.0, grid_kwh=1.0, import_rate=0.30)
+        m = c.calculate_performance(MagicMock(), EnergyTotals(), None)
+        assert m.battery_stored_grid_share == pytest.approx(25.0)
+
+
+# ───────────────────────────────────────────────────────────────────────
 # 5. the surface
 # ───────────────────────────────────────────────────────────────────────
 

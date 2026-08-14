@@ -976,6 +976,11 @@ integration drift cannot invent stored energy. If the SOC sensor goes
 offline, SEM leaves the figures alone rather than reading silence as an
 empty battery.
 
+Right after installing (or restarting into) this version, the stored-share
+sensor reads **unknown** rather than 0 % — SEM has not yet watched any
+charge arrive, and "unknown" is the honest answer until the first charging
+cycle fills the pool. It becomes a number on its own from there.
+
 ### True Baseload — the house SEM does not touch (#773)
 
 With every controlled load counting its own kWh (#768), what is left of
@@ -999,9 +1004,13 @@ Two properties make it useful beyond curiosity:
   health check reports it **with a named suspect** (the device — or the
   home row itself — whose own day-over-day change explains the step).
 
-Days where any device's energy had to be estimated (`rated_power` ×
-runtime) still display, but are excluded from the drift comparison — an
-estimate is never treated as a measurement.
+Days where a device's energy had to be estimated (`rated_power` × runtime)
+still display, and the drift comparison accepts them as long as the
+estimated portion is small (≤ 0.5 kWh for the day) — an estimate that
+small cannot change the verdict, and refusing every such day would leave
+the check permanently silent in any house with a single meterless device.
+Days with a larger estimated share are excluded from the comparison — a
+big estimate is never treated as a measurement.
 
 ### Performance Sensors (%)
 - `sensor.sem_self_consumption_rate` — % of solar used locally
