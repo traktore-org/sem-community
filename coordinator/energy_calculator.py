@@ -90,6 +90,34 @@ _SPLIT_SEP = "#"
 # rather than in the card that displays them.
 SHIFTED_SPLITS = ("sg3", "sg4")
 
+# (#772) The comfort buckets: did a comfort zone's kWh land inside its
+# planned ``comfort:{did}`` block or outside it. The value of a pre-cool
+# block is the energy it DISPLACES, not the energy it uses — a block that
+# banked four hours of coasting and one that ran the AC at 03:00 and again
+# at 17:00 book the same in-block kWh, and the difference lives entirely in
+# the OUT bucket. The in/out ratio over time is the first honest answer to
+# "is banking working here" (#705 Ph3's missing feedback, #755's first
+# comfort signal). "No plan" files as OUT, not unlabeled — a night the
+# planner never banked belongs in the ratio's denominator.
+COMFORT_SPLIT_IN = "comfort_in_block"
+COMFORT_SPLIT_OUT = "comfort_out_block"
+
+# (#773) The midnight-keyed mirror of everything SEM can see the devices
+# consume. Device ledger rows roll at SUNRISE (#620/#704); the home row rolls
+# at MIDNIGHT. ``true_baseload = home − controlled`` across that mismatch
+# would mis-book every small-hours kWh — the #703/#704 bug class — so the
+# subtrahend is booked a second time at the filing seam, keyed by the
+# calendar day, exactly the way ``MIDNIGHT_EV_CATEGORY`` mirrors the EV row.
+# ``_EST`` is the slice of the mirror that came from rated×runtime estimates:
+# it keeps the baseload DISPLAYABLE but disqualifies the day as a
+# measurement (#755 contract 1 — an estimate may never train anything).
+CONTROLLED_LOADS_CATEGORY = "controlled_loads"
+CONTROLLED_LOADS_EST_CATEGORY = "controlled_loads_est"
+
+# (#773) How many sealed days of baseload history are kept for the drift
+# check. Two weeks spans an occupancy cycle (weekday/weekend) twice.
+_BASELOAD_HISTORY_DAYS = 14
+
 # (#724) The boundary the FLEET EV total falls back to when its chargers do not
 # share a Charge-by deadline. Expressed as an offset so it flows through the
 # same ``get_current_meter_day_offset_based`` path (and the same day memo) as a
@@ -277,6 +305,10 @@ class EnergyCalculator:
         self._yearly_cost_seeded: bool = False
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
+        # (#773) Sealed days of the true-baseload residual, newest last.
+        # One row per finished calendar day WITH a home row — a day without
+        # one is a gap and is refused, never recorded as zero. Persisted.
+        self._baseload_history: deque = deque(maxlen=_BASELOAD_HISTORY_DAYS)
 
     def _record_clamp(
         self, name: str, raw: float, clamped: float, eps: float,
@@ -644,6 +676,14 @@ class EnergyCalculator:
         energy.daily_home = self._get_daily("home", today)
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
+
+        # (#773) The audited residual, derived AFTER home because it is one
+        # more subtraction from it. The W twin is filled by the coordinator,
+        # which owns the live device draws.
+        _baseload = self.get_true_baseload(today)
+        energy.true_baseload_today = _baseload["today_kwh"]
+        energy.controlled_loads_today = _baseload["controlled_today_kwh"]
+        energy.true_baseload_measured = _baseload["measured"]
 
         # Solar self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
         # Only tracks savings from solar — battery discharge savings are in cost_batt_savings.
@@ -2323,6 +2363,139 @@ class EnergyCalculator:
         daily = self.get_device_splits(device_id, meter_day)
         return round(sum(daily.get(s, 0.0) for s in SHIFTED_SPLITS), 2)
 
+    def get_comfort_split(
+        self, device_id: str, meter_day: date
+    ) -> Dict[str, float]:
+        """(#772) A zone's comfort energy by plan placement, today + month.
+
+        The two numbers whose ratio answers "is banking working here".
+        Today is the live view; the MONTH is where a week's worth
+        actually survives — the rollover sweep keeps only today's and
+        yesterday's daily keys, so any window longer than that must be
+        read from the monthly bucket (pinned in test_772).
+        """
+        month_key = self._month_key(meter_day)
+        out: Dict[str, float] = {}
+        for split, name in (
+            (COMFORT_SPLIT_IN, "in_block"),
+            (COMFORT_SPLIT_OUT, "out_block"),
+        ):
+            category = self._device_category(device_id, split)
+            out[f"{name}_today_kwh"] = self._get_daily(category, meter_day)
+            out[f"{name}_month_kwh"] = self._get_monthly(category, month_key)
+        return out
+
+    # ── (#773) the residual: home minus everything SEM can see ──────────
+
+    def accumulate_controlled_load(
+        self, increment_kwh: float, calendar_day: date, *, estimated: bool
+    ) -> None:
+        """Book one cycle's device kWh into the MIDNIGHT-keyed mirror.
+
+        Called at the filing seam beside ``accumulate_device_energy`` — the
+        same increment, booked a second time under the calendar day, because
+        the baseload subtraction runs against the midnight-keyed home row
+        and the device's own ledger day rolls at sunrise (see the category
+        comment). Daily-only: the residual is a daily diagnostic, not a
+        billing figure.
+
+        ``estimated`` marks a rated×runtime booking. The kWh still enters
+        the mirror (the subtraction stays displayable); the estimated slice
+        is tracked BESIDE it, and any estimated kWh in the day makes the
+        day's baseload unmeasured (#755 contract 1).
+        """
+        if not increment_kwh:
+            return
+        daily_key = f"{CONTROLLED_LOADS_CATEGORY}_{calendar_day}"
+        self._daily_accumulators[daily_key] = (
+            self._daily_accumulators.get(daily_key, 0.0) + float(increment_kwh)
+        )
+        if estimated:
+            est_key = f"{CONTROLLED_LOADS_EST_CATEGORY}_{calendar_day}"
+            self._daily_accumulators[est_key] = (
+                self._daily_accumulators.get(est_key, 0.0)
+                + float(increment_kwh)
+            )
+
+    @property
+    def baseload_history(self) -> list:
+        """(#773) Sealed baseload days, oldest first, for the drift check."""
+        return list(self._baseload_history)
+
+    def get_true_baseload(self, today: date) -> Dict[str, Any]:
+        """(#773) Today's residual so far: home minus the controlled mirror.
+
+        ``today_kwh`` is None — not zero — while no home row exists: before
+        the balance (or the integrator) has written one there is nothing to
+        subtract from, and ``0 − controlled`` would publish the house as a
+        negative-consumption fault (#755 contract 1: silence is not a
+        measurement of zero).
+
+        A NEGATIVE value is published as-is. The home row is clamped ≥ 0 for
+        good physical reasons; the baseload is a DIAGNOSTIC, and negative is
+        its most unambiguous finding — an over-subtraction or a sign error —
+        which a ``max(0, ...)`` would hide (the issue's explicit ask).
+
+        ``measured`` is the training gate: True only when no estimated kWh
+        entered today's mirror. An estimated day still displays.
+        """
+        home_key = f"home_{today}"
+        controlled = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_CATEGORY}_{today}", 0.0)
+        estimated = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_EST_CATEGORY}_{today}", 0.0)
+        home = self._daily_accumulators.get(home_key)
+        return {
+            "today_kwh": None if home is None else round(home - controlled, 3),
+            "home_today_kwh": home,
+            "controlled_today_kwh": round(controlled, 3),
+            "estimated_today_kwh": round(estimated, 3),
+            "measured": home is not None and estimated == 0.0,
+        }
+
+    def _seal_baseload_day(self, day: date) -> None:
+        """(#773) Write one finished day into the baseload history.
+
+        Runs from the rollover, BEFORE the daily sweep deletes the rows it
+        reads. A day without a home row is a GAP: it is skipped entirely
+        rather than sealed as zero — a zero here would poison every median
+        the drift check takes for the next two weeks. Idempotent per day
+        (a retried rollover must not duplicate the row).
+
+        The per-device day totals ride along so a later breach can name its
+        suspect: the term whose own day-over-day move explains the step.
+        They are the device-ledger (sunrise-keyed) rows for ``day`` — offset
+        from the midnight mirror by the small hours, which is fine for
+        naming a mover and would be wrong for arithmetic; the arithmetic
+        uses the mirror.
+        """
+        day_str = str(day)
+        if any(r.get("date") == day_str for r in self._baseload_history):
+            return
+        home = self._daily_accumulators.get(f"home_{day}")
+        if home is None:
+            return
+        controlled = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_CATEGORY}_{day}", 0.0)
+        estimated = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_EST_CATEGORY}_{day}", 0.0)
+        prefix = DEVICE_KEY_PREFIX
+        suffix = f"_{day}"
+        devices = {
+            k[len(prefix):-len(suffix)]: round(v, 3)
+            for k, v in self._daily_accumulators.items()
+            if k.startswith(prefix) and k.endswith(suffix)
+            and _SPLIT_SEP not in k
+        }
+        self._baseload_history.append({
+            "date": day_str,
+            "baseload_kwh": round(home - controlled, 3),
+            "home_kwh": round(home, 3),
+            "controlled_kwh": round(controlled, 3),
+            "measured": estimated == 0.0,
+            "devices": devices,
+        })
+
     # ── (#770) battery charge, by where the energy came from ───────────
     #
     # ``battery_charge`` was one number for two different things: a kWh off
@@ -2604,6 +2777,10 @@ class EnergyCalculator:
         if has_yesterday_data and not already_snapshotted:
             self._snapshot_daily_costs(yesterday)
 
+        # (#773) Seal yesterday's baseload BEFORE the sweep deletes the rows
+        # it reads. Idempotent, and a day with no home row is a refused gap.
+        self._seal_baseload_day(yesterday)
+
         # Remove daily accumulators from previous days
         # Skip sunrise-keyed keys (EV + per-device, cleaned separately below)
         keys_to_remove = [
@@ -2723,6 +2900,11 @@ class EnergyCalculator:
             # savings figure would drift back toward the flat-rate answer
             # exactly when a force-charged night is still sitting in there.
             "battery_provenance": self._battery_provenance.get_state(),
+            # (#773) Sealed baseload days. Losing them on restart would
+            # re-arm the drift check's "too little history" silence for two
+            # weeks after every reboot — the exact window a post-upgrade
+            # sensor fault most needs catching in.
+            "baseload_history": list(self._baseload_history),
         }
 
     @staticmethod
@@ -2855,6 +3037,15 @@ class EnergyCalculator:
             # drops junk rather than raising — a corrupt pool has to degrade
             # to "SEM knows nothing yet", which the unknown bucket models.
             self._battery_provenance.restore_state(state.get("battery_provenance"))
+            # (#773) Sealed baseload days — junk rows are dropped, not
+            # repaired; a dropped day is a gap the drift check refuses.
+            baseload = state.get("baseload_history")
+            if isinstance(baseload, list):
+                self._baseload_history = deque(
+                    (r for r in baseload
+                     if isinstance(r, dict) and r.get("date")),
+                    maxlen=_BASELOAD_HISTORY_DAYS,
+                )
             last_update = state.get("last_update")
             if last_update:
                 self._last_update = datetime.fromisoformat(last_update)

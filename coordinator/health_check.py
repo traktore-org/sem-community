@@ -303,6 +303,7 @@ class HealthCheck:
         energy_flows: EnergyFlows | None = None,
         per_charger_daily: Mapping[str, float] | None = None,
         live_charger_ids: Iterable[str] | None = None,
+        per_device_daily: Mapping[str, float] | None = None,
     ) -> list[str]:
         """(#771) The three published breakdowns vs their fleet rows.
 
@@ -375,7 +376,107 @@ class HealthCheck:
                 if v:
                     violations.append(v)
 
+        # 4. (#773) Controlled loads vs the home row. The devices are members
+        #    of home the way chargers are members of the EV day — most of
+        #    home is the un-metered baseload, so SHORTFALL is the healthy
+        #    state, and only over-count fires: Σ(devices) > home is the
+        #    energy-domain shape of a NEGATIVE baseload — a draw counted
+        #    twice or a sign error, never a house. The members are the live
+        #    device objects' own day totals (sunrise-keyed, which only makes
+        #    the check more conservative against the midnight home row), so
+        #    a removed device drops out by construction and no live-id set
+        #    is needed.
+        v = self._reconcile_partition(
+            "Controlled loads vs home residual",
+            per_device_daily or {},
+            getattr(energy, "daily_home", 0.0),
+        )
+        if v:
+            violations.append(v)
+
         return violations
+
+    # (#773) Baseload drift tolerance: a step must clear BOTH bounds to
+    # fire. The residual is small (a few kWh) and moves ±40% with ordinary
+    # occupancy (a weekend at home is not a dead sensor), while the faults
+    # this exists to catch — a metered row dying, a counter reset, a
+    # #761-shape double-count — move it by a whole row's worth. A tighter
+    # band would fire on healthy houses and be muted, which is the #660
+    # death: a check that cried wolf until nobody listened.
+    _BASELOAD_ABS_TOL_KWH = 2.0
+    _BASELOAD_REL_TOL = 0.5
+    _BASELOAD_MIN_REFERENCE_DAYS = 3
+
+    def check_baseload_drift(self, history: list) -> list[str]:
+        """(#773) Does the leftover behave like a house?
+
+        Compares the newest SEALED, MEASURED day against the median of the
+        measured days before it. #628 discipline throughout: an unmeasured
+        day (an estimate in the mirror, a missing home row) is a GAP — it
+        neither feeds the reference nor is itself judged, because comparing
+        an estimate against measurements fires on healthy hardware and gets
+        muted. Fewer than ``_BASELOAD_MIN_REFERENCE_DAYS`` measured
+        reference days: silent.
+
+        A breach NAMES its suspect — the term (a device id, or the home row
+        itself) whose own day-over-day move best explains the step — because
+        "imbalance" alone sends the user hunting through every sensor they
+        own. The device day totals sealed alongside each day exist for
+        exactly this.
+        """
+        if not history:
+            return []
+        measured = [
+            r for r in history
+            if isinstance(r, dict) and r.get("measured")
+            and r.get("baseload_kwh") is not None
+        ]
+        if len(measured) < self._BASELOAD_MIN_REFERENCE_DAYS + 1:
+            return []
+        latest = measured[-1]
+        if history[-1] is not latest:
+            return []  # the newest sealed day is a gap — nothing to judge
+        reference = measured[:-1][-self._BASELOAD_MIN_REFERENCE_DAYS * 2:]
+        ref_values = sorted(float(r["baseload_kwh"]) for r in reference)
+        median = ref_values[len(ref_values) // 2]
+        value = float(latest["baseload_kwh"])
+        step = value - median
+        tolerance = max(
+            self._BASELOAD_ABS_TOL_KWH, self._BASELOAD_REL_TOL * abs(median)
+        )
+        if abs(step) <= tolerance:
+            return []
+
+        # Name the mover: for each term, its latest value minus its median
+        # over the reference days. ``home`` is a term like any device — a
+        # step that arrives through the home row means a METERED row (or
+        # the balance) moved, not a device.
+        def _term_median(key_fn) -> float:
+            vals = sorted(key_fn(r) for r in reference)
+            return vals[len(vals) // 2]
+
+        movers: dict[str, float] = {
+            "home": float(latest.get("home_kwh", 0.0) or 0.0)
+            - _term_median(lambda r: float(r.get("home_kwh", 0.0) or 0.0)),
+        }
+        device_ids = set(latest.get("devices") or {})
+        for r in reference:
+            device_ids |= set(r.get("devices") or {})
+        for did in device_ids:
+            movers[did] = float(
+                (latest.get("devices") or {}).get(did, 0.0) or 0.0
+            ) - _term_median(
+                lambda r, d=did: float(
+                    (r.get("devices") or {}).get(d, 0.0) or 0.0)
+            )
+        suspect, moved = max(movers.items(), key=lambda kv: abs(kv[1]))
+        return [
+            f"True baseload stepped {step:+.2f}kWh against a "
+            f"{median:.2f}kWh median ({tolerance:.2f}kWh band). The house "
+            f"SEM does not control varies slowly — a step means a sensor "
+            f"died, a counter reset, or a device is double-counted. "
+            f"Largest mover: {suspect} ({moved:+.2f}kWh day-over-day)."
+        ]
 
     def check_clamps(self, clamp_engagement: dict[str, float]) -> list[str]:
         """(#660) Report clamps that have been engaged for too long.
@@ -437,6 +538,8 @@ class HealthCheck:
         energy_flows: EnergyFlows | None = None,
         per_charger_daily: Mapping[str, float] | None = None,
         live_charger_ids: Iterable[str] | None = None,
+        per_device_daily: Mapping[str, float] | None = None,
+        baseload_history: list | None = None,
     ) -> list[str]:
         """Run all health checks and return violations list.
 
@@ -463,7 +566,10 @@ class HealthCheck:
                 energy_flows=energy_flows,
                 per_charger_daily=per_charger_daily,
                 live_charger_ids=live_charger_ids,
+                per_device_daily=per_device_daily,
             )
+        if baseload_history:
+            violations += self.check_baseload_drift(baseload_history)
 
         if violations:
             self._violation_count += len(violations)

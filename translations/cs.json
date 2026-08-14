@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Uložená energie ze sítě"
+      },
+      "true_baseload_power": {
+        "name": "Skutečné základní zatížení"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Skutečné základní zatížení dnes"
       }
     },
     "binary_sensor": {

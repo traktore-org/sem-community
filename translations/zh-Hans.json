@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "来自电网的储存电量"
+      },
+      "true_baseload_power": {
+        "name": "真实基础负荷"
+      },
+      "daily_true_baseload_energy": {
+        "name": "今日真实基础负荷"
       }
     },
     "binary_sensor": {

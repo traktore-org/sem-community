@@ -111,6 +111,9 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "daily_battery_charge_grid": {"sem_energy", "sem_battery", "sem_daily", "sem_secondary"},
     "daily_battery_grid_cost": {"sem_energy", "sem_battery", "sem_daily", "sem_secondary"},
     "battery_stored_grid_share": {"sem_battery", "sem_secondary"},
+    # (#773) The audited residual — the home the devices don't explain.
+    "true_baseload_power": {"sem_power", "sem_home", "sem_secondary"},
+    "daily_true_baseload_energy": {"sem_energy", "sem_home", "sem_daily", "sem_secondary"},
     # Removed (#667): daily_solar_yield (sensor.py:254 — use daily_solar_energy)
     # and daily_ev_consumption (no such entity; daily_ev_energy is the one).
     # Both are labelled above — repointing would have double-labelled them.

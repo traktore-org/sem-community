@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Lagret energi fra nettet"
+      },
+      "true_baseload_power": {
+        "name": "Reell grunnlast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Reell grunnlast i dag"
       }
     },
     "binary_sensor": {

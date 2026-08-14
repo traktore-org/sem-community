@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Tárolt energia hálózatról"
+      },
+      "true_baseload_power": {
+        "name": "Valós alapterhelés"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Valós alapterhelés ma"
       }
     },
     "binary_sensor": {

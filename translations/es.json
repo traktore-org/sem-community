@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Energía almacenada de la red"
+      },
+      "true_baseload_power": {
+        "name": "Carga base real"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Carga base real hoy"
       }
     },
     "binary_sensor": {

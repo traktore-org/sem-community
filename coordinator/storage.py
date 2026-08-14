@@ -94,6 +94,10 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # credited the full import price again, which is the bug the whole row
     # exists to fix.
     "battery_provenance",
+    # (#773) the sealed baseload days. Losing them re-arms the drift check's
+    # "too little history" silence for two weeks after every reboot — the
+    # exact window a post-upgrade sensor fault most needs catching in.
+    "baseload_history",
 )
 
 

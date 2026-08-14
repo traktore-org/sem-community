@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Lagrad energi från nät"
+      },
+      "true_baseload_power": {
+        "name": "Verklig baslast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Verklig baslast idag"
       }
     },
     "binary_sensor": {

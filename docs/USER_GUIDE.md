@@ -976,6 +976,33 @@ integration drift cannot invent stored energy. If the SOC sensor goes
 offline, SEM leaves the figures alone rather than reading silence as an
 empty battery.
 
+### True Baseload — the house SEM does not touch (#773)
+
+With every controlled load counting its own kWh (#768), what is left of
+`home` after subtracting them is your **baseload**: fridge, standby,
+lighting, router — the part of the house SEM cannot shift.
+
+| Sensor | What it answers |
+|---|---|
+| `sensor.sem_true_baseload_power` | the house's uncontrolled draw, live (W) |
+| `sensor.sem_daily_true_baseload_energy` | the same over the day (kWh) |
+
+Two properties make it useful beyond curiosity:
+
+- **It can go negative — on purpose.** A negative baseload means SEM
+  subtracted more than the house used: a device counted twice, or a sensor
+  with the wrong sign. That is a fault report, not a glitch, which is why
+  it is never clamped to zero.
+- **It is boring, and SEM checks that it stays boring.** Baseload moves
+  with season and occupancy — slowly. A step change means a sensor died, a
+  counter reset, or a device's energy is being double-counted, and the
+  health check reports it **with a named suspect** (the device — or the
+  home row itself — whose own day-over-day change explains the step).
+
+Days where any device's energy had to be estimated (`rated_power` ×
+runtime) still display, but are excluded from the drift comparison — an
+estimate is never treated as a measurement.
+
 ### Performance Sensors (%)
 - `sensor.sem_self_consumption_rate` — % of solar used locally
 - `sensor.sem_autarky_rate` — % of consumption from solar+battery (grid-charged battery counts as grid, #770)

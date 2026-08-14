@@ -345,10 +345,21 @@ class TestTheCalendarPruneDoesNotEatTheDeviceDay:
 
 class TestTheCoordinatorFilesTheIncrement:
     def _coord(self, devices):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+
         calc = MagicMock()
         surplus = MagicMock()
         surplus._devices = devices
-        return SimpleNamespace(_energy_calculator=calc, _surplus_controller=surplus)
+        coord = SimpleNamespace(
+            _energy_calculator=calc, _surplus_controller=surplus)
+        # (#772) The seam derives a comfort bucket for label-less devices;
+        # bind the real method so these stand-ins keep exercising the true
+        # filing path. None of the devices here carries a comfort band, so
+        # the derivation returns None and the #769 expectations stand.
+        coord._comfort_split_for = SEMCoordinator._comfort_split_for.__get__(coord)
+        return coord
 
     def test_each_device_increment_is_filed_under_its_split(self) -> None:
         from custom_components.solar_energy_management.coordinator.coordinator import (

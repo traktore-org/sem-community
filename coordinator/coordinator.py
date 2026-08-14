@@ -3796,6 +3796,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     for c in (self.config.get("ev_chargers") or [])
                     if c.get("id")
                 ],
+                # (#773) The devices are members of the home row the way
+                # chargers are members of the EV day (over-count only —
+                # shortfall IS the baseload), and the sealed history feeds
+                # the drift check that asks whether the leftover still
+                # behaves like a house.
+                per_device_daily={
+                    d.device_id: float(
+                        getattr(d, "daily_energy_kwh", 0.0) or 0.0)
+                    for d in self._surplus_controller._devices.values()
+                    if getattr(d, "device_id", None)
+                },
+                baseload_history=getattr(
+                    self._energy_calculator, "baseload_history", None,
+                ) if self._energy_calculator else None,
             )
 
             # Step 12: Notifications (extracted for readability, #29)
@@ -4766,6 +4780,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # it. Same meter day, so the device's four horizons all rest on
             # the one day boundary.
             self._file_device_energy(meter_day)
+            # (#773) The W twin of the daily residual: home minus the live
+            # device draws SEM can see. A device with no readable power
+            # contributes nothing — its draw simply stays inside the
+            # baseload, which is exactly what "SEM cannot see it" means.
+            # NOT clamped at zero: negative is the diagnostic's sharpest
+            # finding (a double-count or a sign error), and the drift/
+            # partition checks depend on seeing it.
+            _controlled_w = 0.0
+            for device in self._surplus_controller._devices.values():
+                try:
+                    _controlled_w += float(device.observed_power_w() or 0.0)
+                except (AttributeError, TypeError, ValueError):
+                    continue
+            energy.true_baseload_power = round(
+                float(power.home_consumption_power or 0.0) - _controlled_w, 1
+            )
         except (AttributeError, TypeError) as e:
             _LOGGER.debug("Device runtime update failed: %s", e)
 
@@ -6398,6 +6428,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "(%.2f in-block)%s",
                 r.demand_id, r.asked_kwh, r.planned_kwh, r.actual_kwh,
                 r.in_block_kwh, "" if r.measured else " [estimated]")
+        # (#772) The morning's comfort verdict: for every comfort demand the
+        # night carried, the zone's running in/out-of-block ratio. This is
+        # the feedback #705 Ph3 banks blind without — a pre-cool that ran
+        # the AC in the block AND again at 17:00 shows up here as a low
+        # banked share, where the per-night in_block_kwh above cannot see
+        # it. Month figures, so one line answers the rolling question.
+        calc = getattr(self, "_energy_calculator", None)
+        if calc is not None and closed:
+            try:
+                _mday = self.time_manager.get_current_meter_day_sunrise_based()
+                for r in closed:
+                    demand_id = str(r.demand_id)
+                    if not demand_id.startswith("comfort:"):
+                        continue
+                    did = demand_id.split(":", 1)[1]
+                    split = calc.get_comfort_split(did, _mday)
+                    in_m = split["in_block_month_kwh"]
+                    out_m = split["out_block_month_kwh"]
+                    total = in_m + out_m
+                    if total <= 0:
+                        continue
+                    _LOGGER.info(
+                        "#772 comfort: %s banked %.2f kWh in-block vs %.2f "
+                        "outside this month (%d%% banked)",
+                        did, in_m, out_m, round(100.0 * in_m / total),
+                    )
+            except Exception:  # noqa: BLE001 — a verdict never costs a seal
+                _LOGGER.debug("#772 comfort ratio skipped", exc_info=True)
         self._persist_demand_outcomes()
         self._refresh_demand_review()
 
@@ -9631,6 +9689,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         periods. This is the seam, and it is deliberately thin: no decision, no
         estimate, no reinterpretation of the number on the way through.
 
+        (#772) One lookup joined the seam: a comfort zone that names no
+        bucket of its own gets one derived from its ``comfort:{did}`` plan
+        gate — in-block or out — because the plan's placement is coordinator
+        state the device cannot see. Still no decision about the NUMBER;
+        only about which shelf it lands on.
+
         A device that booked nothing this cycle is not filed at all — a device
         with an unreadable meter must not be recorded as one that consumed
         zero (#755 contract 1).
@@ -9638,14 +9702,62 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         calc = getattr(self, "_energy_calculator", None)
         if calc is None:
             return
+        now = dt_util.now()
         for device in self._surplus_controller._devices.values():
             increment = getattr(device, "last_cycle_energy_kwh", 0.0) or 0.0
             if not increment:
                 continue
+            split = getattr(device, "energy_split_label", None)
+            if split is None:
+                split = self._comfort_split_for(device, now)
             calc.accumulate_device_energy(
-                device.device_id, increment, meter_day,
-                split=getattr(device, "energy_split_label", None),
+                device.device_id, increment, meter_day, split=split,
             )
+            # (#773) The same increment, booked once more into the
+            # midnight-keyed controlled-loads mirror the baseload
+            # subtraction runs against. ``meter_day`` above is the
+            # device's SUNRISE day; the mirror wants the calendar day —
+            # the #703/#704 boundary lesson, applied at the seam.
+            calc.accumulate_controlled_load(
+                increment, now.date(),
+                estimated=not getattr(
+                    device, "daily_energy_is_measured", False),
+            )
+
+    def _comfort_split_for(self, device, now):
+        """(#772) The comfort bucket for this cycle's kWh, or None.
+
+        Derived HERE, at filing time, from the same ``comfort:{did}`` gate
+        the actuation layer consults — not from a stamp cached on the
+        device, which would go stale the moment the plan clears or the
+        kill-switch flips mid-day.
+
+        Three deliberate edges:
+        - A DISENGAGED band (no band, dead thermometer, misconfig) returns
+          None: the zone cannot say what its band wanted, so it files no
+          comfort claim at all (#755 contract 1) — and the gate is not
+          consulted, so a band-less pool pump never shows up in the
+          coverage log as a comfort demand.
+        - An UNCOVERED gate is OUT-of-block, not None: a night the planner
+          never banked is banking-not-working, and it must land in the
+          ratio's denominator. Filing it unsplit would make an idle
+          planner look like a perfect one.
+        - The device's own label (the heat pump's SG state, #769) is
+          senior — the caller only asks here when the device named no
+          bucket itself.
+        """
+        try:
+            if getattr(device, "comfort_state", "disengaged") == "disengaged":
+                return None
+            gate = self._overnight_plan_gate(
+                f"comfort:{device.device_id}", now
+            )
+        except Exception:  # noqa: BLE001 — a broken band files no claim
+            return None
+        from .energy_calculator import COMFORT_SPLIT_IN, COMFORT_SPLIT_OUT
+        if getattr(gate, "covered", False) and getattr(gate, "in_block", False):
+            return COMFORT_SPLIT_IN
+        return COMFORT_SPLIT_OUT
 
     def _persist_device_runtimes(self) -> None:
         """Save device runtimes — and, for EVERY device, the day's energy.

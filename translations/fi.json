@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Varastoitu energia verkosta"
+      },
+      "true_baseload_power": {
+        "name": "Todellinen peruskuorma"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Todellinen peruskuorma tänään"
       }
     },
     "binary_sensor": {

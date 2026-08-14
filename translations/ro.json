@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Energie stocată din rețea"
+      },
+      "true_baseload_power": {
+        "name": "Sarcina de bază reală"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Sarcina de bază reală azi"
       }
     },
     "binary_sensor": {

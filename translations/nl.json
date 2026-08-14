@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Opgeslagen energie uit net"
+      },
+      "true_baseload_power": {
+        "name": "Werkelijke basislast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Werkelijke basislast vandaag"
       }
     },
     "binary_sensor": {

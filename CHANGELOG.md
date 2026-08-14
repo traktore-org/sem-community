@@ -291,6 +291,49 @@ shapes the demand set must ride the re-plan signature.
   of what is stored right now. (Self-consumption was checked and is already
   correct — it is measured against solar, not against the battery, so it
   was never affected.)
+- 🧮 **The per-device breakdowns now reconcile against the fleet identity**
+  (#771) — SEM publishes per-charger daily kWh, a per-charger origin split
+  and per-PV-string energy, and none of them was ever checked against the
+  fleet row it decomposes: a renamed charger's stale bucket kept being
+  published and the sum double-counted (the #761 shape) with every total
+  still agreeing. A health check now reconciles all three — over-count only,
+  because shortfall has three *legitimate* causes (the 4-string discovery
+  cap, per-charger deadline rollover, upward counter reconcile) and a check
+  that fires on healthy hardware gets muted. A violation names every member
+  and marks the one that is no longer configured. The per-battery breakdown
+  in the issue's table was **deleted, not reconciled**: it had no producer —
+  `EnergyTotals.per_inverter`/`per_battery`, `InverterRuntime`, and the
+  `InverterFlows`/`BatteryFlows` slices (whose comment claimed a
+  conservation invariant "holds by construction" over code that never
+  constructed them) were data-shaped surface with nothing behind it, and a
+  checker over a dict nothing fills can only ever say "verified". Ratchet
+  tests keep the surface deleted.
+- 🌡️ **Comfort energy exists now, split by plan placement** (#772) — comfort
+  is the one demand family where the plan *creates* runs, and it left no
+  energy trace at all. A zone's kWh (accrued like any device, #768) now
+  files under "inside its planned block" or "outside", derived at the filing
+  seam from the same `comfort:` gate the actuation layer consults. The
+  in/out ratio is the first honest answer to "is banking working here" — a
+  pre-cool that ran the AC at 03:00 *and again at 17:00* books the same
+  in-block energy as one that banked four hours of coasting; the difference
+  lives entirely in the out bucket. A disengaged band files no claim, and
+  "no plan tonight" files as *out*, so an idle planner cannot look like a
+  perfect one. This is the feedback #705 Ph3 decides blind without.
+- 🏠 **The residual is audited: True Baseload** (#773) — with every
+  controlled load carrying a kWh, `home` stops being a black box and becomes
+  a subtraction: `home − Σ(controlled loads)` = the house SEM does *not*
+  touch, whose defining property is that it is boring. Two new sensors
+  (`True Baseload` W + `True Baseload Today` kWh) publish it — **negative
+  values included**, because a negative baseload is the sharpest possible
+  finding (a double-count or a sign error) and clamping it would hide
+  exactly the fault the number exists to expose. Its day-to-day drift is a
+  free sensor-health check with the #628 discipline: a day without a home
+  row is a refused gap (never a zero), an estimated day displays but never
+  trains or compares, and a breach names its suspect — the device or the
+  home row whose own day-over-day move explains the step. The
+  controlled-loads subtrahend is a midnight-keyed mirror booked at the
+  filing seam, because device days roll at sunrise and subtracting across
+  that boundary is the #703/#704 bug class.
 
 ### 🐛 Found on PROD hardware (#774)
 

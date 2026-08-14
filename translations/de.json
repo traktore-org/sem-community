@@ -1208,6 +1208,12 @@
       },
       "battery_stored_grid_share": {
         "name": "Gespeicherte Energie aus Netz"
+      },
+      "true_baseload_power": {
+        "name": "Echte Grundlast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Echte Grundlast heute"
       }
     },
     "binary_sensor": {

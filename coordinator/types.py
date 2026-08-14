@@ -406,6 +406,23 @@ class EnergyTotals:
     daily_battery_charge_solar: float = 0.0
     daily_battery_charge_grid: float = 0.0
 
+    # (#773) The audited residual: home minus every controlled load SEM can
+    # see (#768/#769/#772 gave them all a kWh). The house SEM does NOT touch
+    # — fridge, standby, lighting — whose defining property is that it is
+    # boring; its drift is checked in ``HealthCheck.check_baseload_drift``.
+    # The W value travels here beside its kWh twin deliberately: the pair is
+    # one diagnostic and splitting it across sections is how halves go
+    # stale. ``true_baseload_today`` is None (not 0.0) while no home row
+    # exists — silence is not a measurement (#755 contract 1) — and both
+    # values may go NEGATIVE: that is the diagnostic's sharpest finding (an
+    # over-subtraction or sign error), never to be clamped quiet.
+    true_baseload_power: Optional[float] = None
+    true_baseload_today: Optional[float] = None
+    controlled_loads_today: float = 0.0
+    # False whenever any estimated (rated×runtime) kWh entered today's
+    # mirror: the number still displays, but must never train anything.
+    true_baseload_measured: bool = False
+
     # Monthly totals (kWh)
     monthly_solar: float = 0.0
     monthly_home: float = 0.0
@@ -1002,6 +1019,12 @@ class SEMData:
             "daily_battery_charge_grid": self.energy.daily_battery_charge_grid,
             "daily_battery_grid_cost": self.costs.daily_battery_grid_cost,
             "battery_stored_grid_share": self.performance.battery_stored_grid_share,
+            # (#773) The audited residual pair + its honesty flag. May be
+            # None (no home row yet) and may be negative (the finding).
+            "true_baseload_power": self.energy.true_baseload_power,
+            "daily_true_baseload_energy": self.energy.true_baseload_today,
+            "daily_controlled_loads_energy": self.energy.controlled_loads_today,
+            "true_baseload_measured": self.energy.true_baseload_measured,
 
             # Monthly energy
             "monthly_solar_yield_energy": self.energy.monthly_solar,

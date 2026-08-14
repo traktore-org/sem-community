@@ -504,6 +504,26 @@ SENSOR_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
     ),
+    # (#773) The audited residual: home minus every controlled load SEM can
+    # see. The house SEM does NOT touch — and therefore the row whose drift
+    # is a free sensor-health check. Both may go NEGATIVE: that is the
+    # diagnostic's sharpest finding (a double-count or sign error), so no
+    # clamp and no non-negative device_class assumptions beyond what HA's
+    # POWER/ENERGY classes already allow.
+    SensorEntityDescription(
+        key="true_baseload_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="daily_true_baseload_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+    ),
     SensorEntityDescription(
         key="daily_ev_energy",
         device_class=SensorDeviceClass.ENERGY,
