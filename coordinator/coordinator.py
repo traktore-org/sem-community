@@ -7257,13 +7257,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # why — the EV side has said so since C7 while the load side
             # skipped in five places silently, and "why isn't my heater in
             # tonight's plan?" had no answer anywhere on the card.
+            # (#744) …and it owes it BY NAME. ``labels`` was assigned only
+            # after every gate passed, so precisely the rows that need a
+            # name never got one and the card fell back to the id slug:
+            # Guido read `energy_dashboard_shellyplus1pm_441793d5470c`
+            # where his roster says "Bad / Dusche / Gäste".
             def _left_out(dev, why):
-                left_out_loads.append({"id": f"load:{dev.device_id}",
-                                       "why": why})
+                left_out_loads.append({
+                    "id": f"load:{dev.device_id}", "why": why,
+                    "label": str(getattr(dev, "name", "") or "").strip() or None,
+                })
 
             for dev in (controller.get_devices_sorted() if controller else []):
                 try:
                     loads_seen += 1
+                    # (#744) Is this a night candidate AT ALL? A device that
+                    # was never asked for guaranteed runtime cannot become a
+                    # night demand in ANY mode — the demand's energy is
+                    # ``rated × (min_runtime − accumulated)``, which is zero
+                    # by construction. Asked FIRST, and silently: the mode
+                    # gate below used to answer for these, so a roster of
+                    # Energy-Dashboard imports (control_mode defaults to
+                    # PEAK_ONLY) printed its own default state as a why-not
+                    # list every night — nine of Guido's eleven rows, ~45 of
+                    # #744's forty-seven. A non-candidate owes no
+                    # explanation; ``loads_seen`` still counts it, so the
+                    # quiet night keeps saying "no load needs a night run".
+                    if int(getattr(dev, "daily_min_runtime_sec", 0) or 0) <= 0:
+                        continue
                     # The plan must mirror the intent gate (finding #1, PROD
                     # night 1): an off/peak_only device is never night-run by
                     # compute_load_intent — planning it (the off-mode heizband

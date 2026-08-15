@@ -478,6 +478,17 @@ The **Energy Plan** card (Control tab) is the one answer:
   device's mode excludes surplus control, no runtime is left to make up,
   it is already at its target, it is a daytime-only device, or SEM has no
   measured power for it yet. An absent row is never a mystery.
+
+  The list names **candidates**, not the whole roster. A device only
+  becomes a night demand through its **minimum daily runtime** — that
+  setting is the ask, and the night's job is to meet it. A device with no
+  minimum runtime set has asked for nothing, cannot be planned in any
+  control mode, and so is not listed at all. This matters on an
+  Energy-Dashboard install, where every consumer in HA's ledger arrives as
+  a row and starts at peak-only: without the candidacy test the list would
+  simply reprint the roster's default state every night. **If a device you
+  expect is missing from both lists, give it a minimum daily runtime** —
+  then it appears, either scheduled or with the reason it was not.
 - **"Already full" needs two witnesses.** A car counts as full only when
   SEM's own charge accounting says so *and* the charger's meter agrees —
   a car drawing more than its charger's handshake current is never

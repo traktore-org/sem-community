@@ -199,8 +199,12 @@ class TestTheQuietFaceSpeaksInSentences:
         )
         monkeypatch.setattr(ev_night_targets, "build_night_target_map",
                             lambda coord, energy: {"ev_charger": 0.0})
-        from .test_638_shadow_mode import _idle_load
-        fake = _fake_self(devices=[_idle_load()])
+        # (#744) A load that ASKED for runtime and has none left — the
+        # shape this test means. ``_idle_load`` (min_runtime 0) is a
+        # non-candidate and no longer prints a row at all; using it here
+        # made the test read as "every registered device gets a row",
+        # which is the noise Guido's 23:50 card was made of.
+        fake = _fake_self(devices=[_load(has_runtime_deficit=False)])
         ok = SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
         assert ok is True
@@ -211,7 +215,7 @@ class TestTheQuietFaceSpeaksInSentences:
         # The headline code says the night needs nobody; the row says which
         # device that was and why (they answer different questions).
         assert plan["not_scheduled"] == [
-            {"id": "load:pump", "why": "no_runtime_need"}]
+            {"id": "load:pump", "why": "no_runtime_need", "label": "Pump"}]
 
     def test_an_idle_night_with_an_unplugged_car_names_it(self, monkeypatch):
         from custom_components.solar_energy_management.coordinator import (
@@ -267,25 +271,30 @@ class TestEveryLeftOutLoadIsNamed:
         )
         rows = self._rows(_load(control_mode=DeviceControlMode.OFF),
                           freeze_targets)
-        assert {"id": "load:pump", "why": "load_mode"} in rows
+        assert {"id": "load:pump", "why": "load_mode",
+                "label": "Pump"} in rows
 
     def test_a_device_with_no_runtime_left_to_do_says_so(self, freeze_targets):
         rows = self._rows(_load(has_runtime_deficit=False), freeze_targets)
-        assert {"id": "load:pump", "why": "no_runtime_need"} in rows
+        assert {"id": "load:pump", "why": "no_runtime_need",
+                "label": "Pump"} in rows
 
     def test_a_banked_room_says_it_is_already_at_target(self, freeze_targets):
         rows = self._rows(_load(stop_condition_met=True), freeze_targets)
-        assert {"id": "load:pump", "why": "stop_condition"} in rows
+        assert {"id": "load:pump", "why": "stop_condition",
+                "label": "Pump"} in rows
 
     def test_a_daytime_only_device_says_it_does_not_do_nights(
             self, freeze_targets):
         rows = self._rows(_load(battery_eligible_overnight=False,
                                 top_up_policy="solar_only"), freeze_targets)
-        assert {"id": "load:pump", "why": "day_only"} in rows
+        assert {"id": "load:pump", "why": "day_only",
+                "label": "Pump"} in rows
 
     def test_a_device_with_no_measured_power_says_so(self, freeze_targets):
         rows = self._rows(_load(rated_power=0.0), freeze_targets)
-        assert {"id": "load:pump", "why": "no_rated_power"} in rows
+        assert {"id": "load:pump", "why": "no_rated_power",
+                "label": "Pump"} in rows
 
     def test_a_planned_load_is_not_in_the_left_out_list(self, freeze_targets):
         assert self._rows(_load(), freeze_targets) == []
@@ -303,8 +312,8 @@ class TestEveryLeftOutLoadIsNamed:
             fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
         plan = fake._energy_plan_shadow
         assert plan["demands"] == []
-        assert {"id": "load:pump", "why": "no_runtime_need"} \
-            in plan["not_scheduled"]
+        assert {"id": "load:pump", "why": "no_runtime_need",
+                "label": "Pump"} in plan["not_scheduled"]
 
     def test_every_why_the_collector_emits_has_a_card_sentence(self):
         """Systematic pin, the twin of the gate-reason one below: a why
@@ -330,6 +339,116 @@ class TestEveryLeftOutLoadIsNamed:
             key = f"energy_plan_why_{code}"
             missing = [lg for lg, t in langs.items() if not t.get(key)]
             assert not missing, f"{key} missing in {missing}"
+
+
+@pytest.mark.unit
+class TestOnlyNightCandidatesOweAWhyNot:
+    """(#744, Guido's PROD card 15.08 23:50) A device that was never asked
+    for guaranteed runtime is not a night candidate, and a non-candidate
+    owes no explanation.
+
+    ``control_mode`` defaults to PEAK_ONLY (devices/base.py), and the
+    collector asked the mode gate FIRST — so every device the user never
+    enrolled in surplus control printed a why-not row every single night.
+    Nine of Guido's eleven rows read "device mode excludes surplus
+    control" for a coffee machine, three tableau outputs, two Shelly 1PMs,
+    a measurement channel and two lights. Not one of them has
+    ``daily_min_runtime_sec`` set, so not one could have been planned in
+    ANY mode: the list was reporting the DEFAULT state of the roster. On
+    #744's 47-device install it would run to ~45 rows.
+
+    The night ask is the candidacy test, so it is asked first. A device
+    that IS asked for runtime and is excluded by its mode keeps its row —
+    that is the real answer to "why isn't my heater in tonight's plan?"
+    """
+
+    def _rows(self, dev, freeze_targets):
+        fake = _fake_self(devices=[dev])
+        SEMCoordinator._shadow_energy_plan(
+            fake, _scheduler(), energy=MagicMock(), power=_power())
+        return fake._energy_plan_shadow.get("not_scheduled") or []
+
+    def test_a_device_never_asked_for_runtime_is_not_on_the_list(
+            self, freeze_targets):
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceControlMode,
+        )
+        rows = self._rows(
+            _load(daily_min_runtime_sec=0, has_runtime_deficit=False,
+                  control_mode=DeviceControlMode.PEAK_ONLY),
+            freeze_targets)
+        assert [r for r in rows if r["id"] == "load:pump"] == [], (
+            "a device with no runtime ask is not a night candidate — "
+            "the default roster must not print itself every night")
+
+    def test_a_device_asked_for_runtime_still_names_its_mode(
+            self, freeze_targets):
+        """The pin against over-correcting: the useful answer survives."""
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceControlMode,
+        )
+        rows = self._rows(_load(control_mode=DeviceControlMode.PEAK_ONLY),
+                          freeze_targets)
+        assert {"id": "load:pump", "why": "load_mode",
+                "label": "Pump"} in rows
+
+    def test_a_non_candidate_still_counts_as_a_load_seen(self, monkeypatch):
+        """``no_load_needs_night`` is keyed on ``loads_seen`` — dropping the
+        ROW must not drop the sentence that explains the quiet night."""
+        from custom_components.solar_energy_management.coordinator import (
+            ev_night_targets,
+        )
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {"ev_charger": 0.0})
+        fake = _fake_self(devices=[_load(daily_min_runtime_sec=0,
+                                         has_runtime_deficit=False)])
+        SEMCoordinator._shadow_energy_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
+        plan = fake._energy_plan_shadow
+        assert "no_load_needs_night" in plan["why_codes"]
+        assert plan["not_scheduled"] == [], (
+            "the sentence stays, the noise goes")
+
+
+@pytest.mark.unit
+class TestALeftOutRowIsNamed:
+    """(#744) The card rendered ``r.id.split(':').pop()`` because the row
+    carried no name — so Guido read
+    ``energy_dashboard_shellyplus1pm_441793d5470c`` instead of
+    "Bad / Dusche / Gäste", and the slug's width pushed every reason into a
+    ragged wrapped column. ``labels`` was only assigned AFTER every gate
+    passed, so precisely the rows that need a name never got one. The
+    scheduled rows already carry ``label``; the left-out rows carry the
+    same key.
+    """
+
+    def _rows(self, dev, freeze_targets):
+        fake = _fake_self(devices=[dev])
+        SEMCoordinator._shadow_energy_plan(
+            fake, _scheduler(), energy=MagicMock(), power=_power())
+        return fake._energy_plan_shadow.get("not_scheduled") or []
+
+    def test_a_left_out_load_carries_its_friendly_name(self, freeze_targets):
+        rows = self._rows(_load(has_runtime_deficit=False), freeze_targets)
+        assert {"id": "load:pump", "why": "no_runtime_need",
+                "label": "Pump"} in rows
+
+    def test_a_nameless_device_falls_back_to_none_not_to_a_crash(
+            self, freeze_targets):
+        dev = _load(has_runtime_deficit=False)
+        del dev.name
+        rows = self._rows(dev, freeze_targets)
+        assert {"id": "load:pump", "why": "no_runtime_need",
+                "label": None} in rows
+
+    def test_the_card_prefers_the_label_over_the_id_slug(self):
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parent.parent
+        card = (root / "dashboard" / "card" / "src" / "cards"
+                / "sem-energy-plan-card.js").read_text()
+        assert card.count("r.label ||") == 2, (
+            "both the quiet-night and the planned-night lists render the "
+            "name, falling back to the slug only when there is none")
 
 
 # The reasons for which "the plan is unreadable" IS the honest sentence:

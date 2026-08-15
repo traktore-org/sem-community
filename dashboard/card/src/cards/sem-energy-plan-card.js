@@ -468,7 +468,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                 <div class="notsched-row">
                                     <ha-icon icon="mdi:sleep"
                                              style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
-                                    <span class="nsname">${(r.id || '').split(':').pop()}</span>
+                                    <span class="nsname">${r.label || (r.id || '').split(':').pop()}</span>
                                     <span class="nswhy">${this._t('energy_plan_why_' + r.why)}</span>
                                 </div>
                             `)}
@@ -779,7 +779,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                 <div class="notsched-row">
                                     <ha-icon icon="mdi:sleep"
                                              style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
-                                    <span class="nsname">${(r.id || '').split(':').pop()}</span>
+                                    <span class="nsname">${r.label || (r.id || '').split(':').pop()}</span>
                                     <span class="nswhy">${this._t('energy_plan_why_' + r.why)}</span>
                                 </div>
                             `)}
@@ -838,15 +838,28 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 color: var(--secondary-text-color, #8a93a5);
                 margin-bottom: 2px;
             }
+            /* (#744) The name column is a NAME now, not an entity slug, so
+               it no longer eats the row — but min-width:0 keeps a long one
+               from pushing the reason into a two-words-per-line ribbon on a
+               phone (Guido's 23:50 card). The reason takes what is left and
+               sits right. */
             .notsched-row {
                 display: flex;
-                align-items: center;
+                align-items: baseline;
                 gap: 6px;
                 font-size: 11px;
                 color: var(--secondary-text-color, #8a93a5);
             }
             .notsched-row .nsname {
                 color: var(--primary-text-color, #e1e1e1);
+                min-width: 0;
+                flex: 0 1 auto;
+                overflow-wrap: anywhere;
+            }
+            .notsched-row .nswhy {
+                min-width: 0;
+                flex: 1 1 auto;
+                text-align: right;
             }
             /* (#755) the record's verdict — same visual weight as the
                not-scheduled list: a footnote, not a headline. */

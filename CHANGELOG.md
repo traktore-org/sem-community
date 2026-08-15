@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧹 **"Not scheduled tonight" lists candidates, not the whole roster**
+  (#744) — a device that was never asked for guaranteed runtime cannot be
+  a night demand in any mode, so it no longer prints a why-not row. The
+  mode gate used to answer first, which made an Energy-Dashboard roster
+  publish its own default state every night (`control_mode` defaults to
+  peak-only): 9 rows of "device mode excludes surplus control" on a
+  12-device install, ~45 on a 47-device one. A device that *does* ask for
+  runtime and is excluded by its mode still says so — that answer was
+  never the noise.
+- 🏷️ **Left-out rows carry the device's name** (#744) — the card fell back
+  to the raw id (`energy_dashboard_shellyplus1pm_441793d5470c`) because
+  the label was only assigned after every gate passed, so exactly the rows
+  that needed a name never got one. The slug's width also pushed each
+  reason into a wrapped ribbon on a phone.
 - 🏷️ **The log tag is the honest mode of the stamp** — six planner lines
   written in the shadow soak still said `(shadow #638)` on actuating
   installs; they now carry the real mode, guarded by a source test.

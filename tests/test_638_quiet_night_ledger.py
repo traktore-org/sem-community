@@ -147,5 +147,9 @@ def test_the_quiet_answer_itself_does_not_move(no_ev_targets):
     assert plan["blocks"] == []
     assert "no overnight demands" in plan["summary"][0]
     assert "battery_no_deficit" in plan["why_codes"]
-    assert plan["not_scheduled"] == [{"id": "load:pump", "why": "no_runtime_need"}]
+    # (#744) ``_idle_load`` never asked for guaranteed runtime, so it is not
+    # a night candidate and owes no why-not. The quiet night still SAYS so —
+    # via ``no_load_needs_night`` above, which is keyed on loads_seen.
+    assert plan["not_scheduled"] == []
+    assert "no_load_needs_night" in plan["why_codes"]
     assert plan["replan_cause"] is None or isinstance(plan["replan_cause"], str)
