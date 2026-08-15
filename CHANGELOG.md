@@ -203,6 +203,18 @@ shapes the demand set must ride the re-plan signature.
   while clouds, or a genuine revision, still re-anchor once. Without a
   production reading — or with a frozen counter (#681) — it degrades to the
   plain 3 kWh deadband: never worse than before.
+- 🚪 **A term behind a closed gate cannot re-plan anything** (#759, third
+  sighting — same rule, three more instances). The demand collector stops at
+  the charge **mode** before it ever asks the plug or the car, and at a
+  load's control **mode** (then night-eligibility) before it asks the deficit
+  or the room — but the signature asked anyway. So a plug blip on an `off`
+  charger, a car filling up on one, a deficit ticking down on a `peak_only`
+  or day-only heater each restamped a night that could not possibly change:
+  on the rig the mode sat at `off`, the shared charger's plug flickered for
+  one cycle, and the plan restamped **twice**, both times emitting
+  byte-identical blocks. The signature now mirrors those gates exactly,
+  including their fail-**visible** direction — an unevaluable gate still
+  watches the term.
 
 ### 🧪 Simulation is a standard feature now (#764)
 

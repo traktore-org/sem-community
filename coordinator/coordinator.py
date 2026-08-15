@@ -6243,20 +6243,63 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         take the whole trigger down with it.
         """
         sig: list = []
+        # 0. The collector's own gates, mirrored (round 4, 15.08). #759's
+        #    rule — watch what the plan READS — has three more instances,
+        #    and the collector names them: it stops at the charge MODE
+        #    before it asks the plug or the car, and at the load's control
+        #    MODE (then night-eligibility) before it asks the deficit or
+        #    the room. A term past a closed gate is unread, so it can only
+        #    restamp a plan that cannot change: live on .175 the mode sat
+        #    at ``off``, the shared KEBA's plug flickered one cycle, and
+        #    the night restamped TWICE with byte-identical output.
+        #    Unevaluable gates fail VISIBLE (include the term) — the same
+        #    direction the collector takes, for the same reason.
+        from ..devices.base import DeviceControlMode as _DCM_SIG
+        _cfgs = {str(c.get("id") or ""): c
+                 for c in (self.config.get("ev_chargers") or [])}
+
+        def _night_ok(cid: str) -> bool:
+            """This charger's mode gate — ``off``, and #634's floorless
+            ``solar_only``, never reach the plug/car questions."""
+            try:
+                return bool(self._mode_allows_night_charging(_cfgs.get(cid) or {}))
+            except Exception:  # noqa: BLE001
+                return True
+
+        def _sem_may_switch(dev) -> bool:
+            """The load/comfort collectors' first gate: SURPLUS only."""
+            try:
+                return getattr(dev, "control_mode",
+                               _DCM_SIG.SURPLUS) == _DCM_SIG.SURPLUS
+            except Exception:  # noqa: BLE001
+                return True
+
+        def _night_may_serve(dev) -> bool:
+            """The load collector's ``day_only`` gate."""
+            try:
+                return bool(getattr(dev, "battery_eligible_overnight", False)
+                            or getattr(dev, "top_up_policy", "") == "cheap_hours")
+            except Exception:  # noqa: BLE001
+                return True
+
         # 1. Connection — the original trigger, per-charger when available.
         #    ``power`` is the cycle's CONFIRMED plug answer
         #    (``_confirm_ev_connection``), so a UDP-polled charger's missed
         #    poll cannot restamp the night: the blip family arriving in the
         #    planner is what #753/N2-15.08 caught.
         _pc = getattr(power, "ev_connected_per_charger", None) or {}
-        _cfgs = {str(c.get("id") or ""): c
-                 for c in (self.config.get("ev_chargers") or [])}
         _fleet = bool(getattr(power, "ev_connected", False))
-        sig.append(("conn", tuple(sorted(
+        _conn = tuple(sorted(
             (str(k), bool(self._plan_ev_connected(
                 str(k), _cfgs.get(str(k)) or {}, power)))
-            for k in _pc
-        )) or (("fleet", _fleet),)))
+            for k in _pc if _night_ok(str(k))
+        ))
+        if not _conn and not _pc and (not _cfgs or any(_night_ok(c) for c in _cfgs)):
+            # No per-charger map at all: the fleet flag is the only answer
+            # there is — but not on an install whose every charger has
+            # opted out, where nobody reads it either.
+            _conn = (("fleet", _fleet),)
+        sig.append(("conn", _conn))
         # 2. Per-charger ask: floor, deadline, mode — and whether the car
         #    is still full (#756). Anchoring full happens mid-night with
         #    the plug still in; nothing else here moves, so without this
@@ -6265,7 +6308,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         for cfg in (self.config.get("ev_chargers") or []):
             try:
                 cid = str(cfg.get("id") or "")
-                _full = bool(self._plan_car_full(cid, power))
+                # The car-full question sits BELOW the mode gate in the
+                # collector, so an opted-out charger's taper anchor is
+                # unread — the knobs above stay, they are the opt-in.
+                _full = bool(self._plan_car_full(cid, power)) if _night_ok(cid) else False
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
@@ -6286,6 +6332,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             try:
                 if not getattr(dev, "has_runtime_deficit", False):
                     continue
+                if not (_sem_may_switch(dev) and _night_may_serve(dev)):
+                    continue  # the collector left it out before the deficit
                 deficit_h = max(0.0, (dev.daily_min_runtime_sec
                                       - dev._daily_runtime_accumulated_sec) / 3600.0)
                 sig.append(("load", str(dev.device_id), round(deficit_h * 10) / 10,
@@ -6301,6 +6349,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _now_sig = dt_util.now()
             for dev in (controller.get_devices_sorted() if controller else []):
                 try:
+                    if not _sem_may_switch(dev):
+                        continue  # the band of a device SEM may not switch
                     _fn = getattr(dev, "comfort_plan_demand", None)
                     ask = _fn(_now_sig) if callable(_fn) else None
                     if not ask:

@@ -226,6 +226,15 @@ re-plans once. A retrospective correction — the dampening re-pricing hours
 that have already been produced — deliberately changes nothing: those
 hours are spent, and the plan never reads them.
 
+The comparison also stops where the plan stops. A device the planner would
+never pack is not watched: a charger whose mode opts out of the night (`Off`,
+or `Solar only` with no "At least" floor) can be plugged, unplugged and
+filled without re-planning anything, and so can a load SEM may not switch
+(`Off` / `Peak only`) or one whose night cannot serve it. Change the knob
+itself — the mode, the floor — and the plan re-stamps at once, because that
+is the ask changing. Anything SEM cannot evaluate stays watched: an
+unreadable gate errs toward re-planning, never toward silence.
+
 An **unplug counts only once it is confirmed**. A UDP-polled charger drops a
 poll now and then and reads "no car" for one cycle with the cable still in;
 that is a missed poll, not a departure, and it must not re-plan the night —

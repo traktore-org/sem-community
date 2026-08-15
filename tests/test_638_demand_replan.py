@@ -40,11 +40,15 @@ class _Tariff:
 
 
 def _dev(did, deficit_h, has=True):
+    # The collector packs a load only where SEM may switch it (SURPLUS, the
+    # getattr default) AND the night can serve it. The default device here
+    # is both, so a gate test can close exactly one of them at a time.
     return SimpleNamespace(
         device_id=did,
         has_runtime_deficit=has,
         daily_min_runtime_sec=int(deficit_h * 3600) + 3600,
         _daily_runtime_accumulated_sec=3600,
+        battery_eligible_overnight=True,
     )
 
 
@@ -549,3 +553,96 @@ class TestAShrinkingDeficitIsProgress:
     def test_a_stop_flag_flip_replans_even_while_shrinking(self):
         assert self._changed(self._sig(1.4, stop=False),
                              self._sig(1.3, stop=True)) is True
+
+
+class TestTheSignatureMirrorsTheCollectorsGates:
+    """(15.08, round 4) A term nobody reads must not re-plan the night.
+
+    #759 fixed the solar term by the rule "watch what the plan READS". The
+    same rule has three more instances, and the collector names them itself:
+    it gates on the charge MODE before it asks the plug or the car, and on
+    the load's control MODE (and night-eligibility) before it asks the
+    deficit or the room. Everything past a closed gate is unread — so a
+    plug blip on an ``off`` charger, or a deficit ticking on a peak_only
+    heater, restamped a plan that could not possibly change.
+
+    Live on .175 (18:33): the mode sat at ``off``, the shared KEBA's plug
+    flickered for one cycle, and the night restamped twice — both times
+    emitting byte-identical output. That is the #759 shape exactly.
+    """
+
+    @staticmethod
+    def _charger(mode="min_plus_solar", floor=3.5):
+        return [{"id": "keba", "daily_ev_target": floor,
+                 "ev_target_time": "07:00", "charge_mode": mode}]
+
+    def test_an_opted_out_chargers_plug_is_not_an_ask_change(self):
+        """``off`` stops at the mode gate — the plug is never consulted."""
+        c = _coord(chargers=self._charger(mode="off"))
+        assert (c._energy_plan_demand_signature(_power(per_charger={"keba": True}))
+                == c._energy_plan_demand_signature(
+                    _power(per_charger={"keba": False})))
+
+    def test_a_floorless_solar_only_chargers_plug_is_not_an_ask_change(self):
+        """#346's default: solar_only with no floor never night-charges."""
+        c = _coord(chargers=self._charger(mode="solar_only", floor=0))
+        assert (c._energy_plan_demand_signature(_power(per_charger={"keba": True}))
+                == c._energy_plan_demand_signature(
+                    _power(per_charger={"keba": False})))
+
+    def test_a_planned_chargers_plug_still_replans(self):
+        """The gate must not swallow the trigger #638 shipped first."""
+        c = _coord(chargers=self._charger())
+        assert (c._energy_plan_demand_signature(_power(per_charger={"keba": True}))
+                != c._energy_plan_demand_signature(
+                    _power(per_charger={"keba": False})))
+
+    def test_a_solar_only_charger_with_a_floor_still_watches_its_plug(self):
+        """#634's opt-in puts it back in the night — and back in the term."""
+        c = _coord(chargers=self._charger(mode="solar_only", floor=20.0))
+        assert (c._energy_plan_demand_signature(_power(per_charger={"keba": True}))
+                != c._energy_plan_demand_signature(
+                    _power(per_charger={"keba": False})))
+
+    def test_an_opted_out_car_filling_up_is_not_an_ask_change(self):
+        """The car-full gate sits BELOW the mode gate in the collector."""
+        full = _coord(chargers=self._charger(mode="off"))
+        full._ev_taper_detectors = {"keba": SimpleNamespace(still_full=True)}
+        blank = _coord(chargers=self._charger(mode="off"))
+        assert (full._energy_plan_demand_signature(_power())
+                == blank._energy_plan_demand_signature(_power()))
+
+    def test_a_planned_car_filling_up_still_replans(self):
+        full = _coord(chargers=self._charger())
+        full._ev_taper_detectors = {"keba": SimpleNamespace(still_full=True)}
+        blank = _coord(chargers=self._charger())
+        assert (full._energy_plan_demand_signature(_power())
+                != blank._energy_plan_demand_signature(_power()))
+
+    def test_an_off_mode_loads_deficit_is_not_an_ask_change(self):
+        """The collector's first load gate (finding #1): only SURPLUS packs."""
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceControlMode,
+        )
+        dev = _dev("heizband", 2.0)
+        dev.control_mode = DeviceControlMode.PEAK_ONLY
+        assert (_coord(devices=(dev,))._energy_plan_demand_signature(_power())
+                == _coord()._energy_plan_demand_signature(_power()))
+
+    def test_a_day_only_loads_deficit_is_not_an_ask_change(self):
+        """Neither battery-eligible overnight nor cheap-hours = day only."""
+        dev = _dev("pump", 2.0)
+        dev.battery_eligible_overnight = False
+        dev.top_up_policy = "none"
+        assert (_coord(devices=(dev,))._energy_plan_demand_signature(_power())
+                == _coord()._energy_plan_demand_signature(_power()))
+
+    def test_an_off_mode_rooms_comfort_ask_is_not_an_ask_change(self):
+        """The comfort collector gates on control_mode too."""
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceControlMode,
+        )
+        dev = _comfort_ask_dev()
+        dev.control_mode = DeviceControlMode.OFF
+        assert (_coord(devices=(dev,))._energy_plan_demand_signature(_power())
+                == _coord()._energy_plan_demand_signature(_power()))
