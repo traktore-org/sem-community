@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 💡 **Lights really are skipped now** (#744) — the beta.17 rule that keeps
+  light fixtures out of SEM's device roster was added to a code path no live
+  install reaches: the unified device registry re-derives the roster from the
+  Energy Dashboard on every refresh and never learned it, so the lights came
+  straight back. The rule now runs at that one authoritative boundary — which
+  means an already-imported light retires itself on the next refresh, no
+  reset needed. A metering plug feeding a lamp is still kept, and an
+  explicitly registered device is still never touched.
+- 🧹 **A device the registry no longer knows leaves Load Management too**
+  (#744) — `energy_dashboard_*` rows were spared from the prune because the
+  prefix means "registry-managed", which stops being true the moment the
+  registry stops deriving it. Such a row survived in Load Management's own
+  store forever: shed-eligible, in diagnostics, invisible to the fix that
+  removed it.
 - 🧹 **"Not scheduled tonight" lists candidates, not the whole roster**
   (#744) — a device that was never asked for guaranteed runtime cannot be
   a night demand in any mode, so it no longer prints a why-not row. The
