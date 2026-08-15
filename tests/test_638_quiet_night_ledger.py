@@ -112,6 +112,33 @@ def test_the_quiet_face_shows_the_arbitrage_verdict():
     assert "a.arbitrage" in call, f"quiet call site: {call}"
 
 
+def test_the_quiet_night_still_says_nothing_planned(no_ev_targets):
+    """The gate's sentence must survive the ledger appearing.
+
+    ``plan_gate`` told a deliberately empty plan apart from an unreadable
+    one by "no demands AND no slots" — true only while the quiet plan
+    published no slots. The moment it published the ledger it judged
+    (above), that discriminator stopped matching and every device's
+    coverage silently became ``not in plan``: technically true, but it is
+    the sentence for "the plan left YOU out", read on a night the plan
+    left EVERYONE out on purpose. The quiet regime is the empty DEMAND
+    list; the slots are the books, not the schedule.
+
+    Found on the .175 campaign minutes after the ledger fix went live —
+    the unit tests kept passing because they hand-built the old shape.
+    """
+    from custom_components.solar_energy_management.coordinator \
+        .energy_plan_actuation import plan_gate
+    from datetime import datetime, timedelta
+    plan = _quiet_plan()
+    now = datetime.fromisoformat(plan["computed_at"]) + timedelta(minutes=5)
+    for demand_id in ("battery", "load:pump", "ev:keba"):
+        gate = plan_gate(plan, demand_id, now)
+        assert gate.covered is False        # an empty plan rules nothing
+        assert gate.reason == "nothing planned", (
+            f"{demand_id}: {gate.reason}")
+
+
 def test_the_quiet_answer_itself_does_not_move(no_ev_targets):
     """Everything the quiet payload already promised the card stays put."""
     plan = _quiet_plan()

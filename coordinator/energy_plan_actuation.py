@@ -106,7 +106,14 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         # sentence for — so the user read "the plan is unreadable" on a
         # night when the plan was perfectly readable and had nothing to do.
         # Uncovered either way; only the reason is honest now.
-        if not (plan.get("demands") or []) and not (plan.get("slots") or []):
+        # (15.08) The quiet regime is the empty DEMAND list, nothing else.
+        # This once also required empty ``slots`` — true only while the
+        # quiet plan published no ledger. The moment it published the
+        # hours it judged, the discriminator stopped matching and every
+        # device read ``not in plan``: the sentence for "the plan left YOU
+        # out", on a night the plan left everyone out on purpose. Slots
+        # are the books; demands are the schedule.
+        if not (plan.get("demands") or []):
             return PlanGate(reason="nothing planned")
         slots = plan.get("slots") or []
         span_start = _parse_dt(slots[0].get("start")) if slots else None

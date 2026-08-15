@@ -481,7 +481,13 @@ shapes the demand set must ride the re-plan signature.
   the scheduling empty. The advisor's contract — *advice always, because an
   absurd advice is the first symptom of books that lie* — is true in every
   regime again, and the opt-in sell path (still off by default, #533) can
-  see its blocks on such a night at all.
+  see its blocks on such a night at all. One consequence had to move with
+  it: the gate told a deliberately empty plan apart from an unreadable one
+  by *no demands **and** no hours* — true only while the quiet plan showed
+  no hours. Publishing the ledger made every device read *not in plan* —
+  the sentence for "the plan left YOU out", on a night it left everyone
+  out on purpose. The quiet regime is the empty demand list; the hours are
+  the books, not the schedule.
 
 - 🛑 **The kill-switch now takes hold on the card too** (#638) — with night
   actuation switched off, the plan's coverage list still showed loads as
