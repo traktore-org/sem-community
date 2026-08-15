@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased]
+
+- 🏷️ **The log tag is the honest mode of the stamp** — six planner lines
+  written in the shadow soak still said `(shadow #638)` on actuating
+  installs; they now carry the real mode, guarded by a source test.
+
 # [2.0.0-beta.1] — 15.08.2026
 
 > **Why 2.0 and not 1.8.** This release changes what an existing install does

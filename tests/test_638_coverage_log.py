@@ -106,3 +106,24 @@ class TestOncePerTransition:
         the reactive layer is driving, not merely that the plan is not."""
         msg = coverage_transition({}, "ev:ch1", PlanGate(reason="no plan"))
         assert "reactive" in msg.lower()
+
+
+class TestTheLogTagIsTheHonestMode:
+    """(15.08, PROD first actuation-ON night) Six planner log lines
+    hardcoded ``(shadow #638)`` — written in the shadow soak and never
+    re-tagged when actuation shipped, so a REAL actuating night logged
+    its no-demands answer as shadow. The tick's own comment states the
+    contract: the tag is the honest mode of THIS stamp. Every planner
+    line must interpolate the tag; none may bake the mode in."""
+
+    def test_no_planner_line_hardcodes_the_mode(self):
+        import inspect
+
+        from custom_components.solar_energy_management.coordinator import (
+            coordinator as mod,
+        )
+        src = inspect.getsource(mod)
+        assert 'ENERGY-PLAN (shadow' not in src, (
+            "a planner log line bakes in 'shadow' — interpolate the tag")
+        assert 'ENERGY-PLAN (active' not in src, (
+            "a planner log line bakes in 'active' — interpolate the tag")

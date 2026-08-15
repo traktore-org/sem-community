@@ -7392,8 +7392,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # with no SOC reading yet is a not-ready world — retry.
             if cap_kwh > 0 and soc is None:
                 _LOGGER.debug(
-                    "ENERGY-PLAN (shadow #638): battery SOC not ready — "
-                    "retrying next cycle")
+                    "ENERGY-PLAN (%s #638): battery SOC not ready — "
+                    "retrying next cycle", tag)
                 return False
             # Finding #3 (TEST, night 2026-07-29): readiness has a THIRD
             # dimension — a multi-battery fleet resolves one unit at a time.
@@ -7419,15 +7419,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._shadow_partial_since = since = now
                 if (now - since).total_seconds() < _SHADOW_PARTIAL_GRACE_S:
                     _LOGGER.debug(
-                        "ENERGY-PLAN (shadow #638): battery fleet only "
+                        "ENERGY-PLAN (%s #638): battery fleet only "
                         "%s/%s units resolved — retrying next cycle",
-                        read, known)
+                        tag, read, known)
                     return False
                 _LOGGER.warning(
-                    "ENERGY-PLAN (shadow #638): battery fleet still only "
+                    "ENERGY-PLAN (%s #638): battery fleet still only "
                     "%s/%s units after %.0f min — planning on the units that "
                     "report. A unit silent this long is offline, not warming.",
-                    read, known, _SHADOW_PARTIAL_GRACE_S / 60.0)
+                    tag, read, known, _SHADOW_PARTIAL_GRACE_S / 60.0)
             else:
                 self._shadow_partial_since = None
             # Label the plan whenever its battery figures came from a SUBSET,
@@ -7452,8 +7452,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Warm-up shape: nothing registered yet (first refresh after
                 # a restart) — not an answer, retry next cycle.
                 _LOGGER.debug(
-                    "ENERGY-PLAN (shadow #638): world not ready "
-                    "(0 devices, empty target map) — retrying next cycle")
+                    "ENERGY-PLAN (%s #638): world not ready "
+                    "(0 devices, empty target map) — retrying next cycle", tag)
                 return False
 
             def _slot_rows(rows):
@@ -7490,7 +7490,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                        f"loads_seen={loads_seen}, loads_eligible={loads_eligible}, "
                        f"battery_deficit={deficit:.2f} kWh")
                 _LOGGER.info(
-                    "ENERGY-PLAN (shadow #638): no overnight demands — %s", why)
+                    "ENERGY-PLAN (%s #638): no overnight demands — %s", tag, why)
                 # (#638 C7 follow-up, Guido's first live look) The card
                 # renders translated SENTENCES from these codes; the raw
                 # prose above stays for logs/diagnose — a rendered surface
@@ -7688,8 +7688,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 t = end
             if not slots:
                 _LOGGER.info(
-                    "ENERGY-PLAN (shadow #638): empty night window "
-                    "(now past %s?) — no plan", night_end)
+                    "ENERGY-PLAN (%s #638): empty night window "
+                    "(now past %s?) — no plan", tag, night_end)
                 # An empty window is not a reason to erase a correct quiet
                 # answer: with nothing to schedule, "nothing needs tonight"
                 # is still what the card must show (it is what this branch
