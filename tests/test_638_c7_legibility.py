@@ -87,24 +87,82 @@ class TestCoverageReachesTheCard:
         assert "_plan_coverage_view" in allsrc
 
 
+def _coord(**attrs):
+    """A coordinator stand-in carrying the REAL evaluator.
+
+    The view and the gate are two consumers of one rule, so a fake that
+    stubs the evaluator would pin nothing. Bind the real method.
+    """
+    fake = SimpleNamespace(**attrs)
+    fake._plan_gate_now = SEMCoordinator._plan_gate_now.__get__(
+        fake, SEMCoordinator)
+    return fake
+
+
+def _live_plan(status="fits", demand_id="load:pump"):
+    """A stamped plan whose span contains ``now`` — the shape the gate trusts."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    start = dt_util.now() - timedelta(minutes=30)
+    end = start + timedelta(hours=8)
+    return {"computed_at": start.isoformat(), "fits": True,
+            "demands": [{"id": demand_id, "status": status}],
+            "slots": [{"start": start.isoformat(), "end": end.isoformat()}],
+            "blocks": [{"id": demand_id, "start": start.isoformat(),
+                        "end": end.isoformat(), "power_w": 800.0}]}
+
+
 @pytest.mark.unit
 class TestCoverageViewIsUserShaped:
-    def test_covered_and_reasons_map_cleanly(self):
-        fake = SimpleNamespace(_plan_coverage_seen={
-            "ev:keba": (True, ""),
-            "load:heizband": (False, "actuation off"),
-            "battery": (False, "verdict yields"),
-        })
-        view = SEMCoordinator._plan_coverage_view(fake)
-        assert view == {
-            "ev:keba": "covered",
-            "load:heizband": "actuation off",
-            "battery": "verdict yields",
-        }
+    """The view is EVALUATED, never remembered.
+
+    ``_plan_coverage_seen`` is the transition log's memory: a demand is
+    written there only when somebody ASKS its gate. Loads are asked from
+    ``_overnight_load_windows``, which returns early when actuation is off
+    or nothing is stamped — so replaying the memory as a live view showed
+    yesterday's answer. Live on .175 15.08: with the kill-switch off the
+    EV row correctly read ``actuation off`` while ``load:sim_pool_pump``
+    still read ``covered`` — the one surface a user checks to see that the
+    kill-switch took hold, contradicting the kill-switch.
+    """
+
+    def test_the_kill_switch_un_covers_every_remembered_row(self):
+        fake = _coord(
+            _plan_coverage_seen={"ev:keba": (True, ""), "load:pump": (True, "")},
+            _overnight_actuation=False,
+            _overnight_shadow_plan=_live_plan())
+        assert SEMCoordinator._plan_coverage_view(fake) == {
+            "ev:keba": "actuation off", "load:pump": "actuation off"}
+
+    def test_a_covered_demand_still_reads_covered(self):
+        fake = _coord(
+            _plan_coverage_seen={"load:pump": (False, "no plan")},
+            _overnight_actuation=True,
+            _overnight_shadow_plan=_live_plan())
+        assert SEMCoordinator._plan_coverage_view(fake) == {
+            "load:pump": "covered"}
+
+    def test_a_row_nobody_re_asked_shows_the_plans_current_verdict(self):
+        """A re-stamp that degraded a demand must reach the card even when
+        that demand's gate was not asked this cycle."""
+        fake = _coord(
+            _plan_coverage_seen={"load:pump": (True, "")},
+            _overnight_actuation=True,
+            _overnight_shadow_plan=_live_plan(status="yields"))
+        assert SEMCoordinator._plan_coverage_view(fake) == {
+            "load:pump": "verdict yields"}
 
     def test_no_map_yet_is_an_empty_dict(self):
-        view = SEMCoordinator._plan_coverage_view(SimpleNamespace())
+        view = SEMCoordinator._plan_coverage_view(_coord())
         assert view == {}
+
+    def test_the_kill_switch_rule_has_exactly_one_evaluator(self):
+        """Systematic pin: the view and the gate must not each own a copy
+        of the rule — two copies is how they came to disagree."""
+        import inspect
+        src = inspect.getsource(SEMCoordinator)
+        assert src.count('PlanGate(reason="actuation off")') == 1
 
 
 @pytest.mark.unit
@@ -150,7 +208,10 @@ class TestTheQuietFaceSpeaksInSentences:
         assert plan["demands"] == []
         assert plan["why_codes"] == [
             "ev_target_met", "no_load_needs_night", "battery_no_deficit"]
-        assert plan["not_scheduled"] == []
+        # The headline code says the night needs nobody; the row says which
+        # device that was and why (they answer different questions).
+        assert plan["not_scheduled"] == [
+            {"id": "load:pump", "why": "no_runtime_need"}]
 
     def test_an_idle_night_with_an_unplugged_car_names_it(self, monkeypatch):
         from custom_components.solar_energy_management.coordinator import (
@@ -169,6 +230,106 @@ class TestTheQuietFaceSpeaksInSentences:
             in plan["not_scheduled"]
         # The EV code must NOT claim "target met" — the car is absent.
         assert "ev_target_met" not in plan["why_codes"]
+
+
+def _load(did="pump", **over):
+    """A load the collector WOULD plan, before the override under test."""
+    dev = SimpleNamespace(
+        device_id=did, name=did.title(), has_runtime_deficit=True,
+        stop_condition_met=False, battery_eligible_overnight=True,
+        top_up_policy="solar_only", daily_min_runtime_sec=4 * 3600,
+        _daily_runtime_accumulated_sec=2 * 3600, rated_power=800.0, priority=4)
+    for key, value in over.items():
+        setattr(dev, key, value)
+    return dev
+
+
+@pytest.mark.unit
+class TestEveryLeftOutLoadIsNamed:
+    """(#638 C7) A device the collector skipped owes the user a why.
+
+    The EV side has said why since C7 (``mode``/``disconnected``/
+    ``car_full``); the load side skipped in five places and said nothing,
+    so "why isn't my heater in tonight's plan?" had no answer anywhere on
+    the card. Live on .175 15.08: four loads left out, ``not_scheduled``
+    empty. Each ``continue`` in the collector now names itself.
+    """
+
+    def _rows(self, dev, freeze_targets):
+        fake = _fake_self(devices=[dev])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(), energy=MagicMock(), power=_power())
+        return fake._overnight_shadow_plan.get("not_scheduled") or []
+
+    def test_a_device_whose_mode_excludes_surplus_says_so(self, freeze_targets):
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceControlMode,
+        )
+        rows = self._rows(_load(control_mode=DeviceControlMode.OFF),
+                          freeze_targets)
+        assert {"id": "load:pump", "why": "load_mode"} in rows
+
+    def test_a_device_with_no_runtime_left_to_do_says_so(self, freeze_targets):
+        rows = self._rows(_load(has_runtime_deficit=False), freeze_targets)
+        assert {"id": "load:pump", "why": "no_runtime_need"} in rows
+
+    def test_a_banked_room_says_it_is_already_at_target(self, freeze_targets):
+        rows = self._rows(_load(stop_condition_met=True), freeze_targets)
+        assert {"id": "load:pump", "why": "stop_condition"} in rows
+
+    def test_a_daytime_only_device_says_it_does_not_do_nights(
+            self, freeze_targets):
+        rows = self._rows(_load(battery_eligible_overnight=False,
+                                top_up_policy="solar_only"), freeze_targets)
+        assert {"id": "load:pump", "why": "day_only"} in rows
+
+    def test_a_device_with_no_measured_power_says_so(self, freeze_targets):
+        rows = self._rows(_load(rated_power=0.0), freeze_targets)
+        assert {"id": "load:pump", "why": "no_rated_power"} in rows
+
+    def test_a_planned_load_is_not_in_the_left_out_list(self, freeze_targets):
+        assert self._rows(_load(), freeze_targets) == []
+
+    def test_the_quiet_night_names_its_left_out_loads_too(self, monkeypatch):
+        """The 'nothing needs the night' payload is the one a user reads
+        WHEN they wonder where their device went."""
+        from custom_components.solar_energy_management.coordinator import (
+            ev_night_targets,
+        )
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {"ev_charger": 0.0})
+        fake = _fake_self(devices=[_load(has_runtime_deficit=False)])
+        SEMCoordinator._shadow_overnight_plan(
+            fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
+        plan = fake._overnight_shadow_plan
+        assert plan["demands"] == []
+        assert {"id": "load:pump", "why": "no_runtime_need"} \
+            in plan["not_scheduled"]
+
+    def test_every_why_the_collector_emits_has_a_card_sentence(self):
+        """Systematic pin, the twin of the gate-reason one below: a why
+        with no translation renders as a blank chip in 16 languages."""
+        import json
+        import pathlib
+        import re
+        root = pathlib.Path(__file__).resolve().parent.parent
+        src = (root / "coordinator" / "coordinator.py").read_text()
+        codes = set(re.findall(r'"why": "([a-z_]+)"', src))
+        codes |= set(re.findall(r'_left_out\([a-z_]+, "([a-z_]+)"\)', src))
+        assert {"mode", "disconnected", "car_full"} <= codes, (
+            "the EV whys moved — this pin is reading the wrong lines")
+        assert {"load_mode", "no_runtime_need", "stop_condition", "day_only",
+                "no_rated_power"} <= codes, (
+            "the load whys moved — this pin is reading the wrong lines")
+        card = (root / "dashboard" / "card" / "src" / "cards"
+                / "sem-energy-plan-card.js").read_text()
+        assert "'overnight_why_' + r.why" in card
+        langs = json.loads(
+            (root / "dashboard" / "translations.json").read_text())
+        for code in sorted(codes):
+            key = f"overnight_why_{code}"
+            missing = [lg for lg, t in langs.items() if not t.get(key)]
+            assert not missing, f"{key} missing in {missing}"
 
 
 # The reasons for which "the plan is unreadable" IS the honest sentence:

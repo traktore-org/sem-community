@@ -441,9 +441,11 @@ The **Energy Plan** card (Control tab) is the one answer:
   answer, not a failure; "plan unreadable" is reserved for a plan that
   really did break trust (a malformed block, an unparsable payload).
 - **"Not scheduled tonight"** — every device the collector deliberately
-  left out, with its why: the charge mode excludes night charging, no car
-  is connected, or the car is already full. An absent row is never a
-  mystery.
+  left out, with its why. Chargers: the charge mode excludes night
+  charging, no car is connected, the car is already full. Loads: the
+  device's mode excludes surplus control, no runtime is left to make up,
+  it is already at its target, it is a daytime-only device, or SEM has no
+  measured power for it yet. An absent row is never a mystery.
 - **"Already full" needs two witnesses.** A car counts as full only when
   SEM's own charge accounting says so *and* the charger's meter agrees —
   a car drawing more than its charger's handshake current is never
@@ -452,7 +454,10 @@ The **Energy Plan** card (Control tab) is the one answer:
   cannot flip between a plan with the car and one without it.
 - **The kill-switch** — `switch.sem_overnight_actuation` turns the plan's
   authority off entirely; every device then runs on its reactive rules
-  and the card says so.
+  and the card says so. Every row flips to *actuation off* within one
+  cycle: the chips are evaluated fresh on each publish through the same
+  single evaluator the log line uses, so the card can never show a
+  leftover verdict from before the switch was flipped.
 
 ## What the record shows (#755)
 

@@ -438,6 +438,32 @@ shapes the demand set must ride the re-plan signature.
   can emit must have a card sentence, or be declared one of the three where
   "unreadable" is the truthful answer.
 
+- 🛑 **The kill-switch now takes hold on the card too** (#638) — with night
+  actuation switched off, the plan's coverage list still showed loads as
+  *covered* while the EV row correctly read *actuation off* (clone, 15.08).
+  The card was reading the transition **log's memory** rather than asking the
+  gate: a demand is written into that memory only when somebody evaluates it,
+  and the load gates are evaluated from a pass that returns early the moment
+  actuation is off — so every load kept displaying the answer from before the
+  switch was flipped. The one surface a user checks to confirm the
+  kill-switch took hold was contradicting the kill-switch. The verdict is now
+  **evaluated per publish** by a single shared evaluator that both the log
+  line and the card go through; a test pins that the "is actuation on?" rule
+  exists exactly once in the coordinator, because two copies is how they came
+  to disagree.
+
+- 🔇 **Every load left out of the plan now says why** (#638) — since the
+  legibility work, an EV the planner skipped explained itself on the card
+  (*mode excludes night charging*, *no car connected*, *car is already
+  full*). Loads had no such answer: the collector dropped them in five
+  different places — mode, no runtime left, already at target, daytime-only,
+  no measured power — and every one of them was silent, so *"why isn't my
+  heater in tonight's plan?"* had nowhere to be answered. On the clone four
+  devices vanished from the plan with no explanation anywhere. Each skip now
+  emits a machine reason that rides the plan payload beside the EV ones and
+  renders in all 16 languages, on both the busy and the quiet plan. A test
+  pins the class: a reason with no translation fails the suite.
+
 - 🚗 **A car that is charging is not a full car** (#756) — the planner asks
   the taper detector whether the car is still full, so a phantom EV cannot
   eat the night's peak budget. But "still full" is anchored energy

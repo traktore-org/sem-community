@@ -6117,17 +6117,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """(#638 C7) The per-demand verdict map, user-shaped: ``covered``
         or the gate's named doubt. The card renders this as the
         "reactive — why" chip — the user-facing twin of the
-        ``#638 coverage`` log line."""
+        ``#638 coverage`` log line.
+
+        EVALUATED per publish, never replayed. ``_plan_coverage_seen`` is
+        the transition log's memory — a demand is written there only when
+        somebody ASKS its gate, and the load gates are asked from
+        ``_overnight_load_windows``, which returns early with actuation off
+        or nothing stamped. Replaying that memory as a live view therefore
+        showed the answer from before the kill-switch: on .175 (15.08) the
+        EV row read ``actuation off`` while a load still read ``covered``
+        — the one surface a user checks to see the kill-switch took hold,
+        contradicting the kill-switch. The gate is pure and cheap, so the
+        view asks it rather than remembering it.
+        """
         seen = getattr(self, "_plan_coverage_seen", None) or {}
+        if not seen:
+            return {}
+        now = dt_util.now()
         out = {}
-        for demand_id, state in seen.items():
-            try:
-                covered, reason = state
-            except (TypeError, ValueError):
-                continue
-            out[str(demand_id)] = "covered" if covered else (
-                str(reason) or "uncovered")
+        for demand_id in list(seen):
+            # No try/except here on purpose: ``plan_gate`` is total (every
+            # doubt has a named reason, nothing raises), and a swallowed
+            # error would silently BLANK the row — the same "the card
+            # doesn't say" failure this method exists to fix.
+            gate = self._plan_gate_now(str(demand_id), now)
+            out[str(demand_id)] = "covered" if gate.covered else (
+                str(gate.reason) or "uncovered")
         return out
+
+    def _plan_gate_now(self, demand_id: str, now=None):
+        """THE verdict for one demand — the kill-switch rule included.
+
+        The single evaluator behind both consumers: ``_overnight_plan_gate``
+        (which logs transitions) and ``_plan_coverage_view`` (which renders).
+        Two copies of "is actuation on?" is precisely how the log line and
+        the card came to disagree.
+        """
+        from .overnight_actuation import PlanGate, plan_gate
+        if not getattr(self, "_overnight_actuation", False):
+            return PlanGate(reason="actuation off")
+        return plan_gate(getattr(self, "_overnight_shadow_plan", None),
+                         demand_id, now or dt_util.now())
 
     def _overnight_plan_gate(self, demand_id: str, now=None):
         """(#638 G4) The trust-rule verdict for one demand against tonight's
@@ -6138,14 +6168,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         (audit 2026-08-11) Every verdict CHANGE is logged with its reason —
         the one line that says which layer drove a demand's night. Without
         it the fail-open fallback is invisible in every soak artifact."""
-        from .overnight_actuation import (
-            PlanGate, coverage_transition, plan_gate,
-        )
-        if not getattr(self, "_overnight_actuation", False):
-            gate = PlanGate(reason="actuation off")
-        else:
-            gate = plan_gate(getattr(self, "_overnight_shadow_plan", None),
-                             demand_id, now or dt_util.now())
+        from .overnight_actuation import coverage_transition
+        gate = self._plan_gate_now(demand_id, now)
         seen = getattr(self, "_plan_coverage_seen", None)
         if seen is None:
             seen = self._plan_coverage_seen = {}
@@ -6971,6 +6995,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             mode_opted_out = []
             disconnected = []
             car_full = []
+            # (#638 C7) The load side's twin of those three lists.
+            left_out_loads = []
             for cid, kwh in targets.items():
                 cfg = cfg_by_id.get(cid, {})
                 # Mirror the execution gate (finding #4, TEST night 2026-07-30).
@@ -7058,6 +7084,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             loads_seen = 0
             loads_eligible = 0
             from ..devices.base import DeviceControlMode as _DCM
+            # (#638 C7) Every load the collector leaves out owes the user a
+            # why — the EV side has said so since C7 while the load side
+            # skipped in five places silently, and "why isn't my heater in
+            # tonight's plan?" had no answer anywhere on the card.
+            def _left_out(dev, why):
+                left_out_loads.append({"id": f"load:{dev.device_id}",
+                                       "why": why})
+
             for dev in (controller.get_devices_sorted() if controller else []):
                 try:
                     loads_seen += 1
@@ -7066,8 +7100,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # compute_load_intent — planning it (the off-mode heizband
                     # "yielded" 3.1 kWh) diverges from execution.
                     if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
+                        _left_out(dev, "load_mode")
                         continue
                     if not getattr(dev, "has_runtime_deficit", False):
+                        _left_out(dev, "no_runtime_need")
                         continue
                     # (#760, N1) The intent's HARD STOP outranks the deficit:
                     # a banked comfort band (room already past target+offset)
@@ -7079,10 +7115,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # state rides the demand signature, so it CLEARING
                     # re-plans and re-admits the demand within a cycle.
                     if getattr(dev, "stop_condition_met", False):
+                        _left_out(dev, "stop_condition")
                         continue
                     night_ok = (getattr(dev, "battery_eligible_overnight", False)
                                 or getattr(dev, "top_up_policy", "") == "cheap_hours")
                     if not night_ok:
+                        _left_out(dev, "day_only")
                         continue
                     loads_eligible += 1
                     deficit_h = max(0.0, (dev.daily_min_runtime_sec
@@ -7091,6 +7129,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # consumption, #576) — the plan is only as accurate as this.
                     rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
                     if deficit_h <= 0 or rated <= 0:
+                        _left_out(dev, "no_rated_power")
                         continue
                     tier2 = bool(getattr(dev, "battery_eligible_overnight", False))
                     labels[f"load:{dev.device_id}"] = (
@@ -7273,7 +7312,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         + [{"id": f"ev:{c}", "why": "disconnected"}
                            for c in disconnected]
                         + [{"id": f"ev:{c}", "why": "car_full"}
-                           for c in car_full]),
+                           for c in car_full]
+                        + left_out_loads),
                     "summary": [f"no overnight demands tonight ({why})"],
                     # (#638 G3c) Same keys as a full plan, empty — the card
                     # renders "nothing needs the night" from the SHAPE, not
@@ -7615,7 +7655,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     + [{"id": f"ev:{c}", "why": "disconnected"}
                        for c in disconnected]
                     + [{"id": f"ev:{c}", "why": "car_full"}
-                       for c in car_full]),
+                       for c in car_full]
+                    + left_out_loads),
                 # None on a whole fleet. A string here means the battery
                 # figures above cover a SUBSET — the plan is still the best
                 # available answer, but it is not the fleet's answer (#638
