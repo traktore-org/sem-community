@@ -237,6 +237,16 @@ shapes the demand set must ride the re-plan signature.
 - 🔌 **The kill-switch is asked by every caller** (#758) — the arbitrage sell
   gate reached the plan directly, so a user who turned night actuation off
   still had the plan discharging their battery to the grid.
+- 🛡️ **An arbitrage sell respects BOTH reserve floors** (#638) — the sell
+  branch took the user's backup reserve *or* the verdict's
+  `arbitrage_reserve_soc`, never both, so any install with a nonzero backup
+  reserve (all of them) silently lost the arbitrage floor: a 20 % backup
+  reserve overrode the 50 % "never sell below" promise, and the hardware
+  actuator (Huawei end-SOC, setpoint batteries) was handed the lower number
+  to enforce on its own between SEM cycles — the #532 drain class one seam
+  later. Both floors now bind and the higher wins. Found by the arbitrage
+  scenario sweep; the full mode × gate × floor matrix is pinned in
+  `test_638_c6_arbitrage_sell.py`.
 - 🧹 **The planner entry point the tests used does not ship** (#758) — a
   flat-slot "compat" adapter with no production caller, and two test corpora
   pointed at it, proving things about a night that cannot happen (every slot

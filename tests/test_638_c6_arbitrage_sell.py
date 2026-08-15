@@ -141,6 +141,66 @@ class TestTheSellFiresOnlyInTheBlock:
 
 
 @pytest.mark.unit
+class TestTheScenarioMatrix:
+    """The scenario sweep Guido asked for (15.08) — every mode × gate ×
+    floor combination the three suites above did not already pin."""
+
+    def test_the_arbitrage_reserve_binds_above_the_user_reserve(self):
+        """The verdict carries floor_soc=50 (arbitrage_reserve_soc); the
+        user's backup reserve is 20. SOC 40 is above the backup but BELOW
+        the arbitrage reserve — selling here drains 30 points the
+        arbitrage config promised to keep. Both floors bind; the higher
+        wins (the #532 drain class, one seam later)."""
+        d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
+                                 soc=40.0, reserve=20.0))
+        assert d.intent != BatteryIntent.FORCE_DISCHARGE
+
+    def test_the_actuator_gets_the_higher_floor(self):
+        """Hardware floors (Huawei end-SOC, Sessy setpoint stop) come from
+        the decision's floor_soc. A sell above both floors must hand the
+        actuator the HIGHER one — the hardware keeps discharging on its
+        own between SEM cycles, and 20 instead of 50 lets it."""
+        d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
+                                 soc=80.0, reserve=20.0))
+        assert d.intent == BatteryIntent.FORCE_DISCHARGE
+        assert d.floor_soc == 50.0
+
+    def test_mode_off_never_sells(self):
+        d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
+                                 mode="off"))
+        assert d.intent == BatteryIntent.OFF
+
+    def test_user_force_charge_outranks_the_sell_block(self):
+        """User intent is a guarantee (C4a): a manually force-charged
+        battery charges through an open sell block."""
+        d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
+                                 mode="force_charge"))
+        assert d.intent == BatteryIntent.FORCE_CHARGE
+
+    def test_an_unavailable_soc_holds_not_sells(self):
+        """#531: a setpoint battery has no hardware reserve-stop — only
+        the live SOC gates it. Silence must hold, not discharge blind."""
+        d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
+                                 soc=None))
+        assert d.intent != BatteryIntent.FORCE_DISCHARGE
+
+    def test_block_closing_mid_sell_falls_to_normal(self):
+        """The block ends while the economics verdict is still warm: the
+        sell branch declines and the decision falls through to NORMAL,
+        whose command_normal() zeroes the forcible-discharge setpoint
+        (#538 idempotent) — a clean stop, not a lingering sell."""
+        d = decide_battery(_view(sched=_sell_sched(), sell=(False, 0.0)))
+        assert d.intent == BatteryIntent.NORMAL
+
+    def test_auto_mode_follows_the_global_toggle_on(self):
+        """The inverse of the dormant-defaults pin: auto + global ON is
+        the sanctioned way to open the valve fleet-wide."""
+        d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
+                                 mode="auto", global_arb=True))
+        assert d.intent == BatteryIntent.FORCE_DISCHARGE
+
+
+@pytest.mark.unit
 class TestThePipelineWiresTheSplit:
     def test_the_pipeline_computes_the_gate_and_splits_the_fleet(self):
         import inspect

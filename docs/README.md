@@ -24,7 +24,7 @@ All SEM documentation lives in this directory. Start here.
 | [HARDWARE_SENSORS.md](HARDWARE_SENSORS.md) | Wiring sensors: power, energy counters, per-brand notes |
 | [PV_STRINGS.md](PV_STRINGS.md) | Per-string PV monitoring |
 | [GRID_VPP.md](GRID_VPP.md) | Grid/VPP event dispatch (observer-first) |
-| [BATTERY_EXPORT_ARBITRAGE.md](BATTERY_EXPORT_ARBITRAGE.md) | Selling stored energy on price peaks (currently deactivated) |
+| [BATTERY_EXPORT_ARBITRAGE.md](BATTERY_EXPORT_ARBITRAGE.md) | Selling stored energy on price peaks (wired through the overnight plan; off by default) |
 | [KEBA_FAILSAFE.md](KEBA_FAILSAFE.md) | KEBA-specific failsafe behavior |
 
 ## Developer / internals

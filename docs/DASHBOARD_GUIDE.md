@@ -99,7 +99,7 @@ Battery state and configuration.
 
 | Card | Description |
 |------|-------------|
-| **SOC Gauge** | Radial gauge showing current battery state of charge. Turns **gold with a "Selling to grid" status + live export price** when SEM is exporting the battery for arbitrage (see [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md) — note: arbitrage is **off by default in v1.7.3 stable**, so this state only appears once it is re-enabled) |
+| **SOC Gauge** | Radial gauge showing current battery state of charge. Turns **gold with a "Selling to grid" status + live export price** when SEM is exporting the battery for arbitrage (see [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md) — off by default; the state only appears once you opt in) |
 | **Power Status** | Current charge/discharge power and daily energy totals |
 | **24h Battery Chart** | Charge/discharge power + SOC line over 24 hours |
 | **SOC Zone Config** | Steppers for priority, buffer, auto-start, and assist-floor SOC levels, plus **Solar Gate** (`battery_assist_min_surplus`) and **Assist Max** — the solar surplus required before the battery helps charge the EV, and the cap on that assist |

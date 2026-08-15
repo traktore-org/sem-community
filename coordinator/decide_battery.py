@@ -228,7 +228,16 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             _sell = getattr(view, "arbitrage_sell", None)
             _sell_open = bool(_sell and _sell[0])
             if _sell_open and arbitrage_allowed_for_mode(mode, global_arb):
-                floor = reserve if reserve > 0 else getattr(sched, "floor_soc", 0.0)
+                # BOTH floors bind and the higher wins: the user's backup
+                # reserve AND the verdict's arbitrage_reserve_soc. The old
+                # either/or dropped the arbitrage reserve on every install
+                # with a nonzero backup reserve (i.e. all of them) — and
+                # handed the ACTUATOR the lower floor, which a hardware
+                # end-SOC (Huawei) or a setpoint battery honors on its own
+                # between SEM cycles. The #532 drain class, one seam later.
+                floor = max(
+                    reserve, float(getattr(sched, "floor_soc", 0.0) or 0.0)
+                )
                 soc = rt.last_known_soc
                 # #531: don't sell blind — a setpoint battery has no hardware
                 # reserve-stop, so an unavailable SOC must hold, not discharge.
