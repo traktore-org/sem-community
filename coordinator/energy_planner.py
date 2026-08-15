@@ -1,4 +1,4 @@
-"""#638 — the Night Ledger and the overnight joint packer.
+"""#638 — the Night Ledger and the joint energy packer.
 
 One shared, pure structure over EXISTING knowledge (spec:
 docs/superpowers/specs/2026-07-28-overnight-flow-plan-design.md): an
@@ -179,7 +179,7 @@ class DemandResult:
 
 
 @dataclass(frozen=True)
-class OvernightPlan:
+class EnergyPlan:
     allocations: tuple
     results: tuple
     total_cost: float
@@ -207,7 +207,7 @@ class OvernightPlan:
 # ---------------------------------------------------------------------------
 
 def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
-               peak_limit_w=0.0) -> OvernightPlan:
+               peak_limit_w=0.0) -> EnergyPlan:
     """Pack every demand into the ledger, one-list priority first.
 
     Grid demands take the cheapest PRICED eligible slots within headroom
@@ -226,7 +226,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                          0.0, round(max(0.0, d.energy_kwh), 3), 0.0,
                          note="no night window")
             for d in sorted(demands, key=lambda d: (d.priority, d.id)))
-        return OvernightPlan((), results, 0.0,
+        return EnergyPlan((), results, 0.0,
                              all(r.status == "fits" for r in results), None)
 
     initial_soc = ledger[0].soc_kwh
@@ -342,7 +342,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
 
     takeover = next((s.start for s in ledger if s.home_grid_w > _W_EPS), None)
     allocations.sort(key=lambda a: (a.start, a.demand_id))
-    return OvernightPlan(
+    return EnergyPlan(
         allocations=tuple(allocations),
         results=tuple(results),
         total_cost=round(sum(a.energy_kwh * a.price for a in allocations), 4),

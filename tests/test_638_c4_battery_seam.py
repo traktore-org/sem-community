@@ -30,7 +30,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
 from custom_components.solar_energy_management.coordinator.decide_battery import (
     decide_battery,
 )
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     PlanGate,
 )
 
@@ -122,14 +122,14 @@ class TestTheWindowCheckerIsGone:
 class TestTheCoordinatorWiresTheGate:
     def test_the_battery_view_carries_the_battery_gate(self):
         """Structural: the pipeline populates plan_gate from the same
-        _overnight_plan_gate helper every other consumer uses — one gate,
+        _energy_plan_gate helper every other consumer uses — one gate,
         one coverage log."""
         import inspect
         from custom_components.solar_energy_management.coordinator.coordinator import (
             SEMCoordinator,
         )
         src = inspect.getsource(SEMCoordinator._run_battery_pipeline)
-        assert '_overnight_plan_gate("battery")' in src
+        assert '_energy_plan_gate("battery")' in src
 
 
 @pytest.mark.unit

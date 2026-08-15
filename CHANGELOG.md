@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 >   named reason on the card rather than silence.
 > - **The phantom-EV model is gone** (#652), so the battery scheduler no
 >   longer sizes its window against a car it invented.
+> - **The overnight planner is now the energy planner**, and the kill-switch
+>   moved with it: `switch.sem_overnight_actuation` →
+>   `switch.sem_energy_plan_actuation`. SEM renames the entity for you and
+>   carries your on/off answer across, so nothing changes behaviour — but an
+>   **automation or dashboard that names the old entity must be updated**.
 >
 > Any one of those is a major bump. Calling it 1.8 would invite people to
 > upgrade expecting minor-release behavior. The number is about
@@ -56,12 +61,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chip. 12 new i18n keys ×16 languages.
 - 📇 **"Not scheduled tonight"** on the Energy Plan card: every deliberate
   exclusion named with its why (mode / no car connected).
-- ⚙️ **`overnight_actuation` defaults ON** — with the selectors retired,
+- ⚙️ **`energy_plan_actuation` defaults ON** — with the selectors retired,
   default-off would silently remove cheap-window timing; the switch remains
   the kill-switch.
 - 📏 **One planning peak** — the EV's peak-managed rate now sizes against the
   same hysteresis-adjusted level the ledger plans with (night top-up amps
   drop by one hysteresis band: intended).
+
+### 🏷️ The overnight planner is the energy planner (#638)
+
+It was named for the night it started with, and it outgrew the name: it
+packs the daytime surplus window, comfort banking in a free hour and the
+cheap-hours loads as readily as it packs the night. A name that says
+"overnight" tells a user their daytime devices are somebody else's problem.
+
+- 🔀 **`switch.sem_overnight_actuation` → `switch.sem_energy_plan_actuation`.**
+  SEM renames the registry entry on upgrade — one entity, one history, no
+  unavailable orphan — and carries your on/off answer across so nothing
+  changes behaviour. **Update any automation or dashboard that names the old
+  entity.** A switch you had renamed yourself keeps the name you gave it.
+- 💾 **Tonight's stamped plan survives the upgrade.** The stored plan is read
+  under its old key once and rewritten under the new one, so upgrading at
+  23:50 does not reshuffle the night the plan is steering.
+- 📖 `docs/OVERNIGHT_PLANNER.md` → `docs/ENERGY_PLANNER.md`; the log prefix
+  `OVERNIGHT-PLAN` → `ENERGY-PLAN`; the card, its ~85 translated strings and
+  every internal symbol follow. The genuinely night-shaped settings keep
+  their names — "Finish overnight from", "Use battery overnight" and the
+  night-charging window all still mean *the night*.
 
 ### 🧠 The learning layer (#755) — the plan learns what it got wrong
 
@@ -607,7 +633,7 @@ shapes the demand set must ride the re-plan signature.
   daytime surplus loop could reach for the charger's stop switch behind the EV
   controller's back — the exact hazard beta.11 set out to close — while the
   card showed nothing, because the display fold hid the row it could not
-  remove. The overnight planner (#638) packs its load demands from that same
+  remove. The energy planner (#638) packs its load demands from that same
   roster, so a duplicate carrying a minimum-runtime goal could additionally
   enter the night ledger twice — once as the charger, once as a load. The fold
   now runs where the device is **registered**, not only where it is read, and

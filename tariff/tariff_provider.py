@@ -234,7 +234,7 @@ class TariffProvider(ABC):
     def get_price_level_at(self, when: datetime) -> Optional[PriceLevel]:
         """The price LEVEL a given moment would classify as (#638).
 
-        The overnight plan packs cheap-hours loads only into slots whose
+        The energy plan packs cheap-hours loads only into slots whose
         level execution's ``price_is_cheap`` gate would actually fire on —
         this accessor is the shared source of that truth. ``None`` =
         unknown (no data / provider cannot say): the planner treats it as

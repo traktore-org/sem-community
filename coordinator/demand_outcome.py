@@ -1,6 +1,6 @@
 """#755 — the per-demand outcome recorder.
 
-The overnight plan captures two of the three numbers that matter: what each
+The energy plan captures two of the three numbers that matter: what each
 demand ASKED for (the demand signature) and what the packer PROMISED it (the
 allocation). The third — what it actually DID — was never written down. That
 gap is why "fits" has never been checked against reality, why the morning

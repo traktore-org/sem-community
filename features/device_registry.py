@@ -725,7 +725,7 @@ class UnifiedDeviceRegistry:
 
         # (#748 seam) The charger-identity fold has to happen HERE too, not
         # only in the card payload and the LoadManagement prune. This roster is
-        # what the daytime surplus loop drives AND what the #638 overnight
+        # what the daytime surplus loop drives AND what the #638 energy
         # planner packs (``get_devices_sorted()``) — registering a row that
         # controls a charger's stop switch lets load management reach for the
         # charger behind the EV controller's back, and plans the same physical

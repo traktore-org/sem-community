@@ -24,7 +24,7 @@ The **Solar Gate** (`battery_assist_min_surplus`, default 1200 W) decides how mu
 
 ## Battery → grid export arbitrage (wired in v2.0, off by default)
 
-Battery → grid export arbitrage — selling stored energy back to the grid when the dynamic export price beats the cost of recharging — is **fully wired as of v2.0** (#638): the overnight plan owns *when* a sell block may run, the live economics decide *whether* it still pays at that moment, and the per-battery mode decides whether it *may* at all.
+Battery → grid export arbitrage — selling stored energy back to the grid when the dynamic export price beats the cost of recharging — is **fully wired as of v2.0** (#638): the energy plan owns *when* a sell block may run, the live economics decide *whether* it still pays at that moment, and the per-battery mode decides whether it *may* at all.
 
 It nonetheless stays **dormant on every install unless you turn it on deliberately** (#533 stands): the global opt-in defaults off, each battery's `allow_arbitrage` defaults off, and the v14 migration forces the flag off once so no install inherits it by accident.
 

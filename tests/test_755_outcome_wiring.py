@@ -31,7 +31,7 @@ from custom_components.solar_energy_management.coordinator.demand_outcome import
     device_draw,
     ev_draw,
 )
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     PlanGate,
 )
 
@@ -127,10 +127,10 @@ def _self(plan=None, devices=(), gate=None, night=date(2026, 8, 12)):
     gate = gate if gate is not None else PlanGate(covered=True, in_block=True,
                                                   block_power_w=4000.0)
     me = SimpleNamespace(
-        _overnight_shadow_plan=plan,
+        _energy_plan_shadow=plan,
         _shadow_plan_date=night if plan is not None else None,
         _demand_outcomes=rec,
-        _overnight_plan_gate=lambda did, now=None: gate,
+        _energy_plan_gate=lambda did, now=None: gate,
         _surplus_controller=SimpleNamespace(
             get_devices_sorted=lambda: list(devices)),
         _ev_devices={"keba": SimpleNamespace(power_entity_id=None)},
@@ -212,7 +212,7 @@ class TestNightLifecycle:
         me = _self(plan=_plan(), devices=[_heizband()])
         SEMCoordinator._record_demand_outcomes(me, _at(22, 0), _power())
         SEMCoordinator._record_demand_outcomes(me, _at(23, 0), _power())
-        me._overnight_shadow_plan = None
+        me._energy_plan_shadow = None
         me._shadow_plan_date = None
         SEMCoordinator._record_demand_outcomes(me, _at(7, 0, day=13), _power())
         ids = sorted(r.demand_id for r in me._demand_outcomes.history())
@@ -223,7 +223,7 @@ class TestNightLifecycle:
         me = _self(plan=_plan(), devices=[_heizband()])
         SEMCoordinator._record_demand_outcomes(me, _at(22, 0), _power())
         SEMCoordinator._record_demand_outcomes(me, _at(23, 0), _power())
-        me._overnight_shadow_plan = _plan()
+        me._energy_plan_shadow = _plan()
         me._shadow_plan_date = date(2026, 8, 13)
         SEMCoordinator._record_demand_outcomes(me, _at(22, 0, day=13), _power())
         assert len(me._demand_outcomes.history()) == 2      # last night sealed

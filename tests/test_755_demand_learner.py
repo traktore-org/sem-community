@@ -178,7 +178,7 @@ class TestItOnlySuggests:
         from custom_components.solar_energy_management.coordinator \
             .coordinator import SEMCoordinator
 
-        src = inspect.getsource(SEMCoordinator._shadow_overnight_plan)
+        src = inspect.getsource(SEMCoordinator._shadow_energy_plan)
         assert "suggest_ask" not in src, (
             "the plan must be built from the CONFIGURED ask; the learner "
             "surfaces a suggestion, it does not apply one")

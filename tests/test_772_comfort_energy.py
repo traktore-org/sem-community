@@ -48,7 +48,7 @@ from custom_components.solar_energy_management.coordinator.energy_calculator imp
     COMFORT_SPLIT_OUT,
     EnergyCalculator,
 )
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     PlanGate,
     UNCOVERED,
 )
@@ -74,7 +74,7 @@ def _coord(devices, gate: PlanGate):
     coord = SimpleNamespace(
         _energy_calculator=MagicMock(),
         _surplus_controller=surplus,
-        _overnight_plan_gate=MagicMock(return_value=gate),
+        _energy_plan_gate=MagicMock(return_value=gate),
     )
     coord._comfort_split_for = SEMCoordinator._comfort_split_for.__get__(coord)
     return coord
@@ -112,7 +112,7 @@ class TestComfortEnergySplitsOnThePlanBlock772:
         acc = _file(coord)
         assert acc.call_args.kwargs == {"split": COMFORT_SPLIT_IN}
         # and the gate consulted is THIS zone's comfort demand, not load:
-        gate_calls = coord._overnight_plan_gate.call_args_list
+        gate_calls = coord._energy_plan_gate.call_args_list
         assert any(c.args[0] == "comfort:office_ac" for c in gate_calls)
 
     def test_out_of_block_energy_files_under_the_out_bucket(self) -> None:
@@ -139,7 +139,7 @@ class TestComfortEnergySplitsOnThePlanBlock772:
             PlanGate(covered=True, in_block=True),
         )
         assert _file(coord).call_args.kwargs == {"split": None}
-        coord._overnight_plan_gate.assert_not_called()
+        coord._energy_plan_gate.assert_not_called()
 
     def test_a_device_without_a_band_at_all_is_untouched(self) -> None:
         """Pre-#772 duck-typed devices carry no comfort_state; they file

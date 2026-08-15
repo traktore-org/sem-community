@@ -79,7 +79,6 @@ Thumbs.db
 # Claude settings (keep local only) — exclude contents, not the dir itself,
 # so we can re-include the shared, version-controlled workflows below.
 .claude/*
-!.claude/workflows/
 CLAUDE.md
 
 # Ruflo / Agent databases (local only, not for distribution)

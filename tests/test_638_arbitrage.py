@@ -20,7 +20,7 @@ import pytest
 from custom_components.solar_energy_management.coordinator.arbitrage import (
     arbitrage_advice,
 )
-from custom_components.solar_energy_management.coordinator.overnight_planner import (
+from custom_components.solar_energy_management.coordinator.energy_planner import (
     LedgerSlot,
 )
 

@@ -7,7 +7,7 @@ forecast-surplus window — the same shape as the overnight EV floor, which
 is the whole point: one packer, one verdict, two horizons.
 
 Pure — stdlib only, no Home Assistant imports, same contract as
-``overnight_planner`` and ``plan_verdict``.
+``energy_planner`` and ``plan_verdict``.
 """
 from __future__ import annotations
 

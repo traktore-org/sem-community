@@ -344,11 +344,11 @@ def _build_coordinator(scenario: Dict[str, Any]):
     coord._daily_ev_per_charger_date = {}
     coord._night_plan_per_charger = {}
     # (#638 one-gate) A scenario may stamp a joint plan directly: the
-    # ``overnight_plan`` top-level key becomes tonight's stash and arms
+    # ``energy_plan`` top-level key becomes tonight's stash and arms
     # actuation, so regime scenarios can pin the gate's WHEN authority.
     # Times in the YAML are written against the harness's frozen epoch.
-    coord._overnight_shadow_plan = scenario.get("overnight_plan")
-    coord._overnight_actuation = bool(scenario.get("overnight_plan"))
+    coord._energy_plan_shadow = scenario.get("energy_plan")
+    coord._energy_plan_actuation = bool(scenario.get("energy_plan"))
     # ``_ev_watts_per_amp`` (the overlay's power model) reads the measured
     # W/A memo the real __init__ creates — without it the accessor raises
     # and the overlay's fail-open except silently skips the plan, which is
@@ -359,7 +359,7 @@ def _build_coordinator(scenario: Dict[str, Any]):
     # registers devices for 2+ chargers. A plan-stamped scenario needs the
     # branch, so register the single charger too (scoped here to avoid
     # shifting the pre-existing single-charger scenarios).
-    if scenario.get("overnight_plan") and not coord._ev_devices:
+    if scenario.get("energy_plan") and not coord._ev_devices:
         for c in (coord.config.get("ev_chargers") or []):
             dev = MagicMock()
             dev.priority = int(c.get("priority", 3))

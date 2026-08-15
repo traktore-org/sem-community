@@ -43,7 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
 
-def _overnight_plan_state(plan: Any) -> str:
+def _energy_plan_state(plan: Any) -> str:
     """(#638) Collapse tonight's plan to one verdict word.
 
     ``pending`` — the planner has not answered for tonight yet (before the
@@ -109,7 +109,7 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def _overnight_plan_attrs(
+def _energy_plan_attrs(
     plan: Any, extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """(#638) Project tonight's stashed plan into entity attributes.
@@ -401,7 +401,7 @@ SENSOR_TYPES = [
         key="night_charging_status",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    # (#638) The overnight joint planner's verdict for tonight. SHADOW: this
+    # (#638) The joint energy planner's verdict for tonight. SHADOW: this
     # reports what the planner WOULD do — nothing here actuates. State is a
     # stable key (``fits``/``yields``/``idle``/``pending``) so the card and
     # the tests can branch on it; the plan itself rides as attributes.
@@ -2452,11 +2452,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             if self.entity_description.key == "charging_state":
                 value = self._format_charging_state(value)
 
-            # (#638) The overnight plan's STATE is a verdict key, never the
+            # (#638) The energy plan's STATE is a verdict key, never the
             # plan dict itself — a dict here would stringify into a >255-char
             # state and get rejected. The plan rides as attributes below.
             elif self.entity_description.key == "energy_plan":
-                value = _overnight_plan_state(value)
+                value = _energy_plan_state(value)
 
             # Special handling for battery status
             elif self.entity_description.key == "battery_status":
@@ -2645,7 +2645,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             #   review   — (#755 pillar 4) what the record has to say, as
             #     machine codes the card translates. Survives the daytime
             #     hours when there is no plan to project.
-            attrs.update(_overnight_plan_attrs(
+            attrs.update(_energy_plan_attrs(
                 self.coordinator.data.get("energy_plan"),
                 extra={
                     "tomorrow": self.coordinator.data.get(

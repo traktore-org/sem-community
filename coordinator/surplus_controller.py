@@ -180,7 +180,7 @@ def compute_load_intent(
             and (getattr(device, "_batt_overnight_forced", False)
                  or getattr(device, "_offpeak_forced", False))):
         return LoadIntent(False, 0.0, None,
-                          plan.reason or "joint overnight plan: window closed")
+                          plan.reason or "joint energy plan: window closed")
 
     # 3. Done for the day — the hard stops (cap overrides the deficit).
     #    (#688) The daily MINIMUM is deliberately NOT one of them. It is a
@@ -241,7 +241,7 @@ def compute_load_intent(
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
     # in daytime (caught live at 09:10 in full sun).
-    # (#638 G4) ``plan_hold`` = the joint overnight plan placed this
+    # (#638 G4) ``plan_hold`` = the joint energy plan placed this
     # load's blocks elsewhere tonight — an extra AND-gate on the start,
     # never a run reason. No trusted plan leaves behaviour untouched.
     if (deficit and can_start and is_night
@@ -262,7 +262,7 @@ def compute_load_intent(
     if plan_hold and deficit:
         detail = f" (until {plan.until:%H:%M})" if plan.until else ""
         return LoadIntent(False, 0.0, None,
-                          (plan.reason or "joint overnight plan: waiting for the planned window") + detail)
+                          (plan.reason or "joint energy plan: waiting for the planned window") + detail)
     return LoadIntent(False, 0.0, None, "no source available")
 
 
@@ -608,7 +608,7 @@ class SurplusController:
         # passes. Default OFF — the passes stay authoritative until a parity
         # corpus + a real-hardware soak prove the new path identical.
         self._use_desired_state: bool = False
-        # (#638 G4) per-cycle window verdicts from the joint overnight plan:
+        # (#638 G4) per-cycle window verdicts from the joint energy plan:
         # device_id → True (inside its planned block) / False (planned
         # elsewhere tonight — don't start now). Absent = the plan has no say.
         # Stamped by update() from the coordinator; empty when actuation is
@@ -921,7 +921,7 @@ class SurplusController:
         observer: bool = False,
         is_night: bool = True,
         # (#638 G4) device_id → True/False window verdicts from the joint
-        # overnight plan; None/empty = no trusted plan → today's behaviour.
+        # energy plan; None/empty = no trusted plan → today's behaviour.
         plan_windows: Optional[dict] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
@@ -1194,7 +1194,7 @@ class SurplusController:
                     # runs THESE passes, and a stop that lives only in the
                     # desired-state path is a stop that never happens.
                     done_reason = getattr(_pv, "reason", "") or \
-                        "joint overnight plan: window closed"
+                        "joint energy plan: window closed"
                 elif (device.daily_targets_met
                         and (device._offpeak_forced
                              or getattr(device, "_batt_overnight_forced", False))):

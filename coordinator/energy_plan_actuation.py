@@ -1,6 +1,6 @@
-"""#638 G4 — actuation: the stamped overnight plan feeds the EXISTING signals.
+"""#638 G4 — actuation: the stamped energy plan feeds the EXISTING signals.
 
-The verification ladder's last rung (docs/OVERNIGHT_PLANNER.md): the plan's
+The verification ladder's last rung (docs/ENERGY_PLANNER.md): the plan's
 blocks feed the EV's night amps and the loads' window gates. The reconcilers
 do not change, and neither do the guarantees — every rule that DECIDES
 whether something runs (deadline forcing, reserve SOC, peak shed, price
@@ -11,7 +11,7 @@ for that demand.
 The trust rule, applied per demand, fail-open to today's behaviour:
 
     a demand follows its planned blocks ONLY when
-      1. actuation is switched on (``switch.sem_overnight_actuation``,
+      1. actuation is switched on (``switch.sem_energy_plan_actuation``,
          default off — the caller checks this before building a gate),
       2. tonight's plan is stamped and fresh (``computed_at`` within the
          night, ``now`` inside the plan's slot span),
@@ -22,7 +22,7 @@ The trust rule, applied per demand, fail-open to today's behaviour:
     as "behave exactly as before this module existed".
 
 Pure: no clock reads, no I/O, no Home Assistant imports — ``now`` is always
-passed in. The plan dict is the G3c stash (``_overnight_shadow_plan``):
+passed in. The plan dict is the G3c stash (``_energy_plan_shadow``):
 ``demands`` rows carry ``id``/``status``, ``blocks`` carry ``id``/``start``/
 ``end``/``power_w`` as ISO strings, ``slots`` span the night window.
 """
@@ -245,7 +245,7 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
         return NO_OPINION
     if gate.in_block:
         return PlanVerdict(hold=False, in_block=True,
-                           reason="joint overnight plan: in planned block")
+                           reason="joint energy plan: in planned block")
     if gate.remaining_kwh + _EPS_KWH < deficit_kwh:
         return NO_OPINION
     when = (f" — block opens at {gate.next_block_start:%H:%M}"
@@ -253,7 +253,7 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
     return PlanVerdict(
         hold=True,
         until=gate.next_block_start,
-        reason=f"joint overnight plan: outside the planned window{when}",
+        reason=f"joint energy plan: outside the planned window{when}",
     )
 
 
@@ -273,7 +273,7 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
         return None
     if any(g.in_block for g in covered):
         return PlanVerdict(in_block=True,
-                           reason="joint overnight plan: in planned block")
+                           reason="joint energy plan: in planned block")
     holds = []
     if load_gate.covered:
         lv = load_verdict(load_gate, deficit_kwh=deficit_kwh)
@@ -285,7 +285,7 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
     if comfort_gate.covered:
         holds.append(PlanVerdict(
             hold=True, until=comfort_gate.next_block_start,
-            reason="joint overnight plan: comfort block later"))
+            reason="joint energy plan: comfort block later"))
     if not holds:
         return None
     untils = [h.until for h in holds if h.until is not None]

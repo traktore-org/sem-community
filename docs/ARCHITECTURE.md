@@ -3,14 +3,14 @@
 This document covers the internal architecture of Solar Energy Management (SEM) for developers and contributors.
 
 > **v2.0 — one gate** (see [CHANGELOG](../CHANGELOG.md) `[2.0.0]` and
-> [OVERNIGHT_PLANNER.md](OVERNIGHT_PLANNER.md)). The structural change of
+> [ENERGY_PLANNER.md](ENERGY_PLANNER.md)). The structural change of
 > this release is that scheduled energy use has **one decision-maker**:
 > - **The plan owns WHEN, the reactive layer owns WHETHER, the user owns MAY.**
 >   The EV's private cheap-window pick and the battery scheduler's own window
 >   pick are deleted; both now read the joint plan's blocks. An AST ratchet
 >   (`tests/test_638_one_selector.py`) keeps `find_cheapest_hours` to its one
 >   home in `tariff/tariff_provider.py`.
-> - **`coordinator/overnight_actuation.py`** is the gate: one trust rule
+> - **`coordinator/energy_plan_actuation.py`** is the gate: one trust rule
 >   (stamp freshness) feeding per-demand verdicts for EV, loads, comfort,
 >   battery and arbitrage.
 > - **Fail-open direction is per family and deliberate** — EV uncovered
@@ -484,14 +484,14 @@ deleted both** (#638).
 ### Where the window comes from (v2.0)
 
 The scheduler says **WHAT** — the deficit, the break-even verdict, the
-anchored target SOC, the charge power. The overnight joint planner says
+anchored target SOC, the charge power. The joint energy planner says
 **WHEN**: the battery enters the night ledger as a `battery` demand and the
 packer places it against the EV, the deferrable loads and the comfort
 bands under one shared peak and one price curve.
 
 ```
 battery_charge_scheduler   →  WHAT   (deficit, economics, target SOC, power)
-overnight plan (#638)      →  WHEN   (the battery block, peak-aware, priced)
+energy plan (#638)      →  WHEN   (the battery block, peak-aware, priced)
 decide_battery             →  gate   (force-charge only inside the block)
 ```
 
@@ -518,7 +518,7 @@ Consequences worth knowing:
 A mid-charge re-evaluation that lands on NOT_NEEDED / NOT_PROFITABLE stops the
 active forced charge instead of leaving the inverter charging unsupervised.
 
-Full walkthrough: [The overnight joint planner](OVERNIGHT_PLANNER.md).
+Full walkthrough: [The joint energy planner](ENERGY_PLANNER.md).
 
 ### Re-plan Triggers
 

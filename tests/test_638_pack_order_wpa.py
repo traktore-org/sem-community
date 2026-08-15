@@ -20,7 +20,7 @@ import re
 
 import pytest
 
-from custom_components.solar_energy_management.coordinator.overnight_planner import (
+from custom_components.solar_energy_management.coordinator.energy_planner import (
     Demand,
 )
 # (#758) see synthetic_night.py — a flat-price fixture, not a shipping API.

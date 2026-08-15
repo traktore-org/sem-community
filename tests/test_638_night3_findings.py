@@ -97,8 +97,8 @@ def _tick_self(sig=("ask",), compute_ok=True):
         _battery_charge_scheduler=SimpleNamespace(),
         time_manager=SimpleNamespace(get_night_end_time=lambda: "07:00"),
         config={"battery_capacity_kwh": 0},
-        _overnight_demand_signature=lambda power: fake._sig,
-        _shadow_overnight_plan=_compute,
+        _energy_plan_demand_signature=lambda power: fake._sig,
+        _shadow_energy_plan=_compute,
         _shadow_plan_date=None,
         _plan_ev_conn_sig=None,
         _sig=sig,
@@ -107,7 +107,7 @@ def _tick_self(sig=("ask",), compute_ok=True):
     return fake
 
 
-class TestOvernightPlanTick:
+class TestEnergyPlanTick:
     """The extracted trigger, called BEFORE the charging decisions
     (finding 2) — and since the horizon-spanning change, ONCE PER ENERGY
     DAY (night-end to night-end) rather than once per night: the plan
@@ -116,22 +116,22 @@ class TestOvernightPlanTick:
 
     def test_the_first_tick_stamps_the_period(self, _freeze_2200):
         fake = _tick_self()
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._shadow_plan_date is not None
         assert fake._plan_ev_conn_sig == ("ask",)
         assert fake._compute_calls == ["initial"]
 
     def test_an_unchanged_ask_does_not_restamp(self, _freeze_2200):
         fake = _tick_self()
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial"]
 
     def test_a_changed_ask_replans_with_the_cause(self, _freeze_2200):
         fake = _tick_self()
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         fake._sig = ("ask", "changed")
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial", "ask changed"]
         assert fake._plan_ev_conn_sig == ("ask", "changed")
 
@@ -145,14 +145,14 @@ class TestOvernightPlanTick:
         fake = _tick_self()
         fake._runtimes_restored = False
         fake._plan_ev_conn_sig = ("warm",)   # the restored stamp's sig
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == [], "a cold tick must not stamp"
         assert fake._plan_ev_conn_sig == ("warm",), (
             "a cold tick must not touch the restored signature"
         )
         # Restore completes → the tick resumes normally next cycle.
         fake._runtimes_restored = True
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial"]
 
     def test_a_daytime_tick_plans_toward_the_coming_night(self, monkeypatch):
@@ -161,7 +161,7 @@ class TestOvernightPlanTick:
         scheduling into surplus windows need a daytime answer)."""
         _freeze(monkeypatch, 14)
         fake = _tick_self()
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial"]
         assert fake._shadow_plan_date is not None
 
@@ -170,33 +170,33 @@ class TestOvernightPlanTick:
         belong to ONE energy day — no re-stamp without an ask change."""
         _freeze(monkeypatch, 14)
         fake = _tick_self()
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         _freeze(monkeypatch, 22)
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         _freeze(monkeypatch, 3, day=9)
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial"]
 
     def test_the_night_end_boundary_opens_the_next_period(self, monkeypatch):
         _freeze(monkeypatch, 22)
         fake = _tick_self()
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         # 07:30 next day — past night_end 07:00: a fresh energy day.
         _freeze(monkeypatch, 7, minute=30, day=9)
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial", "initial"]
 
     def test_a_not_ready_world_retries_without_a_stamp(self, _freeze_2200):
         fake = _tick_self(compute_ok=False)
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._shadow_plan_date is None
         # and the retry is still an "initial" answer, not a re-plan
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial", "initial"]
 
     def test_the_tick_never_breaks_the_cycle(self, _freeze_2200):
         hostile = SimpleNamespace()  # every attribute missing
-        SEMCoordinator._overnight_plan_tick(hostile, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(hostile, power=None, energy=None)
 
     def test_the_tick_feeds_the_drift_learners(self, _freeze_2200):
         """(#638 Phase 3) Comfort sampling rides the tick — every cycle,
@@ -207,8 +207,8 @@ class TestOvernightPlanTick:
         fake = _tick_self()
         fake._surplus_controller = SimpleNamespace(
             get_devices_sorted=lambda: [dev])
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert len(sampled) == 2
 
 
@@ -221,10 +221,10 @@ class TestTheStampPrecedesTheDecisions:
     def test_source_order(self):
         import inspect
         src = inspect.getsource(SEMCoordinator._async_update_data)
-        tick = src.index("_overnight_plan_tick(")
+        tick = src.index("_energy_plan_tick(")
         ev_chain = src.index("Step 4.5")
         assert tick < ev_chain, (
-            "_overnight_plan_tick must run before the EV session/decision "
+            "_energy_plan_tick must run before the EV session/decision "
             "chain — deciding a fresh connect against the stale plan is the "
             "night-3 blip (one cycle of enable-then-revoke on hardware)"
         )
@@ -232,8 +232,8 @@ class TestTheStampPrecedesTheDecisions:
     def test_the_inline_trigger_block_is_gone(self):
         import inspect
         src = inspect.getsource(SEMCoordinator._async_update_data)
-        assert "_shadow_overnight_plan(" not in src, (
-            "the trigger body must live only in _overnight_plan_tick — two "
+        assert "_shadow_energy_plan(" not in src, (
+            "the trigger body must live only in _energy_plan_tick — two "
             "copies is the drift invitation this extraction removes"
         )
 
@@ -248,11 +248,11 @@ class TestThePlanSurvivesTheReboot:
 
     def _restored(self, state):
         fake = SimpleNamespace(
-            _overnight_shadow_plan=None,
+            _energy_plan_shadow=None,
             _shadow_plan_date=None,
             _plan_ev_conn_sig=None,
         )
-        SEMCoordinator._restore_overnight_plan(fake, state)
+        SEMCoordinator._restore_energy_plan(fake, state)
         return fake
 
     def test_a_fresh_same_period_plan_restores(self):
@@ -263,7 +263,7 @@ class TestThePlanSurvivesTheReboot:
             "sig": [["conn", [["keba", True]]], ["price", [0.3, 0.2]]],
         }
         fake = self._restored(state)
-        assert fake._overnight_shadow_plan["demands"][0]["id"] == "ev:x"
+        assert fake._energy_plan_shadow["demands"][0]["id"] == "ev:x"
         assert str(fake._shadow_plan_date) == "2026-08-09"
         # the signature must compare EQUAL to a live tuple-shaped sig —
         # a JSON round-trip turns tuples into lists, and an unequal sig
@@ -275,7 +275,7 @@ class TestThePlanSurvivesTheReboot:
         for bad in (None, "x", {}, {"plan": "not-a-dict"},
                     {"plan": {}, "period": "not-a-date", "sig": []}):
             fake = self._restored(bad)
-            assert fake._overnight_shadow_plan is None
+            assert fake._energy_plan_shadow is None
             assert fake._shadow_plan_date is None
 
     def test_the_tick_does_not_replan_a_restored_period(self, monkeypatch):
@@ -286,7 +286,7 @@ class TestThePlanSurvivesTheReboot:
         from datetime import date
         fake._shadow_plan_date = date(2026, 8, 9)
         fake._plan_ev_conn_sig = ("ask",)
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == [], (
             "same period + same ask after a reboot = the SAME night — "
             "no silent reshuffle")
@@ -299,10 +299,10 @@ class TestThePlanSurvivesTheReboot:
         period, same ask — the flag alone re-stamps, cause 'manual'."""
         _freeze(monkeypatch, 22)
         fake = _tick_self()
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial"]
         fake._manual_replan_requested = True
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert fake._compute_calls == ["initial", "manual"]
         assert fake._manual_replan_requested is False
 
@@ -311,9 +311,9 @@ class TestThePlanSurvivesTheReboot:
         stored = {}
         fake = _tick_self()
         fake._storage = SimpleNamespace(
-            set_overnight_plan_state=lambda s: stored.update(s))
-        fake._overnight_shadow_plan = {"computed_at": "x", "demands": []}
-        SEMCoordinator._overnight_plan_tick(fake, power=None, energy=None)
+            set_energy_plan_state=lambda s: stored.update(s))
+        fake._energy_plan_shadow = {"computed_at": "x", "demands": []}
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
         assert stored.get("period") == "2026-08-09"
         assert stored.get("sig") is not None
         assert isinstance(stored.get("plan"), dict)

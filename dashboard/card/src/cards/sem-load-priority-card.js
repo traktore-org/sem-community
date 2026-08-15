@@ -34,7 +34,7 @@ import {
 // tests/test_618_docs_anchors.py — the regex there matches this
 // "docs:" literal, keep the shape).
 const COMFORT_DOCS = {
-    docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#comfort-banking',
+    docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/ENERGY_PLANNER.md#comfort-banking',
 };
 
 class SEMLoadPriorityCard extends SEMLitBase {

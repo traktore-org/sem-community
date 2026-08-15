@@ -5,7 +5,7 @@ window collector only ever asked the gate for ``load:{did}`` — so a comfort
 block could not reach its device: banking runs never actuated. The merge:
 
 * ``PlanVerdict`` carries ``in_block`` — the run half of the verdict.
-* ``_overnight_load_windows`` asks BOTH gates per device and merges:
+* ``_energy_plan_load_windows`` asks BOTH gates per device and merges:
   either demand in-block → a run verdict; a hold only when EVERY covered
   demand holds (an uncovered/no-authority demand keeps its reactive layer);
   the earliest ``next_block_start`` wins the ``until``.
@@ -23,7 +23,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     PlanGate,
     load_verdict,
 )
@@ -61,14 +61,14 @@ def _win_dev(did="heizband"):
 
 
 def _win_self(gates):
-    """A fake whose _overnight_plan_gate answers from a dict."""
-    from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+    """A fake whose _energy_plan_gate answers from a dict."""
+    from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
         UNCOVERED,
     )
     fake = SimpleNamespace(
-        _overnight_actuation=True,
-        _overnight_shadow_plan={"computed_at": "x"},
-        _overnight_plan_gate=lambda demand_id, now=None: gates.get(
+        _energy_plan_actuation=True,
+        _energy_plan_shadow={"computed_at": "x"},
+        _energy_plan_gate=lambda demand_id, now=None: gates.get(
             demand_id, UNCOVERED),
     )
     return fake
@@ -78,7 +78,7 @@ def _windows(fake, devices):
     from custom_components.solar_energy_management.coordinator.coordinator import (
         SEMCoordinator,
     )
-    return SEMCoordinator._overnight_load_windows(fake, devices)
+    return SEMCoordinator._energy_plan_load_windows(fake, devices)
 
 
 @pytest.mark.unit
@@ -189,7 +189,7 @@ class TestComfortBankingRunsInItsBlock:
 @pytest.mark.unit
 class TestTheLegacySurfacesAreGone:
     def test_load_window_is_deleted(self):
-        import custom_components.solar_energy_management.coordinator.overnight_actuation as oa
+        import custom_components.solar_energy_management.coordinator.energy_plan_actuation as oa
         assert not hasattr(oa, "load_window")
 
     def test_plan_window_param_is_deleted(self):

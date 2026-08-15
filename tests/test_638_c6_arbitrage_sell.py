@@ -29,7 +29,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
 from custom_components.solar_energy_management.coordinator.decide_battery import (
     decide_battery,
 )
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     arbitrage_sell_gate,
 )
 

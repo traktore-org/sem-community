@@ -245,9 +245,9 @@ class TestTheSignatureSeesTheCar:
     def test_the_car_filling_up_changes_the_signature(self) -> None:
         c = self._coord()
         power = SimpleNamespace(ev_connected=True, ev_connected_per_charger=None)
-        before = c._overnight_demand_signature(power)
+        before = c._energy_plan_demand_signature(power)
         c._ev_taper_detectors["keba"] = _detector(True, 0.0)
-        assert c._overnight_demand_signature(power) != before
+        assert c._energy_plan_demand_signature(power) != before
 
     def test_the_signature_believes_the_meter_over_the_anchor(self) -> None:
         """The restamp N2 caught came through THIS term: the deficit
@@ -259,8 +259,8 @@ class TestTheSignatureSeesTheCar:
                                   ev_power_per_charger={"keba": 0.0})
         drawing = SimpleNamespace(ev_connected=True, ev_connected_per_charger=None,
                                   ev_power_per_charger={"keba": 3900.0})
-        assert (c._overnight_demand_signature(drawing)
-                != c._overnight_demand_signature(at_rest))
+        assert (c._energy_plan_demand_signature(drawing)
+                != c._energy_plan_demand_signature(at_rest))
 
 
 class TestTheCollectorAsksTheSameQuestion:
@@ -277,9 +277,9 @@ class TestTheCollectorAsksTheSameQuestion:
         fake._ev_taper_detectors = {"ev_charger": _detector(True, 0.0)}
         power = SimpleNamespace(battery_soc=80.0,
                                 ev_power_per_charger={"ev_charger": 3900.0})
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=power)
-        ids = {d["id"] for d in fake._overnight_shadow_plan["demands"]}
+        ids = {d["id"] for d in fake._energy_plan_shadow["demands"]}
         assert "ev:ev_charger" in ids
 
     def test_a_car_at_rest_is_still_skipped(self, freeze_targets) -> None:
@@ -292,9 +292,9 @@ class TestTheCollectorAsksTheSameQuestion:
         fake._ev_taper_detectors = {"ev_charger": _detector(True, 0.0)}
         power = SimpleNamespace(battery_soc=80.0,
                                 ev_power_per_charger={"ev_charger": 0.0})
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=power)
-        plan = fake._overnight_shadow_plan
+        plan = fake._energy_plan_shadow
         ids = {d["id"] for d in plan["demands"]}
         assert "ev:ev_charger" not in ids
         assert any(n.get("id") == "ev:ev_charger" and n.get("why") == "car_full"

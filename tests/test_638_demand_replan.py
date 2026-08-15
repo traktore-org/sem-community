@@ -6,7 +6,7 @@ user-visible: the EV target went 3.5 → 6.0 kWh at 22:19, execution followed
 the new floor within a cycle (fail-open), and the ledger kept describing a
 night that no longer existed.
 
-``_overnight_demand_signature`` folds every demand-shaping input into one
+``_energy_plan_demand_signature`` folds every demand-shaping input into one
 comparable value. These tests pin the two properties that matter:
 
 * a REAL change (target, deadline, mode, a load's deficit appearing, the
@@ -63,23 +63,23 @@ def _coord(chargers=None, devices=(), prices=()):
 class TestARealChangeReplans:
     def test_target_change_changes_the_signature(self):
         c = _coord()
-        before = c._overnight_demand_signature(_power())
+        before = c._energy_plan_demand_signature(_power())
         c.config["ev_chargers"][0]["daily_ev_target"] = 6.0
-        assert c._overnight_demand_signature(_power()) != before
+        assert c._energy_plan_demand_signature(_power()) != before
 
     def test_deadline_and_mode_changes_change_the_signature(self):
         c = _coord()
-        base = c._overnight_demand_signature(_power())
+        base = c._energy_plan_demand_signature(_power())
         c.config["ev_chargers"][0]["ev_target_time"] = "06:00"
-        moved = c._overnight_demand_signature(_power())
+        moved = c._energy_plan_demand_signature(_power())
         assert moved != base
         c.config["ev_chargers"][0]["charge_mode"] = "solar_only"
-        assert c._overnight_demand_signature(_power()) != moved
+        assert c._energy_plan_demand_signature(_power()) != moved
 
     def test_unplug_still_replans(self):
         c = _coord()
-        assert (c._overnight_demand_signature(_power(connected=True))
-                != c._overnight_demand_signature(_power(connected=False)))
+        assert (c._energy_plan_demand_signature(_power(connected=True))
+                != c._energy_plan_demand_signature(_power(connected=False)))
 
     def test_a_stop_condition_clearing_changes_the_signature(self):
         """#760: a banked comfort band is a hard stop the collector now
@@ -89,56 +89,56 @@ class TestARealChangeReplans:
         dev = _dev("heizband", 2.0)
         dev.stop_condition_met = True
         c = _coord(devices=[dev])
-        before = c._overnight_demand_signature(_power())
+        before = c._energy_plan_demand_signature(_power())
         dev.stop_condition_met = False
-        assert c._overnight_demand_signature(_power()) != before
+        assert c._energy_plan_demand_signature(_power()) != before
 
     def test_a_new_load_deficit_changes_the_signature(self):
         quiet = _coord(devices=())
         asking = _coord(devices=(_dev("heizband", 2.0),))
-        assert (quiet._overnight_demand_signature(_power())
-                != asking._overnight_demand_signature(_power()))
+        assert (quiet._energy_plan_demand_signature(_power())
+                != asking._energy_plan_demand_signature(_power()))
 
     def test_a_price_update_changes_the_signature(self):
         flat = _coord(prices=(0.36,) * 8)
         published = _coord(prices=(0.36, 0.36, 0.12, 0.12, 0.36, 0.36, 0.36, 0.36))
-        assert (flat._overnight_demand_signature(_power())
-                != published._overnight_demand_signature(_power()))
+        assert (flat._energy_plan_demand_signature(_power())
+                != published._energy_plan_demand_signature(_power()))
 
 
 class TestJitterDoesNot:
     def test_identical_cycles_are_identical(self):
         c = _coord(devices=(_dev("heizband", 2.0),), prices=(0.36,) * 8)
-        assert (c._overnight_demand_signature(_power())
-                == c._overnight_demand_signature(_power()))
+        assert (c._energy_plan_demand_signature(_power())
+                == c._energy_plan_demand_signature(_power()))
 
     def test_a_running_loads_shrinking_deficit_is_not_a_demand_change(self):
         """The deficit shrinks every cycle while a device runs — the 6-minute
         rounding must absorb that, or the night re-plans continuously."""
         c = _coord(devices=(_dev("heizband", 2.0),))
-        before = c._overnight_demand_signature(_power())
+        before = c._energy_plan_demand_signature(_power())
         # 90 seconds of running: deficit 2.0 h → 1.975 h — same 0.1 h bucket.
         c._surplus_controller.get_devices_sorted()[0]\
             ._daily_runtime_accumulated_sec += 90
-        assert c._overnight_demand_signature(_power()) == before
+        assert c._energy_plan_demand_signature(_power()) == before
 
     def test_sub_cent_price_noise_is_not_a_demand_change(self):
         a = _coord(prices=(0.361,) * 8)
         b = _coord(prices=(0.3649,) * 8)
-        assert (a._overnight_demand_signature(_power())
-                == b._overnight_demand_signature(_power()))
+        assert (a._energy_plan_demand_signature(_power())
+                == b._energy_plan_demand_signature(_power()))
 
     def test_no_tariff_and_a_broken_provider_are_both_valid_shapes(self):
         c = _coord(prices=())
-        sig = c._overnight_demand_signature(_power())
+        sig = c._energy_plan_demand_signature(_power())
         assert ("price", ()) in sig
         c._tariff_provider = None  # provider gone entirely
-        assert ("price", ()) in c._overnight_demand_signature(_power())
+        assert ("price", ()) in c._energy_plan_demand_signature(_power())
 
     def test_a_broken_device_never_takes_the_signature_down(self):
         bad = SimpleNamespace(device_id="x", has_runtime_deficit=True)
         c = _coord(devices=(bad,))  # missing runtime attrs → skipped
-        assert isinstance(c._overnight_demand_signature(_power()), tuple)
+        assert isinstance(c._energy_plan_demand_signature(_power()), tuple)
 
 
 def _comfort_ask_dev(did="ac1", kwh=1.5, minute=0):
@@ -158,21 +158,21 @@ class TestComfortAsksReplan:
     def test_an_ask_appearing_changes_the_signature(self):
         quiet = _coord()
         asking = _coord(devices=(_comfort_ask_dev(),))
-        assert (quiet._overnight_demand_signature(_power())
-                != asking._overnight_demand_signature(_power()))
+        assert (quiet._energy_plan_demand_signature(_power())
+                != asking._energy_plan_demand_signature(_power()))
 
     def test_drift_jitter_rounds_away(self):
         """+0.1 kWh and +10 min stay inside the 0.5 kWh / 30 min steps."""
         a = _coord(devices=(_comfort_ask_dev(kwh=1.5, minute=0),))
         b = _coord(devices=(_comfort_ask_dev(kwh=1.6, minute=10),))
-        assert (a._overnight_demand_signature(_power())
-                == b._overnight_demand_signature(_power()))
+        assert (a._energy_plan_demand_signature(_power())
+                == b._energy_plan_demand_signature(_power()))
 
     def test_a_material_change_does_not(self):
         a = _coord(devices=(_comfort_ask_dev(kwh=1.5),))
         b = _coord(devices=(_comfort_ask_dev(kwh=2.5),))
-        assert (a._overnight_demand_signature(_power())
-                != b._overnight_demand_signature(_power()))
+        assert (a._energy_plan_demand_signature(_power())
+                != b._energy_plan_demand_signature(_power()))
 
 
 class TestTheSupplySideReplans:
@@ -194,24 +194,24 @@ class TestTheSupplySideReplans:
     def test_a_provider_revision_replans(self):
         sunny = self._with_forecast(55.0, 40.0)
         clouded = self._with_forecast(34.0, 20.0)
-        assert (sunny._overnight_demand_signature(_power())
-                != clouded._overnight_demand_signature(_power()))
+        assert (sunny._energy_plan_demand_signature(_power())
+                != clouded._energy_plan_demand_signature(_power()))
 
     def test_the_burn_down_is_not_an_ask_change(self):
         morning = self._with_forecast(55.0, 50.0)
         noon = self._with_forecast(55.0, 20.0)
-        assert (morning._overnight_demand_signature(_power())
-                == noon._overnight_demand_signature(_power()))
+        assert (morning._energy_plan_demand_signature(_power())
+                == noon._energy_plan_demand_signature(_power()))
 
     def test_sub_step_revisions_round_away(self):
         a = self._with_forecast(55.0, 40.0)
         b = self._with_forecast(55.9, 40.0)
-        assert (a._overnight_demand_signature(_power())
-                == b._overnight_demand_signature(_power()))
+        assert (a._energy_plan_demand_signature(_power())
+                == b._energy_plan_demand_signature(_power()))
 
     def test_no_forecast_is_a_valid_shape(self):
         c = _coord()
-        assert isinstance(c._overnight_demand_signature(_power()), tuple)
+        assert isinstance(c._energy_plan_demand_signature(_power()), tuple)
 
     def test_the_n1_bucket_edge_oscillation_is_one_night(self):
         """(#759) Quantizing cannot damp a value that LIVES at a bucket
@@ -221,10 +221,10 @@ class TestTheSupplySideReplans:
         coverage changing hands every 20 s. Same coordinator, same night,
         sub-hysteresis jitter: ONE signature."""
         c = self._with_forecast(66.9, 40.0)
-        first = c._overnight_demand_signature(_power())
+        first = c._energy_plan_demand_signature(_power())
         for raw in (67.1, 66.9, 67.3, 66.8, 67.1):
             c._forecast_reader.forecast_data.forecast_today_kwh = raw
-            assert c._overnight_demand_signature(_power()) == first, (
+            assert c._energy_plan_demand_signature(_power()) == first, (
                 f"forecast jitter to {raw} kWh re-planned the night"
             )
 
@@ -232,23 +232,23 @@ class TestTheSupplySideReplans:
         """The hysteresis must not eat the week picture: a genuine
         provider revision (clouds rolling in) re-plans."""
         c = self._with_forecast(66.9, 40.0)
-        first = c._overnight_demand_signature(_power())
+        first = c._energy_plan_demand_signature(_power())
         c._forecast_reader.forecast_data.forecast_today_kwh = 60.0
-        assert c._overnight_demand_signature(_power()) != first
+        assert c._energy_plan_demand_signature(_power()) != first
 
     def test_a_transient_forecast_outage_keeps_the_anchor(self):
         """A one-cycle unreadable forecast used to flip the term to 0.0
         and back — two replans for one hiccup. Degrade to the last
         anchored value, not to a different night."""
         c = self._with_forecast(66.9, 40.0)
-        first = c._overnight_demand_signature(_power())
+        first = c._energy_plan_demand_signature(_power())
 
         class _Boom:
             @property
             def forecast_data(self):
                 raise RuntimeError("reader down")
         c._forecast_reader = _Boom()
-        assert c._overnight_demand_signature(_power()) == first
+        assert c._energy_plan_demand_signature(_power()) == first
 
 
 class TestThePriceWindowSlides:
@@ -277,8 +277,8 @@ class TestThePriceWindowSlides:
         full = [("2026-08-14T22:00:00+02:00", 0.42),
                 ("2026-08-14T23:00:00+02:00", 0.12),
                 ("2026-08-15T00:00:00+02:00", 0.10)]
-        old = self._coord_with_prices(full)._overnight_demand_signature(_power())
-        new = self._coord_with_prices(full[1:])._overnight_demand_signature(_power())
+        old = self._coord_with_prices(full)._energy_plan_demand_signature(_power())
+        new = self._coord_with_prices(full[1:])._energy_plan_demand_signature(_power())
         assert demand_signature_changed(old, new) is False
 
     def test_a_revised_price_at_a_shared_timestamp_replans(self):
@@ -286,9 +286,9 @@ class TestThePriceWindowSlides:
             demand_signature_changed,
         )
         old = self._coord_with_prices([
-            ("2026-08-14T23:00:00+02:00", 0.12)])._overnight_demand_signature(_power())
+            ("2026-08-14T23:00:00+02:00", 0.12)])._energy_plan_demand_signature(_power())
         new = self._coord_with_prices([
-            ("2026-08-14T23:00:00+02:00", 0.30)])._overnight_demand_signature(_power())
+            ("2026-08-14T23:00:00+02:00", 0.30)])._energy_plan_demand_signature(_power())
         assert demand_signature_changed(old, new) is True
 
     def test_tomorrows_curve_landing_replans(self):
@@ -296,10 +296,10 @@ class TestThePriceWindowSlides:
             demand_signature_changed,
         )
         today = [("2026-08-14T23:00:00+02:00", 0.12)]
-        old = self._coord_with_prices(today)._overnight_demand_signature(_power())
+        old = self._coord_with_prices(today)._energy_plan_demand_signature(_power())
         new = self._coord_with_prices(
             today + [("2026-08-15T01:00:00+02:00", 0.08)]
-        )._overnight_demand_signature(_power())
+        )._energy_plan_demand_signature(_power())
         assert demand_signature_changed(old, new) is True
 
     def test_every_other_term_still_compares_strictly(self):
@@ -307,9 +307,9 @@ class TestThePriceWindowSlides:
             demand_signature_changed,
         )
         a = self._coord_with_prices([("2026-08-14T23:00:00+02:00", 0.12)])
-        old = a._overnight_demand_signature(_power())
+        old = a._energy_plan_demand_signature(_power())
         a.config["ev_chargers"][0]["daily_ev_target"] = 9.9
-        new = a._overnight_demand_signature(_power())
+        new = a._energy_plan_demand_signature(_power())
         assert demand_signature_changed(old, new) is True
 
     def test_a_stored_old_format_signature_replans_once_never_crashes(self):
@@ -317,7 +317,7 @@ class TestThePriceWindowSlides:
             demand_signature_changed,
         )
         new = self._coord_with_prices(
-            [("2026-08-14T23:00:00+02:00", 0.12)])._overnight_demand_signature(_power())
+            [("2026-08-14T23:00:00+02:00", 0.12)])._energy_plan_demand_signature(_power())
         old_format = tuple(
             (("price", (0.42, 0.12)) if x[0] == "price" else x) for x in new)
         assert demand_signature_changed(old_format, new) is True
@@ -353,7 +353,7 @@ class TestAPlugBlipIsNotAnUnplug:
     def _cycle(self, c, power):
         """One cycle: confirm at the source (step 1), then the trigger."""
         c._confirm_ev_connection(power)
-        return c._overnight_demand_signature(power)
+        return c._energy_plan_demand_signature(power)
 
     def _blip(self):
         return _power(connected=False, per_charger={"keba": False})
@@ -450,7 +450,7 @@ class TestAShrinkingDeficitIsProgress:
     def _sig(self, deficit_h, stop=False, did="plug"):
         dev = _dev(did, deficit_h)
         dev.stop_condition_met = stop
-        return _coord(devices=(dev,))._overnight_demand_signature(_power())
+        return _coord(devices=(dev,))._energy_plan_demand_signature(_power())
 
     def _changed(self, old, new):
         from custom_components.solar_energy_management.coordinator.coordinator import (
@@ -466,11 +466,11 @@ class TestAShrinkingDeficitIsProgress:
         assert self._changed(self._sig(1.3), self._sig(1.5)) is True
 
     def test_a_vanishing_demand_replans(self):
-        quiet = _coord()._overnight_demand_signature(_power())
+        quiet = _coord()._energy_plan_demand_signature(_power())
         assert self._changed(self._sig(1.3), quiet) is True
 
     def test_a_new_demand_replans(self):
-        quiet = _coord()._overnight_demand_signature(_power())
+        quiet = _coord()._energy_plan_demand_signature(_power())
         assert self._changed(quiet, self._sig(1.3)) is True
 
     def test_a_stop_flag_flip_replans_even_while_shrinking(self):

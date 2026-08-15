@@ -495,23 +495,32 @@ class SEMStorage:
         self._energy_data["ev_intelligence"] = intel
 
     # Measured watts-per-amp persistence (#638 night 2) — the learned
-    # W/A EMA survives restarts so the overnight packer never falls back
+    # W/A EMA survives restarts so the energy packer never falls back
     # to nameplate right after a deploy. In-memory only, the 23:36
     # restart reset it and the 23:46 re-plan sized the EV floor at
     # 6.9 kW nameplate, found no slot under the peak, and yielded a car
     # that then charged at 4.54 kW. Same rule as the sign locks below:
     # learned state that gates behaviour is not allowed to die at boot.
-    def get_overnight_plan_state(self) -> Dict[str, Any]:
+    def get_energy_plan_state(self) -> Dict[str, Any]:
         """(#638) Tonight's stamped plan + period + demand signature —
         a reboot must not silently reshuffle a night the actuation is
-        steering by (Guido's Aug-5 note, made acute 00:20 on 08-09)."""
-        return self._energy_data.get("overnight_plan", {})
+        steering by (Guido's Aug-5 note, made acute 00:20 on 08-09).
 
-    def set_overnight_plan_state(self, state: Dict[str, Any]) -> None:
+        ``overnight_plan`` is the same state under the planner's old name.
+        An upgrade at 23:50 is still a reboot mid-night, and the whole point
+        of persisting the stamp is that such a reboot changes nothing."""
+        return (self._energy_data.get("energy_plan")
+                or self._energy_data.get("overnight_plan", {}))
+
+    def set_energy_plan_state(self, state: Dict[str, Any]) -> None:
         """(#638) Persist the stamp; saved by the normal delayed-save
         cycle — an abrupt kill before a save degrades to the old
-        re-plan-on-boot, never to a corrupt night."""
-        self._energy_data["overnight_plan"] = dict(state)
+        re-plan-on-boot, never to a corrupt night.
+
+        The legacy key is retired on the first write: read once, then gone,
+        so a later boot can never pick up the pre-rename night."""
+        self._energy_data["energy_plan"] = dict(state)
+        self._energy_data.pop("overnight_plan", None)
 
     # (#755) The third number: what each demand actually DID. Durable on
     # purpose — a night spans midnight and the daily bucket empties there,

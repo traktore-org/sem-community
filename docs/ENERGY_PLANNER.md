@@ -4,7 +4,7 @@
 > the whole energy day* — daylight and the coming night in one ledger — and
 > the plan's windows drive the *existing* night signals: see
 > [Actuation](#actuation-g4) and [Where to see it](#where-to-see-it).
-> `switch.sem_overnight_actuation` is the kill-switch: turn it **off** and
+> `switch.sem_energy_plan_actuation` is the kill-switch: turn it **off** and
 > the planner goes back to pure shadow, every real decision made by SEM's
 > reactive layer, exactly as before this build.
 >
@@ -177,10 +177,10 @@ The output is a **report**, one line per demand — the thing you can read at
 22:00 instead of discovering at 06:30:
 
 ```
-OVERNIGHT-PLAN (shadow): battery carries home until 03:00 — the grid takes over from there
-OVERNIGHT-PLAN (shadow): ev:ev_charger:  fits — 8.0 kWh planned, est 2.70
-OVERNIGHT-PLAN (shadow): load:pump:      fits — 3.0 kWh planned, est 0.31
-OVERNIGHT-PLAN (shadow): load:heizband:  YIELDS 1.1 kWh — 2.0/3.1 kWh fits above the floor
+ENERGY-PLAN (shadow): battery carries home until 03:00 — the grid takes over from there
+ENERGY-PLAN (shadow): ev:ev_charger:  fits — 8.0 kWh planned, est 2.70
+ENERGY-PLAN (shadow): load:pump:      fits — 3.0 kWh planned, est 0.31
+ENERGY-PLAN (shadow): load:heizband:  YIELDS 1.1 kWh — 2.0/3.1 kWh fits above the floor
 ```
 
 **A yield is a report, not a decision.** The planner only ever moves *when*
@@ -326,7 +326,7 @@ advice is the first visible symptom.
   numbers — hover any row or the line for the full story, and the small
   book icons deep-link straight into this document.
 - **As an entity** — `sensor.sem_energy_plan` (diagnostic; renamed from
-  `sensor.sem_overnight_plan` when the horizon grew past the night — the
+  `sensor.sem_energy_plan` when the horizon grew past the night — the
   old entity is cleaned from the registry automatically on restart). Its state is
   the verdict word `fits` / `yields` / `idle` / `pending`; the plan itself
   rides as attributes (`demands`, `slots`, `blocks`, `takeover`,
@@ -340,12 +340,12 @@ advice is the first visible symptom.
   night the timeline alone is dropped — `timeline_omitted: true`, the card
   falls back to the demand list and says so. `diagnose` always has the full
   detail.
-- **Logs** — `OVERNIGHT-PLAN (shadow)` lines (`(active)` while actuation is
+- **Logs** — `ENERGY-PLAN (shadow)` lines (`(active)` while actuation is
   on): the summary at INFO, one line per allocation at DEBUG. Never silent:
   even "no overnight demands tonight" is logged, with the counts that
   explain it.
 - **On demand** — the `solar_energy_management.diagnose` service response
-  carries `overnight_plan_shadow`: the timestamp, fits/yields summary, the
+  carries `energy_plan_shadow`: the timestamp, fits/yields summary, the
   takeover hour, and every allocation line of the most recent plan.
 
 ## What accuracy depends on
@@ -363,7 +363,7 @@ The plan is only as good as its inputs — all of which SEM maintains anyway:
 
 Actuation does **not** add a control path — it feeds the plan's windows
 into the two signal families the reactive layer already consumes
-(`coordinator/overnight_actuation.py`):
+(`coordinator/energy_plan_actuation.py`):
 
 - **EV** — inside one of its planned blocks, the charger gets an amps
   *floor* derived from the block's planned power (threaded through the
@@ -386,7 +386,7 @@ guarantees stay senior even when covered: a forcing deadline or an
 unreachable floor is never gated, and a peak shed still wins over any
 planned window.
 
-Flip it with `switch.sem_overnight_actuation` (Config category on the SEM
+Flip it with `switch.sem_energy_plan_actuation` (Config category on the SEM
 device; persisted across restarts, default **on** since the one-gate build —
 see the next section). The card's chip, the sensor's `actuation` attribute
 and the log tag all reflect the live state.
@@ -452,7 +452,7 @@ The **Energy Plan** card (Control tab) is the one answer:
   answered as full, whatever the accounting says mid-charge. Both the
   demand list and the re-plan trigger ask the same accessor, so the night
   cannot flip between a plan with the car and one without it.
-- **The kill-switch** — `switch.sem_overnight_actuation` turns the plan's
+- **The kill-switch** — `switch.sem_energy_plan_actuation` turns the plan's
   authority off entirely; every device then runs on its reactive rules
   and the card says so. Every row flips to *actuation off* within one
   cycle: the chips are evaluated fresh on each publish through the same
@@ -515,12 +515,12 @@ tariff the rate is zero and the sun really is free.
 1. **Baseline** — nightly measurements of the unchanged reactive system:
    grid energy, cost, every floor met. *(done — the number to beat)*
 2. **Corpus** — the pure packing scenarios in
-   `tests/test_638_overnight_planner.py`. *(done)*
+   `tests/test_638_energy_planner.py`. *(done)*
 3. **Shadow** — the plan computed and logged next to reality
    every night, compared each morning. *(done — six findings fixed)*
 4. **Actuation** *(current)* — the plan's output feeds the *existing*
    signals (the EV's night amps, the loads' window gates), behind
-   `switch.sem_overnight_actuation`, on by default since the one-gate
+   `switch.sem_energy_plan_actuation`, on by default since the one-gate
    build (with the selectors retired, off would mean *no* cheap-window
    timing at all). The reconcilers do not change. Soaking: shadow-verify
    nights with the switch off, then flip it and compare the same nights

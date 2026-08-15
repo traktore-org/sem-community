@@ -145,7 +145,7 @@ def _public_functions() -> dict[str, str]:
 
     (#758) The scan above walks ``ClassDef`` bodies only, so a public
     function at module scope was invisible to it — which is how
-    ``overnight_planner.plan_overnight`` survived: a flat-slot adapter with
+    ``energy_planner.plan_overnight`` survived: a flat-slot adapter with
     no production caller and a large test corpus pointed straight at it,
     exactly the #653 fingerprint one indentation level out.
 

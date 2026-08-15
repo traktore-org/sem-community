@@ -75,7 +75,7 @@ def build_charger_view(
         target_soc: Per-charger SOC target, or None.
         deadline_amps: Pre-computed deadline floor amps (#246), or 0.
         plan: The planning layer's verdict for this charger this
-            cycle (#638) — a hold placed by the overnight planner (or
+            cycle (#638) — a hold placed by the energy planner (or
             the #247 tariff planner, which speaks through the same
             type). Defaults to no opinion, meaning "behave as though no
             planner exists".

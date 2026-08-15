@@ -239,7 +239,7 @@ class TestItOnlySuggests:
         import inspect
         from custom_components.solar_energy_management.coordinator \
             .coordinator import SEMCoordinator
-        src = inspect.getsource(SEMCoordinator._shadow_overnight_plan)
+        src = inspect.getsource(SEMCoordinator._shadow_energy_plan)
         assert "review_night" not in src and "review_demand" not in src
 
 
@@ -253,14 +253,14 @@ class TestTheUserCanReadIt:
     def test_every_code_has_a_key_in_every_language(self):
         data = json.loads((REPO / "dashboard" / "translations.json").read_text(
             encoding="utf-8"))
-        missing = [(lang, f"overnight_review_{c}")
+        missing = [(lang, f"energy_plan_review_{c}")
                    for lang in data for c in self.CODES
-                   if f"overnight_review_{c}" not in data[lang]]
+                   if f"energy_plan_review_{c}" not in data[lang]]
         assert not missing, f"untranslated review verdicts: {missing}"
 
     def test_the_codes_the_module_emits_are_exactly_the_translated_set(self):
         """The inverse guard. A code added to the module without a key would
-        render as ``overnight_review_whatever`` on somebody's dashboard."""
+        render as ``energy_plan_review_whatever`` on somebody's dashboard."""
         src = (REPO / "coordinator" / "demand_review.py").read_text(
             encoding="utf-8")
         emitted = set(re.findall(r'CODE_[A-Z_]+\s*=\s*"([a-z_]+)"', src))
@@ -272,15 +272,15 @@ class TestTheUserCanReadIt:
         js = (REPO / "dashboard" / "card" / "sem-localize.js").read_text(
             encoding="utf-8")
         for c in self.CODES:
-            assert f'"overnight_review_{c}"' in js, (
-                f"overnight_review_{c} missing from sem-localize.js — run "
+            assert f'"energy_plan_review_{c}"' in js, (
+                f"energy_plan_review_{c} missing from sem-localize.js — run "
                 f"scripts/regenerate_localize.py")
 
     def test_the_card_renders_the_review(self):
         card = (REPO / "dashboard" / "card" / "src" / "cards"
                 / "sem-energy-plan-card.js").read_text(encoding="utf-8")
         assert "review" in card
-        assert "overnight_review_" in card, (
+        assert "energy_plan_review_" in card, (
             "the card must translate the verdict codes, not print them")
 
     def test_the_sensor_publishes_it_beside_the_plan(self):

@@ -29,7 +29,7 @@ from __future__ import annotations
 import math
 from datetime import datetime, timedelta
 
-from .overnight_planner import LedgerSlot
+from .energy_planner import LedgerSlot
 
 # Below this computed surplus a "free window" is forecast noise, not a
 # plannable window — mirrors the delta-guard instinct on the EV side.

@@ -1283,9 +1283,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             return False
 
     if entry.version < 17:
-        # (#758) v1.8 turns the overnight plan into an ACTUATOR: its blocks
+        # (#758) v1.8 turns the energy plan into an ACTUATOR: its blocks
         # drive the EV charger, the battery and the cheap-hours loads. The
-        # kill switch is ``switch.sem_overnight_actuation``, and it defaults
+        # kill switch is ``switch.sem_energy_plan_actuation``, and it defaults
         # to on — correct for a fresh install, where the user chose the
         # feature, and wrong for an UPGRADE, where nobody chose anything.
         # RestoreEntity cannot help: the switch is new, so there is no prior
@@ -1299,9 +1299,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
         # a decision is worse than one that never ran.
         try:
             new_options = {**accumulated_options}
-            announce = "overnight_actuation" not in new_options
+            announce = "energy_plan_actuation" not in new_options
             if announce:
-                new_options["overnight_actuation"] = True
+                new_options["energy_plan_actuation"] = True
             hass.config_entries.async_update_entry(
                 entry, data={**accumulated_data}, options=new_options,
                 version=17, minor_version=1,
@@ -1326,29 +1326,66 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                     {
                         "title": "SEM now plans your night",
                         "message": (
-                            "This version lets the overnight plan drive the "
+                            "This version lets the energy plan drive the "
                             "hardware: your EV charger, battery and "
                             "cheap-hours devices now run in the windows the "
                             "plan picks, instead of only being advised.\n\n"
                             "It is **on**. To go back to the purely reactive "
                             "behaviour, turn off "
-                            "`switch.sem_overnight_actuation` — the plan "
+                            "`switch.sem_energy_plan_actuation` — the plan "
                             "stays visible on the Energy Plan card either "
                             "way.\n\n"
                             "[How to read tonight's plan]"
                             "(https://github.com/traktore-org/sem-community/"
-                            "blob/main/docs/OVERNIGHT_PLANNER.md)"
+                            "blob/main/docs/ENERGY_PLANNER.md)"
                         ),
-                        "notification_id": "sem_overnight_actuation_v18",
+                        "notification_id": "sem_energy_plan_actuation_v18",
                     },
                     blocking=False,
                 )
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning(
-                    "#758: overnight-actuation notice not delivered (%s) — "
+                    "#758: energy-plan actuation notice not delivered (%s) — "
                     "the option is written; the switch is "
-                    "switch.sem_overnight_actuation", e,
+                    "switch.sem_energy_plan_actuation", e,
                 )
+
+    if entry.version < 18:
+        # (#638) The planner was named for the night it started with, and it
+        # outgrew the name — it plans the day too. Renaming the code is free.
+        # Renaming a RECORDED DECISION is not: v17 wrote the actuation answer
+        # under ``overnight_actuation``, and a user who turned actuation off
+        # recorded their "no" there. Read only the new name and that "no"
+        # becomes silence — and silence means the default, which is ON. The
+        # rename would hand their hardware back to the planner.
+        #
+        # So carry the answer across, in both places ``_configured`` looks,
+        # and retire the old key: two names for one decision is the next bug.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            carried = False
+            for bag in (new_data, new_options):
+                if "overnight_actuation" in bag:
+                    bag["energy_plan_actuation"] = bag.pop("overnight_actuation")
+                    carried = True
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=18, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if carried:
+                _LOGGER.info(
+                    "#638: carried the actuation choice across the rename — "
+                    "overnight_actuation is now energy_plan_actuation "
+                    "(switch.sem_energy_plan_actuation)"
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v18 failed — keeping original "
+                "config: %s", entry.version, e,
+            )
+            return False
 
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
@@ -1516,6 +1553,34 @@ def build_discovered_charger_storage(
     )
 
 
+# (#638) The kill-switch's unique_id is ``sem_{key}``, so renaming the
+# planner mints a new identity. Left alone HA would register a SECOND
+# switch and strand the first as an unavailable orphan — the user would
+# see two kill-switches, one of them inert, and the history would stop at
+# the upgrade. Carry the registry entry instead.
+_ACTUATION_UID_WAS = "sem_overnight_actuation"
+_ACTUATION_UID_NOW = "sem_energy_plan_actuation"
+
+
+def _async_rename_actuation_switch(registry) -> None:
+    """Move the actuation switch's registry entry onto its new name."""
+    old = registry.async_get_entity_id("switch", DOMAIN, _ACTUATION_UID_WAS)
+    if not old:
+        return
+    changes = {"new_unique_id": _ACTUATION_UID_NOW}
+    # The entity_id only moves if it is still the one WE picked. A user who
+    # renamed the switch chose that name; carrying the identity keeps their
+    # entity alive, and renaming it anyway would break the automations the
+    # carry was for.
+    if old == f"switch.{_ACTUATION_UID_WAS}":
+        changes["new_entity_id"] = f"switch.{_ACTUATION_UID_NOW}"
+    _LOGGER.info(
+        "#638: carrying the actuation switch across the rename — %s → %s",
+        old, changes.get("new_entity_id", old),
+    )
+    registry.async_update_entity(old, **changes)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Set up Solar Energy Management from a config entry.
 
@@ -1608,6 +1673,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 registry.async_remove(ent.entity_id)
     except Exception as exc:  # noqa: BLE001
         _LOGGER.debug("Set-default button cleanup skipped: %s", exc)
+
+    # (#638) Carry the kill-switch across the planner's rename. Idempotent;
+    # only fires on installs that still hold the pre-rename registry entry.
+    try:
+        from homeassistant.helpers import entity_registry as er
+        _async_rename_actuation_switch(er.async_get(hass))
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.debug("Actuation switch rename skipped: %s", exc)
 
     # Merge entry.data and entry.options for complete configuration
     full_config = {**entry.data, **entry.options}
@@ -4729,10 +4802,10 @@ async def _async_register_phase_services(
         # (#638 G3) Tonight's shadow plan — the 22:00 answer, inspectable on
         # demand (journals rotate; this doesn't). None until the first
         # night-window trigger after startup.
-        shadow_plan = (getattr(coordinator, "_overnight_shadow_plan", None)
+        shadow_plan = (getattr(coordinator, "_energy_plan_shadow", None)
                        if coordinator else None)
         if shadow_plan is not None:
-            payload["overnight_plan_shadow"] = shadow_plan
+            payload["energy_plan_shadow"] = shadow_plan
 
         # Layered-trace health summary (1.7.5) — tiny, so EVERY Diagnose
         # button surfaces "is a control layer disagreeing right now?" at a

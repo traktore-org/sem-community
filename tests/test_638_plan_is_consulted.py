@@ -1,7 +1,7 @@
 """#638 — the plan must be part of the decision, not a note under the door.
 
-Live on PROD, 2026-08-06. The overnight planner reserved 22:00→22:18:52
-for the car (1.52 kWh at 4833 W) and published it: ``sensor.sem_overnight_plan``
+Live on PROD, 2026-08-06. The energy planner reserved 22:00→22:18:52
+for the car (1.52 kWh at 4833 W) and published it: ``sensor.sem_energy_plan``
 = ``fits``, ``actuation: true``, the block rendered on the card. The car
 charged 21:01→~21:30 at the Min floor instead and reported "Night mode -
 Target reached" at 22:37 — finished half an hour before the plan's window
@@ -95,7 +95,7 @@ class TestTheVerdictIsPartOfThePicture:
     def test_absence_is_the_default_and_means_no_opinion(self):
         """Fail-open, unchanged: no plan ⇒ behave exactly as before #638.
 
-        Every install without the overnight planner, and every cycle where
+        Every install without the energy planner, and every cycle where
         the plan is stale or the switch is off, lands here.
         """
         assert NO_OPINION.hold is False
@@ -166,7 +166,7 @@ class TestEveryNightModeHonoursAHold:
     @pytest.mark.parametrize("mode", NIGHT_MODES)
     def test_a_hold_stops_the_charge(self, mode):
         d = decide(_night_view(mode, plan=PlanVerdict(
-            hold=True, reason="joint overnight plan: block opens at 22:00")))
+            hold=True, reason="joint energy plan: block opens at 22:00")))
         assert d.intent is not ChargerIntent.CHARGE_AT_AMPS, (
             f"{mode} charged straight through the plan's hold — this is the "
             "PROD 2026-08-06 failure: the car finished before its own "
@@ -177,7 +177,7 @@ class TestEveryNightModeHonoursAHold:
     def test_the_reason_says_it_is_the_plan_holding(self, mode):
         """A hold the user can't attribute is a hold they'll switch off."""
         d = decide(_night_view(mode, plan=PlanVerdict(
-            hold=True, reason="joint overnight plan: block opens at 22:00")))
+            hold=True, reason="joint energy plan: block opens at 22:00")))
         assert "wait" in d.reason.lower() or "hold" in d.reason.lower()
 
     @pytest.mark.parametrize("mode", sorted(UNPLANNABLE))
@@ -260,15 +260,15 @@ class TestOnePlaceTranslatesTheNightPlan:
         """
         verdict = verdict_from_night_plan(SimpleNamespace(
             should_wait_for_cheap=True,
-            reason="joint overnight plan: outside the planned window"))
+            reason="joint energy plan: outside the planned window"))
         assert verdict.hold is True
-        assert verdict.reason == "joint overnight plan: outside the planned window"
+        assert verdict.reason == "joint energy plan: outside the planned window"
 
     def test_a_plan_that_says_go_is_not_a_hold(self):
         """In-window: the plan raised a floor, it did not ask anyone to wait."""
         verdict = verdict_from_night_plan(SimpleNamespace(
             should_wait_for_cheap=False,
-            reason="joint overnight plan: in planned window — floor 10A"))
+            reason="joint energy plan: in planned window — floor 10A"))
         assert verdict.hold is False
 
     def test_every_call_site_builds_its_verdict_through_the_factory(self):

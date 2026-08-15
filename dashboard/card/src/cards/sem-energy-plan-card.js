@@ -8,7 +8,7 @@
  *
  * SHADOW: the planner does not actuate. This card says what SEM WOULD do,
  * which is exactly why it exists — before #638 the only way to see a plan
- * was to grep the log for OVERNIGHT-PLAN or call the diagnose service.
+ * was to grep the log for ENERGY-PLAN or call the diagnose service.
  *
  * Self-hides while the verdict is ``pending`` (before the night window, or
  * while the world is still warming up) so it costs nothing during the day.
@@ -28,17 +28,17 @@ const DEFAULT_ENTITY = 'sensor.sem_energy_plan';
 // comfort banking teal (thermal mass as a battery — matches the goal
 // editor's comfort section colour).
 const KINDS = {
-    ev:      { icon: 'mdi:ev-station',   color: '#8DC892', label: 'overnight_kind_ev' },
-    load:    { icon: 'mdi:power-plug',   color: '#5BC8D8', label: 'overnight_kind_load' },
-    battery: { icon: 'mdi:home-battery', color: '#f06292', label: 'overnight_kind_battery' },
-    comfort: { icon: 'mdi:thermometer',  color: '#4db6ac', label: 'overnight_kind_comfort' },
+    ev:      { icon: 'mdi:ev-station',   color: '#8DC892', label: 'energy_plan_kind_ev' },
+    load:    { icon: 'mdi:power-plug',   color: '#5BC8D8', label: 'energy_plan_kind_load' },
+    battery: { icon: 'mdi:home-battery', color: '#f06292', label: 'energy_plan_kind_battery' },
+    comfort: { icon: 'mdi:thermometer',  color: '#4db6ac', label: 'energy_plan_kind_comfort' },
 };
 
 // Deep links into the planner docs (guarded by tests/test_618_docs_anchors.py
 // — the regex there matches these "docs:" literals, keep the shape).
 const DOC_LINKS = {
-    actuation: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#actuation-g4' },
-    arbitrage: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/OVERNIGHT_PLANNER.md#the-arbitrage-advisor' },
+    actuation: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/ENERGY_PLANNER.md#actuation-g4' },
+    arbitrage: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/ENERGY_PLANNER.md#the-arbitrage-advisor' },
 };
 
 const STATUS = {
@@ -85,7 +85,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                      // pending-face chip reads the switch directly (attrs
                      // are empty then) — its flips must re-render too, as
                      // must the window-open time the face displays.
-                     hass?.states['switch.sem_overnight_actuation']?.state,
+                     hass?.states['switch.sem_energy_plan_actuation']?.state,
                      hass?.states['sensor.sem_night_start_time']?.state,
                      hass?.language].join('|');
         const hasLocalize = typeof semLocalize === 'function';
@@ -128,16 +128,16 @@ class SEMEnergyPlanCard extends SEMLitBase {
     // jargon on a rendered surface.
     _covKey(reason) {
         if (!reason || reason === 'covered') return null;
-        if (reason.startsWith('verdict')) return 'overnight_cov_yields';
+        if (reason.startsWith('verdict')) return 'energy_plan_cov_yields';
         const m = {
-            'no plan': 'overnight_cov_no_plan',
-            'stale stamp': 'overnight_cov_stale',
-            'outside span': 'overnight_cov_outside',
-            'not in plan': 'overnight_cov_not_in_plan',
-            'actuation off': 'overnight_cov_actuation_off',
-            'nothing planned': 'overnight_cov_nothing_planned',
+            'no plan': 'energy_plan_cov_no_plan',
+            'stale stamp': 'energy_plan_cov_stale',
+            'outside span': 'energy_plan_cov_outside',
+            'not in plan': 'energy_plan_cov_not_in_plan',
+            'actuation off': 'energy_plan_cov_actuation_off',
+            'nothing planned': 'energy_plan_cov_nothing_planned',
         };
-        return m[reason] || 'overnight_cov_unreadable';
+        return m[reason] || 'energy_plan_cov_unreadable';
     }
 
     // (#638 C7) the reactive-fallback chip — the user-facing twin of the
@@ -147,25 +147,25 @@ class SEMEnergyPlanCard extends SEMLitBase {
         const key = this._covKey(reason);
         if (!key) return nothing;
         return html`<span class="chip chip-reactive"
-            title="${this._t('overnight_reactive_tip')} — ${this._t(key)}"
-            >${this._t('overnight_reactive')} · ${this._t(key)}</span>`;
+            title="${this._t('energy_plan_reactive_tip')} — ${this._t(key)}"
+            >${this._t('energy_plan_reactive')} · ${this._t(key)}</span>`;
     }
 
     // (#638 G4) chip renderer for a live state string.
     _liveChip(live) {
         if (!live) return nothing;
         if (live === 'now') {
-            return html`<span class="live now">▶ ${this._t('overnight_live_now')}</span>`;
+            return html`<span class="live now">▶ ${this._t('energy_plan_live_now')}</span>`;
         }
         if (live.startsWith('wait:')) {
             const t = this._hm(new Date(Number(live.slice(5))).toISOString());
             return html`<span class="live wait">${
-                this._format('overnight_live_wait', { time: t }) || t}</span>`;
+                this._format('energy_plan_live_wait', { time: t }) || t}</span>`;
         }
         if (live === 'done') {
-            return html`<span class="live done">${this._t('overnight_live_done')}</span>`;
+            return html`<span class="live done">${this._t('energy_plan_live_done')}</span>`;
         }
-        return html`<span class="live react">${this._t('overnight_live_reactive')}</span>`;
+        return html`<span class="live react">${this._t('energy_plan_live_reactive')}</span>`;
     }
 
     _hm(iso) {
@@ -210,8 +210,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
     // the note so the idle render (which has no footer) still explains itself.
     _modeChip(act) {
         return html`<span class="chip ${act ? 'chip-active' : ''}"
-            title="${this._t(act ? 'overnight_active_note' : 'overnight_shadow_note')}">${
-            this._t(act ? 'overnight_active' : 'overnight_shadow')}</span>`;
+            title="${this._t(act ? 'energy_plan_active_note' : 'energy_plan_shadow_note')}">${
+            this._t(act ? 'energy_plan_active' : 'energy_plan_shadow')}</span>`;
     }
 
     _docsLink(key = 'actuation') {
@@ -232,7 +232,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 @click=${() => { this._view = id; this.requestUpdate(); }}>
                 ${this._t(label)}</button>`;
         return html`<span class="vtoggle">
-            ${btn('today', 'overnight_today')}${btn('tomorrow', 'overnight_tomorrow')}
+            ${btn('today', 'energy_plan_today')}${btn('tomorrow', 'energy_plan_tomorrow')}
         </span>`;
     }
 
@@ -297,12 +297,12 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 <div class="wrap">
                     <div class="head">
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
-                        <span class="title">${this._t('overnight_plan_title')}</span>
+                        <span class="title">${this._t('energy_plan_title')}</span>
                         ${this._viewToggle(true)}
-                        <span class="chip" title="${this._t('overnight_provisional_tip')}">${this._t('overnight_provisional')}</span>
+                        <span class="chip" title="${this._t('energy_plan_provisional_tip')}">${this._t('energy_plan_provisional')}</span>
                         <span class="chip ${prelim ? '' : 'chip-active'}"
-                              title="${this._t(prelim ? 'overnight_prices_preliminary_tip' : 'overnight_prices_final_tip')}">
-                            ${this._t(prelim ? 'overnight_prices_preliminary' : 'overnight_prices_final')}</span>
+                              title="${this._t(prelim ? 'energy_plan_prices_preliminary_tip' : 'energy_plan_prices_final_tip')}">
+                            ${this._t(prelim ? 'energy_plan_prices_preliminary' : 'energy_plan_prices_final')}</span>
                         ${this._docsLink()}
                     </div>
                     <div class="strip ${hasStrip ? '' : 'nostrip'}">
@@ -317,10 +317,10 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             <div class="stat axis"></div>
                         ` : nothing}
                         ${curve.length > 1 ? html`
-                            <div class="lbl" title="${this._t('overnight_provisional_tip')}">
+                            <div class="lbl" title="${this._t('energy_plan_provisional_tip')}">
                                 <div class="lname">
                                     <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:13px;color:#4db6ac"></ha-icon>
-                                    <span class="name">${this._t('overnight_kind_battery')}</span>
+                                    <span class="name">${this._t('energy_plan_kind_battery')}</span>
                                 </div>
                             </div>
                             ${hasStrip ? html`
@@ -338,7 +338,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             const mine = blocksFor(a.kind, i);
                             const tip = [a.label,
                                 mine.map(b => `${this._hm(b.start)}–${this._hm(b.end)}`).join('\n') || null,
-                                this._t('overnight_provisional_tip')].filter(Boolean).join('\n');
+                                this._t('energy_plan_provisional_tip')].filter(Boolean).join('\n');
                             return html`
                                 <div class="lbl" title="${tip}">
                                     <div class="lname">
@@ -359,13 +359,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         })}
                     </div>
                     <div class="legend">
-                        <span class="key"><i class="sw tmw-sun-key"></i>${this._t('overnight_legend_surplus')}</span>
-                        <span class="key"><i class="sw cheapkey"></i>${this._t('overnight_legend_cheap')}</span>
-                        <span class="key"><i class="sw" style="background:#f06292"></i>${this._t('overnight_legend_battery_charge')}</span>
+                        <span class="key"><i class="sw tmw-sun-key"></i>${this._t('energy_plan_legend_surplus')}</span>
+                        <span class="key"><i class="sw cheapkey"></i>${this._t('energy_plan_legend_cheap')}</span>
+                        <span class="key"><i class="sw" style="background:#f06292"></i>${this._t('energy_plan_legend_battery_charge')}</span>
                     </div>
                     <div class="idle">
                         ☀ ${(t.forecast_kwh || 0).toFixed(1)} kWh ·
-                        ${this._format('overnight_stamps_at', { time: this._hm(t.stamps_at) })}
+                        ${this._format('energy_plan_stamps_at', { time: this._hm(t.stamps_at) })}
                     </div>
                 </div>
             </ha-card>
@@ -381,7 +381,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
         if (!rv) return nothing;
         const rows = [];
         for (const d of (rv.demands || [])) {
-            const text = this._format('overnight_review_' + d.code, {
+            const text = this._format('energy_plan_review_' + d.code, {
                 nights: d.nights,
                 asked: (d.asked_kwh || 0).toFixed(1),
                 suggested: (d.suggested_kwh == null
@@ -391,14 +391,14 @@ class SEMEnergyPlanCard extends SEMLitBase {
             if (text) rows.push({ d, text, k: KINDS[d.kind] || KINDS.load });
         }
         const sc = rv.self_consumption;
-        const scText = sc ? this._format('overnight_review_' + sc.code, {
+        const scText = sc ? this._format('energy_plan_review_' + sc.code, {
             actual: Math.round((sc.actual_share || 0) * 100),
             predicted: Math.round((sc.predicted_share || 0) * 100),
         }) : null;
         if (!rows.length && !scText) return nothing;
         return html`
             <div class="review">
-                <div class="rev-h">${this._t('overnight_review_title')}</div>
+                <div class="rev-h">${this._t('energy_plan_review_title')}</div>
                 ${rows.map(r => html`
                     <div class="rev-row">
                         <ha-icon icon="${r.k.icon}"
@@ -418,21 +418,21 @@ class SEMEnergyPlanCard extends SEMLitBase {
         `;
     }
 
-    _renderIdle(act, textKey = 'overnight_idle', suffix = '', hasTomorrow = false,
+    _renderIdle(act, textKey = 'energy_plan_idle', suffix = '', hasTomorrow = false,
                 why = '', whyCodes = [], notSched = []) {
         // (#638 C7) translated sentences from the machine codes; the raw
         // diagnostic prose survives only as the hover tooltip. Rendering
         // it verbatim read as an unfinished placeholder (Guido, first
         // live look at the one-gate card).
         const sentences = (whyCodes || [])
-            .map(c => this._t('overnight_whyc_' + c))
+            .map(c => this._t('energy_plan_whyc_' + c))
             .filter(Boolean).join(' · ');
         return html`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
-                        <span class="title">${this._t('overnight_plan_title')}</span>
+                        <span class="title">${this._t('energy_plan_title')}</span>
                         ${this._viewToggle(hasTomorrow)}
                         ${this._modeChip(act)}
                         ${this._docsLink()}
@@ -443,13 +443,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         : (why ? html`<div class="why" title="${why}">${why}</div>` : nothing)}
                     ${(notSched || []).length ? html`
                         <div class="notsched">
-                            <div class="notsched-h">${this._t('overnight_not_scheduled')}</div>
+                            <div class="notsched-h">${this._t('energy_plan_not_scheduled')}</div>
                             ${notSched.map(r => html`
                                 <div class="notsched-row">
                                     <ha-icon icon="mdi:sleep"
                                              style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
                                     <span class="nsname">${(r.id || '').split(':').pop()}</span>
-                                    <span class="nswhy">${this._t('overnight_why_' + r.why)}</span>
+                                    <span class="nswhy">${this._t('energy_plan_why_' + r.why)}</span>
                                 </div>
                             `)}
                         </div>
@@ -477,7 +477,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
         // ``pending`` (empty attrs). Fall back to the switch entity itself
         // so the chip never claims "shadow" while actuation is armed.
         const act = a.actuation === true || (a.actuation === undefined
-            && this._hass.states['switch.sem_overnight_actuation']?.state === 'on');
+            && this._hass.states['switch.sem_energy_plan_actuation']?.state === 'on');
         // ``pending`` used to self-hide entirely — fine as a System-tab
         // diagnostic, wrong on the Control tab: after a daytime restart
         // (the stash is in-memory, task #14) the card vanished until the
@@ -491,13 +491,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
         if (verdict === 'pending') {
             const ns = this._hass.states['sensor.sem_night_start_time']?.state;
             const when = (ns && /^\d{1,2}:\d{2}$/.test(ns)) ? ` (~${ns})` : '';
-            return this._renderIdle(act, 'overnight_pending', when, !!a.tomorrow);
+            return this._renderIdle(act, 'energy_plan_pending', when, !!a.tomorrow);
         }
         const demands = Array.isArray(a.demands) ? a.demands : [];
         const slots = Array.isArray(a.slots) ? a.slots : [];
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
         if (verdict === 'idle' || !demands.length) {
-            return this._renderIdle(act, 'overnight_idle', '', !!a.tomorrow,
+            return this._renderIdle(act, 'energy_plan_idle', '', !!a.tomorrow,
                 a.why || '', a.why_codes || [], a.not_scheduled || []);
         }
 
@@ -566,8 +566,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
         // the takeover reads as icon + hour there and carries the full
         // localized sentence as its tooltip.
         const takeoverFull = a.takeover
-            ? this._format('overnight_takeover', { time: this._hm(a.takeover) })
-            : this._t('overnight_all_night');
+            ? this._format('energy_plan_takeover', { time: this._hm(a.takeover) })
+            : this._t('energy_plan_all_night');
         const takeoverCell = a.takeover
             ? html`
                 <ha-icon icon="mdi:transmission-tower"
@@ -577,13 +577,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
             : html`
                 <ha-icon icon="mdi:home-battery-outline"
                          style="--mdc-icon-size:12px;color:#4db6ac"></ha-icon>
-                <span>${this._t('overnight_all_night_short')}</span>
+                <span>${this._t('energy_plan_all_night_short')}</span>
               `;
 
         const currency = semGetCurrency(this._hass);
         const cost = Number(a.total_cost);
         const costText = Number.isFinite(cost)
-            ? `${this._t('overnight_est')} ${cost.toFixed(2)} ${currency}`
+            ? `${this._t('energy_plan_est')} ${cost.toFixed(2)} ${currency}`
             : null;
         const fits = a.fits !== false;
 
@@ -597,7 +597,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 <div class="wrap">
                     <div class="head">
                         <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:#8353d1"></ha-icon>
-                        <span class="title">${this._t('overnight_plan_title')}</span>
+                        <span class="title">${this._t('energy_plan_title')}</span>
                         ${this._viewToggle(!!a.tomorrow)}
                         ${this._modeChip(act)}
                         ${this._docsLink()}
@@ -609,7 +609,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             icon="${fits ? 'mdi:check-circle' : 'mdi:alert-circle-outline'}"
                             style="--mdc-icon-size:15px;color:${fits ? '#8DC892' : '#f06292'}"></ha-icon>
                         <span class="vtext">
-                            ${fits ? this._t('overnight_fits') : this._t('overnight_yields')}
+                            ${fits ? this._t('energy_plan_fits') : this._t('energy_plan_yields')}
                         </span>
                         ${costText ? html`<span class="cost">${costText}</span>` : nothing}
                     </div>
@@ -630,7 +630,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                     const price = (s.price === null || s.price === undefined)
                                         ? '—' : `${s.price} ${currency}`;
                                     const tipS = `${this._hm(s.start)}–${this._hm(s.end)} · ${price}`
-                                        + (s.cheap ? ` · ${this._t('overnight_legend_cheap')}` : '');
+                                        + (s.cheap ? ` · ${this._t('energy_plan_legend_cheap')}` : '');
                                     return html`<div class="slotcell" title="${tipS}"
                                         style="left:${sl}%;width:${sw}%"></div>`;
                                 })}
@@ -640,7 +640,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
 
                         <div class="lbl">
                             <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:13px;color:#4db6ac"></ha-icon>
-                            <span class="name">${this._t('overnight_home')}</span>
+                            <span class="name">${this._t('energy_plan_home')}</span>
                         </div>
                         ${hasStrip ? html`
                             <div class="track">
@@ -673,12 +673,12 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                 // the numbers (the docs link in the head has
                                 // the full story under #comfort-banking).
                                 d.kind === 'comfort'
-                                    ? this._t('overnight_comfort_tip') : null,
+                                    ? this._t('energy_plan_comfort_tip') : null,
                                 mine.map(b => `${this._hm(b.start)}–${this._hm(b.end)} · ${
                                     (b.power_w / 1000).toFixed(1)} kW${
                                     b.price != null ? ` · ${b.price}` : ''}`).join('\n') || null,
                                 `${(d.planned_kwh || 0).toFixed(1)} / ${(d.needed_kwh || 0).toFixed(1)} kWh`
-                                    + ` · ${this._t('overnight_est')} ${(d.est_cost || 0).toFixed(2)} ${currency}`,
+                                    + ` · ${this._t('energy_plan_est')} ${(d.est_cost || 0).toFixed(2)} ${currency}`,
                                 d.note || null,
                             ].filter(Boolean).join('\n');
                             // (#638 G4) live chip while actuation is on.
@@ -688,7 +688,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             // the generic fallback line otherwise. An empty
                             // row used to be the only signal.
                             const reason = d.note || (d.status !== 'fits'
-                                ? this._format('overnight_yield_reason', {
+                                ? this._format('energy_plan_yield_reason', {
                                     planned: (d.planned_kwh || 0).toFixed(1),
                                     needed: (d.needed_kwh || 0).toFixed(1),
                                   })
@@ -731,46 +731,46 @@ class SEMEnergyPlanCard extends SEMLitBase {
 
                     ${hasStrip ? html`
                         <div class="legend">
-                            <span class="key"><i class="sw batt"></i>${this._t('overnight_legend_battery')}</span>
-                            <span class="key"><i class="sw grid"></i>${this._t('overnight_legend_grid')}</span>
-                            <span class="key"><i class="sw cheapkey"></i>${this._t('overnight_legend_cheap')}</span>
+                            <span class="key"><i class="sw batt"></i>${this._t('energy_plan_legend_battery')}</span>
+                            <span class="key"><i class="sw grid"></i>${this._t('energy_plan_legend_grid')}</span>
+                            <span class="key"><i class="sw cheapkey"></i>${this._t('energy_plan_legend_cheap')}</span>
                         </div>
                     ` : html`
                         <div class="warn">
                             <ha-icon icon="mdi:chart-timeline-variant"
                                      style="--mdc-icon-size:13px;color:#ff9800"></ha-icon>
-                            <span>${this._t('overnight_strip_omitted')}</span>
+                            <span>${this._t('energy_plan_strip_omitted')}</span>
                         </div>
                     `}
 
                     ${a.battery_fleet_partial ? html`
                         <div class="warn">
                             <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:13px;color:#ff9800"></ha-icon>
-                            <span>${this._t('overnight_fleet_partial')}</span>
+                            <span>${this._t('energy_plan_fleet_partial')}</span>
                         </div>
                     ` : nothing}
 
                     ${(a.not_scheduled || []).length ? html`
                         <div class="notsched">
-                            <div class="notsched-h">${this._t('overnight_not_scheduled')}</div>
+                            <div class="notsched-h">${this._t('energy_plan_not_scheduled')}</div>
                             ${a.not_scheduled.map(r => html`
                                 <div class="notsched-row">
                                     <ha-icon icon="mdi:sleep"
                                              style="--mdc-icon-size:12px;color:var(--secondary-text-color,#8a93a5)"></ha-icon>
                                     <span class="nsname">${(r.id || '').split(':').pop()}</span>
-                                    <span class="nswhy">${this._t('overnight_why_' + r.why)}</span>
+                                    <span class="nswhy">${this._t('energy_plan_why_' + r.why)}</span>
                                 </div>
                             `)}
                         </div>
                     ` : nothing}
 
                     ${a.arbitrage ? html`
-                        <div class="arb" title="${this._t('overnight_arbitrage_tip')}">
+                        <div class="arb" title="${this._t('energy_plan_arbitrage_tip')}">
                             <ha-icon icon="mdi:swap-vertical-bold"
                                      style="--mdc-icon-size:13px;color:${
                                          a.arbitrage.opportunity ? '#8DC892'
                                          : 'var(--secondary-text-color,#8a93a5)'}"></ha-icon>
-                            <span class="arb-lbl">${this._t('overnight_arbitrage')}</span>
+                            <span class="arb-lbl">${this._t('energy_plan_arbitrage')}</span>
                             <span class="arb-txt">${a.arbitrage.reason || ''}</span>
                             ${this._docsLink('arbitrage')}
                         </div>
@@ -779,7 +779,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                     ${this._renderReview()}
 
                     <div class="foot">${this._t(act
-                        ? 'overnight_active_note' : 'overnight_shadow_note')}</div>
+                        ? 'energy_plan_active_note' : 'energy_plan_shadow_note')}</div>
                 </div>
             </ha-card>
         `;

@@ -1,7 +1,7 @@
 """#638 G3c — the shadow plan's UI surface: sensor + ledger-strip card.
 
 The planner has been correct and invisible: the only way to read a night's
-plan was to grep the log for ``OVERNIGHT-PLAN`` or call the ``diagnose``
+plan was to grep the log for ``ENERGY-PLAN`` or call the ``diagnose``
 service. This module pins the contract that makes it visible:
 
 * the stash carries a STRUCTURED payload (``demands``/``slots``/``blocks``)
@@ -26,8 +26,8 @@ from custom_components.solar_energy_management.coordinator.coordinator import (
 from custom_components.solar_energy_management.coordinator import ev_night_targets
 from custom_components.solar_energy_management.sensor import (
     _PLAN_ATTR_BUDGET_BYTES,
-    _overnight_plan_attrs,
-    _overnight_plan_state,
+    _energy_plan_attrs,
+    _energy_plan_state,
 )
 
 from .test_638_shadow_mode import (  # noqa: F401 — fixtures come along
@@ -42,22 +42,22 @@ CARD_SRC = REPO / "dashboard" / "card" / "src" / "cards" / "sem-energy-plan-card
 # than scraped from the source: a typo'd key in the card would otherwise
 # "verify" itself.
 CARD_KEYS = [
-    "overnight_plan_title", "overnight_shadow", "overnight_fits",
-    "overnight_yields", "overnight_idle", "overnight_takeover",
-    "overnight_all_night", "overnight_all_night_short", "overnight_home",
-    "overnight_est",
-    "overnight_legend_battery", "overnight_legend_grid",
-    "overnight_legend_cheap", "overnight_fleet_partial",
-    "overnight_shadow_note", "overnight_kind_ev", "overnight_kind_load",
-    "overnight_today", "overnight_tomorrow", "overnight_prices_final",
-    "overnight_prices_preliminary", "overnight_prices_final_tip",
-    "overnight_prices_preliminary_tip", "overnight_legend_surplus",
-    "overnight_stamps_at", "overnight_tomorrow_asks",
-    "overnight_provisional", "overnight_provisional_tip",
-    "overnight_legend_battery_charge",
-    "overnight_kind_battery", "overnight_kind_comfort",
-    "overnight_comfort_tip", "overnight_arbitrage", "overnight_arbitrage_tip",
-    "overnight_strip_omitted",
+    "energy_plan_title", "energy_plan_shadow", "energy_plan_fits",
+    "energy_plan_yields", "energy_plan_idle", "energy_plan_takeover",
+    "energy_plan_all_night", "energy_plan_all_night_short", "energy_plan_home",
+    "energy_plan_est",
+    "energy_plan_legend_battery", "energy_plan_legend_grid",
+    "energy_plan_legend_cheap", "energy_plan_fleet_partial",
+    "energy_plan_shadow_note", "energy_plan_kind_ev", "energy_plan_kind_load",
+    "energy_plan_today", "energy_plan_tomorrow", "energy_plan_prices_final",
+    "energy_plan_prices_preliminary", "energy_plan_prices_final_tip",
+    "energy_plan_prices_preliminary_tip", "energy_plan_legend_surplus",
+    "energy_plan_stamps_at", "energy_plan_tomorrow_asks",
+    "energy_plan_provisional", "energy_plan_provisional_tip",
+    "energy_plan_legend_battery_charge",
+    "energy_plan_kind_battery", "energy_plan_kind_comfort",
+    "energy_plan_comfort_tip", "energy_plan_arbitrage", "energy_plan_arbitrage_tip",
+    "energy_plan_strip_omitted",
 ]
 
 
@@ -67,9 +67,9 @@ CARD_KEYS = [
 
 def test_plan_carries_structured_rows_beside_the_prose(freeze_targets):
     fake = _fake_self(devices=[_fake_load()])
-    SEMCoordinator._shadow_overnight_plan(
+    SEMCoordinator._shadow_energy_plan(
         fake, _scheduler(), energy=MagicMock(), power=_power())
-    plan = fake._overnight_shadow_plan
+    plan = fake._energy_plan_shadow
 
     # The prose the logs and the soak notes quote is UNCHANGED.
     assert plan["summary"] and plan["allocations"]
@@ -104,9 +104,9 @@ def test_takeover_is_published_for_the_battery_row(freeze_targets):
     re-derivable per slot from ``home_grid_w`` — the card shades from the
     latter, so the two must agree."""
     fake = _fake_self(devices=[_fake_load()])
-    SEMCoordinator._shadow_overnight_plan(
+    SEMCoordinator._shadow_energy_plan(
         fake, _scheduler(), energy=MagicMock(), power=_power())
-    plan = fake._overnight_shadow_plan
+    plan = fake._energy_plan_shadow
     first_grid = next((s["start"] for s in plan["slots"]
                        if s["home_grid_w"] > 0), None)
     assert plan["takeover"] == first_grid
@@ -119,9 +119,9 @@ def test_no_demand_night_has_the_same_shape(freeze_targets, monkeypatch):
     monkeypatch.setattr(ev_night_targets, "build_night_target_map",
                         lambda coord, energy: {})
     fake = _fake_self(devices=[_idle_load()])
-    SEMCoordinator._shadow_overnight_plan(
+    SEMCoordinator._shadow_energy_plan(
         fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
-    plan = fake._overnight_shadow_plan
+    plan = fake._energy_plan_shadow
     assert isinstance(plan, dict)
     assert plan["demands"] == [] and plan["slots"] == [] and plan["blocks"] == []
     assert plan["summary"], "the quiet night still says so out loud"
@@ -141,16 +141,16 @@ def test_no_demand_night_has_the_same_shape(freeze_targets, monkeypatch):
     ({"demands": [{"id": "ev:x"}]}, "yields"),
 ])
 def test_verdict_state_mapping(plan, expected):
-    assert _overnight_plan_state(plan) == expected
+    assert _energy_plan_state(plan) == expected
 
 
 def test_state_never_exceeds_has_limit(freeze_targets):
     """A dict in the state slot stringifies past 255 chars and HA REJECTS the
     write — the entity would go unavailable rather than merely look wrong."""
     fake = _fake_self(devices=[_fake_load()])
-    SEMCoordinator._shadow_overnight_plan(
+    SEMCoordinator._shadow_energy_plan(
         fake, _scheduler(), energy=MagicMock(), power=_power())
-    state = _overnight_plan_state(fake._overnight_shadow_plan)
+    state = _energy_plan_state(fake._energy_plan_shadow)
     assert isinstance(state, str) and 0 < len(state) <= 255
 
 
@@ -180,7 +180,7 @@ def _synthetic_plan(*, slots, demands, blocks_per_demand, minutes=15):
         "fits": False,
         "total_cost": 4.56,
         "takeover": (t + 6 * step).isoformat(),
-        "summary": ["OVERNIGHT-PLAN (shadow): " + "x" * 90] * 8,
+        "summary": ["ENERGY-PLAN (shadow): " + "x" * 90] * 8,
         "allocations": ["ev:charger 22:00-23:00 4140 W @ 0.2345"] * 40,
         "demands": [{
             "id": f"load:device_{d}", "kind": "load",
@@ -212,7 +212,7 @@ def _size(attrs):
 
 
 def test_projection_leaves_the_prose_and_the_trajectory_behind():
-    attrs = _overnight_plan_attrs(
+    attrs = _energy_plan_attrs(
         _synthetic_plan(slots=8, demands=2, blocks_per_demand=2))
     assert "summary" not in attrs and "allocations" not in attrs
     for s in attrs["slots"]:
@@ -225,7 +225,7 @@ def test_projection_leaves_the_prose_and_the_trajectory_behind():
 def test_the_projection_carries_the_arbitrage_advice():
     """(#638, the last string) The advisor's verdict must reach the
     entity — the morning plan-vs-Sankey audit reads it there."""
-    attrs = _overnight_plan_attrs(
+    attrs = _energy_plan_attrs(
         {"arbitrage": {"opportunity": False, "reason": "no priced market"},
          "demands": [], "slots": [], "blocks": []})
     assert attrs["arbitrage"]["reason"] == "no priced market"
@@ -235,7 +235,7 @@ def test_the_idle_answer_carries_its_why():
     """(Guido, 08-08: uncapping a device made the plan 'disappear') — the
     quiet answer was CORRECT but unexplained on the card: the why lived
     only in diagnose. The projection now carries it."""
-    attrs = _overnight_plan_attrs(
+    attrs = _energy_plan_attrs(
         {"why": "ev_targets={}, loads_eligible=0", "demands": [],
          "slots": [], "blocks": []})
     assert attrs["why"] == "ev_targets={}, loads_eligible=0"
@@ -245,7 +245,7 @@ def test_the_projection_carries_the_replan_cause():
     """Night-3 finding 3: a re-stamped night must be distinguishable from
     the first answer on the entity, not only in container logs (which
     rotate too fast to serve as evidence)."""
-    attrs = _overnight_plan_attrs(
+    attrs = _energy_plan_attrs(
         {"replan_cause": "ask changed", "demands": [], "slots": [],
          "blocks": []})
     assert attrs["replan_cause"] == "ask changed"
@@ -258,7 +258,7 @@ def test_contiguous_allocations_merge_into_one_run():
     Note the fixture is SLOT-major (see ``_synthetic_plan``): merging has to
     group by demand first. A version that only compared each block with its
     predecessor merged nothing live and still passed a demand-major test."""
-    attrs = _overnight_plan_attrs(
+    attrs = _energy_plan_attrs(
         _synthetic_plan(slots=16, demands=2, blocks_per_demand=4))
     assert len(attrs["blocks"]) == 2, "4 back-to-back slots are one bar"
     for b in attrs["blocks"]:
@@ -270,7 +270,7 @@ def test_contiguous_allocations_merge_into_one_run():
 
 
 def test_merge_handles_the_shape_ha_test_actually_published():
-    """Verbatim from ``sensor.sem_overnight_plan`` on HA-TEST, 2026-08-04
+    """Verbatim from ``sensor.sem_energy_plan`` on HA-TEST, 2026-08-04
     04:58 — two demands over two contiguous hours. The first merge shipped
     green against a demand-major fixture and collapsed NOTHING here."""
     live = [
@@ -283,7 +283,7 @@ def test_merge_handles_the_shape_ha_test_actually_published():
         {"id": "load:sim_pool_pump", "start": "2026-08-04T06:00:00+02:00",
          "end": "2026-08-04T06:01:00+02:00", "power_w": 1500.0, "price": 0.3387},
     ]
-    merged = _overnight_plan_attrs({"demands": [1], "blocks": live})["blocks"]
+    merged = _energy_plan_attrs({"demands": [1], "blocks": live})["blocks"]
     assert len(merged) == 2
     assert {b["id"] for b in merged} == {"ev:keba_fa87f74cd3",
                                          "load:sim_pool_pump"}
@@ -295,7 +295,7 @@ def test_merge_handles_the_shape_ha_test_actually_published():
 def test_a_gap_between_allocations_is_not_merged_away():
     plan = _synthetic_plan(slots=16, demands=1, blocks_per_demand=4)
     del plan["blocks"][2]  # the pump pauses for a quarter-hour
-    blocks = _overnight_plan_attrs(plan)["blocks"]
+    blocks = _energy_plan_attrs(plan)["blocks"]
     assert len(blocks) == 2, "an anti-cycle pause must stay visible"
 
 
@@ -303,7 +303,7 @@ def test_a_real_fifteen_minute_night_keeps_its_timeline():
     """The case that made this budget necessary: a 16-hour winter night on a
     quarter-hour market, six demands. Before merging this was 18 KB and the
     card lost its chart entirely."""
-    attrs = _overnight_plan_attrs(_synthetic_plan(
+    attrs = _energy_plan_attrs(_synthetic_plan(
         slots=64, demands=6, blocks_per_demand=10))
     assert not attrs.get("timeline_omitted"), (
         f"a normal 15-min night lost its chart ({_size(attrs)} bytes)")
@@ -319,7 +319,7 @@ def test_an_oversized_night_drops_the_chart_not_the_answer():
     for i, b in enumerate(plan["blocks"]):
         b["power_w"] = 100.0 + i
     plan["demands"] = plan["demands"] * 4
-    attrs = _overnight_plan_attrs(plan)
+    attrs = _energy_plan_attrs(plan)
     assert attrs["timeline_omitted"] is True
     assert attrs["slots"] == [] and attrs["blocks"] == []
     # The demands ARE the answer — they survive, and so does the verdict.
@@ -328,8 +328,8 @@ def test_an_oversized_night_drops_the_chart_not_the_answer():
 
 
 def test_projection_of_a_missing_plan_is_empty():
-    assert _overnight_plan_attrs(None) == {}
-    assert _overnight_plan_attrs("not-a-dict") == {}
+    assert _energy_plan_attrs(None) == {}
+    assert _energy_plan_attrs("not-a-dict") == {}
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +387,7 @@ def test_card_asks_only_for_keys_that_exist():
     happily bless.
 
     Both patterns anchor on what CLOSES the literal — a comma or the call's
-    own paren. A key built by concatenation (``'overnight_review_' + code``)
+    own paren. A key built by concatenation (``'energy_plan_review_' + code``)
     is a prefix, not a key, and belongs to whichever test owns that code
     list (#755: ``test_755_demand_review.py``); matching it here would
     report the prefix as a missing translation forever.

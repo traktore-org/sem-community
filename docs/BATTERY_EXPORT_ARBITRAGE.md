@@ -2,7 +2,7 @@
 
 > ## 🔒 Wired, tested, and OFF by default (v2.0)
 >
-> The selling machinery is fully built into the overnight plan (the same
+> The selling machinery is fully built into the energy plan (the same
 > one-gate that schedules EV and load windows) and covered by a dedicated
 > scenario test matrix — but **every default keeps it dormant** (#533): the
 > global toggle ships off, and the UI opt-ins are still held back until the
@@ -71,7 +71,7 @@ What the battery's state of charge does across that same day:
 
 Three things the pictures show:
 
-- **The sell only happens inside a planned block.** The overnight plan packs
+- **The sell only happens inside a planned block.** The energy plan packs
   the sell window from the price curve the evening before, next to the EV and
   load windows, so everything competes for the same night under the same
   peak-load cap. No block on the plan — no selling, whatever the live price
@@ -89,7 +89,7 @@ Three things the pictures show:
 
 | Question | Who answers it | What it checks |
 |---|---|---|
-| **WHEN?** | The stamped overnight plan | Is a sell block open *right now*? (Stale or missing plan = closed.) |
+| **WHEN?** | The stamped energy plan | Is a sell block open *right now*? (Stale or missing plan = closed.) |
 | **WHETHER?** | Live economics, re-checked every cycle | Does the export price *still* beat recharge cost + wear? A price that moved kills the sale mid-block. |
 | **MAY?** | Your settings | Global toggle, this battery's mode (`Self-consumption` never sells), both reserve floors, and the night-actuation kill-switch. |
 
@@ -109,7 +109,7 @@ It is the mirror of the scheduler's charge-on-cheap decision, using the **same
 economics**, so it can never sell at a loss. Every cycle, while arbitrage is on
 and no charge is planned, SEM sells only when **all** of these hold:
 
-1. **A sell block on the overnight plan is open right now** — the plan owns
+1. **A sell block on the energy plan is open right now** — the plan owns
    the WHEN (see the pictures above).
 2. **Export price ≥ your “min export price to sell”** — worth cycling the
    battery for.

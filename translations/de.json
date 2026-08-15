@@ -1267,8 +1267,8 @@
       "vacation_mode": {
         "name": "Urlaubsmodus"
       },
-      "overnight_actuation": {
-        "name": "Nachtplan-Ausführung"
+      "energy_plan_actuation": {
+        "name": "Ausführung des Energieplans"
       }
     },
     "number": {

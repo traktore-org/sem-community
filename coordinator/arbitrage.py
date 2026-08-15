@@ -24,7 +24,7 @@ Honesty rules, each one a test:
 SHADOW-ONLY: nothing here actuates. The battery command wire stays in
 its #533 deactivated state; the live proof of the mode is post-1.8 on
 Guido's explicit call. Pure module — no clock reads, no I/O, no Home
-Assistant imports (house contract, same as overnight_planner).
+Assistant imports (house contract, same as energy_planner).
 """
 from __future__ import annotations
 

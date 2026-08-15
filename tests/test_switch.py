@@ -31,11 +31,11 @@ class TestSEMSwitches:
         gone (the named ``charge_mode`` selector carries the same
         intent); ``observer_mode`` remains, joined by ``vacation_mode``
         (#594 — suppress comfort heating while away) and
-        ``overnight_actuation`` (#638 G4 — feed the joint overnight
+        ``energy_plan_actuation`` (#638 G4 — feed the joint overnight
         plan into the night signals; default off = pure shadow)."""
         keys = [s.key for s in SWITCH_TYPES]
         assert keys == ["observer_mode", "vacation_mode",
-                        "overnight_actuation"]
+                        "energy_plan_actuation"]
 
     # ``test_night_charging_default_off`` and
     # ``test_night_charging_existing_state_preserved`` removed in
@@ -352,7 +352,7 @@ class TestExplicitConfigBeatsGhostRestore777:
         """Same precedence for the siblings: an old install's
         kill-switch-off must not silently disarm a fresh install whose
         data records the default ON."""
-        sw = _sw("overnight_actuation", data={"overnight_actuation": True})
+        sw = _sw("energy_plan_actuation", data={"energy_plan_actuation": True})
         sw._apply_restored_state(_ghost("off"))
         assert sw._is_on is True
 
@@ -374,4 +374,4 @@ class TestExplicitConfigBeatsGhostRestore777:
         from custom_components.solar_energy_management import config_flow
         src = inspect.getsource(config_flow)
         assert '_data["vacation_mode"]' in src
-        assert '_data["overnight_actuation"]' in src
+        assert '_data["energy_plan_actuation"]' in src

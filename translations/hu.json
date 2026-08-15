@@ -1267,8 +1267,8 @@
       "vacation_mode": {
         "name": "Vakáció üzemmód"
       },
-      "overnight_actuation": {
-        "name": "Éjszakai terv végrehajtása"
+      "energy_plan_actuation": {
+        "name": "Energiaterv végrehajtása"
       }
     },
     "number": {

@@ -1267,8 +1267,8 @@
       "vacation_mode": {
         "name": "Ferietilstand"
       },
-      "overnight_actuation": {
-        "name": "Natplan-udførelse"
+      "energy_plan_actuation": {
+        "name": "Energiplan-udførelse"
       }
     },
     "number": {

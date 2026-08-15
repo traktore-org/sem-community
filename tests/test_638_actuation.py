@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     UNCOVERED,
     PlanGate,
     ev_overlay,
@@ -323,7 +323,7 @@ class TestAuthorityBeginsAtTheStamp:
         }
 
     def test_the_pre_first_slot_sliver_is_covered_and_vetoes(self):
-        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
             plan_gate,
         )
         now = datetime.fromisoformat("2026-08-05T22:00:57+02:00")
@@ -335,7 +335,7 @@ class TestAuthorityBeginsAtTheStamp:
         )
 
     def test_inside_the_block_still_opens(self):
-        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
             plan_gate,
         )
         now = datetime.fromisoformat("2026-08-05T23:30:00+02:00")
@@ -346,7 +346,7 @@ class TestAuthorityBeginsAtTheStamp:
         """No retroactive authority: a cycle evaluated before computed_at
         (clock skew, replayed stash) must not be gated by a plan from its
         own future."""
-        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
             plan_gate, UNCOVERED,
         )
         now = datetime.fromisoformat("2026-08-05T21:30:00+02:00")
@@ -388,7 +388,7 @@ class TestStage3LoadVerdict:
     raised while the remaining blocks can still deliver the deficit."""
 
     def test_uncovered_is_no_opinion(self):
-        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
             load_verdict,
         )
         from custom_components.solar_energy_management.coordinator.plan_verdict import (
@@ -397,7 +397,7 @@ class TestStage3LoadVerdict:
         assert load_verdict(UNCOVERED, deficit_kwh=1.0) == NO_OPINION
 
     def test_in_block_is_go(self):
-        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
             load_verdict,
         )
         g = PlanGate(covered=True, in_block=True, block_power_w=1000.0,
@@ -408,7 +408,7 @@ class TestStage3LoadVerdict:
     def test_out_of_block_holds_with_reason_and_until(self):
         g = PlanGate(covered=True, in_block=False, remaining_kwh=2.0,
                      next_block_start=NOW + timedelta(hours=1))
-        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
             load_verdict,
         )
         v = load_verdict(g, deficit_kwh=1.0)
@@ -419,7 +419,7 @@ class TestStage3LoadVerdict:
     def test_a_hold_that_cannot_deliver_fails_open(self):
         """The blocks left can no longer cover the deficit — holding would
         strand the runtime guarantee. Same rule as the EV overlay."""
-        from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
             load_verdict,
         )
         from custom_components.solar_energy_management.coordinator.plan_verdict import (
@@ -453,7 +453,7 @@ class TestStage3IntentConsultsTheVerdict:
         return dev
 
     def test_a_hold_gates_the_tier2_start(self):
-        v = PlanVerdict(hold=True, reason="joint overnight plan: outside")
+        v = PlanVerdict(hold=True, reason="joint energy plan: outside")
         intent = compute_load_intent(
             self._load(), remaining_surplus_w=0.0, is_night=True,
             soc_above_reserve=True, plan=v)
@@ -463,7 +463,7 @@ class TestStage3IntentConsultsTheVerdict:
     def test_a_hold_stops_a_running_paid_load(self):
         """The window closed while the load ran — the plan reclaims the
         energy for the planned block instead of letting the run bleed on."""
-        v = PlanVerdict(hold=True, reason="joint overnight plan: outside")
+        v = PlanVerdict(hold=True, reason="joint energy plan: outside")
         intent = compute_load_intent(
             self._load(active=True), remaining_surplus_w=0.0, is_night=True,
             soc_above_reserve=True, plan=v)
@@ -480,7 +480,7 @@ class TestStage3IntentConsultsTheVerdict:
 
     def test_a_hold_never_touches_a_solar_run(self):
         """Free surplus is never plan-gated — the sun is spending itself."""
-        v = PlanVerdict(hold=True, reason="joint overnight plan: outside")
+        v = PlanVerdict(hold=True, reason="joint energy plan: outside")
         dev = self._load(tier2=False, deficit=False)
         intent = compute_load_intent(
             dev, remaining_surplus_w=1500.0, is_night=False,

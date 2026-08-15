@@ -119,7 +119,7 @@ The cheapest-hours behaviour (built into the **Solar + cheapest hours** mode, an
 
 | Time | Charging Mode | What tariff_optimized does |
 |---|---|---|
-| Night | tariff-aware modes | Waits for the [overnight plan's](OVERNIGHT_PLANNER.md) charge block — the cheapest hours that also fit under your peak limit and priority order (subject to Min reachability) |
+| Night | tariff-aware modes | Waits for the [energy plan's](ENERGY_PLANNER.md) charge block — the cheapest hours that also fit under your peak limit and priority order (subject to Min reachability) |
 | Daytime | Min + Solar | **Drops the Min grid guarantee on EXPENSIVE / VERY_EXPENSIVE hours.** Falls back to surplus-only; resumes on price drop or sufficient solar |
 | Daytime | Solar only | No effect (never uses grid anyway) |
 | Anytime | Always (max) / Off | No effect (explicit override) |
@@ -140,11 +140,11 @@ Every 10 s during the night window, for each charger:
 
 3. Compute effective_rate = Max current            if forcing deadline (deadline earlier than window end)
                             peak_managed_amps      otherwise   ← peak-aware (#274/C1)
-   where peak_managed_amps = (peak_limit − avg_overnight_home_W) / watts_per_amp.
+   where peak_managed_amps = (peak_limit − avg_energy_plan_home_W) / watts_per_amp.
 
 4. Reachable? = (remaining_kWh / effective_rate) ≤ hours_left.
 
-5. Ask the overnight plan (#638) whether this charger is COVERED tonight:
+5. Ask the energy plan (#638) whether this charger is COVERED tonight:
      a. Covered and inside its block?   → charge.
      b. Covered and outside its block?  → WAIT (state = tariff_waiting_for_cheap,
                                           card shows the block's start time).

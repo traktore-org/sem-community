@@ -31,7 +31,7 @@ def _doc_slugs(path: Path) -> set:
 
 
 # (#638 G4) every card that carries a docs deep-link is guarded, not just
-# the config card — the overnight plan card links its actuation and
+# the config card — the energy plan card links its actuation and
 # arbitrage anchors, the load-priority goal editor its comfort anchor.
 _EXTRA_CARDS = [
     _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-energy-plan-card.js",

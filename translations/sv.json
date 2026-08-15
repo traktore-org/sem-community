@@ -1267,8 +1267,8 @@
       "vacation_mode": {
         "name": "Semesterläge"
       },
-      "overnight_actuation": {
-        "name": "Nattplansutförande"
+      "energy_plan_actuation": {
+        "name": "Energiplansutförande"
       }
     },
     "number": {

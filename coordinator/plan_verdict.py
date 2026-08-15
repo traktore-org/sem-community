@@ -7,7 +7,7 @@ across a horizon it can see ahead: tonight's price slots, tomorrow's
 forecast. This type is what the second says to the first.
 
 Day/night agnostic on purpose. Night is where planning is currently
-mandatory — the price blocks are known hours ahead and the overnight
+mandatory — the price blocks are known hours ahead and the energy
 planner places each device's energy in them. A daytime planner (forecast
 windows, surplus placement) says the same thing in the same shape: *not
 now, later, and here is why*. It must populate THIS field rather than
@@ -43,7 +43,7 @@ class PlanVerdict:
     hold: bool = False
     # True = the plan placed this device's energy in a later window and
     # has already PROVEN the later windows can still deliver what is owed
-    # (see overnight_actuation.ev_overlay). It is never a bare preference:
+    # (see energy_plan_actuation.ev_overlay). It is never a bare preference:
     # a verdict that cannot guarantee the need is met must not hold.
 
     until: Optional[datetime] = None

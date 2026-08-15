@@ -63,7 +63,7 @@ class TestPlanAttributeBudget:
 
     def test_the_budget_counts_the_extras(self) -> None:
         from custom_components.solar_energy_management.sensor import (
-            _overnight_plan_attrs, _PLAN_ATTR_BUDGET_BYTES,
+            _energy_plan_attrs, _PLAN_ATTR_BUDGET_BYTES,
         )
         base = datetime(2026, 8, 13, 22, 0)
         plan = {
@@ -89,7 +89,7 @@ class TestPlanAttributeBudget:
              "nights": 12, "asked_kwh": 4.2, "suggested_kwh": 3.9,
              "last_kwh": 4.0} for i in range(40)
         ]}
-        attrs = _overnight_plan_attrs(plan, extra={"review": review})
+        attrs = _energy_plan_attrs(plan, extra={"review": review})
         assert "review" in attrs
         size = len(json.dumps(attrs, default=str))
         assert size <= _PLAN_ATTR_BUDGET_BYTES, (
@@ -98,7 +98,7 @@ class TestPlanAttributeBudget:
 
     def test_a_small_plan_keeps_its_timeline(self) -> None:
         from custom_components.solar_energy_management.sensor import (
-            _overnight_plan_attrs,
+            _energy_plan_attrs,
         )
         base = datetime(2026, 8, 13, 22, 0)
         plan = {
@@ -111,7 +111,7 @@ class TestPlanAttributeBudget:
                         "end": (base + timedelta(hours=1)).isoformat(),
                         "power_w": 3000.0}],
         }
-        attrs = _overnight_plan_attrs(plan, extra={"review": {"demands": []}})
+        attrs = _energy_plan_attrs(plan, extra={"review": {"demands": []}})
         assert attrs["slots"]
         assert not attrs.get("timeline_omitted")
 
@@ -125,9 +125,9 @@ class TestNoOrphanPlannerEntry:
         1e9 kWh battery, so the corpus that used it was proving things about
         a night that cannot happen."""
         from custom_components.solar_energy_management.coordinator import (
-            overnight_planner,
+            energy_planner,
         )
-        assert not hasattr(overnight_planner, "plan_overnight"), (
+        assert not hasattr(energy_planner, "plan_overnight"), (
             "plan_overnight has no production caller — the corpus must use "
             "build_night_ledger + pack_night, the pair the coordinator calls"
         )
@@ -166,7 +166,7 @@ class TestArbitrageHonoursTheKillSwitch:
         assert idx > 0
         # The 400 characters before the call must contain the gate.
         window = src[max(0, idx - 400):idx]
-        assert "_overnight_actuation" in window, (
+        assert "_energy_plan_actuation" in window, (
             "arbitrage_sell_gate runs without checking the actuation kill "
             "switch — its sibling gates (plan_gate, load windows) both check"
         )
@@ -178,7 +178,7 @@ class TestUpgradeConsent:
 
     @pytest.mark.asyncio
     async def test_migration_writes_the_option_and_tells_the_user(self) -> None:
-        """``overnight_actuation`` is a brand-new entity on this branch, so
+        """``energy_plan_actuation`` is a brand-new entity on this branch, so
         RestoreEntity has nothing to restore and every UPGRADING install
         falls to the default — night hardware control, unannounced.
 
@@ -203,8 +203,11 @@ class TestUpgradeConsent:
         entry.options = {}
 
         assert await async_migrate_entry(hass, entry) is True
-        assert updated.get("version") == 17
-        assert updated["options"]["overnight_actuation"] is True
+        # 18, not 17: the planner rename (#638) appended a migration step,
+        # and the chain reports its terminal version. The consent contract
+        # being pinned here — option recorded, user told — is unchanged.
+        assert updated.get("version") == 18
+        assert updated["options"]["energy_plan_actuation"] is True
 
         titles = [
             c.args[2].get("title", "")
@@ -234,10 +237,10 @@ class TestUpgradeConsent:
         entry.version = 16
         entry.minor_version = 1
         entry.data = {}
-        entry.options = {"overnight_actuation": False}
+        entry.options = {"energy_plan_actuation": False}
 
         assert await async_migrate_entry(hass, entry) is True
-        assert updated["options"]["overnight_actuation"] is False
+        assert updated["options"]["energy_plan_actuation"] is False
         titles = [
             c.args[2].get("title", "")
             for c in hass.services.async_call.await_args_list

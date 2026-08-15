@@ -1267,8 +1267,8 @@
       "vacation_mode": {
         "name": "Režim dovolené"
       },
-      "overnight_actuation": {
-        "name": "Provádění nočního plánu"
+      "energy_plan_actuation": {
+        "name": "Provádění energetického plánu"
       }
     },
     "number": {

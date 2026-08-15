@@ -20,11 +20,11 @@ All SEM documentation lives in this directory. Start here.
 | [EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md) | How the five charge modes decide — the canonical EV reference |
 | [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md) | Multiple chargers, inverters and batteries |
 | [LOAD_PRIORITY.md](LOAD_PRIORITY.md) | The single device-priority list (loads, chargers, battery) |
-| [OVERNIGHT_PLANNER.md](OVERNIGHT_PLANNER.md) | The joint overnight plan: one schedule for EV + loads + battery (shadow) |
+| [ENERGY_PLANNER.md](ENERGY_PLANNER.md) | The joint energy plan: one schedule for EV + loads + comfort + battery, day and night |
 | [HARDWARE_SENSORS.md](HARDWARE_SENSORS.md) | Wiring sensors: power, energy counters, per-brand notes |
 | [PV_STRINGS.md](PV_STRINGS.md) | Per-string PV monitoring |
 | [GRID_VPP.md](GRID_VPP.md) | Grid/VPP event dispatch (observer-first) |
-| [BATTERY_EXPORT_ARBITRAGE.md](BATTERY_EXPORT_ARBITRAGE.md) | Selling stored energy on price peaks (wired through the overnight plan; off by default) |
+| [BATTERY_EXPORT_ARBITRAGE.md](BATTERY_EXPORT_ARBITRAGE.md) | Selling stored energy on price peaks (wired through the energy plan; off by default) |
 | [KEBA_FAILSAFE.md](KEBA_FAILSAFE.md) | KEBA-specific failsafe behavior |
 
 ## Developer / internals

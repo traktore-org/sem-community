@@ -100,7 +100,7 @@ class TestTheN1Shape:
         await sc.update(
             0.0, **N1_KW,
             plan_windows={"sim_heizband": PlanVerdict(
-                in_block=True, reason="joint overnight plan: in planned block")},
+                in_block=True, reason="joint energy plan: in planned block")},
         )
         d.activate.assert_called()
 
@@ -124,7 +124,7 @@ class TestTheN1Shape:
         await sc.update(
             0.0, **N1_KW,
             plan_windows={"sim_heizband": PlanVerdict(
-                hold=True, reason="joint overnight plan: blocks later")},
+                hold=True, reason="joint energy plan: blocks later")},
         )
         d.activate.assert_not_called()
 

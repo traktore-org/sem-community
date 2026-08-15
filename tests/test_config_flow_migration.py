@@ -424,7 +424,7 @@ async def test_v15_already_current_is_noop(hass) -> None:
     field is retired).
 
     (#758) "Untouched" now has exactly one exception, and it is the point of
-    the v17 hop: ``overnight_actuation`` is written down. Nothing is
+    the v17 hop: ``energy_plan_actuation`` is written down. Nothing is
     reinterpreted — the value is the same default the switch would have
     picked — but an upgrading install ends with a recorded decision instead
     of an implied one.
@@ -448,7 +448,7 @@ async def test_v15_already_current_is_noop(hass) -> None:
     updated = hass.config_entries.async_get_entry(entry.entry_id)
     assert updated.version == CURRENT
     assert updated.data == payload_data
-    assert updated.options == {**payload_options, "overnight_actuation": True}
+    assert updated.options == {**payload_options, "energy_plan_actuation": True}
 
 
 @pytest.mark.asyncio
@@ -547,7 +547,7 @@ async def test_v15_to_v16_idempotent_without_legacy_flags(hass) -> None:
     updated = hass.config_entries.async_get_entry(entry.entry_id)
     assert updated.version == CURRENT
     assert updated.data == payload_data
-    assert updated.options == {**payload_options, "overnight_actuation": True}
+    assert updated.options == {**payload_options, "energy_plan_actuation": True}
 
 
 @pytest.mark.asyncio

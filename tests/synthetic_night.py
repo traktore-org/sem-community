@@ -1,6 +1,6 @@
 """A synthetic flat-price night — a TEST fixture, not a shipping API.
 
-This adapter used to live in ``coordinator/overnight_planner.py`` as
+This adapter used to live in ``coordinator/energy_planner.py`` as
 ``plan_overnight``, where it had no production caller: the coordinator
 builds a real ``LedgerSlot`` list and calls ``build_night_ledger`` +
 ``pack_night`` directly. Two corpora imported the adapter instead, so a
@@ -34,7 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from custom_components.solar_energy_management.coordinator.overnight_planner import (
+from custom_components.solar_energy_management.coordinator.energy_planner import (
     LedgerSlot, build_night_ledger, pack_night,
 )
 

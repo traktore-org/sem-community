@@ -1,4 +1,4 @@
-"""#638 G2 — the pure-function corpus for the overnight joint packer.
+"""#638 G2 — the pure-function corpus for the joint energy packer.
 
 Each scenario is one of the issue's named packing cases: tight window,
 competing cheapest slot, unreachable floor → priority yield — plus the
@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from custom_components.solar_energy_management.coordinator.overnight_planner import (
-    Allocation, Demand, OvernightPlan,
+from custom_components.solar_energy_management.coordinator.energy_planner import (
+    Allocation, Demand, EnergyPlan,
 )
 # (#758) The flat-slot night is a fixture, not a shipping entry point — see
 # synthetic_night.py for exactly which four things it pretends about a night.
@@ -269,7 +269,7 @@ class TestEnsembleScenario:
 # The Night Ledger (spec: 2026-07-28-overnight-flow-plan-design.md)
 # ---------------------------------------------------------------------------
 
-from custom_components.solar_energy_management.coordinator.overnight_planner import (  # noqa: E402
+from custom_components.solar_energy_management.coordinator.energy_planner import (  # noqa: E402
     LedgerSlot, build_night_ledger, pack_night,
 )
 

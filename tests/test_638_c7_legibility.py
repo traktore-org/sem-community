@@ -38,9 +38,9 @@ class TestNotScheduledIsStructured:
     def test_a_mode_opt_out_lands_with_its_why(self, freeze_targets):
         fake = _fake_self(devices=[_fake_load()])
         fake._mode_allows_night_charging = lambda cfg: False
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=_power())
-        plan = fake._overnight_shadow_plan
+        plan = fake._energy_plan_shadow
         rows = plan.get("not_scheduled")
         assert rows, "the opted-out charger must appear structurally"
         assert {"id": "ev:ev_charger", "why": "mode"} in rows
@@ -49,29 +49,29 @@ class TestNotScheduledIsStructured:
         fake = _fake_self(devices=[_fake_load()])
         power = _power()
         power.ev_connected_per_charger = {"ev_charger": False}
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=power)
-        rows = fake._overnight_shadow_plan.get("not_scheduled")
+        rows = fake._energy_plan_shadow.get("not_scheduled")
         assert {"id": "ev:ev_charger", "why": "disconnected"} in rows
 
     def test_a_planned_night_has_an_empty_list_not_a_missing_key(
             self, freeze_targets):
         fake = _fake_self(devices=[_fake_load()])
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=_power())
-        assert fake._overnight_shadow_plan.get("not_scheduled") == []
+        assert fake._energy_plan_shadow.get("not_scheduled") == []
 
 
 @pytest.mark.unit
 class TestCoverageReachesTheCard:
     def test_the_sensor_attrs_carry_the_coverage_map(self):
         from custom_components.solar_energy_management.sensor import (
-            _overnight_plan_attrs,
+            _energy_plan_attrs,
         )
         plan = {"computed_at": "2026-08-11T21:00:00+00:00",
                 "coverage": {"ev:keba": "covered",
                              "load:heizband": "actuation off"}}
-        attrs = _overnight_plan_attrs(plan)
+        attrs = _energy_plan_attrs(plan)
         assert attrs["coverage"] == {"ev:keba": "covered",
                                      "load:heizband": "actuation off"}
 
@@ -119,7 +119,7 @@ class TestCoverageViewIsUserShaped:
 
     ``_plan_coverage_seen`` is the transition log's memory: a demand is
     written there only when somebody ASKS its gate. Loads are asked from
-    ``_overnight_load_windows``, which returns early when actuation is off
+    ``_energy_plan_load_windows``, which returns early when actuation is off
     or nothing is stamped — so replaying the memory as a live view showed
     yesterday's answer. Live on .175 15.08: with the kill-switch off the
     EV row correctly read ``actuation off`` while ``load:sim_pool_pump``
@@ -130,16 +130,16 @@ class TestCoverageViewIsUserShaped:
     def test_the_kill_switch_un_covers_every_remembered_row(self):
         fake = _coord(
             _plan_coverage_seen={"ev:keba": (True, ""), "load:pump": (True, "")},
-            _overnight_actuation=False,
-            _overnight_shadow_plan=_live_plan())
+            _energy_plan_actuation=False,
+            _energy_plan_shadow=_live_plan())
         assert SEMCoordinator._plan_coverage_view(fake) == {
             "ev:keba": "actuation off", "load:pump": "actuation off"}
 
     def test_a_covered_demand_still_reads_covered(self):
         fake = _coord(
             _plan_coverage_seen={"load:pump": (False, "no plan")},
-            _overnight_actuation=True,
-            _overnight_shadow_plan=_live_plan())
+            _energy_plan_actuation=True,
+            _energy_plan_shadow=_live_plan())
         assert SEMCoordinator._plan_coverage_view(fake) == {
             "load:pump": "covered"}
 
@@ -148,8 +148,8 @@ class TestCoverageViewIsUserShaped:
         that demand's gate was not asked this cycle."""
         fake = _coord(
             _plan_coverage_seen={"load:pump": (True, "")},
-            _overnight_actuation=True,
-            _overnight_shadow_plan=_live_plan(status="yields"))
+            _energy_plan_actuation=True,
+            _energy_plan_shadow=_live_plan(status="yields"))
         assert SEMCoordinator._plan_coverage_view(fake) == {
             "load:pump": "verdict yields"}
 
@@ -174,7 +174,7 @@ class TestActuationDefaultsOn:
     def test_the_coordinator_default_is_on(self):
         import inspect
         src = inspect.getsource(SEMCoordinator.__init__)
-        assert 'config.get("overnight_actuation", True)' in src
+        assert 'config.get("energy_plan_actuation", True)' in src
 
     def test_the_switch_seed_default_is_on(self):
         # (#777) The seed moved from a literal ``options.get`` into the
@@ -183,7 +183,7 @@ class TestActuationDefaultsOn:
         from custom_components.solar_energy_management.switch import (
             SEMSolarSwitch,
         )
-        assert SEMSolarSwitch._PERSISTED_DEFAULTS["overnight_actuation"] is True
+        assert SEMSolarSwitch._PERSISTED_DEFAULTS["energy_plan_actuation"] is True
 
 
 @pytest.mark.unit
@@ -201,10 +201,10 @@ class TestTheQuietFaceSpeaksInSentences:
                             lambda coord, energy: {"ev_charger": 0.0})
         from .test_638_shadow_mode import _idle_load
         fake = _fake_self(devices=[_idle_load()])
-        ok = SEMCoordinator._shadow_overnight_plan(
+        ok = SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
         assert ok is True
-        plan = fake._overnight_shadow_plan
+        plan = fake._energy_plan_shadow
         assert plan["demands"] == []
         assert plan["why_codes"] == [
             "ev_target_met", "no_load_needs_night", "battery_no_deficit"]
@@ -223,9 +223,9 @@ class TestTheQuietFaceSpeaksInSentences:
         fake = _fake_self(devices=[_idle_load()])
         power = _power()
         power.ev_connected_per_charger = {"ev_charger": False}
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(), power=power)
-        plan = fake._overnight_shadow_plan
+        plan = fake._energy_plan_shadow
         assert {"id": "ev:ev_charger", "why": "disconnected"} \
             in plan["not_scheduled"]
         # The EV code must NOT claim "target met" — the car is absent.
@@ -257,9 +257,9 @@ class TestEveryLeftOutLoadIsNamed:
 
     def _rows(self, dev, freeze_targets):
         fake = _fake_self(devices=[dev])
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=_power())
-        return fake._overnight_shadow_plan.get("not_scheduled") or []
+        return fake._energy_plan_shadow.get("not_scheduled") or []
 
     def test_a_device_whose_mode_excludes_surplus_says_so(self, freeze_targets):
         from custom_components.solar_energy_management.devices.base import (
@@ -299,9 +299,9 @@ class TestEveryLeftOutLoadIsNamed:
         monkeypatch.setattr(ev_night_targets, "build_night_target_map",
                             lambda coord, energy: {"ev_charger": 0.0})
         fake = _fake_self(devices=[_load(has_runtime_deficit=False)])
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
-        plan = fake._overnight_shadow_plan
+        plan = fake._energy_plan_shadow
         assert plan["demands"] == []
         assert {"id": "load:pump", "why": "no_runtime_need"} \
             in plan["not_scheduled"]
@@ -323,11 +323,11 @@ class TestEveryLeftOutLoadIsNamed:
             "the load whys moved — this pin is reading the wrong lines")
         card = (root / "dashboard" / "card" / "src" / "cards"
                 / "sem-energy-plan-card.js").read_text()
-        assert "'overnight_why_' + r.why" in card
+        assert "'energy_plan_why_' + r.why" in card
         langs = json.loads(
             (root / "dashboard" / "translations.json").read_text())
         for code in sorted(codes):
-            key = f"overnight_why_{code}"
+            key = f"energy_plan_why_{code}"
             missing = [lg for lg, t in langs.items() if not t.get(key)]
             assert not missing, f"{key} missing in {missing}"
 
@@ -360,7 +360,7 @@ class TestTheQuietPlanIsNotUnreadable:
 
     def test_the_quiet_plan_names_itself(self):
         from custom_components.solar_energy_management.coordinator \
-            .overnight_actuation import plan_gate
+            .energy_plan_actuation import plan_gate
         gate = plan_gate(self._quiet(), "battery", self.NOW)
         # Still uncovered — an empty plan has no say over anything.
         assert gate.covered is False
@@ -371,7 +371,7 @@ class TestTheQuietPlanIsNotUnreadable:
         plan that packed demands but has no readable slots is genuinely
         broken and must keep saying so."""
         from custom_components.solar_energy_management.coordinator \
-            .overnight_actuation import plan_gate
+            .energy_plan_actuation import plan_gate
         broken = self._quiet()
         broken["demands"] = [{"id": "battery", "status": "fits"}]
         gate = plan_gate(broken, "battery", self.NOW)
@@ -386,7 +386,7 @@ class TestTheQuietPlanIsNotUnreadable:
         import pathlib
         import re
         root = pathlib.Path(__file__).resolve().parent.parent
-        src = (root / "coordinator" / "overnight_actuation.py").read_text()
+        src = (root / "coordinator" / "energy_plan_actuation.py").read_text()
         reasons = set(re.findall(r'PlanGate\(reason=[\'"]([^\'"{]+)[\'"]', src))
         reasons.add("actuation off")  # the coordinator's own kill-switch reason
         assert "nothing planned" in reasons
@@ -394,7 +394,7 @@ class TestTheQuietPlanIsNotUnreadable:
         card = (root / "dashboard" / "card" / "src" / "cards"
                 / "sem-energy-plan-card.js").read_text()
         block = card.split("_covKey(reason)", 1)[1].split("}", 1)[0]
-        mapped = dict(re.findall(r"'([^']+)':\s*'(overnight_cov_[a-z_]+)'",
+        mapped = dict(re.findall(r"'([^']+)':\s*'(energy_plan_cov_[a-z_]+)'",
                                  block))
 
         unmapped = {r for r in reasons

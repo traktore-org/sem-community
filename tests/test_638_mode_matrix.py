@@ -36,7 +36,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
     ChargerIntent,
     FleetContext,
 )
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     plan_gate,
 )
 from custom_components.solar_energy_management.coordinator.plan_verdict import (
@@ -46,7 +46,7 @@ from custom_components.solar_energy_management.coordinator.plan_verdict import (
 from .test_decide import _view
 
 
-_HOLD = PlanVerdict(hold=True, reason="joint overnight plan: outside window")
+_HOLD = PlanVerdict(hold=True, reason="joint energy plan: outside window")
 
 
 @pytest.mark.unit
@@ -184,5 +184,5 @@ class TestTheGateAlreadySpansTheDay:
         from custom_components.solar_energy_management.coordinator.coordinator import (
             SEMCoordinator,
         )
-        src = inspect.getsource(SEMCoordinator._overnight_load_windows)
+        src = inspect.getsource(SEMCoordinator._energy_plan_load_windows)
         assert "is_night" not in src

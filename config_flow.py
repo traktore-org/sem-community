@@ -193,10 +193,10 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     ``initial_current`` (decouples from the misleading "night"
     #     prefix — the value is the session-start ramp current, applied
     #     whenever a session begins). Display: "Vehicle Start Amps".
-    # v17 (#758): write ``overnight_actuation`` down explicitly on upgrade
+    # v17 (#758): write ``energy_plan_actuation`` down explicitly on upgrade
     #     and announce it once. The v1.8 plan drives hardware; the default
     #     is on, and a default nobody was told about is not consent.
-    VERSION = 17
+    VERSION = 18
 
     @staticmethod
     @callback
@@ -279,7 +279,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # speak for a fresh one. Only true legacy upgrades (no key
             # anywhere) keep the restore-state fallback.
             self._data["vacation_mode"] = False
-            self._data["overnight_actuation"] = True
+            self._data["energy_plan_actuation"] = True
             return await self.async_step_hardware()
 
         # Show Energy Dashboard summary — list every sensor SEM picked up so the

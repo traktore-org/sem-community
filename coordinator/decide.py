@@ -565,7 +565,7 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
     # its two siblings, which is how PROD came to finish a charge on
     # 2026-08-06 half an hour before its own planned window opened.
     #
-    # Safe to obey unconditionally: ``overnight_actuation.ev_overlay``
+    # Safe to obey unconditionally: ``energy_plan_actuation.ev_overlay``
     # only raises ``hold`` after PROVING the remaining blocks can still
     # deliver what is owed, and stands down entirely for a forcing
     # deadline or an unreachable floor. A hold is never a mere preference.

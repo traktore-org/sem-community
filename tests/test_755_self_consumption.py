@@ -30,7 +30,7 @@ import pytest
 from custom_components.solar_energy_management.coordinator.day_ledger import (
     build_day_slots,
 )
-from custom_components.solar_energy_management.coordinator.overnight_planner import (
+from custom_components.solar_energy_management.coordinator.energy_planner import (
     Demand,
     LedgerSlot,
     build_night_ledger,
@@ -196,7 +196,7 @@ class TestTheCoordinatorStatesAndMeasuresIt:
         from custom_components.solar_energy_management.coordinator \
             .coordinator import SEMCoordinator
 
-        src = inspect.getsource(SEMCoordinator._shadow_overnight_plan)
+        src = inspect.getsource(SEMCoordinator._shadow_energy_plan)
         assert "export_rate=" in src, (
             "build_day_slots must be given the feed-in rate, else every "
             "surplus slot prices at 0 and the sun wins by fiat again")
@@ -210,9 +210,9 @@ class TestTheCoordinatorStatesAndMeasuresIt:
             .coordinator import SEMCoordinator
 
         fake = _fake_self(devices=[_fake_load()])
-        SEMCoordinator._shadow_overnight_plan(
+        SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=_power())
-        sc = fake._overnight_shadow_plan["self_consumption"]
+        sc = fake._energy_plan_shadow["self_consumption"]
         assert set(sc) == {"solar_kwh", "self_consumed_kwh", "exported_kwh",
                            "from_plan_kwh", "share"}
 

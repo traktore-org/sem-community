@@ -548,7 +548,7 @@ class TestSolarPlusCheapMode:
         ``_tariff_wait`` key in the config mapping; the behaviour pinned
         here is unchanged. The reason no longer hard-codes "cheaper"
         because two planners raise this hold — the #247 tariff planner
-        waiting on price, and the #638 overnight planner waiting on its
+        waiting on price, and the #638 energy planner waiting on its
         placed window — so wording that names only price would be wrong
         half the time. What is pinned instead is stronger: the planner's
         own words reach the user.

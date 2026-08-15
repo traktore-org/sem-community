@@ -20,7 +20,7 @@ from custom_components.solar_energy_management.coordinator.day_ledger import (
     build_day_slots,
     expected_solar_kwh_between,
 )
-from custom_components.solar_energy_management.coordinator.overnight_planner import (
+from custom_components.solar_energy_management.coordinator.energy_planner import (
     Demand,
     build_night_ledger,
     pack_night,

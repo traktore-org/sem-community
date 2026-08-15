@@ -1267,8 +1267,8 @@
       "vacation_mode": {
         "name": "Feriemodus"
       },
-      "overnight_actuation": {
-        "name": "Nattplan-utførelse"
+      "energy_plan_actuation": {
+        "name": "Energiplan-utførelse"
       }
     },
     "number": {

@@ -209,7 +209,7 @@ class TestTheCycleConfirmsBeforeItDecides:
         confirm = src.index("_confirm_ev_connection(")
         assert confirm > src.index("read_power()"), \
             "the confirmation filters the cycle's own reading"
-        assert confirm < src.index("_overnight_plan_tick("), \
+        assert confirm < src.index("_energy_plan_tick("), \
             "the plan tick (step 4.4) must see the confirmed answer"
         assert confirm < src.index("_update_session_tracking("), \
             "session tracking (step 4.5) must see the confirmed answer"

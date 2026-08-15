@@ -274,7 +274,7 @@ the fold from the display to the data layer and stopped there, because `LoadMana
 fold at all. So the duplicate stayed registered as an independent surplus device: the daytime surplus
 loop could still reach the charger's own stop switch behind the EV controller — the very hazard the
 fix announced closed — and the card showed nothing, because the display fold hid the row it could not
-remove. That roster is also what the #638 overnight planner packs (`get_devices_sorted()`), so a
+remove. That roster is also what the #638 energy planner packs (`get_devices_sorted()`), so a
 duplicate carrying a minimum-runtime goal could enter the night ledger twice. **The tell:** a fix
 phrased as "display layer vs data layer" — a two-term framing for a fan-out. Ask instead: *how many
 rosters are built from this source, and does the rule run in each?* Count the writers, not the layers.

@@ -69,7 +69,7 @@ class TestBothCallersReadTheSameNumber:
         from custom_components.solar_energy_management.coordinator.coordinator import (
             SEMCoordinator,
         )
-        src = inspect.getsource(SEMCoordinator._shadow_overnight_plan)
+        src = inspect.getsource(SEMCoordinator._shadow_energy_plan)
         assert "_planning_peak_w(" in src, (
             "the night-ledger build must size headroom from _planning_peak_w")
         assert "peak_hysteresis" not in src, (

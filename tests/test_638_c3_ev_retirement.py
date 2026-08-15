@@ -112,7 +112,7 @@ class TestEvDemandsCarryTheAntiCycleWindow:
         )
         fake = _fake_self()
         captured = {}
-        import custom_components.solar_energy_management.coordinator.overnight_planner as onp
+        import custom_components.solar_energy_management.coordinator.energy_planner as onp
         real_pack = onp.pack_night
 
         def spy(demands, ledger, **kw):
@@ -120,7 +120,7 @@ class TestEvDemandsCarryTheAntiCycleWindow:
             return real_pack(demands, ledger, **kw)
 
         with patch.object(onp, "pack_night", side_effect=spy):
-            SEMCoordinator._shadow_overnight_plan(
+            SEMCoordinator._shadow_energy_plan(
                 fake, _scheduler(), energy=MagicMock(), power=_power())
         ev = [d for d in captured.get("demands", []) if d.id.startswith("ev:")]
         assert ev, "the fake world must produce an EV demand"

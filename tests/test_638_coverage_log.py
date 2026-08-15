@@ -19,7 +19,7 @@ from datetime import timedelta
 
 import pytest
 
-from custom_components.solar_energy_management.coordinator.overnight_actuation import (
+from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
     PlanGate,
     coverage_transition,
     plan_gate,
