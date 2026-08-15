@@ -523,6 +523,26 @@ shapes the demand set must ride the re-plan signature.
   now leads with the grid-connection-agreement warning and names
   `sensor.sem_flow_battery_to_grid_power` as the compliance witness.
 
+### 🙏 Thanks
+
+SEM is built and maintained by one person. 2.0 took a long build and a longer
+soak on real hardware, and the people below paid for the time it took —
+thank you.
+
+- 💛 **[@praun](https://github.com/praun)**, **[@RienduPre](https://github.com/RienduPre)**,
+  **[@Azlinon](https://github.com/Azlinon)** and **[@onkelfu](https://github.com/onkelfu)**
+  for sponsoring the project. (Sponsors who chose to stay private aren't
+  named here — the thanks is the same.)
+- 🐞 **@RienduPre** and **@onkelfu** again, on the other side of the tracker:
+  a large share of the bugs fixed on the road to 2.0 exist as fixes because
+  they were reported precisely.
+- 🙌 Everyone who filed an issue, posted a diagnose dump, or answered a
+  question on the forum. A single-maintainer project sees exactly as many
+  hardware combinations as its users show it.
+
+If SEM saves you money, a [monthly sponsorship](https://github.com/sponsors/traktore-org)
+keeps it maintained.
+
 # [1.7.6-beta.18] — 14.08.2026
 
 ### 🐛 Fixes
