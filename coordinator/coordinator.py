@@ -6226,7 +6226,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return plan_car_fullness(detector, drawing_w=drawing_w,
                                  handshake_w=handshake_w)
 
-    def _energy_plan_demand_signature(self, power) -> tuple:
+    def _energy_plan_demand_signature(self, power, energy=None) -> tuple:
         """(#638) What the night is being ASKED for, as a comparable value.
 
         The stamp is once per night; this is how it learns the night changed
@@ -6318,32 +6318,70 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         #    free energy is a forecast that revises through the morning
         #    — Aug 6 was a 34-kWh day a dawn stamp would have priced at
         #    ~55, and nothing on the ask side would have re-planned it.
-        #    The DAY TOTAL only: it moves when the provider re-publishes;
-        #    the remaining burns down every daylight minute and is time
-        #    passing, not the ask changing. 2-kWh steps.
+        #
+        #    The term watches what the PLAN READS: the hours still AHEAD
+        #    (``forecast_remaining_today_kwh``) and TOMORROW's day (the
+        #    sunrise floor, and the room arbitrage may buy into). It used
+        #    to watch the day TOTAL — a number the builder consumes
+        #    nowhere. With dampening live (.175, 15.08) the total is
+        #    rewritten every ~30 min as the correction re-prices hours
+        #    ALREADY PRODUCED: 11 restamps in 7.3 h, one of which
+        #    (16:42:05, 42 → 38 kWh) rebuilt byte-identical blocks. A
+        #    retrospective correction is not news about the night.
+        #
+        #    The remaining does burn down every daylight minute, and that
+        #    is time passing rather than the ask changing — so measured
+        #    production EXPLAINS the decay: expected = anchored remaining
+        #    − what has been produced since the anchor. Only the gap
+        #    between expectation and reality (clouds, a real revision)
+        #    re-anchors. Without a production reading the expectation is
+        #    flat and the plain #759 deadband applies — never worse than
+        #    before, which is also how a frozen counter (#681) degrades.
         try:
             _fd = getattr(getattr(self, "_forecast_reader", None),
                           "forecast_data", None)
-            _today = float(getattr(_fd, "forecast_today_kwh", 0.0) or 0.0)
+            _rem = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0)
+                         or 0.0)
+            _tom = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
+            _made = getattr(energy, "daily_solar", None)
+            _made = (float(_made) if isinstance(_made, (int, float))
+                     and not isinstance(_made, bool) else None)
             # (#759) Quantizing alone cannot damp a value that LIVES at a
             # bucket edge: on N1 the dampened forecast wobbled 66.9↔67.1
             # around the 67 boundary, the rounding turned that into 66↔68,
             # and every flip was a full replan — coverage changed hands
             # every 20 s and no load could start under it. So the term is
-            # computed from an ANCHOR that only moves when the raw value
-            # has moved ≥ 3 kWh (1.5 buckets) away from it: jitter orbits
-            # the anchor forever, a real provider revision re-anchors once.
-            _anchor = getattr(self, "_sig_solar_anchor", None)
-            if _anchor is None or abs(_today - _anchor) >= 3.0:
-                self._sig_solar_anchor = _anchor = _today
-            sig.append(("solar", round(_anchor / 2.0) * 2.0))
+            # computed from an ANCHOR that only moves when reality has
+            # left the expectation by ≥ 3 kWh (1.5 buckets): jitter orbits
+            # the anchor forever, a real revision re-anchors once.
+            _a = getattr(self, "_sig_solar_anchor", None)
+            if not (isinstance(_a, tuple) and len(_a) == 2):
+                _a = None          # a pre-#759 float anchor: start over
+            if _a is None:
+                _expected = None
+            else:
+                _a_rem, _a_made = _a
+                _expected = (max(0.0, _a_rem - max(0.0, _made - _a_made))
+                             if _made is not None and _a_made is not None
+                             else _a_rem)
+            if _expected is None or abs(_rem - _expected) >= 3.0:
+                self._sig_solar_anchor = _a = (_rem, _made)
+            sig.append(("solar", round(_a[0] / 2.0) * 2.0))
+            _at = getattr(self, "_sig_solar_anchor_tomorrow", None)
+            if _at is None or abs(_tom - _at) >= 3.0:
+                self._sig_solar_anchor_tomorrow = _at = _tom
+            sig.append(("solar_tomorrow", round(_at / 2.0) * 2.0))
         except Exception:  # noqa: BLE001 — no forecast is a valid shape
-            # A transient read failure keeps the anchor: flipping to 0.0
+            # A transient read failure keeps the anchors: flipping to 0.0
             # and back would be two replans for one hiccup (#759).
-            _anchor = getattr(self, "_sig_solar_anchor", None)
+            _a = getattr(self, "_sig_solar_anchor", None)
+            _a_rem = _a[0] if isinstance(_a, tuple) and len(_a) == 2 else None
             sig.append(("solar",
-                        round(_anchor / 2.0) * 2.0 if _anchor is not None
+                        round(_a_rem / 2.0) * 2.0 if _a_rem is not None
                         else 0.0))
+            _at = getattr(self, "_sig_solar_anchor_tomorrow", None)
+            sig.append(("solar_tomorrow",
+                        round(_at / 2.0) * 2.0 if _at is not None else 0.0))
         # 6. The night's price curve — a provider publishing tomorrow's
         #    prices mid-evening changes where everything should go.
         try:
@@ -6878,7 +6916,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # One signature over every input that changes WHAT is asked of
             # the night — connection, EV floor/deadline/mode, each load's
             # runtime deficit, and the night's price curve.
-            _demand_sig = self._energy_plan_demand_signature(power)
+            _demand_sig = self._energy_plan_demand_signature(power, energy)
             cause = "initial"
             # (Guido, 00:30 on 08-09) the explicit re-plan lever — now
             # that the plan survives reboots, restart-as-replan retires

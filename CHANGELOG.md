@@ -185,6 +185,25 @@ shapes the demand set must ride the re-plan signature.
   on/off-domain control entities so a charger's current number can never
   read as ON.
 
+### 🌞 What the third campaign night taught (#759)
+
+- ☀️ **Watch what the plan reads, and let production explain the rest**
+  (#759, second sighting) — the supply term watched the forecast's *day
+  total*, a number the plan builder consumes nowhere. What it does consume
+  is the hours still **ahead** and **tomorrow's** day. With live dampening
+  the total is rewritten every half hour as the correction re-prices hours
+  that have **already been produced**: 11 restamps in 7.3 hours on the rig,
+  one of which (16:42:05, 42 → 38 kWh) rebuilt byte-identical blocks — the
+  plan proving, in its own output, that nothing had changed. Tomorrow's
+  forecast — the sunrise floor and the room arbitrage may buy into — was
+  watched by nothing at all. Now: the term is the hours ahead plus
+  tomorrow, and the day burning down is explained by **measured
+  production** (expected remaining = anchored remaining − produced since
+  the anchor), so a day going to plan is one signature from dawn to dusk
+  while clouds, or a genuine revision, still re-anchor once. Without a
+  production reading — or with a frozen counter (#681) — it degrades to the
+  plain 3 kWh deadband: never worse than before.
+
 ### 🧪 Simulation is a standard feature now (#764)
 
 - 👁️ **Observer mode publishes its WOULD decisions** — the per-device map

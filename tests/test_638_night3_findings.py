@@ -97,7 +97,7 @@ def _tick_self(sig=("ask",), compute_ok=True):
         _battery_charge_scheduler=SimpleNamespace(),
         time_manager=SimpleNamespace(get_night_end_time=lambda: "07:00"),
         config={"battery_capacity_kwh": 0},
-        _energy_plan_demand_signature=lambda power: fake._sig,
+        _energy_plan_demand_signature=lambda power, energy=None: fake._sig,
         _shadow_energy_plan=_compute,
         _shadow_plan_date=None,
         _plan_ev_conn_sig=None,

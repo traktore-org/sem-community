@@ -212,9 +212,19 @@ re-plan says why it exists — the sensor's `replan_cause` attribute reads
 `initial` for the day's first answer and `ask changed` for a re-stamp.
 Jitter deliberately does **not** re-plan: targets are compared in
 0.1-kWh steps, load deficits in 6-minute steps, comfort asks in
-0.5-kWh/30-minute steps, prices to the cent, and the forecast by its
-**day total** in 2-kWh steps — a thermometer drifting or the sun burning
-down the remaining forecast is time passing, not the ask changing.
+0.5-kWh/30-minute steps, and prices to the cent — a thermometer drifting
+is time passing, not the ask changing.
+
+The solar side is compared as **what the plan actually spends**: the hours
+still ahead today, and tomorrow's day (the sunrise floor, and the room
+arbitrage may buy into). Each is anchored with a 3-kWh deadband, and the
+day burning down is explained by your **measured production** — as long as
+the remaining forecast falls at roughly the rate the panels deliver, it is
+the day going to plan and the night is not re-planned. Clouds arriving, or
+the provider revising the curve, opens a gap against that expectation and
+re-plans once. A retrospective correction — the dampening re-pricing hours
+that have already been produced — deliberately changes nothing: those
+hours are spent, and the plan never reads them.
 
 An **unplug counts only once it is confirmed**. A UDP-polled charger drops a
 poll now and then and reads "no car" for one cycle with the cable still in;

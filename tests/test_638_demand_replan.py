@@ -177,19 +177,39 @@ class TestComfortAsksReplan:
 
 class TestTheSupplySideReplans:
     """(#638, the week picture 2026-08-08) The day's free energy is a
-    FORECAST that revises through the morning — Aug 6 was a 34-kWh day a
-    dawn stamp would have priced at ~55. The signature watches the DAY
-    TOTAL (revised only when the provider re-publishes), never the
-    remaining (which burns down every daylight minute and is not an ask
-    change)."""
+    FORECAST that revises — Aug 6 was a 34-kWh day a dawn stamp would have
+    priced at ~55.
 
-    def _with_forecast(self, today, remaining):
+    The term watches what the PLAN reads: the hours still AHEAD
+    (``forecast_remaining_today_kwh``) and TOMORROW's day (the sunrise
+    floor and the room arbitrage may buy into). It used to watch the day
+    TOTAL — a number the builder reads nowhere. On the .175 campaign
+    (15.08) that cost both ways: a live dampening correction rewriting the
+    already-produced morning restamped the night eleven times in one day
+    (16:42:05, ``('solar', 42.0) → ('solar', 38.0)``, after which the
+    packer allocated the byte-identical blocks), while tomorrow collapsing
+    never restamped at all.
+
+    Time passing is not news either: the remaining number shrinks all day
+    as the sun is spent, exactly as forecast. So the anchor carries the
+    production reading it was taken with and compares against what it
+    EXPECTS now — a day spent as forecast keeps one anchor; clouds, or a
+    provider revision, open a gap and re-anchor once per 3 kWh (#759).
+    """
+
+    def _with_forecast(self, today, remaining, tomorrow=0.0):
         c = _coord()
         c._forecast_reader = SimpleNamespace(
             forecast_data=SimpleNamespace(
                 forecast_today_kwh=today,
-                forecast_remaining_today_kwh=remaining))
+                forecast_remaining_today_kwh=remaining,
+                forecast_tomorrow_kwh=tomorrow))
         return c
+
+    @staticmethod
+    def _made(kwh):
+        """The energy view the cycle already has — today's produced solar."""
+        return SimpleNamespace(daily_solar=kwh)
 
     def test_a_provider_revision_replans(self):
         sunny = self._with_forecast(55.0, 40.0)
@@ -197,15 +217,62 @@ class TestTheSupplySideReplans:
         assert (sunny._energy_plan_demand_signature(_power())
                 != clouded._energy_plan_demand_signature(_power()))
 
-    def test_the_burn_down_is_not_an_ask_change(self):
-        morning = self._with_forecast(55.0, 50.0)
-        noon = self._with_forecast(55.0, 20.0)
-        assert (morning._energy_plan_demand_signature(_power())
-                == noon._energy_plan_demand_signature(_power()))
+    def test_a_retrospective_revision_is_not_news(self):
+        """.175 16:42:05, the restamp that started this: the day total
+        went 42 → 38 while the hours ahead and tomorrow sat still. The
+        dampening had re-corrected the morning — hours already produced.
+        Nothing the plan reads moved, and the plan it rebuilt proved it by
+        allocating the identical blocks."""
+        c = self._with_forecast(42.0, 10.7, 25.5)
+        first = c._energy_plan_demand_signature(
+            _power(), energy=self._made(31.3))
+        c._forecast_reader.forecast_data.forecast_today_kwh = 38.0
+        assert c._energy_plan_demand_signature(
+            _power(), energy=self._made(31.3)) == first
+
+    def test_the_hours_still_ahead_revising_is_news(self):
+        """The other half of the same coin: clouds for the rest of the day
+        change what the plan can spend, and must re-plan it."""
+        c = self._with_forecast(55.0, 40.0)
+        first = c._energy_plan_demand_signature(
+            _power(), energy=self._made(15.0))
+        c._forecast_reader.forecast_data.forecast_remaining_today_kwh = 20.0
+        assert c._energy_plan_demand_signature(
+            _power(), energy=self._made(15.0)) != first
+
+    def test_the_day_being_spent_is_not_an_ask_change(self):
+        """30 kWh of the morning's forecast turned into 30 kWh of measured
+        production: the day going exactly to plan. One signature."""
+        c = self._with_forecast(55.0, 50.0)
+        first = c._energy_plan_demand_signature(
+            _power(), energy=self._made(5.0))
+        c._forecast_reader.forecast_data.forecast_remaining_today_kwh = 20.0
+        assert c._energy_plan_demand_signature(
+            _power(), energy=self._made(35.0)) == first
+
+    def test_tomorrow_collapsing_replans(self):
+        """The plan reads tomorrow twice — the floor it must leave in the
+        battery at sunrise and the room arbitrage may buy into — and the
+        trigger did not watch it at all."""
+        c = self._with_forecast(40.0, 2.0, 25.0)
+        first = c._energy_plan_demand_signature(
+            _power(), energy=self._made(38.0))
+        c._forecast_reader.forecast_data.forecast_tomorrow_kwh = 4.0
+        assert c._energy_plan_demand_signature(
+            _power(), energy=self._made(38.0)) != first
+
+    def test_without_a_production_reading_the_deadband_still_holds(self):
+        """A bare tick with no energy view cannot explain the decay, so it
+        re-anchors per 3 kWh — the behaviour before this change, never
+        worse. A frozen solar counter (#681) degrades to exactly this."""
+        c = self._with_forecast(55.0, 50.0)
+        first = c._energy_plan_demand_signature(_power())
+        c._forecast_reader.forecast_data.forecast_remaining_today_kwh = 40.0
+        assert c._energy_plan_demand_signature(_power()) != first
 
     def test_sub_step_revisions_round_away(self):
         a = self._with_forecast(55.0, 40.0)
-        b = self._with_forecast(55.9, 40.0)
+        b = self._with_forecast(55.9, 40.4)
         assert (a._energy_plan_demand_signature(_power())
                 == b._energy_plan_demand_signature(_power()))
 
@@ -220,21 +287,27 @@ class TestTheSupplySideReplans:
         66↔68, and each flip was a full replan — four restamps in 110 s,
         coverage changing hands every 20 s. Same coordinator, same night,
         sub-hysteresis jitter: ONE signature."""
-        c = self._with_forecast(66.9, 40.0)
-        first = c._energy_plan_demand_signature(_power())
+        c = self._with_forecast(70.0, 66.9)
+        first = c._energy_plan_demand_signature(
+            _power(), energy=self._made(3.1))
         for raw in (67.1, 66.9, 67.3, 66.8, 67.1):
-            c._forecast_reader.forecast_data.forecast_today_kwh = raw
-            assert c._energy_plan_demand_signature(_power()) == first, (
+            c._forecast_reader.forecast_data.forecast_remaining_today_kwh = raw
+            assert c._energy_plan_demand_signature(
+                _power(), energy=self._made(3.1)) == first, (
                 f"forecast jitter to {raw} kWh re-planned the night"
             )
 
     def test_a_real_revision_on_the_same_coordinator_still_replans(self):
         """The hysteresis must not eat the week picture: a genuine
-        provider revision (clouds rolling in) re-plans."""
-        c = self._with_forecast(66.9, 40.0)
-        first = c._energy_plan_demand_signature(_power())
+        provider revision (clouds rolling in) re-plans. A real revision
+        moves the hours ahead — the dampening scales the whole curve."""
+        c = self._with_forecast(70.0, 66.9)
+        first = c._energy_plan_demand_signature(
+            _power(), energy=self._made(3.1))
         c._forecast_reader.forecast_data.forecast_today_kwh = 60.0
-        assert c._energy_plan_demand_signature(_power()) != first
+        c._forecast_reader.forecast_data.forecast_remaining_today_kwh = 56.9
+        assert c._energy_plan_demand_signature(
+            _power(), energy=self._made(3.1)) != first
 
     def test_a_transient_forecast_outage_keeps_the_anchor(self):
         """A one-cycle unreadable forecast used to flip the term to 0.0
