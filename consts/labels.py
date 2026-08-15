@@ -93,6 +93,7 @@ SENSOR_LABEL_MAPPING: Final[Dict[str, set]] = {
     "flow_grid_to_ev_power": {"sem_flow", "sem_grid", "sem_ev", "sem_secondary"},
     "flow_grid_to_battery_power": {"sem_flow", "sem_grid", "sem_battery", "sem_secondary"},
     "flow_battery_to_home_power": {"sem_flow", "sem_battery", "sem_home", "sem_secondary"},
+    "flow_battery_to_grid_power": {"sem_flow", "sem_battery", "sem_grid", "sem_secondary"},
     "flow_battery_to_ev_power": {"sem_flow", "sem_battery", "sem_ev", "sem_secondary"},
 
     # Daily energy sensors

@@ -852,6 +852,16 @@ SENSOR_TYPES = [
         native_unit_of_measurement=UnitOfPower.WATT,
         suggested_display_precision=0,
     ),
+    # (#776) Exported battery energy — force_discharge / the arbitrage
+    # sell. Doubles as the compliance witness for installs whose grid
+    # contract prohibits selling stored energy: it must read 0 there.
+    SensorEntityDescription(
+        key="flow_battery_to_grid_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
     SensorEntityDescription(
         key="flow_battery_to_ev_power",
         device_class=SensorDeviceClass.POWER,
@@ -941,6 +951,12 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="flow_battery_to_ev_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="flow_battery_to_grid_energy",
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,

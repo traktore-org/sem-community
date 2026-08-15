@@ -18,6 +18,21 @@ grid** when the export price beats the cost of recharging it later.
 > **Opt-in. Default OFF.** SEM never force-discharges your battery unless you
 > turn this on.
 
+> ## ⚠️ Check your grid connection agreement first
+>
+> Some grid operators and feed-in schemes **prohibit exporting stored
+> (battery) energy** — the feed-in contract covers PV production only, and
+> exporting from the battery can violate the connection agreement or void a
+> feed-in tariff. **If that applies to you: leave arbitrage OFF and do not
+> use the `Force discharge` battery mode** — both deliberately push battery
+> energy to the grid. Everything else in SEM (charge scheduling,
+> self-consumption, peak shaving, EV solar charging) never exports your
+> battery and is unaffected by such restrictions.
+>
+> The `sensor.sem_flow_battery_to_grid_power` / `…_energy` pair (v2.0)
+> shows exactly how much battery energy went to the grid — on a restricted
+> install it is also your evidence that the answer is **zero**.
+
 ## What the mode does — one day in two pictures
 
 The price curve decides everything. SEM charges the battery in the cheapest

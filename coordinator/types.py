@@ -343,6 +343,11 @@ class PowerFlows:
     # Battery flows (W)
     battery_to_home: float = 0.0
     battery_to_ev: float = 0.0
+    # (#776) Exported battery energy — force_discharge and the C6
+    # arbitrage sell. Solar keeps first claim on the export
+    # (``solar_to_grid`` stays the slack variable); this is only what
+    # solar could not claim.
+    battery_to_grid: float = 0.0
 
     # Per-charger EV flow split (v1.6.9). Populated by
     # ``flow_calculator.calculate_power_flows`` when ``PowerReadings``
@@ -503,6 +508,11 @@ class EnergyFlows:
     # Battery flows
     battery_to_home: float = 0.0
     battery_to_ev: float = 0.0
+    # (#776) Exported battery energy — force_discharge mode and the C6
+    # arbitrage sell. Before this field the (battery, grid_export) pair
+    # was disallowed and a selling battery's exported kWh vanished from
+    # the flow ledger while still earning avoided-import savings.
+    battery_to_grid: float = 0.0
 
     # Per-charger EV energy split (v1.6.15). Populated by
     # ``FlowCalculator.integrate_energy_flows`` when
@@ -1005,6 +1015,7 @@ class SEMData:
             "flow_grid_to_ev_power": self.power_flows.grid_to_ev,
             "flow_grid_to_battery_power": self.power_flows.grid_to_battery,
             "flow_battery_to_home_power": self.power_flows.battery_to_home,
+            "flow_battery_to_grid_power": self.power_flows.battery_to_grid,
             "flow_battery_to_ev_power": self.power_flows.battery_to_ev,
 
             # Daily energy
@@ -1059,6 +1070,7 @@ class SEMData:
             "flow_grid_to_battery_energy": self.energy_flows.grid_to_battery,
             "flow_battery_to_home_energy": self.energy_flows.battery_to_home,
             "flow_battery_to_ev_energy": self.energy_flows.battery_to_ev,
+            "flow_battery_to_grid_energy": self.energy_flows.battery_to_grid,
 
             # Per-charger flow surface (v1.6.15). Emit only when the
             # multi-charger pipeline has populated these maps; in

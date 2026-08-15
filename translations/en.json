@@ -723,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Battery to Home"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Battery to Grid"
+      },
       "flow_battery_to_ev_power": {
         "name": "Battery to EV"
       },
@@ -758,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Battery to Home Energy"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Battery to Grid Energy"
       },
       "flow_battery_to_ev_energy": {
         "name": "Battery to EV Energy"

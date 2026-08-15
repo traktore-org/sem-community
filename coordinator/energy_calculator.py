@@ -610,7 +610,8 @@ class EnergyCalculator:
             # purchase already sits in the import cost.
             self._accumulate_cost(
                 "cost_batt_savings", today, month_key, year_key,
-                self._battery_discharge_savings(power, discharge_increment),
+                self._battery_discharge_savings(
+                    power, discharge_increment, power_flows),
             )
         self._reconcile_metered_energy(
             "battery_discharge", today, month_key, year_key,
@@ -2612,6 +2613,7 @@ class EnergyCalculator:
 
     def _battery_discharge_savings(
         self, power: PowerReadings, discharge_increment: float,
+        power_flows: "Optional[PowerFlows]" = None,
     ) -> float:
         """What this discharge saved, given where the stored energy came from.
 
@@ -2619,9 +2621,32 @@ class EnergyCalculator:
         so what it holds here is what the battery holds. Energy SEM never saw
         arrive is ``unknown`` and keeps the legacy full-rate credit — the
         number does not move until SEM actually knows better.
+
+        (#776) Savings are AVOIDED IMPORT, so only the home-delivered share
+        of the discharge earns them. The exported share (force_discharge,
+        the C6 arbitrage sell) already earns its export revenue at the grid
+        meter — crediting it here too paid the same kWh twice. The pool
+        draw stays the FULL increment (the energy really left the battery);
+        only the money is scaled. No flow attribution — or a cycle where
+        none of the discharge was attributed — keeps the legacy full
+        credit: silence is not a measurement of "all exported" any more
+        than of "all delivered".
         """
         mix = self._battery_provenance.discharge_fleet(discharge_increment)
-        return discharge_savings(mix, self._import_rate)
+        savings = discharge_savings(mix, self._import_rate)
+        if power_flows is None:
+            return savings
+        delivered = (
+            max(0.0, float(getattr(power_flows, "battery_to_home", 0.0) or 0.0))
+            + max(0.0, float(getattr(power_flows, "battery_to_ev", 0.0) or 0.0))
+        )
+        exported = max(
+            0.0, float(getattr(power_flows, "battery_to_grid", 0.0) or 0.0)
+        )
+        attributed = delivered + exported
+        if attributed <= 0:
+            return savings
+        return savings * (delivered / attributed)
 
     def _reconcile_provenance_to_soc(self, power: PowerReadings) -> None:
         """Pin the provenance pool to SOC × capacity, when SOC is real."""

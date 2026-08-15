@@ -723,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Akkumulátorból házba"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Akkumulátorból hálózatba"
+      },
       "flow_battery_to_ev_power": {
         "name": "Akkumulátorból EV-be"
       },
@@ -758,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Akkumulátorból házba energia"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Akkumulátorból hálózatba energia"
       },
       "flow_battery_to_ev_energy": {
         "name": "Akkumulátorból EV-be energia"

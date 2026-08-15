@@ -936,6 +936,10 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_flow_solar_to_battery_power` — solar power to battery
 - `sensor.sem_flow_grid_to_ev_power` — grid power to EV
 - `sensor.sem_flow_battery_to_home_power` — battery power to home
+- `sensor.sem_flow_battery_to_grid_power` — battery power exported to the
+  grid (#776) — non-zero only during `Force discharge` or an arbitrage
+  sell; if your grid contract prohibits exporting stored energy this
+  sensor is your evidence that SEM never does (it must read 0)
 
 ### Cost Sensors
 - `sensor.sem_daily_costs` — today's grid import cost

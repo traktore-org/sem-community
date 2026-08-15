@@ -237,6 +237,22 @@ shapes the demand set must ride the re-plan signature.
 - 🔌 **The kill-switch is asked by every caller** (#758) — the arbitrage sell
   gate reached the plan directly, so a user who turned night actuation off
   still had the plan discharging their battery to the grid.
+- 💱 **Exported battery energy is attributed and paid once** (#776) — the
+  flow ledger deliberately disallowed the battery→grid-export pair ("SEM
+  doesn't support battery-to-grid arbitrage"), which stopped being true the
+  moment `Force discharge` shipped and the plan-gated sell was wired: during
+  any battery export the exported watts vanished from the flow attribution,
+  while the savings math booked the **raw** discharge — an exported kWh
+  earned avoided-import savings it never delivered *and* export revenue at
+  the meter. One kWh, two credits. Now a `battery_to_grid` flow (new sensor
+  pair `Battery to Grid` W / kWh, ×16 languages) receives what solar's
+  export claim leaves, and discharge savings are scaled by the
+  home-delivered share — exported kWh earn exactly their export revenue,
+  once. A cycle without flow attribution keeps the legacy full credit
+  (silence is not a measurement of "all exported"). The new sensor doubles
+  as the compliance witness for installs whose grid contract prohibits
+  selling stored energy: it must read zero there, and the arbitrage doc now
+  says so up front.
 - 🛡️ **An arbitrage sell respects BOTH reserve floors** (#638) — the sell
   branch took the user's backup reserve *or* the verdict's
   `arbitrage_reserve_soc`, never both, so any install with a nonzero backup
