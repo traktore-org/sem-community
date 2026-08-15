@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased]
+# [2.0.0-beta.2] — 16.08.2026
+
+> The first night of 2.0 on real hardware, read off one dashboard card.
+> Four of these five are the same shape: something written, tested and
+> believed — but asked at a place the running code never reaches, or
+> asked before the question that decides whether it applies at all.
 
 - 💡 **Lights really are skipped now** (#744) — the beta.17 rule that keeps
   light fixtures out of SEM's device roster was added to a code path no live
