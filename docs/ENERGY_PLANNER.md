@@ -226,6 +226,15 @@ re-plans once. A retrospective correction — the dampening re-pricing hours
 that have already been produced — deliberately changes nothing: those
 hours are spent, and the plan never reads them.
 
+A real revision **re-plans, but only a changed answer re-stamps**. Hourly
+forecast providers (Forecast.Solar) re-publish through the night, and on a
+volatile night each revision genuinely moves the numbers — so the plan is
+rebuilt every time. If the rebuilt answer is the same decision the night
+already has — same blocks, same verdicts, same cost — the existing stamp
+stays: `computed_at` marks when the *decision* was made, and an identical
+repack is free. A manual re-plan always stamps, because "decide again,
+now" must visibly answer even when the answer is "the same".
+
 The comparison also stops where the plan stops. A device the planner would
 never pack is not watched: a charger whose mode opts out of the night (`Off`,
 or `Solar only` with no "At least" floor) can be plugged, unplugged and

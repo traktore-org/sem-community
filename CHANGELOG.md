@@ -215,6 +215,16 @@ shapes the demand set must ride the re-plan signature.
   byte-identical blocks. The signature now mirrors those gates exactly,
   including their fail-**visible** direction — an unevaluable gate still
   watches the term.
+- 🔁 **A revision re-plans; only a changed answer re-stamps** (#775).
+  Forecast.Solar re-publishes hourly, and on a weather-volatile night each
+  revision is real — ±10–16 kWh, past any honest deadband — so PROD
+  re-planned at 00:14, 01:14 and 02:14 without a single packed block
+  moving. The night still re-plans on every revision, but the rebuilt
+  answer is now compared against the stamped **decision** (blocks,
+  verdicts, why-nots, cost, the arbitrage actionables) and an identical
+  repack keeps its stamp: `computed_at` marks a decision, and an identical
+  repack is free. Manual re-plans always stamp — "decide again, now" must
+  visibly answer, even with "same answer".
 
 ### 🧪 Simulation is a standard feature now (#764)
 

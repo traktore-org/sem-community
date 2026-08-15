@@ -317,3 +317,162 @@ class TestThePlanSurvivesTheReboot:
         assert stored.get("period") == "2026-08-09"
         assert stored.get("sig") is not None
         assert isinstance(stored.get("plan"), dict)
+
+
+class TestARevisionWithTheSameAnswerKeepsTheStamp:
+    """(#775) Forecast.Solar re-publishes hourly, and on a volatile night
+    each revision is REAL (±10-16 kWh — past any honest deadband). The
+    night must re-PLAN on every revision, but a repack that reaches the
+    identical answer must not re-STAMP it: PROD's 15.08 night logged
+    three full re-plans (00:14, 01:14, 02:14) whose packed result never
+    moved. The stamp marks a DECISION; an identical repack is free."""
+
+    PLAN = {
+        "computed_at": "2026-08-09T22:00:00",
+        "replan_cause": "initial",
+        "fits": True,
+        "total_cost": 2.79,
+        "takeover": None,
+        "battery_fleet_partial": None,
+        "blocks": [{"id": "ev:k", "start": "23:00", "end": "05:00",
+                    "power_w": 1903.0}],
+        "demands": [{"id": "ev:k", "status": "fits",
+                     "planned_kwh": 12.16, "needed_kwh": 12.16}],
+        "not_scheduled": [{"id": "load:x", "why": "day_only"}],
+        "slots": [{"price": 0.10, "home_grid_w": 300.0}],
+        "self_consumption": {"share": 0.5},
+        "summary": ["the 22:00 answer"],
+        "allocations": ["ev:k: 1903 W 23:00-05:00 @ 0.100 (slot #1)"],
+        "arbitrage": {"opportunity": False, "charge_kwh": 0.0,
+                      "est_profit": 0.0, "reason": "no spread (soc 63%)",
+                      "charge_blocks": [], "discharge_blocks": []},
+    }
+
+    @staticmethod
+    def _self(seq):
+        calls = []
+        plans = [dict(p) for p in seq]
+
+        def _compute(scheduler, energy, power=None, replan_cause="initial"):
+            calls.append(replan_cause)
+            fake._energy_plan_shadow = plans.pop(0)
+            return True
+
+        fake = SimpleNamespace(
+            _battery_charge_scheduler=SimpleNamespace(),
+            time_manager=SimpleNamespace(get_night_end_time=lambda: "07:00"),
+            config={"battery_capacity_kwh": 0},
+            _energy_plan_demand_signature=lambda power, energy=None: fake._sig,
+            _shadow_energy_plan=_compute,
+            _shadow_plan_date=None,
+            _plan_ev_conn_sig=None,
+            _energy_plan_shadow=None,
+            _sig=("ask",),
+            _compute_calls=calls,
+        )
+        return fake
+
+    def test_the_same_answer_keeps_the_stamp(self, _freeze_2200):
+        revised = {**self.PLAN,
+                   "computed_at": "2026-08-09T23:14:30",
+                   "replan_cause": "ask changed",
+                   # a solar revision re-prices the trajectory cosmetics
+                   "slots": [{"price": 0.10, "home_grid_w": 900.0}],
+                   "self_consumption": {"share": 0.7},
+                   "arbitrage": {**self.PLAN["arbitrage"],
+                                 "reason": "no spread (soc 58%)"}}
+        fake = self._self([self.PLAN, revised])
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        fake._sig = ("ask", "revised")
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == ["initial", "ask changed"], (
+            "the revision must still RE-PLAN — #775 never skips the rebuild")
+        assert fake._energy_plan_shadow["computed_at"] == (
+            "2026-08-09T22:00:00"), "an identical repack must keep the stamp"
+        assert fake._plan_ev_conn_sig == ("ask", "revised"), (
+            "the baseline must advance or the same revision re-fires forever")
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        assert fake._compute_calls == ["initial", "ask changed"], (
+            "a kept stamp must not re-fire on the next cycle")
+
+    def test_a_new_answer_still_restamps(self, _freeze_2200):
+        revised = {**self.PLAN,
+                   "computed_at": "2026-08-09T23:14:30",
+                   "replan_cause": "ask changed",
+                   "blocks": [{"id": "ev:k", "start": "23:00",
+                               "end": "04:00", "power_w": 2200.0}]}
+        fake = self._self([self.PLAN, revised])
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        fake._sig = ("ask", "revised")
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        assert fake._energy_plan_shadow["computed_at"] == (
+            "2026-08-09T23:14:30"), "a moved block is a new decision"
+
+    def test_manual_replan_restamps_even_with_the_same_answer(
+            self, _freeze_2200):
+        same_again = {**self.PLAN, "computed_at": "2026-08-09T23:30:00",
+                      "replan_cause": "manual"}
+        fake = self._self([self.PLAN, same_again])
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        fake._manual_replan_requested = True
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        assert fake._energy_plan_shadow["computed_at"] == (
+            "2026-08-09T23:30:00"), (
+            "'decide again, now' must visibly answer, even with 'same answer'")
+
+    def test_the_persisted_sig_advances_with_a_kept_stamp(self, _freeze_2200):
+        revised = {**self.PLAN, "computed_at": "2026-08-09T23:14:30",
+                   "replan_cause": "ask changed"}
+        fake = self._self([self.PLAN, revised])
+        stored = {}
+        fake._storage = SimpleNamespace(
+            set_energy_plan_state=lambda s: stored.update(s))
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        fake._sig = ("ask", "revised")
+        SEMCoordinator._energy_plan_tick(fake, power=None, energy=None)
+        assert stored["sig"] == ("ask", "revised"), (
+            "a reboot must re-seat the kept plan with the FRESH baseline")
+        assert stored["plan"]["computed_at"] == "2026-08-09T22:00:00"
+
+
+class TestPlanDecisionCore:
+    """(#775) What counts as 'the same answer'. The stamp owns the
+    DECISION — blocks, verdicts, whys, cost, the arbitrage actionables.
+    Trajectory cosmetics re-derive from live numbers on every build and
+    must not hold a restamp hostage."""
+
+    BASE = TestARevisionWithTheSameAnswerKeepsTheStamp.PLAN
+
+    def test_cosmetics_are_not_the_decision(self):
+        core = coord_mod.plan_decision_core
+        moved = {**self.BASE,
+                 "computed_at": "later", "replan_cause": "ask changed",
+                 "slots": [{"price": 0.99}], "self_consumption": {"share": 0},
+                 "summary": ["other words"], "allocations": ["other"],
+                 "arbitrage": {**self.BASE["arbitrage"],
+                               "est_profit": 1.23,
+                               "reason": "no spread (soc 12%)"}}
+        assert core(self.BASE) == core(moved)
+
+    @pytest.mark.parametrize("field,value", [
+        ("blocks", [{"id": "ev:k", "start": "23:00", "end": "04:00",
+                     "power_w": 1903.0}]),
+        ("demands", [{"id": "ev:k", "status": "partial",
+                      "planned_kwh": 6.0, "needed_kwh": 12.16}]),
+        ("not_scheduled", [{"id": "load:x", "why": "no_runtime_need"}]),
+        ("takeover", "2026-08-10T03:00:00"),
+        ("fits", False),
+        ("total_cost", 3.41),
+        ("battery_fleet_partial", "2 of 3 batteries"),
+        ("arbitrage", {"opportunity": True, "charge_kwh": 4.0,
+                       "est_profit": 0.0, "reason": "",
+                       "charge_blocks": [], "discharge_blocks": []}),
+    ])
+    def test_the_decision_moving_is_a_new_answer(self, field, value):
+        core = coord_mod.plan_decision_core
+        assert core(self.BASE) != core({**self.BASE, field: value})
+
+    def test_a_missing_or_broken_plan_never_raises(self):
+        core = coord_mod.plan_decision_core
+        assert core(None) == core(None)
+        assert core({"blocks": "garbage"}) is not None

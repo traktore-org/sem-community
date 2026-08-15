@@ -112,6 +112,62 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
 from .publish_diag import format_battery_sign_diag as _format_battery_sign_diag
 
 
+def plan_decision_core(plan) -> tuple:
+    """(#775) A stamped plan's DECISION, as a comparable value.
+
+    Forecast.Solar re-publishes hourly and each revision is real — so the
+    night re-PLANS on every one, but a repack that reaches the identical
+    answer must not re-STAMP it. "Identical" means what the user reads as
+    the decision: the blocks, each demand's verdict, the why-nots, the
+    takeover hour, whether it fits, what it costs, and the arbitrage
+    ACTIONABLES. Trajectory cosmetics (slots, self-consumption outlook,
+    prose summaries, allocation reasons) re-derive from live numbers on
+    every build and must not hold a restamp hostage. Anything unreadable
+    degrades to a non-equal constant — a broken shape restamps, never
+    silences."""
+    if not isinstance(plan, dict):
+        return ("<no-plan>",)
+    try:
+        blocks = tuple(sorted(
+            (str(b.get("id")), str(b.get("start")), str(b.get("end")),
+             round(float(b.get("power_w") or 0.0)))
+            for b in (plan.get("blocks") or []) if isinstance(b, dict)))
+        demands = tuple(sorted(
+            (str(d.get("id")), str(d.get("status")),
+             round(float(d.get("planned_kwh") or 0.0), 2),
+             round(float(d.get("needed_kwh") or 0.0), 2))
+            for d in (plan.get("demands") or []) if isinstance(d, dict)))
+        whys = tuple(sorted(
+            (str(n.get("id")), str(n.get("why")))
+            for n in (plan.get("not_scheduled") or []) if isinstance(n, dict)))
+        arb = plan.get("arbitrage")
+        if isinstance(arb, dict):
+            arb_core = (
+                bool(arb.get("opportunity")),
+                round(float(arb.get("charge_kwh") or 0.0), 1),
+                tuple(sorted(
+                    (str(b.get("start")), str(b.get("end")))
+                    for b in (arb.get("charge_blocks") or [])
+                    if isinstance(b, dict))),
+                tuple(sorted(
+                    (str(b.get("start")), str(b.get("end")))
+                    for b in (arb.get("discharge_blocks") or [])
+                    if isinstance(b, dict))),
+            )
+        else:
+            arb_core = None
+        return (
+            blocks, demands, whys,
+            str(plan.get("takeover")),
+            bool(plan.get("fits")),
+            round(float(plan.get("total_cost") or 0.0), 2),
+            str(plan.get("battery_fleet_partial")),
+            arb_core,
+        )
+    except Exception:  # noqa: BLE001 — an unreadable plan restamps, safely
+        return ("<unreadable>", id(plan))
+
+
 def demand_signature_changed(old, new) -> bool:
     """(#765) Did the night's ASK really change between two signatures?
 
@@ -6978,14 +7034,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _LOGGER.info(
                     "ENERGY-PLAN (#638): manual re-plan requested — "
                     "restamping the period")
+            # (#775) A revision re-PLANS unconditionally, but whether it
+            # re-STAMPS is decided AFTER the rebuild, against the packed
+            # answer — so the sig diff and the outgoing plan are carried
+            # to the stamp site instead of logged here.
+            _prev_sig_775 = _prev_plan_775 = None
             if (getattr(self, "_shadow_plan_date", None) == _night_of
                     and self._plan_ev_conn_sig is not None
                     and demand_signature_changed(
                         self._plan_ev_conn_sig, _demand_sig)):
-                _LOGGER.info(
-                    "ENERGY-PLAN (#638): the night's demands changed "
-                    "(%s → %s) — replanning",
-                    self._plan_ev_conn_sig, _demand_sig)
+                _prev_sig_775 = self._plan_ev_conn_sig
+                _prev_plan_775 = getattr(self, "_energy_plan_shadow", None)
                 self._shadow_plan_date = None
                 # (night 3, finding 3) the re-stamp says why it exists —
                 # Guido shrinking the ASK to 0.5 kWh silently became "the"
@@ -7010,6 +7069,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if _batt_ready and self._shadow_energy_plan(
                         _sched, energy, power,
                         replan_cause=cause):
+                    if (cause == "ask changed"
+                            and isinstance(_prev_plan_775, dict)
+                            and plan_decision_core(self._energy_plan_shadow)
+                            == plan_decision_core(_prev_plan_775)):
+                        # (#775) The ask moved, the rebuild ran, and the
+                        # packed answer is byte-for-byte the decision the
+                        # night already has — an identical repack is free.
+                        # Keep the stamp (computed_at marks a DECISION),
+                        # advance the signature baseline so this revision
+                        # does not re-fire every cycle. Manual re-plans
+                        # never take this path: "decide again, now" must
+                        # visibly answer, even with "same answer".
+                        self._energy_plan_shadow = _prev_plan_775
+                        _LOGGER.debug(
+                            "ENERGY-PLAN (#775): the ask moved (%s → %s) "
+                            "but the packed answer is identical — "
+                            "stamp kept", _prev_sig_775, _demand_sig)
+                    elif cause == "ask changed":
+                        _LOGGER.info(
+                            "ENERGY-PLAN (#638): the night's demands "
+                            "changed (%s → %s) — replanning",
+                            _prev_sig_775, _demand_sig)
                     self._shadow_plan_date = _night_of
                     self._plan_ev_conn_sig = _demand_sig
                     # (#638) the stamp is state — persist it so a reboot
