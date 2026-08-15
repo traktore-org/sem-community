@@ -273,6 +273,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Store Energy Dashboard sensor config + the observer_mode toggle
             self._data.update(self._energy_dashboard_config.to_dict())
             self._data["observer_mode"] = user_input.get("observer_mode", False)
+            # (#777) Record ALL persisted-switch defaults explicitly at
+            # install: a key present in entry data means "this install
+            # chose", so a dead install's restore-store ghost can never
+            # speak for a fresh one. Only true legacy upgrades (no key
+            # anywhere) keep the restore-state fallback.
+            self._data["vacation_mode"] = False
+            self._data["overnight_actuation"] = True
             return await self.async_step_hardware()
 
         # Show Energy Dashboard summary — list every sensor SEM picked up so the

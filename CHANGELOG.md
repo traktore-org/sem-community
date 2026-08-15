@@ -237,6 +237,20 @@ shapes the demand set must ride the re-plan signature.
 - 🔌 **The kill-switch is asked by every caller** (#758) — the arbitrage sell
   gate reached the plan directly, so a user who turned night actuation off
   still had the plan discharging their battery to the grid.
+- 👻 **A fresh install no longer wakes up in observer mode** (#777) — the
+  observer switch has a forced-stable entity id and HA's restore-state
+  store outlives the config entry, so a fresh installation on a machine
+  that ever ran observer-ON restored the dead install's state over this
+  install's explicit config — and silently never controlled hardware as
+  its first impression. Explicit config now beats ghost restore: the
+  switch seeds from options (every flip persists there immediately), then
+  entry data (the install flow records all three toggles now), then the
+  default; a restored state is honored only when no config record exists
+  at all — a legacy install upgrading, the one case it still serves. Same
+  precedence for the vacation and night-actuation switches, and the
+  install-time observer choice finally reaches the switch face (it was
+  written to data but read from options — checked-at-install showed OFF
+  while the coordinator observed).
 - 💱 **Exported battery energy is attributed and paid once** (#776) — the
   flow ledger deliberately disallowed the battery→grid-export pair ("SEM
   doesn't support battery-to-grid arbitrage"), which stopped being true the

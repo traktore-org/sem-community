@@ -118,10 +118,13 @@ class TestActuationDefaultsOn:
         assert 'config.get("overnight_actuation", True)' in src
 
     def test_the_switch_seed_default_is_on(self):
-        from pathlib import Path
-        src = Path(__file__).resolve().parent.parent.joinpath(
-            "switch.py").read_text()
-        assert 'options.get("overnight_actuation", True)' in src
+        # (#777) The seed moved from a literal ``options.get`` into the
+        # explicit-config-beats-ghost precedence; the C8 default itself
+        # is unchanged and now pinned structurally.
+        from custom_components.solar_energy_management.switch import (
+            SEMSolarSwitch,
+        )
+        assert SEMSolarSwitch._PERSISTED_DEFAULTS["overnight_actuation"] is True
 
 
 @pytest.mark.unit
