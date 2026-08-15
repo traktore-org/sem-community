@@ -404,17 +404,26 @@ shapes the demand set must ride the re-plan signature.
 - 🔌 **A missed poll is not an unplug** (#638) — SEM's own entities
   contradicted each other inside one update: `binary_sensor.sem_ev_connected`
   read `off` in the very cycle `binary_sensor.sem_charger_<id>_connected` read
-  `on`, both projected from the same `coordinator.data`. Two authorities for
-  one question: the execution layer counts a disconnect only after three
-  confirmed cycles (the UDP-blip absorber, #35/#595/#753), while the plan
-  layer and the fleet entity read the raw plug sensor. So a single dropped
-  KEBA poll restamped the night with the car dropped from the plan, and the
-  blip clearing restamped it back — two re-plans and a window where the plan
-  said "no car tonight", against #638's one-stop/one-start guarantee. The
-  plan now asks what execution asks; a *connect* stays immediate, so a
-  plug-in still stamps within the cycle. Measured on the clone with the plug
-  held continuously connected for three minutes: **5 plan-membership flips
-  and 5 re-stamps before the fix, 0 and 0 after.**
+  `on`, both projected from the same `coordinator.data`. One question, two
+  authorities: the session layer counted a disconnect only after three
+  confirmed cycles (the UDP-blip absorber, #35/#595/#753), while everyone
+  else read the raw plug sensor. A single dropped KEBA poll therefore
+  restamped the night with the car dropped from the plan and the blip
+  clearing restamped it back (two re-plans against #638's one-stop/one-start
+  guarantee), and — the sighting that showed how wide the class was —
+  `sensor.sem_charging_state` fell to *System ready* three times in three
+  minutes while the charger reported the car connected throughout, which on
+  real hardware also ends the session and sends the charger a `disable`.
+
+  The debounce now runs **once, at the source**: the cycle's plug reading is
+  confirmed the moment it is read, before the plan, the state machine, the
+  per-charger decisions, session tracking or any entity sees it. There is no
+  raw answer left in the cycle for a consumer to disagree with, so the fix is
+  structural rather than a patch per call site (fourteen of them). A
+  *connect* stays immediate — a plug-in still stamps within the cycle — and
+  the boot warm-up still never counts (#753). Measured on the clone with the
+  plug held continuously connected for three minutes: **5 plan-membership
+  flips and 5 re-stamps before the fix, 0 and 0 after.**
 
 ### 📚 Documentation
 

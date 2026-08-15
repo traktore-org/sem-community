@@ -771,6 +771,55 @@ class EVControlMixin:
         # ``ev_charging_power_sensor`` entry (rare).
         return float(getattr(power, "ev_power", 0.0) or 0.0)
 
+    def _confirm_ev_connection(self, power: PowerReadings) -> None:
+        """(#638) Answer the plug question ONCE, for the whole cycle.
+
+        Filters ``power`` in place the cycle it is read: every consumer
+        downstream — the state machine, ``build_charger_view`` → ``decide``,
+        the plan layer, the notification gate, the entities — then reads one
+        answer. Before this, the debounce lived in
+        ``_update_session_tracking`` and its result on
+        ``_last_ev_connected_per_charger``, so only the consumers that read
+        THAT map were protected; everything reading ``power.ev_connected``
+        got the raw sensor. On .175 (15.08) that split showed as
+        ``sensor.sem_charging_state`` flapping to "System ready" — the
+        car-away face, and on real hardware a ``stop_session()`` — while
+        the per-charger connected entity stayed on.
+
+        Per charger, plus the flat fleet flag for installs without a
+        per-charger sensor. The fleet answer is the OR of both: a fleet
+        whose chargers blip in turn never reads "no car".
+        """
+        from .ev_availability import confirm_connection
+
+        if not hasattr(self, "_ev_conn_confirmed"):
+            self._ev_conn_confirmed = {}
+            self._ev_conn_streak = {}
+        import time as _time
+        _boot = getattr(self, "_boot_monotonic", None)
+        in_warmup = (_boot is not None and _time.monotonic() - _boot < 120.0)
+
+        def _one(key: str, raw: bool) -> bool:
+            confirmed, streak = confirm_connection(
+                bool(self._ev_conn_confirmed.get(key, False)), bool(raw),
+                int(self._ev_conn_streak.get(key, 0)), in_warmup,
+            )
+            self._ev_conn_confirmed[key] = confirmed
+            self._ev_conn_streak[key] = streak
+            if confirmed and not raw:
+                _LOGGER.debug(
+                    "Plug %s: missed poll %d/3 — holding connected (#638)",
+                    key or "fleet", streak,
+                )
+            return confirmed
+
+        raw_map = getattr(power, "ev_connected_per_charger", None) or {}
+        confirmed_map = {cid: _one(str(cid), raw) for cid, raw in raw_map.items()}
+        fleet = _one("", bool(getattr(power, "ev_connected", False)))
+        if raw_map:
+            power.ev_connected_per_charger = confirmed_map
+        power.ev_connected = fleet or any(confirmed_map.values())
+
     def _update_session_tracking(self, power: PowerReadings, power_flows: PowerFlows) -> None:
         """Track per-session energy, cost, and source attribution.
 
@@ -786,24 +835,15 @@ class EVControlMixin:
         hours = update_interval / 3600.0
 
         # Detect session end: EV was connected, now disconnected.
-        # (#753) A disconnect is only real once CONFIRMED: never inside the
-        # boot warm-up window (the connection sensor publishes False before
-        # its integration has loaded — PROD 2026-08-11: a restart's warm-up
-        # 'unplug' finalized a 6 kWh session and restarted it at 1.6 kWh,
-        # silently rewriting the session's cost and solar share), and only
-        # after three consecutive disconnected cycles (which also absorbs
-        # the KEBA UDP blip family, #35/#595). While the disconnect is
-        # unconfirmed the edge stays armed: _last_ev_connected keeps its
-        # True so this branch re-evaluates every cycle.
+        # (#753 / #638) ``power.ev_connected`` is already the CONFIRMED
+        # answer — ``_confirm_ev_connection`` debounced it at the top of the
+        # cycle (never inside the boot warm-up: PROD 2026-08-11, a restart's
+        # warm-up 'unplug' finalized a 6 kWh session and restarted it at
+        # 1.6 kWh; and only after three consecutive disconnected cycles,
+        # absorbing the KEBA UDP blip family #35/#595). Debouncing again
+        # here would cost a real unplug six cycles and split the cycle's one
+        # answer back in two, which is the bug that moved it to the source.
         if self._last_ev_connected and not power.ev_connected:
-            import time as _time
-            _boot = getattr(self, "_boot_monotonic", None)
-            in_warmup = (_boot is not None
-                         and _time.monotonic() - _boot < 120.0)
-            self._session_data.disconnect_streak += 1
-            if in_warmup or self._session_data.disconnect_streak < 3:
-                return
-            self._session_data.disconnect_streak = 0
             # Session ended — update lifetime stats and keep data for display
             if self._session_data.active and self._session_data.energy_kwh > 0.1:
                 if self._storage:
@@ -825,7 +865,6 @@ class EVControlMixin:
             return
 
         self._last_ev_connected = power.ev_connected
-        self._session_data.disconnect_streak = 0  # (#753) blip absorbed
 
         # Detect session start: EV charging and no active session.
         # v1.6.8: per-charger power. ``_update_session_tracking`` is called

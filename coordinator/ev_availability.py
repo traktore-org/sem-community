@@ -14,30 +14,36 @@ def operational_ev_connected(devices: Mapping[str, Any] | None, sensor_connected
     return bool(devices) and bool(sensor_connected)
 
 
+def confirm_connection(prev_confirmed: bool, raw: bool, streak: int,
+                       in_warmup: bool,
+                       threshold: int = 3) -> tuple[bool, int]:
+    """The cycle's answer to "is this car connected?", and the streak.
+
+    A connect is immediate; a disconnect is earned. A UDP-polled charger
+    drops its plug sensor for a cycle with the car still on the cable (the
+    blip family #35/#595/#753), and a sensor whose integration has not
+    loaded yet publishes False without meaning it (#753: a restart's
+    warm-up 'unplug' finalized a 6 kWh session). Neither is an unplug, so
+    a disconnect counts only after ``threshold`` consecutive raw NOs,
+    never inside the boot warm-up.
+
+    Pure: the caller owns the state. Used once per cycle per charger by
+    ``SEMCoordinator._confirm_ev_connection`` — the ONE place the raw plug
+    reading is read, so every consumer downstream sees one answer.
+    """
+    if raw:
+        return True, 0
+    if not prev_confirmed:
+        return False, 0
+    streak += 1
+    if in_warmup or streak < threshold:
+        return True, streak
+    return False, 0
+
+
 def operational_night_target(devices: Mapping[str, Any] | None, target_kwh: float) -> float:
     """Suppress plans when no charger device can execute them."""
     return float(target_kwh) if devices else 0.0
-
-
-def fleet_connected(confirmed_per_charger: Mapping[str, Any] | None,
-                    raw_fleet: Any) -> bool:
-    """The PUBLISHED fleet answer — same authority as the per-charger entities.
-
-    ``binary_sensor.sem_charger_<id>_connected`` projects the debounced map
-    (``_last_ev_connected_per_charger``: an unplug counts only after three
-    confirmed disconnected cycles, absorbing the UDP-blip family
-    #35/#595/#753). ``binary_sensor.sem_ev_connected`` projected the raw
-    ``power.ev_connected``, so on .175 (15.08) the fleet entity read ``off``
-    in the very cycle its only charger's entity read ``on`` — one
-    ``coordinator.data``, two answers to one question.
-
-    The fleet is the OR of its chargers whenever any per-charger state
-    exists; only an install with none at all (legacy flat sensor, no
-    registered charger) falls back to the raw flag.
-    """
-    if confirmed_per_charger:
-        return any(bool(v) for v in confirmed_per_charger.values())
-    return bool(raw_fleet)
 
 
 def plan_connectivity(cid, charger_cfg, full_config, power):

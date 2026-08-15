@@ -216,12 +216,21 @@ Jitter deliberately does **not** re-plan: targets are compared in
 **day total** in 2-kWh steps — a thermometer drifting or the sun burning
 down the remaining forecast is time passing, not the ask changing.
 
-An **unplug counts only once it is confirmed** — the same three-cycle rule
-the charging session uses. A UDP-polled charger drops a poll now and then
-and reads "no car" for one cycle with the cable still in; that is a missed
-poll, not a departure, and it must not re-plan the night. A **plug-in**, by
-contrast, is acted on immediately: connecting a car re-stamps within the
-cycle.
+An **unplug counts only once it is confirmed**. A UDP-polled charger drops a
+poll now and then and reads "no car" for one cycle with the cable still in;
+that is a missed poll, not a departure, and it must not re-plan the night —
+so a disconnect is believed only after three consecutive cycles say so, and
+never during the first two minutes after a restart, when a sensor that has
+not spoken yet is not a sensor saying "no". A **plug-in**, by contrast, is
+acted on immediately: connecting a car re-stamps within the cycle.
+
+That confirmation happens **once per cycle, where the plug is read** — not
+in each place that asks. The plan, the charging state, each charger's own
+decision, the session counters and SEM's own `connected` entities are all
+answered from the same confirmed reading, so they cannot contradict each
+other about the same car in the same update. It is why a blip can no longer
+drop the car from the night's plan, end a running session, or flip the
+charging state to *System ready* with the cable plugged in.
 
 ## The energy-day horizon
 

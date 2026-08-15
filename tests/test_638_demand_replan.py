@@ -325,72 +325,81 @@ class TestThePriceWindowSlides:
 
 class TestAPlugBlipIsNotAnUnplug:
     """(#753 family, N2 15.08 on .175) The KEBA's UDP plug sensor drops for a
-    cycle with the car still on the cable. Every other consumer of "is this
-    car connected" reads the DEBOUNCED map — three confirmed disconnected
-    cycles before an unplug counts (``ev_control._update_session_tracking``,
-    absorbing #35/#595/#753). The plan layer read the RAW sensor, so a single
-    blip restamped the night without the EV and the blip clearing restamped
-    it back: two restamps and a window where the plan said "no car tonight".
+    cycle with the car still on the cable. A single blip restamped the night
+    without the EV and the blip clearing restamped it back: two restamps and
+    a window where the plan said "no car tonight", against #638's ≤1
+    stop/start per device.
 
     Caught live: ``binary_sensor.sem_ev_connected`` off in the same cycle
     ``binary_sensor.sem_charger_keba_fa87f74cd3_connected`` was on — both
     read from one ``coordinator.data``, so an in-cycle contradiction.
 
-    The plan asks what execution asks: a disconnect counts only once the
-    debounce has confirmed it; a CONNECT is immediate (the plan tick runs
-    before session tracking, so the map lags a cycle — the night-3 proof
+    The plan asks what execution asks because they now ask the SAME reading:
+    ``_confirm_ev_connection`` debounces ``power`` at the top of the cycle,
+    so these tests drive it in production order. A disconnect counts after
+    three confirmed cycles; a CONNECT is immediate (the night-3 proof
     "connect 00:07:32, stamp same second" must survive).
     """
 
-    def _c(self, confirmed):
+    def _c(self, *, arrived=True):
         c = _coord()
-        c._last_ev_connected_per_charger = dict(confirmed)
+        c._ev_conn_confirmed = {}
+        c._ev_conn_streak = {}
+        c._boot_monotonic = None  # long booted — warm-up is not the subject
+        if arrived:
+            c._confirm_ev_connection(_power(per_charger={"keba": True}))
         return c
 
+    def _cycle(self, c, power):
+        """One cycle: confirm at the source (step 1), then the trigger."""
+        c._confirm_ev_connection(power)
+        return c._overnight_demand_signature(power)
+
+    def _blip(self):
+        return _power(connected=False, per_charger={"keba": False})
+
     def test_an_unconfirmed_disconnect_is_not_an_unplug(self):
-        c = self._c({"keba": True})
-        plugged = c._overnight_demand_signature(_power(per_charger={"keba": True}))
-        blip = c._overnight_demand_signature(
-            _power(connected=False, per_charger={"keba": False}))
-        assert blip == plugged
+        c = self._c()
+        plugged = self._cycle(c, _power(per_charger={"keba": True}))
+        assert self._cycle(c, self._blip()) == plugged
 
     def test_a_confirmed_unplug_still_replans(self):
-        c = self._c({"keba": False})
-        plugged = self._c({"keba": True})._overnight_demand_signature(
-            _power(per_charger={"keba": True}))
-        gone = c._overnight_demand_signature(
-            _power(connected=False, per_charger={"keba": False}))
-        assert gone != plugged
+        c = self._c()
+        plugged = self._cycle(c, _power(per_charger={"keba": True}))
+        assert self._cycle(c, self._blip()) == plugged
+        assert self._cycle(c, self._blip()) == plugged
+        assert self._cycle(c, self._blip()) != plugged
 
     def test_a_fresh_connect_replans_without_waiting_for_the_debounce(self):
-        """The map is last cycle's — a car that just plugged in is not yet
-        in it, and the stamp must not wait a cycle for it."""
-        away = self._c({"keba": False})._overnight_demand_signature(
-            _power(connected=False, per_charger={"keba": False}))
-        fresh = self._c({"keba": False})._overnight_demand_signature(
-            _power(connected=True, per_charger={"keba": True}))
+        c = self._c(arrived=False)
+        away = self._cycle(c, self._blip())
+        fresh = self._cycle(c, _power(connected=True, per_charger={"keba": True}))
         assert fresh != away
 
     def test_the_collector_and_the_signature_read_the_same_answer(self):
         """One accessor, or the plan's demands and its replan trigger can
         disagree about the same car in the same cycle."""
-        c = self._c({"keba": True})
+        c = self._c()
         cfg = c.config["ev_chargers"][0]
-        blip = _power(connected=False, per_charger={"keba": False})
+        blip = self._blip()
+        c._confirm_ev_connection(blip)
         assert c._plan_ev_connected("keba", cfg, blip) is True
 
     def test_a_confirmed_unplug_reaches_the_collector(self):
-        c = self._c({"keba": False})
+        c = self._c()
         cfg = c.config["ev_chargers"][0]
-        gone = _power(connected=False, per_charger={"keba": False})
+        for _ in range(3):
+            gone = self._blip()
+            c._confirm_ev_connection(gone)
         assert c._plan_ev_connected("keba", cfg, gone) is False
 
-    def test_a_charger_with_no_debounce_state_honours_its_sensor(self):
-        """No registered device → no debounce map entry. The sensor is then
-        the only answer there is; second-guessing it would starve the plan."""
-        c = self._c({})
+    def test_a_charger_that_was_never_connected_honours_its_sensor(self):
+        """Nothing to hold: an absent car is absent from the first cycle,
+        and inventing a hold would starve a sensor-less install's plan."""
+        c = self._c(arrived=False)
         cfg = c.config["ev_chargers"][0]
-        gone = _power(connected=False, per_charger={"keba": False})
+        gone = self._blip()
+        c._confirm_ev_connection(gone)
         assert c._plan_ev_connected("keba", cfg, gone) is False
 
     def test_the_accessor_is_the_only_raw_reader(self):
@@ -424,7 +433,7 @@ class TestAPlugBlipIsNotAnUnplug:
     def test_no_plug_sensor_stays_unknown(self):
         """The tri-state contract survives: ``None`` = nothing to ask, and
         the debounce map must not turn that into a definite no."""
-        c = self._c({"keba": False})
+        c = self._c(arrived=False)
         power = SimpleNamespace(ev_connected=False, ev_connected_per_charger=None)
         assert c._plan_ev_connected("keba", {}, power) is None
 
