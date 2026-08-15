@@ -14,6 +14,7 @@ is for logs, not for rendering):
   reactively is visible on the card, never silent.
 """
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -168,3 +169,81 @@ class TestTheQuietFaceSpeaksInSentences:
             in plan["not_scheduled"]
         # The EV code must NOT claim "target met" — the car is absent.
         assert "ev_target_met" not in plan["why_codes"]
+
+
+# The reasons for which "the plan is unreadable" IS the honest sentence:
+# the plan really did break trust and the user can do nothing but wait for
+# the next stamp. Every OTHER reason owes the user a specific sentence.
+_UNREADABLE_IS_HONEST = {"malformed block", "unreadable plan", "no span"}
+
+
+@pytest.mark.unit
+class TestTheQuietPlanIsNotUnreadable:
+    """A night with nothing to schedule is a READABLE answer.
+
+    The quiet 22:00 plan publishes ``demands``/``slots``/``blocks`` as empty
+    lists on purpose ("nothing needs the night"). Gating that shape on the
+    slot span made every demand answer ``no span``, and the card has no
+    sentence for that reason — so it fell through to *"the plan is
+    unreadable"* on a night when the plan was perfectly readable and simply
+    had nothing to do. Live on PROD 15.08 12:10:51: battery + 10 loads +
+    comfort, every coverage value ``no span``.
+    """
+
+    NOW = datetime(2026, 8, 15, 23, 30, tzinfo=timezone.utc)
+
+    def _quiet(self):
+        return {"computed_at": "2026-08-15T22:00:00+00:00", "fits": True,
+                "demands": [], "slots": [], "blocks": [],
+                "why_codes": ["battery_no_deficit"]}
+
+    def test_the_quiet_plan_names_itself(self):
+        from custom_components.solar_energy_management.coordinator \
+            .overnight_actuation import plan_gate
+        gate = plan_gate(self._quiet(), "battery", self.NOW)
+        # Still uncovered — an empty plan has no say over anything.
+        assert gate.covered is False
+        assert gate.reason == "nothing planned"
+
+    def test_a_plan_that_lost_its_span_still_says_no_span(self):
+        """The discriminator is the EMPTY shape, not the missing span: a
+        plan that packed demands but has no readable slots is genuinely
+        broken and must keep saying so."""
+        from custom_components.solar_energy_management.coordinator \
+            .overnight_actuation import plan_gate
+        broken = self._quiet()
+        broken["demands"] = [{"id": "battery", "status": "fits"}]
+        gate = plan_gate(broken, "battery", self.NOW)
+        assert gate.reason == "no span"
+
+    def test_every_gate_reason_has_a_card_sentence(self):
+        """Systematic pin: a reason the gate can emit that the card cannot
+        translate renders as "unreadable" — the bug class, not one bug.
+        Adding a reason now forces either a card key or an explicit entry
+        in the honest-unreadable set."""
+        import json
+        import pathlib
+        import re
+        root = pathlib.Path(__file__).resolve().parent.parent
+        src = (root / "coordinator" / "overnight_actuation.py").read_text()
+        reasons = set(re.findall(r'PlanGate\(reason=[\'"]([^\'"{]+)[\'"]', src))
+        reasons.add("actuation off")  # the coordinator's own kill-switch reason
+        assert "nothing planned" in reasons
+
+        card = (root / "dashboard" / "card" / "src" / "cards"
+                / "sem-energy-plan-card.js").read_text()
+        block = card.split("_covKey(reason)", 1)[1].split("}", 1)[0]
+        mapped = dict(re.findall(r"'([^']+)':\s*'(overnight_cov_[a-z_]+)'",
+                                 block))
+
+        unmapped = {r for r in reasons
+                    if r not in mapped and r not in _UNREADABLE_IS_HONEST}
+        assert not unmapped, (
+            f"gate reasons with no card sentence: {sorted(unmapped)} — "
+            "either map them in _covKey or declare them honestly unreadable")
+
+        langs = json.loads(
+            (root / "dashboard" / "translations.json").read_text())
+        for reason, key in mapped.items():
+            missing = [lg for lg, t in langs.items() if not t.get(key)]
+            assert not missing, f"{key} ({reason}) missing in {missing}"

@@ -433,11 +433,23 @@ The **Energy Plan** card (Control tab) is the one answer:
 - **Chips** — while actuation is on, each row carries its live state:
   steering now, waiting for its block, done — or **"reactive — why"**
   when the plan does not cover the demand right now (no plan yet, plan
-  outdated, could not fit it, actuation off). Reactive is visible, never
-  silent.
+  outdated, could not fit it, nothing to schedule tonight, actuation off).
+  Reactive is visible, never silent.
+- **A quiet night says so.** When nothing needs the night — battery full,
+  EV at target, no load asking — the plan is stamped with empty lists on
+  purpose and every row reads *nothing to schedule tonight*. That is an
+  answer, not a failure; "plan unreadable" is reserved for a plan that
+  really did break trust (a malformed block, an unparsable payload).
 - **"Not scheduled tonight"** — every device the collector deliberately
-  left out, with its why: the charge mode excludes night charging, or no
-  car is connected. An absent row is never a mystery.
+  left out, with its why: the charge mode excludes night charging, no car
+  is connected, or the car is already full. An absent row is never a
+  mystery.
+- **"Already full" needs two witnesses.** A car counts as full only when
+  SEM's own charge accounting says so *and* the charger's meter agrees —
+  a car drawing more than its charger's handshake current is never
+  answered as full, whatever the accounting says mid-charge. Both the
+  demand list and the re-plan trigger ask the same accessor, so the night
+  cannot flip between a plan with the car and one without it.
 - **The kill-switch** — `switch.sem_overnight_actuation` turns the plan's
   authority off entirely; every device then runs on its reactive rules
   and the card says so.

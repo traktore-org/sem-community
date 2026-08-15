@@ -109,6 +109,23 @@ re-stamp); reboot mid-block (the stamp must survive with the same
 `computed_at`); flip the actuation kill-switch (coverage must flip to
 "actuation off" and back without a restamp).
 
+## Simulate the input, never the entity a real device owns
+
+Point SEM at *simulated* entities (`input_boolean`, `input_number`,
+template sensors) — those the harness owns outright. An entity a live
+integration publishes cannot be held: the integration republishes its own
+truth within a poll and wins. On the shared clone that is the KEBA plug
+sensor — with a real cable connected, "the car went away" is not a state
+the rig can enter, no matter how many `POST /api/states` calls the harness
+makes.
+
+So a harness check has **three** verdicts, not two: pass, fail, and
+*untestable*. Probe first (hold the value, read it back, see whether it
+sticks), and when the precondition is unreachable say so. A rig limit
+reported as a failure trains you to skim past failures; reported as a pass
+it hides untested surface. Both are worse than an honest "not testable
+today, and here is what proves the same property instead".
+
 ## What this cannot test
 
 The last centimeter: brand adapters talking to real firmware (Modbus

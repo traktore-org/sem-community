@@ -425,6 +425,36 @@ shapes the demand set must ride the re-plan signature.
   plug held continuously connected for three minutes: **5 plan-membership
   flips and 5 re-stamps before the fix, 0 and 0 after.**
 
+- 🌙 **"Nothing to schedule" is an answer, not an error** (#638) — on a night
+  where nothing needs the night (battery full, EV at target, no load asking),
+  the plan is stamped with its lists deliberately empty and says why. The
+  actuation gate read that empty shape as a plan with no period and answered
+  *no span* for every device — a reason the card has no sentence for, so it
+  fell through to **"plan unreadable"**. Live on production 15.08 12:10:51:
+  the battery, ten loads and the comfort demand all told the user the plan
+  was unreadable while the plan was perfectly readable and simply idle. The
+  gate now names the quiet plan honestly (*nothing to schedule tonight*, in
+  all 16 languages), and a test pins the whole class: every reason the gate
+  can emit must have a card sentence, or be declared one of the three where
+  "unreadable" is the truthful answer.
+
+- 🚗 **A car that is charging is not a full car** (#756) — the planner asks
+  the taper detector whether the car is still full, so a phantom EV cannot
+  eat the night's peak budget. But "still full" is anchored energy
+  accounting: it is the deficit below full, charging *subtracts* from it,
+  and it clamps at zero. So the instant a real charge delivered the last of
+  the deficit, the detector reported a full car while the meter showed
+  3.9 kW going into the pack — and stayed there until the pack had
+  overdrawn the anchor by 0.1 kWh, about 90 seconds later. In that window
+  the night was re-stamped around a car that had just been dropped from it,
+  and re-stamped back when the anchor gave way (production, 15.08
+  11:50:52). The fullness question is now asked in **one** place — a single
+  accessor shared by the demand collector and the re-plan trigger, so they
+  cannot answer it differently — and that place also reads the charger's
+  own meter: a car drawing above its charger's handshake threshold is never
+  answered as full. A genuine sub-handshake trickle still reads full, so
+  the phantom-EV fix (#756) is untouched.
+
 ### 📚 Documentation
 
 - 📖 **README, ARCHITECTURE, SETUP_GUIDE and EV_CHARGING_LOGIC now describe

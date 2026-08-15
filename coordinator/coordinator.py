@@ -6173,6 +6173,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         from .ev_availability import plan_connectivity
         return plan_connectivity(cid, charger_cfg, self.config, power)
 
+    def _plan_car_full(self, cid: str, power):
+        """(#756) THE plan layer's answer to "is this car full?".
+
+        Tri-state, same contract as ``_plan_ev_connected``: ``True`` (skip
+        the demand) or ``None`` (nothing to ask → plan it). One accessor,
+        so the demand collector and the demand signature cannot answer
+        differently — answering differently is exactly what flipped the
+        night on N2: the signature restamped because the car had "filled
+        up", and the collector then built the new plan without it.
+
+        Two readings, one question: the taper detector's anchor and THIS
+        charger's draw (``_charger_power_w``, the canonical per-charger
+        read) against the charger's own handshake threshold.
+        """
+        from .ev_availability import plan_car_fullness
+        detector = (getattr(self, "_ev_taper_detectors", None) or {}).get(cid)
+        if detector is None:
+            return None
+        drawing_w = None
+        if power is not None:
+            try:
+                drawing_w = self._charger_power_w(cid, power)
+            except Exception:  # noqa: BLE001 — no meter opinion, use the anchor
+                drawing_w = None
+        adapter = (getattr(self, "_charger_adapters", None) or {}).get(cid)
+        handshake_w = float(getattr(adapter, "handshake_power_w", 500.0) or 500.0)
+        return plan_car_fullness(detector, drawing_w=drawing_w,
+                                 handshake_w=handshake_w)
+
     def _overnight_demand_signature(self, power) -> tuple:
         """(#638) What the night is being ASKED for, as a comparable value.
 
@@ -6212,9 +6241,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         for cfg in (self.config.get("ev_chargers") or []):
             try:
                 cid = str(cfg.get("id") or "")
-                from .ev_availability import plan_car_fullness
-                _full = bool(plan_car_fullness(
-                    getattr(self, "_ev_taper_detectors", {}).get(cid)))
+                _full = bool(self._plan_car_full(cid, power))
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
@@ -6973,7 +7000,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # precedent). The plug-in re-plans within a cycle because
                 # connection is term 1 of the demand signature — proven
                 # live on the clone: connect 00:07:32, stamp same second.
-                from .ev_availability import plan_car_fullness
                 if self._plan_ev_connected(cid, cfg, power) is False:
                     disconnected.append(cid)
                     continue
@@ -6983,11 +7009,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # 100 % car jumped to the full 20 kWh and the phantom
                 # displaced the real loads under the peak cap (sim_heizband
                 # fits→yields at exactly 00:01; the morning unplug flipped
-                # it straight back). Only the detector's definite yes skips;
-                # an unknown car is planned — the two gates above set the
-                # precedent.
-                if plan_car_fullness(
-                        getattr(self, "_ev_taper_detectors", {}).get(cid)):
+                # it straight back). Only a definite yes skips; an unknown
+                # car is planned — the two gates above set the precedent.
+                # (N2, 15.08) The accessor asks the meter too: a car that
+                # is DRAWING is not a full car, however the anchor's
+                # arithmetic reads mid-delivery.
+                if self._plan_car_full(cid, power):
                     car_full.append(cid)
                     continue
                 if kwh <= 0.05:

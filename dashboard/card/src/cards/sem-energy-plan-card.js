@@ -135,6 +135,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
             'outside span': 'overnight_cov_outside',
             'not in plan': 'overnight_cov_not_in_plan',
             'actuation off': 'overnight_cov_actuation_off',
+            'nothing planned': 'overnight_cov_nothing_planned',
         };
         return m[reason] || 'overnight_cov_unreadable';
     }

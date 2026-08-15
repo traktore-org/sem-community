@@ -121,6 +121,17 @@ def _fake_self(devices=()):
     fake._plan_ev_connected = (
         lambda cid, cfg, power: SEMCoordinator._plan_ev_connected(
             fake, cid, cfg, power))
+    # (#756/N2) The plan's fullness authority, bound the same way and for
+    # the same reason: the double must not be able to answer "is this car
+    # full?" differently from production. Reads the detector registry and
+    # this charger's draw — the registry is absent on the plain fake, so a
+    # car with no detector stays unknown (planned).
+    fake._ev_devices = {}
+    fake._charger_power_w = (
+        lambda cid, power, ev_dev=None: SEMCoordinator._charger_power_w(
+            fake, cid, power, ev_dev))
+    fake._plan_car_full = (
+        lambda cid, power: SEMCoordinator._plan_car_full(fake, cid, power))
     return fake
 
 

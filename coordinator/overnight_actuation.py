@@ -99,6 +99,15 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         computed = _parse_dt(plan.get("computed_at"))
         if computed is None or now - computed > _MAX_PLAN_AGE:
             return PlanGate(reason="stale stamp")
+        # A DELIBERATELY empty plan is not an unreadable one. The quiet
+        # 22:00 answer ("nothing needs the night") publishes demands, slots
+        # and blocks as empty lists on purpose; falling through to the span
+        # check made every demand answer "no span", which the card has no
+        # sentence for — so the user read "the plan is unreadable" on a
+        # night when the plan was perfectly readable and had nothing to do.
+        # Uncovered either way; only the reason is honest now.
+        if not (plan.get("demands") or []) and not (plan.get("slots") or []):
+            return PlanGate(reason="nothing planned")
         slots = plan.get("slots") or []
         span_start = _parse_dt(slots[0].get("start")) if slots else None
         span_end = _parse_dt(slots[-1].get("end")) if slots else None

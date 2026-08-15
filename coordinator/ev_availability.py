@@ -76,22 +76,51 @@ def plan_connectivity(cid, charger_cfg, full_config, power):
     return None
 
 
-def plan_car_fullness(detector):
+def plan_car_fullness(detector, drawing_w=None, handshake_w=500.0):
     """Tri-state fullness for the night demand collector (#756).
 
     ``True`` when THIS charger's taper detector says the car is still
     full — anchored at a completed charge with nothing drawn since (the
-    same predicate that pins estimated_soc to 100). ``None`` for
-    everything else, including no detector and a broken one: only a
-    definite yes skips a demand, the ``plan_connectivity`` precedent.
+    same predicate that pins estimated_soc to 100) — AND the meter does
+    not contradict it. ``None`` for everything else, including no
+    detector and a broken one: only a definite yes skips a demand, the
+    ``plan_connectivity`` precedent.
 
     Why it exists: ``build_night_target_map`` answers ``target − daily``
     off the calendar counter, which rolls at midnight — on N1 the ask for
     a 100 % car jumped to the full 20 kWh at 00:01 and the phantom
     displaced the real loads under the peak cap. The counter knows the
     calendar; the detector knows the car.
+
+    Why the meter overrules the anchor (N2, .175 15.08): ``still_full``
+    is the deficit below full, and charging SUBTRACTS from it, clamped at
+    zero. A real charge delivering the last of the deficit therefore
+    reads "anchored, nothing missing" for as long as it takes to overdraw
+    by ``ANCHOR_REFUTED_KWH`` — ~90 s at 3.9 kW — and in that window the
+    plan was told the car was full and restamped the night without it.
+    After a TAPER-detected full it is not a window at all: ``update_energy``
+    returns early while ``_full_detected`` stands, so the deficit never
+    moves and the #774 refutation can never fire — the car reads full for
+    as long as the flag lasts, whatever the meter says.
+
+    The detector cannot close either case alone: it sees energy increments,
+    not duration, and a genuine trickle is numerically the same rate. Power
+    is known here, so here is where the meter gets its say.
+
+    ``handshake_w`` is the charger's own "actually charging" threshold
+    (``adapter.handshake_power_w``, #739) — a real sub-handshake trickle
+    still reads full, so #756's contract is untouched. Only a NUMBER may
+    contradict the anchor: junk on the wire must not un-full a car.
     """
     try:
-        return True if getattr(detector, "still_full", False) else None
+        if not getattr(detector, "still_full", False):
+            return None
     except Exception:  # noqa: BLE001 — an unreadable detector has no opinion
         return None
+    if drawing_w is not None:
+        try:
+            if float(drawing_w) > float(handshake_w):
+                return None
+        except (TypeError, ValueError):
+            pass  # an unreadable meter is not an argument
+    return True
