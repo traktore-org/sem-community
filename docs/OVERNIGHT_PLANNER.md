@@ -216,6 +216,13 @@ Jitter deliberately does **not** re-plan: targets are compared in
 **day total** in 2-kWh steps — a thermometer drifting or the sun burning
 down the remaining forecast is time passing, not the ask changing.
 
+An **unplug counts only once it is confirmed** — the same three-cycle rule
+the charging session uses. A UDP-polled charger drops a poll now and then
+and reads "no car" for one cycle with the cable still in; that is a missed
+poll, not a departure, and it must not re-plan the night. A **plug-in**, by
+contrast, is acted on immediately: connecting a car re-stamps within the
+cycle.
+
 ## The energy-day horizon
 
 The plan always covers **now → the coming night's end** (the

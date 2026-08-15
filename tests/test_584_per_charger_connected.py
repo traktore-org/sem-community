@@ -80,6 +80,43 @@ class TestPerChargerConnectedResolution:
 
 
 @pytest.mark.unit
+class TestTheFleetEntityAgreesWithItsChargers:
+    """(15.08, .175) ``binary_sensor.sem_ev_connected`` read ``off`` in the
+    same cycle ``binary_sensor.sem_charger_keba_fa87f74cd3_connected`` read
+    ``on`` — both projected from ONE ``coordinator.data``, so not a race but
+    a contradiction. The per-charger entity publishes the DEBOUNCED map (a
+    disconnect counts only after three confirmed cycles, absorbing the
+    UDP-blip family #35/#595/#753); the fleet entity published the raw
+    ``power.ev_connected``. One question, two authorities.
+    """
+
+    def _f(self, confirmed, raw):
+        from custom_components.solar_energy_management.coordinator.ev_availability import (
+            fleet_connected,
+        )
+        return fleet_connected(confirmed, raw)
+
+    def test_a_blipping_charger_keeps_the_fleet_connected(self):
+        assert self._f({"keba": True}, False) is True
+
+    def test_the_fleet_is_the_or_of_its_chargers(self):
+        assert self._f({"a": False, "b": True}, False) is True
+        assert self._f({"a": False, "b": False}, True) is False
+
+    def test_no_per_charger_state_falls_back_to_the_raw_flag(self):
+        assert self._f({}, True) is True
+        assert self._f(None, False) is False
+
+    def test_the_publish_path_uses_it(self):
+        """The entity is what the user sees; a helper nothing calls fixes
+        nothing."""
+        import pathlib
+        src = (pathlib.Path(__file__).parent.parent
+               / "coordinator" / "coordinator.py").read_text()
+        assert "fleet_connected(" in src
+
+
+@pytest.mark.unit
 def test_power_readings_per_charger_fields_default_empty():
     p = PowerReadings()
     assert p.ev_connected_per_charger == {}

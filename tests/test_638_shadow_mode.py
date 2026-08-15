@@ -114,6 +114,13 @@ def _fake_self(devices=()):
         EVControlMixin,
     )
     fake._planning_peak_w = lambda: EVControlMixin._planning_peak_w(fake)
+    # (15.08) The plan's connection authority, bound the same way: the REAL
+    # accessor runs, so the double cannot answer "is this car connected?"
+    # differently from production (#660 lens). It reads the debounced map
+    # through ``getattr`` — absent on the fake, so a raw no stays a no here.
+    fake._plan_ev_connected = (
+        lambda cid, cfg, power: SEMCoordinator._plan_ev_connected(
+            fake, cid, cfg, power))
     return fake
 
 

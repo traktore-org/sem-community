@@ -399,6 +399,23 @@ shapes the demand set must ride the re-plan signature.
   the car was actually driven is unknowable — only that it was further than we
   thought — and inventing the replacement number is what caused this.
 
+### 🐛 Found by the simulation campaign (#638, #753)
+
+- 🔌 **A missed poll is not an unplug** (#638) — SEM's own entities
+  contradicted each other inside one update: `binary_sensor.sem_ev_connected`
+  read `off` in the very cycle `binary_sensor.sem_charger_<id>_connected` read
+  `on`, both projected from the same `coordinator.data`. Two authorities for
+  one question: the execution layer counts a disconnect only after three
+  confirmed cycles (the UDP-blip absorber, #35/#595/#753), while the plan
+  layer and the fleet entity read the raw plug sensor. So a single dropped
+  KEBA poll restamped the night with the car dropped from the plan, and the
+  blip clearing restamped it back — two re-plans and a window where the plan
+  said "no car tonight", against #638's one-stop/one-start guarantee. The
+  plan now asks what execution asks; a *connect* stays immediate, so a
+  plug-in still stamps within the cycle. Measured on the clone with the plug
+  held continuously connected for three minutes: **5 plan-membership flips
+  and 5 re-stamps before the fix, 0 and 0 after.**
+
 ### 📚 Documentation
 
 - 📖 **README, ARCHITECTURE, SETUP_GUIDE and EV_CHARGING_LOGIC now describe

@@ -19,6 +19,27 @@ def operational_night_target(devices: Mapping[str, Any] | None, target_kwh: floa
     return float(target_kwh) if devices else 0.0
 
 
+def fleet_connected(confirmed_per_charger: Mapping[str, Any] | None,
+                    raw_fleet: Any) -> bool:
+    """The PUBLISHED fleet answer — same authority as the per-charger entities.
+
+    ``binary_sensor.sem_charger_<id>_connected`` projects the debounced map
+    (``_last_ev_connected_per_charger``: an unplug counts only after three
+    confirmed disconnected cycles, absorbing the UDP-blip family
+    #35/#595/#753). ``binary_sensor.sem_ev_connected`` projected the raw
+    ``power.ev_connected``, so on .175 (15.08) the fleet entity read ``off``
+    in the very cycle its only charger's entity read ``on`` — one
+    ``coordinator.data``, two answers to one question.
+
+    The fleet is the OR of its chargers whenever any per-charger state
+    exists; only an install with none at all (legacy flat sensor, no
+    registered charger) falls back to the raw flag.
+    """
+    if confirmed_per_charger:
+        return any(bool(v) for v in confirmed_per_charger.values())
+    return bool(raw_fleet)
+
+
 def plan_connectivity(cid, charger_cfg, full_config, power):
     """Three-state connectivity for the night demand collector (#638 night 3).
 

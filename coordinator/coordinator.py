@@ -3893,6 +3893,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # sampled is the one this cycle's actuation actually obeyed.
             self._record_demand_outcomes(dt_util.now(), power)
 
+            # (15.08) The fleet entity answers the same question as the
+            # per-charger entities two lines down, so it must read the same
+            # authority: the raw flag made sem_ev_connected go off in the
+            # very cycle sem_charger_<id>_connected was on.
+            if self._ev_devices:
+                from .ev_availability import fleet_connected
+                result["ev_connected"] = fleet_connected(
+                    self._last_ev_connected_per_charger,
+                    result.get("ev_connected"),
+                )
+
             # Add per-charger data (#131): power + session
             per_charger_soc: Dict[str, float] = {}
             for cid, ev_dev in self._ev_devices.items():
@@ -6148,6 +6159,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.info("#638 coverage: %s", msg)
         return gate
 
+    def _plan_ev_connected(self, cid: str, charger_cfg, power):
+        """(#638) THE plan layer's answer to "is this car connected?".
+
+        Tri-state, same contract as ``plan_connectivity``: True / False /
+        ``None`` (nothing to ask). The difference is WHOSE no it trusts.
+
+        A raw plug sensor says no for a cycle whenever a UDP-polled charger
+        misses a poll — the blip family #35/#595/#753. Every other consumer
+        of this question already knows that: the session layer only counts a
+        disconnect after three consecutive disconnected cycles
+        (``ev_control._update_session_tracking``), and the confirmed answer
+        it leaves behind, ``_last_ev_connected_per_charger[cid]``, is what
+        the virtual-SOC decay (#648), the per-charger SOC cap (#708), the
+        notification gate (#584) and ``binary_sensor.sem_charger_<id>_
+        connected`` all read.
+
+        The plan layer read the raw sensor instead, so one blip restamped
+        the night with the EV dropped and the blip clearing restamped it
+        back — two restamps and a window where the plan said "no car
+        tonight", against #638's ≤1 stop/start per device. Caught live on
+        .175: ``binary_sensor.sem_ev_connected`` off in the same cycle the
+        per-charger entity was on, both out of one ``coordinator.data``.
+
+        Only the NO is second-guessed. A connect stays immediate: the plan
+        tick runs before session tracking (step 4.4 vs 4.5), so the map is
+        last cycle's, and waiting for it would cost the plug-in its
+        same-second stamp (#638 night 3).
+        """
+        from .ev_availability import plan_connectivity
+        answer = plan_connectivity(cid, charger_cfg, self.config, power)
+        if answer is False:
+            confirmed = getattr(self, "_last_ev_connected_per_charger", None) or {}
+            if confirmed.get(cid):
+                return True  # disconnect not confirmed yet — still plugged in
+        return answer
+
     def _overnight_demand_signature(self, power) -> tuple:
         """(#638) What the night is being ASKED for, as a comparable value.
 
@@ -6166,10 +6213,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         sig: list = []
         # 1. Connection — the original trigger, per-charger when available.
+        #    Same key set as the raw map, but each answer comes from
+        #    _plan_ev_connected: an UNCONFIRMED disconnect is a missed UDP
+        #    poll, not an unplug, and restamping the night on one is the
+        #    blip family arriving in the planner (#753 family, N2 15.08).
+        _pc = getattr(power, "ev_connected_per_charger", None) or {}
+        _cfgs = {str(c.get("id") or ""): c
+                 for c in (self.config.get("ev_chargers") or [])}
+        _fleet = bool(getattr(power, "ev_connected", False))
+        if not _fleet:
+            # The flat-config twin of the same rule: the debounced fleet flag
+            # is still armed while a disconnect is unconfirmed.
+            _fleet = bool(getattr(self, "_last_ev_connected", False))
         sig.append(("conn", tuple(sorted(
-            (str(k), bool(v)) for k, v in
-            (getattr(power, "ev_connected_per_charger", None) or {}).items()
-        )) or (("fleet", bool(getattr(power, "ev_connected", False))),)))
+            (str(k), bool(self._plan_ev_connected(
+                str(k), _cfgs.get(str(k)) or {}, power)))
+            for k in _pc
+        )) or (("fleet", _fleet),)))
         # 2. Per-charger ask: floor, deadline, mode — and whether the car
         #    is still full (#756). Anchoring full happens mid-night with
         #    the plug still in; nothing else here moves, so without this
@@ -6939,8 +6999,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # precedent). The plug-in re-plans within a cycle because
                 # connection is term 1 of the demand signature — proven
                 # live on the clone: connect 00:07:32, stamp same second.
-                from .ev_availability import plan_car_fullness, plan_connectivity
-                if plan_connectivity(cid, cfg, self.config, power) is False:
+                from .ev_availability import plan_car_fullness
+                if self._plan_ev_connected(cid, cfg, power) is False:
                     disconnected.append(cid)
                     continue
                 # (#756, N1) A car that is KNOWN full is not a demand. The
