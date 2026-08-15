@@ -4673,7 +4673,15 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     </div>
                 `:q}
             </div>
-        `:q}_renderIdle(e,t="energy_plan_idle",i="",s=!1,r="",a=[],o=[]){const n=(a||[]).map(e=>this._t("energy_plan_whyc_"+e)).filter(Boolean).join(" · ");return W`
+        `:q}_renderArb(e){return e?W`
+            <div class="arb" title="${this._t("energy_plan_arbitrage_tip")}">
+                <ha-icon icon="mdi:swap-vertical-bold"
+                         style="--mdc-icon-size:13px;color:${e.opportunity?"#8DC892":"var(--secondary-text-color,#8a93a5)"}"></ha-icon>
+                <span class="arb-lbl">${this._t("energy_plan_arbitrage")}</span>
+                <span class="arb-txt">${e.reason||""}</span>
+                ${this._docsLink("arbitrage")}
+            </div>
+        `:q}_renderIdle(e,t="energy_plan_idle",i="",s=!1,r="",a=[],o=[],n=null){const l=(a||[]).map(e=>this._t("energy_plan_whyc_"+e)).filter(Boolean).join(" · ");return W`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
@@ -4684,7 +4692,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         ${this._docsLink()}
                     </div>
                     <div class="idle">${this._t(t)}${i}</div>
-                    ${n?W`<div class="why" title="${r}">${n}</div>`:r?W`<div class="why" title="${r}">${r}</div>`:q}
+                    ${l?W`<div class="why" title="${r}">${l}</div>`:r?W`<div class="why" title="${r}">${r}</div>`:q}
                     ${(o||[]).length?W`
                         <div class="notsched">
                             <div class="notsched-h">${this._t("energy_plan_not_scheduled")}</div>
@@ -4698,10 +4706,11 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             `)}
                         </div>
                     `:q}
+                    ${this._renderArb(n)}
                     ${this._renderReview()}
                 </div>
             </ha-card>
-        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation||void 0===i.actuation&&"on"===this._hass.states["switch.sem_energy_plan_actuation"]?.state;if("tomorrow"===(this._view||"today")&&i.tomorrow)return this._renderTomorrow(i.tomorrow);if("pending"===t){const e=this._hass.states["sensor.sem_night_start_time"]?.state,t=e&&/^\d{1,2}:\d{2}$/.test(e)?` (~${e})`:"";return this._renderIdle(s,"energy_plan_pending",t,!!i.tomorrow)}const r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s,"energy_plan_idle","",!!i.tomorrow,i.why||"",i.why_codes||[],i.not_scheduled||[]);const n=a.length?Date.parse(a[0].start):NaN,l=a.length?Date.parse(a[a.length-1].end):NaN,c=l-n,d=a.length>0&&Number.isFinite(c)&&c>0,p=this._runs(a,n,c,e=>!!e.cheap).filter(e=>e.v);let h=null;const _=this._hass.states["sensor.sem_night_start_time"]?.state;if(d&&_&&/^\d{1,2}:\d{2}$/.test(_)){const[e,t]=_.split(":").map(Number);for(const i of[0,1]){const s=new Date(n);s.setDate(s.getDate()+i),s.setHours(e,t,0,0);const r=s.getTime();if(r>=n&&r<l){h=(r-n)/c*100;break}}}const g=Date.now(),u=d&&g>=n&&g<l?(g-n)/c*100:null,f=W`
+        `}render(){if(!this._hass||!this._config)return q;const e=this._hass.states[this._entity],t=e?.state;if(!e||"unavailable"===t||"unknown"===t)return this.style.display="none",q;this.style.display="";const i=e.attributes||{},s=!0===i.actuation||void 0===i.actuation&&"on"===this._hass.states["switch.sem_energy_plan_actuation"]?.state;if("tomorrow"===(this._view||"today")&&i.tomorrow)return this._renderTomorrow(i.tomorrow);if("pending"===t){const e=this._hass.states["sensor.sem_night_start_time"]?.state,t=e&&/^\d{1,2}:\d{2}$/.test(e)?` (~${e})`:"";return this._renderIdle(s,"energy_plan_pending",t,!!i.tomorrow)}const r=Array.isArray(i.demands)?i.demands:[],a=Array.isArray(i.slots)?i.slots:[],o=Array.isArray(i.blocks)?i.blocks:[];if("idle"===t||!r.length)return this._renderIdle(s,"energy_plan_idle","",!!i.tomorrow,i.why||"",i.why_codes||[],i.not_scheduled||[],i.arbitrage);const n=a.length?Date.parse(a[0].start):NaN,l=a.length?Date.parse(a[a.length-1].end):NaN,c=l-n,d=a.length>0&&Number.isFinite(c)&&c>0,p=this._runs(a,n,c,e=>!!e.cheap).filter(e=>e.v);let h=null;const _=this._hass.states["sensor.sem_night_start_time"]?.state;if(d&&_&&/^\d{1,2}:\d{2}$/.test(_)){const[e,t]=_.split(":").map(Number);for(const i of[0,1]){const s=new Date(n);s.setDate(s.getDate()+i),s.setHours(e,t,0,0);const r=s.getTime();if(r>=n&&r<l){h=(r-n)/c*100;break}}}const g=Date.now(),u=d&&g>=n&&g<l?(g-n)/c*100:null,f=W`
             <div class="band">
                 ${p.map(e=>W`
                     <div class="cheap" style="left:${e.left}%;width:${e.width}%"></div>
@@ -4837,15 +4846,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         </div>
                     `:q}
 
-                    ${i.arbitrage?W`
-                        <div class="arb" title="${this._t("energy_plan_arbitrage_tip")}">
-                            <ha-icon icon="mdi:swap-vertical-bold"
-                                     style="--mdc-icon-size:13px;color:${i.arbitrage.opportunity?"#8DC892":"var(--secondary-text-color,#8a93a5)"}"></ha-icon>
-                            <span class="arb-lbl">${this._t("energy_plan_arbitrage")}</span>
-                            <span class="arb-txt">${i.arbitrage.reason||""}</span>
-                            ${this._docsLink("arbitrage")}
-                        </div>
-                    `:q}
+                    ${this._renderArb(i.arbitrage)}
 
                     ${this._renderReview()}
 

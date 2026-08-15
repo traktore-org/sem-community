@@ -7269,14 +7269,49 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 f"battery fleet partial: {read}/{configured} units"
                 if configured and read < configured else None)
 
-            if not demands:
+            # (15.08, .175 campaign) A quiet night is still a night. The
+            # "nothing needs tonight" answer used to be RETURNED right here,
+            # BEFORE the ledger was ever built — so a night with nothing to
+            # schedule lost its price axis, its self-consumption expectation
+            # and its arbitrage verdict, and the advisor's own ADVICE-ALWAYS
+            # contract was quietly false in the one regime where the advice
+            # is the only thing left to say. Decide the answer here; SPEAK
+            # it below, once the books are open.
+            quiet_night = not demands
+            if quiet_night and loads_seen == 0 and not targets \
+                    and deficit <= 0.0:
                 # Warm-up shape: nothing registered yet (first refresh after
                 # a restart) — not an answer, retry next cycle.
-                if loads_seen == 0 and not targets and deficit <= 0.0:
-                    _LOGGER.debug(
-                        "ENERGY-PLAN (shadow #638): world not ready "
-                        "(0 devices, empty target map) — retrying next cycle")
-                    return False
+                _LOGGER.debug(
+                    "ENERGY-PLAN (shadow #638): world not ready "
+                    "(0 devices, empty target map) — retrying next cycle")
+                return False
+
+            def _slot_rows(rows):
+                """The card's hour axis and battery trajectory.
+
+                ONE shape, two callers (quiet night and packed night): a
+                quiet night that drew a different strip would be a second
+                bug wearing this fix. ``home_grid_w > 0`` is the takeover
+                made visible per slot — the hour the battery stopped
+                covering the house on its own.
+                """
+                return [{
+                    "start": s.start.isoformat(),
+                    # ``end`` is carried explicitly rather than left for the
+                    # card to infer from the next slot's start: the last slot
+                    # has no successor, and market slots are not always
+                    # hourly (15-min curves exist), so the strip's time axis
+                    # needs a real end.
+                    "end": s.end.isoformat(),
+                    "price": s.price,
+                    "cheap": bool(s.level_cheap),
+                    "home_w": round(s.home_w, 1),
+                    "soc_kwh": round(s.soc_kwh, 2),
+                    "home_grid_w": round(s.home_grid_w, 1),
+                } for s in rows]
+
+            def _quiet_answer(arb=None, ledger_rows=(), self_cons=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
                 # broken one; burned three placement bugs learning that).
@@ -7298,7 +7333,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     why_codes.append("no_load_needs_night")
                 if deficit <= 0.05:
                     why_codes.append("battery_no_deficit")
-                self._energy_plan_shadow = {
+                return {
                     "computed_at": now.isoformat(),
                     "fits": True,
                     # (08-08) the quiet answer must explain itself ON the
@@ -7319,14 +7354,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # renders "nothing needs the night" from the SHAPE, not
                     # from a missing key it would have to treat as an error.
                     "demands": [],
-                    "slots": [],
+                    # …and the keys that are LEDGER facts rather than
+                    # packing results are filled, not emptied: the night
+                    # still has prices, a battery trajectory, a share it
+                    # expects to keep and an arbitrage verdict. Only the
+                    # scheduling is empty.
+                    "slots": list(ledger_rows),
                     "blocks": [],
+                    "arbitrage": arb,
+                    "self_consumption": self_cons,
                     "battery_fleet_partial": partial_note,
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
                 }
-                return True
 
             # ── The Night Ledger (spec) ─────────────────────────────────
             # Battery state: live SOC → kWh; the sunrise floor reserves
@@ -7480,7 +7521,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _LOGGER.info(
                     "ENERGY-PLAN (shadow #638): empty night window "
                     "(now past %s?) — no plan", night_end)
-                self._energy_plan_shadow = None
+                # An empty window is not a reason to erase a correct quiet
+                # answer: with nothing to schedule, "nothing needs tonight"
+                # is still what the card must show (it is what this branch
+                # published before the answer moved below the ledger).
+                self._energy_plan_shadow = (
+                    _quiet_answer() if quiet_night else None)
                 # No plan means no partial wait either — don't leave a clock
                 # running that a later night would inherit.
                 self._shadow_partial_since = None
@@ -7558,6 +7604,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ))
             except Exception:  # noqa: BLE001 — advice must never cost a plan
                 arb = None
+            from .self_consumption import predict_self_consumption
+            if quiet_night and not demands:
+                # Nothing to pack — but the books are open now, so the quiet
+                # answer carries what the ledger knows. (``demands`` can have
+                # grown by exactly one above: with ``arbitrage_shadow_demand``
+                # on, the shadow cycle IS tonight's plan and gets packed like
+                # any other demand — that branch used to be unreachable.)
+                self._energy_plan_shadow = _quiet_answer(
+                    arb, _slot_rows(ledger),
+                    predict_self_consumption(ledger, []).as_dict())
+                return True
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
                               max_discharge_w=max_discharge_w,
                               peak_limit_w=peak_w)
@@ -7590,7 +7647,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # cap)" back apart: the packer already has this as dataclasses,
             # so publish the fields, not the sentence. Both stay — the
             # strings are what the log lines and the soak notes quote.
-            from .self_consumption import predict_self_consumption
             kind_of = {d.id: d.kind for d in demands}
             rows = [{
                 "id": r.demand_id,
@@ -7603,22 +7659,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "est_cost": round(r.est_cost, 2),
                 "note": r.note or None,
             } for r in plan.results]
-            # The ledger itself — the card's hour axis and battery trajectory.
-            # ``home_grid_w > 0`` is the takeover made visible per slot: the
-            # hour the battery stopped covering the house on its own.
-            slot_rows = [{
-                "start": s.start.isoformat(),
-                # ``end`` is carried explicitly rather than left for the card
-                # to infer from the next slot's start: the last slot has no
-                # successor, and market slots are not always hourly (15-min
-                # curves exist), so the strip's time axis needs a real end.
-                "end": s.end.isoformat(),
-                "price": s.price,
-                "cheap": bool(s.level_cheap),
-                "home_w": round(s.home_w, 1),
-                "soc_kwh": round(s.soc_kwh, 2),
-                "home_grid_w": round(s.home_grid_w, 1),
-            } for s in ledger]
+            # The ledger itself — the card's hour axis and battery
+            # trajectory, in the ONE shape a quiet night draws too.
+            slot_rows = _slot_rows(ledger)
             blocks = [{
                 "id": a.demand_id,
                 "start": a.start.isoformat(),

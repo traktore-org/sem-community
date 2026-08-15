@@ -464,6 +464,25 @@ shapes the demand set must ride the re-plan signature.
   can emit must have a card sentence, or be declared one of the three where
   "unreadable" is the truthful answer.
 
+- 💱 **A quiet night is still a night** (#638) — on the same "nothing to
+  schedule" night, the plan came back with no price axis, no
+  self-consumption expectation and **no arbitrage verdict at all**. Not a
+  missing advisor: an ordering bug. The quiet answer was returned *before*
+  the night ledger was built, so everything derived from that ledger was
+  absent exactly in the regime where the arbitrage verdict is the only
+  thing left to say — and the shadow arbitrage demand, which is the whole
+  plan on such a night, could never be created. Two runs of the same
+  campaign script showed it: with one unrelated pool pump asking for the
+  night the card read *buy 0.4 kWh @ ~0.10, deliver 0.3 kWh @ ~0.20 — est
+  +0.01*; with nothing asking, the same battery, the same prices, the same
+  hour — nothing. The books are now opened first and the quiet answer
+  speaks after them: it carries the hour strip, the battery trajectory,
+  the expected self-consumption share and the arbitrage verdict, with only
+  the scheduling empty. The advisor's contract — *advice always, because an
+  absurd advice is the first symptom of books that lie* — is true in every
+  regime again, and the opt-in sell path (still off by default, #533) can
+  see its blocks on such a night at all.
+
 - 🛑 **The kill-switch now takes hold on the card too** (#638) — with night
   actuation switched off, the plan's coverage list still showed loads as
   *covered* while the EV row correctly read *actuation off* (clone, 15.08).

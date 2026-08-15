@@ -418,8 +418,28 @@ class SEMEnergyPlanCard extends SEMLitBase {
         `;
     }
 
+    // The advisor's verdict, drawn the same way on every face of the card.
+    // (15.08) It used to live inline in the busy face only, so a night with
+    // nothing to schedule — the night a user has time to read it — showed no
+    // verdict at all. One renderer, two callers: two copies is how the busy
+    // and the quiet night came to disagree.
+    _renderArb(arb) {
+        if (!arb) return nothing;
+        return html`
+            <div class="arb" title="${this._t('energy_plan_arbitrage_tip')}">
+                <ha-icon icon="mdi:swap-vertical-bold"
+                         style="--mdc-icon-size:13px;color:${
+                             arb.opportunity ? '#8DC892'
+                             : 'var(--secondary-text-color,#8a93a5)'}"></ha-icon>
+                <span class="arb-lbl">${this._t('energy_plan_arbitrage')}</span>
+                <span class="arb-txt">${arb.reason || ''}</span>
+                ${this._docsLink('arbitrage')}
+            </div>
+        `;
+    }
+
     _renderIdle(act, textKey = 'energy_plan_idle', suffix = '', hasTomorrow = false,
-                why = '', whyCodes = [], notSched = []) {
+                why = '', whyCodes = [], notSched = [], arb = null) {
         // (#638 C7) translated sentences from the machine codes; the raw
         // diagnostic prose survives only as the hover tooltip. Rendering
         // it verbatim read as an unfinished placeholder (Guido, first
@@ -454,6 +474,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             `)}
                         </div>
                     ` : nothing}
+                    ${this._renderArb(arb)}
                     ${this._renderReview()}
                 </div>
             </ha-card>
@@ -498,7 +519,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
         if (verdict === 'idle' || !demands.length) {
             return this._renderIdle(act, 'energy_plan_idle', '', !!a.tomorrow,
-                a.why || '', a.why_codes || [], a.not_scheduled || []);
+                a.why || '', a.why_codes || [], a.not_scheduled || [],
+                a.arbitrage);
         }
 
         const t0 = slots.length ? Date.parse(slots[0].start) : NaN;
@@ -764,17 +786,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         </div>
                     ` : nothing}
 
-                    ${a.arbitrage ? html`
-                        <div class="arb" title="${this._t('energy_plan_arbitrage_tip')}">
-                            <ha-icon icon="mdi:swap-vertical-bold"
-                                     style="--mdc-icon-size:13px;color:${
-                                         a.arbitrage.opportunity ? '#8DC892'
-                                         : 'var(--secondary-text-color,#8a93a5)'}"></ha-icon>
-                            <span class="arb-lbl">${this._t('energy_plan_arbitrage')}</span>
-                            <span class="arb-txt">${a.arbitrage.reason || ''}</span>
-                            ${this._docsLink('arbitrage')}
-                        </div>
-                    ` : nothing}
+                    ${this._renderArb(a.arbitrage)}
 
                     ${this._renderReview()}
 

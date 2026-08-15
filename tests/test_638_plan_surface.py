@@ -115,7 +115,14 @@ def test_takeover_is_published_for_the_battery_row(freeze_targets):
 def test_no_demand_night_has_the_same_shape(freeze_targets, monkeypatch):
     """'Nothing needs the night' must be renderable from the SHAPE. If the
     empty answer dropped the keys, the card would have to treat a legitimate
-    quiet night as a malformed plan."""
+    quiet night as a malformed plan.
+
+    (15.08) ``slots`` used to be asserted EMPTY here — which pinned the
+    ordering bug rather than the shape: the quiet answer returned before the
+    ledger existed, so a night with nothing to schedule also had no price
+    axis and no arbitrage verdict. Scheduling is what is empty on a quiet
+    night; the ledger facts are not. See ``test_638_quiet_night_ledger``.
+    """
     monkeypatch.setattr(ev_night_targets, "build_night_target_map",
                         lambda coord, energy: {})
     fake = _fake_self(devices=[_idle_load()])
@@ -123,7 +130,11 @@ def test_no_demand_night_has_the_same_shape(freeze_targets, monkeypatch):
         fake, _scheduler(deficit=0.0), energy=MagicMock(), power=_power())
     plan = fake._energy_plan_shadow
     assert isinstance(plan, dict)
-    assert plan["demands"] == [] and plan["slots"] == [] and plan["blocks"] == []
+    assert plan["demands"] == [] and plan["blocks"] == []
+    assert plan["slots"], "the quiet night judged a ledger — show it"
+    for s in plan["slots"]:
+        assert set(s) >= {"start", "end", "price", "cheap", "home_w",
+                          "soc_kwh", "home_grid_w"}
     assert plan["summary"], "the quiet night still says so out loud"
 
 

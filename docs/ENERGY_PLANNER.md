@@ -436,10 +436,14 @@ The **Energy Plan** card (Control tab) is the one answer:
   outdated, could not fit it, nothing to schedule tonight, actuation off).
   Reactive is visible, never silent.
 - **A quiet night says so.** When nothing needs the night — battery full,
-  EV at target, no load asking — the plan is stamped with empty lists on
-  purpose and every row reads *nothing to schedule tonight*. That is an
-  answer, not a failure; "plan unreadable" is reserved for a plan that
-  really did break trust (a malformed block, an unparsable payload).
+  EV at target, no load asking — the plan is stamped with an empty
+  *schedule* on purpose and every row reads *nothing to schedule tonight*.
+  That is an answer, not a failure; "plan unreadable" is reserved for a
+  plan that really did break trust (a malformed block, an unparsable
+  payload). Everything that is not scheduling still appears: the hour
+  strip with tonight's prices, the battery's expected trajectory, the
+  self-consumption share and the arbitrage verdict. A night with nothing
+  to do is exactly the night those numbers are worth reading.
 - **"Not scheduled tonight"** — every device the collector deliberately
   left out, with its why. Chargers: the charge mode excludes night
   charging, no car is connected, the car is already full. Loads: the
