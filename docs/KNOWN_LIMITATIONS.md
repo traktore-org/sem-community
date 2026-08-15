@@ -22,9 +22,18 @@ The **Solar Gate** (`battery_assist_min_surplus`, default 1200 W) decides how mu
 - The configurable range is **0–5000 W**, so on a very large PV array you cannot require *more* than 5 kW of surplus before the battery assists.
 - The discharge clamp it drives is a hard limit only on inverters that expose a discharge-power `number` entity (see above); on others the gate still governs SEM's *requested* amps but cannot physically cap the inverter's discharge.
 
-## Battery → grid export arbitrage (disabled in this stable)
+## Battery → grid export arbitrage (wired in v2.0, off by default)
 
-Battery → grid export arbitrage (selling stored energy to the grid when the dynamic export price beats the recharge cost) is implemented but **deactivated in v1.7.3 stable** pending more review and soak (#533; still deactivated as of v1.7.5 — re-evaluation planned for a later v1.7.x release). The per-battery modes and code remain, but the arbitrage opt-in is hidden in the UI.
+Battery → grid export arbitrage — selling stored energy back to the grid when the dynamic export price beats the cost of recharging — is **fully wired as of v2.0** (#638): the overnight plan owns *when* a sell block may run, the live economics decide *whether* it still pays at that moment, and the per-battery mode decides whether it *may* at all.
+
+It nonetheless stays **dormant on every install unless you turn it on deliberately** (#533 stands): the global opt-in defaults off, each battery's `allow_arbitrage` defaults off, and the v14 migration forces the flag off once so no install inherits it by accident.
+
+Two limits worth knowing before you enable it:
+
+- **Check your grid connection agreement first.** Many contracts permit exporting *solar* but not exporting *stored* energy. SEM cannot know your contract. `sensor.sem_flow_battery_to_grid_power` is the compliance witness — with arbitrage off it should read 0 W at all times.
+- The sell is capped at the **block-implied power** (`kWh ÷ hours`), not the inverter's maximum discharge — SEM sells the planned energy over the planned window rather than dumping the pack at full rate.
+
+Full walkthrough with worked examples: [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md).
 
 ## Sunrise-based meter day
 

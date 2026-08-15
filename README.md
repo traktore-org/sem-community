@@ -435,6 +435,19 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements
 
+### v2.0 — One gate for the night (15.08.2026)
+
+**Why the major number:** this release changes what an existing install does without the user changing anything. Night actuation is **on by default** (the migration writes the choice down and points at the kill-switch; an install that already turned it off is never touched), and the private cheap-window pickers are **gone** — a `solar_plus_cheap` install's night timing now comes from the joint plan rather than the code path it has been running. Same intent, different decision-maker.
+
+- **The overnight joint planner is the only scheduler** (#638) — EV, deferrable loads, comfort bands and the battery are packed into *one* schedule under the shared peak limit, the real price curve and your device priority order. The EV's own cheap-hour pick and the battery scheduler's own window pick are deleted; a CI ratchet keeps them deleted.
+- **Plan owns WHEN, live economics own WHETHER, your settings own MAY.** When a demand runs outside the plan it says so — a translated "reactive — why" chip on the card, in 16 languages, never silence.
+- **"Not scheduled tonight"** — every device the plan deliberately left out is named with its reason (mode excludes it, no car connected, car already full, yields to a higher priority).
+- **The plan checks its own homework** (#755) — a per-demand outcome recorder writes what each demand *actually did* against what it was promised, and a morning verdict on the card tells you in one line whether your asks match your usage. An estimate is never recorded as a measurement.
+- **Self-consumption is an objective, not a side effect** — a surplus slot is priced at the feed-in revenue it costs to consume it, so solar wins on the numbers instead of by fiat (and a genuinely cheaper grid hour is allowed to win).
+- **The energy ledger closes** (#767–#776) — every kWh SEM moves now has a row, including **exported battery energy** (`sensor.sem_flow_battery_to_grid_power`), grid-vs-solar provenance of stored energy, and a true-baseload figure that refuses to count an estimate as a measurement.
+- **Battery → grid arbitrage is wired** (#533 still stands: off on every default) — the plan says when, live economics say whether, per-battery mode says may. **Check your grid connection agreement first** — see [Battery export arbitrage](docs/BATTERY_EXPORT_ARBITRAGE.md).
+- **Fresh installs no longer wake up observing** (#777) — an old install's leftover switch state can no longer speak for a new one.
+
 ### v1.7.3 — Reliable EV charging + battery protection (23.06.2026)
 - **EV charger state reconciler** (#392) — the per-cycle imperative actuator (which spammed `keba.disable` and dropped KEBA to 6 A) is replaced by a desired-vs-observed reconciler that issues the *minimum* commands to converge, then leaves the charger alone. Idempotent idle, heartbeat re-writes, failsafe armed once per session. Plus **enable-switch reconciliation + backoff** (#536) for switch-driven chargers (Wallbox etc.).
 - **Solar Gate** (#537) — the home battery only assists the EV when there's real solar surplus ≥ a configurable gate (default **1200 W**), in *any* charging mode; set it to **0 W** to allow battery support everywhere including overnight. Closes the overnight battery-drain-into-the-car class of bug.
@@ -616,8 +629,8 @@ the source of truth.
 
 ### Current phase
 
-Stabilising for 1.7.5: bug fixes are reviewed and merged as usual; feature PRs
-are parked until the release is cut.
+Soaking 2.0 on real hardware: bug fixes are reviewed and merged as usual;
+feature PRs are parked until the stable release is cut.
 
 ## License
 

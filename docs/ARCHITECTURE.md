@@ -2,6 +2,28 @@
 
 This document covers the internal architecture of Solar Energy Management (SEM) for developers and contributors.
 
+> **v2.0 — one gate** (see [CHANGELOG](../CHANGELOG.md) `[2.0.0]` and
+> [OVERNIGHT_PLANNER.md](OVERNIGHT_PLANNER.md)). The structural change of
+> this release is that scheduled energy use has **one decision-maker**:
+> - **The plan owns WHEN, the reactive layer owns WHETHER, the user owns MAY.**
+>   The EV's private cheap-window pick and the battery scheduler's own window
+>   pick are deleted; both now read the joint plan's blocks. An AST ratchet
+>   (`tests/test_638_one_selector.py`) keeps `find_cheapest_hours` to its one
+>   home in `tariff/tariff_provider.py`.
+> - **`coordinator/overnight_actuation.py`** is the gate: one trust rule
+>   (stamp freshness) feeding per-demand verdicts for EV, loads, comfort,
+>   battery and arbitrage.
+> - **Fail-open direction is per family and deliberate** — EV uncovered
+>   charges at its floor, battery uncovered does not force-charge, and every
+>   verdict change is logged once (`#638 coverage:`) and rendered as a
+>   translated reason on the card.
+> - **The plan is measured against reality** (#755): a per-demand outcome
+>   recorder writes what each demand actually did, split inside/outside the
+>   planned block, with a `measured` flag that refuses to let an estimate be
+>   recorded as a measurement.
+> - **The energy ledger closes** (#767–#776): every kWh SEM moves has a row,
+>   including exported battery energy.
+
 > **v1.7.3 additions** (see [CHANGELOG](../CHANGELOG.md) `[1.7.3]`):
 > - **EV charger state reconciler** — `coordinator/charger_reconciler.py` is now the
 >   sole actuation path. A pure desired-vs-observed decision table (DesiredState
@@ -455,21 +477,48 @@ updates, forecast refreshes and SOC drift MPC-style.
    re-evaluations recompute the plan against fresh prices/forecasts but never stack
    the deficit on top of charging progress — anchoring on the live SOC would ratchet
    the target toward `max_target_soc` every profitable night.
-7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints;
-   slot length comes from the tariff provider's detected market interval (15/30/60 min)
-8. **Cheapest hours** — dynamic tariff: `find_cheapest_hours(N, 12h)` | static: full NT window
+The pipeline stops there. Steps 7–8 used to be the scheduler's own
+time-slotted allocation and its own `find_cheapest_hours` pick; **v2.0
+deleted both** (#638).
+
+### Where the window comes from (v2.0)
+
+The scheduler says **WHAT** — the deficit, the break-even verdict, the
+anchored target SOC, the charge power. The overnight joint planner says
+**WHEN**: the battery enters the night ledger as a `battery` demand and the
+packer places it against the EV, the deferrable loads and the comfort
+bands under one shared peak and one price curve.
+
+```
+battery_charge_scheduler   →  WHAT   (deficit, economics, target SOC, power)
+overnight plan (#638)      →  WHEN   (the battery block, peak-aware, priced)
+decide_battery             →  gate   (force-charge only inside the block)
+```
+
+Consequences worth knowing:
+
+- `decide_battery` force-charges only while the plan's battery block is
+  open, at `min(charge_power_w, block_power_w)`, and stops when it closes.
+- An **uncovered** battery (no fresh plan) does **not** force-charge — a
+  deliberate fail-closed with a named reason on the card, because
+  pre-charging is an optimization, not a guarantee.
+- The **negative-price override stays reactive** and bypasses the gate
+  entirely (`price_forced`) — a paid-to-charge hour is not a planning
+  question.
+- The `battery_scheduler_schedule` entity is *derived* from the plan's
+  battery blocks and keeps its old dict shape, so nothing downstream
+  broke.
+- The SCHEDULED verdict is persisted beside the plan (`battery_verdict`),
+  so a reboot mid-block resumes instead of waiting for the next planning
+  window.
+- `find_cheapest_hours` now has exactly one home, `tariff/tariff_provider.py`,
+  and an AST ratchet (`tests/test_638_one_selector.py`) fails CI on any new
+  caller anywhere in the tree.
 
 A mid-charge re-evaluation that lands on NOT_NEEDED / NOT_PROFITABLE stops the
 active forced charge instead of leaving the inverter charging unsupervised.
 
-### Night Charge Schedule
-
-Both battery and EV are variable-power loads co-scheduled per hour:
-- **No peak limit**: both charge simultaneously at max power
-- **EV priority mode**: EV gets full demand, battery gets remainder
-- **Proportional mode**: power split by demand ratio
-
-The schedule adapts at runtime when actual EV power differs from planned.
+Full walkthrough: [The overnight joint planner](OVERNIGHT_PLANNER.md).
 
 ### Re-plan Triggers
 

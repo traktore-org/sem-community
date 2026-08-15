@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [2.0.0-beta.1] — 14.08.2026
+# [2.0.0-beta.1] — 15.08.2026
 
 > **Why 2.0 and not 1.8.** This release changes what an existing install does
 > without the user changing anything:
@@ -398,6 +398,22 @@ shapes the demand set must ride the re-plan signature.
   real reading, a taper anchor, or the session bootstrap re-arms it. How far
   the car was actually driven is unknowable — only that it was further than we
   thought — and inventing the replacement number is what caused this.
+
+### 📚 Documentation
+
+- 📖 **README, ARCHITECTURE, SETUP_GUIDE and EV_CHARGING_LOGIC now describe
+  the seam that actually exists.** Four places still taught the retired
+  machinery — the battery scheduler "picks the cheapest hours", the EV's
+  night step 5 doing its own cheap-window arithmetic, `find_cheapest_hours`
+  listed as a live pipeline step, and a co-scheduling "Night Charge Schedule"
+  whose classes were deleted in this release. Each now names the real
+  decision-maker (plan owns WHEN, reactive owns WHETHER) and what changes for
+  the user — including that with the kill-switch off there is no planned
+  pre-charge at all.
+- ⚠️ **KNOWN_LIMITATIONS no longer says arbitrage is "deactivated in v1.7.3"**
+  — it is wired and shipped in 2.0, dormant on every default, and the entry
+  now leads with the grid-connection-agreement warning and names
+  `sensor.sem_flow_battery_to_grid_power` as the compliance witness.
 
 # [1.7.6-beta.18] — 14.08.2026
 
