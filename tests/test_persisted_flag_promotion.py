@@ -239,12 +239,36 @@ class TestWiring:
         assert 'full_config.get("observer_mode")' in src
 
     def test_the_switch_and_setup_share_one_default_table(self):
-        """Two copies of "what silence means" is how they drift apart."""
-        from custom_components.solar_energy_management.persisted_flags import (
-            PERSISTED_FLAG_DEFAULTS,
+        """Two copies of "what silence means" is how they drift apart.
+
+        Identity, not equality: two dicts that agree today are exactly the
+        state this pin exists to outlaw — the drift starts the day someone
+        edits one of them. If this ever fails the message must say WHY,
+        because "the same table is not the same table" has two very
+        different causes: a real second literal in ``switch.py``, or two
+        module objects for ``persisted_flags`` (an import accident, which
+        would mean other module-level state in this package is doubled
+        too). The diagnostic separates them.
+        """
+        import sys
+
+        from custom_components.solar_energy_management import (
+            persisted_flags as pf, switch as sw,
         )
-        from custom_components.solar_energy_management.switch import SEMSolarSwitch
-        assert SEMSolarSwitch._PERSISTED_DEFAULTS is PERSISTED_FLAG_DEFAULTS
+        diag = {
+            "pf_module": (id(pf), getattr(pf, "__file__", None)),
+            "sw_module": (id(sw), getattr(sw, "__file__", None)),
+            "pf_table_id": id(pf.PERSISTED_FLAG_DEFAULTS),
+            "switch_table_id": id(sw.SEMSolarSwitch._PERSISTED_DEFAULTS),
+            "tables_equal": (sw.SEMSolarSwitch._PERSISTED_DEFAULTS
+                             == pf.PERSISTED_FLAG_DEFAULTS),
+            "candidate_modules": sorted(
+                k for k in sys.modules
+                if "persisted_flags" in k or k.endswith(".switch")
+            ),
+        }
+        assert sw.SEMSolarSwitch._PERSISTED_DEFAULTS is (
+            pf.PERSISTED_FLAG_DEFAULTS), diag
 
     def test_the_switch_entity_ids_are_the_ones_that_exist(self):
         """The store is keyed by entity_id; the switch forces
