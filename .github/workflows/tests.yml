@@ -1,10 +1,15 @@
 name: Tests
 
+# `release/**` is here because a release branch is a DEVELOPMENT line, not a
+# tag: 2.0 was built on `release/2.0` for weeks with no CI run at all, because
+# the trigger list named only develop and main. Branch protection still gates
+# main; this makes the branch where the work actually happens report green
+# while the work is happening, instead of at the merge.
 on:
   push:
-    branches: [develop, main]
+    branches: [develop, main, "release/**"]
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, "release/**"]
 
 jobs:
   test:
