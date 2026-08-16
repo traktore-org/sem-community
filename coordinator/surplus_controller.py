@@ -22,6 +22,9 @@ from typing import Any, Dict, List, Optional
 from homeassistant.core import HomeAssistant
 
 from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
+from .plan_verdict import NO_OPINION, PlanVerdict
+
+from ..utils.log_gate import log_on_change
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -127,6 +130,7 @@ def compute_load_intent(
     is_shed_target: bool = False,
     soc_above_reserve: bool = False,
     is_night: bool = True,
+    plan: "PlanVerdict" = NO_OPINION,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
 
@@ -139,6 +143,10 @@ def compute_load_intent(
     mode = getattr(device, "control_mode", DeviceControlMode.SURPLUS)
     active = bool(getattr(device, "is_active", False))
     held = device.get_current_consumption() if active else 0.0
+    # (#638 Stage 3) Loads consult the same PlanVerdict the EV does —
+    # the one gate, no side channels (the legacy plan_window bool died
+    # in the C5 merge).
+    plan_hold = plan.hold
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
@@ -161,6 +169,18 @@ def compute_load_intent(
     # 2. Peak shed wins over any run reason.
     if is_shed_target:
         return LoadIntent(False, 0.0, None, "peak shed")
+
+    # 2b. (#638 Stage 3) The plan may STOP a paid run whose window closed —
+    #     the hold is only ever raised while the remaining blocks can still
+    #     deliver the deficit (load_verdict), so cutting here reclaims the
+    #     energy for the planned block instead of letting the run bleed on.
+    #     ONLY paid, plan-owned runs: solar runs are never plan-gated (the
+    #     sun is spending itself), and user-started runs are not SEM's to cut.
+    if (active and plan_hold
+            and (getattr(device, "_batt_overnight_forced", False)
+                 or getattr(device, "_offpeak_forced", False))):
+        return LoadIntent(False, 0.0, None,
+                          plan.reason or "joint energy plan: window closed")
 
     # 3. Done for the day — the hard stops (cap overrides the deficit).
     #    (#688) The daily MINIMUM is deliberately NOT one of them. It is a
@@ -194,25 +214,55 @@ def compute_load_intent(
     if getattr(device, "daily_targets_met", False):
         tier1_headroom_w = 0.0
     effective = float(remaining_surplus_w) + float(tier1_headroom_w)
-    if effective >= threshold and can_start:
+    # (#688) the start RESERVE: a fresh start needs margin on top of the
+    # threshold (600 W pump, 800 W ask), so the start itself plus the next
+    # cloud doesn't flip the surplus negative and cycle the device. STARTS
+    # only — a running load keeps the plain threshold; reserving against a
+    # healthy run would CREATE the cycling this prevents.
+    start_bar = threshold
+    if not active:
+        start_bar = threshold + max(
+            0.0, float(getattr(device, "start_reserve_w", 0.0) or 0.0))
+    if effective >= start_bar and can_start:
         battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
         src = "tier1_battery" if battery_assisted else "solar"
         return LoadIntent(True, rated, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")
 
+    # (#638 C5) Comfort banking: a WILLING band inside its planned block.
+    # The ONE sanctioned place the plan CREATES a run — banking has no
+    # reactive run reason at all (a willing room otherwise only rides
+    # free surplus). Forced rooms never land here: forcing lives on the
+    # deficit paths, and a forced room's comfort_state is not "willing".
+    if (plan.in_block and can_start
+            and getattr(device, "comfort_state", "") == "willing"):
+        return LoadIntent(True, rated, "cheap_grid",
+                          plan.reason or "joint plan: comfort banking block open")
+
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
     # in daytime (caught live at 09:10 in full sun).
+    # (#638 G4) ``plan_hold`` = the joint energy plan placed this
+    # load's blocks elsewhere tonight — an extra AND-gate on the start,
+    # never a run reason. No trusted plan leaves behaviour untouched.
     if (deficit and can_start and is_night
+            and not plan_hold
             and getattr(device, "battery_eligible_overnight", False)
             and soc_above_reserve):
         return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
 
     # Cheap-hours grid: finish a runtime deficit off the grid in a cheap window.
     if (deficit and can_start and price_is_cheap
+            and not plan_hold
             and getattr(device, "top_up_policy", "solar_only") == "cheap_hours"):
         return LoadIntent(True, rated, "cheap_grid", "cheap-hours grid — runtime deficit")
 
-    # 5. No source → off.
+    # 5. No source → off. When a plan hold is what suppressed the paid
+    #    sources, SAY SO — "no source available" with a block twenty
+    #    minutes away reads as a bug; the plan's own words read as a plan.
+    if plan_hold and deficit:
+        detail = f" (until {plan.until:%H:%M})" if plan.until else ""
+        return LoadIntent(False, 0.0, None,
+                          (plan.reason or "joint energy plan: waiting for the planned window") + detail)
     return LoadIntent(False, 0.0, None, "no source available")
 
 
@@ -256,7 +306,7 @@ def _clear_source_markers(device: "ControllableDevice") -> None:
 
 
 def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
-                            active: bool) -> float:
+                            active: bool, controller=None) -> float:
     """OBSERVER mode = the layer-3 intercept, in one place.
 
     Management (layer 1) + decision (layer 2) already ran live against the real
@@ -267,20 +317,35 @@ def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
     hardware risk. This is why observer mode needs no separate ``observe_only``
     path — a clean layer cut makes it a one-line branch in the actuator.
     """
+    # (#764) Record the would-decision on the controller's standard surface
+    # BEFORE the log lines — the surface can never drift from what the log
+    # says. Optional: bare callers keep the pure behavior.
+    if controller is not None:
+        try:
+            controller.record_observer_decision(device, intent, active=active)
+        except Exception:  # noqa: BLE001 — the surface must never break the seam
+            pass
     # Deliberately NOTHING is mutated here — not even the surplus debounce timer
     # (the H2 reset in the actuating path). Observer is a pure shadow: each cycle
     # independently says "given reality now, I would do X". (Belief-sync via
     # reconcile_all at update()'s top is separate and permitted — see there.)
     observed = device.get_current_consumption() if active else 0.0
     name = getattr(device, "name", None) or getattr(device, "device_id", "?")
+    # (#762) transition-gated: a WOULD that has not changed is not news —
+    # ~950 INFO lines/day on .175 for decisions holding perfectly still.
+    # One key per device: ACTIVATE→ADJUST→DEACTIVATE edges all log.
+    _key = f"observer:{getattr(device, 'device_id', name)}"
     if intent.on and not active:
-        _LOGGER.info("OBSERVER · WOULD ACTIVATE %s @ %.0fW [source=%s] — %s",
-                     name, intent.power_w, intent.source, intent.reason)
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD ACTIVATE %s @ %.0fW [source=%s] — %s",
+                      name, intent.power_w, intent.source, intent.reason)
     elif not intent.on and active:
-        _LOGGER.info("OBSERVER · WOULD DEACTIVATE %s — %s", name, intent.reason)
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD DEACTIVATE %s — %s", name, intent.reason)
     elif intent.on and active and intent.source is not None:
-        _LOGGER.info("OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
-                     name, intent.power_w, intent.source, intent.reason)
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
+                      name, intent.power_w, intent.source, intent.reason)
     # else: idle, or on-but-not-SEM-driven (source is None) → no command to log.
     return observed
 
@@ -319,7 +384,7 @@ async def _deactivate_owned(device: "ControllableDevice") -> bool:
 
 
 async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
-                         *, observer: bool = False) -> float:
+                         *, observer: bool = False, controller=None) -> float:
     """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
     the management layer's ``intent``. This is the SINGLE place a load is actuated.
 
@@ -334,7 +399,8 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
     active = bool(getattr(device, "is_active", False))
 
     if observer:
-        return _reconcile_load_observe(device, intent, active)
+        return _reconcile_load_observe(device, intent, active,
+                                       controller=controller)
 
     if intent.on and not active:
         if not device.can_activate():
@@ -467,6 +533,96 @@ class SurplusController:
     - LIFO deactivation when surplus drops
     """
 
+    def publish_observer_decision(self, *, key: str, name: str, action: str,
+                                  power_w: float = 0.0, source=None,
+                                  reason: str = "", kind: str = "load",
+                                  **extra) -> None:
+        """(#764) One WOULD decision, one surface — for EVERY family.
+
+        Loads, chargers and batteries all land in the same
+        ``observer_decisions`` map (keyed ``<device_id>`` / ``ev:<cid>`` /
+        ``battery:<bid>``, with ``kind`` naming the family) so a simulation
+        reads ONE attribute and gets the whole shadow cycle. The map always
+        carries the CURRENT would-state — a fresh reader needs no history.
+        The bus event fires only on decision TRANSITIONS, judged on the
+        digit-stripped action/source/reason (the #762 rule: a wobbling watt
+        number is not an edge).
+        """
+        import re as _re
+        payload = {
+            "device_id": key,
+            "kind": kind,
+            "name": name or key,
+            "action": action,
+            "power_w": float(power_w or 0.0),
+            "source": source,
+            "reason": reason,
+        }
+        payload.update(extra)
+        self.observer_decisions[key] = payload
+        self._observer_published_this_cycle.add(key)
+        edge_key = _re.sub(r"-?\d+(?:[.,]\d+)?", "#",
+                           f"{action}|{source}|{reason}")
+        if self._observer_decision_keys.get(key) == edge_key:
+            return
+        self._observer_decision_keys[key] = edge_key
+        try:
+            self.hass.bus.async_fire(
+                "solar_energy_management_observer_decision", dict(payload))
+        except Exception:  # noqa: BLE001 — the event must never break the seam
+            pass
+
+    def retire_unpublished_observer_decisions(self) -> None:
+        """(#764) The surface is a ROSTER, not a ledger — sweep once a cycle.
+
+        ``observer_decisions`` answers "what would SEM do right now", so a
+        device that no longer decides has to leave. Whoever published this
+        cycle stays; everyone else is dropped, edge state included, so a
+        device that leaves and comes back announces itself instead of
+        returning silently.
+
+        Found live on .175 the day this shipped: the legacy single-charger
+        fallback decided once at startup, before ``_ev_devices`` was
+        populated, and its row then sat on a one-charger rig's surface
+        reading as a second charger. Same class as #744 — an append-only
+        map describes history, and a simulation needs the present tense.
+        """
+        live = self._observer_published_this_cycle
+        self._observer_published_this_cycle = set()
+        # An empty pass empties the map, and that is the honest answer: SEM
+        # would do nothing. A cycle that DIED never reaches the sweep (it is
+        # the last step of ``_async_update_data``), so an error preserves the
+        # last known shadow rather than blanking it.
+        for key in [k for k in self.observer_decisions if k not in live]:
+            self.observer_decisions.pop(key, None)
+            self._observer_decision_keys.pop(key, None)
+
+    def record_observer_decision(self, device, intent: "LoadIntent",
+                                 *, active: bool) -> None:
+        """(#764) A load's WOULD decision, mapped onto the shared surface.
+
+        ``hold`` means no command would be sent — the device is already
+        where SEM wants it.
+        """
+        if intent.on and not active:
+            action = "activate"
+        elif not intent.on and active:
+            action = "deactivate"
+        elif intent.on and active and intent.source is not None:
+            action = "adjust"
+        else:
+            action = "hold"
+        did = str(getattr(device, "device_id", "") or "")
+        self.publish_observer_decision(
+            key=did,
+            name=str(getattr(device, "name", "") or did),
+            action=action,
+            power_w=float(intent.power_w or 0.0),
+            source=intent.source,
+            reason=intent.reason,
+            kind="load",
+        )
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -474,6 +630,14 @@ class SurplusController:
     ):
         self.hass = hass
         self.regulation_offset = regulation_offset
+        # (#764) Observer mode's WOULD decisions, published as a standard
+        # surface: this map rides the observer-mode switch's attributes
+        # (a fresh session reads the current would-state instantly) and a
+        # bus event fires on every decision TRANSITION — so a simulation
+        # bridge is a five-line HA automation, not an SSH log scraper.
+        self.observer_decisions: Dict[str, dict] = {}
+        self._observer_decision_keys: Dict[str, str] = {}
+        self._observer_published_this_cycle: set[str] = set()
         self.max_export_w: float = 0  # 0 = no limit. E.g., 10000 for 10kW export limit
         self._devices: Dict[str, ControllableDevice] = {}
         self._allocation_data = SurplusAllocationData()
@@ -494,6 +658,12 @@ class SurplusController:
         # passes. Default OFF — the passes stay authoritative until a parity
         # corpus + a real-hardware soak prove the new path identical.
         self._use_desired_state: bool = False
+        # (#638 G4) per-cycle window verdicts from the joint energy plan:
+        # device_id → True (inside its planned block) / False (planned
+        # elsewhere tonight — don't start now). Absent = the plan has no say.
+        # Stamped by update() from the coordinator; empty when actuation is
+        # off or no trusted plan exists.
+        self._plan_windows: dict = {}
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -729,7 +899,10 @@ class SurplusController:
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 price_is_cheap=price_is_cheap, peak_freeze=peak_freeze,
                 is_night=getattr(self, "_is_night_cycle", True),
-                is_shed_target=device.device_id in shed, soc_above_reserve=soc_above)
+                is_shed_target=device.device_id in shed, soc_above_reserve=soc_above,
+                # (#638 G4) the joint plan's per-device window verdict this
+                # cycle; absent from the dict = the plan has no say.
+                plan=self._plan_windows.get(device.device_id) or NO_OPINION)
             intents[device.device_id] = intent
             # solar/tier1-driven loads consume surplus for lower-priority ones
             if intent.on and intent.source in ("solar", "tier1_battery"):
@@ -757,7 +930,8 @@ class SurplusController:
         allocations: List[SurplusAllocation] = []
         active_count = 0
         for device in devices:
-            await reconcile_load(device, intents[device.device_id], observer=observer)
+            await reconcile_load(device, intents[device.device_id],
+                                 observer=observer, controller=self)
             active = bool(device.is_active)
             consumption = device.get_current_consumption() if active else 0.0
             if active:
@@ -796,6 +970,9 @@ class SurplusController:
         battery_assist_budget_w: float = 0.0,
         observer: bool = False,
         is_night: bool = True,
+        # (#638 G4) device_id → True/False window verdicts from the joint
+        # energy plan; None/empty = no trusted plan → today's behaviour.
+        plan_windows: Optional[dict] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -851,6 +1028,21 @@ class SurplusController:
         # (#633) "Finish overnight from: Battery" is a NIGHT source — the
         # Tier-2 pass and its force-expiry both gate on this cycle flag.
         self._is_night_cycle = bool(is_night)
+        # (#638 G4) stamp this cycle's joint-plan window verdicts for the
+        # intent path AND the imperative passes below.
+        self._plan_windows = dict(plan_windows or {})
+        # (#766) Belief follows the switch, every cycle — the per-cycle twin
+        # of adopt_if_running. Without it, a switch turned ON outside SEM's
+        # own activate() (an external actuator, a user, a box self-start)
+        # stays invisible: never seen active, never deactivated, runtime
+        # never accrued (the N2 pool ran 00:00→07:50 on an idle belief).
+        for _dev in self._devices.values():
+            try:
+                _sync = getattr(_dev, "sync_belief_to_observation", None)
+                if callable(_sync):
+                    _sync()
+            except Exception:  # noqa: BLE001 — one device never stalls the walk
+                continue
         peak_freeze = peak_state in (
             LoadManagementState.WARNING,
             LoadManagementState.SHEDDING,
@@ -1040,6 +1232,19 @@ class SurplusController:
                     # crosses the cap keeps running past it (caught live on the
                     # Heizband PROD test). The cap overrides the min deficit.
                     done_reason = "daily max runtime cap reached"
+                elif ((_pv := self._plan_windows.get(device.device_id)) is not None
+                        and getattr(_pv, "hold", False)
+                        and (device._offpeak_forced
+                             or getattr(device, "_batt_overnight_forced", False))):
+                    # (#638 Stage 3) the plan's window closed while a paid run
+                    # was on — the hold is only raised while the remaining
+                    # blocks can still deliver the deficit (load_verdict), so
+                    # cutting here banks the energy for the planned block.
+                    # Imperative twin of compute_load_intent clause 2b: PROD
+                    # runs THESE passes, and a stop that lives only in the
+                    # desired-state path is a stop that never happens.
+                    done_reason = getattr(_pv, "reason", "") or \
+                        "joint energy plan: window closed"
                 elif (device.daily_targets_met
                         and (device._offpeak_forced
                              or getattr(device, "_batt_overnight_forced", False))):
@@ -1285,6 +1490,35 @@ class SurplusController:
         # Only for "surplus" mode devices — off-peak is a form of proactive activation (#49).
         # #508 W2: suppressed while the peak is at risk — a cheap-tariff
         # runtime deficit must not push grid import over the limit.
+        # (#638 C5) Comfort-banking pass — the imperative twin of the
+        # willing+in_block clause in compute_load_intent. PROD runs THESE
+        # passes: a run that lives only in the desired-state path is a run
+        # that never happens. A WILLING band whose planned comfort block is
+        # open banks now; forced rooms stay with the deficit passes.
+        if not peak_freeze:
+            for device in devices:
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue
+                if device.is_active or device.stop_condition_met:
+                    continue
+                if getattr(device, "comfort_state", "") != "willing":
+                    continue
+                _pv = self._plan_windows.get(device.device_id)
+                if _pv is None or not getattr(_pv, "in_block", False):
+                    continue
+                if not device.can_activate():
+                    continue
+                consumed = await _activate_owned(device, device.min_power_threshold)
+                if consumed > 0:
+                    device._offpeak_forced = True
+                    device._offpeak_forced_date = _load_meter_day(device)
+                    active_count += 1
+                    remaining_surplus -= consumed
+                    _LOGGER.info(
+                        "Comfort banking: %s runs in its planned block (%.0fW)",
+                        device.name, consumed,
+                    )
+
         if price_level in ("cheap", "very_cheap", "negative") and not peak_freeze:
             for device in devices:
                 if device.control_mode != DeviceControlMode.SURPLUS:
@@ -1294,6 +1528,13 @@ class SurplusController:
                 if device.top_up_policy == "solar_only":
                     continue
                 if device.stop_condition_met:
+                    continue
+                # (#638 G4) the joint plan placed this load's blocks elsewhere
+                # tonight — don't start it in THIS cheap hour. Gates the start
+                # only; a run already going ends by its own terms (deficit /
+                # expiry), matching the plan's min-run quantization.
+                _pv = self._plan_windows.get(device.device_id)
+                if _pv is not None and getattr(_pv, "hold", _pv is False):
                     continue
                 # (arc) Respect can_activate() here too — otherwise a cheap-hours
                 # top-up would re-activate a load the user just turned off,
@@ -1347,6 +1588,12 @@ class SurplusController:
                 if not device.needs_offpeak_activation:  # deficit + not capped
                     continue
                 if not self._tier2_overnight_eligible(device):
+                    continue
+                # (#638 G4) same window gate as the cheap-hours pass: the plan
+                # may defer a Tier-2 load to a later slot when the battery's
+                # shared discharge budget is contested.
+                _pv = self._plan_windows.get(device.device_id)
+                if _pv is not None and getattr(_pv, "hold", _pv is False):
                     continue
                 if not device.can_activate():
                     continue

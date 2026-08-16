@@ -25,7 +25,6 @@ from ..const import (
     DEFAULT_PEAK_LIMIT_UNLIMITED,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_VOLTAGE_PER_PHASE,
-    EV_DEADLINE_LOOKAHEAD_HOURS,
 )
 from .types import PowerReadings, PowerFlows, SessionData
 from .ev_tariff_planner import NightChargePlan, plan_night_charge
@@ -196,7 +195,7 @@ class EVControlMixin:
         # NOT the charger max. Using the learned overnight consumption pattern (or
         # the rolling monthly average) here is what stops the planner waiting for a
         # cheap window it can't fill at the peak-limited rate and then missing Min.
-        peak_limit_w = self._get_peak_limit_w()
+        peak_limit_w = self._planning_peak_w()
         expected_home_w = self._expected_night_home_w(energy, window_h)
         # Subtract draw already committed to higher-priority chargers this cycle
         # so the fleet shares one peak budget (#274/H1).
@@ -219,54 +218,14 @@ class EVControlMixin:
         peak_rate_kw = max(0.1, peak_managed_amps * watts_per_amp / 1000.0)
 
         # Cheapest contiguous window covering the remaining need (block-wise) (#247).
-        # Size the request at the realistic peak-managed rate so we fetch enough
-        # cheap hours to actually cover Min (#274/H2 slot length inferred below).
-        #
-        # Cap the lookahead at hours-to-deadline (#281): otherwise a post-deadline
-        # price dip (e.g. 08:00–10:00 cheapest when deadline is 07:00) can be
-        # selected as "the cheap window". The planner then clips it to 0
-        # deliverable kWh and silently falls back to charge-now — ignoring the
-        # real pre-deadline cheap window. Bound the request to the actual window
-        # we can charge in.
-        cheap_slots = None
-        slot_hours = 1.0
-        if tariff_optimized and remaining_to_min_kwh > 0.1:
-            tariff = getattr(self, "_tariff_provider", None)
-            if tariff is not None and hasattr(tariff, "find_cheapest_hours"):
-                try:
-                    hours_needed = max(1, int(remaining_to_min_kwh / peak_rate_kw + 0.999))
-                    # Pre-deadline horizon — fall back to the global lookahead
-                    # only when the deadline can't be resolved (target_time blank).
-                    from .ev_tariff_planner import resolve_deadline, _hours_between
-                    now = dt_util.now()
-                    deadline_dt = (
-                        resolve_deadline(now, target_time)
-                        or resolve_deadline(now, night_end)
-                    )
-                    if deadline_dt is not None:
-                        hours_to_deadline = max(
-                            1, int(_hours_between(now, deadline_dt) + 0.999),
-                        )
-                        lookahead = min(
-                            int(EV_DEADLINE_LOOKAHEAD_HOURS), hours_to_deadline,
-                        )
-                    else:
-                        lookahead = int(EV_DEADLINE_LOOKAHEAD_HOURS)
-                    points = tariff.find_cheapest_hours(
-                        hours_needed,
-                        within_hours=lookahead,
-                        prefer_consecutive=True,
-                    )
-                    cheap_slots = [p.timestamp for p in points] if points else None
-                    # Infer slot length from the consecutive block (#274/H2):
-                    # 30/15-min markets must not be counted as full hours.
-                    if cheap_slots and len(cheap_slots) >= 2:
-                        gap = (cheap_slots[1] - cheap_slots[0]).total_seconds() / 3600.0
-                        if 0 < gap <= 1.0:
-                            slot_hours = gap
-                except (ValueError, TypeError, AttributeError) as e:
-                    _LOGGER.debug("Tariff cheap-window lookup failed: %s", e)
-
+        # (#638 one-gate C3) The private cheap-window selection is RETIRED.
+        # The joint plan's blocks are the only WHEN for the night — the
+        # overlay (both coordinator sites) is the sole writer of
+        # ``should_wait_for_cheap``/``next_cheap_start``, so an uncovered
+        # night fails open to CHARGING at the deadline/top-up floor. The
+        # dwell hysteresis died with the selector: it damped the selector's
+        # own price flapping, and plan blocks do not flap — the packer's
+        # min_run/min_gap quantization protects the contactor instead.
         plan = plan_night_charge(
             now=dt_util.now(),
             remaining_to_min_kwh=remaining_to_min_kwh,
@@ -276,29 +235,8 @@ class EVControlMixin:
             target_time=target_time,
             night_end=night_end,
             tariff_optimized=tariff_optimized,
-            cheap_slots=cheap_slots,
-            slot_hours=slot_hours,
             peak_managed_amps=peak_managed_amps,
         )
-
-        # Hysteresis (#274/M4): hold the previous wait↔charge decision until the
-        # dwell elapses, so a price hovering at the cheap/expensive boundary
-        # doesn't stop/start the charger (contactor cycling) every cycle.
-        if tariff_optimized:
-            cid = cfg.get("id", "ev_charger")
-            dwell = int(self.config.get("ev_tariff_dwell_seconds", 600))
-            decisions = getattr(self, "_tariff_decision_per_charger", None)
-            if decisions is None:
-                decisions = self._tariff_decision_per_charger = {}
-            now_ts = dt_util.now().timestamp()
-            prev = decisions.get(cid)
-            if (prev is not None
-                    and plan.should_wait_for_cheap != prev[0]
-                    and (now_ts - prev[1]) < dwell):
-                plan.should_wait_for_cheap = prev[0]  # hold within dwell
-            if prev is None or prev[0] != plan.should_wait_for_cheap:
-                decisions[cid] = (plan.should_wait_for_cheap, now_ts)
-
         return plan
 
     def _night_deliverable_kwh(self, charger_cfg: dict) -> float:
@@ -429,6 +367,36 @@ class EVControlMixin:
             except Exception:
                 pass
         return self.config.get("target_peak_limit", 5.0) * 1000
+
+    def _planning_peak_w(self) -> float:
+        """The peak level PLANNING may size against — cap minus hysteresis.
+
+        The limit is a SHED THRESHOLD, not a target to sit on (#638 finding
+        #6): LoadManager goes SHEDDING at ``peak >= target`` on the 15-minute
+        rolling average, then sheds down to ``target - hysteresis``. An
+        allocation booked AT the cap is exactly the one execution kills, so
+        everything forward-looking — the night ledger's headroom AND the EV's
+        peak-managed rate — sizes against this ONE number. Two copies of the
+        subtraction is how the plan and the EV drifted a hysteresis band
+        apart (one-gate build, 2026-08-11).
+
+        Semantics carried over from the ledger's inline block:
+        ``math.inf`` (unlimited) passes through; 0 stays 0 (the packer's
+        "no limit configured" sentinel); a cap smaller than the hysteresis
+        clamps at 1 W, never 0 — collapsing to the sentinel would flip a
+        TIGHT house into an unlimited one.
+        """
+        from ..consts.core import DEFAULT_PEAK_HYSTERESIS
+        try:
+            peak_w = float(self._get_peak_limit_w())
+        except Exception:  # noqa: BLE001 — no load manager yet (early startup)
+            peak_w = float(
+                self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+        if peak_w > 0.0 and math.isfinite(peak_w):
+            hyst_w = float(self.config.get(
+                "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS) or 0.0) * 1000.0
+            peak_w = max(1.0, peak_w - hyst_w)
+        return peak_w
 
     def _peak_limit_unlimited(self) -> bool:
         """True when this install declared it has no grid ceiling (#716).
@@ -745,7 +713,11 @@ class EVControlMixin:
                 .get(cid, getattr(power, "ev_charging", False)),
             ),
         )
-        await actuate(decision, adapter, cp, reconciler)
+        await actuate(
+            decision, adapter, cp, reconciler,
+            observer=self._observer_mode,
+            controller=self._surplus_controller,
+        )
 
     def _this_charger_power(self, ev, power) -> float:
         """Return the per-charger power reading in watts (#315 multi-charger fix).
@@ -803,6 +775,55 @@ class EVControlMixin:
         # ``ev_charging_power_sensor`` entry (rare).
         return float(getattr(power, "ev_power", 0.0) or 0.0)
 
+    def _confirm_ev_connection(self, power: PowerReadings) -> None:
+        """(#638) Answer the plug question ONCE, for the whole cycle.
+
+        Filters ``power`` in place the cycle it is read: every consumer
+        downstream — the state machine, ``build_charger_view`` → ``decide``,
+        the plan layer, the notification gate, the entities — then reads one
+        answer. Before this, the debounce lived in
+        ``_update_session_tracking`` and its result on
+        ``_last_ev_connected_per_charger``, so only the consumers that read
+        THAT map were protected; everything reading ``power.ev_connected``
+        got the raw sensor. On .175 (15.08) that split showed as
+        ``sensor.sem_charging_state`` flapping to "System ready" — the
+        car-away face, and on real hardware a ``stop_session()`` — while
+        the per-charger connected entity stayed on.
+
+        Per charger, plus the flat fleet flag for installs without a
+        per-charger sensor. The fleet answer is the OR of both: a fleet
+        whose chargers blip in turn never reads "no car".
+        """
+        from .ev_availability import confirm_connection
+
+        if not hasattr(self, "_ev_conn_confirmed"):
+            self._ev_conn_confirmed = {}
+            self._ev_conn_streak = {}
+        import time as _time
+        _boot = getattr(self, "_boot_monotonic", None)
+        in_warmup = (_boot is not None and _time.monotonic() - _boot < 120.0)
+
+        def _one(key: str, raw: bool) -> bool:
+            confirmed, streak = confirm_connection(
+                bool(self._ev_conn_confirmed.get(key, False)), bool(raw),
+                int(self._ev_conn_streak.get(key, 0)), in_warmup,
+            )
+            self._ev_conn_confirmed[key] = confirmed
+            self._ev_conn_streak[key] = streak
+            if confirmed and not raw:
+                _LOGGER.debug(
+                    "Plug %s: missed poll %d/3 — holding connected (#638)",
+                    key or "fleet", streak,
+                )
+            return confirmed
+
+        raw_map = getattr(power, "ev_connected_per_charger", None) or {}
+        confirmed_map = {cid: _one(str(cid), raw) for cid, raw in raw_map.items()}
+        fleet = _one("", bool(getattr(power, "ev_connected", False)))
+        if raw_map:
+            power.ev_connected_per_charger = confirmed_map
+        power.ev_connected = fleet or any(confirmed_map.values())
+
     def _update_session_tracking(self, power: PowerReadings, power_flows: PowerFlows) -> None:
         """Track per-session energy, cost, and source attribution.
 
@@ -818,24 +839,15 @@ class EVControlMixin:
         hours = update_interval / 3600.0
 
         # Detect session end: EV was connected, now disconnected.
-        # (#753) A disconnect is only real once CONFIRMED: never inside the
-        # boot warm-up window (the connection sensor publishes False before
-        # its integration has loaded — PROD 2026-08-11: a restart's warm-up
-        # 'unplug' finalized a 6 kWh session and restarted it at 1.6 kWh,
-        # silently rewriting the session's cost and solar share), and only
-        # after three consecutive disconnected cycles (which also absorbs
-        # the KEBA UDP blip family, #35/#595). While the disconnect is
-        # unconfirmed the edge stays armed: _last_ev_connected keeps its
-        # True so this branch re-evaluates every cycle.
+        # (#753 / #638) ``power.ev_connected`` is already the CONFIRMED
+        # answer — ``_confirm_ev_connection`` debounced it at the top of the
+        # cycle (never inside the boot warm-up: PROD 2026-08-11, a restart's
+        # warm-up 'unplug' finalized a 6 kWh session and restarted it at
+        # 1.6 kWh; and only after three consecutive disconnected cycles,
+        # absorbing the KEBA UDP blip family #35/#595). Debouncing again
+        # here would cost a real unplug six cycles and split the cycle's one
+        # answer back in two, which is the bug that moved it to the source.
         if self._last_ev_connected and not power.ev_connected:
-            import time as _time
-            _boot = getattr(self, "_boot_monotonic", None)
-            in_warmup = (_boot is not None
-                         and _time.monotonic() - _boot < 120.0)
-            self._session_data.disconnect_streak += 1
-            if in_warmup or self._session_data.disconnect_streak < 3:
-                return
-            self._session_data.disconnect_streak = 0
             # Session ended — update lifetime stats and keep data for display
             if self._session_data.active and self._session_data.energy_kwh > 0.1:
                 if self._storage:
@@ -857,7 +869,6 @@ class EVControlMixin:
             return
 
         self._last_ev_connected = power.ev_connected
-        self._session_data.disconnect_streak = 0  # (#753) blip absorbed
 
         # Detect session start: EV charging and no active session.
         # v1.6.8: per-charger power. ``_update_session_tracking`` is called

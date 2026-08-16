@@ -70,22 +70,24 @@ def _top_up_amps(coord, cfg, remaining_kwh=10.0):
 
 
 class TestVoltageComesFromConfig:
-    """6000 W ceiling − 750 W home = 5250 W of headroom, single phase."""
+    """6000 W cap − 200 W hysteresis = 5800 W planning ceiling (the level
+    the shed logic actually holds — one-gate C1, ``_planning_peak_w``),
+    − 750 W home = 5050 W of headroom, single phase."""
 
     def test_the_default_is_still_230_volts(self):
         # Pin the unchanged case first: nothing set, nothing moves.
         coord, cfg = _coordinator()
-        assert _top_up_amps(coord, cfg) == 23        # 5250 / 230 = 22.8
+        assert _top_up_amps(coord, cfg) == 22        # 5050 / 230 = 21.9
 
     def test_a_fleet_voltage_is_honoured(self):
         coord, cfg = _coordinator(fleet={"ev_voltage": 240})
-        assert _top_up_amps(coord, cfg) == 22        # 5250 / 240 = 21.9
+        assert _top_up_amps(coord, cfg) == 21        # 5050 / 240 = 21.0
 
     def test_a_per_charger_voltage_beats_the_fleet_one(self):
         coord, cfg = _coordinator(
             fleet={"ev_voltage": 230}, charger={"ev_voltage": 240},
         )
-        assert _top_up_amps(coord, cfg) == 22
+        assert _top_up_amps(coord, cfg) == 21
 
     def test_a_junk_voltage_falls_back_rather_than_failing_open(self):
         # ``amps_from_headroom`` floors watts-per-amp at 1.0, so a zero here
@@ -94,7 +96,7 @@ class TestVoltageComesFromConfig:
         # limit itself was hardened against in this issue. Fall back to the
         # default instead: wrong-and-conservative beats wrong-and-unlimited.
         coord, cfg = _coordinator(fleet={"ev_voltage": 0})
-        assert _top_up_amps(coord, cfg) == 23
+        assert _top_up_amps(coord, cfg) == 22
 
 
 class TestMaxCurrentIsPerCharger:
@@ -143,7 +145,8 @@ class TestTheReportedClamp:
         assert _top_up_amps(coord, cfg) == 6
 
     def test_declaring_one_phase_recovers_the_rate(self):
-        # The same headroom at the true 240 W/A is 17.7 A -> 18, about
-        # 4.3 kW. This is the workaround available today.
+        # The same headroom at the true 240 W/A — now sized against the
+        # hysteresis-adjusted planning ceiling (4800 − 750 = 4050 W) — is
+        # 16.9 A -> 17, about 4.1 kW. This is the workaround available today.
         coord, cfg = _coordinator(fleet=dict(self.FLEET, ev_phases=1))
-        assert _top_up_amps(coord, cfg) == 18
+        assert _top_up_amps(coord, cfg) == 17

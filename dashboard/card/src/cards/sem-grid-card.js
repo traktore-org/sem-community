@@ -1,9 +1,15 @@
 /**
  * SEM Grid Card — LitElement migration
  *
+ * DEPRECATED (2026-08-09 System-tab challenge): removed from the
+ * generated dashboard — every section had grown a better home (hero +
+ * today totals → Home/Energy/Costs; peak/load/surplus/tariff → the
+ * Control card's own sections, same sensors plus the controls to act).
+ * Kept in the bundle so hand-placed copies keep rendering; RETIRES at
+ * 1.8 with a CHANGELOG note.
+ *
  * Consolidated grid card: import/export hero, today totals, peak management
  * progress bar, load control, tariff info, and surplus state.
- * Visual design is identical to the original sem-grid-card.js.
  *
  * Config:
  *   type: custom:sem-grid-card

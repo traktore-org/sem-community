@@ -193,7 +193,10 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     ``initial_current`` (decouples from the misleading "night"
     #     prefix — the value is the session-start ramp current, applied
     #     whenever a session begins). Display: "Vehicle Start Amps".
-    VERSION = 16
+    # v17 (#758): write ``energy_plan_actuation`` down explicitly on upgrade
+    #     and announce it once. The v1.8 plan drives hardware; the default
+    #     is on, and a default nobody was told about is not consent.
+    VERSION = 18
 
     @staticmethod
     @callback
@@ -270,6 +273,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Store Energy Dashboard sensor config + the observer_mode toggle
             self._data.update(self._energy_dashboard_config.to_dict())
             self._data["observer_mode"] = user_input.get("observer_mode", False)
+            # (#777) Record ALL persisted-switch defaults explicitly at
+            # install: a key present in entry data means "this install
+            # chose", so a dead install's restore-store ghost can never
+            # speak for a fresh one. Only true legacy upgrades (no key
+            # anywhere) keep the restore-state fallback.
+            self._data["vacation_mode"] = False
+            self._data["energy_plan_actuation"] = True
             return await self.async_step_hardware()
 
         # Show Energy Dashboard summary — list every sensor SEM picked up so the
@@ -1327,7 +1337,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("initial_current", 10),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=32, step=1,
+                        min=1, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1336,7 +1346,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("ev_min_current", 6),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=16, step=1,
+                        min=1, max=16, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1522,7 +1532,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("initial_current", self._data.get("initial_current", 10)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=32, step=1,
+                        min=1, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1531,7 +1541,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("ev_min_current", self._data.get("ev_min_current", 6)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=16, step=1,
+                        min=1, max=16, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1547,7 +1557,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     description={"suggested_value": charger.get("vehicle_min_current")},
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=6, max=32, step=1,
+                        min=1, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),

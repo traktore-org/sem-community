@@ -322,6 +322,9 @@ class UnifiedDeviceRegistry:
         # (#688) per-load anti-cycling (minutes) — overrides the SwitchDevice
         # default window. Absent keeps the constructor default (never 0).
         "min_on_time_min", "min_off_time_min",
+        # (#688, the remaining half) extra watts a fresh start needs on top
+        # of the threshold — 0 (default) = today's behaviour.
+        "start_reserve_w",
         # (#705) thermal comfort band — Phase 1 consumes them on climate
         # devices; stored against any device (Phase 2 opens switch loads).
         "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
@@ -577,6 +580,29 @@ class UnifiedDeviceRegistry:
             name = dev_info.get("name", "")
             is_ev = dev_info.get("is_ev", False)
 
+            # (#744) Lights are not imported — see
+            # ``LoadDeviceDiscovery._is_light_fixture`` for the rule and the
+            # why. It was added to that class only, and that class's ED
+            # importer is dead on a live install: its one caller
+            # (``LoadManagement._discover_devices``) early-returns as soon as
+            # ``_unified_registry_active`` is set, which ``__init__.py`` does
+            # right after this registry initializes. So the filter ran once on
+            # the legacy pass and THIS loop — which re-derives the whole roster
+            # from the Energy Dashboard on every refresh — put the lights
+            # straight back (Guido's PROD, beta.1: "Garage / Carport Licht" and
+            # "Girlande" still on the planner card). One rule, applied at the
+            # boundary that actually runs. Because the roster is re-derived,
+            # an already-imported light retires itself on the next refresh —
+            # there is no sweep to get wrong.
+            if not is_ev and self._discovery._is_light_fixture(energy_sensor):
+                _LOGGER.info(
+                    "Skipping Energy Dashboard device '%s' (%s): light "
+                    "fixture — monitored by HA's Energy Dashboard, not "
+                    "imported into SEM (no energy-management use case)",
+                    name, energy_sensor,
+                )
+                continue
+
             # Build a temporary device to get device_id
             temp = UnifiedDevice(
                 energy_sensor=energy_sensor,
@@ -722,7 +748,7 @@ class UnifiedDeviceRegistry:
 
         # (#748 seam) The charger-identity fold has to happen HERE too, not
         # only in the card payload and the LoadManagement prune. This roster is
-        # what the daytime surplus loop drives AND what the #638 overnight
+        # what the daytime surplus loop drives AND what the #638 energy
         # planner packs (``get_devices_sorted()``) — registering a row that
         # controls a charger's stop switch lets load management reach for the
         # charger behind the EV controller's back, and plans the same physical
@@ -849,12 +875,27 @@ class UnifiedDeviceRegistry:
         if not self._load_manager:
             return False
 
-        # Remove old non-registry, non-EV devices
+        # Keep exactly three things: what this registry currently derives, the
+        # per-charger EV rows, and explicit service registrations. Everything
+        # else in LoadManagement's dict is stale.
+        #
+        # (#744) The ``energy_dashboard_`` PREFIX used to be the keep rule,
+        # because it means "registry-managed" — but that stops being true the
+        # moment the registry stops deriving that row. LoadManagement keeps its
+        # own store and reloads it at init, so a row the registry dropped (a
+        # light; an entity the user removed from the Energy Dashboard) was
+        # immortal here: shed-eligible, in diagnostics, forever. The surplus
+        # sync has always healed this by construction — it unregisters every
+        # ``energy_dashboard_*`` device before re-adding the ones it knows —
+        # so this is the same rule on the other side of the seam.
+        derived = {d.device_id for d in self._devices}
         old_ids = [
             did for did in list(self._load_manager._devices.keys())
-            if not did.startswith("energy_dashboard_")
+            if did not in derived
+            # (#436) per-charger EV rows are registered by __init__.py, not here
             and not did.startswith("load_device_")
-            # (#559 Phase 0) never prune service-registered devices
+            # (#559 Phase 0) an explicit registration is a user decision, not a
+            # discovery guess — and it never appears in ``derived``
             and did not in self._service_registrations
         ]
         for did in old_ids:
@@ -931,7 +972,13 @@ class UnifiedDeviceRegistry:
         _LOGGER.info(
             "Synced %d devices to LoadManagement", len(self._devices)
         )
-        return charger_pruned or ed_pruned
+        # (#744) A stale row removed above is also a change the caller must
+        # persist — otherwise LoadManagement's own store reloads it at the next
+        # restart and the row is back. Three independent reasons to persist,
+        # and they compose: a charger twin folded, an ED twin folded, or a row
+        # the registry no longer derives. Any one of them means the store is
+        # now behind the roster.
+        return charger_pruned or ed_pruned or bool(old_ids)
 
     async def _reconcile_charger_dups_and_persist(self) -> None:
         """(#748) Drop charger-duplicate LoadManagement rows and de-persist if

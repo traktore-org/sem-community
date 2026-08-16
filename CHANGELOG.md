@@ -11,6 +11,719 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [2.0.0-beta.3] — 16.08.2026
+
+- 🔭 **Observer mode now cuts at the write, not before the decision** (#764) —
+  simulating SEM was supposed to mean "every layer runs for real, only the
+  final hardware command is cut". That held for loads. For EV chargers and
+  batteries the cut sat *above* the decision: observing skipped the whole
+  block, so no adapter was built, `decide()` and `decide_battery()` never
+  ran, and there was nothing to observe. A two-battery rig reported
+  `adapters = {}` / `last_decisions = {}` in diagnostics and read as a
+  misconfiguration. All three families now branch in the same place — inside
+  the actuator — and publish what they WOULD command on the standard
+  `would_decisions` surface (keyed `ev:<id>` / `battery:<id>`, with the same
+  transition-gated bus event loads use). The #740 police pass — which stops
+  a charger that self-started outside its mode — goes through the same seam,
+  so observing a rogue draw now reports it instead of opening a real
+  contactor. Startup recovery, the one real write left in the battery
+  pipeline, stays skipped while observing, the #536 setpoint zeroing is
+  untouched, and an AST lint fails CI if any `actuate` / `actuate_battery`
+  call site forgets the flag. Live behavior is unchanged: with observer off,
+  every path is exactly what it was.
+
+- 🧹 **The WOULD surface retires devices that stop deciding** (#764) — the
+  map is a roster, not a ledger: it answers "what would SEM do right now",
+  so a device that no longer decides leaves it at the end of the cycle,
+  edge state included. Caught within a cycle of the fix going live — the
+  legacy single-charger fallback decides once at startup, before the fleet
+  is populated, and its row then sat on a one-charger rig reading as a
+  second charger. Same class as #744. Deciding to leave a device alone is
+  still deciding: a battery or charger set to `off` keeps its row and
+  reports the hands-off command, so an absent row means SEM has no opinion
+  about that device rather than an opinion of "do nothing".
+
+- 🩺 **Diagnostics report the charger adapter again** (#764) — the dump read
+  `coordinator._ev_adapters`, an attribute production has never had (the
+  cache is `_charger_adapters`), so `adapter_class` came back `null` on
+  every dump since #357 and the Wallbox pause-switch discovery block below
+  it — the entire reason #357 exists — was unreachable on real hardware.
+  The tests missed it because each one assigned the invented name to its
+  own mock; they now use the name the coordinator writes, and a pin fails
+  if the two ever drift apart again.
+
+- 💡 **The arbitrage line only appears where arbitrage can actually happen**
+  (#533 / #638) — the advisor runs on every plan by design: it is the one
+  reader of *every* page of the ledger, so an economically absurd verdict is
+  the first symptom of books that lie. But its readout was printed on the
+  plan card of installs where trading is switched off, so a battery quietly
+  sitting in `auto` on a flat tariff got told *"no room to buy into: battery
+  6.3/15.0 kWh full…"* — which reads as though SEM wanted to trade tonight
+  and the battery was in the way. Nothing was ever going to trade. The plan
+  now carries **whether arbitrage is open** (a battery in *allow arbitrage*,
+  or the scheduler toggle) next to the verdict, and the card prints the line
+  only then. The audit is untouched: the verdict still rides on the
+  `arbitrage` attribute and the `ENERGY-PLAN … arbitrage:` log line on every
+  install. The mode scan behind it now lives in exactly one accessor instead
+  of an expression the card had no way to ask.
+
+- 🔌 **A device set to Mode = Off was still switched off** (#779, @onkelfu) —
+  after upgrading to 2.0, appliances the user set to Mode = Off (a
+  dishwasher, and reportedly a heat pump and network gear) kept getting
+  switched off by SEM. The same physical device appeared **twice**: the
+  registry's Energy-Dashboard row (`energy_dashboard_<slug>`, which carries
+  the user's Mode setting) and a stale `load_device_<slug>` smart-switch row
+  left over from a pre-2.0 version's pattern discovery. With the unified
+  registry active that legacy discovery is turned off, so the ghost is never
+  rebuilt — but the sync's prune spared every `load_device_*` key (to protect
+  EV chargers), so it survived every restart. The ghost carried no mode, so
+  Mode = Off on the visible row never reached it and the peak-shed loop
+  actuated the appliance behind the user's back. SEM now folds the ghost at
+  the data layer when it shares the same on/off control as an
+  Energy-Dashboard device — dedup on the control surface, not the name, and
+  never on a power or energy sensor, which a derived or multi-channel device
+  can legitimately share — and de-persists it so the duplicate is gone for
+  good after the upgrade. A smart plug with no Energy-Dashboard twin is
+  untouched. Sixth instance of bug class 12, and the non-charger twin of the
+  #748 fold.
+
+# [2.0.0-beta.2] — 16.08.2026
+
+> The first night of 2.0 on real hardware, read off one dashboard card.
+> Four of these five are the same shape: something written, tested and
+> believed — but asked at a place the running code never reaches, or
+> asked before the question that decides whether it applies at all.
+
+- 💡 **Lights really are skipped now** (#744) — the beta.17 rule that keeps
+  light fixtures out of SEM's device roster was added to a code path no live
+  install reaches: the unified device registry re-derives the roster from the
+  Energy Dashboard on every refresh and never learned it, so the lights came
+  straight back. The rule now runs at that one authoritative boundary — which
+  means an already-imported light retires itself on the next refresh, no
+  reset needed. A metering plug feeding a lamp is still kept, and an
+  explicitly registered device is still never touched.
+- 🧹 **A device the registry no longer knows leaves Load Management too**
+  (#744) — `energy_dashboard_*` rows were spared from the prune because the
+  prefix means "registry-managed", which stops being true the moment the
+  registry stops deriving it. Such a row survived in Load Management's own
+  store forever: shed-eligible, in diagnostics, invisible to the fix that
+  removed it.
+- 🧹 **"Not scheduled tonight" lists candidates, not the whole roster**
+  (#744) — a device that was never asked for guaranteed runtime cannot be
+  a night demand in any mode, so it no longer prints a why-not row. The
+  mode gate used to answer first, which made an Energy-Dashboard roster
+  publish its own default state every night (`control_mode` defaults to
+  peak-only): 9 rows of "device mode excludes surplus control" on a
+  12-device install, ~45 on a 47-device one. A device that *does* ask for
+  runtime and is excluded by its mode still says so — that answer was
+  never the noise.
+- 🏷️ **Left-out rows carry the device's name** (#744) — the card fell back
+  to the raw id (`energy_dashboard_shellyplus1pm_441793d5470c`) because
+  the label was only assigned after every gate passed, so exactly the rows
+  that needed a name never got one. The slug's width also pushed each
+  reason into a wrapped ribbon on a phone.
+- 🏷️ **The log tag is the honest mode of the stamp** — six planner lines
+  written in the shadow soak still said `(shadow #638)` on actuating
+  installs; they now carry the real mode, guarded by a source test.
+
+# [2.0.0-beta.1] — 15.08.2026
+
+> **Why 2.0 and not 1.8.** This release changes what an existing install does
+> without the user changing anything:
+>
+> - **Night actuation is on by default.** The migration writes the value down
+>   explicitly and tells you where the kill-switch is (#758) — the answer is
+>   recorded rather than implied, and an install that had already turned it
+>   off is never touched. But an install that never made the choice now has
+>   SEM driving hardware overnight.
+> - **The private cheap-window pickers are deleted.** A `solar_plus_cheap`
+>   install's night timing now comes from the joint plan, not from the code
+>   path it has been running. Same intent, different decision-maker.
+> - **An uncovered battery no longer force-charges** — deliberate, with a
+>   named reason on the card rather than silence.
+> - **The phantom-EV model is gone** (#652), so the battery scheduler no
+>   longer sizes its window against a car it invented.
+> - **The overnight planner is now the energy planner**, and the kill-switch
+>   moved with it: `switch.sem_overnight_actuation` →
+>   `switch.sem_energy_plan_actuation`. SEM renames the entity for you and
+>   carries your on/off answer across, so nothing changes behaviour — but an
+>   **automation or dashboard that names the old entity must be updated**.
+>
+> Any one of those is a major bump. Calling it 1.8 would invite people to
+> upgrade expecting minor-release behavior. The number is about
+> compatibility, not size.
+
+### ✨ The one-gate unification (#638)
+- 🎯 **One selector left.** The EV's private cheap-window pick and the battery
+  scheduler's own window pick are DELETED — the joint plan's blocks are the
+  only WHEN for scheduled energy use. A CI ratchet fails any new
+  `find_cheapest_hours` caller forever.
+- 🔋 **Battery: scheduler says WHAT, plan says WHEN.** `decide_battery`
+  force-charges only inside the plan's battery block; the SCHEDULED verdict
+  survives reboots beside the plan; the schedule entity derives from the
+  plan's blocks (same shape). The negative-price override stays reactive and
+  bypasses the gate. Closes the #652 phantom-EV model.
+- 🌡️ **Comfort banking actuates.** `comfort:` demands merge with `load:`
+  demands per device (the ID mismatch that kept banking runs from ever
+  firing); a WILLING band runs inside its planned block — the one sanctioned
+  place the plan creates a run.
+- 💱 **Arbitrage sell path wired, valve closed** (#533 stands): plan says
+  WHEN, live economics say WHETHER, per-battery mode says MAY; power capped
+  at the block-implied watts and fleet-split.
+- 🛡️ **Fail-open, per family, visibly:** EV uncovered → charges at the floor;
+  battery → no force-charge; every verdict change logged once
+  (`#638 coverage:`) and shown on the card as a translated "reactive — why"
+  chip. 12 new i18n keys ×16 languages.
+- 📇 **"Not scheduled tonight"** on the Energy Plan card: every deliberate
+  exclusion named with its why (mode / no car connected).
+- ⚙️ **`energy_plan_actuation` defaults ON** — with the selectors retired,
+  default-off would silently remove cheap-window timing; the switch remains
+  the kill-switch.
+- 📏 **One planning peak** — the EV's peak-managed rate now sizes against the
+  same hysteresis-adjusted level the ledger plans with (night top-up amps
+  drop by one hysteresis band: intended).
+
+### 🏷️ The overnight planner is the energy planner (#638)
+
+It was named for the night it started with, and it outgrew the name: it
+packs the daytime surplus window, comfort banking in a free hour and the
+cheap-hours loads as readily as it packs the night. A name that says
+"overnight" tells a user their daytime devices are somebody else's problem.
+
+- 🔀 **`switch.sem_overnight_actuation` → `switch.sem_energy_plan_actuation`.**
+  SEM renames the registry entry on upgrade — one entity, one history, no
+  unavailable orphan — and carries your on/off answer across so nothing
+  changes behaviour. **Update any automation or dashboard that names the old
+  entity.** A switch you had renamed yourself keeps the name you gave it.
+- 💾 **Tonight's stamped plan survives the upgrade.** The stored plan is read
+  under its old key once and rewritten under the new one, so upgrading at
+  23:50 does not reshuffle the night the plan is steering.
+- 📖 `docs/OVERNIGHT_PLANNER.md` → `docs/ENERGY_PLANNER.md`; the log prefix
+  `OVERNIGHT-PLAN` → `ENERGY-PLAN`; the card, its ~85 translated strings and
+  every internal symbol follow. The genuinely night-shaped settings keep
+  their names — "Finish overnight from", "Use battery overnight" and the
+  night-charging window all still mean *the night*.
+
+### 🧠 The learning layer (#755) — the plan learns what it got wrong
+
+- 📓 **The third number.** The plan recorded what each demand ASKED and what
+  the packer PROMISED; what it actually DID was never written down. A
+  per-demand outcome recorder now integrates real power across the night —
+  one unit, straight through midnight, in the durable store — and splits it
+  two ways: inside the planned block vs. outside, and covered by the gate
+  vs. not. "Fits" is now a claim somebody checks.
+- 🚫 **An estimate may never be recorded as a measurement.** Every sample
+  carries a `measured` flag; one estimated sample marks the whole night
+  untrainable, silence is not a measurement of zero, and a gap in the record
+  (restart, dead sensor) is refused rather than integrated across. This is
+  the #743/#744/#753 bug class nailed shut at the recorder's door — and
+  again at the learner's.
+- ☀️ **Self-consumption is an objective now, not a side effect.** The night
+  ledger prices a surplus slot at the feed-in revenue it costs to consume it
+  (`electricity_export_rate`, default 0.075) instead of at zero. Solar used
+  to win by fiat; now it wins on the numbers — and a genuinely cheaper night
+  hour is allowed to beat it. With no export tariff the rate is 0 and the sun
+  really is free. Each night also records its predicted vs. achieved solar
+  share.
+- 📈 **The learner reads only the nights that can teach.** A night may LOWER
+  an ask only if the demand got its full grant and stopped on its own;
+  everything else is censored from above and can only raise a floor. The
+  suggestion is a high percentile of the teaching nights (never a mean —
+  interruption noise runs one direction), gated behind a cold-start minimum,
+  and it never writes anything: it suggests.
+- 🗣️ **The morning verdict, on the card, in 16 languages.** "What the record
+  shows" gives every demand one line — *still learning · the ask matches
+  what it uses · usually needs about 7.4 kWh of the 10.0 kWh asked · uses the
+  full ask every night, it may need more* — plus the night's solar-share
+  line. It rides its own attribute so it survives the daytime hours, which is
+  exactly when it gets read.
+
+### 🌙 What the first actuation night taught (#756, #759, #760)
+
+N1 (12→13.08 on the .175 rig) ran the whole machine end-to-end — zero
+errors, clean hand-back — and caught three ways a plan can describe a
+night that cannot happen. All three are the same lesson: **the collector
+must mirror every gate the executor enforces**, and every input that
+shapes the demand set must ride the re-plan signature.
+
+- 🚗 **The ask is bounded by the car, not the calendar** (#756) — the night
+  target is `target − daily` off a counter that rolls at midnight, so at
+  00:01 a car at 100 % was asked for its full 20 kWh — and under the peak
+  cap the phantom displaced the real loads (the heizband went fits→yields
+  at exactly 00:01; the morning unplug flipped it straight back). The
+  taper detector's "still full" — anchored at a completed charge with
+  nothing drawn since — is now the collector's third mirrored gate, the
+  card lists the car under "not scheduled tonight — car is already full"
+  (×16 languages), and the fullness flag rides the signature so the car
+  filling up mid-night re-plans.
+- 🌤️ **A forecast wiggle is not a changed night** (#759) — the raw solar
+  forecast sat in the demand signature, and a value living at a bucket
+  edge (66.9↔67.1 around the 67 boundary) re-planned the night four times
+  in 110 seconds, flipping every demand's coverage each time. The term now
+  anchors with 3 kWh hysteresis: jitter orbits the anchor forever, a real
+  provider revision re-anchors once, and a transient forecast outage keeps
+  the anchor instead of flapping to zero and back.
+- 🔥 **A stopped load is not a demand** (#760) — the heizband's comfort
+  band read the room at 22.01 °C (past target+offset → banked), which is
+  a hard stop the intent enforces ABOVE the tier-2 clause — the executor
+  rightly refused all night, while the plan packed 2.0 kWh and said
+  fits+COVERED. The stop condition is now the fourth mirrored gate, and
+  it rides the signature so the room cooling back into the band re-plans
+  and re-admits the demand within a cycle. An in-process oracle now pins
+  the whole property: covered + in-block + every tier-2 gate green ⇒ the
+  device starts.
+
+### 🌙 What the second campaign night taught (#765, #766)
+
+- 🕰️ **Time passing is not the night changing** (#765) — the price term
+  fingerprinted the *sliding* upcoming-prices window, so a past slot
+  dropping off the front restamped the plan every hour on the hour (10
+  restamps in a night with prices at absolute timestamps identical
+  throughout). The term now carries (absolute timestamp, price) pairs and
+  the comparison knows one rule: a shared timestamp's price changing
+  replans, tomorrow's curve landing replans, a past slot expiring is
+  silence. An old-format stored signature replans once after upgrade,
+  never crashes. Second sighting the same day, next term over: a RUNNING
+  load's shrinking deficit crossed a 0.1 h bucket every 6 minutes — one
+  replan per bucket for as long as it ran. Shrinking-but-nonzero is now
+  silence too (the plan working is not the ask changing); a deficit
+  growing, a demand appearing or vanishing, or the stop flag flipping
+  stays news.
+- 👁️ **Belief follows the switch, every cycle** (#766) — `is_active` was a
+  belief only SEM's own activate/deactivate (plus one-shot adoption at
+  registration) ever updated, so a switch turned ON outside SEM — an
+  external actuator, a user's hand, a box self-start — stayed invisible:
+  never seen active, never deactivated, runtime never accrued (the N2 pool
+  ran 00:00→07:50 against an idle belief, honestly flagged unmeasurable by
+  the outcome recorder). Every load now syncs belief to observation each
+  cycle — the per-cycle twin of the restart adoption, strictly for
+  on/off-domain control entities so a charger's current number can never
+  read as ON.
+
+### 🌞 What the third campaign night taught (#759)
+
+- ☀️ **Watch what the plan reads, and let production explain the rest**
+  (#759, second sighting) — the supply term watched the forecast's *day
+  total*, a number the plan builder consumes nowhere. What it does consume
+  is the hours still **ahead** and **tomorrow's** day. With live dampening
+  the total is rewritten every half hour as the correction re-prices hours
+  that have **already been produced**: 11 restamps in 7.3 hours on the rig,
+  one of which (16:42:05, 42 → 38 kWh) rebuilt byte-identical blocks — the
+  plan proving, in its own output, that nothing had changed. Tomorrow's
+  forecast — the sunrise floor and the room arbitrage may buy into — was
+  watched by nothing at all. Now: the term is the hours ahead plus
+  tomorrow, and the day burning down is explained by **measured
+  production** (expected remaining = anchored remaining − produced since
+  the anchor), so a day going to plan is one signature from dawn to dusk
+  while clouds, or a genuine revision, still re-anchor once. Without a
+  production reading — or with a frozen counter (#681) — it degrades to the
+  plain 3 kWh deadband: never worse than before.
+- 🚪 **A term behind a closed gate cannot re-plan anything** (#759, third
+  sighting — same rule, three more instances). The demand collector stops at
+  the charge **mode** before it ever asks the plug or the car, and at a
+  load's control **mode** (then night-eligibility) before it asks the deficit
+  or the room — but the signature asked anyway. So a plug blip on an `off`
+  charger, a car filling up on one, a deficit ticking down on a `peak_only`
+  or day-only heater each restamped a night that could not possibly change:
+  on the rig the mode sat at `off`, the shared charger's plug flickered for
+  one cycle, and the plan restamped **twice**, both times emitting
+  byte-identical blocks. The signature now mirrors those gates exactly,
+  including their fail-**visible** direction — an unevaluable gate still
+  watches the term.
+- 🔁 **A revision re-plans; only a changed answer re-stamps** (#775).
+  Forecast.Solar re-publishes hourly, and on a weather-volatile night each
+  revision is real — ±10–16 kWh, past any honest deadband — so PROD
+  re-planned at 00:14, 01:14 and 02:14 without a single packed block
+  moving. The night still re-plans on every revision, but the rebuilt
+  answer is now compared against the stamped **decision** (blocks,
+  verdicts, why-nots, cost, the arbitrage actionables) and an identical
+  repack keeps its stamp: `computed_at` marks a decision, and an identical
+  repack is free. Manual re-plans always stamp — "decide again, now" must
+  visibly answer, even with "same answer".
+
+### 🧪 Simulation is a standard feature now (#764)
+
+- 👁️ **Observer mode publishes its WOULD decisions** — the per-device map
+  rides `switch.sem_observer_mode`'s `would_decisions` attribute (fresh
+  reads, no history needed), and every decision *transition* fires a
+  `solar_energy_management_observer_decision` bus event (edges, never a
+  heartbeat — a wobbling watt is not a transition). A closed-loop
+  simulation of any device is now a five-line HA automation instead of an
+  SSH log scraper.
+- 📖 **`docs/SIMULATION.md`** — the standard workflow, written down: observer
+  mode as the simulation boundary, simulating every input with plain HA
+  entities, running scenario cases back to back in minutes, and the
+  provocation set (stamp loss, reboot survival, kill-switch). Born from the
+  N2 campaign night, where the whole edge-case matrix ran in one evening on
+  the dedicated rig.
+
+### 🔍 A silently skipped reconciliation now says so (#628)
+
+- 👁️ **Counter-backing is visible.** The all-or-nothing rule (a partial
+  counter read must never adopt) is correct — but the skip was invisible,
+  so a category with an unreadable counter ran as a pure stopwatch
+  indefinitely and the first symptom was a numbers-don't-match report
+  weeks later. Now: one transition-gated line when a category flips
+  counter-backed ↔ unbacked (a healthy boot stays silent; a counter dead
+  *from* boot logs, because that is exactly the invisible case), and the
+  diagnostics download carries per-category backed/skipped cycle counts —
+  "was export ever reconciled on this install?" becomes one look.
+
+### 🪵 A log line is a transition, not a heartbeat (#762)
+
+- 📉 **The debug firehose is off.** Measured on the test rig: a *steady*
+  system repeated the same six decision lines ~8,000 times a day
+  (`decide_battery → normal` 1423×, `Charging strategy: idle` 1792×,
+  `Scheduled delayed save` 1930×, …), which shrank the host's log ring to
+  ~2 minutes — burying the once-per-night lines that matter — and drowned
+  the excerpt HA's native "Enable debug logging" toggle hands you. Every
+  measured offender now goes through one shared gate: an unchanged
+  decision is silent, every change logs, a flap logs each edge. Wobbling
+  measurements inside a reason (`limit 594 W` → `602 W`) don't count as
+  change — the decision does. The zero-information delayed-save heartbeat
+  is deleted outright; sensor outages log one line going silent and one
+  coming back.
+- 🤫 **At default log level SEM stays quiet** (0 INFO lines in a measured
+  2-minute PROD window) — nothing changes for normal installs. Debug is
+  the standard HA flow: the integration page's *Enable debug logging*
+  button (the manifest declares its loggers), which now produces a
+  readable story instead of a heartbeat dump.
+
+### 🐛 Found by auditing the branch as a whole (#757, #758)
+
+- ⛔ **A stop repeated 1800 times is not a stop** (#757) — the one-gate build
+  changed the *shape* of the battery decision: `decide_battery` now returns
+  STOP_FORCE_CHARGE on every cycle a SCHEDULED battery sits outside its
+  block, so a 21:00 verdict with an 02:00 window asked the inverter to stop
+  a charge it was not doing, all evening, on the same serial Modbus link the
+  read coordinator uses. Every adapter's stop is now a no-op when nothing is
+  being forced — the #538 idempotency treatment, one layer up. A stop that
+  fails still leaves the intent alone, so the next cycle retries.
+- 🔔 **Nothing switches on silently on upgrade** (#758) — night actuation
+  drives real hardware and defaults to on, which is right for a fresh
+  install (the user chose the feature) and wrong for an upgrade (nobody
+  chose anything). The migration writes the value down — same answer,
+  recorded instead of implied — and posts one notification naming the
+  kill-switch. An install that had already turned it off is never touched.
+- 🕳️ **A dead battery meter is no longer recorded as an idle battery**
+  (#758) — `battery_power` falls back to 0.0 W when its sensor cannot be
+  read, and the night ledger recorded that as a measured zero, which is
+  exactly the "silence is not a measurement" contract the learning layer is
+  built on. The reading now carries whether anyone actually looked.
+- 📦 **The plan's byte budget counts everything that lands on the entity**
+  (#758) — the trim ran before `tomorrow` and the morning `review` were
+  appended, and HA's recorder drops *all* attributes above 16 KiB. Going
+  over did not truncate the plan; it erased it from history. One place adds,
+  one place counts, and a second pass drops the extras (saying so) if
+  dropping the timeline was not enough.
+- 🔌 **The kill-switch is asked by every caller** (#758) — the arbitrage sell
+  gate reached the plan directly, so a user who turned night actuation off
+  still had the plan discharging their battery to the grid.
+- 👻 **A fresh install no longer wakes up in observer mode** (#777) — the
+  observer switch has a forced-stable entity id and HA's restore-state
+  store outlives the config entry, so a fresh installation on a machine
+  that ever ran observer-ON restored the dead install's state over this
+  install's explicit config — and silently never controlled hardware as
+  its first impression. Explicit config now beats ghost restore: the
+  switch seeds from options (every flip persists there immediately), then
+  entry data (the install flow records all three toggles now), then the
+  default; a restored state is honored only when no config record exists
+  at all — a legacy install upgrading, the one case it still serves. Same
+  precedence for the vacation and night-actuation switches, and the
+  install-time observer choice finally reaches the switch face (it was
+  written to data but read from options — checked-at-install showed OFF
+  while the coordinator observed).
+- 💱 **Exported battery energy is attributed and paid once** (#776) — the
+  flow ledger deliberately disallowed the battery→grid-export pair ("SEM
+  doesn't support battery-to-grid arbitrage"), which stopped being true the
+  moment `Force discharge` shipped and the plan-gated sell was wired: during
+  any battery export the exported watts vanished from the flow attribution,
+  while the savings math booked the **raw** discharge — an exported kWh
+  earned avoided-import savings it never delivered *and* export revenue at
+  the meter. One kWh, two credits. Now a `battery_to_grid` flow (new sensor
+  pair `Battery to Grid` W / kWh, ×16 languages) receives what solar's
+  export claim leaves, and discharge savings are scaled by the
+  home-delivered share — exported kWh earn exactly their export revenue,
+  once. A cycle without flow attribution keeps the legacy full credit
+  (silence is not a measurement of "all exported"). The new sensor doubles
+  as the compliance witness for installs whose grid contract prohibits
+  selling stored energy: it must read zero there, and the arbitrage doc now
+  says so up front.
+- 🛡️ **An arbitrage sell respects BOTH reserve floors** (#638) — the sell
+  branch took the user's backup reserve *or* the verdict's
+  `arbitrage_reserve_soc`, never both, so any install with a nonzero backup
+  reserve (all of them) silently lost the arbitrage floor: a 20 % backup
+  reserve overrode the 50 % "never sell below" promise, and the hardware
+  actuator (Huawei end-SOC, setpoint batteries) was handed the lower number
+  to enforce on its own between SEM cycles — the #532 drain class one seam
+  later. Both floors now bind and the higher wins. Found by the arbitrage
+  scenario sweep; the full mode × gate × floor matrix is pinned in
+  `test_638_c6_arbitrage_sell.py`.
+- 🧹 **The planner entry point the tests used does not ship** (#758) — a
+  flat-slot "compat" adapter with no production caller, and two test corpora
+  pointed at it, proving things about a night that cannot happen (every slot
+  cheap, no house load, an infinite battery, no peak limit). Moved to
+  `tests/synthetic_night.py` with its four fictions written down; the tests
+  that matter now drive the real `build_night_ledger` + `pack_night` pair.
+  The #653 orphan guard, which had only ever walked class bodies, now reads
+  module scope too — and immediately found a second one.
+
+### ⚖️ Closing the energy balance (#767)
+
+- 🔌 **Every controlled load now counts its own kWh** (#768) — SEM accrued
+  *seconds* per device and nothing else, so a pool pump, heizband or heat pump
+  disappeared into the `home` residual, which is computed as a leftover and
+  therefore can never complain. Each device now books a daily energy figure
+  every cycle, in a fixed order of evidence: its energy counter's delta first,
+  then its power sensor integrated over the cycle, and only if it has neither,
+  `rated_power` × runtime — the last flagged as an ESTIMATE that may never be
+  fed back as a measurement (#755). A sensor that can't be read is recorded as
+  blind seconds, not as a device drawing zero watts. Persisted per meter day,
+  counter baseline included, so a same-day restart books the energy the meter
+  saw while HA was down instead of losing it.
+- 🌡️ **The heat pump gets a ledger row** (#769) — on a heat-pump house the
+  largest controllable load in the building had no kWh anywhere. It now has
+  the same four horizons every other consumer has (today / month / year /
+  total), keyed off the **sunrise** meter day the device itself rolls on, so
+  there is one day boundary in the system rather than two that disagree every
+  morning. Alongside them: **Shifted today** — the part SEM actually caused,
+  counted only while SG-Ready was asking for BOOST or FORCE_ON. Energy the
+  pump's own thermostat would have taken anyway is kept out of that number,
+  which is what turns "SG-Ready shifted X kWh" from a claim into a
+  measurement. The split mechanism is generic (a device names its own
+  bucket), so the additional heat pumps of #685 arrive with it already
+  working.
+- 🔋 **A bought kWh does not become free by sitting in the battery** (#770) —
+  every discharge was credited at the full import price as if the battery
+  only ever held sunshine. On a house that charges in the cheap valley that
+  is not a saving, it is a purchase moved a few hours; and the one-gate
+  build just made grid charging routine, so the error was about to grow.
+  The battery is now inventory with a cost basis: each charge is filed as
+  solar or grid by the flow that caused it (fleet-split by per-battery
+  charge power), each discharge draws proportionally, and savings pay only
+  the difference between what a kWh cost and what it displaced. Energy of
+  unknown origin keeps the old full credit — it is not punished for a
+  measurement SEM doesn't have (#755). The pool is pinned to the measured
+  SOC every cycle so integration drift can't invent stored energy, and an
+  offline SOC sensor pins nothing, because silence is not a measurement of
+  an empty battery. The stored-grid-share sensor shows **no value, not 0 %**,
+  until the pool holds energy whose origin SEM actually watched arrive — a
+  freshly restarted install claiming "nothing was bought" off an empty pool
+  was the same contract violation one layer up (caught on the .175 soak's
+  first night). **Autarky is corrected with it**: battery discharge is
+  own supply only for the solar-charged share; the rest is grid supply that
+  was time-shifted. Four new sensors make the number auditable — today's
+  charge from solar, from grid, what the grid part cost, and the grid share
+  of what is stored right now. (Self-consumption was checked and is already
+  correct — it is measured against solar, not against the battery, so it
+  was never affected.)
+- 🧮 **The per-device breakdowns now reconcile against the fleet identity**
+  (#771) — SEM publishes per-charger daily kWh, a per-charger origin split
+  and per-PV-string energy, and none of them was ever checked against the
+  fleet row it decomposes: a renamed charger's stale bucket kept being
+  published and the sum double-counted (the #761 shape) with every total
+  still agreeing. A health check now reconciles all three — over-count only,
+  because shortfall has three *legitimate* causes (the 4-string discovery
+  cap, per-charger deadline rollover, upward counter reconcile) and a check
+  that fires on healthy hardware gets muted. A violation names every member
+  and marks the one that is no longer configured. The per-battery breakdown
+  in the issue's table was **deleted, not reconciled**: it had no producer —
+  `EnergyTotals.per_inverter`/`per_battery`, `InverterRuntime`, and the
+  `InverterFlows`/`BatteryFlows` slices (whose comment claimed a
+  conservation invariant "holds by construction" over code that never
+  constructed them) were data-shaped surface with nothing behind it, and a
+  checker over a dict nothing fills can only ever say "verified". Ratchet
+  tests keep the surface deleted.
+- 🌡️ **Comfort energy exists now, split by plan placement** (#772) — comfort
+  is the one demand family where the plan *creates* runs, and it left no
+  energy trace at all. A zone's kWh (accrued like any device, #768) now
+  files under "inside its planned block" or "outside", derived at the filing
+  seam from the same `comfort:` gate the actuation layer consults. The
+  in/out ratio is the first honest answer to "is banking working here" — a
+  pre-cool that ran the AC at 03:00 *and again at 17:00* books the same
+  in-block energy as one that banked four hours of coasting; the difference
+  lives entirely in the out bucket. A disengaged band files no claim, and
+  "no plan tonight" files as *out*, so an idle planner cannot look like a
+  perfect one. This is the feedback #705 Ph3 decides blind without.
+- 🏠 **The residual is audited: True Baseload** (#773) — with every
+  controlled load carrying a kWh, `home` stops being a black box and becomes
+  a subtraction: `home − Σ(controlled loads)` = the house SEM does *not*
+  touch, whose defining property is that it is boring. Two new sensors
+  (`True Baseload` W + `True Baseload Today` kWh) publish it — **negative
+  values included**, because a negative baseload is the sharpest possible
+  finding (a double-count or a sign error) and clamping it would hide
+  exactly the fault the number exists to expose. Its day-to-day drift is a
+  free sensor-health check with the #628 discipline: a day without a home
+  row is a refused gap (never a zero), and a breach names its suspect — the
+  device or the home row whose own day-over-day move explains the step.
+  Each sealed day records the *size* of its estimated portion, and the
+  drift check accepts a day whose estimate is too small to move a verdict
+  (≤ 0.5 kWh against the 2 kWh band) — gating on "no estimate anywhere"
+  would let one meterless pool pump silence the check forever, which is
+  dormancy wearing discipline's clothes. Days with a larger estimate stay
+  gaps: they display but never train or compare. The
+  controlled-loads subtrahend is a midnight-keyed mirror booked at the
+  filing seam, because device days roll at sunrise and subtracting across
+  that boundary is the #703/#704 bug class.
+
+### 🐛 Found on PROD hardware (#774)
+
+- 🔌 **A car drawing 8.7 kW is not a full car** (#774) — the Energy Plan card
+  read "not scheduled tonight: car is already full" while the charger pushed
+  8760 W into it. The virtual-SOC deficit is only ever *raised* by a vehicle-SOC
+  reading or the daily driving decay, and that decay runs at midnight rollover
+  **while the car is disconnected** — so charge-to-full → unplug → drive →
+  replug the *same day* leaves the "full" reference standing, and the deficit,
+  clamped at zero, can never move off the floor no matter how many kWh flow in.
+  Energy delivered beyond what the reference says the pack was missing now
+  refutes that reference: SEM drops it and reports the SOC as unknown until a
+  real reading, a taper anchor, or the session bootstrap re-arms it. How far
+  the car was actually driven is unknowable — only that it was further than we
+  thought — and inventing the replacement number is what caused this.
+
+### 🐛 Found by the simulation campaign (#638, #753)
+
+- 🔌 **A missed poll is not an unplug** (#638) — SEM's own entities
+  contradicted each other inside one update: `binary_sensor.sem_ev_connected`
+  read `off` in the very cycle `binary_sensor.sem_charger_<id>_connected` read
+  `on`, both projected from the same `coordinator.data`. One question, two
+  authorities: the session layer counted a disconnect only after three
+  confirmed cycles (the UDP-blip absorber, #35/#595/#753), while everyone
+  else read the raw plug sensor. A single dropped KEBA poll therefore
+  restamped the night with the car dropped from the plan and the blip
+  clearing restamped it back (two re-plans against #638's one-stop/one-start
+  guarantee), and — the sighting that showed how wide the class was —
+  `sensor.sem_charging_state` fell to *System ready* three times in three
+  minutes while the charger reported the car connected throughout, which on
+  real hardware also ends the session and sends the charger a `disable`.
+
+  The debounce now runs **once, at the source**: the cycle's plug reading is
+  confirmed the moment it is read, before the plan, the state machine, the
+  per-charger decisions, session tracking or any entity sees it. There is no
+  raw answer left in the cycle for a consumer to disagree with, so the fix is
+  structural rather than a patch per call site (fourteen of them). A
+  *connect* stays immediate — a plug-in still stamps within the cycle — and
+  the boot warm-up still never counts (#753). Measured on the clone with the
+  plug held continuously connected for three minutes: **5 plan-membership
+  flips and 5 re-stamps before the fix, 0 and 0 after.**
+
+- 🌙 **"Nothing to schedule" is an answer, not an error** (#638) — on a night
+  where nothing needs the night (battery full, EV at target, no load asking),
+  the plan is stamped with its lists deliberately empty and says why. The
+  actuation gate read that empty shape as a plan with no period and answered
+  *no span* for every device — a reason the card has no sentence for, so it
+  fell through to **"plan unreadable"**. Live on production 15.08 12:10:51:
+  the battery, ten loads and the comfort demand all told the user the plan
+  was unreadable while the plan was perfectly readable and simply idle. The
+  gate now names the quiet plan honestly (*nothing to schedule tonight*, in
+  all 16 languages), and a test pins the whole class: every reason the gate
+  can emit must have a card sentence, or be declared one of the three where
+  "unreadable" is the truthful answer.
+
+- 💱 **A quiet night is still a night** (#638) — on the same "nothing to
+  schedule" night, the plan came back with no price axis, no
+  self-consumption expectation and **no arbitrage verdict at all**. Not a
+  missing advisor: an ordering bug. The quiet answer was returned *before*
+  the night ledger was built, so everything derived from that ledger was
+  absent exactly in the regime where the arbitrage verdict is the only
+  thing left to say — and the shadow arbitrage demand, which is the whole
+  plan on such a night, could never be created. Two runs of the same
+  campaign script showed it: with one unrelated pool pump asking for the
+  night the card read *buy 0.4 kWh @ ~0.10, deliver 0.3 kWh @ ~0.20 — est
+  +0.01*; with nothing asking, the same battery, the same prices, the same
+  hour — nothing. The books are now opened first and the quiet answer
+  speaks after them: it carries the hour strip, the battery trajectory,
+  the expected self-consumption share and the arbitrage verdict, with only
+  the scheduling empty. The advisor's contract — *advice always, because an
+  absurd advice is the first symptom of books that lie* — is true in every
+  regime again, and the opt-in sell path (still off by default, #533) can
+  see its blocks on such a night at all. One consequence had to move with
+  it: the gate told a deliberately empty plan apart from an unreadable one
+  by *no demands **and** no hours* — true only while the quiet plan showed
+  no hours. Publishing the ledger made every device read *not in plan* —
+  the sentence for "the plan left YOU out", on a night it left everyone
+  out on purpose. The quiet regime is the empty demand list; the hours are
+  the books, not the schedule.
+
+- 🛑 **The kill-switch now takes hold on the card too** (#638) — with night
+  actuation switched off, the plan's coverage list still showed loads as
+  *covered* while the EV row correctly read *actuation off* (clone, 15.08).
+  The card was reading the transition **log's memory** rather than asking the
+  gate: a demand is written into that memory only when somebody evaluates it,
+  and the load gates are evaluated from a pass that returns early the moment
+  actuation is off — so every load kept displaying the answer from before the
+  switch was flipped. The one surface a user checks to confirm the
+  kill-switch took hold was contradicting the kill-switch. The verdict is now
+  **evaluated per publish** by a single shared evaluator that both the log
+  line and the card go through; a test pins that the "is actuation on?" rule
+  exists exactly once in the coordinator, because two copies is how they came
+  to disagree.
+
+- 🔇 **Every load left out of the plan now says why** (#638) — since the
+  legibility work, an EV the planner skipped explained itself on the card
+  (*mode excludes night charging*, *no car connected*, *car is already
+  full*). Loads had no such answer: the collector dropped them in five
+  different places — mode, no runtime left, already at target, daytime-only,
+  no measured power — and every one of them was silent, so *"why isn't my
+  heater in tonight's plan?"* had nowhere to be answered. On the clone four
+  devices vanished from the plan with no explanation anywhere. Each skip now
+  emits a machine reason that rides the plan payload beside the EV ones and
+  renders in all 16 languages, on both the busy and the quiet plan. A test
+  pins the class: a reason with no translation fails the suite.
+
+- 🚗 **A car that is charging is not a full car** (#756) — the planner asks
+  the taper detector whether the car is still full, so a phantom EV cannot
+  eat the night's peak budget. But "still full" is anchored energy
+  accounting: it is the deficit below full, charging *subtracts* from it,
+  and it clamps at zero. So the instant a real charge delivered the last of
+  the deficit, the detector reported a full car while the meter showed
+  3.9 kW going into the pack — and stayed there until the pack had
+  overdrawn the anchor by 0.1 kWh, about 90 seconds later. In that window
+  the night was re-stamped around a car that had just been dropped from it,
+  and re-stamped back when the anchor gave way (production, 15.08
+  11:50:52). The fullness question is now asked in **one** place — a single
+  accessor shared by the demand collector and the re-plan trigger, so they
+  cannot answer it differently — and that place also reads the charger's
+  own meter: a car drawing above its charger's handshake threshold is never
+  answered as full. A genuine sub-handshake trickle still reads full, so
+  the phantom-EV fix (#756) is untouched.
+
+### 📚 Documentation
+
+- 📖 **README, ARCHITECTURE, SETUP_GUIDE and EV_CHARGING_LOGIC now describe
+  the seam that actually exists.** Four places still taught the retired
+  machinery — the battery scheduler "picks the cheapest hours", the EV's
+  night step 5 doing its own cheap-window arithmetic, `find_cheapest_hours`
+  listed as a live pipeline step, and a co-scheduling "Night Charge Schedule"
+  whose classes were deleted in this release. Each now names the real
+  decision-maker (plan owns WHEN, reactive owns WHETHER) and what changes for
+  the user — including that with the kill-switch off there is no planned
+  pre-charge at all.
+- ⚠️ **KNOWN_LIMITATIONS no longer says arbitrage is "deactivated in v1.7.3"**
+  — it is wired and shipped in 2.0, dormant on every default, and the entry
+  now leads with the grid-connection-agreement warning and names
+  `sensor.sem_flow_battery_to_grid_power` as the compliance witness.
+
+### 🙏 Thanks
+
+SEM is built and maintained by one person. 2.0 took a long build and a longer
+soak on real hardware, and the people below paid for the time it took —
+thank you.
+
+- 💛 **[@praun](https://github.com/praun)**, **[@RienduPre](https://github.com/RienduPre)**,
+  **[@Azlinon](https://github.com/Azlinon)** and **[@onkelfu](https://github.com/onkelfu)**
+  for sponsoring the project. (Sponsors who chose to stay private aren't
+  named here — the thanks is the same.)
+- 🐞 **@RienduPre** and **@onkelfu** again, on the other side of the tracker:
+  a large share of the bugs fixed on the road to 2.0 exist as fixes because
+  they were reported precisely.
+- 🙌 Everyone who filed an issue, posted a diagnose dump, or answered a
+  question on the forum. A single-maintainer project sees exactly as many
+  hardware combinations as its users show it.
+
+If SEM saves you money, a [monthly sponsorship](https://github.com/sponsors/traktore-org)
+keeps it maintained.
+
 # [1.7.6-beta.19] — 16.08.2026
 
 ### 🐛 Fixes
@@ -31,6 +744,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Energy-Dashboard device (dedup on the control surface, not the name),
   and de-persists it so the duplicate is gone for good after upgrade. A
   smart plug with no Energy-Dashboard twin is untouched.
+
+> Last release of the 1.7.x line. Development continues on 2.0.
 
 # [1.7.6-beta.18] — 14.08.2026
 
@@ -142,7 +857,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   daytime surplus loop could reach for the charger's stop switch behind the EV
   controller's back — the exact hazard beta.11 set out to close — while the
   card showed nothing, because the display fold hid the row it could not
-  remove. The overnight planner (#638) packs its load demands from that same
+  remove. The energy planner (#638) packs its load demands from that same
   roster, so a duplicate carrying a minimum-runtime goal could additionally
   enter the night ledger twice — once as the charger, once as a load. The fold
   now runs where the device is **registered**, not only where it is read, and

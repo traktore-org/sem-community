@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Carga Nocturna"
       },
+      "energy_plan": {
+        "name": "Plan energético"
+      },
       "battery_priority_status": {
         "name": "Prioridad Batería"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Batería a Hogar"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Batería a Red"
+      },
       "flow_battery_to_ev_power": {
         "name": "Batería a VE"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Batería a Hogar Energía"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Batería a Red Energía"
       },
       "flow_battery_to_ev_energy": {
         "name": "Batería a VE Energía"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "Evento VPP"
+      },
+      "heat_pump_energy_today": {
+        "name": "Bomba de calor hoy"
+      },
+      "heat_pump_energy_month": {
+        "name": "Bomba de calor este mes"
+      },
+      "heat_pump_energy_year": {
+        "name": "Bomba de calor este año"
+      },
+      "heat_pump_energy_total": {
+        "name": "Bomba de calor total"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Bomba de calor desplazada hoy"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Carga solar hoy"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Carga de red hoy"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Coste de carga de red hoy"
+      },
+      "battery_stored_grid_share": {
+        "name": "Energía almacenada de la red"
+      },
+      "true_baseload_power": {
+        "name": "Carga base real"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Carga base real hoy"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Modo vacaciones"
+      },
+      "energy_plan_actuation": {
+        "name": "Ejecución del plan energético"
       }
     },
     "number": {

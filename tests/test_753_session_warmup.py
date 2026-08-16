@@ -9,9 +9,15 @@ into lifetime stats, and a fresh session started when charging resumed at
 rewritten. Same warm-up class as the 23-kWh target blip logged the same
 evening: a sensor that has not spoken yet is not a sensor saying "no".
 
-The end-detection now requires a CONFIRMED disconnect: never during the
-boot warm-up window, and only after three consecutive disconnected
-cycles (which also absorbs the KEBA UDP blip family, #35/#595)."""
+A disconnect must therefore be CONFIRMED: never during the boot warm-up
+window, and only after three consecutive disconnected cycles (which also
+absorbs the KEBA UDP blip family, #35/#595).
+
+The confirmation moved to the source in #638 — ``_confirm_ev_connection``
+filters ``power`` once, at the top of the cycle, so the session layer and
+every other consumer share one answer. These tests therefore drive the
+production pair in production order: confirm, then track.
+"""
 
 import time
 from types import SimpleNamespace
@@ -31,7 +37,11 @@ def _host(*, boot_ago_s=9999.0, session_kwh=6.0):
     h = SimpleNamespace()
     h.config = {"update_interval": 10}
     h._boot_monotonic = time.monotonic() - boot_ago_s
+    # The car has been on the cable: both the session edge and the plug
+    # confirmation carry that history into the cycle under test.
     h._last_ev_connected = True
+    h._ev_conn_confirmed = {"": True}
+    h._ev_conn_streak = {}
     h._session_data = SessionData(
         active=True, start_time="2026-08-11T08:00:00+02:00",
         energy_kwh=session_kwh, solar_energy_kwh=session_kwh * 0.8,
@@ -44,12 +54,16 @@ def _host(*, boot_ago_s=9999.0, session_kwh=6.0):
 
 
 def _power(connected, ev_power=0.0):
-    return SimpleNamespace(ev_connected=connected, ev_power=ev_power)
+    return SimpleNamespace(ev_connected=connected, ev_power=ev_power,
+                           ev_connected_per_charger=None)
 
 
 def _tick(h, connected, ev_power=0.0):
-    EVControlMixin._update_session_tracking(
-        h, _power(connected, ev_power), PowerFlows())
+    """One coordinator cycle's EV path: the plug answer is confirmed at the
+    source (step 1), then session tracking reads it (step 4.5)."""
+    p = _power(connected, ev_power)
+    EVControlMixin._confirm_ev_connection(h, p)
+    EVControlMixin._update_session_tracking(h, p, PowerFlows())
 
 
 @pytest.mark.unit
@@ -104,5 +118,6 @@ class TestARealDisconnectStillEnds:
         del h._boot_monotonic
         _tick(h, connected=False)
         _tick(h, connected=False)
+        assert h._session_data.active is True
         _tick(h, connected=False)
         assert h._session_data.active is False

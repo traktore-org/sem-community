@@ -20,6 +20,8 @@ from ..charger_types import BatteryIntent
 from ..power_control import async_write_power_setpoint, prepare_power_setpoint
 from .base import BatteryControlAdapter
 
+from ...utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -414,15 +416,6 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
-        # Already stopped — stay silent (#757). A SCHEDULED-outside-window or
-        # idle/target-reached verdict repeats STOP_FORCE_CHARGE every cycle;
-        # re-issuing stop_forcible_charge each time floods the single serial
-        # Modbus link and collides with the huawei_solar read coordinators
-        # (transaction-ID mismatches, read timeouts — the #538 failure, one
-        # layer up). Issue the stop on the TRANSITION and no-op afterwards:
-        # the command_off pattern (base.py:187).
-        if self._last_intent is BatteryIntent.STOP_FORCE_CHARGE:
-            return
         # STOP any forced op — also clears an arbitrage discharge (#523),
         # so the scheduler's idle/target-reached verdict can't leave the
         # battery silently selling to grid. Forcible discharge and forced
@@ -438,13 +431,21 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
-        # #757 honest retry: record STOP only when the stop actually landed.
-        # A failed stop must NOT record the intent, or the guard above would
-        # suppress the retry and strand the LUNA2000 charging (#589 class 4).
+        # (#757) Everything above is a real edge — an orphan cleared, a
+        # forcible discharge cancelled. Below is the steady state, and
+        # the steady state is where the storm lived: hours of "stop" for
+        # a battery that stopped at the first one. Ask the shared
+        # predicate, then honour its contract — record the intent ONLY on
+        # a stop that landed, so a dropped Modbus write is retried next
+        # cycle instead of being remembered as a success.
+        if self._force_charge_already_stopped():
+            return
         from .force_charge import ChargeCommandStatus
         status = await self._charge_adapter.stop_forced_charge()
-        if status.status is ChargeCommandStatus.FAILED:
-            self._last_error = f"stop_forced_charge failed: {status.message}"
+        if getattr(status, "status", None) is ChargeCommandStatus.FAILED:
+            self._last_error = (
+                f"stop_forced_charge failed: {getattr(status, 'message', '')}"
+            )
             return
         self._forcible_charging = False
         self._last_error = None
@@ -454,7 +455,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
 
     async def _apply_discharge_limit(self, watts: float) -> None:
         if not self._discharge_control_entity:
-            _LOGGER.debug(
+            log_on_change(   # (#762) a standing config gap is one line, not 806/day
+                _LOGGER, "no_discharge_entity", logging.DEBUG,
                 "HuaweiBatteryAdapter: no battery_discharge_control_entity "
                 "configured — skipping limit %.0f W", watts,
             )

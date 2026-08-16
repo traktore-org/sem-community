@@ -172,6 +172,11 @@ class CalendarTariffProvider(TariffProvider):
     def get_price_at(self, when: datetime) -> Optional[float]:
         return self.peak_rate if self._is_high_tariff(when) else self.off_peak_rate
 
+    def get_price_level_at(self, when: datetime) -> "PriceLevel | None":
+        # Same calendar rule get_price_level applies now: NT = CHEAP (#638).
+        return (PriceLevel.NORMAL if self._is_high_tariff(when)
+                else PriceLevel.CHEAP)
+
     def get_tariff_data(self) -> TariffData:
         now = dt_util.now()
         is_ht = self._is_high_tariff(now)

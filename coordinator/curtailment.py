@@ -210,3 +210,15 @@ class CurtailmentProbe:
             self._step_plateau_until = now + STEP_RETRY_S
             return 0.0
         return min(STEP_BONUS_W, self._room_w(i))
+
+
+def marks_day_curtailed(state) -> bool:
+    """(#743, 1.8 half) Whether this probe state proves the day curtailed.
+
+    Only ``harvest`` counts — production FOLLOWED the probe, so the export
+    limit was real and today's measured solar is clamped-to-consumption,
+    not the sky's answer. A failed probe (plain clouds) or any unconfirmed
+    state keeps teaching the forecast tracker as normal: the poisoned-
+    sample skip must never widen into "any suspicious day learns nothing".
+    """
+    return state == "harvest"

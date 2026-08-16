@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Ładowanie nocne"
       },
+      "energy_plan": {
+        "name": "Plan energetyczny"
+      },
       "battery_priority_status": {
         "name": "Priorytet baterii"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Bateria → dom"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Bateria → sieć"
+      },
       "flow_battery_to_ev_power": {
         "name": "Bateria → EV"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Energia bateria → dom"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Energia bateria → sieć"
       },
       "flow_battery_to_ev_energy": {
         "name": "Energia bateria → EV"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "Zdarzenie VPP"
+      },
+      "heat_pump_energy_today": {
+        "name": "Pompa ciepła dzisiaj"
+      },
+      "heat_pump_energy_month": {
+        "name": "Pompa ciepła w tym miesiącu"
+      },
+      "heat_pump_energy_year": {
+        "name": "Pompa ciepła w tym roku"
+      },
+      "heat_pump_energy_total": {
+        "name": "Pompa ciepła łącznie"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Pompa ciepła przesunięta dzisiaj"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Dziś ładowanie ze słońca"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Dziś ładowanie z sieci"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Dziś koszt ładowania z sieci"
+      },
+      "battery_stored_grid_share": {
+        "name": "Zmagazynowana energia z sieci"
+      },
+      "true_baseload_power": {
+        "name": "Rzeczywiste obciążenie bazowe"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Rzeczywiste obciążenie bazowe dziś"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Tryb wakacyjny"
+      },
+      "energy_plan_actuation": {
+        "name": "Realizacja planu energetycznego"
       }
     },
     "number": {

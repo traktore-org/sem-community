@@ -8,6 +8,11 @@ import pytest
 from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management import async_migrate_entry
+from custom_components.solar_energy_management.config_flow import SolarEnergyManagementConfigFlow
+
+# (#758) The chain ends at whatever the config flow declares — see the note
+# in test_config_flow_migration.py.
+CURRENT = SolarEnergyManagementConfigFlow.VERSION
 
 
 def _entry(options, data=None, version=3):
@@ -42,7 +47,7 @@ async def test_seeds_all_eight_from_global():
     )
     assert await async_migrate_entry(hass, entry) is True
     c, kwargs = _seeded_charger(hass)
-    assert kwargs["version"] == 16  # bumped in v15→v16 (#604)  # bumped in v14→v15 (#576)  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert kwargs["version"] == CURRENT
     assert c["daily_ev_target"] == 8
     assert c["daily_ev_target_max"] == 50
     assert c["ev_target_soc"] == 70
@@ -99,7 +104,7 @@ async def test_no_chargers_is_safe_and_bumps_version():
     hass = MagicMock()
     entry = _entry(options={}, data={"daily_ev_target": 8})
     assert await async_migrate_entry(hass, entry) is True
-    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == 16  # bumped in v15→v16 (#604)  # bumped in v14→v15 (#576)  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == CURRENT
 
 
 @pytest.mark.asyncio

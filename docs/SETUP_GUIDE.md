@@ -389,8 +389,9 @@ generated yet. It is organized into these pages:
   these rates throughout the day. Best for simple flat-rate tariffs.
 - **Dynamic**: SEM reads the current rate from a HA sensor every cycle. Used
   with time-of-use tariffs (Tibber, Octopus Energy, Amber) where prices
-  change hourly. The battery charge scheduler will pick the cheapest hours
-  automatically.
+  change hourly. The [joint energy planner](ENERGY_PLANNER.md) uses the
+  price curve to place every scheduled demand — EV, battery and deferrable
+  loads — in the cheapest hours automatically.
 - **Calendar**: You define cheap/expensive periods via a HA calendar entity.
   Useful for fixed time-of-use tariffs without a dynamic price API.
 
@@ -449,7 +450,8 @@ The contract, in full:
   of `{start, end, value}` entries (Nordpool shape; several other shapes
   are auto-detected too). With a curve, the **entire** dynamic machinery
   lights up: percentile price levels, cheap-window detection, the
-  overnight cheapest-hours planner and the battery charge scheduler.
+  [joint energy planner](ENERGY_PLANNER.md) and the battery charge
+  scheduler.
   The `tariff_classifier_path` attribute on the price-level sensor shows
   which path/attribute SEM matched — check it if classification looks off.
 - **Minimal variant without a curve**: set *Price classification mode* to
@@ -951,9 +953,19 @@ At a configurable daily evaluation time (default 21:00), the scheduler:
    rate (accounting for battery round-trip efficiency) is cheaper than what
    grid electricity would cost during the day
 
-If the break-even check passes, the scheduler picks the cheapest hours in the
-overnight window (using dynamic tariff data if available, or the full window
-on a static tariff) and issues forced charge commands to the battery.
+If the break-even check passes, the scheduler hands its verdict — *how much*
+energy, to *what* target SOC, at *what* power — to the
+[joint energy planner](ENERGY_PLANNER.md), which decides *when*: the
+battery becomes one demand among the EV, the deferrable loads and the comfort
+bands, placed in the cheapest hours of the overnight window (or across the
+full window on a static tariff) under your peak limit and priority order.
+SEM then issues forced charge commands only while that block is open.
+
+> Since v2.0 the scheduler no longer picks its own window (#638). Two
+> consequences: the battery's charge hours now respect the same peak limit
+> and priority order as everything else, and with
+> `switch.sem_energy_plan_actuation` **off** there is no planned pre-charge at
+> all — the switch is the kill-switch for the whole night.
 
 ### Break-even logic
 

@@ -19,6 +19,7 @@ from .charger_types import (
     FleetContext,
     FleetCycleState,
 )
+from .plan_verdict import NO_OPINION, PlanVerdict
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from .types import PowerReadings
@@ -35,7 +36,7 @@ def build_charger_view(
     target_soc: Optional[float] = None,
     deadline_amps: int = 0,
     top_up_amps: int = 0,
-    tariff_wait: bool = False,
+    plan: PlanVerdict = NO_OPINION,
     solar_committed_w: float = 0.0,
     night_deliverable_kwh: float = float("inf"),
     soc_ceiling_reached: bool = False,
@@ -58,7 +59,7 @@ def build_charger_view(
 
       * ``target_kwh`` / ``target_soc`` — per-charger remaining need
       * ``deadline_amps`` — per-charger night-plan floor (#246)
-      * ``tariff_wait`` — per-charger night-plan wait flag (#247)
+      * ``plan`` — the planning layer's verdict for this charger (#638)
       * ``solar_committed_w`` — solar already claimed by
         higher-priority chargers in the cascade
 
@@ -73,7 +74,11 @@ def build_charger_view(
         target_kwh: Per-charger remaining-to-Min kWh, or None.
         target_soc: Per-charger SOC target, or None.
         deadline_amps: Pre-computed deadline floor amps (#246), or 0.
-        tariff_wait: Per-charger night-planner wait flag (#247).
+        plan: The planning layer's verdict for this charger this
+            cycle (#638) — a hold placed by the energy planner (or
+            the #247 tariff planner, which speaks through the same
+            type). Defaults to no opinion, meaning "behave as though no
+            planner exists".
         solar_committed_w: Solar already committed to higher-priority
             chargers in this cycle.
 
@@ -180,10 +185,16 @@ def build_charger_view(
         battery_commanded=fleet_state.battery_commanded,
     )
 
-    # Merge per-charger config with the tariff_wait flag so
-    # SolarPlusCheapMode can consult it. Avoids extending the
-    # ChargerView signature with an opaque kwarg.
-    cfg_with_wait = dict(charger_cfg) if isinstance(charger_cfg, dict) else {}
+    # A working copy of the per-charger config, filled in below with the
+    # hardware keys the entry does not carry (#678).
+    #
+    # (#638) This dict used to smuggle the planner's verdict too, as
+    # ``_tariff_wait`` — "avoids extending the ChargerView signature with
+    # an opaque kwarg", said the comment that lived here. The opacity was
+    # the problem: an untyped key is invisible to a reader of ``decide()``,
+    # so two of the three night modes never consulted it. It is a typed
+    # ``plan`` field on the view now.
+    cfg_resolved = dict(charger_cfg) if isinstance(charger_cfg, dict) else {}
 
     # #678 — fill the hardware keys the per-charger dict does not carry.
     #
@@ -204,10 +215,10 @@ def build_charger_view(
     # cannot draw, and the difference is taken off what the next charger
     # in the list is allowed to see.
     for _key in ("ev_max_current", "ev_min_current", "ev_phases", "ev_voltage"):
-        if cfg_with_wait.get(_key) is None:
+        if cfg_resolved.get(_key) is None:
             _fleet_val = config.get(_key)
             if _fleet_val is not None:
-                cfg_with_wait[_key] = _fleet_val
+                cfg_resolved[_key] = _fleet_val
 
     # ``hardware_max_a`` is the adapter's ``max_current_a`` — the SAME
     # value the adapter clamps every command to, and the only ceiling
@@ -227,21 +238,20 @@ def build_charger_view(
         except (TypeError, ValueError):
             _hw = None
         if _hw is not None and _hw > 0:
-            _cfg_max = cfg_with_wait.get("ev_max_current")
+            _cfg_max = cfg_resolved.get("ev_max_current")
             try:
                 _hw = min(_hw, float(_cfg_max)) if _cfg_max is not None else _hw
             except (TypeError, ValueError):
                 pass
-            cfg_with_wait["ev_max_current"] = int(_hw)
-
-    cfg_with_wait["_tariff_wait"] = tariff_wait
+            cfg_resolved["ev_max_current"] = int(_hw)
 
     return ChargerView(
         power=cp,
         energy=ce,
         mode=mode,
-        config=cfg_with_wait,
+        config=cfg_resolved,
         fleet=fleet,
+        plan=plan,
         target_kwh=target_kwh,
         target_soc=target_soc,
         deadline_amps=deadline_amps,

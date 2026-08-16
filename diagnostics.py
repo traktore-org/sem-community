@@ -147,6 +147,15 @@ REDACT_CONFIG_KEYS = {
 }
 
 
+def _safe(fn):
+    """Evaluate a diagnostics accessor; a broken internal must never take
+    the whole download down (the download IS the debugging tool)."""
+    try:
+        return fn()
+    except Exception as e:  # noqa: BLE001
+        return f"unavailable ({e})"
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: SEMConfigEntry
 ) -> dict[str, Any]:
@@ -336,7 +345,17 @@ async def async_get_config_entry_diagnostics(
     ev_devices = getattr(coordinator, "_ev_devices", None) or {}
     if ev_devices:
         from .coordinator.ev_control import EVControlMixin  # noqa: F401
-        adapters = getattr(coordinator, "_ev_adapters", {}) or {}
+        # (#764) The cache the coordinator actually writes is
+        # ``_charger_adapters`` (coordinator.py / ev_control.py). This read
+        # said ``_ev_adapters`` — an attribute production has never had — so
+        # ``adapter_class`` came back null on every dump ever taken and the
+        # Wallbox discovery block below was unreachable live. Fall back to the
+        # old name for anything that still sets it.
+        adapters = (
+            getattr(coordinator, "_charger_adapters", None)
+            or getattr(coordinator, "_ev_adapters", None)
+            or {}
+        )
         for cid, dev in ev_devices.items():
             ad = adapters.get(cid)
             entry_info = {
@@ -471,6 +490,13 @@ async def async_get_config_entry_diagnostics(
             "grid_export_kwh": data.get("daily_grid_export_energy"),
             "battery_charge_kwh": data.get("daily_battery_charge_energy"),
             "battery_discharge_kwh": data.get("daily_battery_discharge_energy"),
+            # (#628 visibility) per-category counter-backing today: how many
+            # cycles reconciled against the hardware counters vs skipped on a
+            # partial read. A category absent here has no counters configured
+            # (integration IS the design); one with skipped >> backed names
+            # the unreadable counter as the divergence mechanism in one look.
+            "counter_backing": _safe(
+                lambda: coordinator._energy_calculator.counter_backing_today()),
         },
         "energy_yearly": {
             "solar_kwh": data.get("yearly_solar_yield_energy"),

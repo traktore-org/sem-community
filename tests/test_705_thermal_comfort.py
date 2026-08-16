@@ -429,6 +429,101 @@ class TestThePayloadIsTheSingleSource:
         assert p["comfort"] == {"state": "disengaged", "reading_c": None, "hvac": "cool"}
 
 
+class TestSetpointAnchoring:
+    """(#705, Azlinon's review) The band rides the thermostat's OWN live
+    setpoint: the user's schedule / presence logic / Ecobee-style native
+    pre-cool moves the setpoint on the climate entity, and SEM's band must
+    follow it instead of fighting it with a stale absolute. The typed
+    values keep carrying the DELTAS (bank-by, run-now-past) and remain the
+    anchor of last resort when the entity exposes no setpoint."""
+
+    def _ac_with_setpoint(self, room, attrs, **kw):
+        states = {
+            "sensor.room_temp": room,
+            "climate.ac_livingroom": ("cool", attrs),
+        }
+        return _ac(_hass_with(states), **kw)
+
+    def test_the_limit_rides_the_live_setpoint(self):
+        """Config 24/26 (delta +2) but the thermostat holds 25 → forced
+        begins at 27, so 26.4 — forced on the absolute — is only willing."""
+        dev = self._ac_with_setpoint("26.4", {"temperature": 25.0})
+        assert dev.comfort_state == "willing"
+
+    def test_past_the_anchored_limit_is_still_forced(self):
+        dev = self._ac_with_setpoint("27.1", {"temperature": 25.0})
+        assert dev.comfort_state == "forced"
+
+    def test_a_schedule_change_moves_the_band_without_touching_sem(self):
+        """Night setback: the thermostat drops to 23 → forced at 25."""
+        dev = self._ac_with_setpoint("25.2", {"temperature": 23.0})
+        assert dev.comfort_state == "forced"
+
+    def test_the_banked_bound_rides_too(self):
+        # anchor 25, offset 2 → banked at ≤ 23 (config target 24 would
+        # have said willing at 22.9... no: 22.9 ≤ 22 is false → willing).
+        dev = self._ac_with_setpoint("22.9", {"temperature": 25.0})
+        assert dev.comfort_state == "banked"
+
+    def test_cool_range_mode_anchors_on_target_temp_high(self):
+        dev = self._ac_with_setpoint(
+            "26.4", {"target_temp_high": 25.0, "target_temp_low": 20.0})
+        assert dev.comfort_state == "willing"
+
+    def test_heat_range_mode_anchors_on_target_temp_low(self):
+        # heat config 21/18 (delta −3); range low 20 → forced below 17.
+        states = {
+            "sensor.room_temp": "17.5",
+            "climate.ac_livingroom": (
+                "heat", {"target_temp_high": 24.0, "target_temp_low": 20.0}),
+        }
+        dev = _ac(_hass_with(states), hvac_mode="heat",
+                  target=21.0, offset=2.0, limit=18.0)
+        assert dev.comfort_state == "willing"
+
+    def test_no_setpoint_falls_back_to_the_typed_absolutes(self):
+        dev = self._ac_with_setpoint("26.4", {"current_temperature": 24.0})
+        assert dev.comfort_state == "forced"
+
+    def test_a_fahrenheit_install_anchors_in_display_units(self):
+        """Config 76/80 °F (delta 4 °F ≈ 2.22 °C), thermostat at 78 °F →
+        forced at 82 °F. A room at 80 °F is forced on the raw absolute
+        and willing on the anchored band — opposite answers, so this
+        cannot pass by cancellation."""
+        states = {
+            "sensor.room_temp": ("80.0", {"unit_of_measurement": "°F"}),
+            "climate.ac_livingroom": ("cool", {"temperature": 78.0}),
+        }
+        hass = _hass_with(states)
+        hass.config.units.temperature_unit = "°F"
+        dev = _ac(hass, target=76.0, offset=4.0, limit=80.0)
+        assert dev.comfort_state == "willing"
+
+    def test_the_misconfig_guard_judges_the_typed_delta(self):
+        """A limit on the wrong side of the typed target stays disengaged
+        even when a sane-looking setpoint exists — the delta carries the
+        user's intent and a negative cool-delta is still nonsense."""
+        dev = self._ac_with_setpoint(
+            "26.4", {"temperature": 25.0}, target=26.0, limit=24.0)
+        assert dev.comfort_state == "disengaged"
+
+    def test_switch_devices_have_no_anchor(self):
+        """Phase-2 heaters have no setpoint to ride — the mixin default
+        answers None and the typed absolutes stay authoritative."""
+        from custom_components.solar_energy_management.devices.base import (
+            SwitchDevice,
+        )
+        dev = SwitchDevice(
+            _hass_with({"sensor.cellar": "17.0"}), "sw1", "Heater",
+            rated_power=800, entity_id="switch.heater")
+        dev.comfort_entity = "sensor.cellar"
+        dev.comfort_target = 21.0
+        dev.comfort_offset = 1.0
+        dev.comfort_limit = 18.0
+        assert dev._comfort_anchor_c() is None
+        assert dev.comfort_state == "forced"
+
+
 class TestPhase2SwitchLoads:
     """The same band on SwitchDevice — one mixin, no sibling copy.
 
@@ -497,3 +592,109 @@ class TestPhase2SwitchLoads:
         assert dev.comfort_state == "disengaged"
         assert dev.has_runtime_deficit is False
         assert dev.stop_condition_met is False
+
+
+class TestComfortSampling:
+    """(#638 Phase 3) The drift learners eat samples SEM already takes —
+    one reading per cycle, split by whether the device was running."""
+
+    def _now(self, minutes=0):
+        from datetime import datetime, timedelta, timezone
+        return (datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc)
+                + timedelta(minutes=minutes))
+
+    def _run(self, dev, running):
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceState,
+        )
+        dev._status.state = (DeviceState.ACTIVE if running
+                             else DeviceState.IDLE)
+
+    def test_samples_split_by_activity(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "24.0"}))
+        self._run(dev, False)
+        dev.record_comfort_sample(self._now(0))
+        self._run(dev, True)
+        dev.record_comfort_sample(self._now(1))
+        assert len(dev._comfort_off_samples) == 1
+        assert len(dev._comfort_on_samples) == 1
+
+    def test_a_silent_thermometer_is_not_a_sample(self):
+        dev = _ac(_hass_with({}))
+        dev.record_comfort_sample(self._now(0))
+        assert not getattr(dev, "_comfort_off_samples", None)
+
+    def test_a_disengaged_band_does_not_sample(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "24.0"}),
+                  target=0.0, limit=0.0)
+        dev.record_comfort_sample(self._now(0))
+        assert not getattr(dev, "_comfort_off_samples", None)
+
+    def test_old_samples_age_out(self):
+        dev = _ac(_hass_with({"sensor.room_temp": "24.0"}))
+        dev.record_comfort_sample(self._now(0))
+        dev.record_comfort_sample(self._now(300))  # 5 h later
+        assert len(dev._comfort_off_samples) == 1
+
+    def test_two_devices_do_not_share_buffers(self):
+        """The class-level-mutable-default trap: buffers must be per
+        instance, or one room's history poisons every room's model."""
+        a = _ac(_hass_with({"sensor.room_temp": "24.0"}))
+        b = ClimateDevice(
+            _hass_with({"sensor.room_temp": "20.0"}), "ac2", "AC 2",
+            rated_power=900, entity_id="climate.ac2", hvac_mode="cool",
+            comfort_entity="sensor.room_temp",
+            comfort_target=24.0, comfort_offset=2.0, comfort_limit=26.0)
+        a.record_comfort_sample(self._now(0))
+        assert not getattr(b, "_comfort_off_samples", None)
+
+
+class TestComfortPlanDemand:
+    """(#638 Phase 3) The band's plannable ask: 'the room hits the limit
+    at T, banking back to target costs E kWh' — or None when the model
+    cannot say. This is what the day planner packs into surplus windows."""
+
+    def _warming_ac(self, room="24.5", off_rate=0.5, on_rate=-1.0):
+        """An AC whose room warms at ``off_rate`` °C/h while off and
+        cools at ``on_rate`` while running, fed 30 min of samples each."""
+        from datetime import datetime, timedelta, timezone
+        dev = _ac(_hass_with({"sensor.room_temp": room}))
+        t0 = datetime(2026, 8, 8, 11, 0, tzinfo=timezone.utc)
+        for i in range(7):
+            ts = t0 + timedelta(minutes=5 * i)
+            h = 5 * i / 60.0
+            dev._ensure_comfort_buffers()
+            dev._comfort_off_samples.append((ts, 23.0 + off_rate * h))
+            dev._comfort_on_samples.append((ts, 25.0 + on_rate * h))
+        self.now = t0 + timedelta(minutes=35)
+        return dev
+
+    def test_a_drifting_room_produces_the_ask(self):
+        dev = self._warming_ac()
+        ask = dev.comfort_plan_demand(self.now)
+        assert ask is not None
+        # 24.5 → 26 at 0.5 °C/h = 3 h to the limit
+        hours = (ask["deadline"] - self.now).total_seconds() / 3600.0
+        assert 2.5 < hours < 3.5
+        # 0.5 °C back to target at 1 °C/h active = 0.5 h × 1.2 kW
+        # (#705 Ph3) the ask now banks the FULL band: edge = target −
+        # offset = 22.0, gap 2.5 °C at 1 °C/h on 1.2 kW → 3.0 kWh (was
+        # 0.6 to target only — half a pre-cool).
+        assert ask["energy_kwh"] == pytest.approx(3.0, abs=0.01)
+
+    def test_a_room_holding_itself_is_no_ask(self):
+        dev = self._warming_ac(off_rate=-0.1)
+        assert dev.comfort_plan_demand(self.now) is None
+
+    def test_a_forced_room_is_the_reactive_layers_problem(self):
+        dev = self._warming_ac(room="26.5")
+        assert dev.comfort_plan_demand(self.now) is None
+
+    def test_no_active_model_is_no_ask(self):
+        dev = self._warming_ac()
+        dev._comfort_on_samples.clear()
+        assert dev.comfort_plan_demand(self.now) is None
+
+    def test_an_already_banked_room_asks_nothing(self):
+        dev = self._warming_ac(room="21.5")
+        assert dev.comfort_plan_demand(self.now) is None

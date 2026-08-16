@@ -270,12 +270,8 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
-        # Already stopped — stay silent (#757, command_off pattern base.py:187):
-        # a repeating idle/target-reached verdict must not re-hammer the
-        # setpoint/strategy/charge switch every cycle (the #538 flood, one
-        # layer up). Issue the stop on the transition, then no-op.
-        if self._last_intent is BatteryIntent.STOP_FORCE_CHARGE:
-            return
+        if self._force_charge_already_stopped():
+            return  # (#757) already stopped — a repeat is noise, not a command
         ok = await self._write_force_discharge(0.0)  # #523 mutual exclusion
         # Back to self-consumption (nom), not the old eco/idle release.
         await self._set_strategy(self._strategy_self_consume)

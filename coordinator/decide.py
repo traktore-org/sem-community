@@ -261,7 +261,18 @@ def effective_min_amps(cfg: dict, fallback: int = 6) -> int:
     Returns:
         ``min(ev_max_current, max(loadpoint_min, vehicle_min or 0))`` as int.
     """
-    loadpoint_min = int(cfg.get("ev_min_current", fallback)) if isinstance(cfg, dict) else fallback
+    # (#750) present-as-None is the classic config trap (the or-chain
+    # precedent): a key that exists with value None must fall back, not
+    # crash the decide layer with a TypeError.
+    if isinstance(cfg, dict):
+        _raw_min = cfg.get("ev_min_current", fallback)
+        try:
+            loadpoint_min = (int(_raw_min)
+                             if _raw_min not in (None, "") else fallback)
+        except (TypeError, ValueError):
+            loadpoint_min = fallback
+    else:
+        loadpoint_min = fallback
     effective = loadpoint_min
     if isinstance(cfg, dict):
         v = cfg.get("vehicle_min_current")
@@ -542,6 +553,32 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
             ),
         )
 
+    # (#638) The planning layer placed this charge in a later window.
+    #
+    # Sits BELOW target-reached, so a charge that simply finished is never
+    # reported as waiting — and ABOVE every charge branch below, because
+    # this function is the ONE seam all three night-capable modes funnel
+    # through (``solar_only`` and ``min_plus_solar`` call it directly,
+    # ``solar_plus_cheap`` via ``_decide_night``). Putting the check here
+    # rather than in each mode is the whole point: the 2026-06-02 fix
+    # repaired ``solar_plus_cheap`` alone and left the class standing in
+    # its two siblings, which is how PROD came to finish a charge on
+    # 2026-08-06 half an hour before its own planned window opened.
+    #
+    # Safe to obey unconditionally: ``energy_plan_actuation.ev_overlay``
+    # only raises ``hold`` after PROVING the remaining blocks can still
+    # deliver what is owed, and stands down entirely for a forcing
+    # deadline or an unreachable floor. A hold is never a mere preference.
+    if view.plan.hold:
+        detail = f" — {view.plan.reason}" if view.plan.reason else ""
+        if view.plan.until is not None:
+            detail += f" (until {view.plan.until:%H:%M})"
+        return ChargerDecision(
+            charger_id=cid, mode=mode_name,
+            intent=ChargerIntent.IDLE,
+            reason=f"{mode_name} night: waiting for the planned window{detail}",
+        )
+
     cfg = view.config if isinstance(view.config, dict) else {}
     min_amps = effective_min_amps(cfg, 6)
     max_amps = int(cfg.get("ev_max_current", 32))
@@ -750,17 +787,12 @@ class SolarPlusCheapMode(ModeStrategy):
                 f"solar_plus_cheap day: tariff={f.tariff_level}",
             )
 
-        # Night → defers to the night planner's tariff_wait flag.
-        # This is the only mode that consults ``tariff_wait``.
-        cfg = view.config if isinstance(view.config, dict) else {}
-        if cfg.get("_tariff_wait", False):
-            return ChargerDecision(
-                charger_id=cid, mode="solar_plus_cheap",
-                intent=ChargerIntent.IDLE,
-                reason="solar_plus_cheap night: waiting for cheaper hour",
-            )
-
-        # Cheap window OR Min floor must be met — top up at Min.
+        # Night → the shared night decision, which consults the planning
+        # layer's verdict for EVERY mode (#638). This mode used to carry
+        # its own private copy of that check, reading
+        # ``config["_tariff_wait"]``; it was the only one that did, and
+        # the two siblings that didn't charged straight through the plan.
+        # One seam, no per-mode copies to keep in sync.
         return _MIN_PLUS_SOLAR._decide_night(view)
 
 

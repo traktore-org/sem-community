@@ -62,17 +62,13 @@ def _aware_seconds(now: datetime) -> int:
     return now.hour * 3600 + now.minute * 60 + now.second
 
 
-def active_deye_slot(values: Iterable[str], now: datetime) -> int:
-    """Return the one-based active Deye slot, including midnight wrap."""
-
-    boundaries = validate_deye_boundaries(values)
-    current = _aware_seconds(now)
-    active = _PROGRAM_COUNT - 1
-    for index, boundary in enumerate(boundaries):
-        if boundary > current:
-            break
-        active = index
-    return active + 1
+# (#758) ``active_deye_slot`` stood here — "which of the six programs is
+# running right now", validated, wrap-aware, three tests, and no caller in
+# the shipped integration. The adapter never needs it: it compiles a window
+# into the slots that OVERLAP it (below) rather than asking which one is
+# current. Deleted rather than baselined — the #653 rule is wire it, delete
+# it, or say why it stays, and there was nothing to wire it to. Found by the
+# orphan guard the moment that guard learned to look at module scope.
 
 
 def compile_deye_charge_window(

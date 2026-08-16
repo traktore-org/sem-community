@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -40,6 +41,165 @@ type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
+
+
+def _energy_plan_state(plan: Any) -> str:
+    """(#638) Collapse tonight's plan to one verdict word.
+
+    ``pending`` — the planner has not answered for tonight yet (before the
+    night window, or still waiting on a not-ready world). ``idle`` — it
+    answered "nothing needs the night", which is a real answer, not a gap.
+    ``fits`` / ``yields`` — everything got its floor, or something did not.
+    """
+    if not isinstance(plan, dict):
+        return "pending"
+    if not plan.get("demands"):
+        return "idle"
+    return "fits" if plan.get("fits") else "yields"
+
+
+# HA's recorder refuses to store a state whose attributes serialize above
+# 16 KiB: it logs a warning and records NO attributes at all, so the plan
+# would silently vanish from history. Stay under it with headroom.
+_PLAN_ATTR_BUDGET_BYTES = 15000
+
+
+def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
+    """(#638) Collapse a demand's back-to-back slot allocations into runs.
+
+    The packer allocates per market slot, so a pump running four consecutive
+    quarter-hours arrives as four blocks. The strip draws them as one bar
+    regardless, and on a 15-minute curve those per-slot blocks are the single
+    largest term in the payload — merging them is free to the card and is
+    what keeps a normal 15-min night under the recorder's limit at all.
+
+    ``price`` is dropped rather than carried: a merged run spans slots that
+    may differ in price, and quoting one of them would be a lie. The per-slot
+    prices stay on the ledger rows, and ``diagnose`` still has every original
+    allocation with its own price.
+
+    Grouping by demand id is load-bearing, not tidiness: the packer emits
+    allocations SLOT-major (every demand for 05:00, then every demand for
+    06:00), so a demand's own consecutive blocks are never neighbours in the
+    list. Comparing each block only against the previous one merges nothing
+    at all on real data — verified live on HA-TEST.
+    """
+    by_id: Dict[Any, List[Dict[str, Any]]] = {}
+    for b in blocks or []:
+        if not isinstance(b, dict):
+            continue
+        by_id.setdefault(b.get("id"), []).append({
+            "id": b.get("id"),
+            "start": b.get("start"),
+            "end": b.get("end"),
+            "power_w": b.get("power_w"),
+        })
+    out: List[Dict[str, Any]] = []
+    for rows in by_id.values():
+        rows.sort(key=lambda r: str(r["start"]))
+        run: List[Dict[str, Any]] = []
+        for row in rows:
+            prev = run[-1] if run else None
+            if (prev and prev["power_w"] == row["power_w"]
+                    and prev["end"] == row["start"]):
+                prev["end"] = row["end"]
+                continue
+            run.append(row)
+        out.extend(run)
+    return out
+
+
+def _energy_plan_attrs(
+    plan: Any, extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """(#638) Project tonight's stashed plan into entity attributes.
+
+    ``extra`` is for the payloads that ride on the SAME state but do not
+    come from the plan — ``tomorrow``, the #755 ``review``. They belong
+    here rather than at the call site because the byte budget below is
+    the whole point of this function: the recorder weighs the finished
+    state, not the part of it this projection happened to build, and a
+    trim computed before the last two writers is a trim that does not
+    trim (#758). One place adds, one place counts.
+
+    Three things are deliberately not copied wholesale:
+
+    * ``summary`` / ``allocations`` — log prose. The logs quote it and the
+      ``diagnose`` payload carries it; the card reads the structured rows.
+    * the ledger's ``home_w`` and ``soc_kwh`` columns — the strip does not
+      draw them, and they are most of what pushes a 15-minute price curve
+      over a long winter night past the recorder's limit.
+    * per-slot allocations — merged into runs, see ``_merge_plan_blocks``.
+
+    If the projection is *still* too large (a 15-min curve × a large fleet),
+    the timeline is dropped rather than the whole payload: the card falls
+    back to the per-demand list and says the chart was omitted. A visibly
+    reduced card beats an entity whose attributes disappear from history.
+    """
+    if not isinstance(plan, dict):
+        # Daytime: no plan to project, but the review still has to reach the
+        # card — it is the record of LAST night, not of tonight's.
+        return {k: v for k, v in (extra or {}).items() if v}
+    attrs: Dict[str, Any] = {
+        "computed_at": plan.get("computed_at"),
+        "fits": plan.get("fits"),
+        "total_cost": plan.get("total_cost"),
+        "takeover": plan.get("takeover"),
+        "demands": plan.get("demands") or [],
+        "slots": [{
+            "start": s.get("start"), "end": s.get("end"),
+            "price": s.get("price"), "cheap": s.get("cheap"),
+            "home_grid_w": s.get("home_grid_w"),
+        } for s in (plan.get("slots") or [])],
+        "blocks": _merge_plan_blocks(plan.get("blocks")),
+        # A string here means the battery figures behind this plan came from
+        # a SUBSET of the fleet (#638 finding #3) — the card says so rather
+        # than presenting a degraded plan as a healthy one.
+        "battery_fleet_partial": plan.get("battery_fleet_partial"),
+        # (#638 G4) True while the actuation switch is on — the plan's
+        # blocks feed the night signals; the card swaps its shadow chip.
+        "actuation": bool(plan.get("actuation", False)),
+        # (night 3, finding 3) "initial" vs "ask changed" — a re-stamped
+        # night is distinguishable from the first answer on the entity,
+        # not only in container logs (which rotate too fast for evidence).
+        "replan_cause": plan.get("replan_cause"),
+        # (08-08) the idle answer's why — the card shows it so a quiet
+        # plan reads as an answer, never as a disappearance.
+        "why": plan.get("why"),
+        # (#638 C7) what will NOT be done and why — the card's
+        # "not scheduled tonight" list, machine keys the card translates.
+        "not_scheduled": plan.get("not_scheduled") or [],
+        # (#638 C7) the quiet face's machine codes → translated sentences.
+        "why_codes": plan.get("why_codes") or [],
+        # (#638 C7) per-demand plan-vs-reactive attribution, live.
+        "coverage": plan.get("coverage") or {},
+        # (#638, the last string) the shadow arbitrage advisor's verdict
+        # with its numbers — the morning plan-vs-Sankey audit reads it
+        # here. Small by construction (a few blocks at most).
+        "arbitrage": plan.get("arbitrage"),
+    }
+    for key, value in (extra or {}).items():
+        if value:
+            attrs[key] = value
+    def _too_big() -> bool:
+        try:
+            return len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES
+        except (TypeError, ValueError):  # pragma: no cover — defensive
+            return True
+
+    if _too_big():
+        attrs["slots"] = []
+        attrs["blocks"] = []
+        attrs["timeline_omitted"] = True
+    # (#758) The timeline is the biggest term, but it is not the only one,
+    # and going over means the recorder keeps NOTHING. If dropping it was
+    # not enough, drop what rode along and say so — the plan itself is what
+    # this entity is for.
+    if extra and _too_big():
+        for key in extra:
+            attrs.pop(key, None)
+        attrs["extras_omitted"] = True
+    return attrs
 
 
 def _phase_guard_current_description(*, key: str) -> SensorEntityDescription:
@@ -241,6 +401,14 @@ SENSOR_TYPES = [
         key="night_charging_status",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # (#638) The joint energy planner's verdict for tonight. SHADOW: this
+    # reports what the planner WOULD do — nothing here actuates. State is a
+    # stable key (``fits``/``yields``/``idle``/``pending``) so the card and
+    # the tests can branch on it; the plan itself rides as attributes.
+    SensorEntityDescription(
+        key="energy_plan",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="battery_priority_status",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -303,6 +471,58 @@ SENSOR_TYPES = [
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    # (#770) The charge, split by origin. One number for free roof energy and
+    # bought valley energy is what made savings and ROI credit a grid-charged
+    # kWh with the full import price it never earned — and the joint planner
+    # made grid charging the norm, not the exception.
+    SensorEntityDescription(
+        key="daily_battery_charge_solar",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="daily_battery_charge_grid",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="daily_battery_grid_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="CHF",  # replaced by hass.config.currency
+        suggested_display_precision=2,
+    ),
+    # What is IN the battery right now, not what went in today — the figure
+    # autarky needs, because a grid-charged discharge is grid supply that was
+    # merely time-shifted.
+    SensorEntityDescription(
+        key="battery_stored_grid_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
+    # (#773) The audited residual: home minus every controlled load SEM can
+    # see. The house SEM does NOT touch — and therefore the row whose drift
+    # is a free sensor-health check. Both may go NEGATIVE: that is the
+    # diagnostic's sharpest finding (a double-count or sign error), so no
+    # clamp and no non-negative device_class assumptions beyond what HA's
+    # POWER/ENERGY classes already allow.
+    SensorEntityDescription(
+        key="true_baseload_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="daily_true_baseload_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
     ),
     SensorEntityDescription(
         key="daily_ev_energy",
@@ -632,6 +852,16 @@ SENSOR_TYPES = [
         native_unit_of_measurement=UnitOfPower.WATT,
         suggested_display_precision=0,
     ),
+    # (#776) Exported battery energy — force_discharge / the arbitrage
+    # sell. Doubles as the compliance witness for installs whose grid
+    # contract prohibits selling stored energy: it must read 0 there.
+    SensorEntityDescription(
+        key="flow_battery_to_grid_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
     SensorEntityDescription(
         key="flow_battery_to_ev_power",
         device_class=SensorDeviceClass.POWER,
@@ -721,6 +951,12 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="flow_battery_to_ev_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="flow_battery_to_grid_energy",
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -1080,6 +1316,42 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="heat_pump_registration_status",
         entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # (#769) The heat pump's ledger row — the same four horizons every other
+    # consumer already had. On a heat-pump house this is the largest
+    # controllable load in the building and until now it had no kWh anywhere:
+    # it vanished into the ``home`` residual (#767). ``shifted_today`` is the
+    # part SEM caused, split out by SG-Ready state, which is what turns
+    # "SG-Ready shifted X kWh" from a claim into a measurement.
+    SensorEntityDescription(
+        key="heat_pump_energy_today",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_month",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_year",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_total",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_shifted_today",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
 
     # ============================================================================
@@ -2016,7 +2288,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if description.key in ["daily_savings", "monthly_savings", "daily_costs", "monthly_costs",
                                "monthly_power_cost", "load_balancing_savings_potential",
                                "daily_battery_savings", "monthly_battery_savings",
-                               "battery_discharge_value"]:
+                               "battery_discharge_value",
+                               # (#770) what today's grid-charging cost
+                               "daily_battery_grid_cost"]:
             self._attr_native_unit_of_measurement = coordinator.hass.config.currency
 
     async def async_added_to_hass(self) -> None:
@@ -2177,6 +2451,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # Special handling for charging state
             if self.entity_description.key == "charging_state":
                 value = self._format_charging_state(value)
+
+            # (#638) The energy plan's STATE is a verdict key, never the
+            # plan dict itself — a dict here would stringify into a >255-char
+            # state and get rejected. The plan rides as attributes below.
+            elif self.entity_description.key == "energy_plan":
+                value = _energy_plan_state(value)
 
             # Special handling for battery status
             elif self.entity_description.key == "battery_status":
@@ -2353,6 +2633,26 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     f"charger_{cid_708}_vehicle_soc_last_at"
                 ),
             })
+        elif self.entity_description.key == "energy_plan":
+            # (#638) SHADOW — what the joint planner WOULD do this energy
+            # day. sem-energy-plan-card renders these directly; the log
+            # lines and the ``diagnose`` stash carry the same plan in prose.
+            # (#758) ``tomorrow`` and ``review`` go THROUGH the projection,
+            # not around it: they land on this same state, so they have to
+            # be inside the recorder's byte budget, not appended after it.
+            #   tomorrow — (#638 consolidation / #722) the NEXT energy day's
+            #     books for the card's Tomorrow view; live, never stamped.
+            #   review   — (#755 pillar 4) what the record has to say, as
+            #     machine codes the card translates. Survives the daytime
+            #     hours when there is no plan to project.
+            attrs.update(_energy_plan_attrs(
+                self.coordinator.data.get("energy_plan"),
+                extra={
+                    "tomorrow": self.coordinator.data.get(
+                        "energy_plan_tomorrow"),
+                    "review": self.coordinator.data.get("energy_plan_review"),
+                },
+            ))
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

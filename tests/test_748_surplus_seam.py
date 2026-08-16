@@ -12,7 +12,7 @@ That matters twice over:
   a duplicate row whose control entity is the charger's start/stop switch lets
   load management reach for the charger behind the EV controller's back —
   the exact hazard flagged to @jappish84 on #628; and
-* the #638 overnight planner packs its load demands from the same roster, so
+* the #638 energy planner packs its load demands from the same roster, so
   the one physical charger can be planned twice — once as ``ev:<cid>``, once
   as ``load:energy_dashboard_*`` — double-booking its energy in the night
   ledger.

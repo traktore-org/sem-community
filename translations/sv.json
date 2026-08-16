@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Nattladdning"
       },
+      "energy_plan": {
+        "name": "Energiplan"
+      },
       "battery_priority_status": {
         "name": "Batteriprioritet"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Batteri till hem"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Batteri till nät"
+      },
       "flow_battery_to_ev_power": {
         "name": "Batteri till EV"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Batteri till hem energi"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Batteri till nät energi"
       },
       "flow_battery_to_ev_energy": {
         "name": "Batteri till EV energi"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "VPP-händelse"
+      },
+      "heat_pump_energy_today": {
+        "name": "Värmepump idag"
+      },
+      "heat_pump_energy_month": {
+        "name": "Värmepump denna månad"
+      },
+      "heat_pump_energy_year": {
+        "name": "Värmepump i år"
+      },
+      "heat_pump_energy_total": {
+        "name": "Värmepump totalt"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Värmepump flyttad idag"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Idag laddning från sol"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Idag laddning från nät"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Idag kostnad nätladdning"
+      },
+      "battery_stored_grid_share": {
+        "name": "Lagrad energi från nät"
+      },
+      "true_baseload_power": {
+        "name": "Verklig baslast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Verklig baslast idag"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Semesterläge"
+      },
+      "energy_plan_actuation": {
+        "name": "Energiplansutförande"
       }
     },
     "number": {

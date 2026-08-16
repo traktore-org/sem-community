@@ -32,6 +32,10 @@ from custom_components.solar_energy_management.coordinator.decide import (
     self_consumption_surplus_w,
     soc_zone,
 )
+from custom_components.solar_energy_management.coordinator.plan_verdict import (
+    NO_OPINION,
+    PlanVerdict,
+)
 
 
 def _view(
@@ -54,6 +58,7 @@ def _view(
     battery_assist_max_power_w: float = 4500.0,
     battery_assist_min_surplus_w: float = 1200.0,
     config: dict | None = None,
+    plan: PlanVerdict = NO_OPINION,
 ) -> ChargerView:
     return ChargerView(
         power=ChargerPower(
@@ -77,6 +82,7 @@ def _view(
         deadline_amps=deadline_amps,
         night_deliverable_kwh=night_deliverable_kwh,
         soc_ceiling_reached=soc_ceiling_reached,
+        plan=plan,
     )
 
 
@@ -536,20 +542,31 @@ class TestSolarPlusCheapMode:
         assert d2.intent is ChargerIntent.IDLE
 
     def test_solar_plus_cheap_night_tariff_wait(self):
-        """Night planner says wait for cheap → idle even with target remaining."""
+        """Night planner says wait → idle even with target remaining.
+
+        (#638) The verdict arrives as ``view.plan`` now, not as a private
+        ``_tariff_wait`` key in the config mapping; the behaviour pinned
+        here is unchanged. The reason no longer hard-codes "cheaper"
+        because two planners raise this hold — the #247 tariff planner
+        waiting on price, and the #638 energy planner waiting on its
+        placed window — so wording that names only price would be wrong
+        half the time. What is pinned instead is stronger: the planner's
+        own words reach the user.
+        """
         d = decide(_view(
             mode="solar_plus_cheap", is_night=True, solar_w=0,
-            target_kwh=10.0,
-            config={"ev_min_current": 6, "_tariff_wait": True},
+            target_kwh=10.0, config={"ev_min_current": 6},
+            plan=PlanVerdict(hold=True, reason="waiting for cheaper prices"),
         ))
         assert d.intent is ChargerIntent.IDLE
-        assert "waiting for cheaper" in d.reason
+        assert "waiting" in d.reason
+        assert "waiting for cheaper prices" in d.reason
 
     def test_solar_plus_cheap_night_in_cheap_window_charges(self):
         d = decide(_view(
             mode="solar_plus_cheap", is_night=True, solar_w=0,
-            target_kwh=10.0,
-            config={"ev_min_current": 6, "_tariff_wait": False},
+            target_kwh=10.0, config={"ev_min_current": 6},
+            plan=PlanVerdict(hold=False),
         ))
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
         assert d.commanded_amps == 6

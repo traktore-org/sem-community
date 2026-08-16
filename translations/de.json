@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Nachtladen"
       },
+      "energy_plan": {
+        "name": "Energieplan"
+      },
       "battery_priority_status": {
         "name": "Batteriepriorität"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Batterie zu Haus"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Batterie zu Netz"
+      },
       "flow_battery_to_ev_power": {
         "name": "Batterie zu EV"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Batterie zu Haus Energie"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Batterie zu Netz Energie"
       },
       "flow_battery_to_ev_energy": {
         "name": "Batterie zu EV Energie"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "VPP-Ereignis"
+      },
+      "heat_pump_energy_today": {
+        "name": "Wärmepumpe heute"
+      },
+      "heat_pump_energy_month": {
+        "name": "Wärmepumpe diesen Monat"
+      },
+      "heat_pump_energy_year": {
+        "name": "Wärmepumpe dieses Jahr"
+      },
+      "heat_pump_energy_total": {
+        "name": "Wärmepumpe gesamt"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Wärmepumpe verschoben heute"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Heute Ladung aus Solar"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Heute Ladung aus Netz"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Heute Kosten Netzladung"
+      },
+      "battery_stored_grid_share": {
+        "name": "Gespeicherte Energie aus Netz"
+      },
+      "true_baseload_power": {
+        "name": "Echte Grundlast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Echte Grundlast heute"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Urlaubsmodus"
+      },
+      "energy_plan_actuation": {
+        "name": "Ausführung des Energieplans"
       }
     },
     "number": {

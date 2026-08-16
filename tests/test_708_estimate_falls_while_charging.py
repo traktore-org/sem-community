@@ -142,8 +142,20 @@ class TestChargingRaisesTheEstimate:
 
     def test_a_full_pack_clamps_at_100(self):
         det = _anchored()
-        det.update_energy(200.0)          # far more than the pack can hold
+        # Exactly the deficit the 38 % anchor claims, to the kWh: the pack
+        # takes every bit it was believed to be missing and stops.
+        det.update_energy(det.energy_since_full / CHARGE_EFFICIENCY)
         assert det.get_virtual_soc(None) == pytest.approx(100.0, abs=0.01)
+        assert det.energy_since_full >= 0.0
+
+    def test_more_than_the_pack_can_hold_refutes_the_anchor(self):
+        """#774 — this used to assert a clamp at 100 %. A delivery the anchor
+        cannot account for is not an overflow to be clamped; it is evidence
+        the anchor was wrong. 200 kWh into an 85 kWh pack says the 38 % was
+        stale, and a stale reference is dropped, not saturated."""
+        det = _anchored()
+        det.update_energy(200.0)
+        assert det._soc_anchored is False
         assert det.energy_since_full >= 0.0
 
 

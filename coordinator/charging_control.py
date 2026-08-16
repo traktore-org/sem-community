@@ -27,6 +27,8 @@ from ..const import (
 )
 from ..utils.time_manager import TimeManager
 
+from ..utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -270,7 +272,8 @@ class ChargingStateMachine:
                     f"EV session allowed"
                 )
             else:
-                _LOGGER.debug(
+                log_on_change(   # (#762) transition-gated
+                    _LOGGER, "solar_wait_batt", logging.DEBUG,
                     f"Solar: Waiting for battery priority ({ctx.battery_soc:.0f}% < {battery_priority_soc}%)"
                 )
                 return ChargingState.SOLAR_WAITING_BATTERY_PRIORITY
@@ -283,7 +286,8 @@ class ChargingStateMachine:
                 return ChargingState.SOLAR_CHARGING_ACTIVE
 
         # Waiting for better solar conditions
-        _LOGGER.debug(
+        log_on_change(   # (#762) 125 near-identical lines/day; digits stripped
+            _LOGGER, "solar_wait", logging.DEBUG,
             f"Solar: Waiting — calculated_current={ctx.calculated_current:.1f}A, "
             f"excess_solar={ctx.excess_solar:.0f}W, "
             f"battery_soc={ctx.battery_soc:.0f}%, "
@@ -398,7 +402,8 @@ class ChargingStateMachine:
 
         remaining_needed = ctx.night_target_kwh
 
-        _LOGGER.debug(
+        log_on_change(   # (#762) per-cycle at night; the number wobbles
+            _LOGGER, "night_remaining", logging.DEBUG,
             "Night charging: remaining=%.1fkWh",
             remaining_needed,
         )

@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Natopladning"
       },
+      "energy_plan": {
+        "name": "Energiplan"
+      },
       "battery_priority_status": {
         "name": "Batteriprioritet"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Batteri til hjem"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Batteri til net"
+      },
       "flow_battery_to_ev_power": {
         "name": "Batteri til EV"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Batteri til hjem energi"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Batteri til net energi"
       },
       "flow_battery_to_ev_energy": {
         "name": "Batteri til EV energi"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "VPP-hændelse"
+      },
+      "heat_pump_energy_today": {
+        "name": "Varmepumpe i dag"
+      },
+      "heat_pump_energy_month": {
+        "name": "Varmepumpe denne måned"
+      },
+      "heat_pump_energy_year": {
+        "name": "Varmepumpe i år"
+      },
+      "heat_pump_energy_total": {
+        "name": "Varmepumpe total"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Varmepumpe flyttet i dag"
+      },
+      "daily_battery_charge_solar": {
+        "name": "I dag opladning fra sol"
+      },
+      "daily_battery_charge_grid": {
+        "name": "I dag opladning fra net"
+      },
+      "daily_battery_grid_cost": {
+        "name": "I dag omkostning netopladning"
+      },
+      "battery_stored_grid_share": {
+        "name": "Lagret energi fra nettet"
+      },
+      "true_baseload_power": {
+        "name": "Reel grundlast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Reel grundlast i dag"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Ferietilstand"
+      },
+      "energy_plan_actuation": {
+        "name": "Energiplan-udførelse"
       }
     },
     "number": {

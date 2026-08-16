@@ -1196,6 +1196,13 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
+        # (#757) The restore below is a Store read plus a hardware write.
+        # Once it has landed there is nothing left to restore, so a
+        # repeat is pure cost. The intent is only ever set on a
+        # successful restore, so an unsafe latch or a held write never
+        # trips this guard — those paths retry, as they must.
+        if self._force_charge_already_stopped():
+            return
         snapshot = await self._load_snapshot()
         if snapshot is None:
             if self._snapshot_load_failed:

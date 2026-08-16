@@ -343,6 +343,33 @@ def _build_coordinator(scenario: Dict[str, Any]):
     coord._daily_ev_per_charger = {}
     coord._daily_ev_per_charger_date = {}
     coord._night_plan_per_charger = {}
+    # (#638 one-gate) A scenario may stamp a joint plan directly: the
+    # ``energy_plan`` top-level key becomes tonight's stash and arms
+    # actuation, so regime scenarios can pin the gate's WHEN authority.
+    # Times in the YAML are written against the harness's frozen epoch.
+    coord._energy_plan_shadow = scenario.get("energy_plan")
+    coord._energy_plan_actuation = bool(scenario.get("energy_plan"))
+    # ``_ev_watts_per_amp`` (the overlay's power model) reads the measured
+    # W/A memo the real __init__ creates — without it the accessor raises
+    # and the overlay's fail-open except silently skips the plan, which is
+    # exactly the invisible-fallback class this build exists to kill.
+    coord._ev_wpa_ema = {}
+    # ``operational_night_target`` suppresses the whole night-plan branch
+    # when no charger DEVICE is registered — and the block above only
+    # registers devices for 2+ chargers. A plan-stamped scenario needs the
+    # branch, so register the single charger too (scoped here to avoid
+    # shifting the pre-existing single-charger scenarios).
+    if scenario.get("energy_plan") and not coord._ev_devices:
+        for c in (coord.config.get("ev_chargers") or []):
+            dev = MagicMock()
+            dev.priority = int(c.get("priority", 3))
+            dev.min_current = float(c.get("min_current", 6))
+            dev.max_current = float(c.get("max_current", 16))
+            dev.phases = int(c.get("phases", 3))
+            dev.voltage = float(c.get("voltage", 230))
+            dev.min_power_threshold = (
+                dev.min_current * dev.phases * dev.voltage)
+            coord._ev_devices[c.get("id", "ev_charger")] = dev
     coord._zone_debounce = {}  # used by _debounce_zone
     coord._observer_mode = False
     # battery_capacity_kwh is a @property on SEMCoordinator that reads from
@@ -751,6 +778,27 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
             f"No cycle had a canonical_strategy containing '{sub}'. Got: "
             f"{[c.result.get('canonical_strategy') for c in run.cycles]}"
         )
+
+    # 1a. Phased strategy assertion (#638) — the strategy AT a specific
+    # cycle, matched against canonical_strategy AND the state-machine's
+    # charging_strategy (the canonical vocabulary is too coarse to tell a
+    # plan-wait from plain idle; the state string carries it).
+    for row in (expect.get("strategy_at") or []):
+        want_t = int(row["t"])
+        sub_at = str(row["substring"]).lower()
+        cycle = next((c for c in run.cycles if c.t_seconds == want_t), None)
+        assert cycle is not None, (
+            f"strategy_at t={want_t}: no cycle recorded at that instant "
+            f"(cycles: {[c.t_seconds for c in run.cycles]})")
+        haystack = (
+            f"{cycle.result.get('canonical_strategy') or ''} "
+            f"{cycle.result.get('charging_strategy') or ''} "
+            f"{cycle.result.get('charging_strategy_reason') or ''}").lower()
+        assert sub_at in haystack, (
+            f"strategy_at t={want_t}: expected '{sub_at}' in strategies, "
+            f"got canonical='{cycle.result.get('canonical_strategy')}' "
+            f"charging='{cycle.result.get('charging_strategy')}' "
+            f"reason='{cycle.result.get('charging_strategy_reason')}'")
 
     # 1b. Negative strategy assertion — NO cycle's canonical_strategy may
     # contain the substring. Lets edge-case scenarios pin a regression

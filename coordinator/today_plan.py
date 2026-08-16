@@ -149,6 +149,7 @@ def compose_today_plan(
     ev_tariff_optimized: bool = False,
     ev_tariff_waiting: bool = False,
     ev_next_cheap_window: Optional[datetime] = None,
+    ev_plan_blocks: Optional[list] = None,
     ev_effective_rate_kw: Optional[float] = None,
     # #298 — live ETAs while a session is actually charging / discharging.
     # Pass ``None`` to suppress the row (e.g. when SOC is already at the
@@ -182,6 +183,12 @@ def compose_today_plan(
         ev_tariff_optimized: True if tariff-optimized switch is ON.
         ev_tariff_waiting: True if the planner is currently waiting.
         ev_next_cheap_window: When the next cheap slot opens.
+        ev_plan_blocks: (#742) THIS charger's blocks from the stamped joint
+            plan, passed only when the gate covers the demand. When present
+            the EV rows come from the blocks — one start per future block,
+            min-reached at the last block's end — and the reactive
+            prediction below becomes the uncovered fallback it always
+            should have been. One data source, every surface.
         ev_effective_rate_kw: Realistic peak-managed charge rate, used to
             estimate when Min will be reached.
         currency: Currency suffix for price values.
@@ -263,7 +270,44 @@ def compose_today_plan(
 
     # === EV-specific rows (only when there's actually charging to plan for) ===
     if ev_min_remaining_kwh and ev_min_remaining_kwh > 0.1:
-        if ev_tariff_optimized and ev_tariff_waiting and ev_next_cheap_window:
+        # (#742) When the joint plan covers this charger, its BLOCKS are the
+        # rows — the live 08.08 regression was this strip painting the
+        # reactive prediction while the Energy Plan card said WAITS·00:00.
+        parsed_blocks = []
+        for b in (ev_plan_blocks or []):
+            try:
+                bs = datetime.fromisoformat(str(b["start"]))
+                be = datetime.fromisoformat(str(b["end"]))
+            except (KeyError, TypeError, ValueError):
+                parsed_blocks = []
+                break  # one malformed block distrusts the set (gate rule)
+            parsed_blocks.append((bs, be))
+        if parsed_blocks:
+            parsed_blocks.sort()
+            for bs, be in parsed_blocks:
+                if now < bs < horizon:
+                    rows.append(PlanRow(
+                        when=bs, kind=KIND_EV_CHARGE_START,
+                        label="plan_ev_charge_start",
+                        detail="plan_ev_charge_joint",
+                    ))
+            last_end = parsed_blocks[-1][1]
+            if now < last_end < horizon:
+                # The plan's own promise — not a rate estimate.
+                rows.append(PlanRow(
+                    when=last_end, kind=KIND_EV_MIN_REACHED,
+                    label="plan_ev_min_reached",
+                ))
+        # (#742) waiting + a window is the honest display signal
+        # REGARDLESS of who produced it: the legacy tariff mode
+        # (solar_plus_cheap) or the joint plan's overlay, which holds
+        # ALL night modes since #638 Stage 1. Gating on
+        # ev_tariff_optimized left a min_plus_solar hold invisible —
+        # the Energy Plan card said WAITS·00:00 while this strip drew
+        # the reactive prediction (live, 08.08 23:10).
+        if parsed_blocks:
+            pass  # the blocks above are the rows — no reactive prediction
+        elif ev_tariff_waiting and ev_next_cheap_window:
             if now < ev_next_cheap_window < horizon:
                 rows.append(PlanRow(
                     when=ev_next_cheap_window,
@@ -279,10 +323,11 @@ def compose_today_plan(
                 detail="plan_ev_charge_night",
             ))
 
-        # Min-reached estimate
-        if ev_effective_rate_kw and ev_effective_rate_kw > 0.3:
+        # Min-reached estimate (legacy fallback — with blocks the last
+        # block's end above is the plan's own promise)
+        if not parsed_blocks and ev_effective_rate_kw and ev_effective_rate_kw > 0.3:
             charge_start = ev_next_cheap_window if (
-                ev_tariff_optimized and ev_tariff_waiting and ev_next_cheap_window
+                ev_tariff_waiting and ev_next_cheap_window
             ) else night_start
             if charge_start and charge_start > now:
                 hours_to_min = ev_min_remaining_kwh / ev_effective_rate_kw

@@ -247,6 +247,18 @@ Devices auto-discovered from the Energy Dashboard default to
 `peak_only`; devices you register via the service default to
 `surplus` (solar-only) — that's what you register them for.
 
+**Lights are not imported.** An Energy-Dashboard consumer whose only
+on/off surface is a `light.*` entity is skipped: lighting is not
+shiftable, not a surplus sink, and shedding a dimmer is hostility for
+savings that round to zero. HA's own Energy Dashboard keeps monitoring
+it — SEM just has no business managing it. A metering *plug* feeding a
+lamp is kept (the plug is a real control surface), and a relay you
+register explicitly with `register_surplus_device` is always kept, even
+if it is exposed as a light: that is your decision, not a guess. The
+skip is logged with the device name, so an absent row is an answer
+rather than a mystery, and it is re-evaluated on every refresh — a light
+imported by an older version disappears by itself after the upgrade.
+
 ### Catching the surplus in your own automations (`peak_only`)
 
 If you prefer to keep your own schedules (e.g. a 3×/day pump

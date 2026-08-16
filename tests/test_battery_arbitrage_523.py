@@ -128,6 +128,9 @@ def _view(sched):
         ev_charging=False,
         home_consumption_w=500.0,
         scheduler_decision=sched,
+        # (#638 C6) the plan's sell WHEN — this file pins the WHETHER
+        # (economics) and MAY (mode) halves, so the block is open here.
+        arbitrage_sell=(True, 4000.0),
     )
 
 

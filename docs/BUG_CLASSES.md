@@ -274,7 +274,7 @@ the fold from the display to the data layer and stopped there, because `LoadMana
 fold at all. So the duplicate stayed registered as an independent surplus device: the daytime surplus
 loop could still reach the charger's own stop switch behind the EV controller — the very hazard the
 fix announced closed — and the card showed nothing, because the display fold hid the row it could not
-remove. That roster is also what the #638 overnight planner packs (`get_devices_sorted()`), so a
+remove. That roster is also what the #638 energy planner packs (`get_devices_sorted()`), so a
 duplicate carrying a minimum-runtime goal could enter the night ledger twice. **The tell:** a fix
 phrased as "display layer vs data layer" — a two-term framing for a fan-out. Ask instead: *how many
 rosters are built from this source, and does the rule run in each?* Count the writers, not the layers.
@@ -1465,38 +1465,55 @@ load-shed *policy* change, not a display fix — Guido's call before it ships.
 
 ---
 
-### 38. Idempotency-free repeat command floods a shared bus (a STOP re-issued every cycle) — GUARDED
-**Symptom:** a control command that should fire ONCE on a state transition is re-issued to the
-inverter on **every** coordinator cycle, hammering the single serial Modbus link until the
-`huawei_solar` read coordinators collide (transaction-ID mismatches, read timeouts). No symptom
-until the repeating verdict actually occurs — the write is individually correct, only its
-*frequency* is wrong. **Root shape:** the decision layer legitimately emits the same intent every
-cycle while a condition holds (an idle / target-reached / SCHEDULED-outside-window verdict), and the
-actuator dispatches it unconditionally ("the adapter de-dups", `actuate_battery.py`), but the
-brand adapter's command has **no "already in this state" guard** — so a level is written as if it
-were an edge. Distinct from class 4 (that is a *swallowed* command reporting false success); here
-the command lands fine, just far too often. The honest-retry half is shared with class 4: once the
-idempotency guard exists, a *failed* stop must NOT record the intent, or the guard suppresses the
-retry and strands the op. **First instance (#538):** the discharge-limit write —
-`command_normal` re-issued max every cycle; closed by `_apply_discharge_limit`'s live-state guard
-(`huawei.py`). **Second instance (#757, one layer up):** `command_stop_force_charge` re-issued
-`huawei_solar.stop_forcible_charge` every cycle between planned charge blocks (~1800 writes/night),
-and recorded STOP even on a failed stop. **Where it lives:** every `command_*` on the battery
-adapters (`battery_adapters/huawei.py` · `generic.py` · `goodwe.py` · `deye.py`) and the
+### 38. A command's CALL SITE changes shape and turns a transition into a per-cycle repeat — GUARDED
+**Symptom:** nothing visibly breaks. The device does the right thing; the bus underneath it does
+not. On a shared serial link the tell is second-hand — read timeouts, "invalid response", a
+coordinator that goes unavailable for a cycle — and it is attributed to the link, not to us.
+**Root shape:** a write is correct *as a transition* ("stop forcing") and was authored where a
+transition is what happens — one edge, one write. Later, a **different layer** changes the shape
+of the decision that produces it: the caller stops asking "did this change?" and starts asking
+"what should be true now?", every cycle. The write itself was never guarded, because at the time
+it was written there was nothing to guard against. Nobody edits the command; the *frequency* is a
+property of the caller, and the caller is a file away. Distinct from plain missing idempotency:
+the code was fine until an unrelated refactor moved the caller from edge-triggered to
+level-triggered. **Live catches:** #538 — `command_normal` rewrote the same 5000 W discharge limit
+every cycle, colliding with `huawei_solar`'s read coordinator on the one Modbus transaction ID.
+#757 (second occurrence, caught in the branch audit before ship) — the #638 one-gate build made
+`decide_battery` return `STOP_FORCE_CHARGE` on *every* cycle a SCHEDULED battery sits outside its
+plan block, so a 21:00 verdict with an 02:00 window asked the inverter ~1800 times to stop a charge
+it was not doing. **Closure:** the command is a no-op when the hardware is already in the commanded
+state, decided from `_last_intent` — the record of what the hardware was **last told**, which may
+only be set on a write that actually landed, so a failed write leaves it alone and the next cycle
+retries (honest-retry discipline). Belt-and-braces: never stay silent while we *believe* the thing
+is running (`_forcible_charging`). **Where it lives:** every `command_*` on the battery adapters
+(`battery_adapters/huawei.py` · `generic.py` · `goodwe.py` · `deye.py`) and the
 `ChargeController.stop_forced_charge` layer they delegate to (`force_charge.py`); the same shape is
-latent in any per-cycle actuator write. **Closure:** the `command_off` pattern (base.py:187) at the
-INTENT layer — each `command_stop_force_charge` no-ops once `_last_intent is STOP_FORCE_CHARGE`, and
-records STOP only when the delegated stop actually landed (honest retry → a failed stop retries
-instead of stranding). Deliberately NOT at the `stop_forced_charge` source layer: an `if not
-_active` guard there looks equivalent but strands a boot orphan — after a restart the in-memory
-`_active` is False while the inverter may still be force-charging, and for GoodWe/Generic that
-unconditional stop is the *only* boot-orphan clear (no snapshot, no status reconcile like Huawei's
-`_maybe_clear_startup_orphan` / Deye's persistent snapshot). The idempotency guard must key on the
-recorded *intent*, which honest-retry keeps truthful, not on a flag that lies across restarts.
-`deye.py` was already safe (snapshot cleared after restore + write-and-verify). **Guard:**
-`tests/test_757_stop_force_charge_idempotent.py` — counts the real HA service calls a *second* stop
-makes (must be zero) across all three brands, pins that a FAILED stop is not recorded and retries,
-AND that the FIRST stop on a fresh (post-restart) adapter still reaches the inverter.
+latent in any per-cycle actuator write. Distinct from class 4 (that is a *swallowed* command
+reporting false success); here the command lands fine, just far too often — but the honest-retry
+half is shared with class 4.
+**Where the guard may NOT go — two placements that look equivalent and are not.** (a) Not at the
+`stop_forced_charge` *source* layer: an `if not _active` guard there strands a boot orphan — after a
+restart the in-memory `_active` is False while the inverter may still be force-charging, and for
+GoodWe/Generic that unconditional stop is the *only* boot-orphan clear (no snapshot, no status
+reconcile like Huawei's `_maybe_clear_startup_orphan` / Deye's persistent snapshot). The guard must
+key on the recorded *intent*, which honest-retry keeps truthful, not on a flag that lies across
+restarts. (b) Not at the *top* of `command_stop_force_charge` on Huawei: the two real edges
+(`_maybe_clear_startup_orphan`, `_stop_forcible`) run first, and a top-of-function return would skip
+them — re-opening #532, the LUNA2000 left selling to grid after a restart. The predicate belongs
+*after* the edges and must carry the `_forcible_charging` belt-and-braces so we never stay silent
+while we believe a force is running. (Both placements were authored independently for #757 — on the
+release branch and on develop — and the difference only showed up at the merge. `deye.py` was
+already safe: snapshot cleared after restore + write-and-verify.)
+**Guard:** `tests/test_757_stop_force_charge_idempotency.py` + `test_757_stop_force_charge_idempotent.py`
+— per adapter: the repeat is silent (zero real HA service calls on a second stop), the FIRST stop on
+a fresh post-restart adapter still reaches the inverter, a stop-while-believed-charging still writes,
+and a failed write is not recorded so the next cycle retries.
+**Sweep question:** for every hardware write, ask *who calls it and how often* — not whether the
+write is correct. If the caller is a per-cycle decision function (a reconciler, a `decide_*`, a
+"desired state" pass), the write must be idempotent at its own door; a write that is only safe
+because its historical caller was edge-triggered is one refactor away from a storm. And: does the
+"already in this state" signal survive a restart, or does it lie about the hardware on a fresh
+adapter?
 **Open sibling — the mirror-image FORCE_CHARGE flood (flagged for Guido):** `command_force_charge`
 has the same shape on the paired command — the scheduler emits FORCE_CHARGE every *in-window* cycle
 (`decide_battery.py`), and `start_forced_charge` re-issues `forcible_charge_soc` /
@@ -1505,8 +1522,5 @@ here because the Huawei `forcible_charge_soc` carries a `duration` — a per-cyc
 *load-bearing* (refreshing the duration so the charge isn't cut off mid-window when
 `duration_min` < window). Closing it safely needs the duration semantics resolved first (does the
 scheduler set duration to the full remaining window, or rely on re-issue?), so it is a design call,
-not a mechanical guard. **Sweep question:** for every per-cycle actuator write, is it guarded on
-"already in this state" — and if the decision layer can repeat the same intent every cycle, does the
-adapter turn that level back into an edge, or write it each time? And does the "already in this
-state" signal survive a restart, or does it lie about the hardware on a fresh adapter?
+not a mechanical guard.
 Refs #538 #757.

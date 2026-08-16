@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Noční nabíjení"
       },
+      "energy_plan": {
+        "name": "Energetický plán"
+      },
       "battery_priority_status": {
         "name": "Priorita baterie"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Baterie → dům"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Baterie → síť"
+      },
       "flow_battery_to_ev_power": {
         "name": "Baterie → EV"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Energie baterie → dům"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Energie baterie → síť"
       },
       "flow_battery_to_ev_energy": {
         "name": "Energie baterie → EV"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "Událost VPP"
+      },
+      "heat_pump_energy_today": {
+        "name": "Tepelné čerpadlo dnes"
+      },
+      "heat_pump_energy_month": {
+        "name": "Tepelné čerpadlo tento měsíc"
+      },
+      "heat_pump_energy_year": {
+        "name": "Tepelné čerpadlo letos"
+      },
+      "heat_pump_energy_total": {
+        "name": "Tepelné čerpadlo celkem"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Tepelné čerpadlo přesunuto dnes"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Dnes nabíjení ze slunce"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Dnes nabíjení ze sítě"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Dnes náklady nabíjení ze sítě"
+      },
+      "battery_stored_grid_share": {
+        "name": "Uložená energie ze sítě"
+      },
+      "true_baseload_power": {
+        "name": "Skutečné základní zatížení"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Skutečné základní zatížení dnes"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Režim dovolené"
+      },
+      "energy_plan_actuation": {
+        "name": "Provádění energetického plánu"
       }
     },
     "number": {

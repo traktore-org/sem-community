@@ -119,7 +119,7 @@ The cheapest-hours behaviour (built into the **Solar + cheapest hours** mode, an
 
 | Time | Charging Mode | What tariff_optimized does |
 |---|---|---|
-| Night | tariff-aware modes | Waits for cheapest contiguous window before charging (subject to Min reachability) |
+| Night | tariff-aware modes | Waits for the [energy plan's](ENERGY_PLANNER.md) charge block — the cheapest hours that also fit under your peak limit and priority order (subject to Min reachability) |
 | Daytime | Min + Solar | **Drops the Min grid guarantee on EXPENSIVE / VERY_EXPENSIVE hours.** Falls back to surplus-only; resumes on price drop or sufficient solar |
 | Daytime | Solar only | No effect (never uses grid anyway) |
 | Anytime | Always (max) / Off | No effect (explicit override) |
@@ -140,20 +140,31 @@ Every 10 s during the night window, for each charger:
 
 3. Compute effective_rate = Max current            if forcing deadline (deadline earlier than window end)
                             peak_managed_amps      otherwise   ← peak-aware (#274/C1)
-   where peak_managed_amps = (peak_limit − avg_overnight_home_W) / watts_per_amp.
+   where peak_managed_amps = (peak_limit − avg_energy_plan_home_W) / watts_per_amp.
 
 4. Reachable? = (remaining_kWh / effective_rate) ≤ hours_left.
 
-5. If cheapest-hours behaviour is on:
-     a. Now is cheap?            → charge.
-     b. Not reachable anyway?    → charge (don't add tariff penalty on top of an already-failing deadline).
-     c. Sum cheap hours BEFORE deadline × effective_rate ≥ remaining_kWh?
-           yes → WAIT (state = tariff_waiting_for_cheap)
-           no  → charge now ("not enough cheap hours at peak-limited rate")
+5. Ask the energy plan (#638) whether this charger is COVERED tonight:
+     a. Covered and inside its block?   → charge.
+     b. Covered and outside its block?  → WAIT (state = tariff_waiting_for_cheap,
+                                          card shows the block's start time).
+     c. UNCOVERED (no fresh plan)?      → charge at deadline / top-up amps.
+                                          Fail-open: the Min floor is a guarantee,
+                                          so a missing plan never costs you the car.
+                                          The card says "reactive — no plan yet".
 
 6. Apply current = max(deadline_amps, gentle_ramp_amps).
    If shared peak budget exceeded (multi-charger), throttle proportionally (#274/H1).
 ```
+
+> **Changed in v2.0 (#638).** Step 5 used to be the charger's *own*
+> cheapest-hours arithmetic — sum the cheap hours before the deadline, wait if
+> they cover the need. That private picker is deleted. The night window now
+> comes from the joint plan, which weighs this charger against the battery, the
+> deferrable loads and the comfort bands under one peak limit and one price
+> curve — so a wait is no longer "these hours are cheap" but "this is your slot".
+> Everything else in the list (the deadline, the Min floor, reachability, the
+> peak-managed rate, the gentle ramp) is unchanged and still reactive.
 
 ---
 
@@ -168,23 +179,22 @@ Every 10 s during the night window, for each charger:
 - Required rate = 8.5 / 9 = 0.94 kW = ~1.4 A at 3-φ
 - Below the 6 A minimum → ramps to 6 A and finishes ~02:00, idles to 07:00.
 
-### Example B — Tariff-optimized, cheap window comfortably covers Min
+### Example B — Tariff-optimized, the plan finds room in the cheap hours
 
 - Same setup but with **cheapest-hours behaviour on** (Solar + cheapest hours mode, or the Cheapest hours option)
-- Cheap window 01:00–05:00 (4 h)
-- effective_rate = peak_managed_amps × 690 W/A ≈ 4.1 kW (assuming 6 A peak headroom)
-- Deliverable in cheap window = 4 × 4.1 = 16.4 kWh > 8.5 kWh ✓
-- SEM idles from 22:00, status = `tariff_waiting_for_cheap`, "Next: 01:00" shown on card
-- At 01:00 it charges; finishes ~03:00; idles to 07:00.
+- Cheapest hours of the night are 01:00–05:00; effective_rate ≈ 4.1 kW at 6 A peak headroom
+- The plan packs 8.5 kWh into 01:00–03:00 — it fits under the peak limit alongside whatever else is scheduled
+- SEM idles from 22:00, status = `tariff_waiting_for_cheap`, "Next: 01:00" shown on the card
+- At 01:00 it charges; finishes ~03:00; idles to 07:00
+- The Energy Plan card shows the block and its reason: *planned — cheapest hours*
 
-### Example C — Tariff override (the case that worried you)
+### Example C — The night is too short to be picky
 
 - 30 kWh Min (almost full charge), deadline 07:00, cheapest-hours on
-- Cheap window 01:00–04:00 (only 3 h)
-- effective_rate = 4.1 kW
-- Deliverable = 3 × 4.1 = 12.3 kWh < 30 kWh ✗
-- SEM **does not wait**. Charges immediately from 22:00 onward; status = `night_charging`.
-- Card reason: *"tariff: not enough cheap hours at the peak-limited rate — charging now to guarantee Min"*
+- The cheapest hours alone can't deliver 30 kWh before 07:00 at the peak-limited rate
+- The plan therefore places the block **from 22:00**, not in the cheap valley — it schedules the hours it actually needs, cheapest-first, until the ask is covered
+- SEM **does not wait**. Charges from 22:00 onward; status = `night_charging`
+- If a plan never arrives at all, the same thing happens for a different reason: uncovered EV demand falls back to deadline amps and the card says *reactive — no plan yet*. The Min floor is a guarantee either way.
 
 ### Example D — Forcing deadline
 

@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "夜间谷电充电"
       },
+      "energy_plan": {
+        "name": "能源计划"
+      },
       "battery_priority_status": {
         "name": "蓄电池优先级"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "蓄电池至家庭功率"
       },
+      "flow_battery_to_grid_power": {
+        "name": "蓄电池至电网功率"
+      },
       "flow_battery_to_ev_power": {
         "name": "蓄电池至电动汽车功率"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "蓄电池至家庭电量"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "蓄电池至电网电量"
       },
       "flow_battery_to_ev_energy": {
         "name": "蓄电池至电动汽车电量"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "VPP 事件"
+      },
+      "heat_pump_energy_today": {
+        "name": "热泵今日"
+      },
+      "heat_pump_energy_month": {
+        "name": "热泵本月"
+      },
+      "heat_pump_energy_year": {
+        "name": "热泵今年"
+      },
+      "heat_pump_energy_total": {
+        "name": "热泵总计"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "热泵今日转移"
+      },
+      "daily_battery_charge_solar": {
+        "name": "今日光伏充电"
+      },
+      "daily_battery_charge_grid": {
+        "name": "今日电网充电"
+      },
+      "daily_battery_grid_cost": {
+        "name": "今日电网充电成本"
+      },
+      "battery_stored_grid_share": {
+        "name": "来自电网的储存电量"
+      },
+      "true_baseload_power": {
+        "name": "真实基础负荷"
+      },
+      "daily_true_baseload_energy": {
+        "name": "今日真实基础负荷"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "度假模式"
+      },
+      "energy_plan_actuation": {
+        "name": "能源计划执行"
       }
     },
     "number": {

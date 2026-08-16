@@ -30,9 +30,12 @@ class TestSEMSwitches:
         ``night_charging`` and ``smart_night_charging`` switches are
         gone (the named ``charge_mode`` selector carries the same
         intent); ``observer_mode`` remains, joined by ``vacation_mode``
-        (#594 — suppress comfort heating while away)."""
+        (#594 — suppress comfort heating while away) and
+        ``energy_plan_actuation`` (#638 G4 — feed the joint overnight
+        plan into the night signals; default off = pure shadow)."""
         keys = [s.key for s in SWITCH_TYPES]
-        assert keys == ["observer_mode", "vacation_mode"]
+        assert keys == ["observer_mode", "vacation_mode",
+                        "energy_plan_actuation"]
 
     # ``test_night_charging_default_off`` and
     # ``test_night_charging_existing_state_preserved`` removed in
@@ -265,3 +268,110 @@ async def test_observer_toggle_persists_to_entry_options(monkeypatch):
     await sw.async_turn_off()
     kwargs = sw.hass.config_entries.async_update_entry.call_args
     assert kwargs.kwargs["options"]["observer_mode"] is False
+
+
+# ───────────────────────────────────────────────────────────────────────
+# #777 — explicit config beats ghost restore
+# ───────────────────────────────────────────────────────────────────────
+
+def _sw(key, *, options=None, data=None):
+    from custom_components.solar_energy_management.switch import (
+        SEMSolarSwitch, SWITCH_TYPES,
+    )
+    desc = next(s for s in SWITCH_TYPES if s.key == key)
+    coordinator = MagicMock()
+    entry = MagicMock()
+    entry.options = options if options is not None else {}
+    entry.data = data if data is not None else {}
+    coordinator.config_entry = entry
+    return SEMSolarSwitch(coordinator, desc, "test_entry")
+
+
+def _ghost(state):
+    return MagicMock(state=state)
+
+
+@pytest.mark.unit
+class TestExplicitConfigBeatsGhostRestore777:
+    """A fresh installation came up in observer mode (Guido, 15.08).
+
+    ``switch.sem_observer_mode`` has a forced-stable entity id, HA's
+    restore-state store outlives the config entry, and the restore path
+    honored ``async_get_last_state()`` unconditionally — so a fresh
+    install on any machine that ever ran observer-ON restored the dead
+    install's state over this install's explicit config, and silently
+    never controlled hardware. Every toggle flip persists to
+    entry.options immediately (``_persist_flag``), so the restore store
+    can only ever be a GHOST or a duplicate: explicit config wins, and
+    the ghost is honored only when neither options nor data carries the
+    key at all (a pre-persist install upgrading — the one case restore
+    still serves)."""
+
+    def test_a_dead_installs_on_does_not_survive_a_fresh_install(self):
+        """The reported bug: install-flow data says False, a previous
+        install's restore-store says on. The config wins."""
+        sw = _sw("observer_mode", data={"observer_mode": False})
+        sw._apply_restored_state(_ghost("on"))
+        assert sw._is_on is False
+
+    def test_the_install_step_choice_reaches_the_switch(self):
+        """The second half: the install flow writes to entry DATA, but
+        the seed read options only — observer checked at install showed
+        an OFF switch while the coordinator observed."""
+        sw = _sw("observer_mode", data={"observer_mode": True})
+        assert sw._is_on is True
+
+    def test_options_outrank_data(self):
+        """A later flip (options) beats the install-time choice (data)."""
+        sw = _sw("observer_mode",
+                 options={"observer_mode": False},
+                 data={"observer_mode": True})
+        sw._apply_restored_state(_ghost("on"))
+        assert sw._is_on is False
+
+    def test_a_reboot_keeps_the_persisted_flip(self):
+        """options carries the flip; a disagreeing restore-store entry
+        is stale by construction (every flip persists immediately)."""
+        sw = _sw("observer_mode", options={"observer_mode": True})
+        sw._apply_restored_state(_ghost("off"))
+        assert sw._is_on is True
+
+    def test_a_legacy_install_without_the_key_keeps_its_restored_state(self):
+        """No key anywhere = a pre-persist install upgrading. Its last
+        state is the only record and stays honored."""
+        sw = _sw("observer_mode")
+        sw._apply_restored_state(_ghost("on"))
+        assert sw._is_on is True
+
+    def test_no_config_and_no_ghost_is_the_default(self):
+        sw = _sw("observer_mode")
+        sw._apply_restored_state(None)
+        assert sw._is_on is False
+
+    def test_actuation_ghost_off_yields_to_explicit_config(self):
+        """Same precedence for the siblings: an old install's
+        kill-switch-off must not silently disarm a fresh install whose
+        data records the default ON."""
+        sw = _sw("energy_plan_actuation", data={"energy_plan_actuation": True})
+        sw._apply_restored_state(_ghost("off"))
+        assert sw._is_on is True
+
+    def test_the_restore_path_uses_the_precedence(self):
+        """async_added_to_hass must route through _apply_restored_state
+        — a precedence nobody calls is the fix that never runs."""
+        import inspect
+        from custom_components.solar_energy_management.switch import (
+            SEMSolarSwitch,
+        )
+        src = inspect.getsource(SEMSolarSwitch.async_added_to_hass)
+        assert "_apply_restored_state(" in src
+
+    def test_the_install_flow_seeds_all_three_flags(self):
+        """A fresh install writes all three keys into entry data, so a
+        ghost can never speak for ANY of the three switches on a fresh
+        install — only true legacy upgrades (no key) keep restore."""
+        import inspect
+        from custom_components.solar_energy_management import config_flow
+        src = inspect.getsource(config_flow)
+        assert '_data["vacation_mode"]' in src
+        assert '_data["energy_plan_actuation"]' in src

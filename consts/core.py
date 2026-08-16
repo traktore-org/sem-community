@@ -245,7 +245,7 @@ PEAK_LIMIT_STEP_KW: Final = 0.1
 
 # (#716/#717) "My grid connection is not the constraint — stop rationing
 # against it." Deliberately a BOOLEAN and not ``target_peak_limit == 0``:
-# the 0-as-unlimited sentinel is exactly what bit the overnight planner
+# the 0-as-unlimited sentinel is exactly what bit the energy planner
 # (#638 finding #5), where a config key nothing ever wrote read as 0, was
 # taken to mean "no limit", and offered a 10 kW EV slot on a 5 kW house.
 # A missing key must fail CLOSED — absent means "respect the limit".

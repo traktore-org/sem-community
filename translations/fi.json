@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Yölataus"
       },
+      "energy_plan": {
+        "name": "Energiasuunnitelma"
+      },
       "battery_priority_status": {
         "name": "Akun etusija"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Akusta kotiin"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Akusta verkkoon"
+      },
       "flow_battery_to_ev_power": {
         "name": "Akusta sähköautoon"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Akusta kotiin (energia)"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Akusta verkkoon (energia)"
       },
       "flow_battery_to_ev_energy": {
         "name": "Akusta sähköautoon (energia)"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "VPP-tapahtuma"
+      },
+      "heat_pump_energy_today": {
+        "name": "Lämpöpumppu tänään"
+      },
+      "heat_pump_energy_month": {
+        "name": "Lämpöpumppu tässä kuussa"
+      },
+      "heat_pump_energy_year": {
+        "name": "Lämpöpumppu tänä vuonna"
+      },
+      "heat_pump_energy_total": {
+        "name": "Lämpöpumppu yhteensä"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Lämpöpumppu siirretty tänään"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Tänään lataus auringosta"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Tänään lataus verkosta"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Tänään verkkolatauksen kustannus"
+      },
+      "battery_stored_grid_share": {
+        "name": "Varastoitu energia verkosta"
+      },
+      "true_baseload_power": {
+        "name": "Todellinen peruskuorma"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Todellinen peruskuorma tänään"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Lomatila"
+      },
+      "energy_plan_actuation": {
+        "name": "Energiasuunnitelman toteutus"
       }
     },
     "number": {

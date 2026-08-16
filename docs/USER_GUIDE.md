@@ -188,6 +188,52 @@ untouched when you turn it off.
 
 ---
 
+## Multiple heat pumps and climate units (#685)
+
+The dedicated **Heat Pump (SG-Ready)** section configures ONE unit — it
+models the SG-Ready relay pair, and most installs have one such interface.
+**Multiple units are supported through climate devices instead**: add each
+unit's `climate.*` entity (an Ecobee, a Nest, any thermostat-controlled
+heat pump or AC) as a surplus device. Every unit then gets, independently:
+
+- its own priority slot in the one device list,
+- its own comfort band (target / offset / limit) with the learned drift
+  model — including pre-cool/pre-heat banking through the energy plan,
+- its own power sensor. Units with split metering (compressor on one
+  circuit, air handler on another) sum their sensors with a
+  [template sensor](https://www.home-assistant.io/integrations/template/)
+  first and use that as the device's power entity.
+
+The SG-Ready section and climate devices can coexist: one SG-Ready unit
+plus any number of climate-managed units.
+
+### How much did SG-Ready actually shift? (#769)
+
+The SG-Ready unit has its own energy row, on the same footing as the EV:
+
+| Sensor | What it answers |
+|---|---|
+| `sensor.sem_heat_pump_energy_today` | kWh the pump used today |
+| `sensor.sem_heat_pump_energy_month` / `_year` / `_total` | the same over longer horizons |
+| `sensor.sem_heat_pump_energy_shifted_today` | of today's kWh, **how much SEM caused** |
+
+"Shifted" counts only the energy booked while SEM was asking for more —
+SG-Ready in **BOOST** or **FORCE_ON**. Energy the pump took on its own
+thermostat (NORMAL) is deliberately excluded, because that is energy that
+would have been used anyway. The difference between the two numbers is the
+honest answer to "is SG-Ready doing anything for me?"
+
+**Where the figure comes from.** If you gave the heat pump an energy counter
+entity, the row is the counter's own delta — a measurement. If it has only a
+power sensor, SEM integrates it. With neither, the figure is `rated_power ×
+runtime` and is flagged as an **estimate**: it is shown, but never fed back
+into SEM's learning (see [SIMULATION.md](SIMULATION.md) and #755). A sensor
+that cannot be read is recorded as *blind* — SEM does not record a silent
+sensor as a pump drawing zero watts.
+
+**The day rolls at sunrise, not midnight** — the same boundary the pump's
+runtime uses — so "today" means the same thing everywhere in SEM.
+
 ## Hot Water and Heat Pump (v1.7.3 hardening)
 
 SEM works alongside your existing heating system — it only boosts with solar surplus, it does NOT replace your boiler or heat pump's normal heating schedule. Your existing system continues to handle baseline heating as usual. SEM adds a solar boost layer on top: when surplus solar power is available, SEM heats the water further to store energy that would otherwise be exported.
@@ -890,6 +936,10 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_flow_solar_to_battery_power` — solar power to battery
 - `sensor.sem_flow_grid_to_ev_power` — grid power to EV
 - `sensor.sem_flow_battery_to_home_power` — battery power to home
+- `sensor.sem_flow_battery_to_grid_power` — battery power exported to the
+  grid (#776) — non-zero only during `Force discharge` or an arbitrage
+  sell; if your grid contract prohibits exporting stored energy this
+  sensor is your evidence that SEM never does (it must read 0)
 
 ### Cost Sensors
 - `sensor.sem_daily_costs` — today's grid import cost
@@ -897,9 +947,79 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_daily_savings` — today's solar savings
 - `sensor.sem_monthly_*` — monthly equivalents
 
+### Where the stored energy came from (#770)
+
+A kWh discharged from the battery is only a saving if it was free when it
+went in. SEM charges the battery from the grid on purpose — in the cheap
+overnight valley, ahead of a poor forecast — and that energy was **bought**,
+not made. Four sensors keep the two apart:
+
+| Sensor | What it answers |
+|---|---|
+| `sensor.sem_daily_battery_charge_solar` | of today's charging, how much came off the roof |
+| `sensor.sem_daily_battery_charge_grid` | …and how much was bought |
+| `sensor.sem_daily_battery_grid_cost` | what the bought part cost |
+| `sensor.sem_battery_stored_grid_share` | % of what is **in** the battery right now that was bought |
+
+`sensor.sem_daily_savings` now pays only the difference: a kWh bought at
+0.30 and discharged against 0.30 saved nothing — it was moved, not made —
+while a kWh bought at 0.10 in the valley and displacing 0.30 at breakfast
+saves 0.20. Energy that was already stored before SEM started watching has
+no known origin and keeps the full credit; it is not penalised for a
+measurement SEM never took.
+
+`sensor.sem_autarky_rate` follows the same rule: battery discharge counts as
+your own supply only for the solar-charged share. The rest is grid supply
+that was merely time-shifted, which is worth money but is not independence.
+(`sensor.sem_self_consumption_rate` is unaffected — it measures how much of
+your *solar* stayed home, and that answer never depended on the battery's
+origin.)
+
+The pool is checked against the battery's measured SOC every cycle, so
+integration drift cannot invent stored energy. If the SOC sensor goes
+offline, SEM leaves the figures alone rather than reading silence as an
+empty battery.
+
+Right after installing (or restarting into) this version, the stored-share
+sensor shows **no value** (unavailable) rather than 0 % — SEM has not yet
+watched any charge arrive, and no answer is the honest answer until the
+first charging cycle fills the pool. It becomes a number on its own from
+there.
+
+### True Baseload — the house SEM does not touch (#773)
+
+With every controlled load counting its own kWh (#768), what is left of
+`home` after subtracting them is your **baseload**: fridge, standby,
+lighting, router — the part of the house SEM cannot shift.
+
+| Sensor | What it answers |
+|---|---|
+| `sensor.sem_true_baseload_power` | the house's uncontrolled draw, live (W) |
+| `sensor.sem_daily_true_baseload_energy` | the same over the day (kWh) |
+
+Two properties make it useful beyond curiosity:
+
+- **It can go negative — on purpose.** A negative baseload means SEM
+  subtracted more than the house used: a device counted twice, or a sensor
+  with the wrong sign. That is a fault report, not a glitch, which is why
+  it is never clamped to zero.
+- **It is boring, and SEM checks that it stays boring.** Baseload moves
+  with season and occupancy — slowly. A step change means a sensor died, a
+  counter reset, or a device's energy is being double-counted, and the
+  health check reports it **with a named suspect** (the device — or the
+  home row itself — whose own day-over-day change explains the step).
+
+Days where a device's energy had to be estimated (`rated_power` × runtime)
+still display, and the drift comparison accepts them as long as the
+estimated portion is small (≤ 0.5 kWh for the day) — an estimate that
+small cannot change the verdict, and refusing every such day would leave
+the check permanently silent in any house with a single meterless device.
+Days with a larger estimated share are excluded from the comparison — a
+big estimate is never treated as a measurement.
+
 ### Performance Sensors (%)
 - `sensor.sem_self_consumption_rate` — % of solar used locally
-- `sensor.sem_autarky_rate` — % of consumption from solar+battery
+- `sensor.sem_autarky_rate` — % of consumption from solar+battery (grid-charged battery counts as grid, #770)
 - `sensor.sem_pv_performance_vs_forecast` — actual yield vs Solcast/Forecast.Solar prediction
 - `sensor.sem_pv_daily_specific_yield` — kWh per kWp installed
 - `sensor.sem_pv_estimated_annual_degradation` — long-term PV health

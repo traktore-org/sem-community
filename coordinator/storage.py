@@ -88,6 +88,16 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # once-per-year cost seeding flag — both also reset on every restart.
     "rate_history",
     "yearly_cost_seeded",
+    # (#770) the battery's cost basis — which pools of the stored energy came
+    # off the roof and which were bought, and for how much. Without this the
+    # store forgets every purchase at restart and the next discharge is
+    # credited the full import price again, which is the bug the whole row
+    # exists to fix.
+    "battery_provenance",
+    # (#773) the sealed baseload days. Losing them re-arms the drift check's
+    # "too little history" silence for two weeks after every reboot — the
+    # exact window a post-upgrade sensor fault most needs catching in.
+    "baseload_history",
 )
 
 
@@ -381,13 +391,25 @@ class SEMStorage:
     def set_device_runtime(
         self, device_id: str, accumulated_sec: float, meter_day: str,
         accumulated_kwh: float = 0.0,
+        counter_baseline_kwh: Optional[float] = None,
     ) -> None:
-        """Persist a device's daily runtime (+ energy progress, #559)."""
+        """Persist a device's daily runtime and daily energy.
+
+        ``accumulated_kwh`` was a #559 leftover — a slot no caller ever wrote
+        and nothing ever read. #768 fills it: the device's measured (or, when
+        flagged, estimated) energy for the meter day.
+
+        ``counter_baseline_kwh`` is the last reading of the device's own energy
+        counter. Restoring it is what lets a same-day restart book the energy
+        the meter recorded while HA was down instead of re-baselining and
+        losing it.
+        """
         if "device_runtimes" not in self._daily_data:
             self._daily_data["device_runtimes"] = {}
         self._daily_data["device_runtimes"][device_id] = {
             "accumulated_sec": accumulated_sec,
             "accumulated_kwh": accumulated_kwh,
+            "counter_baseline_kwh": counter_baseline_kwh,
             "meter_day": meter_day,
         }
 
@@ -472,6 +494,55 @@ class SEMStorage:
         intel["chargers"] = chargers
         self._energy_data["ev_intelligence"] = intel
 
+    # Measured watts-per-amp persistence (#638 night 2) — the learned
+    # W/A EMA survives restarts so the energy packer never falls back
+    # to nameplate right after a deploy. In-memory only, the 23:36
+    # restart reset it and the 23:46 re-plan sized the EV floor at
+    # 6.9 kW nameplate, found no slot under the peak, and yielded a car
+    # that then charged at 4.54 kW. Same rule as the sign locks below:
+    # learned state that gates behaviour is not allowed to die at boot.
+    def get_energy_plan_state(self) -> Dict[str, Any]:
+        """(#638) Tonight's stamped plan + period + demand signature —
+        a reboot must not silently reshuffle a night the actuation is
+        steering by (Guido's Aug-5 note, made acute 00:20 on 08-09).
+
+        ``overnight_plan`` is the same state under the planner's old name.
+        An upgrade at 23:50 is still a reboot mid-night, and the whole point
+        of persisting the stamp is that such a reboot changes nothing."""
+        return (self._energy_data.get("energy_plan")
+                or self._energy_data.get("overnight_plan", {}))
+
+    def set_energy_plan_state(self, state: Dict[str, Any]) -> None:
+        """(#638) Persist the stamp; saved by the normal delayed-save
+        cycle — an abrupt kill before a save degrades to the old
+        re-plan-on-boot, never to a corrupt night.
+
+        The legacy key is retired on the first write: read once, then gone,
+        so a later boot can never pick up the pre-rename night."""
+        self._energy_data["energy_plan"] = dict(state)
+        self._energy_data.pop("overnight_plan", None)
+
+    # (#755) The third number: what each demand actually DID. Durable on
+    # purpose — a night spans midnight and the daily bucket empties there,
+    # so the per-device runtime accumulators cannot carry a night's outcome.
+    # This is also the learner's only training set, which makes losing it at
+    # boot a slow, silent regression rather than a visible one.
+    def get_demand_outcome_state(self) -> Dict[str, Any]:
+        """(#755) The open night's per-demand record plus night history."""
+        return self._energy_data.get("demand_outcomes", {})
+
+    def set_demand_outcome_state(self, state: Dict[str, Any]) -> None:
+        """(#755) Persist the outcome record; delayed-save like the stamp."""
+        self._energy_data["demand_outcomes"] = dict(state)
+
+    def get_ev_wpa_state(self) -> Dict[str, float]:
+        """Get the persisted per-charger measured-W/A EMA."""
+        return self._energy_data.get("ev_wpa_ema", {})
+
+    def set_ev_wpa_state(self, state: Dict[str, float]) -> None:
+        """Persist the per-charger measured-W/A EMA."""
+        self._energy_data["ev_wpa_ema"] = dict(state)
+
     # Sign-detection persistence (#476 item 5) — locked grid/battery
     # sign flags survive restarts so the autodetect can't re-learn a
     # wrong sign from ambiguous post-reboot samples.
@@ -550,7 +621,8 @@ class SEMStorage:
                 }
 
             self._energy_store.async_delay_save(get_data, ENERGY_SAVE_DELAY)
-            _LOGGER.debug("Scheduled delayed save of energy data")
+            # (#762) No heartbeat here: scheduling a save is not an event
+            # (1930 identical lines/day on .175). Saves log on completion/failure.
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to schedule energy data save: %s", e)
 

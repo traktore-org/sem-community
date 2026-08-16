@@ -657,6 +657,9 @@
       "night_charging_status": {
         "name": "Night Charging"
       },
+      "energy_plan": {
+        "name": "Energy Plan"
+      },
       "battery_priority_status": {
         "name": "Battery Priority"
       },
@@ -720,6 +723,9 @@
       "flow_battery_to_home_power": {
         "name": "Battery to Home"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Battery to Grid"
+      },
       "flow_battery_to_ev_power": {
         "name": "Battery to EV"
       },
@@ -755,6 +761,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Battery to Home Energy"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Battery to Grid Energy"
       },
       "flow_battery_to_ev_energy": {
         "name": "Battery to EV Energy"
@@ -1178,6 +1187,39 @@
       },
       "vpp_event": {
         "name": "VPP Event"
+      },
+      "heat_pump_energy_today": {
+        "name": "Heat Pump Today"
+      },
+      "heat_pump_energy_month": {
+        "name": "Heat Pump This Month"
+      },
+      "heat_pump_energy_year": {
+        "name": "Heat Pump This Year"
+      },
+      "heat_pump_energy_total": {
+        "name": "Heat Pump Total"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Heat Pump Shifted Today"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Today Charge from Solar"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Today Charge from Grid"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Today Grid Charge Cost"
+      },
+      "battery_stored_grid_share": {
+        "name": "Stored Energy from Grid"
+      },
+      "true_baseload_power": {
+        "name": "True Baseload"
+      },
+      "daily_true_baseload_energy": {
+        "name": "True Baseload Today"
       }
     },
     "binary_sensor": {
@@ -1224,6 +1266,9 @@
       },
       "vacation_mode": {
         "name": "Vacation Mode"
+      },
+      "energy_plan_actuation": {
+        "name": "Energy Plan Actuation"
       }
     },
     "number": {

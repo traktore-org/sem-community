@@ -16,6 +16,11 @@ from .types import (
 )
 from ..utils.time_manager import TimeManager
 from .units import energy_state_to_kwh
+from .battery_provenance import (
+    BatteryProvenance, allocate_fleet_charge, discharge_savings,
+)
+
+from ..utils.log_gate import log_on_change
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,6 +69,54 @@ _LEGACY_EV_KEY_PREFIX = f"{_LEGACY_EV_CATEGORY}_"
 # deliberately does not start with ``ev_``: that prefix means "survives the
 # midnight rollover" (``_check_rollover``), and this bucket must roll at midnight.
 MIDNIGHT_EV_CATEGORY = "midnight_ev"
+
+# (#769) Per-device ledger keys. Every controlled load gets daily/monthly/
+# yearly/lifetime totals on the same footing as EV, keyed by ``device_id``
+# from the start because #685 puts additional heat pumps in the one device
+# list as ordinary climate devices — there is no "the" heat pump to hardcode.
+#
+# The prefix is a colon rather than an underscore so a device_id can never
+# collide with a plain category ("device:heat_pump" vs "solar"), and so the
+# rollover sweep can recognise these keys: like EV, a device's day rolls at
+# SUNRISE (#620/#704), not at midnight, so a device key must survive the
+# calendar-day prune the way ``ev_`` does.
+DEVICE_KEY_PREFIX = "device:"
+# Sub-total separator, e.g. ``device:heat_pump#sg3_2026-08-14``.
+_SPLIT_SEP = "#"
+
+# (#769) The SG-Ready states that mean SEM ASKED for the consumption. Energy
+# booked in these is energy SEM shifted; everything else is energy the device
+# would have used on its own. Named here, beside the ledger that sums them,
+# rather than in the card that displays them.
+SHIFTED_SPLITS = ("sg3", "sg4")
+
+# (#772) The comfort buckets: did a comfort zone's kWh land inside its
+# planned ``comfort:{did}`` block or outside it. The value of a pre-cool
+# block is the energy it DISPLACES, not the energy it uses — a block that
+# banked four hours of coasting and one that ran the AC at 03:00 and again
+# at 17:00 book the same in-block kWh, and the difference lives entirely in
+# the OUT bucket. The in/out ratio over time is the first honest answer to
+# "is banking working here" (#705 Ph3's missing feedback, #755's first
+# comfort signal). "No plan" files as OUT, not unlabeled — a night the
+# planner never banked belongs in the ratio's denominator.
+COMFORT_SPLIT_IN = "comfort_in_block"
+COMFORT_SPLIT_OUT = "comfort_out_block"
+
+# (#773) The midnight-keyed mirror of everything SEM can see the devices
+# consume. Device ledger rows roll at SUNRISE (#620/#704); the home row rolls
+# at MIDNIGHT. ``true_baseload = home − controlled`` across that mismatch
+# would mis-book every small-hours kWh — the #703/#704 bug class — so the
+# subtrahend is booked a second time at the filing seam, keyed by the
+# calendar day, exactly the way ``MIDNIGHT_EV_CATEGORY`` mirrors the EV row.
+# ``_EST`` is the slice of the mirror that came from rated×runtime estimates:
+# it keeps the baseload DISPLAYABLE but disqualifies the day as a
+# measurement (#755 contract 1 — an estimate may never train anything).
+CONTROLLED_LOADS_CATEGORY = "controlled_loads"
+CONTROLLED_LOADS_EST_CATEGORY = "controlled_loads_est"
+
+# (#773) How many sealed days of baseload history are kept for the drift
+# check. Two weeks spans an occupancy cycle (weekday/weekend) twice.
+_BASELOAD_HISTORY_DAYS = 14
 
 # (#724) The boundary the FLEET EV total falls back to when its chargers do not
 # share a Charge-by deadline. Expressed as an offset so it flows through the
@@ -151,6 +204,18 @@ class EnergyCalculator:
         # Rate history for 7-day averaging (dynamic tariffs)
         self._rate_history: deque = deque(maxlen=30)
 
+        # (#770) Share of the battery's STORED energy that was bought from
+        # the grid. Autarky counts battery discharge as own supply; that is
+        # only true for the solar-charged part, and the one-gate planner made
+        # grid charging routine. 0.0 until the provenance store says
+        # otherwise — an unknown-origin battery keeps the legacy credit
+        # rather than being punished for a measurement SEM doesn't have.
+        self._battery_grid_origin_share = 0.0
+
+        # (#770) The battery as inventory with a cost basis. Charged tagged
+        # by origin, discharged in proportion, pinned to the measured SOC.
+        self._battery_provenance = BatteryProvenance()
+
         # (#660) Clamp engagement — how much each ``max(0, …)`` /
         # ``min(100, …)`` guard below actually REMOVED this cycle.
         #
@@ -201,6 +266,15 @@ class EnergyCalculator:
         # ``_reconcile_metered_energy``. Keyed by category:
         # {"grid_import": ["sensor.p1_import"], ...}.
         self._meter_counter_entities: Dict[str, List[str]] = {}
+        # (#628 visibility) Whether each configured category's last
+        # reconciliation attempt was counter-backed (None = never tried),
+        # plus today's backed/skipped tallies for the diagnostics download.
+        # The all-or-nothing skip used to be SILENT — a category with an
+        # unreadable counter ran as a pure stopwatch indefinitely, and the
+        # first symptom was a numbers-don't-match report weeks later.
+        self._backing_state: Dict[str, Optional[bool]] = {}
+        self._backing_tally: Dict[str, Dict[str, int]] = {}
+        self._backing_tally_date: Optional[str] = None
         self._meter_counter_enabled: bool = False
         self._meter_counter_logged: bool = False
         self._meter_baselines: Dict[str, Dict[str, Any]] = {}
@@ -231,6 +305,10 @@ class EnergyCalculator:
         self._yearly_cost_seeded: bool = False
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
+        # (#773) Sealed days of the true-baseload residual, newest last.
+        # One row per finished calendar day WITH a home row — a day without
+        # one is a gap and is refused, never recorded as zero. Persisted.
+        self._baseload_history: deque = deque(maxlen=_BASELOAD_HISTORY_DAYS)
 
     def _record_clamp(
         self, name: str, raw: float, clamped: float, eps: float,
@@ -504,6 +582,19 @@ class EnergyCalculator:
         if power.battery_charge_power >= MIN_POWER_THRESHOLD:
             charge_increment = (power.battery_charge_power * interval_hours) / 1000
             self._accumulate("battery_charge", today, month_key, year_key, charge_increment)
+            # (#770) …and again, told apart by origin. The flow layer has
+            # always known which part came off the roof; it just never
+            # reached the ledger, so a kWh bought in the valley discharged
+            # against the full import price and the difference was called
+            # savings.
+            self._file_battery_charge_origin(
+                power, power_flows, charge_increment, today,
+            )
+        # (#770) Pin the pool to the measured contents ONCE per cycle, after
+        # the charge and before the draw. Integrated power drifts; SOC is
+        # measured. Doing it only on discharge would leave the published
+        # share describing a pool the battery does not hold.
+        self._reconcile_provenance_to_soc(power)
         self._reconcile_metered_energy("battery_charge", today, month_key, year_key)
         energy.daily_battery_charge = self._get_daily("battery_charge", today)
         energy.monthly_battery_charge = self._get_monthly("battery_charge", month_key)
@@ -513,14 +604,36 @@ class EnergyCalculator:
         if power.battery_discharge_power >= MIN_POWER_THRESHOLD:
             discharge_increment = (power.battery_discharge_power * interval_hours) / 1000
             self._accumulate("battery_discharge", today, month_key, year_key, discharge_increment)
-            self._accumulate_cost("cost_batt_savings", today, month_key, year_key, discharge_increment * self._import_rate)
+            # (#770) What this discharge actually saved, not what a discharge
+            # of free solar would have saved. Drawn from the pool in
+            # proportion; the grid part only earns the SPREAD, because the
+            # purchase already sits in the import cost.
+            self._accumulate_cost(
+                "cost_batt_savings", today, month_key, year_key,
+                self._battery_discharge_savings(
+                    power, discharge_increment, power_flows),
+            )
         self._reconcile_metered_energy(
             "battery_discharge", today, month_key, year_key,
-            cost_key="cost_batt_savings", rate=self._import_rate,
+            cost_key="cost_batt_savings",
+            # (#770) The counter correction has to value a kWh the same way
+            # the live path does, or an install with a BMS counter would
+            # quietly get the flat-rate answer back through the side door.
+            rate=self._battery_provenance.implied_savings_rate(self._import_rate),
         )
         energy.daily_battery_discharge = self._get_daily("battery_discharge", today)
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
+
+        # (#770) The provenance row. The money and the stored-share are
+        # published by ``calculate_costs`` and ``calculate_performance``,
+        # which own those types; only the two kWh rows are energy.
+        _split = self.get_battery_charge_split(today)
+        energy.daily_battery_charge_solar = round(_split["solar_today_kwh"], 2)
+        energy.daily_battery_charge_grid = round(_split["grid_today_kwh"], 2)
+        self.set_battery_grid_origin_share(
+            self._battery_provenance.fleet_grid_fraction()
+        )
 
         # Sanity checks — warn and cap if values exceed physical limits.
         # These run BEFORE the home balance (#628 review W1): the caps are the
@@ -564,6 +677,14 @@ class EnergyCalculator:
         energy.daily_home = self._get_daily("home", today)
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
+
+        # (#773) The audited residual, derived AFTER home because it is one
+        # more subtraction from it. The W twin is filled by the coordinator,
+        # which owns the live device draws.
+        _baseload = self.get_true_baseload(today)
+        energy.true_baseload_today = _baseload["today_kwh"]
+        energy.controlled_loads_today = _baseload["controlled_today_kwh"]
+        energy.true_baseload_measured = _baseload["measured"]
 
         # Solar self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
         # Only tracks savings from solar — battery discharge savings are in cost_batt_savings.
@@ -628,6 +749,16 @@ class EnergyCalculator:
         energy.daily_battery_discharge = self._get_daily("battery_discharge", today)
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
+        # (#770) The provenance row is read back like every other row here. A
+        # skipped cycle means "no new energy was integrated", not "the battery
+        # is empty and cost nothing" — leaving these at their defaults would
+        # flap the sensors to zero for one cycle after every sensor stall.
+        # The cost and the stored-share need no equivalent: they are built by
+        # ``calculate_costs`` / ``calculate_performance``, which run every
+        # cycle and read the same accumulators regardless of the gap.
+        _split = self.get_battery_charge_split(today)
+        energy.daily_battery_charge_solar = round(_split["solar_today_kwh"], 2)
+        energy.daily_battery_charge_grid = round(_split["grid_today_kwh"], 2)
         return energy
 
     def configure_ev_counters(
@@ -1122,6 +1253,11 @@ class EnergyCalculator:
         ca[f"cost_import_{year_key}"] = round(grid_import * imp_rate, 4)
         ca[f"cost_export_{year_key}"] = round(grid_export * exp_rate, 4)
         ca[f"cost_savings_{year_key}"] = round(solar_direct * imp_rate, 4)
+        # (#770) The backfilled discharge is credited at the FULL import rate
+        # on purpose. The provenance store only knows what it watched; the
+        # pre-tracking year has no origin record at all, and unknown origin
+        # keeps the legacy credit rather than being charged for a measurement
+        # SEM never took. Live accumulation from here on is split properly.
         ca[f"cost_batt_savings_{year_key}"] = round(batt_discharge * imp_rate, 4)
         self._yearly_cost_seeded = True
         _LOGGER.info(
@@ -1462,6 +1598,44 @@ class EnergyCalculator:
         for accumulators, key in periods:
             accumulators[key] = accumulators.get(key, 0.0) + delta
 
+    def _tally_backing(self, category: str, today_str: str, backed: bool) -> None:
+        """(#628 visibility) Count and announce counter-backing transitions.
+
+        The all-or-nothing skip is correct but was invisible. One
+        transition-gated INFO line per flip (the #762 alternation pattern)
+        and per-day tallies for diagnostics — "was export ever reconciled
+        on this install?" becomes one look instead of a 19-comment thread.
+        A healthy boot (first read complete) stays silent; a counter that
+        is dead FROM boot logs, because that is exactly the invisible case.
+        """
+        if self._backing_tally_date != today_str:
+            self._backing_tally_date = today_str
+            self._backing_tally = {}
+        tally = self._backing_tally.setdefault(
+            category, {"backed": 0, "skipped": 0})
+        tally["backed" if backed else "skipped"] += 1
+        prev = self._backing_state.get(category)
+        if prev is backed:
+            return
+        self._backing_state[category] = backed
+        if not backed:
+            log_on_change(
+                _LOGGER, f"backing:{category}", logging.INFO,
+                "%s: no longer counter-backed — a configured counter is "
+                "unreadable; the daily row runs on power integration alone "
+                "until it returns", category,
+            )
+        elif prev is False:
+            log_on_change(
+                _LOGGER, f"backing:{category}", logging.INFO,
+                "%s: counter-backed again — reconciliation resumed", category,
+            )
+
+    def counter_backing_today(self) -> Dict[str, Dict[str, int]]:
+        """(#628 visibility) Today's per-category backed/skipped cycle
+        counts, for the diagnostics download."""
+        return {k: dict(v) for k, v in self._backing_tally.items()}
+
     def _reconcile_metered_energy(
         self,
         category: str,
@@ -1542,11 +1716,13 @@ class EnergyCalculator:
             # Partial read — see ALL-OR-NOTHING above. Do NOT touch the
             # baselines: the missing counter kept counting while it was
             # unavailable, and its delta is still owed once it returns.
+            self._tally_backing(category, today_str, backed=False)
             return
 
         # (#628) Complete read — this category's daily row is the hardware's
         # this cycle, so the home balance may build on it.
         self._counter_backed.add(category)
+        self._tally_backing(category, today_str, backed=True)
 
         # A counter that went BACKWARDS since its last reading (meter reboot,
         # a daily-type register resetting at midnight) invalidates the whole
@@ -1797,6 +1973,13 @@ class EnergyCalculator:
         costs.daily_battery_savings = max(
             0, self._get_daily_cost("cost_batt_savings", today)
         )
+        # (#770) What today's grid charging of the battery cost, published
+        # beside the savings it has to be read against. NOT floored: a
+        # negative import price makes a purchase legitimately negative, and
+        # clamping it would hide money the user was paid to take.
+        costs.daily_battery_grid_cost = round(
+            self.get_battery_charge_split(today)["grid_cost_today"], 2
+        )
         # #351 M2 — headline total spans both. Pre-fix users comparing
         # daily_savings to import costs saw battery_to_ev portion
         # missing.
@@ -1925,6 +2108,15 @@ class EnergyCalculator:
         self.clamp_engagement.pop("self_consumption_rate", None)
         self.clamp_engagement.pop("autarky_rate", None)
 
+        # (#770) How much of what is stored right now was bought. Published
+        # beside autarky because it is the correction autarky applies below.
+        # None (→ sensor unknown) until the pool has attributed content —
+        # a share the pool never measured must not read as "0 % bought".
+        _share = self._battery_provenance.fleet_grid_share_measured()
+        metrics.battery_stored_grid_share = (
+            None if _share is None else round(_share * 100, 1)
+        )
+
         # Self consumption rate = (solar - export) / solar — direction-of-
         # flow-agnostic; whatever solar didn't go to the grid was
         # consumed locally (by home, battery, or EV). No flow attribution
@@ -1964,25 +2156,31 @@ class EnergyCalculator:
         # * total      = own_supply + grid_supply
         # * autarky    = own_supply / total × 100
         #
-        # Treating ``battery_to_X`` as own supply is an approximation
-        # — strictly some battery discharge originated from cheap-
-        # tariff grid charge, not solar. SEM doesn't track battery-
-        # energy provenance, so the "all-battery-is-own" rule
-        # matches user intuition ("my battery is mine").
+        # (#770) That approximation is now retired. SEM DOES track battery
+        # provenance, and the grid-charged share of the discharge is grid
+        # supply that was merely time-shifted — the house did not make it.
+        # ``_battery_grid_origin_share`` is 0.0 until the store knows
+        # better, so an install with no grid charging reads exactly as
+        # before.
         #
         # Legacy two-arg callers (no energy_flows) keep the v1.6.x
         # behaviour. They share the bug class, but their existing
         # tests pin the old numbers so we don't quietly retcon them.
         if energy_flows is not None:
+            battery_supply = (
+                getattr(energy_flows, "battery_to_home", 0.0)
+                + getattr(energy_flows, "battery_to_ev", 0.0)
+            )
+            battery_from_grid = battery_supply * self._battery_grid_origin_share
             own_supply = (
                 getattr(energy_flows, "solar_to_home", 0.0)
                 + getattr(energy_flows, "solar_to_ev", 0.0)
-                + getattr(energy_flows, "battery_to_home", 0.0)
-                + getattr(energy_flows, "battery_to_ev", 0.0)
+                + (battery_supply - battery_from_grid)
             )
             grid_supply = (
                 getattr(energy_flows, "grid_to_home", 0.0)
                 + getattr(energy_flows, "grid_to_ev", 0.0)
+                + battery_from_grid
             )
             total_consumption = own_supply + grid_supply
             if total_consumption > 0:
@@ -2064,6 +2262,419 @@ class EnergyCalculator:
         """Get lifetime accumulated energy."""
         key = f"lifetime_{category}"
         return round(self._lifetime_accumulators.get(key, 0.0), 2)
+
+    # ── (#769) the per-device ledger ────────────────────────────────────
+    #
+    # SEM commands loads and then forgets what they cost. The heat pump is
+    # the worst case — on the houses SEM was installed for it is the single
+    # largest controllable load, and it was accounted for like an unmonitored
+    # kettle: absorbed into the ``home`` residual, which is computed as a
+    # leftover and therefore can never complain (#767).
+    #
+    # #768 gave each device its daily kWh with provenance. This is the other
+    # three horizons plus the attribution, riding the SAME accumulators the
+    # fleet categories use so persistence, rollover and pruning are the ones
+    # already proven rather than a second set that can drift from them.
+
+    @staticmethod
+    def _device_category(device_id: str, split: Optional[str] = None) -> str:
+        base = f"{DEVICE_KEY_PREFIX}{device_id}"
+        return f"{base}{_SPLIT_SEP}{split}" if split else base
+
+    @staticmethod
+    def _month_key(day: date) -> str:
+        """The calculator's OWN month key — ``2026_8``, not ISO ``2026-08``.
+
+        This is not cosmetic. ``_check_rollover``'s monthly sweep runs on
+        every cycle, not only when the month changes, and deletes any key
+        that does not end in the caller's month key. A device row written in
+        a different format is therefore deleted seconds after it is written
+        and the monthly total silently degrades to "whatever the last cycle
+        booked". One helper, one format, both sides.
+        """
+        return f"{day.year}_{day.month}"
+
+    def accumulate_device_energy(
+        self,
+        device_id: str,
+        increment_kwh: float,
+        meter_day: date,
+        split: Optional[str] = None,
+    ) -> None:
+        """Book one cycle's device energy into every period.
+
+        ``meter_day`` is the DEVICE's day — the sunrise-based meter day the
+        device itself rolls on (#620/#704) — and the month and year keys are
+        derived from it. One day definition feeds all four horizons, so the
+        totals can't disagree with each other for the six hours between
+        midnight and sunrise.
+
+        ``split`` names an attribution bucket (the heat pump's SG-Ready
+        state). The bucket is accumulated BESIDE the device total, never
+        instead of it: an unsplit device is still fully counted, and the
+        buckets of a split device sum to its total.
+        """
+        if not device_id or not increment_kwh:
+            return
+        month_key = self._month_key(meter_day)
+        year_key = str(meter_day.year)
+        self._accumulate(
+            self._device_category(device_id), meter_day,
+            month_key, year_key, float(increment_kwh),
+        )
+        if split:
+            self._accumulate(
+                self._device_category(device_id, split), meter_day,
+                month_key, year_key, float(increment_kwh),
+            )
+
+    def get_device_energy(self, device_id: str, meter_day: date) -> Dict[str, float]:
+        """The device's ledger row: daily / monthly / yearly / lifetime kWh."""
+        category = self._device_category(device_id)
+        return {
+            "daily_kwh": self._get_daily(category, meter_day),
+            "monthly_kwh": self._get_monthly(category, self._month_key(meter_day)),
+            "yearly_kwh": self._get_yearly(category, str(meter_day.year)),
+            "lifetime_kwh": self._get_lifetime(category),
+        }
+
+    def get_device_splits(self, device_id: str, meter_day: date) -> Dict[str, float]:
+        """Today's kWh per attribution bucket, e.g. ``{"sg2": .., "sg3": ..}``.
+
+        Empty for a device that names no buckets — which is most of them.
+        """
+        prefix = f"{self._device_category(device_id)}{_SPLIT_SEP}"
+        suffix = f"_{meter_day}"
+        out: Dict[str, float] = {}
+        for key, value in self._daily_accumulators.items():
+            if key.startswith(prefix) and key.endswith(suffix):
+                out[key[len(prefix):-len(suffix)]] = round(value, 2)
+        return out
+
+    def get_device_shifted(
+        self, device_id: str, meter_day: date, lifetime: bool = False
+    ) -> float:
+        """kWh this device consumed BECAUSE SEM asked (SG-Ready boost/force).
+
+        The number the whole issue is about: without it, "SEM ran the heat
+        pump on solar" is a claim with no measurement behind it.
+        """
+        if lifetime:
+            return round(sum(
+                self._get_lifetime(self._device_category(device_id, s))
+                for s in SHIFTED_SPLITS
+            ), 2)
+        daily = self.get_device_splits(device_id, meter_day)
+        return round(sum(daily.get(s, 0.0) for s in SHIFTED_SPLITS), 2)
+
+    def get_comfort_split(
+        self, device_id: str, meter_day: date
+    ) -> Dict[str, float]:
+        """(#772) A zone's comfort energy by plan placement, today + month.
+
+        The two numbers whose ratio answers "is banking working here".
+        Today is the live view; the MONTH is where a week's worth
+        actually survives — the rollover sweep keeps only today's and
+        yesterday's daily keys, so any window longer than that must be
+        read from the monthly bucket (pinned in test_772).
+        """
+        month_key = self._month_key(meter_day)
+        out: Dict[str, float] = {}
+        for split, name in (
+            (COMFORT_SPLIT_IN, "in_block"),
+            (COMFORT_SPLIT_OUT, "out_block"),
+        ):
+            category = self._device_category(device_id, split)
+            out[f"{name}_today_kwh"] = self._get_daily(category, meter_day)
+            out[f"{name}_month_kwh"] = self._get_monthly(category, month_key)
+        return out
+
+    # ── (#773) the residual: home minus everything SEM can see ──────────
+
+    def accumulate_controlled_load(
+        self, increment_kwh: float, calendar_day: date, *, estimated: bool
+    ) -> None:
+        """Book one cycle's device kWh into the MIDNIGHT-keyed mirror.
+
+        Called at the filing seam beside ``accumulate_device_energy`` — the
+        same increment, booked a second time under the calendar day, because
+        the baseload subtraction runs against the midnight-keyed home row
+        and the device's own ledger day rolls at sunrise (see the category
+        comment). Daily-only: the residual is a daily diagnostic, not a
+        billing figure.
+
+        ``estimated`` marks a rated×runtime booking. The kWh still enters
+        the mirror (the subtraction stays displayable); the estimated slice
+        is tracked BESIDE it, and any estimated kWh in the day makes the
+        day's baseload unmeasured (#755 contract 1).
+        """
+        if not increment_kwh:
+            return
+        daily_key = f"{CONTROLLED_LOADS_CATEGORY}_{calendar_day}"
+        self._daily_accumulators[daily_key] = (
+            self._daily_accumulators.get(daily_key, 0.0) + float(increment_kwh)
+        )
+        if estimated:
+            est_key = f"{CONTROLLED_LOADS_EST_CATEGORY}_{calendar_day}"
+            self._daily_accumulators[est_key] = (
+                self._daily_accumulators.get(est_key, 0.0)
+                + float(increment_kwh)
+            )
+
+    @property
+    def baseload_history(self) -> list:
+        """(#773) Sealed baseload days, oldest first, for the drift check."""
+        return list(self._baseload_history)
+
+    def get_true_baseload(self, today: date) -> Dict[str, Any]:
+        """(#773) Today's residual so far: home minus the controlled mirror.
+
+        ``today_kwh`` is None — not zero — while no home row exists: before
+        the balance (or the integrator) has written one there is nothing to
+        subtract from, and ``0 − controlled`` would publish the house as a
+        negative-consumption fault (#755 contract 1: silence is not a
+        measurement of zero).
+
+        A NEGATIVE value is published as-is. The home row is clamped ≥ 0 for
+        good physical reasons; the baseload is a DIAGNOSTIC, and negative is
+        its most unambiguous finding — an over-subtraction or a sign error —
+        which a ``max(0, ...)`` would hide (the issue's explicit ask).
+
+        ``measured`` is the training gate: True only when no estimated kWh
+        entered today's mirror. An estimated day still displays.
+        """
+        home_key = f"home_{today}"
+        controlled = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_CATEGORY}_{today}", 0.0)
+        estimated = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_EST_CATEGORY}_{today}", 0.0)
+        home = self._daily_accumulators.get(home_key)
+        return {
+            "today_kwh": None if home is None else round(home - controlled, 3),
+            "home_today_kwh": home,
+            "controlled_today_kwh": round(controlled, 3),
+            "estimated_today_kwh": round(estimated, 3),
+            "measured": home is not None and estimated == 0.0,
+        }
+
+    def _seal_baseload_day(self, day: date) -> None:
+        """(#773) Write one finished day into the baseload history.
+
+        Runs from the rollover, BEFORE the daily sweep deletes the rows it
+        reads. A day without a home row is a GAP: it is skipped entirely
+        rather than sealed as zero — a zero here would poison every median
+        the drift check takes for the next two weeks. Idempotent per day
+        (a retried rollover must not duplicate the row).
+
+        The per-device day totals ride along so a later breach can name its
+        suspect: the term whose own day-over-day move explains the step.
+        They are the device-ledger (sunrise-keyed) rows for ``day`` — offset
+        from the midnight mirror by the small hours, which is fine for
+        naming a mover and would be wrong for arithmetic; the arithmetic
+        uses the mirror.
+        """
+        day_str = str(day)
+        if any(r.get("date") == day_str for r in self._baseload_history):
+            return
+        home = self._daily_accumulators.get(f"home_{day}")
+        if home is None:
+            return
+        controlled = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_CATEGORY}_{day}", 0.0)
+        estimated = self._daily_accumulators.get(
+            f"{CONTROLLED_LOADS_EST_CATEGORY}_{day}", 0.0)
+        prefix = DEVICE_KEY_PREFIX
+        suffix = f"_{day}"
+        devices = {
+            k[len(prefix):-len(suffix)]: round(v, 3)
+            for k, v in self._daily_accumulators.items()
+            if k.startswith(prefix) and k.endswith(suffix)
+            and _SPLIT_SEP not in k
+        }
+        self._baseload_history.append({
+            "date": day_str,
+            "baseload_kwh": round(home - controlled, 3),
+            "home_kwh": round(home, 3),
+            "controlled_kwh": round(controlled, 3),
+            "measured": estimated == 0.0,
+            # The SIZE of the estimated portion, not just its presence: the
+            # estimate's error is bounded by the estimate itself, so the
+            # drift check can accept a day whose estimate is too small to
+            # move a verdict. Gating on the boolean alone made one meterless
+            # pool pump silence the check forever (.175's first sealed day
+            # — and most houses').
+            "estimated_kwh": round(estimated, 3),
+            "devices": devices,
+        })
+
+    # ── (#770) battery charge, by where the energy came from ───────────
+    #
+    # ``battery_charge`` was one number for two different things: a kWh off
+    # the roof and a kWh bought in the cheap valley. Discharging both against
+    # the full import price and calling the difference savings was near
+    # enough while grid charging was rare — the joint planner made it the
+    # norm. Same accumulators as every other category, so persistence,
+    # rollover and pruning are the proven ones.
+
+    def accumulate_battery_charge_split(
+        self,
+        solar_kwh: float,
+        grid_kwh: float,
+        today: date,
+        import_rate: Optional[float] = None,
+    ) -> None:
+        """File one cycle's battery charge under its origin.
+
+        The two buckets are accumulated BESIDE ``battery_charge``, never
+        instead of it, so the split always sums to the total the rest of the
+        ledger already agrees on.
+        """
+        month_key = self._month_key(today)
+        year_key = str(today.year)
+        solar_kwh = max(0.0, float(solar_kwh or 0.0))
+        grid_kwh = max(0.0, float(grid_kwh or 0.0))
+        if solar_kwh:
+            self._accumulate(
+                "battery_charge_solar", today, month_key, year_key, solar_kwh,
+            )
+        if grid_kwh:
+            self._accumulate(
+                "battery_charge_grid", today, month_key, year_key, grid_kwh,
+            )
+            rate = self._import_rate if import_rate is None else float(import_rate)
+            self._accumulate_cost(
+                "cost_batt_charge_grid", today, month_key, year_key,
+                grid_kwh * max(0.0, rate),
+            )
+
+    def get_battery_charge_split(self, today: date) -> Dict[str, float]:
+        """Today's battery charge by origin, plus the grid part's horizons."""
+        month_key = self._month_key(today)
+        year_key = str(today.year)
+        return {
+            "solar_today_kwh": self._get_daily("battery_charge_solar", today),
+            "solar_month_kwh": self._get_monthly("battery_charge_solar", month_key),
+            "solar_year_kwh": self._get_yearly("battery_charge_solar", year_key),
+            "solar_total_kwh": self._get_lifetime("battery_charge_solar"),
+            "grid_today_kwh": self._get_daily("battery_charge_grid", today),
+            "grid_month_kwh": self._get_monthly("battery_charge_grid", month_key),
+            "grid_year_kwh": self._get_yearly("battery_charge_grid", year_key),
+            "grid_total_kwh": self._get_lifetime("battery_charge_grid"),
+            "grid_cost_today": round(
+                self._daily_cost_accumulators.get(
+                    f"cost_batt_charge_grid_{today}", 0.0
+                ), 4,
+            ),
+        }
+
+    def _file_battery_charge_origin(
+        self,
+        power: PowerReadings,
+        power_flows: "Optional[PowerFlows]",
+        charge_increment: float,
+        today: date,
+    ) -> None:
+        """Split this cycle's charge into solar and grid, and store both.
+
+        The flow layer attributes in WATTS for the whole house; the ledger
+        needs kWh for this cycle. Scaling the flow split onto the integrated
+        increment keeps the two in step even when the flow attribution and
+        the battery power sensor disagree slightly — the split can never sum
+        to more than the charge the ledger already booked.
+
+        Where the electrons physically went is unknowable, so the per-battery
+        allocation follows how hard each unit was charging (#523 installs);
+        one battery, or none with a power sensor, collapses to a fleet pool.
+        """
+        if power_flows is None or charge_increment <= 0:
+            return
+        solar_w = max(0.0, float(getattr(power_flows, "solar_to_battery", 0.0) or 0.0))
+        grid_w = max(0.0, float(getattr(power_flows, "grid_to_battery", 0.0) or 0.0))
+        attributed_w = solar_w + grid_w
+        if attributed_w <= 0:
+            return
+
+        solar_kwh = charge_increment * (solar_w / attributed_w)
+        grid_kwh = charge_increment - solar_kwh
+
+        self.accumulate_battery_charge_split(solar_kwh, grid_kwh, today)
+
+        charging = {
+            bid: bp.power_w
+            for bid, bp in (getattr(power, "batteries", None) or {}).items()
+            if float(getattr(bp, "power_w", 0.0) or 0.0) > 0
+        }
+        for bid, (b_solar, b_grid) in allocate_fleet_charge(
+            charging, solar_kwh, grid_kwh,
+        ).items():
+            self._battery_provenance.charge(
+                bid, b_solar, b_grid, self._import_rate,
+            )
+
+    def _battery_discharge_savings(
+        self, power: PowerReadings, discharge_increment: float,
+        power_flows: "Optional[PowerFlows]" = None,
+    ) -> float:
+        """What this discharge saved, given where the stored energy came from.
+
+        The pool was already pinned to the measured SOC earlier in the cycle,
+        so what it holds here is what the battery holds. Energy SEM never saw
+        arrive is ``unknown`` and keeps the legacy full-rate credit — the
+        number does not move until SEM actually knows better.
+
+        (#776) Savings are AVOIDED IMPORT, so only the home-delivered share
+        of the discharge earns them. The exported share (force_discharge,
+        the C6 arbitrage sell) already earns its export revenue at the grid
+        meter — crediting it here too paid the same kWh twice. The pool
+        draw stays the FULL increment (the energy really left the battery);
+        only the money is scaled. No flow attribution — or a cycle where
+        none of the discharge was attributed — keeps the legacy full
+        credit: silence is not a measurement of "all exported" any more
+        than of "all delivered".
+        """
+        mix = self._battery_provenance.discharge_fleet(discharge_increment)
+        savings = discharge_savings(mix, self._import_rate)
+        if power_flows is None:
+            return savings
+        delivered = (
+            max(0.0, float(getattr(power_flows, "battery_to_home", 0.0) or 0.0))
+            + max(0.0, float(getattr(power_flows, "battery_to_ev", 0.0) or 0.0))
+        )
+        exported = max(
+            0.0, float(getattr(power_flows, "battery_to_grid", 0.0) or 0.0)
+        )
+        attributed = delivered + exported
+        if attributed <= 0:
+            return savings
+        return savings * (delivered / attributed)
+
+    def _reconcile_provenance_to_soc(self, power: PowerReadings) -> None:
+        """Pin the provenance pool to SOC × capacity, when SOC is real."""
+        if getattr(power, "battery_soc_unavailable", False):
+            return
+        capacity = float(self.config.get("battery_capacity_kwh", 0) or 0)
+        if capacity <= 0:
+            return
+        try:
+            soc = float(power.fleet_battery_soc)
+        except (TypeError, ValueError, AttributeError):
+            return
+        self._battery_provenance.reconcile_fleet_to_stored(
+            capacity * max(0.0, min(100.0, soc)) / 100.0
+        )
+
+    def set_battery_grid_origin_share(self, share: float) -> None:
+        """Tell autarky how much of the stored energy was bought.
+
+        Comes from :class:`BatteryProvenance` — a measurement of the pool,
+        not a guess. Out-of-range values are clamped rather than rejected:
+        the caller is SEM, and a broken share must degrade to the legacy
+        answer, not crash the metrics.
+        """
+        try:
+            self._battery_grid_origin_share = max(0.0, min(1.0, float(share)))
+        except (TypeError, ValueError):
+            self._battery_grid_origin_share = 0.0
 
     def _accumulate_cost(
         self, category: str, today: date, month_key: str, year_key: str, increment: float
@@ -2168,13 +2779,27 @@ class EnergyCalculator:
         accumulator category starts with "ev", so the prefix is unambiguous;
         the categories are solar, home, ev, grid_import, grid_export,
         battery_charge, battery_discharge.
+
+        (#769) Per-device keys (``device:*``) get the same exemption, for the
+        same reason and one more: a device's day rolls at SUNRISE, so between
+        midnight and dawn its keys are stamped with YESTERDAY and a strict
+        calendar sweep would delete the numbers as fast as they are written.
+        The monthly and yearly device keys keep the previous period too — the
+        trailing boundary is a month-end and a year-end problem as much as a
+        nightly one, and losing New Year's small hours out of the yearly total
+        is exactly the kind of quiet erosion this arc exists to stop.
         """
         yesterday = today - timedelta(days=1)
         yesterday_str = str(yesterday)
+        prev_month_key = self._month_key(today.replace(day=1) - timedelta(days=1))
+        prev_year_key = str(today.year - 1)
+
+        def _sunrise_keyed(key: str) -> bool:
+            return key.startswith(_EV_KEY_PREFIX) or key.startswith(DEVICE_KEY_PREFIX)
 
         # Snapshot yesterday's costs before cleaning up (for accumulated ROI)
         has_yesterday_data = any(
-            k.endswith(yesterday_str) and not k.startswith(_EV_KEY_PREFIX)
+            k.endswith(yesterday_str) and not _sunrise_keyed(k)
             for k in self._daily_accumulators
         )
         # A prior snapshot is only considered valid if it captured non-zero energy.
@@ -2187,16 +2812,20 @@ class EnergyCalculator:
         if has_yesterday_data and not already_snapshotted:
             self._snapshot_daily_costs(yesterday)
 
+        # (#773) Seal yesterday's baseload BEFORE the sweep deletes the rows
+        # it reads. Idempotent, and a day with no home row is a refused gap.
+        self._seal_baseload_day(yesterday)
+
         # Remove daily accumulators from previous days
-        # Skip EV keys (sunrise/deadline-based, cleaned separately below)
+        # Skip sunrise-keyed keys (EV + per-device, cleaned separately below)
         keys_to_remove = [
             k for k in self._daily_accumulators.keys()
-            if not k.endswith(str(today)) and not k.startswith(_EV_KEY_PREFIX)
+            if not k.endswith(str(today)) and not _sunrise_keyed(k)
         ]
-        # Clean old EV keys (older than yesterday — keeps today + yesterday)
+        # Clean old sunrise-keyed daily keys (keeps today + yesterday)
         keys_to_remove += [
             k for k in self._daily_accumulators.keys()
-            if k.startswith(_EV_KEY_PREFIX)
+            if _sunrise_keyed(k)
             and not k.endswith(str(today))
             and not k.endswith(yesterday_str)
         ]
@@ -2207,6 +2836,7 @@ class EnergyCalculator:
         keys_to_remove = [
             k for k in self._monthly_accumulators.keys()
             if not k.endswith(month_key)
+            and not (k.startswith(DEVICE_KEY_PREFIX) and k.endswith(prev_month_key))
         ]
         for key in keys_to_remove:
             del self._monthly_accumulators[key]
@@ -2216,6 +2846,7 @@ class EnergyCalculator:
             keys_to_remove = [
                 k for k in self._yearly_accumulators.keys()
                 if not k.endswith(year_key)
+                and not (k.startswith(DEVICE_KEY_PREFIX) and k.endswith(prev_year_key))
             ]
             for key in keys_to_remove:
                 del self._yearly_accumulators[key]
@@ -2299,6 +2930,16 @@ class EnergyCalculator:
             "ev_day_key": (
                 self._ev_day_key.isoformat() if self._ev_day_key else None
             ),
+            # (#770) The battery's cost basis. It has to survive a restart or
+            # every reboot would hand the pool back as unknown and the
+            # savings figure would drift back toward the flat-rate answer
+            # exactly when a force-charged night is still sitting in there.
+            "battery_provenance": self._battery_provenance.get_state(),
+            # (#773) Sealed baseload days. Losing them on restart would
+            # re-arm the drift check's "too little history" silence for two
+            # weeks after every reboot — the exact window a post-upgrade
+            # sensor fault most needs catching in.
+            "baseload_history": list(self._baseload_history),
         }
 
     @staticmethod
@@ -2427,6 +3068,19 @@ class EnergyCalculator:
                 # rollover. (A fresh install never reaches restore_state, so
                 # this cannot mask a genuinely new setup.)
                 self._seed_ev_day_memo_from_legacy_rule()
+            # (#770) The battery's cost basis. ``restore_state`` on the store
+            # drops junk rather than raising — a corrupt pool has to degrade
+            # to "SEM knows nothing yet", which the unknown bucket models.
+            self._battery_provenance.restore_state(state.get("battery_provenance"))
+            # (#773) Sealed baseload days — junk rows are dropped, not
+            # repaired; a dropped day is a gap the drift check refuses.
+            baseload = state.get("baseload_history")
+            if isinstance(baseload, list):
+                self._baseload_history = deque(
+                    (r for r in baseload
+                     if isinstance(r, dict) and r.get("date")),
+                    maxlen=_BASELOAD_HISTORY_DAYS,
+                )
             last_update = state.get("last_update")
             if last_update:
                 self._last_update = datetime.fromisoformat(last_update)
