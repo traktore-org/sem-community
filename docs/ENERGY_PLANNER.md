@@ -336,6 +336,18 @@ deeper job is auditing: it is the one reader of *every* page of the
 ledger, so if the books are wrong anywhere, an economically absurd
 advice is the first visible symptom.
 
+**Which is why it runs even when it cannot act — and why you usually
+won't see it.** Arbitrage is opt-in: it is open only when a battery is
+set to *allow arbitrage*, or the scheduler's arbitrage toggle is on.
+Everywhere else the verdict is an instrument reading, not an answer to
+you — a card line saying *"no room to buy into…"* on a battery in
+`auto` reads as though SEM wanted to trade and something blocked it,
+when nothing was ever going to trade. So the plan carries **whether
+arbitrage can act** alongside the verdict, and the card prints the line
+only where it can. The audit keeps running regardless: the verdict
+stays on the `arbitrage` attribute and in the `ENERGY-PLAN … arbitrage:`
+log line for every install.
+
 ## Where to see it
 
 - **On the dashboard** — the **Energy Plan** card on the *Control* tab
@@ -349,10 +361,11 @@ advice is the first visible symptom.
   `active` chip and an "the plan's windows steer tonight" footer. The card
   **self-hides** until a plan has been stamped, so it costs nothing during
   the day.
-  Comfort banking runs appear as their own teal thermometer rows; an
-  arbitrage line under the strip carries the advisor's verdict with its
-  numbers — hover any row or the line for the full story, and the small
-  book icons deep-link straight into this document.
+  Comfort banking runs appear as their own teal thermometer rows; where
+  arbitrage is open (a battery in *allow arbitrage*, or the scheduler
+  toggle on) an arbitrage line under the strip carries the advisor's
+  verdict with its numbers — hover any row or the line for the full
+  story, and the small book icons deep-link straight into this document.
 - **As an entity** — `sensor.sem_energy_plan` (diagnostic; renamed from
   `sensor.sem_energy_plan` when the horizon grew past the night — the
   old entity is cleaned from the registry automatically on restart). Its state is

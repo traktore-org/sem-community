@@ -5390,6 +5390,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 overrides[single_key] = multi_default
         return {**cfg, **overrides} if overrides else cfg
 
+    def _arbitrage_enabled(self, battery_count: int = 0) -> bool:
+        """(#533 / #638 C6+C7) Can battery→grid arbitrage act on THIS install?
+
+        ONE fact, two consumers. The battery pipeline asks it to decide
+        whether to compute market signals at all; the plan payload carries
+        the answer so the card knows the advisor's verdict describes a
+        CLOSED feature. Before this the rule was an inline expression in the
+        pipeline and nowhere else — which is why Guido's PROD card (16.08,
+        battery in ``auto``, global toggle off) still printed "Battery
+        arbitrage — no room to buy into…", explaining a trade nothing was
+        ever going to make.
+
+        Every default keeps it shut (#533 stands): no battery ships in
+        ``allow_arbitrage`` and the global toggle defaults off. The user
+        opens the valve — and only then does arbitrage owe an explanation.
+
+        Reads defensively in the CLOSED direction: a valve we cannot see is
+        shut. Arbitrage is opt-in, so False is the safe default — and this
+        accessor must never be able to void the advice it gates.
+        """
+        if getattr(getattr(self, "_battery_scheduler_config", None),
+                   "arbitrage_enabled", False):
+            return True
+        per_battery = getattr(self, "_per_battery_config", None)
+        if not callable(per_battery):
+            return False
+        return any(
+            str((per_battery(i, battery_count) or {}).get(
+                "battery_mode", "auto") or "auto").lower() == "allow_arbitrage"
+            for i in range(battery_count)
+        )
+
     def _battery_adapter_context(
         self, battery_id: str, index: int = 0, count: int = 1,
     ) -> Dict[str, Any]:
@@ -5772,17 +5804,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # dormant (#533 stands): no battery ships in allow_arbitrage mode and
         # the global toggle defaults off; a user must open the valve, and the
         # sell then fires only inside the plan's own sell block.
-        _any_allow_arb = any(
-            str(self._per_battery_config(i, _n_cfg).get(
-                "battery_mode", "auto") or "auto").lower() == "allow_arbitrage"
-            for i in range(_n_cfg)
-        ) if _n_cfg else False
+        _any_allow_arb = self._arbitrage_enabled(_n_cfg)
         # Market signals are computed ONCE here (#533) and carried on the
         # FleetContext below — single source of truth, no ad-hoc tariff/power
         # reads in the decision. ``None`` unless arbitrage is being evaluated
         # (the whole block is dormant while the toggle + _any_allow_arb are off).
         arb_signals = None
-        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb):
+        if _any_allow_arb:
             arb_signals = self._compute_arbitrage_signals(power)
             # #531 charge-first: never sell while there's storable solar surplus
             # the battery could absorb — storing free solar avoids a future
@@ -5801,9 +5829,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # Run the economic check when globally enabled OR any
                     # battery is in allow_arbitrage mode (#523); decide_battery
                     # gates per battery which units actually sell.
-                    enabled_override=(
-                        self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb
-                    ),
+                    enabled_override=_any_allow_arb,
                 )
                 if _arb.state.value == "discharging_arbitrage":
                     scheduler_decision = _arb
@@ -7768,7 +7794,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _iso = lambda rows: [  # noqa: E731 — local shape adapter
                     {**b, "start": b["start"].isoformat(),
                      "end": b["end"].isoformat()} for b in rows]
+                # (C7, Guido's PROD card 16.08) The advice is computed on
+                # every stamp because it audits the ledger — but on an
+                # install where arbitrage cannot act it is an instrument
+                # readout, not an answer. Publish the gate WITH the verdict
+                # so the card can stay silent about a closed feature while
+                # diagnostics and the log line keep the full reading.
+                _arb_on = self._arbitrage_enabled(
+                    len(getattr(power, "batteries", {}) or {}))
                 arb = {
+                    "enabled": _arb_on,
                     "opportunity": _adv.opportunity,
                     "charge_kwh": _adv.charge_kwh,
                     "est_profit": _adv.est_profit,

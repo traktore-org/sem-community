@@ -132,6 +132,13 @@ def _fake_self(devices=()):
             fake, cid, power, ev_dev))
     fake._plan_car_full = (
         lambda cid, power: SEMCoordinator._plan_car_full(fake, cid, power))
+    # (16.08) The arbitrage VALVE, bound for the same reason: the plan
+    # publishes whether arbitrage can act at all, and the double must not
+    # answer that differently from production. The fake carries no scheduler
+    # config and no per-battery modes, so it reads SHUT — which is the
+    # shipped default (#533) and the state of Guido's PROD.
+    fake._arbitrage_enabled = (
+        lambda n=0: SEMCoordinator._arbitrage_enabled(fake, n))
     return fake
 
 

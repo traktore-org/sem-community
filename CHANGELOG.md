@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased] — 16.08.2026
+
+- 💡 **The arbitrage line only appears where arbitrage can actually happen**
+  (#533 / #638) — the advisor runs on every plan by design: it is the one
+  reader of *every* page of the ledger, so an economically absurd verdict is
+  the first symptom of books that lie. But its readout was printed on the
+  plan card of installs where trading is switched off, so a battery quietly
+  sitting in `auto` on a flat tariff got told *"no room to buy into: battery
+  6.3/15.0 kWh full…"* — which reads as though SEM wanted to trade tonight
+  and the battery was in the way. Nothing was ever going to trade. The plan
+  now carries **whether arbitrage is open** (a battery in *allow arbitrage*,
+  or the scheduler toggle) next to the verdict, and the card prints the line
+  only then. The audit is untouched: the verdict still rides on the
+  `arbitrage` attribute and the `ENERGY-PLAN … arbitrage:` log line on every
+  install. The mode scan behind it now lives in exactly one accessor instead
+  of an expression the card had no way to ask.
+
 # [2.0.0-beta.2] — 16.08.2026
 
 > The first night of 2.0 on real hardware, read off one dashboard card.

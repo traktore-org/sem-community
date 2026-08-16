@@ -4673,7 +4673,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     </div>
                 `:q}
             </div>
-        `:q}_renderArb(e){return e?W`
+        `:q}_renderArb(e){return e&&e.enabled?W`
             <div class="arb" title="${this._t("energy_plan_arbitrage_tip")}">
                 <ha-icon icon="mdi:swap-vertical-bold"
                          style="--mdc-icon-size:13px;color:${e.opportunity?"#8DC892":"var(--secondary-text-color,#8a93a5)"}"></ha-icon>

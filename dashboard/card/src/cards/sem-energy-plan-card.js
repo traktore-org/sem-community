@@ -424,7 +424,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
     // verdict at all. One renderer, two callers: two copies is how the busy
     // and the quiet night came to disagree.
     _renderArb(arb) {
-        if (!arb) return nothing;
+        // (16.08, Guido's PROD) The advisor runs on every stamp as a ledger
+        // audit, but a verdict for a feature that cannot act is not an
+        // answer — it reads as "SEM wanted to trade and the battery was in
+        // the way". Render only where arbitrage is actually open: the
+        // global toggle, or a battery in allow_arbitrage. The plan carries
+        // that gate; an older payload without it stays silent.
+        if (!arb || !arb.enabled) return nothing;
         return html`
             <div class="arb" title="${this._t('energy_plan_arbitrage_tip')}">
                 <ha-icon icon="mdi:swap-vertical-bold"
