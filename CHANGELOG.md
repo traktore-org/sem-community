@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased] — 16.08.2026
+# [2.0.0-beta.3] — 16.08.2026
 
 - 🔭 **Observer mode now cuts at the write, not before the decision** (#764) —
   simulating SEM was supposed to mean "every layer runs for real, only the
