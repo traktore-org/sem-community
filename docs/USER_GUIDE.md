@@ -778,8 +778,11 @@ Devices in `peak_only` or `off` mode are **never activated** by the surplus cont
 
 **What "monitors only" means for a device you switch yourself** (#779): SEM
 *watches* an `off`/`peak_only` device at every mode — if you turn it on, SEM
-notices, and its runtime and energy keep counting. What SEM does **not** do is
-record itself as the one who started it. That distinction matters because one
+notices, and its **energy** keeps counting (the house balance wants what the
+device drew, whoever started it). Its **daily runtime budget** does not accrue
+under `off`, deliberately: that budget is SEM's own solar allowance, and `off`
+means SEM isn't managing the device (`peak_only` still accrues). What SEM does
+**not** do is record itself as the one who started it. That distinction matters because one
 rule acts on it: if you move a device to `off` *while SEM is running it*, SEM
 stops it once and hands it back. A load **you** started is never SEM's to stop,
 whatever its mode.

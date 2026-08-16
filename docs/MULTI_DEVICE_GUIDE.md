@@ -234,7 +234,7 @@ ladder:
 
 | Mode (UI) | Behavior |
 |---|---|
-| **Off** | SEM monitors only, never switches the device — it sees your ON and keeps counting the runtime, but never records itself as the one who started it (#779) |
+| **Off** | SEM monitors only, never switches the device — it sees your ON and keeps counting the device's energy, but never records itself as the one who started it — and the daily runtime budget stops accruing, because that budget is SEM's own (#779) |
 | **Peak only** | **Your own automations** run the device; SEM only sheds it to protect the grid peak and restores it afterwards (catch the surplus via the event interface below) |
 | **Surplus** | SEM runs the device on solar surplus; **never grid power** — on a dark day the daily target is simply missed |
 
