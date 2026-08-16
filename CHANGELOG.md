@@ -13,6 +13,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.4] — 16.08.2026
+
+- 🐛 **"Mode: Off" now means SEM keeps its hands off, including its books**
+  (#779) — a dishwasher, heat pump and network switch all configured Off were
+  switched off by SEM anyway, reproducibly within seconds of a restart: turn
+  it back on, SEM takes it away again. One flag, written by a path that
+  couldn't know what it means. SEM records whether it *started* a load, and
+  exactly one rule acts on that: *the mode moved to Off while SEM was driving
+  this — so stop it once and let go.* That rule is right. But the per-cycle
+  check that lets SEM notice a switch someone else turned on was adopting
+  **ownership** along with the observation, at every mode — and a switch
+  being on cannot tell you who switched it. So a load the user turned on
+  under Mode = Off was claimed by SEM on the next cycle, and the release rule
+  read that claim and stopped it. After a restart the first cycle does it,
+  which is why it looked like the restart. SEM still *watches* the load at
+  every mode — Off is monitoring, and the runtime and energy books stay
+  honest — but it only claims a load it is actually allowed to drive. Closed
+  structurally rather than patched: all three paths that adopt a running load
+  now go through one writer that holds the mode check, the two duplicated
+  checks at the call sites are gone, and a lint fails the build if a fourth
+  path ever claims ownership on its own.
+- 💡 **Small loads report their real draw instead of "~1 kW"** (#744) — a
+  discovered load is built from its power sensor, which reads 0 W for as long
+  as the load is *off*; SEM turned that 0 into a 1 kW placeholder and then
+  had no way to tell the placeholder from a measurement. Every learning path
+  is up-only — right for a measured peak, and the reason a shower light on a
+  Shelly PM drawing 8 W was pinned at exactly 1 kW forever: the calibrator
+  refused a smaller number, the store kept only ratings above 1 kW, and the
+  7-day history seed threw away anything below it. The placeholder now
+  carries a label, so the first real reading replaces it in **either**
+  direction and only then does the up-only ratchet apply. Three consequences
+  go with it: the priority card shows `~8 W` instead of `~1.0 kW`, the load's
+  surplus-activation threshold stops demanding a kilowatt before an 8 W bulb
+  is ever offered, and a house of 47 small loads stops presenting 47 kW of
+  phantom demand to the planner. Estimates still never teach the model — a
+  load with no power sensor keeps the honest placeholder. Fixed on the
+  service-registration path in the same pass: no rating given is no longer
+  stored as 1 kW, and those rows read the live calibrated rating like every
+  other row already did.
 - 🧹 **A config field you empty now stays empty** (#627) — Home Assistant
   leaves a cleared optional field out of the submitted form altogether, and
   every page merged what it received with `update(user_input)`. That merge

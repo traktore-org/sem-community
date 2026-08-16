@@ -3707,7 +3707,10 @@ async def _async_register_phase_services(
             "entity_id": call.data.get("entity_id"),
             "name": call.data.get("name") or call.data.get("device_id"),
             "priority": call.data.get("priority", 5),
-            "rated_power": call.data.get("rated_power", 1000),
+            # (#744) No rating named means no rating — not 1 kW. The device
+            # layer applies (and labels) the placeholder, so the first real
+            # measurement can still replace it downward.
+            "rated_power": call.data.get("rated_power"),
             "power_entity_id": call.data.get("power_entity_id"),
             # #600 — optional kWh energy counter; SEM autodetects a companion
             # power sensor on the device first, else derives power from this.
@@ -3768,7 +3771,10 @@ async def _async_register_phase_services(
             vol.Required("entity_id"): cv.string,
             vol.Optional("name"): cv.string,
             vol.Optional("priority", default=5): vol.All(int, vol.Range(min=1, max=10)),
-            vol.Optional("rated_power", default=1000): vol.Coerce(float),
+            # (#744) NO default — a voluptuous default is always filled in, so
+            # every call would arrive carrying 1 kW and the handler could never
+            # see that the caller named no rating at all.
+            vol.Optional("rated_power"): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
             vol.Optional("energy_entity_id"): cv.string,  # #600
             vol.Optional("control_mode", default="surplus"): vol.In(

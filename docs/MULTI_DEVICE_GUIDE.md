@@ -234,7 +234,7 @@ ladder:
 
 | Mode (UI) | Behavior |
 |---|---|
-| **Off** | SEM monitors only, never switches the device |
+| **Off** | SEM monitors only, never switches the device — it sees your ON and keeps counting the runtime, but never records itself as the one who started it (#779) |
 | **Peak only** | **Your own automations** run the device; SEM only sheds it to protect the grid peak and restores it afterwards (catch the surplus via the event interface below) |
 | **Surplus** | SEM runs the device on solar surplus; **never grid power** — on a dark day the daily target is simply missed |
 
@@ -324,10 +324,15 @@ data:
 | `top_up_policy` | `solar_only` (default, never grid) or `cheap_hours` (HW/HP off-peak top-up) |
 | `stop_entity` + `stop_at` | External completion condition |
 
-> **Tip — `rated_power`:** give a real value at registration. SEM also
-> **auto-calibrates** it from the switch's power sensor the first time the
-> load runs, so an auto-discovered socket that read 0 W while off won't
-> switch on at a tiny surplus and import the rest from grid.
+> **Tip — `rated_power`:** give a real value at registration if you know one;
+> it is then treated as fact and never overwritten downward. Leave it out and
+> SEM shows a 1 kW placeholder until the load first runs, then
+> **auto-calibrates** from its power sensor — the first real reading replaces
+> the placeholder in either direction (a 8 W bulb becomes 8 W), and from then
+> on the rating only ever climbs to the load's measured peak. A load with no
+> power sensor at all keeps the placeholder: the 1 kW is what stops an
+> unmeasurable socket from switching on at a tiny surplus and importing the
+> rest from grid.
 
 #### What happens when the budget is NOT reached?
 

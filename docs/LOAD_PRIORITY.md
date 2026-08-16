@@ -51,6 +51,15 @@ devices by priority and gives each its share if enough is available:
 A discrete load only switches on when the available surplus meets its full rated
 power; otherwise it yields and that power flows to the battery.
 
+**Where the rating comes from matters** (#744). If you registered the load with a
+`rated_power`, that is the number. Otherwise SEM holds a 1 kW placeholder until it
+sees the load run once, then adopts the measured draw — in either direction, so a
+lamp on a metering plug settles at its real 8 W rather than being held at the
+placeholder and never offered surplus. After that first measurement the rating only
+climbs, to the largest draw ever measured. A load with **no** power sensor keeps the
+1 kW placeholder for good; that is deliberate, since the alternative is switching an
+unmeasurable load on at any trickle of surplus and importing the rest.
+
 ## Worked examples
 
 Reserve zone = 30 %, two 1 kW heaters at priorities 2 and 3.

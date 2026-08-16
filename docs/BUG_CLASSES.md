@@ -1571,3 +1571,100 @@ all three flags, and an ordering assertion that the promotion happens before `SE
 LAST. If not, the gap is a window, and the direction of the default decides whether that window is
 merely wrong or actively dangerous. Distinct from class 7 (that re-arms a *timer* across restart);
 this one never had the value at all. Refs #777.
+
+### 40. A fabricated default defended by a ratchet built for measurements — GUARDED
+**Symptom:** a whole population of devices reports the *same* suspiciously round number, forever,
+and no amount of live data moves it. Nothing errors, nothing is unavailable, and every individual
+guard reads as sound when you inspect it alone.
+**Root shape:** two ingredients that are each defensible and lethal together. (a) A code path
+**invents** a value when it has none — a floor, a default, a "saner than zero" placeholder — and
+stores it in the same field a real measurement would occupy. (b) Some *other* path defends that
+field one-directionally (`if observed > current: adopt`, `if x > FLOOR: persist`), because for a
+measured peak that is exactly right. The defence cannot tell what it is defending: the invention
+now has the standing of evidence, and the ratchet's job becomes protecting the guess **from** the
+measurement. The tell is a literal appearing in a *comparison* rather than only in an assignment —
+`> DEFAULT_X` is code asking "is this real?" using a number as a proxy for provenance.
+**Live catch (#744, @Azlinon, 47 loads):** a discovered load is constructed from its power sensor,
+which reads **0 W for the whole time the load is off** — so `SwitchDevice.__init__` supplied the
+1 kW default to nearly every load at nearly every rebuild. From there: `calibrate_rated_power`
+refused 8 W as "not an improvement"; `_capture_calibrated_ratings` persisted only `rated >
+_DEFAULT_RATED_POWER`; `_seed_and_apply_ratings` seeded 7-day history only if `hist_max >
+_DEFAULT_RATED_POWER`, and otherwise only ever raised the device. Three independent up-only guards,
+each correct against a measurement, jointly pinning **every load under 1 kW at exactly 1 kW for
+life**: a 6.4 W shower light on a Shelly PM read "~1.0 kW" on the card, its `min_power_threshold`
+demanded a kilowatt of surplus before SEM would offer it any, and the planner sized a house of small
+loads at tens of kW of demand that does not exist. Two further spellings of the same invention on the
+service path — `stored["rated_power"] = spec.get(..., 1000)`, the guess written to **disk** where it
+returns as fact, and a card row reading that spec instead of the live calibrated rating.
+**Closure:** make provenance a **first-class attribute of the value**, not something inferred from
+its magnitude. `ControllableDevice.rated_power_measured` (the question `_daily_energy_source` already
+asks for energy, one attribute further along): the class that invents the placeholder labels it, and
+every consumer branches on the label instead of on `1000`. While unmeasured, the first real reading
+REPLACES the value in **either** direction; after that the up-only ratchet applies unchanged. The
+placeholder itself stays — a load with no power sensor still needs a saner floor than 0 W (#576), and
+it is still forbidden to learn from the energy-deriver's estimate (#744's earlier half,
+`test_744_rated_ratchet`). This is the mirror of #755 contract 1: *an estimate must never teach the
+model* has a twin — **an estimate must never out-rank the model's first real lesson.**
+**Where else it lives:** any `DEFAULT_*` / `or 1000` / `max(x, FLOOR)` whose result lands in a field
+later compared against fresh data. Sweep when touched: `spec.get(k, <literal>)` at any *storage*
+write, EV rated-power / amp assumptions, forecast and tariff fallbacks. **And one spelling that
+hides a level up: a schema default.** `vol.Optional(k, default=1000)` is *always* filled in by
+validation, so every call arrives carrying the guess and nothing downstream can ever observe that
+the caller named no rating — the absence is unrepresentable, which left a correct fix one layer down
+inert for every real service call. A key that is genuinely optional must carry **no** default.
+**Guard:** `tests/test_744_measured_rating.py` — the guess is labelled at every build site
+(constructor, spec factory, service registration), the first measurement replaces it downward, the
+ratchet resumes afterwards, a rating we were given is never overwritten downward, a sensor-less load
+keeps the placeholder, and a small rating survives persist + rebuild + history seed.
+**Sweep question:** for every default your code supplies for a value it will later *learn* — *can a
+reader tell the default from a learned value without comparing it to the default?* If the only way to
+ask "is this real?" is `x != DEFAULT` or `x > DEFAULT`, the answer is no, and every one-directional
+guard downstream is now protecting the invention. Refs #744 #576 #755.
+
+### 41. An observation writes a flag that records agency — GUARDED
+**Symptom:** SEM actuates a device the user configured "hands off", reproducibly, within seconds of
+a restart — and every gate you inspect is present and correct. The user turns it back on; SEM takes
+it away again.
+**Root shape:** a flag answers a question about **who acted** (`_sem_owned` — "did SEM start this
+load?"), and some path assigns it from what it can **see** (the switch is on). Observing a switch
+cannot answer a question about agency, so the write is a fabrication wearing the shape of a fact.
+It hides because the fabricating path and the path that *acts* on the flag are far apart and each is
+right alone: adopting a running load is right (#559/#766 — otherwise it runs forever, unbelieved
+and unstoppable), and releasing a load whose mode moved to Off *while SEM was driving it* is right
+(class 17, PROD 2026-07-23). Only the pair is wrong. The tell is a boolean whose name is a
+past-tense claim about the system's own behaviour, assigned in a function whose inputs are all
+present-tense observations.
+**Amplifier — the gate lives at the CALL SITE, not at the write.** `adopt_if_running` was safe only
+because both of its callers in `device_registry.py` checked `control_mode == SURPLUS` first. When
+#766 added `sync_belief_to_observation`, the per-cycle twin modelled on it, it inherited the body
+and not the gate — because the gate was never part of the body. Class 38's neighbour: policy that
+lives in the caller is policy the next caller has to remember, and eventually one doesn't.
+**Live catch (#779, @onkelfu, v2.0.0-beta.3):** dishwasher, heat pump and network gear all
+configured **Mode: Off**, all switched off by SEM seconds after an HA restart. After a restart the
+belief starts IDLE while the switch is already ON, so the very first cycle adopts it, claims it, and
+`compute_load_intent`'s class-17 release — reading a flag that now says SEM was driving it — stops
+the user's dishwasher. A previous beta had retired a duplicate device row he was pointed at; the
+switch-off survived that, because the duplicate was never the mechanism.
+**Closure:** one writer holds the gate. `ControllableDevice._adopt_ownership()` — every path that
+adopts an *observed* ON routes through it, the mode check is inside it, and the two call-site gates
+are **deleted**, because duplicated policy is exactly what drifted. `record_activated` remains a
+second writer and is the one sanctioned ungated claim: SEM issued the command, so it owns the result
+by construction — there is no observation to second-guess. The BELIEF still follows the switch at
+every mode: Off is monitoring, and monitoring means the books stay honest (runtime accrues, the
+#755 recorder can say `measured`).
+**The asymmetry, stated once so the guard can encode it:** *releasing* ownership (`= False`) needs no
+justification and stays free — the reconciler and `mark_reconciled_off` do it directly. *Claiming* is
+the direction that needs a reason. *Carrying* a claim already made (`= other._sem_owned`, the
+rebuild transplant in `SurplusController.register_device`) is neither, and stays free too — gating it
+would remove the class-17 release that is the backstop for that path.
+**Where else it lives:** any flag named for a past action of SEM's — `sem_owned`, `surplus_managed`,
+`session_owner`, `*_forced`, `*_by_sem` — assigned anywhere other than where SEM took that action.
+Also: whenever a one-shot grows a per-cycle twin, diff the CALLERS, not just the bodies.
+**Guard:** `tests/test_779_mode_off_ownership.py` — an AST lint over `devices/base.py` and over the
+whole component: a `_sem_owned` assignment that is neither `False` nor a copy of another
+`_sem_owned` may appear only in `record_activated` / `_adopt_ownership`; plus behavioural pins on
+both adoption paths, on the registry no longer carrying a duplicate gate, and the must-not-move
+class-17 release.
+**Sweep question:** for every boolean that records *what SEM did*, ask — could this be assigned by a
+function that only knows what the world *looks like*? If yes it is not a record, it is a guess, and
+something downstream is treating it as testimony. Refs #779 #766 #559 #576.

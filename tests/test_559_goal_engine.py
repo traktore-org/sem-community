@@ -478,7 +478,21 @@ async def test_boot_reregister_adopts_running_surplus_device(registry):
 
 
 @pytest.mark.asyncio
-async def test_boot_reregister_never_adopts_peak_only(registry):
+async def test_boot_reregister_never_owns_peak_only(registry):
+    """(#779) This used to assert ``is_active is False`` — "user-managed,
+    never adopted". Since #766 that has been true only in the gap between
+    registration and the first coordinator cycle: the per-cycle belief sync
+    runs over *every* device, unmoded, and flips a running switch's belief
+    to ACTIVE anyway. The pin was passing because this test never runs a
+    cycle, not because SEM behaves that way.
+
+    What is real, and is the guarantee worth pinning, is OWNERSHIP: a
+    peak_only load stays the user's. The belief may follow the switch (Off
+    and peak_only are monitoring, and monitoring means honest books —
+    runtime accrues, the #755 recorder can say ``measured``); the claim may
+    not, because ``compute_load_intent``'s class-17 release acts on it and
+    would switch the user's load off. That was onkelfu's dishwasher.
+    """
     hass = MagicMock()
     hass.states.get = lambda e: SimpleNamespace(state="on", attributes={})
     registry.hass = hass
@@ -488,4 +502,4 @@ async def test_boot_reregister_never_adopts_peak_only(registry):
     }}
     registry._register_service_devices()
     dev = registry._surplus_controller.get_device("pump")
-    assert dev.is_active is False  # user-managed — never adopted
+    assert dev._sem_owned is False  # user-managed — SEM never claims it

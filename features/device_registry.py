@@ -421,8 +421,12 @@ class UnifiedDeviceRegistry:
             if spec.get("depends_on"):
                 device.depends_on = list(spec["depends_on"])
             self._apply_goals(device)
-            if device.control_mode == DeviceControlMode.SURPLUS:
-                device.adopt_if_running()  # (#559) re-own after restart
+            # (#559) adopt a load that is physically ON after a restart.
+            # (#779) The mode gate that used to sit here now lives inside
+            # _adopt_ownership: the BELIEF is adopted at every mode (Off is
+            # monitoring), only the ownership CLAIM is gated. Two copies of
+            # one policy is how the third copy gets forgotten — it was.
+            device.adopt_if_running()
             self._surplus_controller.register_device(device)
         if self._service_registrations:
             _LOGGER.info(
@@ -463,7 +467,11 @@ class UnifiedDeviceRegistry:
             "entity_id": spec.get("entity_id", ""),
             "name": spec.get("name") or device_id,
             "priority": spec.get("priority", 5),
-            "rated_power": spec.get("rated_power", 1000),
+            # (#744) A caller who gave no rating gets no rating STORED. Baking
+            # 1 kW in here is the guess at its most durable — it outlives the
+            # process that invented it and comes back from disk as fact.
+            # ``surplus_device_from_spec`` applies (and labels) the placeholder.
+            "rated_power": spec.get("rated_power") or 0,
             "power_entity_id": spec.get("power_entity_id"),
             "energy_entity_id": spec.get("energy_entity_id"),  # #600
             "control_mode": spec.get("control_mode", "surplus"),
@@ -827,8 +835,9 @@ class UnifiedDeviceRegistry:
                 if deps:
                     surplus_device.depends_on = list(deps)
                 self._apply_goals(surplus_device)
-                if surplus_device.control_mode == DeviceControlMode.SURPLUS:
-                    surplus_device.adopt_if_running()  # (#559) re-own after restart
+                # (#559/#779) unconditional — the claim's gate is inside
+                # _adopt_ownership, see the twin call site above.
+                surplus_device.adopt_if_running()
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
@@ -1269,7 +1278,12 @@ class UnifiedDeviceRegistry:
                 "priority": spec.get("priority", 5),
                 "is_controllable": True,
                 "is_critical": False,
-                "power_rating": spec.get("rated_power", 1000),
+                # (#744) the same accessor the ED rows use: the live device's
+                # self-calibrated rating first, the sensor second. Reading the
+                # spec kept a service-registered 8 W load at "~1.0 kW" on the
+                # card forever, even once it had measured itself.
+                "power_rating": self._rated_power_for(
+                    did, spec.get("power_entity_id")),
                 "power_entity": spec.get("power_entity_id"),
                 # the service accepts energy_entity_id (#600) — emit it
                 # instead of a hardcoded None, else registering a device that
@@ -2206,8 +2220,15 @@ class UnifiedDeviceRegistry:
     def _capture_calibrated_ratings(self) -> bool:
         """(#576) Snapshot any rating a live device self-calibrated UP to, into
         the persistent overrides — BEFORE ``_sync_to_surplus_controller`` rebuilds
-        the devices and resets ``rated_power`` to the default. Only records real,
-        above-floor values; returns True if anything changed."""
+        the devices and resets ``rated_power`` to the default. Returns True if
+        anything changed.
+
+        (#744) What earns a place in the store is a MEASUREMENT, not a number
+        above 1 kW. The old ``rated > _DEFAULT_RATED_POWER`` test conflated the
+        two: it kept the placeholder out (right) by throwing away every load
+        smaller than the placeholder (wrong), so an 8 W light could never carry
+        its real draw across a rebuild. ``rated_power_measured`` separates them.
+        """
         dirty = False
         for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
             if getattr(dev, "is_ev", False) or not getattr(dev, "power_entity_id", None):
@@ -2215,9 +2236,11 @@ class UnifiedDeviceRegistry:
             rated = getattr(dev, "rated_power", None)
             if rated is None:
                 continue
+            if not getattr(dev, "rated_power_measured", True):
+                continue          # still the invented placeholder — not ours to keep
             rated = float(rated)
             prev = float(self._rated_power_overrides.get(did, 0) or 0)
-            if rated > _DEFAULT_RATED_POWER and rated > prev:
+            if rated > prev:
                 self._rated_power_overrides[did] = rated
                 dirty = True
         return dirty
@@ -2267,17 +2290,27 @@ class UnifiedDeviceRegistry:
             if getattr(dev, "rated_power", None) is None:
                 continue
             override = float(self._rated_power_overrides.get(did, 0) or 0)
-            # (b) one-shot history seed for a device we've never learned.
+            # (#744) Does the rebuilt device hold a real number or the 1 kW
+            # placeholder? Everything below turns on that, not on 1000.
+            measured = bool(getattr(dev, "rated_power_measured", True))
+            rated_now = float(getattr(dev, "rated_power", 0) or 0)
+            # (b) one-shot history seed for a device we've never learned. ANY
+            # real history is a measurement — including 8 W. The old
+            # ``> _DEFAULT_RATED_POWER`` gate discarded exactly the small loads
+            # that needed the correction most (#744).
             if override <= 0 and did not in self._rating_seed_attempted:
                 self._rating_seed_attempted.add(did)
                 hist_max = await self._history_max_power(sensor)
-                if hist_max > _DEFAULT_RATED_POWER:
+                if hist_max > 0 and (not measured or hist_max > rated_now):
                     override = hist_max
                     self._rated_power_overrides[did] = hist_max
                     dirty = True
-            # (a) apply the learned rating if the rebuilt device is below it.
-            if override > 0 and override > float(getattr(dev, "rated_power", 0) or 0):
+            # (a) apply the learned rating if the rebuilt device is below it —
+            # or, while it still holds only the placeholder, in EITHER
+            # direction: a measured 8 W beats an invented 1 kW (#744).
+            if override > 0 and (not measured or override > rated_now):
                 dev.rated_power = override
+                dev.rated_power_measured = True
                 if hasattr(dev, "min_power_threshold"):
                     dev.min_power_threshold = override
         return dirty

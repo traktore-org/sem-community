@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from custom_components.solar_energy_management.devices.base import (
-    DeviceState, SwitchDevice,
+    DeviceControlMode, DeviceState, SwitchDevice,
 )
 
 
@@ -34,6 +34,11 @@ def _dev(entity_id="input_boolean.pool", state="on", believes_active=False):
     d.entity_id = entity_id
     d.name = "Pool"
     d.rated_power = 1500.0
+    # (#779) The pool pump is a SURPLUS load — that is the mode under which
+    # adopting an external ON *with ownership* is the right call, and the
+    # only one. This fake predates the gate and skipped __init__, so it had
+    # no mode at all.
+    d.control_mode = DeviceControlMode.SURPLUS
     # minimal status scaffolding
     from custom_components.solar_energy_management.devices.base import DeviceStatus
     d._status = DeviceStatus(state=(DeviceState.ACTIVE if believes_active

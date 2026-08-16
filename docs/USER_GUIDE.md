@@ -776,6 +776,14 @@ SEM distributes solar surplus across devices that are in **`surplus` mode** by p
 
 Devices in `peak_only` or `off` mode are **never activated** by the surplus controller. They can only be shed by peak load management.
 
+**What "monitors only" means for a device you switch yourself** (#779): SEM
+*watches* an `off`/`peak_only` device at every mode — if you turn it on, SEM
+notices, and its runtime and energy keep counting. What SEM does **not** do is
+record itself as the one who started it. That distinction matters because one
+rule acts on it: if you move a device to `off` *while SEM is running it*, SEM
+stops it once and hands it back. A load **you** started is never SEM's to stop,
+whatever its mode.
+
 ### Price-responsive mode
 
 When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution becomes price-aware: during cheap or negative price periods, SEM adds virtual surplus to encourage activation of **surplus-mode devices**.

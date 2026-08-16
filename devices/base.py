@@ -254,6 +254,16 @@ class ControllableDevice(ABC):
         self._batt_overnight_forced: bool = False
         self._batt_overnight_forced_date: Optional[date] = None
 
+        # (#744) Is ``rated_power`` a MEASUREMENT or a guess? The same
+        # provenance question ``_daily_energy_source`` asks above, one
+        # attribute further along. A subclass that is HANDED a rating leaves
+        # this True; the one that INVENTS a placeholder when it has none
+        # (SwitchDevice's 1 kW floor) sets it False. Every learning path is
+        # up-only — correct against a measurement, and the reason a 8 W
+        # shower light stayed pinned at 1 kW forever when the "rating" it
+        # was defending was never measured at all. This is how they tell.
+        self.rated_power_measured: bool = True
+
         # Appliance dependencies (#122): device only activates when dependencies are met
         self.depends_on: List[str] = []  # device_ids that must be active
         self.dependency_mode: str = "must_active"  # must_active | must_inactive
@@ -614,7 +624,13 @@ class ControllableDevice(ABC):
         observed = self.observed_power_w()
         if observed is None:
             return
-        if observed > self.rated_power:
+        # (#744) The up-only ratchet defends a MEASURED peak. It must not
+        # defend an invented one: while ``rated_power`` is still the 1 kW
+        # placeholder, the first real reading REPLACES it — downward too.
+        # That is the whole of Azlinon's "nothing below 1 kW": a 8 W bulb
+        # could never argue its way past a number nobody had measured.
+        first_real = not self.rated_power_measured and observed > 0
+        if first_real or observed > self.rated_power:
             _LOGGER.info(
                 "%s: calibrated rated_power %.0fW -> %.0fW from %s",
                 self.name, self.rated_power, observed,
@@ -622,6 +638,7 @@ class ControllableDevice(ABC):
             )
             self.rated_power = observed
             self.min_power_threshold = observed
+            self.rated_power_measured = True
 
     @property
     def remaining_daily_runtime_sec(self) -> float:
@@ -805,6 +822,30 @@ class ControllableDevice(ABC):
         # (arc) SEM turned this on → SEM owns the on-state.
         self._sem_owned = True
         self._observed_off_since = None
+
+    def _adopt_ownership(self) -> bool:
+        """(#779) The one writer for a claim SEM did not earn by acting.
+
+        ``record_activated`` is the other, and it needs no gate: SEM issued
+        the command, so it owns the result by construction. Everything else
+        that sets ``_sem_owned = True`` is *adopting an observation* — a
+        switch that is on, which cannot by itself answer "did SEM start
+        this?". Three paths do that (the one-shot at registration for
+        switches and for climate, and #766's per-cycle twin), each carried
+        the mode gate separately, and the third was written without it. That
+        was #779: under Mode = Off the claim was a fabrication, and
+        ``compute_load_intent``'s class-17 release — built to let go of a
+        load SEM really *was* driving — read it and switched the user's
+        dishwasher off every cycle he turned it back on.
+
+        So the gate lives here, once. Adoption of the BELIEF stays the
+        caller's business and happens at every mode (Off is monitoring, and
+        monitoring means the books stay honest); only the claim is gated.
+        Returns what was claimed, for the caller's log line.
+        """
+        owned = self.control_mode == DeviceControlMode.SURPLUS
+        self._sem_owned = owned
+        return owned
 
     def record_deactivated(self) -> None:
         """Record deactivation timestamp for anti-cycling."""
@@ -1241,6 +1282,12 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
             energy_entity_id=energy_entity_id,
         )
         self.rated_power = rp
+        # (#744) Label the invention. A discovered load is built from its live
+        # power sensor, which reads 0 W for as long as the load is off — so
+        # "0" here means "not measured yet", never "draws nothing", and the
+        # 1 kW above is a placeholder that calibrate_rated_power may replace
+        # in either direction.
+        self.rated_power_measured = bool(rated_power and rated_power > 0)
         # (#644) ONE anti-cycle mechanism: the legacy min_on_time/min_off_time
         # knobs map onto the base-layer min_on_seconds/min_off_seconds, whose
         # epochs (_last_activated/_last_deactivated) are rebuild-transplanted
@@ -1299,6 +1346,17 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         the device comes under normal control, so goal gates and force
         expiry can stop it. An external OFF releases the belief without
         commanding anything: the user already acted; SEM's books follow.
+
+        (#779) That ownership claim is gated on SURPLUS, exactly as
+        ``adopt_if_running`` is at both its call sites — the one-shot's gate
+        that this per-cycle twin inherited the body of but not the gate.
+        ``_sem_owned`` answers "did SEM start this load?", and observing a
+        switch that is on cannot answer it. Under Mode = Off the claim was a
+        fabrication, and ``compute_load_intent``'s class-17 release — built
+        to let go of a load SEM really *was* driving — read it and switched
+        the user's dishwasher off, every cycle it turned it back on.
+        The BELIEF still follows the switch at every mode: Off is
+        monitoring, and monitoring means the books stay honest.
         """
         if not self.entity_id or not self.hass:
             return False
@@ -1314,10 +1372,12 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
             self._status.allocated_power_w = self.rated_power
             self._status.last_activated = datetime.now()
             self._last_activated = self._status.last_activated
-            self._sem_owned = True
+            owned = self._adopt_ownership()  # (#779) gated, in one place
             _LOGGER.info(
-                "%s: switch %s turned ON outside SEM — belief adopted, "
-                "under normal control (#766)", self.name, self.entity_id,
+                "%s: switch %s turned ON outside SEM — belief adopted, %s (#766)",
+                self.name, self.entity_id,
+                "under normal control" if owned
+                else f"left to the user (mode {self.control_mode.value})",
             )
             return True
         if observed == "off" and self.is_active:
@@ -1350,10 +1410,12 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
         self._last_activated = self._status.last_activated  # (#644) unified clock
-        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
+        owned = self._adopt_ownership()  # (#779) gated, in one place
         _LOGGER.info(
-            "%s: switch %s was ON at registration — re-owned as active",
+            "%s: switch %s was ON at registration — belief adopted, %s",
             self.name, self.entity_id,
+            "re-owned as active" if owned
+            else f"left to the user (mode {self.control_mode.value})",
         )
         return True
 
@@ -1589,10 +1651,12 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
         self._last_activated = self._status.last_activated  # (#644) unified clock
-        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
+        owned = self._adopt_ownership()  # (#779) gated, in one place
         _LOGGER.info(
-            "%s: climate %s was %s at registration — re-owned as active",
+            "%s: climate %s was %s at registration — belief adopted, %s",
             self.name, self.entity_id, state.state,
+            "re-owned as active" if owned
+            else f"left to the user (mode {self.control_mode.value})",
         )
         return True
 
@@ -2982,7 +3046,11 @@ def surplus_device_from_spec(
     """
     dtype = (spec.get("device_type") or "switch").lower()
     name = spec.get("name") or device_id
-    rated_power = spec.get("rated_power", 1000)
+    # (#744) A spec with no rating does not mean "1 kW" — it means UNKNOWN.
+    # Pass the absence through so ``SwitchDevice`` applies (and labels) its
+    # own placeholder; only the classes that have none of their own still
+    # take the flat floor below.
+    rated_power = spec.get("rated_power") or 0
     priority = spec.get("priority", 5)
     entity_id = spec.get("entity_id", "")
     power_entity_id = spec.get("power_entity_id")
@@ -3009,7 +3077,7 @@ def surplus_device_from_spec(
             hass=hass,
             device_id=device_id,
             name=name,
-            rated_power=rated_power,
+            rated_power=rated_power or DEFAULT_DEVICE_RATED_POWER,
             priority=priority,
             entity_id=entity_id,
             power_entity_id=power_entity_id,
