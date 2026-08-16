@@ -255,20 +255,25 @@ class TestWiring:
         from custom_components.solar_energy_management import (
             persisted_flags as pf, switch as sw,
         )
-        diag = {
-            "pf_module": (id(pf), getattr(pf, "__file__", None)),
-            "sw_module": (id(sw), getattr(sw, "__file__", None)),
-            "pf_table_id": id(pf.PERSISTED_FLAG_DEFAULTS),
-            "switch_table_id": id(sw.SEMSolarSwitch._PERSISTED_DEFAULTS),
-            "tables_equal": (sw.SEMSolarSwitch._PERSISTED_DEFAULTS
-                             == pf.PERSISTED_FLAG_DEFAULTS),
-            "candidate_modules": sorted(
-                k for k in sys.modules
-                if "persisted_flags" in k or k.endswith(".switch")
-            ),
-        }
-        assert sw.SEMSolarSwitch._PERSISTED_DEFAULTS is (
-            pf.PERSISTED_FLAG_DEFAULTS), diag
+        klass = sw.SEMSolarSwitch
+        # Printed, not passed to assert: pytest truncates an assertion
+        # message and cut this exact evidence off last time. Captured
+        # stdout is shown in full on failure and hidden on success.
+        for line in (
+            f"pf module      = {id(pf)} {getattr(pf, '__file__', None)}",
+            f"sw module      = {id(sw)} {getattr(sw, '__file__', None)}",
+            f"pf table       = {id(pf.PERSISTED_FLAG_DEFAULTS)}",
+            f"sw module name = {id(getattr(sw, 'PERSISTED_FLAG_DEFAULTS', None))}",
+            f"class attr     = {id(klass._PERSISTED_DEFAULTS)}",
+            f"own __dict__   = {'_PERSISTED_DEFAULTS' in klass.__dict__}",
+            f"defining base  = {[b for b in klass.__mro__ if '_PERSISTED_DEFAULTS' in vars(b)]}",
+            f"equal          = {klass._PERSISTED_DEFAULTS == pf.PERSISTED_FLAG_DEFAULTS}",
+            f"class value    = {klass._PERSISTED_DEFAULTS}",
+            f"module value   = {pf.PERSISTED_FLAG_DEFAULTS}",
+            f"modules        = {sorted(k for k in sys.modules if 'persisted_flags' in k or k.endswith('.switch'))}",
+        ):
+            print(f"[one-table] {line}")
+        assert klass._PERSISTED_DEFAULTS is pf.PERSISTED_FLAG_DEFAULTS
 
     def test_the_switch_entity_ids_are_the_ones_that_exist(self):
         """The store is keyed by entity_id; the switch forces
