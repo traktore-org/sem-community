@@ -18,6 +18,14 @@ You never need observer mode off to test decisions, plans, or timing.
 You only need it off to watch a physical contactor close — and that is
 what a production soak is for, not a simulation.
 
+That principle now holds for **every** family. Until 16.08.2026 it was
+true of loads only: for EV chargers and batteries the cut sat *above* the
+decision, so observing meant no adapter was built, `decide()` and
+`decide_battery()` never ran, and there was nothing to publish — a
+two-battery rig reported `adapters = {}` in diagnostics and read as a
+misconfiguration. The cut is now at the write for all three (#764), so
+the executor is simulable the same way the planner always was.
+
 ## The WOULD surface (#764)
 
 When observer mode is on, SEM publishes its would-be actions on two
@@ -39,6 +47,27 @@ standard surfaces (one source of truth — the execution seam itself):
    `hold` means no command would be sent — the device is where SEM wants
    it. The attribute is empty while observer mode is off (a live system's
    map would be stale by definition).
+
+   Chargers and batteries share the map, keyed `ev:<charger_id>` and
+   `battery:<battery_id>`, with `kind` naming the family — one attribute
+   carries the whole shadow cycle:
+
+   ```yaml
+   would_decisions:
+     ev:keba_fa87f74cd3:
+       kind: charger
+       action: charge_at_amps  # idle | disable | charge_at_amps | charge_max
+       amps: 10
+       power_w: 6900.0         # what the box would actually pull
+       source: min_plus_solar  # the resolved charge mode
+       reason: "night floor — deadline 06:00"
+     battery:b1:
+       kind: battery
+       action: force_charge    # normal | limit_discharge | force_charge |
+                               # stop_force_charge | force_discharge | off
+       power_w: 3000.0
+       reason: "planned window 03:00–05:00 — deficit 3.0 kWh"
+   ```
 
 2. **Events — subscribe for the edges:** every decision *transition*
    fires a `solar_energy_management_observer_decision` bus event with the

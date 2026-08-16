@@ -74,7 +74,11 @@ class PerChargerContext:
                 adapter = adapter_for(ev_dev)
                 view = build_charger_view(coord, cid, ev_dev, pcc, power)
                 decision = decide(view)
-                await actuate(decision, adapter, view.power, reconciler=reconciler)
+                await actuate(
+                    decision, adapter, view.power, reconciler=reconciler,
+                    observer=coord._observer_mode,
+                    controller=coord._surplus_controller,
+                )
 
     The ``__enter__`` hook swaps the coordinator's primary-charger
     attributes (``_ev_device``, ``_ev_stalled_since``, etc.) to this

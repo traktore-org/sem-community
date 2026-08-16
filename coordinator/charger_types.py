@@ -542,6 +542,37 @@ def solar_commitment_w(
     return 0.0
 
 
+def commanded_power_w(
+    decision: ChargerDecision,
+    *,
+    phases: int,
+    voltage: float,
+    max_current_a: float,
+) -> float:
+    """Watts this decision commands — the whole commitment, whoever funds it.
+
+    :func:`solar_commitment_w` answers "how much of the shared SOLAR surplus
+    does this charger claim", so it caps at ``budget_w``. This answers the
+    other question: how much power will flow if the actuator applies the
+    decision — grid-funded deadline amps and battery-funded floors included.
+
+    Two callers, one number: the night peak budget's per-charger commitment
+    (which normally reads the setpoint the actuator wrote — and under
+    observer mode nothing writes one), and the WOULD payload that observer
+    mode publishes. A charger that would pull 6.9 kW must say 6.9 kW in
+    both, or a two-charger simulation hands the junior charger phantom
+    headroom.
+    """
+    if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+        return max(
+            0.0,
+            float(decision.commanded_amps) * float(phases) * float(voltage),
+        )
+    if decision.intent is ChargerIntent.CHARGE_MAX:
+        return max(0.0, float(max_current_a) * float(phases) * float(voltage))
+    return 0.0
+
+
 # ─────────────────────────────────────────────────────────────────
 # Per-charger view (the input to decide())
 # ─────────────────────────────────────────────────────────────────

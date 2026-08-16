@@ -3025,7 +3025,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if self._observer_mode:
                 self._zero_charger_setpoints()
 
-            if self._ev_devices and not self._observer_mode:
+            # (#764) The observer cut is at the WRITE, not here. Everything
+            # below — adapters, views, decide(), the plan gate, the peak
+            # cascade — runs for real under observer; ``actuate`` is handed
+            # ``observer=`` and records what it WOULD command instead of
+            # commanding it. Gating the block itself (the pre-#764 shape)
+            # meant the executor half of #638 could not be simulated at all:
+            # no adapter, no decision, nothing to observe.
+            if self._ev_devices:
                 # Multi-charger (#112): night targets. There is exactly ONE
                 # solar allocator across chargers and it is
                 # ``_solar_committed_w_per_cycle`` below — each charger's
@@ -3520,15 +3527,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         pcc.effective_state = effective_state
 
                         try:
-                            await actuate(decision, adapter, view.power, reconciler=reconciler)
+                            await actuate(
+                                decision, adapter, view.power,
+                                reconciler=reconciler,
+                                observer=self._observer_mode,
+                                controller=self._surplus_controller,
+                            )
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
                             # (the commitment), not the lagging measured power.
                             try:
-                                self._night_committed_w += max(0.0, (
-                                    ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
-                                ))
+                                if self._observer_mode:
+                                    # (#764) Nothing writes a setpoint under
+                                    # observer — they're zeroed above (#536) —
+                                    # so read the commitment off the decision
+                                    # the actuator WOULD have applied. Without
+                                    # this the junior charger sees phantom
+                                    # headroom and a fleet simulation is fiction.
+                                    from .charger_types import commanded_power_w
+                                    self._night_committed_w += commanded_power_w(
+                                        decision,
+                                        phases=adapter.phases,
+                                        voltage=adapter.voltage,
+                                        max_current_a=adapter.max_current_a,
+                                    )
+                                else:
+                                    self._night_committed_w += max(0.0, (
+                                        ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
+                                    ))
                             except (AttributeError, TypeError):
                                 pass
                             # Step 6: thread solar commitment through to the next
@@ -3553,7 +3580,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         except ValueError as e:
                             _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
                 self._save_ev_session_state()
-            elif self._ev_device and not self._observer_mode:
+            elif self._ev_device:
                 # Single-charger legacy path — also flipped to the new pipeline.
                 # Build a synthetic per-charger view from the global config.
                 from .actuate import actuate
@@ -3634,7 +3661,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self, decision, adapter=adapter, power=view.power
                 )
                 try:
-                    await actuate(decision, adapter, view.power, reconciler=reconciler)
+                    await actuate(
+                        decision, adapter, view.power, reconciler=reconciler,
+                        observer=self._observer_mode,
+                        controller=self._surplus_controller,
+                    )
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)
@@ -3650,22 +3681,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # _energy_plan_tick, called before the EV session/decision
             # chain: the stamp must precede the first decision that reads it.
 
+            # (#764) Runs under observer too — the cut is inside
+            # ``actuate_battery``. Pre-#764 this whole pipeline was skipped,
+            # so a two-battery rig reported ``adapters = {}`` /
+            # ``last_decisions = {}`` in diagnostics and no battery decision
+            # could ever be simulated.
             discharge_limit = None
-            if not self._observer_mode:
-                try:
-                    await self._run_battery_pipeline(power, energy, charging_state)
-                    # (#625 phase 4) Surface the tightest ACTIVE
-                    # LIMIT_DISCHARGE for the sensor (#375) — extracted
-                    # to actuate_battery.active_discharge_limit.
-                    from .actuate_battery import active_discharge_limit
-                    discharge_limit = active_discharge_limit(
-                        getattr(self, "_battery_adapters", None))
-                except (HomeAssistantError, ServiceValidationError) as e:
-                    _LOGGER.error("Battery pipeline service failed: %s", e)
-                except Exception as e:  # noqa: BLE001
-                    _LOGGER.warning(
-                        "Battery pipeline error: %s", e, exc_info=True,
-                    )
+            try:
+                await self._run_battery_pipeline(power, energy, charging_state)
+                # (#625 phase 4) Surface the tightest ACTIVE
+                # LIMIT_DISCHARGE for the sensor (#375) — extracted
+                # to actuate_battery.active_discharge_limit.
+                from .actuate_battery import active_discharge_limit
+                discharge_limit = active_discharge_limit(
+                    getattr(self, "_battery_adapters", None))
+            except (HomeAssistantError, ServiceValidationError) as e:
+                _LOGGER.error("Battery pipeline service failed: %s", e)
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Battery pipeline error: %s", e, exc_info=True,
+                )
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
@@ -5958,12 +5993,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._battery_orphan_guard = {}
                     adapter._orphan_guard = self._battery_orphan_guard
                 self._battery_adapters[battery_id] = adapter
-                recovered = await adapter.async_recover_pending()
-                if not recovered:
-                    _LOGGER.warning(
-                        "Battery %s: startup recovery blocked active control: %s",
-                        battery_id, getattr(adapter, "last_error", "unknown error"),
-                    )
+                # (#764) Startup recovery is a real write — the #532
+                # orphan-stop that saved a LUNA2000 from draining to grid.
+                # Building the adapter under observer is fine (reads only);
+                # recovering is not. The shadow stays a shadow.
+                if not self._observer_mode:
+                    recovered = await adapter.async_recover_pending()
+                    if not recovered:
+                        _LOGGER.warning(
+                            "Battery %s: startup recovery blocked active control: %s",
+                            battery_id, getattr(adapter, "last_error", "unknown error"),
+                        )
                 _LOGGER.info(
                     "Battery %s: %s (forced-discharge support=%s)",
                     battery_id, type(adapter).__name__,
@@ -6056,8 +6096,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if decision.intent is BatteryIntent.FORCE_DISCHARGE:
                 self._battery_arbitrage_active = True
 
-            # 4. Actuate
-            await actuate_battery(decision, adapter)
+            # 4. Actuate (#764: observer cuts here, inside the actuator)
+            await actuate_battery(
+                decision, adapter,
+                observer=self._observer_mode,
+                controller=self._surplus_controller,
+            )
 
         # Reset scheduler when night ends — preserved from legacy
         if (scheduler.enabled

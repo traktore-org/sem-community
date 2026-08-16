@@ -533,18 +533,51 @@ class SurplusController:
     - LIFO deactivation when surplus drops
     """
 
-    def record_observer_decision(self, device, intent: "LoadIntent",
-                                 *, active: bool) -> None:
-        """(#764) Publish one device's WOULD decision on the standard surface.
+    def publish_observer_decision(self, *, key: str, name: str, action: str,
+                                  power_w: float = 0.0, source=None,
+                                  reason: str = "", kind: str = "load",
+                                  **extra) -> None:
+        """(#764) One WOULD decision, one surface — for EVERY family.
 
-        The map (``observer_decisions``) always carries the CURRENT
-        would-state — a fresh reader needs no history. The bus event fires
-        only on decision TRANSITIONS, judged on the digit-stripped
-        action/source/reason (the #762 rule: a wobbling watt number is not
-        an edge). ``hold`` means no command would be sent — the device is
-        where SEM wants it.
+        Loads, chargers and batteries all land in the same
+        ``observer_decisions`` map (keyed ``<device_id>`` / ``ev:<cid>`` /
+        ``battery:<bid>``, with ``kind`` naming the family) so a simulation
+        reads ONE attribute and gets the whole shadow cycle. The map always
+        carries the CURRENT would-state — a fresh reader needs no history.
+        The bus event fires only on decision TRANSITIONS, judged on the
+        digit-stripped action/source/reason (the #762 rule: a wobbling watt
+        number is not an edge).
         """
         import re as _re
+        payload = {
+            "device_id": key,
+            "kind": kind,
+            "name": name or key,
+            "action": action,
+            "power_w": float(power_w or 0.0),
+            "source": source,
+            "reason": reason,
+        }
+        payload.update(extra)
+        self.observer_decisions[key] = payload
+        edge_key = _re.sub(r"-?\d+(?:[.,]\d+)?", "#",
+                           f"{action}|{source}|{reason}")
+        if self._observer_decision_keys.get(key) == edge_key:
+            return
+        self._observer_decision_keys[key] = edge_key
+        try:
+            self.hass.bus.async_fire(
+                "solar_energy_management_observer_decision", dict(payload))
+        except Exception:  # noqa: BLE001 — the event must never break the seam
+            pass
+
+    def record_observer_decision(self, device, intent: "LoadIntent",
+                                 *, active: bool) -> None:
+        """(#764) A load's WOULD decision, mapped onto the shared surface.
+
+        ``hold`` means no command would be sent — the device is already
+        where SEM wants it.
+        """
         if intent.on and not active:
             action = "activate"
         elif not intent.on and active:
@@ -554,25 +587,15 @@ class SurplusController:
         else:
             action = "hold"
         did = str(getattr(device, "device_id", "") or "")
-        payload = {
-            "device_id": did,
-            "name": str(getattr(device, "name", "") or did),
-            "action": action,
-            "power_w": float(intent.power_w or 0.0),
-            "source": intent.source,
-            "reason": intent.reason,
-        }
-        self.observer_decisions[did] = payload
-        edge_key = _re.sub(r"-?\d+(?:[.,]\d+)?", "#",
-                           f"{action}|{intent.source}|{intent.reason}")
-        if self._observer_decision_keys.get(did) == edge_key:
-            return
-        self._observer_decision_keys[did] = edge_key
-        try:
-            self.hass.bus.async_fire(
-                "solar_energy_management_observer_decision", dict(payload))
-        except Exception:  # noqa: BLE001 — the event must never break the seam
-            pass
+        self.publish_observer_decision(
+            key=did,
+            name=str(getattr(device, "name", "") or did),
+            action=action,
+            power_w=float(intent.power_w or 0.0),
+            source=intent.source,
+            reason=intent.reason,
+            kind="load",
+        )
 
     def __init__(
         self,

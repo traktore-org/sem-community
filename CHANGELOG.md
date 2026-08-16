@@ -13,6 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased] — 16.08.2026
 
+- 🔭 **Observer mode now cuts at the write, not before the decision** (#764) —
+  simulating SEM was supposed to mean "every layer runs for real, only the
+  final hardware command is cut". That held for loads. For EV chargers and
+  batteries the cut sat *above* the decision: observing skipped the whole
+  block, so no adapter was built, `decide()` and `decide_battery()` never
+  ran, and there was nothing to observe. A two-battery rig reported
+  `adapters = {}` / `last_decisions = {}` in diagnostics and read as a
+  misconfiguration. All three families now branch in the same place — inside
+  the actuator — and publish what they WOULD command on the standard
+  `would_decisions` surface (keyed `ev:<id>` / `battery:<id>`, with the same
+  transition-gated bus event loads use). The #740 police pass — which stops
+  a charger that self-started outside its mode — goes through the same seam,
+  so observing a rogue draw now reports it instead of opening a real
+  contactor. Startup recovery, the one real write left in the battery
+  pipeline, stays skipped while observing, the #536 setpoint zeroing is
+  untouched, and an AST lint fails CI if any `actuate` / `actuate_battery`
+  call site forgets the flag. Live behavior is unchanged: with observer off,
+  every path is exactly what it was.
+
 - 💡 **The arbitrage line only appears where arbitrage can actually happen**
   (#533 / #638) — the advisor runs on every plan by design: it is the one
   reader of *every* page of the ledger, so an economically absurd verdict is

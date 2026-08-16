@@ -713,7 +713,11 @@ class EVControlMixin:
                 .get(cid, getattr(power, "ev_charging", False)),
             ),
         )
-        await actuate(decision, adapter, cp, reconciler)
+        await actuate(
+            decision, adapter, cp, reconciler,
+            observer=self._observer_mode,
+            controller=self._surplus_controller,
+        )
 
     def _this_charger_power(self, ev, power) -> float:
         """Return the per-charger power reading in watts (#315 multi-charger fix).

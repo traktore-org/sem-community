@@ -25,16 +25,61 @@ if TYPE_CHECKING:  # pragma: no cover
 _LOGGER = logging.getLogger(__name__)
 
 
+def _observe(decision: "BatteryDecision", controller=None) -> None:
+    """OBSERVER mode = the layer-3 intercept for batteries, in one place.
+
+    ``decide_battery`` already ran live; this seam records and logs the
+    command it WOULD dispatch and calls no adapter method. The watts are
+    read off the field the intent actually uses, so the shadow says what
+    the inverter would have been told.
+    """
+    watts = {
+        BatteryIntent.FORCE_CHARGE: decision.charge_power_w,
+        BatteryIntent.FORCE_DISCHARGE: decision.discharge_power_w,
+        BatteryIntent.LIMIT_DISCHARGE: decision.discharge_limit_w,
+    }.get(decision.intent, 0.0)
+    if controller is not None:
+        try:
+            controller.publish_observer_decision(
+                key=f"battery:{decision.battery_id}",
+                name=str(decision.battery_id),
+                action=decision.intent.value,
+                power_w=float(watts or 0.0),
+                reason=decision.reason,
+                kind="battery",
+            )
+        except Exception:  # noqa: BLE001 — the surface must never break the seam
+            pass
+    log_on_change(   # (#762) transition-gated
+        _LOGGER, f"observer:battery:{decision.battery_id}", logging.INFO,
+        "OBSERVER · WOULD %s %s @ %.0fW — %s",
+        decision.intent.value.upper(), decision.battery_id,
+        float(watts or 0.0), decision.reason,
+    )
+
+
 async def actuate_battery(
     decision: "BatteryDecision",
     adapter: "BatteryControlAdapter",
+    *,
+    observer: bool = False,
+    controller=None,
 ) -> None:
     """Apply a per-battery decision through the adapter.
 
     Args:
         decision: The output of ``decide_battery(view)`` this cycle.
         adapter: The brand-specific adapter wrapping this battery.
+        observer: Observer mode — cut the trigger. The decision still ran
+            for real; this seam only records what it WOULD command
+            (see :func:`_observe`).
+        controller: The :class:`SurplusController` that owns the shared
+            ``observer_decisions`` surface. Optional.
     """
+    if observer:
+        _observe(decision, controller=controller)
+        return
+
     if decision.intent is BatteryIntent.OFF:
         await adapter.command_off()
         log_on_change(   # (#762) transition-gated

@@ -26,6 +26,9 @@ from unittest.mock import MagicMock
 from custom_components.solar_energy_management.coordinator.ev_control import (
     EVControlMixin,
 )
+from custom_components.solar_energy_management.coordinator.surplus_controller import (
+    SurplusController,
+)
 
 
 class _RecordingAdapter:
@@ -49,11 +52,16 @@ class _RecordingAdapter:
         self.currents.append(amps)
 
 
-def _make_coord(cid: str, draw_w: float):
+def _make_coord(cid: str, draw_w: float, *, observer: bool = False):
     coord = EVControlMixin.__new__(EVControlMixin)
     coord.hass = MagicMock()
     coord._charger_adapters = {}
     coord._charger_reconcilers = {}
+    # (#764) The police pass writes through the same actuator seam as the
+    # main loop, so it carries the same observer flag. A real coordinator
+    # always has both; the fixture mirrors it.
+    coord._observer_mode = observer
+    coord._surplus_controller = None
     ev_dev = SimpleNamespace(_current_setpoint=0)
     adapter = _RecordingAdapter(ev_dev)
     coord._charger_adapters[cid] = adapter
@@ -131,6 +139,49 @@ class TestTheGateStillPolices:
         ))
 
         assert adapter.disables == 1
+
+
+class TestThePoliceObserveToo:
+    """(#764) The police pass is a write path like any other, so it cuts at
+    the same seam. Observing a rogue draw must report it, never open the
+    contactor — on the shared rig a real KEBA is on the other end."""
+
+    def test_a_rogue_draw_is_not_stopped_while_observing(self):
+        coord, ev_dev, adapter, power = _make_coord(
+            "b", 3000.0, observer=True,
+        )
+
+        asyncio.run(coord._police_opted_out_charger(
+            "b", ev_dev, {"id": "b", "charge_mode": "off"}, power,
+        ))
+
+        assert adapter.disables == 0, (
+            "the police pass wrote to hardware while observing"
+        )
+        assert adapter.currents == []
+
+    def test_the_would_stop_still_reaches_the_surface(self):
+        coord, ev_dev, adapter, power = _make_coord(
+            "b", 3000.0, observer=True,
+        )
+        controller = SimpleNamespace(
+            observer_decisions={},
+            _observer_decision_keys={},
+            hass=MagicMock(),
+        )
+        controller.publish_observer_decision = (
+            SurplusController.publish_observer_decision.__get__(controller)
+        )
+        coord._surplus_controller = controller
+
+        asyncio.run(coord._police_opted_out_charger(
+            "b", ev_dev, {"id": "b", "charge_mode": "off"}, power,
+        ))
+
+        would = controller.observer_decisions["ev:b"]
+        assert would["kind"] == "charger"
+        assert would["action"] in ("disable", "idle")
+        assert would["power_w"] == 0.0
 
 
 class TestTheGateCallsThePolice:
