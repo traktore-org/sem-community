@@ -1668,6 +1668,7 @@ class-17 release.
 **Sweep question:** for every boolean that records *what SEM did*, ask — could this be assigned by a
 function that only knows what the world *looks like*? If yes it is not a record, it is a guess, and
 something downstream is treating it as testimony. Refs #779 #766 #559 #576.
+
 ---
 
 ### 42. Discovery admits on SHAPE when the registry already answers on ROLE — GUARDED
@@ -1724,3 +1725,42 @@ service registration, ED-row out of scope, persisted by the sync).
 **Sweep question:** for every "is this a candidate?" test in discovery — is the question being asked
 structural while the question that matters is semantic? If HA carries the answer as metadata, a
 name-shaped guess is not a heuristic, it is a wrong answer with a fallback. Refs #781 #744 #745 #436.
+
+---
+
+### 43. A re-baseline that forgets what it dropped FROM — GUARDED
+**Symptom:** one member of an energy ledger reports an absurd figure — a heat pump at 15,508 kWh
+*today* against a house total of 33 — and every other member is right. The balance check fires; the
+device's own guard "worked".
+**Root shape:** a monotonic counter that goes backwards is correctly recognised as a reset and
+re-based, and there the guard's memory ends. The **next** reading is the lifetime total measured
+against a baseline of zero: a positive delta, structurally indistinguishable from consumption, and
+booked. The bug is not in the branch that fires; it is that the branch **discards the one number**
+(the pre-reset high-water mark) that makes the next reading interpretable. A guard that handles an
+event without recording it has moved the failure one cycle later, where it no longer looks like the
+same event.
+**Live catch (#782, @onkelfu, v2.0.0-beta.4):** `energy_dashboard_warmepumpe_energy_gesamt_2` booked
+15,508.51 kWh in one ~10 s cycle — 5.6 GW — after its counter reset to 0 and returned.
+**Closure:** two additions, deliberately separate. (1) A **physics** bound on any single delta:
+`_MAX_PLAUSIBLE_LOAD_W = 100 kW` against the window the delta actually spans. This is explicitly
+**not** class 40's error — `rated_power` is an *estimate about this device* and must never overrule
+its meter; a house-circuit ceiling set far above every real appliance can only ever catch counter
+pathology. (2) `_energy_counter_pre_reset_kwh` — the drop remembers its mark, so a recovered counter
+books `now − mark`, the genuine consumption across the outage, instead of everything or nothing.
+**The window is the crux.** Measured per-cycle it would refuse honest data: a 20 kW pump on an
+hourly utility meter delivers 20 kWh in one 10 s cycle (7.2 MW by that arithmetic). So the window is
+the time since the counter's **value last changed** — which also puts a #755-contract-1 blind
+stretch *inside* the window (the value can't change while it's unreadable), and makes the outage
+length available for free when a reset recovers. An **unknown** window (`None` — the baseline came
+back from storage across a restart) never refuses: `_restore_device_energy` restores the baseline
+without a timestamp, and booking that gap is the design.
+**Where else it lives:** every re-baseline of a monotonic source — per-charger session energy,
+lifetime solar counters, grid import/export statistics, the #755 recorder's own counters. Ask of
+each: after the re-base, is the pre-reset value still reachable?
+**Guard:** `tests/test_782_counter_recovery.py` — the reporter's exact sequence books 0.0; a genuine
+0.5 kWh across a 30-minute outage is kept; a truly replaced meter counts from zero; an implausible
+jump is refused, counted **blind** (not zero), and re-based so the next delta is trusted; and the
+honest deltas — ordinary, and one spanning a 30-minute blind gap — are untouched.
+**Sweep question:** for every guard that recognises "this reading is not a delta", ask what the
+guard *keeps*. If it only re-bases, the next reading is the same event wearing a plausible sign.
+Refs #782 #774 #768 #755.

@@ -567,6 +567,28 @@ Energy integration gap: XXXs > 120s limit — skipping cycle to prevent accumula
 1. The daily accumulators reset at midnight — wait for the next day
 2. For immediate correction: compare SEM values against hardware daily counters (e.g. `sensor.batteries_tagesentladung`) and adjust storage if needed
 3. Restart the integration after corrections: **Settings > Devices & Services > Solar Energy Management > Reload**
+
+## One device's energy today is absurd (thousands of kWh)
+
+**Cause (fixed in 2.0.0):** the device's energy counter reset to zero — a
+firmware update, a re-paired device, a replaced meter — and then climbed back
+to its old reading. SEM caught the drop but not the return, so the lifetime
+total was booked as one cycle's consumption. The tell is the energy-balance
+health check: the members sum to far more than the house total, and exactly
+one member is responsible.
+
+**Now:** SEM remembers the reading the counter fell from and books only what
+it gained over that mark — the real consumption across the outage. A delta no
+window could physically deliver (over 100 kW for a single load) is refused,
+recorded as *blind* rather than as zero, and the meter is trusted again from
+where it now stands. Look for:
+
+```
+energy counter sensor.X recovered to N kWh after a reset from M — booking … kWh consumed across the … s outage, not the whole reading
+```
+
+A figure booked before the upgrade clears at the next day rollover (sunrise).
+
 ## Devices & Services shows dozens of loads that are settings, not devices
 
 **Cause (fixed in 2.0.0):** load discovery admitted any `switch.*` it could

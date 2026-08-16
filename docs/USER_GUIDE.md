@@ -231,6 +231,19 @@ into SEM's learning (see [SIMULATION.md](SIMULATION.md) and #755). A sensor
 that cannot be read is recorded as *blind* — SEM does not record a silent
 sensor as a pump drawing zero watts.
 
+**When a counter reboots.** An energy counter that resets to zero — a
+firmware update, a re-paired device, a replaced meter — has not un-used its
+energy, and when it climbs back to its old reading it has not just used that
+much either. SEM books neither. It remembers the reading the counter fell
+from and, when it comes back, books only what it gained over that mark: the
+genuine consumption across the outage. A jump no window could physically
+deliver (no single house load draws 100 kW) is refused outright, recorded as
+*blind* rather than as zero, and the meter is trusted again from where it now
+stands. The window is measured from the last time the counter's **value**
+changed, so a meter that publishes once an hour, a sensor that was
+unavailable for half an hour, and a reading picked back up after a Home
+Assistant restart all still book their real energy.
+
 **The day rolls at sunrise, not midnight** — the same boundary the pump's
 runtime uses — so "today" means the same thing everywhere in SEM.
 

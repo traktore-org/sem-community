@@ -30,6 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previous version already wrote are never re-derived, they now retire
   themselves on the next refresh — leaving hand-registered devices and
   charger rows alone.
+- 🐛 **A meter that reboots no longer books its whole lifetime as today's
+  energy** (#782) — one heat pump reported 15,508.51 kWh *today* against a
+  house total of 33.47. Its counter had reset to 0 and come back: SEM caught
+  the drop and re-based, then read the lifetime total against a baseline of
+  zero and booked the difference — 5.6 GW in one ten-second cycle. Two
+  changes. A delta is now checked against what its window could physically
+  deliver: no single house load draws 100 kW, so the bound only ever catches
+  counter pathology, never usage — and it is *not* the device's rated power,
+  which is an estimate and must never overrule a meter. And a counter that
+  falls now remembers what it fell *from*, so when it comes back SEM books
+  the genuine consumption across the outage instead of everything or nothing.
+  The window is measured from when the counter's value last changed, so an
+  hourly utility meter, a sensor that was unavailable for half an hour, and a
+  baseline restored across a restart all still book their real energy.
+
 # [2.0.0-beta.4] — 16.08.2026
 
 - 🐛 **"Mode: Off" now means SEM keeps its hands off, including its books**

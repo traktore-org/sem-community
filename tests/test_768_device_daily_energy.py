@@ -226,9 +226,13 @@ class TestTheDayBoundary:
         hass.set("sensor.pool_kwh", 100.0)
         dev = _device(hass, energy_entity_id="sensor.pool_kwh")
         _run(dev, 1, 60)
-        hass.set("sensor.pool_kwh", 105.0)
+        # 0.5 kWh across the two cycles is 15 kW — a big pool heater, and
+        # under #782's physics ceiling. What this test pins is the rollover,
+        # not the plausibility of the delta; the numbers are incidental and
+        # only have to be numbers a house circuit could actually deliver.
+        hass.set("sensor.pool_kwh", 100.5)
         _run(dev, 1, 60)
-        assert dev.daily_energy_kwh == pytest.approx(5.0)
+        assert dev.daily_energy_kwh == pytest.approx(0.5)
 
         dev.update_daily_runtime(date(2026, 8, 15))
         assert dev.daily_energy_kwh == 0.0

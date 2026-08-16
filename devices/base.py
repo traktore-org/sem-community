@@ -72,6 +72,17 @@ FAILSAFE_OFF_TIMEOUT_S = 10
 # (the #553 guard was a silent no-op since it shipped).
 QUOTA_STOP_MARGIN_KWH = 0.3
 
+# #782 — the physics bound on one load's energy counter. NOT a rating: a
+# device's own ``rated_power`` is a learned estimate and must never overrule
+# its meter (#774). This is what any single load on any house circuit could
+# draw — a 3×63 A three-phase feed is ~43 kW, so 100 kW is far above every
+# real appliance and every plausible measurement error scale. It exists to
+# catch counter pathology (a meter that resets to 0 and comes back reads as
+# its whole lifetime consumed in one cycle: onkelfu's 15508.51 kWh = 5.6 GW),
+# and it is measured against the window the delta actually spans, blind
+# seconds included, so a delta bridging an unreadable stretch still books.
+_MAX_PLAUSIBLE_LOAD_W = 100_000.0
+
 from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
@@ -215,6 +226,22 @@ class ControllableDevice(ABC):
         # recorded rather than silently booked as 0 kWh.
         self._daily_energy_blind_s: float = 0.0
         self._energy_counter_last_kwh: Optional[float] = None
+        # (#782) What a counter dropped FROM. The ``delta < 0`` guard re-bases
+        # on a drop and
+        # then forgets — so a counter that comes back to its lifetime total
+        # books that total as one cycle's consumption (onkelfu: 15508.51 kWh,
+        # 5.6 GW). Remembering the high-water mark is what tells a RECOVERED
+        # counter (nothing was consumed) from a REPLACED one (every delta from
+        # zero is real).
+        self._energy_counter_pre_reset_kwh: Optional[float] = None
+        # When the counter's VALUE last changed — the start of the window the
+        # next delta spans. Not "when we last read it": a Shelly that publishes
+        # energy once a minute, a cloud meter that publishes hourly, a sensor
+        # that was unavailable for half an hour (#755 contract 1) and a restart
+        # gap all hand us one delta covering a long window, and every kWh in it
+        # is real. ``None`` means the window is unknown (a baseline restored
+        # from storage) — and an unknown window is never used to refuse.
+        self._energy_counter_last_at: Optional[datetime] = None
         self._energy_last_power_w: Optional[float] = None
         # (#769) What the LAST cycle booked. The running total above answers
         # "how much today"; the ledger needs "how much just now" to file it
@@ -486,33 +513,107 @@ class ControllableDevice(ABC):
         kwh = energy_state_to_kwh(self.hass.states.get(self.energy_entity_id))
         if kwh is None:
             # #755 contract 1 — a sensor that can't be read is not a device
-            # drawing zero watts. Record the blindness; book nothing.
+            # drawing zero watts. Record the blindness; book nothing. The
+            # window start is deliberately NOT moved: the delta that eventually
+            # arrives spans this gap and carries its energy.
             self._daily_energy_blind_s += elapsed_s
             return
 
         self._daily_energy_source = "counter"
         last = self._energy_counter_last_kwh
         self._energy_counter_last_kwh = kwh
+        now = datetime.now()
+        # The window this delta spans — since the value last CHANGED, so a
+        # counter that publishes once an hour is measured over its hour and a
+        # blind stretch is inside the window, not outside it. ``None`` when the
+        # baseline came from storage: unknown, and never used to refuse.
+        window_s: Optional[float] = None
+        if self._energy_counter_last_at is not None:
+            _w = (now - self._energy_counter_last_at).total_seconds()
+            window_s = _w if _w > 0 else None
+        if last is None or kwh != last:
+            self._energy_counter_last_at = now
         if last is None:
             return  # first read of the day/session: a baseline, not a delta
         delta = kwh - last
         if delta < 0:
             # A TOTAL_INCREASING counter that went backwards rebooted; it has
             # not un-consumed its lifetime energy. Re-baseline (done above),
-            # book nothing.
+            # book nothing — and remember what it fell FROM, so a counter that
+            # comes back is not mistaken for a device that consumed its whole
+            # lifetime in one cycle (#782).
+            self._energy_counter_pre_reset_kwh = max(
+                self._energy_counter_pre_reset_kwh or 0.0, last
+            )
             _LOGGER.debug(
                 "%s: energy counter %s went backwards (%.3f -> %.3f kWh) — "
                 "re-baselined, no energy booked",
                 self.name, self.energy_entity_id, last, kwh,
             )
             return
-        # Deliberately NO plausibility ceiling here. ``rated_power`` is a
-        # learned guess and is routinely far below a real device's draw, so
-        # discarding a meter delta for exceeding it would be the #774 error
-        # again — an estimate overruling a measurement. A delta that spans a
-        # blind gap is real energy that really was consumed today; the blind
-        # seconds beside it say the coverage was interrupted.
-        self._book_energy(delta)
+        # (#782) The one bound on a delta: what the window could physically
+        # deliver. This is NOT the #774 error — ``rated_power`` is an estimate
+        # about THIS device and must never overrule its meter, so it is not
+        # consulted. ``_MAX_PLAUSIBLE_LOAD_W`` is a bound on any single load on
+        # any house circuit, set far above every real appliance, and the window
+        # is the one the delta actually spans (blind seconds included). So it
+        # catches counter pathology and nothing else.
+        #
+        # An unknown window (``None``: the baseline came back from storage
+        # across a restart, so nothing says how long ago it was read) never
+        # refuses. Booking that delta is the deliberate behaviour — the restart
+        # gap's energy is restored by design (``_restore_device_energy``).
+        if (
+            window_s is None
+            or delta <= _MAX_PLAUSIBLE_LOAD_W * window_s / 3_600_000.0
+        ):
+            if (
+                self._energy_counter_pre_reset_kwh is not None
+                and kwh >= self._energy_counter_pre_reset_kwh
+            ):
+                # The counter climbed honestly back past its old high-water
+                # mark; there is nothing left to disambiguate.
+                self._energy_counter_pre_reset_kwh = None
+            self._book_energy(delta)
+            return
+
+        pre_reset = self._energy_counter_pre_reset_kwh
+        if pre_reset is not None and kwh >= pre_reset:
+            # The counter RECOVERED — it is back at (or past) where it fell
+            # from. Nothing between the two readings was consumed twice; only
+            # what it gained over the old mark is real, and the window it had
+            # to gain it in is the whole outage: the counter's value did not
+            # change while it read zero, so the window start is still the drop.
+            recovered = kwh - pre_reset
+            self._energy_counter_pre_reset_kwh = None
+            if recovered <= _MAX_PLAUSIBLE_LOAD_W * window_s / 3_600_000.0:
+                _LOGGER.warning(
+                    "%s: energy counter %s recovered to %.3f kWh after a reset "
+                    "from %.3f — booking %.3f kWh consumed across the %.0f s "
+                    "outage, not the whole reading",
+                    self.name, self.energy_entity_id, kwh, pre_reset,
+                    recovered, window_s,
+                )
+                self._book_energy(recovered)
+                return
+            _LOGGER.warning(
+                "%s: energy counter %s recovered to %.3f kWh after a reset "
+                "from %.3f — the %.3f kWh gain is more than %.0f s could "
+                "deliver; booking nothing and counting the window blind",
+                self.name, self.energy_entity_id, kwh, pre_reset,
+                recovered, window_s,
+            )
+            self._daily_energy_blind_s += elapsed_s
+            return
+
+        _LOGGER.warning(
+            "%s: energy counter %s jumped %.3f kWh in %.0f s — no window could "
+            "deliver that (%.0f W); re-baselined at %.3f, booking nothing and "
+            "counting the window blind",
+            self.name, self.energy_entity_id, delta, window_s,
+            delta * 3_600_000.0 / window_s, kwh,
+        )
+        self._daily_energy_blind_s += elapsed_s
 
     def _accrue_from_power(self, elapsed_s: float) -> None:
         """Trapezoid the power sensor over the cycle."""
