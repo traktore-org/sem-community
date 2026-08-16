@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6-beta.19] — 16.08.2026
+
+### 🐛 Fixes
+- 🔌 **A device set to Mode = Off was still switched off** (#779,
+  @onkelfu) — after upgrading to 2.0, appliances the user set to
+  Mode = Off (a dishwasher, and reportedly a heat pump and network gear)
+  kept getting switched off by SEM. The same physical device appeared
+  **twice**: the registry's Energy-Dashboard row
+  (`energy_dashboard_<slug>`, which carries the user's Mode setting) and
+  a stale `load_device_<slug>` smart-switch row left over from a pre-2.0
+  version's pattern discovery. With the unified registry active, that
+  legacy discovery is turned off, so the ghost row is never rebuilt — but
+  the sync's prune spared every `load_device_*` key (to protect EV
+  chargers), so it survived every restart. The ghost carried no mode, so
+  Mode = Off on the visible row never reached it and the peak-shed loop
+  actuated the appliance behind the user's back. SEM now folds the ghost
+  at the data layer when it shares the same on/off control as an
+  Energy-Dashboard device (dedup on the control surface, not the name),
+  and de-persists it so the duplicate is gone for good after upgrade. A
+  smart plug with no Energy-Dashboard twin is untouched.
+
 # [1.7.6-beta.18] — 14.08.2026
 
 ### 🐛 Fixes
