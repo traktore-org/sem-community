@@ -387,6 +387,30 @@ class TestTheSurfaceIsARosterNotALedger:
 
         assert set(sc.observer_decisions) == {"sim_heizband"}
 
+    @pytest.mark.asyncio
+    async def test_a_hands_off_decision_is_still_a_decision(self):
+        """Round 5 on .175 corrected my own expectation here.
+
+        "Leaves the map" is about a device that stops DECIDING — not about a
+        device SEM decides to leave alone. A battery in ``mode=off`` runs
+        through ``decide_battery`` every cycle and comes back with
+        ``BatteryIntent.OFF`` ("SEM hands-off — inverter self-manages"); a
+        charger in ``off`` comes back with DISABLE. Those rows belong on the
+        surface: "SEM would deliberately do nothing here" is an answer, and
+        an empty row would read as "SEM has no idea about this device".
+        """
+        sc = _sc()
+        await actuate_battery(
+            _bdec(intent=BatteryIntent.OFF,
+                  reason="mode=off (SEM hands-off — inverter self-manages)"),
+            _battery_adapter(), observer=True, controller=sc)
+        sc.retire_unpublished_observer_decisions()
+
+        row = sc.observer_decisions["battery:b1"]
+        assert row["action"] == "off"
+        assert row["power_w"] == 0.0
+        assert "hands-off" in row["reason"]
+
     def test_the_cycle_sweeps_the_surface(self):
         """The sweep only works if the cycle actually calls it, once, after
         every family has had its say."""

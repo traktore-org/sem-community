@@ -49,11 +49,17 @@ standard surfaces (one source of truth — the execution seam itself):
    map would be stale by definition).
 
    The map is a **roster, not a ledger**: it carries exactly the devices
-   that decided this cycle. One that stops deciding — mode set to `off`, a
-   charger deregistered, a startup-only code path that fired once — leaves
-   the map at the end of that cycle rather than lingering as a ghost row.
-   So a row's presence is itself a signal, and a count you read off the
-   attribute is the live count.
+   that decided this cycle. One that stops deciding — a charger
+   deregistered, a load taken out of surplus management, a startup-only
+   code path that fired once — leaves the map at the end of that cycle
+   rather than lingering as a ghost row. So a row's presence is itself a
+   signal, and a count you read off the attribute is the live count.
+
+   Deciding to leave a device alone is still deciding: a battery set to
+   `off` keeps its row and reports `action: off` ("SEM hands-off — inverter
+   self-manages"), and a charger set to `off` reports `action: disable`.
+   The absence of a row means SEM has nothing to say about that device;
+   `off` means SEM would deliberately do nothing.
 
    Chargers and batteries share the map, keyed `ev:<charger_id>` and
    `battery:<battery_id>`, with `kind` naming the family — one attribute

@@ -38,7 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edge state included. Caught within a cycle of the fix going live — the
   legacy single-charger fallback decides once at startup, before the fleet
   is populated, and its row then sat on a one-charger rig reading as a
-  second charger. Same class as #744.
+  second charger. Same class as #744. Deciding to leave a device alone is
+  still deciding: a battery or charger set to `off` keeps its row and
+  reports the hands-off command, so an absent row means SEM has no opinion
+  about that device rather than an opinion of "do nothing".
 
 - 🩺 **Diagnostics report the charger adapter again** (#764) — the dump read
   `coordinator._ev_adapters`, an attribute production has never had (the
