@@ -288,6 +288,35 @@ identity set *changes*, which is the moment SEM first learns the fact. **Guard:*
 not the filtered `get_devices_sorted()` view — a read-site fold would fail it) and on the planner's
 roster, and pins the restart window and the every-cycle no-op. Refs #628 #700 #748 #638.
 
+**Sixth instance — #779 (@onkelfu, 2.0.0-beta.2): the NON-charger twin, one roster short of #748.**
+A device the user set to **Mode=Off** was still switched off. The dishwasher appeared twice —
+`energy_dashboard_spuelmaschine` (the registry's authoritative ED row, `is_controllable`) and
+`load_device_spuelmaschine` (a `smart_switch` ghost). Same immortality mechanism as #748 (the #436
+spare keeps EVERY `load_device_*` key), but #748's data-layer fold matched only a **charger's**
+entities — a plain smart plug shares none, so it survived. With the registry active, LoadManagement's
+own `discover_controllable_devices` is guarded off, so any `load_device_<slug>` **smart-switch** row
+is a pre-2.0 persisted ghost; when the same physical device is also in the Energy Dashboard the
+registry re-adds it as `energy_dashboard_<slug>` — the row that carries the user's Mode
+(`control_mode`). The ghost has **no `control_mode`** (so Mode=Off on the ED twin never reaches it)
+and stays `is_controllable`/sheddable → the peak-shed loop actuates the appliance behind the user's
+back (dishwasher, heat pump, network gear — safety-critical). **The tell:** the user's setting lives
+on the id they *see* (the ED row); a second id for the SAME entity is invisible to them and
+unbound. **Closure:** `_prune_ed_duplicate_lm_rows` — fold, at the data layer, any `load_device_*`
+row (except `ev_charger` rows and service registrations) whose switch/control entity IS the
+actuation surface a registry-owned ED device controls (dedup on the shared CONTROL entity, not the
+id — class 12's own pattern). Deliberately NOT on power/energy: a load's power sensor can be derived
+(#744) or shared across a multi-channel device's two loads, so matching it could fold a legitimate
+neighbour; the shared control surface is the one signal that cannot false-positive. Remove it from
+`_devices_shed` too, and de-persist via `_sync_to_load_manager`'s existing save. A `load_device_*`
+row with no matching ED twin is the device's ONLY representation and is left untouched — which is
+exactly why #748's `test_...dishwasher` (no ED device) still survives.
+**Guard:** `tests/test_779_ed_duplicate_load_row.py` — the shared-entity ghost is dropped while an
+unrelated no-ED-twin plug survives; and, via the REAL `LoadManagementCoordinator`, the ghost is a
+live shed candidate BEFORE the fold and gone after (pins the behaviour, not the prune). **Sweep
+question:** for every store that persists a device row by an id, can the SAME physical entity acquire
+a SECOND id from a different discovery source — and does the user's per-device setting bind to the
+entity or to one id? Refs #436 #700 #748 #779.
+
 ### 13. Single-charger-in-list read as legacy (`len(ev_chargers) > 1` guard) — GUARDED
 **Symptom:** a lone EV charger configured through the config-flow (its sensors stored in
 `ev_chargers[0]`, NOT the flat top-level keys) has a fleet-level quantity silently read from the
