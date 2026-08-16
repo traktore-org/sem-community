@@ -32,6 +32,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call site forgets the flag. Live behavior is unchanged: with observer off,
   every path is exactly what it was.
 
+- 🧹 **The WOULD surface retires devices that stop deciding** (#764) — the
+  map is a roster, not a ledger: it answers "what would SEM do right now",
+  so a device that no longer decides leaves it at the end of the cycle,
+  edge state included. Caught within a cycle of the fix going live — the
+  legacy single-charger fallback decides once at startup, before the fleet
+  is populated, and its row then sat on a one-charger rig reading as a
+  second charger. Same class as #744.
+
+- 🩺 **Diagnostics report the charger adapter again** (#764) — the dump read
+  `coordinator._ev_adapters`, an attribute production has never had (the
+  cache is `_charger_adapters`), so `adapter_class` came back `null` on
+  every dump since #357 and the Wallbox pause-switch discovery block below
+  it — the entire reason #357 exists — was unreachable on real hardware.
+  The tests missed it because each one assigned the invented name to its
+  own mock; they now use the name the coordinator writes, and a pin fails
+  if the two ever drift apart again.
+
 - 💡 **The arbitrage line only appears where arbitrage can actually happen**
   (#533 / #638) — the advisor runs on every plan by design: it is the one
   reader of *every* page of the ledger, so an economically absurd verdict is

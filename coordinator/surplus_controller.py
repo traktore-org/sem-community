@@ -560,6 +560,7 @@ class SurplusController:
         }
         payload.update(extra)
         self.observer_decisions[key] = payload
+        self._observer_published_this_cycle.add(key)
         edge_key = _re.sub(r"-?\d+(?:[.,]\d+)?", "#",
                            f"{action}|{source}|{reason}")
         if self._observer_decision_keys.get(key) == edge_key:
@@ -570,6 +571,31 @@ class SurplusController:
                 "solar_energy_management_observer_decision", dict(payload))
         except Exception:  # noqa: BLE001 — the event must never break the seam
             pass
+
+    def retire_unpublished_observer_decisions(self) -> None:
+        """(#764) The surface is a ROSTER, not a ledger — sweep once a cycle.
+
+        ``observer_decisions`` answers "what would SEM do right now", so a
+        device that no longer decides has to leave. Whoever published this
+        cycle stays; everyone else is dropped, edge state included, so a
+        device that leaves and comes back announces itself instead of
+        returning silently.
+
+        Found live on .175 the day this shipped: the legacy single-charger
+        fallback decided once at startup, before ``_ev_devices`` was
+        populated, and its row then sat on a one-charger rig's surface
+        reading as a second charger. Same class as #744 — an append-only
+        map describes history, and a simulation needs the present tense.
+        """
+        live = self._observer_published_this_cycle
+        self._observer_published_this_cycle = set()
+        # An empty pass empties the map, and that is the honest answer: SEM
+        # would do nothing. A cycle that DIED never reaches the sweep (it is
+        # the last step of ``_async_update_data``), so an error preserves the
+        # last known shadow rather than blanking it.
+        for key in [k for k in self.observer_decisions if k not in live]:
+            self.observer_decisions.pop(key, None)
+            self._observer_decision_keys.pop(key, None)
 
     def record_observer_decision(self, device, intent: "LoadIntent",
                                  *, active: bool) -> None:
@@ -611,6 +637,7 @@ class SurplusController:
         # bridge is a five-line HA automation, not an SSH log scraper.
         self.observer_decisions: Dict[str, dict] = {}
         self._observer_decision_keys: Dict[str, str] = {}
+        self._observer_published_this_cycle: set[str] = set()
         self.max_export_w: float = 0  # 0 = no limit. E.g., 10000 for 10kW export limit
         self._devices: Dict[str, ControllableDevice] = {}
         self._allocation_data = SurplusAllocationData()

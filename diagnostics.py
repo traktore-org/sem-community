@@ -345,7 +345,17 @@ async def async_get_config_entry_diagnostics(
     ev_devices = getattr(coordinator, "_ev_devices", None) or {}
     if ev_devices:
         from .coordinator.ev_control import EVControlMixin  # noqa: F401
-        adapters = getattr(coordinator, "_ev_adapters", {}) or {}
+        # (#764) The cache the coordinator actually writes is
+        # ``_charger_adapters`` (coordinator.py / ev_control.py). This read
+        # said ``_ev_adapters`` — an attribute production has never had — so
+        # ``adapter_class`` came back null on every dump ever taken and the
+        # Wallbox discovery block below was unreachable live. Fall back to the
+        # old name for anything that still sets it.
+        adapters = (
+            getattr(coordinator, "_charger_adapters", None)
+            or getattr(coordinator, "_ev_adapters", None)
+            or {}
+        )
         for cid, dev in ev_devices.items():
             ad = adapters.get(cid)
             entry_info = {

@@ -3801,6 +3801,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     charging_context.available_power,
                 )
 
+            # (#764) Every family has now had its say — chargers (step 7),
+            # batteries (7.5), loads (inside the analytics phases). Sweep the
+            # WOULD surface so it describes THIS cycle: a device that stopped
+            # deciding leaves the map instead of lingering as a ghost row.
+            if self._observer_mode and self._surplus_controller:
+                self._surplus_controller.retire_unpublished_observer_decisions()
+
             # #596: reconcile the published fleet ``charging_state`` with the
             # per-charger effective state for single-charger installs (see
             # _resolve_fleet_charging_state).

@@ -336,6 +336,66 @@ class TestTheBatteryPipelineRunsUnderObserver:
         assert "battery:primary" in coord._surplus_controller.observer_decisions
 
 
+class TestTheSurfaceIsARosterNotALedger:
+    """The map answers "what would SEM do RIGHT NOW", so a device that no
+    longer decides must leave it.
+
+    Found live on .175 (16.08.2026), one cycle after this fix deployed: the
+    map showed TWO chargers on a one-charger rig. `ev:ev_charger` came from
+    the legacy single-charger fallback firing once at startup, before
+    `_ev_devices` was populated; it never decided again, but its row sat on
+    the surface reading as a second charger. Same class as #744 — a ledger
+    that only ever appends is not a roster.
+    """
+
+    def test_a_device_that_stops_deciding_leaves_the_map(self):
+        sc = _sc()
+        sc.publish_observer_decision(
+            key="ev:ghost", name="ghost", action="idle", kind="charger")
+        sc.publish_observer_decision(
+            key="ev:real", name="real", action="idle", kind="charger")
+        sc.retire_unpublished_observer_decisions()
+
+        # Next cycle only the real charger decides.
+        sc.publish_observer_decision(
+            key="ev:real", name="real", action="idle", kind="charger")
+        sc.retire_unpublished_observer_decisions()
+
+        assert set(sc.observer_decisions) == {"ev:real"}
+
+    def test_retiring_forgets_the_edge_state_too(self):
+        """Otherwise a device that leaves and returns with its old action
+        comes back silently — the return IS a transition."""
+        sc = _sc()
+        sc.publish_observer_decision(
+            key="battery:b2", name="b2", action="normal", kind="battery")
+        sc.retire_unpublished_observer_decisions()
+        sc.retire_unpublished_observer_decisions()  # b2 goes `off`, retires
+        sc.hass.bus.async_fire.reset_mock()
+
+        sc.publish_observer_decision(
+            key="battery:b2", name="b2", action="normal", kind="battery")
+
+        assert sc.hass.bus.async_fire.call_count == 1
+
+    def test_a_still_deciding_device_survives_every_sweep(self):
+        sc = _sc()
+        for _ in range(5):
+            sc.publish_observer_decision(
+                key="sim_heizband", name="Sim Heizband", action="hold")
+            sc.retire_unpublished_observer_decisions()
+
+        assert set(sc.observer_decisions) == {"sim_heizband"}
+
+    def test_the_cycle_sweeps_the_surface(self):
+        """The sweep only works if the cycle actually calls it, once, after
+        every family has had its say."""
+        src = inspect.getsource(SEMCoordinator._async_update_data)
+        assert "retire_unpublished_observer_decisions" in src, (
+            "nothing sweeps the WOULD surface — stale rows will accumulate"
+        )
+
+
 # ─────────────────────── the wiring pins ───────────────────────
 
 

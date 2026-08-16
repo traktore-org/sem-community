@@ -48,6 +48,13 @@ standard surfaces (one source of truth — the execution seam itself):
    it. The attribute is empty while observer mode is off (a live system's
    map would be stale by definition).
 
+   The map is a **roster, not a ledger**: it carries exactly the devices
+   that decided this cycle. One that stops deciding — mode set to `off`, a
+   charger deregistered, a startup-only code path that fired once — leaves
+   the map at the end of that cycle rather than lingering as a ghost row.
+   So a row's presence is itself a signal, and a count you read off the
+   attribute is the live count.
+
    Chargers and batteries share the map, keyed `ev:<charger_id>` and
    `battery:<battery_id>`, with `kind` naming the family — one attribute
    carries the whole shadow cycle:
