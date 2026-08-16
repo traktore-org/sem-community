@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A device's settings are no longer managed as if they were loads**
+  (#781) — 24 of one user's 50 Load-Management rows were WLED *settings*:
+  "reverse", "freeze", "night light", "sync send". Each landed controllable
+  with 0 W, so a peak event could flip an LED strip's reverse setting looking
+  for watts that were never there. The cause is that discovery asked only
+  "is this a switch I can pair with a power sensor" — and one
+  `sensor.wled_*_power` pairs with every sibling switch, because the name
+  match is a substring test. Home Assistant already answers the question SEM
+  wasn't asking: an entity marked *configuration* or *diagnostic* is a
+  device's own knob, never its primary control. SEM now reads that mark
+  everywhere the class lives — pattern discovery, the per-device control
+  pick (an appliance's child-lock is not its actuator), and the light-fixture
+  filter, which a strip's setting switches used to defeat. An entity the
+  registry doesn't know is still kept, not guessed at. And because rows a
+  previous version already wrote are never re-derived, they now retire
+  themselves on the next refresh — leaving hand-registered devices and
+  charger rows alone.
 # [2.0.0-beta.4] — 16.08.2026
 
 - 🐛 **"Mode: Off" now means SEM keeps its hands off, including its books**

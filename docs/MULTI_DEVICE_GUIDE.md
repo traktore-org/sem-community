@@ -259,6 +259,19 @@ skip is logged with the device name, so an absent row is an answer
 rather than a mystery, and it is re-evaluated on every refresh — a light
 imported by an older version disappears by itself after the upgrade.
 
+**Settings are not devices.** A lot of hardware publishes its own knobs
+as switches — a WLED strip's *reverse*, *freeze* and *night light*, a
+washing machine's *child lock*, a router's *status LED*. Home Assistant
+marks those entities **configuration** or **diagnostic**, and SEM reads
+that mark: they are never discovered as loads, never chosen as a
+device's control surface, and rows an older version created for them
+retire themselves on the next refresh. Toggling one draws no watts, so
+managing it can only ever be noise — a peak event flipping your stair
+lights into reverse looking for power that was never there. Two things
+are always kept: an entity your registry doesn't know (a template
+switch, a YAML helper — no mark to read is not evidence against it), and
+anything you registered yourself with `register_surplus_device`.
+
 ### Catching the surplus in your own automations (`peak_only`)
 
 If you prefer to keep your own schedules (e.g. a 3×/day pump

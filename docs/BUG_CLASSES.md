@@ -1668,3 +1668,59 @@ class-17 release.
 **Sweep question:** for every boolean that records *what SEM did*, ask — could this be assigned by a
 function that only knows what the world *looks like*? If yes it is not a record, it is a guess, and
 something downstream is treating it as testimony. Refs #779 #766 #559 #576.
+---
+
+### 42. Discovery admits on SHAPE when the registry already answers on ROLE — GUARDED
+**Symptom:** the device list fills with rows that are not devices — a load per *setting* of one
+appliance, all `is_controllable`, all `W = 0`. Nothing errors; the fleet just quietly grows a
+population SEM will try to manage.
+**Root shape:** the admission test asks a **structural** question ("is this a `switch.*` I can pair
+with a power sensor?") about a question that is **semantic** ("is this the device's control surface,
+or one of its knobs?"). Home Assistant already answers the semantic one — `entity_category` =
+`config`/`diagnostic` means *explicitly not the primary control* — and the entity_id cannot be made
+to answer it (`switch.wled_treppe_umkehren` is shaped exactly like `switch.dishwasher`). The same
+registry-driven shape as the #744 light filter, and the same failure to consult it.
+**Amplifier — a fuzzy pairing turns one admission into N.** `_names_match`'s last resort strips
+every digit, so one `sensor.wled_treppe_power` matches every sibling switch of that strip, and
+`shelly_kanal_1` matches `shelly_kanal_2`'s meter. A structural admission plus a lossy match is a
+fan-out: one wrong yes becomes twenty-four rows, and two real channels swap watts.
+**Live catch (#781, @onkelfu, v2.0.0-beta.4):** 24 of 50 Load-Management rows were
+`load_device_wled_*` — *umkehren*, *einfrieren*, *nachtlicht*, *sync senden/empfangen* — every one a
+WLED setting, every one `peak_only` + controllable, so a peak event could flip a stair light into
+reverse hunting for watts that never existed. The strip's CONFIG switches also defeated the #744
+light filter: `_is_light_fixture` tested the bare sibling **domains**, saw `switch` present, and
+concluded "metering plug, keep".
+**Closure:** one predicate, `LoadDeviceDiscovery.is_config_surface`, consulted at **all five** places
+the class lives — pattern discovery; `_find_control_in_device` (an appliance's child-lock is not its
+actuator; the filter is *deliberately* strict, because "this device has no primary control, use the
+categorized one" is precisely the harm); `_find_control_by_name`, whose partial match accepts any
+`switch.*` merely *containing* the base name; the Shelly/ESPHome branches of
+`_find_control_by_integration` (a Shelly auto-off timer, an ESPHome `restart` switch — every node
+publishes one); and `_is_light_fixture` (count only primary switches). It reads the two **named**
+values (`config`/`diagnostic`) rather than truthiness, so an unrecognised category keeps the load —
+the filter may only act on a positive, known answer. Charger brand paths (KEBA/go-e/Easee) are out
+of scope by construction: a charger's control can legitimately be categorized, and charger rows are
+authoritative.
+`_find_corresponding_power_sensor` now prefers an exact base-name match and keeps the fuzzy hit only
+as a fallback. Absence of a registry entry filters **nothing** (a template switch / YAML helper has
+no category to read — the #744 rule).
+**The retirement half — a discovery filter is inert on an install that already ran.** Two facts
+compose: `LoadManagement._discover_devices` early-returns once `_unified_registry_active`, so
+pattern discovery never runs again on a live install; and `_sync_to_load_manager`'s #436 prune
+**spares every `load_device_*` key**. The rows are immortal — a filter alone would have changed
+nothing for the reporter. Hence `_prune_config_surface_lm_rows`, the third member of the prune
+house pattern (charger-duplicate, ED-duplicate, config-surface): it deletes from `lm._devices` and
+`_devices_shed`, spares authoritative charger rows and explicit `_service_registrations`, and
+returns a bool so the sync **persists** the removal (the #744 lesson — a drop that isn't written
+back is undone by the next restart).
+**Where else it lives:** every discovery predicate that reads an entity_id, a domain or a state and
+not the registry — control discovery, power-sensor pairing, sensor-role inference, the ED import.
+Ask of each: does HA already record this as metadata?
+**Guard:** `tests/test_781_config_switch_discovery.py` — the WLED shape refused, the diagnostic
+switch refused, a plain metering plug still discovered, an unregistered switch still kept, the
+control pick refusing a setting on the name path and on both brand paths (with the real relay still
+found), channel 1 bound to channel 1's meter, and six retirement pins (drop, survive, charger,
+service registration, ED-row out of scope, persisted by the sync).
+**Sweep question:** for every "is this a candidate?" test in discovery — is the question being asked
+structural while the question that matters is semantic? If HA carries the answer as metadata, a
+name-shaped guess is not a heuristic, it is a wrong answer with a fallback. Refs #781 #744 #745 #436.

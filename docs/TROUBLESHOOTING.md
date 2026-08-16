@@ -567,3 +567,18 @@ Energy integration gap: XXXs > 120s limit — skipping cycle to prevent accumula
 1. The daily accumulators reset at midnight — wait for the next day
 2. For immediate correction: compare SEM values against hardware daily counters (e.g. `sensor.batteries_tagesentladung`) and adjust storage if needed
 3. Restart the integration after corrections: **Settings > Devices & Services > Solar Energy Management > Reload**
+## Devices & Services shows dozens of loads that are settings, not devices
+
+**Cause (fixed in 2.0.0):** load discovery admitted any `switch.*` it could
+pair with a power sensor. A lot of hardware publishes its own knobs as
+switches — a WLED strip's *reverse* / *freeze* / *night light*, a washing
+machine's child lock, a router's status LED — and one `sensor.*_power` pairs
+with all of a device's siblings, so one strip could contribute a dozen rows,
+each controllable at 0 W.
+
+**Now:** Home Assistant marks those entities **configuration** or
+**diagnostic**, and SEM reads that mark — they are not discovered, not chosen
+as a device's control surface, and rows an older version wrote retire
+themselves on the next refresh (logged as `#781 dropped load row …`). Entities
+your registry doesn't know (template switches, YAML helpers) are still kept,
+as is anything you registered yourself with `register_surplus_device`.

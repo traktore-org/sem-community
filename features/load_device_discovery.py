@@ -29,6 +29,12 @@ _ONOFF_CONTROL_DOMAINS = frozenset(
     {"switch", "light", "input_boolean", "fan", "humidifier", "siren", "remote"}
 )
 
+# (#781) The two ``entity_category`` values HA uses to say "this entity is NOT
+# the device's primary control" — a knob or a readout, never a load. Named
+# explicitly rather than tested for truthiness so an unrecognised value keeps
+# the load: this filter may only ever act on a positive, known answer.
+_CONFIG_SURFACE_CATEGORIES = frozenset({"config", "diagnostic"})
+
 
 def resolve_load_is_on(
     hass: HomeAssistant, control_entity: Optional[str], current_power: float
@@ -63,6 +69,40 @@ class LoadDeviceDiscovery:
         """Initialize device discovery."""
         self.hass = hass
         self._entity_registry = entity_registry.async_get(hass)
+
+    def is_config_surface(self, entity_id: Optional[str]) -> bool:
+        """(#781) Is this entity a device's own configuration / diagnostic
+        knob rather than a control surface?
+
+        HA already answers this, and the answer is not guessable from the
+        entity_id: ``entity_category`` exists precisely to mark an entity as
+        NOT the device's primary control. A WLED strip publishes
+        ``switch.*_umkehren`` / ``_einfrieren`` / ``_nachtlicht`` / sync
+        toggles — every one CONFIG — and pattern discovery, which admits any
+        ``switch.*`` it can pair with a power sensor, registered 24 of them as
+        sheddable loads on onkelfu's install. A peak event would then flip an
+        LED strip's *reverse* setting hunting for watts it never drew.
+
+        Registry-driven like the #744 light filter, and equally conservative:
+        an entity the registry does not know (a template switch, a YAML
+        helper) has no category to read, and absence of evidence filters
+        nothing. Same for a category HA might add later — only the two values
+        that actually mean "not the primary control" filter, so this can only
+        ever remove a load on a positive, named answer.
+        """
+        if not entity_id:
+            return False
+        try:
+            entry = self._entity_registry.async_get(entity_id)
+        except Exception:  # noqa: BLE001 — an unreadable registry filters nothing
+            return False
+        if entry is None:
+            return False
+        category = getattr(entry, "entity_category", None)
+        if category is None:
+            return False
+        name = str(getattr(category, "value", category)).lower()
+        return name in _CONFIG_SURFACE_CATEGORIES
 
     def get_all_entities(self) -> List[str]:
         """Get all available entity IDs."""
@@ -105,6 +145,14 @@ class LoadDeviceDiscovery:
                 if switch_entity in excluded:
                     _LOGGER.debug(
                         "Skipping %s: claimed by a configured charger", switch_entity
+                    )
+                    continue
+                # (#781) a device's configuration knob is not a load — see
+                # is_config_surface.
+                if self.is_config_surface(switch_entity):
+                    _LOGGER.debug(
+                        "Skipping %s: a configuration/diagnostic entity, not a "
+                        "control surface", switch_entity,
                     )
                     continue
                 # Try to find corresponding power sensor
@@ -174,7 +222,14 @@ class LoadDeviceDiscovery:
                 self._entity_registry, entry.device_id,
                 include_disabled_entities=True,
             )
-            domains = {e.entity_id.split(".", 1)[0] for e in siblings}
+            # (#781) Only a PRIMARY switch counts as "this fixture has a real
+            # control surface". A WLED strip carries ``switch.*`` siblings that
+            # are all CONFIG knobs (reverse, freeze, nightlight, sync), so the
+            # bare domain test read it as a metering plug and imported it.
+            domains = {
+                e.entity_id.split(".", 1)[0] for e in siblings
+                if not self.is_config_surface(e.entity_id)
+            }
             return "light" in domains and "switch" not in domains
         except Exception:  # noqa: BLE001 — an unreadable registry filters nothing
             return False
@@ -373,6 +428,17 @@ class LoadDeviceDiscovery:
             self._entity_registry, device_id
         )
 
+        # (#781) A device's configuration knobs are not its control surface,
+        # at any priority. WLED publishes only CONFIG switches beside its
+        # light, so "the first switch on this device" handed a strip's
+        # nightlight toggle to load management as an actuator. Strict, not
+        # preferential: falling back to a categorized entity when a device has
+        # no primary control is exactly the harm — "monitoring only" is the
+        # honest answer there.
+        device_entities = [
+            e for e in device_entities if not self.is_config_surface(e.entity_id)
+        ]
+
         # Priority 1: Switch entities
         for entry in device_entities:
             if entry.entity_id.startswith("switch.") and not entry.disabled_by:
@@ -426,6 +492,12 @@ class LoadDeviceDiscovery:
     def _find_control_by_name(self, base_name: str) -> Optional[Dict[str, Any]]:
         """Find control entity by matching base name patterns.
 
+        (#781) The partial match below accepts any ``switch.*`` merely
+        CONTAINING the base name — for a WLED strip that is
+        ``switch.wled_treppe_umkehren``, and SEM would then "control" the load
+        by flipping its reverse setting. A configuration/diagnostic entity is
+        never a control surface; see :meth:`is_config_surface`.
+
         Args:
             base_name: Base name extracted from energy sensor
 
@@ -443,7 +515,7 @@ class LoadDeviceDiscovery:
         ]
 
         for switch in switch_patterns:
-            if switch in all_entities:
+            if switch in all_entities and not self.is_config_surface(switch):
                 state = self.hass.states.get(switch)
                 if state and state.state not in ("unknown", "unavailable"):
                     return {
@@ -453,7 +525,11 @@ class LoadDeviceDiscovery:
 
         # Try partial match for switches containing the base name
         for entity in all_entities:
-            if entity.startswith("switch.") and base_name in entity:
+            if (
+                entity.startswith("switch.")
+                and base_name in entity
+                and not self.is_config_surface(entity)
+            ):
                 state = self.hass.states.get(entity)
                 if state and state.state not in ("unknown", "unavailable"):
                     return {
@@ -583,9 +659,14 @@ class LoadDeviceDiscovery:
             base_name = self._extract_base_name(energy_sensor)
             all_entities = self.get_all_entities()
 
-            # Shelly typically has switch entities
+            # Shelly typically has switch entities — but also settings ones
+            # (auto-on/auto-off timers, LED mode). (#781) Skip those.
             for entity in all_entities:
-                if entity.startswith("switch.") and "shelly" in entity.lower():
+                if (
+                    entity.startswith("switch.")
+                    and "shelly" in entity.lower()
+                    and not self.is_config_surface(entity)
+                ):
                     # Try to match by checking if base name relates to this switch
                     if base_name in entity.lower() or self._names_match(
                         base_name, self._extract_base_name(entity)
@@ -602,8 +683,10 @@ class LoadDeviceDiscovery:
             base_name = self._extract_base_name(energy_sensor)
             all_entities = self.get_all_entities()
 
+            # (#781) Every ESPHome node publishes a ``restart`` switch, and
+            # many publish more config toggles. They are not the load.
             for entity in all_entities:
-                if entity.startswith("switch."):
+                if entity.startswith("switch.") and not self.is_config_surface(entity):
                     if base_name in entity.lower():
                         state = self.hass.states.get(entity)
                         if state and state.state not in ("unavailable", "unknown"):
@@ -624,21 +707,32 @@ class LoadDeviceDiscovery:
     def _find_corresponding_power_sensor(
         self, switch_entity: str, power_pattern: str, all_entities: List[str]
     ) -> Optional[str]:
-        """Find the power sensor corresponding to a switch entity."""
+        """Find the power sensor corresponding to a switch entity.
+
+        (#781) The device's OWN sensor wins. ``_names_match``'s last resort
+        strips every digit, so ``shelly_kanal_1`` and ``shelly_kanal_2`` clean
+        to the same string and channel 1 adopted whichever channel's sensor the
+        entity list happened to yield first — a load bound to a neighbour's
+        watts. An exact base-name match is unambiguous; the fuzzy match stays,
+        but only as the fallback it was meant to be.
+        """
         # Extract the base name from switch entity
         base_name = self._extract_base_name(switch_entity)
 
         # Look for power sensors that match the base name
         potential_power_sensors = self._find_pattern_matches(power_pattern, all_entities)
 
+        fuzzy_match: Optional[str] = None
         for power_entity in potential_power_sensors:
             power_base_name = self._extract_base_name(power_entity)
 
-            # Check if they belong to the same device
-            if self._names_match(base_name, power_base_name):
+            if power_base_name == base_name:
                 return power_entity
+            # Check if they belong to the same device
+            if fuzzy_match is None and self._names_match(base_name, power_base_name):
+                fuzzy_match = power_entity
 
-        return None
+        return fuzzy_match
 
     def _extract_base_name(self, entity_id: str) -> str:
         """Extract base name from entity ID for matching."""

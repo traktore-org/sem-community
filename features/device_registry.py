@@ -978,6 +978,16 @@ class UnifiedDeviceRegistry:
         # neighbouring load is never folded.
         ed_pruned = self._prune_ed_duplicate_lm_rows()
 
+        # (#781) The rows that were never loads at all. Same immortality as
+        # above (the #436 spare keeps every ``load_device_*`` key), different
+        # reason: these are a device's own CONFIGURATION knobs, admitted by
+        # pattern discovery because a ``switch.*`` that pairs with a power
+        # sensor was the whole test. Filtering discovery does nothing for an
+        # install that already persisted them — pattern discovery is guarded
+        # off once the registry is active, so nothing re-derives these keys and
+        # nothing else would ever remove them.
+        config_pruned = self._prune_config_surface_lm_rows()
+
         _LOGGER.info(
             "Synced %d devices to LoadManagement", len(self._devices)
         )
@@ -987,7 +997,7 @@ class UnifiedDeviceRegistry:
         # and they compose: a charger twin folded, an ED twin folded, or a row
         # the registry no longer derives. Any one of them means the store is
         # now behind the roster.
-        return charger_pruned or ed_pruned or bool(old_ids)
+        return charger_pruned or ed_pruned or config_pruned or bool(old_ids)
 
     async def _reconcile_charger_dups_and_persist(self) -> None:
         """(#748) Drop charger-duplicate LoadManagement rows and de-persist if
@@ -1157,6 +1167,67 @@ class UnifiedDeviceRegistry:
                 "#779 dropped legacy smart-switch ghost load row %s — it "
                 "duplicates a registry-owned Energy-Dashboard device (shared "
                 "entity); the ED row is authoritative", did,
+            )
+        return bool(removed)
+
+    def _prune_config_surface_lm_rows(self) -> bool:
+        """(#781) Drop legacy ``load_device_<slug>`` rows whose control entity
+        is a device's CONFIGURATION knob, not a load.
+
+        onkelfu's diagnostics: 24 of 50 Load-Management rows are
+        ``load_device_wled_*`` — reverse, freeze, nightlight, sync send/receive.
+        Pattern discovery admitted them because it asked only "is this a
+        ``switch.*`` I can pair with a power sensor", and one
+        ``sensor.wled_treppe_power`` pairs with every sibling. Each row landed
+        ``is_controllable`` at ``peak_only``, so a peak event could flip an LED
+        strip's settings looking for watts it never drew (``W = 0``).
+
+        Discovery now refuses them (``LoadDeviceDiscovery.is_config_surface`` —
+        one rule, read from HA's own ``entity_category``), but a filter alone
+        leaves an upgraded install exactly as it was: with the registry active,
+        LoadManagement's pattern discovery is guarded off, so no pass
+        re-derives these keys, and ``_sync_to_load_manager``'s prune spares
+        every ``load_device_*`` key by design (#436). They have to be retired
+        explicitly. The same three spares as the sibling prunes: authoritative
+        per-charger rows, explicit service registrations, and anything the
+        registry itself owns (``energy_dashboard_*`` re-derives every refresh).
+        Returns True if it removed anything. Never raises."""
+        lm = self._load_manager
+        if not lm or not self._discovery:
+            return False
+        authoritative = {
+            f"load_device_{c.get('id')}"
+            for c in self._ev_charger_rows if c.get("id")
+        }
+        removed: List[str] = []
+        try:
+            for did, info in list(getattr(lm, "_devices", {}).items()):
+                if not did.startswith("load_device_") or not isinstance(info, dict):
+                    continue
+                if did in authoritative or info.get("device_type") == "ev_charger":
+                    continue  # authoritative charger row
+                if did in self._service_registrations:
+                    continue  # explicit user registration, not a discovery guess
+                control = info.get("control") or {}
+                candidates = [info.get("switch_entity"), control.get("entity")]
+                if any(self._discovery.is_config_surface(e) for e in candidates):
+                    removed.append(did)
+        except Exception as e:  # pragma: no cover - defensive
+            _LOGGER.debug("#781 config-surface prune skipped: %s", e)
+            return False
+        for did in removed:
+            try:
+                del lm._devices[did]
+            except KeyError:  # pragma: no cover - defensive
+                pass
+            # A pruned row must not linger in the shed list — _restore_loads
+            # indexes _devices[did] and would KeyError on a removed row.
+            shed = getattr(lm, "_devices_shed", None)
+            if isinstance(shed, list) and did in shed:
+                shed.remove(did)
+            _LOGGER.info(
+                "#781 dropped load row %s — its control entity is a "
+                "configuration/diagnostic knob, not a load", did,
             )
         return bool(removed)
 

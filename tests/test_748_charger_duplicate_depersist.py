@@ -67,8 +67,13 @@ class _FakeLoadManager:
 
 
 def _reg(load_manager, charger_rows=None, ed_devices=None):
+    # The discovery double must answer #781's config-surface question the way
+    # the real object does — a bare MagicMock says "yes, a knob" to every
+    # entity and the sync's config-surface prune would eat these fixtures.
+    discovery = MagicMock()
+    discovery.is_config_surface.return_value = False
     r = UnifiedDeviceRegistry(
-        MagicMock(), _SurplusController(), load_manager, MagicMock()
+        MagicMock(), _SurplusController(), load_manager, discovery
     )
     r._has_battery = False
     r._devices = list(ed_devices or [])
