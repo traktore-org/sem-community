@@ -1309,6 +1309,20 @@ ID and tracks sessions, power, and costs per charger. See
 [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md) for multi-charger priority
 and surplus distribution details.
 
+The page pre-fills from a charger SEM found in your entity registry and does
+not already manage — a box you have already configured is never offered a
+second time, so the suggestions are always for the *new* charger. If nothing
+was discovered the fields come up empty; fill them in by hand.
+
+**A wrong entity was auto-detected — how do I remove it?**
+
+Clear the field and save. Optional pickers (start/stop switch, current
+sensor, charge-mode select, the `phase_guard_*` sensors, the heat-pump
+relays, the tariff entities) treat an empty field as "this system does not
+have one", and SEM stops using the key. Required fields cannot be emptied —
+point them at the right entity instead. Before v2.0.0-beta.4 an emptied
+field was read as "unchanged" and the old value stayed.
+
 **SEM is using too much CPU on my Raspberry Pi.**
 
 Raise the update interval in the options flow from 10 seconds to 30 seconds.

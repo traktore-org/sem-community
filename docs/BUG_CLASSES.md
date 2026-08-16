@@ -906,12 +906,26 @@ either side. A silent default is the same bug with the guess baked into the sour
 v1.0, auto-filled for some brands, never writable, and beta.25's new repair pointed straight at
 it); **#688 part 1** (`min_off_time_sec` defaulted to a twitchy 1 min with no surface, so a pool
 pump short-cycled and the user could neither see the window nor lengthen it).
+**Second half (16.08.2026):** a field you can type into is not yet a surface you can *correct* —
+the class also lives in what a form does with the value you did **not** type. HA drops a cleared
+optional field out of `user_input` entirely, so `update(user_input)` cannot tell "left alone" from
+"emptied": **41 fields on 8 pages** were re-pointable but not erasable (`phase_guard_*` ×12, the
+tariff entities, the heat-pump relays, `battery_discharge_control_entity`, the per-charger
+entities). And a *suggestion* that clones an installed device is the same asymmetry pointing
+outward: the add-charger page deduped discoveries on `_device_id`, which is written onto a
+discovery and never onto the stored charger, so charger #2 was pre-filled with charger #1 — one
+box, two configs, the second never moves.
 **Closure:** every per-charger/per-load key the runtime honours is settable *after* install, on
 the same fields it was set with; detection results become suggestions the user can override, not
-silent commitments. Guarded by `tests/test_627_charger_config_surface.py` and
+silent commitments; a cleared field is recorded as an explicit `None` (deleting the key merely
+un-covers what `entry.data` holds, #690); devices are recognised by the entities they point at,
+which is what actually gets stored. Guarded by `tests/test_627_charger_config_surface.py`,
+`tests/test_ev_charger_post_install_surface.py` (AST: no step may merge a form by hand; the
+charger fingerprint must cover every entity `hardware_detection` reports) and
 `tests/test_688_load_anti_cycling.py`.
 **Sweep question:** for each key the runtime reads out of config — *name the screen that writes
-it.* If the answer is "the install-time step" or "hardware detection", it has no surface.
+it, and the gesture that empties it.* If the answer is "the install-time step" or "hardware
+detection", it has no surface; if there is no answer to the second half, it has no way back.
 
 ### 31. `except` narrower than what its own body can raise — a "never raises" helper that does — PARTIAL
 **Symptom:** a best-effort helper whose docstring promises it can't break the caller, and which is

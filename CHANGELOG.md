@@ -13,6 +13,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧹 **A config field you empty now stays empty** (#627) — Home Assistant
+  leaves a cleared optional field out of the submitted form altogether, and
+  every page merged what it received with `update(user_input)`. That merge
+  cannot tell "left alone" from "emptied", so **41 fields across 8 pages**
+  could be re-pointed but never taken back: the twelve `phase_guard_*`
+  current/power/voltage sensors, the tariff entities, the heat-pump relays,
+  the battery discharge control entity, and the per-charger entities #627
+  gave a surface to in the first place. Mis-pick one at setup and the only
+  recorded cure was deleting the integration. Every page now merges through
+  one helper that asks the form it just showed which fields it offered, and
+  records a cleared field explicitly — so the clear also survives the merge
+  with whatever initial setup wrote. An AST guard fails CI if a page goes
+  back to merging by hand.
+- 🔌 **A second EV charger no longer starts life as a copy of the first**
+  (#627) — the add-charger page filtered already-installed boxes out of its
+  suggestions by `_device_id`, a key auto-discovery puts on a *discovery* and
+  that nothing ever writes onto the *stored* charger. The filter therefore
+  never matched, every discovery always looked new, and charger #2 came up
+  pre-filled with charger #1's sensors and its control service. Accept the
+  suggestions and SEM held two configs for one box: the first was driven
+  twice, the second never moved. Chargers are now recognised by the entities
+  they point at — what actually gets stored, for every charger, including the
+  one the initial setup flow creates and which can never carry a
+  `_device_id`.
 - 🛡️ **A hands-off install now boots hands-off** (#777) — the persisted
   toggles (`observer_mode`, `vacation_mode`, `energy_plan_actuation`) can be
   recorded in three places: the config entry's options, its data, or — on an

@@ -89,6 +89,110 @@ def _efficiency_from_percent(percent: Any) -> float:
     return resolve_charge_efficiency(fraction)
 
 
+def _clearable_keys(schema: Any) -> set[str]:
+    """The fields a form lets the user leave EMPTY.
+
+    ``vol.Optional(key, description={"suggested_value": …})`` with no
+    ``default`` is exactly HA's "may be absent": the marker only *suggests*
+    a value, so an emptied field comes back as a MISSING key rather than an
+    empty string. An Optional that carries a ``default`` is always filled in
+    by validation, so it is never ambiguous and never clearable.
+    """
+    inner = getattr(schema, "schema", None)
+    if not isinstance(inner, dict):
+        return set()
+    return {
+        str(marker.schema)
+        for marker in inner
+        if isinstance(marker, vol.Optional)
+        and getattr(marker, "default", vol.UNDEFINED) is vol.UNDEFINED
+    }
+
+
+def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
+    """Merge a submitted form into ``target``, honouring CLEARED fields.
+
+    ``target.update(user_input)`` — what every step used to do — cannot tell
+    "the user left this alone" from "the user emptied it", because HA drops
+    an emptied optional field out of ``user_input`` altogether. The result
+    is a config key that can be re-pointed but never taken back: a wrong
+    auto-detected ``ev_start_stop_entity`` (#627's symptom), a mis-picked
+    ``phase_guard_*`` sensor, a heat-pump relay on the wrong switch. The
+    only recorded cure was deleting the integration.
+
+    The missing input is *which fields this page offered* — and HA keeps it:
+    ``flow.cur_step`` is the form it just showed, schema included. So the
+    page itself decides what may be cleared, and no hand-written key list
+    can drift away from the fields on screen.
+
+    A cleared field is written as ``None``, not deleted. The runtime config
+    is ``{**entry.data, **entry.options}`` and the options flow replaces
+    options wholesale (#690), so deleting the key merely un-covers whatever
+    initial setup wrote into ``entry.data`` and the cleared value returns.
+    ``None`` is also the house spelling of "not set" — the v8→v9 migration
+    seeds ``vehicle_min_current: None`` — and every consumer of these keys
+    reads them for truth or with a falsy fallback.
+
+    With no shown form to consult (a direct handler call), this degrades to
+    a plain update: nothing to clear against.
+    """
+    cur_step = getattr(flow, "cur_step", None) or {}
+    for key in _clearable_keys(cur_step.get("data_schema")):
+        if key not in user_input:
+            target[key] = None
+    target.update(user_input)
+
+
+# Every per-charger key that names an ENTITY, i.e. that says something about
+# the physical box rather than about the car or about how to talk to it.
+# Service names are deliberately absent: two KEBAs both answer to
+# ``keba.set_current``, so a service is not an identity. Pinned against
+# ``hardware_detection`` by tests/test_ev_charger_post_install_surface.py, so
+# a brand that starts reporting a new entity key cannot quietly slip out of
+# the comparison below.
+_CHARGER_ENTITY_KEYS = frozenset({
+    "ev_charge_mode_entity",
+    "ev_charger_service_entity_id",
+    "ev_charging_power_sensor",
+    "ev_charging_sensor",
+    "ev_connected_sensor",
+    "ev_current_control_entity",
+    "ev_current_sensor",
+    "ev_session_energy_sensor",
+    "ev_start_stop_entity",
+    "ev_total_energy_sensor",
+})
+
+
+def _charger_entities(charger: Any) -> set[str]:
+    """The entities a charger config points at — its fingerprint."""
+    if not isinstance(charger, dict):
+        return set()
+    return {str(v) for k, v in charger.items() if k in _CHARGER_ENTITY_KEYS and v}
+
+
+def _charger_already_installed(discovery: dict, installed: Any) -> bool:
+    """Is this discovery a box the user already has?
+
+    Compared by ENTITY OVERLAP. The dedup this replaces compared
+    ``_device_id`` — a key ``hardware_detection`` puts on a *discovery* and
+    that nothing ever writes onto the *stored* charger. So the set of
+    already-known ids was always empty, every discovery always looked new,
+    and the values offered for charger #2 were charger #1's own config: its
+    sensors and its ``ev_charger_service``. Accept the suggestions and SEM
+    drives the first box twice while the second one never moves.
+
+    Entities are the right key because they are what actually gets stored,
+    for every charger — including charger #0, which the initial setup flow
+    creates and which can never carry a ``_device_id``, and including one
+    that was configured by hand.
+    """
+    mine = _charger_entities(discovery)
+    if not mine:
+        return False
+    return any(mine & _charger_entities(c) for c in (installed or []))
+
+
 def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
     """Auto-detect battery capacity, system size, and max discharge from hardware.
 
@@ -394,7 +498,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 # Store EV charger entities and continue to the hardware step
-                self._data.update(user_input)
+                _merge_form_input(self, self._data, user_input)
                 return await self.async_step_hardware()
 
         # Primary: integration-aware registry discovery (KEBA, Easee, go-eCharger, Wallbox).
@@ -589,7 +693,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 merged.update(self._install_defaults())
                 merged.update(_detect_hardware_specs(self.hass))
                 merged.update(self._data)
-                merged.update(user_input)
+                _merge_form_input(self, merged, user_input)
 
                 discharge_entity = discover_inverter_from_registry(
                     self.hass, self._energy_dashboard_config
@@ -1003,10 +1107,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             # Update both flat keys and ev_chargers[0] (#112)
-            self._data.update(user_input)
+            _merge_form_input(self, self._data, user_input)
             ev_chargers = list(self._data.get("ev_chargers") or self.config_entry.options.get("ev_chargers") or [])
             if ev_chargers:
-                ev_chargers[0].update(user_input)
+                _merge_form_input(self, ev_chargers[0], user_input)
             else:
                 ev_chargers = [{"id": "ev_charger", "name": "EV Charger", **user_input}]
             self._data["ev_chargers"] = ev_chargers
@@ -1222,9 +1326,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # Auto-discover additional chargers
         from .hardware_detection import discover_all_ev_chargers_from_registry
         all_discovered = discover_all_ev_chargers_from_registry(self.hass)
-        existing_ids = {c.get("_device_id") for c in self._data.get("ev_chargers", []) if c.get("_device_id")}
-        # Filter to undiscovered chargers
-        new_discoveries = [c for c in all_discovered if c.get("_device_id") not in existing_ids]
+        # Offer only a box the user does NOT already have — see
+        # ``_charger_already_installed`` for why the fingerprint is the
+        # entities and not ``_device_id``.
+        installed = self._data.get("ev_chargers", [])
+        new_discoveries = [
+            c for c in all_discovered if not _charger_already_installed(c, installed)
+        ]
         suggestions = new_discoveries[0] if new_discoveries else {}
 
         return self.async_show_form(
@@ -1421,7 +1529,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             # Update charger with new values
             charger_name = user_input.pop("charger_name", charger.get("name", "EV Charger"))
-            charger.update(user_input)
+            _merge_form_input(self, charger, user_input)
             charger["name"] = charger_name
             self._data["ev_chargers"] = ev_chargers
             _LOGGER.info("Updated EV charger '%s'", charger_name)
@@ -1655,7 +1763,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._data.update(user_input)
+            _merge_form_input(self, self._data, user_input)
             return await self.async_step_settings_ev()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
@@ -1749,7 +1857,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """EV charging, solar and observer-mode settings."""
         if user_input is not None:
-            self._data.update(user_input)
+            _merge_form_input(self, self._data, user_input)
             return await self.async_step_settings_phase_guard_topology()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
@@ -1800,7 +1908,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             user_input["phase_guard_phase_count"] = int(
                 user_input.get("phase_guard_phase_count", 3)
             )
-            self._data.update(user_input)
+            _merge_form_input(self, self._data, user_input)
             self._data["phase_guard_enabled"] = topology != "disabled"
             if topology == "disabled":
                 return await self.async_step_settings_tariff()
@@ -1849,7 +1957,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Map per-phase sensors for the selected electrical topology."""
         if user_input is not None:
-            self._data.update(user_input)
+            _merge_form_input(self, self._data, user_input)
             return await self.async_step_settings_tariff()
 
         current_config = {
@@ -2099,7 +2207,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
                         break
-            self._data.update(user_input)
+            _merge_form_input(self, self._data, user_input)
             return await self.async_step_load_management()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
@@ -2247,7 +2355,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     errors["emergency_peak_level"] = "peak_emergency_not_above_target"
 
             if not errors:
-                self._data.update(user_input)
+                _merge_form_input(self, self._data, user_input)
                 return await self.async_step_heat_pump()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
@@ -2358,7 +2466,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if has_one_relay and not has_climate:
                 errors["base"] = "heat_pump_partial_relays"
             else:
-                self._data.update(user_input)
+                _merge_form_input(self, self._data, user_input)
                 return await self.async_step_battery_scheduler()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
@@ -2434,7 +2542,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._data.update(user_input)
+            _merge_form_input(self, self._data, user_input)
             if self._data.get("battery_charge_platform") == "deye":
                 return await self.async_step_deye()
             return await self.async_step_pv_naming()
@@ -2904,7 +3012,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     errors["mobile_notification_service"] = "service_not_found"
 
             if not errors:
-                self._data.update(user_input)
+                _merge_form_input(self, self._data, user_input)
                 # #690 — async_create_entry REPLACES entry.options wholesale.
                 # Carry forward every stored option this dialog does not own,
                 # so a config-dialog save can't erase values written by
