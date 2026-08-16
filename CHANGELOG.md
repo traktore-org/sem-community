@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased]
+
+- 🛡️ **A hands-off install now boots hands-off** (#777) — the persisted
+  toggles (`observer_mode`, `vacation_mode`, `energy_plan_actuation`) can be
+  recorded in three places: the config entry's options, its data, or — on an
+  install predating the persisted toggles — only in the switch entity's own
+  restore store. The switch reads all three. Setup read the first two and
+  built the coordinator from the default, so on such an install SEM came up
+  **armed** and only learned it was supposed to be observing when the switch
+  platform attached, minutes later on a busy start. Live-hit on a test box
+  wired to a real charger and battery. Setup now resolves the flags from the
+  same three sources, in the same order, *before* the coordinator exists, and
+  writes what it recovers into the config entry — so the answer stops
+  depending on a store Home Assistant prunes after seven days. Nothing
+  changes for an install that has ever toggled a switch or been created by
+  the current setup flow: those already carry an explicit record.
+
 # [2.0.0-beta.3] — 16.08.2026
 
 - 🔭 **Observer mode now cuts at the write, not before the decision** (#764) —

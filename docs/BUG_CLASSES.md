@@ -1524,3 +1524,36 @@ here because the Huawei `forcible_charge_soc` carries a `duration` — a per-cyc
 scheduler set duration to the full remaining window, or rely on re-issue?), so it is a design call,
 not a mechanical guard.
 Refs #538 #757.
+
+### 39. A safety flag whose truth lives in a store its reader cannot see — GUARDED
+**Symptom:** a promise about hardware silently does not hold for a window after every restart. The
+UI is correct — the switch shows the right state — and the flag is genuinely honoured *once the
+entity attaches*, so every point-in-time check passes. Only the interval between component setup
+and platform attach is wrong, it is invisible in a steady-state inspection, and on a busy start it
+is minutes long. **Root shape:** the value has more than one place it can be recorded, and two
+readers cover different subsets. Here: `observer_mode` / `vacation_mode` /
+`energy_plan_actuation` live in `entry.options` (runtime flip), `entry.data` (install flow) **or**
+— on an install predating the persisted toggles — only in HA's restore store, which is the switch
+*entity's* record and structurally invisible to `async_setup_entry`. The switch read all three; setup
+read two and fell back to the per-key default. The default is the armed direction, so a missing
+record read as "act". **Second-order:** the restore store expires (`STATE_EXPIRATION`, 7 days), so
+the one reader that *was* right also loses the answer on any install left off for a fortnight —
+a read-only fix would have lapsed silently. **Live catch:** 16.08.2026, HA-TEST — a box wired to a
+real KEBA and LUNA2000, believed hands-off, would have run armed for the length of every start;
+found while inspecting `core.config_entries` before a deploy, not by any test or log.
+**Closure:** one resolver (`persisted_flags.py`) reading all three sources in one order, called by
+setup *before* the coordinator is constructed, and PROMOTING what only the restore store knows into
+`entry.options` — so the ambiguity is resolved once and permanently instead of re-derived (and
+eventually lost) every boot. The switch shares the default table by reference, so "what silence
+means" cannot drift between the two readers. Silence resolves to `None`, never `False`: "never
+recorded" and "recorded off" are different facts, and collapsing them is what let the armed default
+win. **Where it lives:** any flag with an entity-owned record *and* a config-entry record; the
+options write is safe at that point in setup only because `add_update_listener` attaches later.
+**Guard:** `tests/test_persisted_flag_promotion.py` — precedence, junk restore states are not a
+record, promotion writes through, an explicit config is left untouched (no write, no reload churn),
+all three flags, and an ordering assertion that the promotion happens before `SEMCoordinator(`.
+**Sweep question:** for every flag that gates hardware, list *every* place it can be recorded and
+*every* reader — then ask whether the reader that runs EARLIEST can see the source that is written
+LAST. If not, the gap is a window, and the direction of the default decides whether that window is
+merely wrong or actively dangerous. Distinct from class 7 (that re-arms a *timer* across restart);
+this one never had the value at all. Refs #777.

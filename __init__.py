@@ -1686,6 +1686,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     full_config = {**entry.data, **entry.options}
     _LOGGER.debug("Configuration keys: %s", list(full_config.keys()))
 
+    # The persisted toggles must be resolved BEFORE the coordinator exists.
+    # A legacy install records observer/vacation/actuation only in the
+    # switch's restore store, which the coordinator cannot see — so it was
+    # built on the armed default and stayed armed until the switch platform
+    # attached (the 2026-07-18 unprotected-window class, #777). Reading the
+    # store here and promoting it into the entry closes that window and
+    # ends the install's dependence on a store HA prunes after 7 days.
+    from .persisted_flags import promote_persisted_flags
+    promote_persisted_flags(hass, entry, full_config)
+
     # Create coordinator with error handling
     try:
         coordinator = SEMCoordinator(hass, full_config)
@@ -2219,9 +2229,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # bouncing on the 263-entity registry. Gated by the same options-flag
     # pattern the install-dashboard one-shot uses just below — survives HA
     # restarts and never re-fires after the user dismisses it. Skipped on
-    # observer mode (test installs don't want notification spam).
+    # observer mode (test installs don't want notification spam) — read from
+    # the RESOLVED config, not entry.data alone: the flag can equally live in
+    # options or, on a legacy install, only in the switch's restore store.
     _welcome_fired = entry.options.get("_welcome_notification_fired", False)
-    if not _welcome_fired and not entry.data.get("observer_mode"):
+    if not _welcome_fired and not full_config.get("observer_mode"):
         try:
             await hass.services.async_call(
                 "persistent_notification",

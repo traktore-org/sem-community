@@ -168,6 +168,31 @@ reported as a failure trains you to skim past failures; reported as a pass
 it hides untested surface. Both are worse than an honest "not testable
 today, and here is what proves the same property instead".
 
+## Observer mode survives a restart — and where it is recorded
+
+Observer mode is a promise about hardware, so it has to hold across a
+restart *from the first cycle*, not from whenever the switch entity happens
+to attach. The flag is recorded in the config entry (options, or data from
+the install flow) and setup reads it before the coordinator is built.
+
+Installs older than the persisted toggles (before 18.07.2026) recorded it
+only in Home Assistant's restore store — the switch entity's own last
+state, which setup could not see. Those came up **armed** until the switch
+attached, and lost the setting entirely if the machine stayed off past the
+restore store's seven-day expiry. Since 16.08.2026 setup reads that store
+too and writes what it finds into the config entry, so the recovery happens
+once and the flag is explicit from then on. You will see it in the log:
+
+```
+Recovered observer_mode=on from the switch restore store — this install
+predates the persisted toggles ...
+```
+
+To confirm an install is protected from the first cycle, look for
+`Observer mode: hardware control disabled` on the coordinator's own
+startup line, before any platform sets up. If observer is on and that line
+is missing, the flag is not reaching setup — report it.
+
 ## What this cannot test
 
 The last centimeter: brand adapters talking to real firmware (Modbus
