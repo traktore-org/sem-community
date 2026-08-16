@@ -243,37 +243,28 @@ class TestWiring:
 
         Identity, not equality: two dicts that agree today are exactly the
         state this pin exists to outlaw — the drift starts the day someone
-        edits one of them. If this ever fails the message must say WHY,
-        because "the same table is not the same table" has two very
-        different causes: a real second literal in ``switch.py``, or two
-        module objects for ``persisted_flags`` (an import accident, which
-        would mean other module-level state in this package is doubled
-        too). The diagnostic separates them.
-        """
-        import sys
+        edits one of them. It has already caught that once: the switch
+        carried its own literal, and the commit that replaced it with the
+        shared reference reached the working tree but not the commit, so
+        the tree was one table and CI was two (16.08.2026).
 
+        Equality is therefore the wrong assertion AND the wrong failure
+        message — the tables were equal the whole time. The message names
+        the discriminator instead: whether ``switch.py`` imports the name
+        at all.
+        """
         from custom_components.solar_energy_management import (
             persisted_flags as pf, switch as sw,
         )
         klass = sw.SEMSolarSwitch
-        # Printed, not passed to assert: pytest truncates an assertion
-        # message and cut this exact evidence off last time. Captured
-        # stdout is shown in full on failure and hidden on success.
-        for line in (
-            f"pf module      = {id(pf)} {getattr(pf, '__file__', None)}",
-            f"sw module      = {id(sw)} {getattr(sw, '__file__', None)}",
-            f"pf table       = {id(pf.PERSISTED_FLAG_DEFAULTS)}",
-            f"sw module name = {id(getattr(sw, 'PERSISTED_FLAG_DEFAULTS', None))}",
-            f"class attr     = {id(klass._PERSISTED_DEFAULTS)}",
-            f"own __dict__   = {'_PERSISTED_DEFAULTS' in klass.__dict__}",
-            f"defining base  = {[b for b in klass.__mro__ if '_PERSISTED_DEFAULTS' in vars(b)]}",
-            f"equal          = {klass._PERSISTED_DEFAULTS == pf.PERSISTED_FLAG_DEFAULTS}",
-            f"class value    = {klass._PERSISTED_DEFAULTS}",
-            f"module value   = {pf.PERSISTED_FLAG_DEFAULTS}",
-            f"modules        = {sorted(k for k in sys.modules if 'persisted_flags' in k or k.endswith('.switch'))}",
-        ):
-            print(f"[one-table] {line}")
-        assert klass._PERSISTED_DEFAULTS is pf.PERSISTED_FLAG_DEFAULTS
+        assert klass._PERSISTED_DEFAULTS is pf.PERSISTED_FLAG_DEFAULTS, (
+            "the switch is not reading persisted_flags' table — "
+            f"switch.py imports the name: "
+            f"{'PERSISTED_FLAG_DEFAULTS' in vars(sw)} "
+            f"(equal={klass._PERSISTED_DEFAULTS == pf.PERSISTED_FLAG_DEFAULTS}, "
+            f"class={id(klass._PERSISTED_DEFAULTS)}, "
+            f"module={id(pf.PERSISTED_FLAG_DEFAULTS)})"
+        )
 
     def test_the_switch_entity_ids_are_the_ones_that_exist(self):
         """The store is keyed by entity_id; the switch forces

@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+from .persisted_flags import PERSISTED_FLAG_DEFAULTS
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -164,14 +165,12 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         else:
             self._is_on = False
 
-    # (#777) The three persisted toggles and what a fresh install means
-    # by silence: observer/vacation OFF; energy_plan_actuation ON since
-    # the one-gate build (#638 C8 — the switch is the kill-switch).
-    _PERSISTED_DEFAULTS = {
-        "observer_mode": False,
-        "vacation_mode": False,
-        "energy_plan_actuation": True,
-    }
+    # (#777) The three persisted toggles and what a fresh install means by
+    # silence. Defined in ``persisted_flags`` and shared by reference, not
+    # copied: setup resolves the very same flags from the very same three
+    # sources before building the coordinator, and two tables of "what
+    # silence means" is exactly how the two readers drifted apart.
+    _PERSISTED_DEFAULTS = PERSISTED_FLAG_DEFAULTS
 
     def _configured(self, key: str) -> Optional[bool]:
         """The explicit config value for ``key`` — None if never recorded.
