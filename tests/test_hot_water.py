@@ -373,7 +373,7 @@ class TestLegionellaPrevention:
         # Hold started 5 minutes ago (<20 min needed)
         ctrl._legionella_hold_start = datetime.now(tz=dt_util.UTC) - timedelta(minutes=5)
 
-        result = await ctrl.check_legionella_cycle()
+        await ctrl.check_legionella_cycle()
         # Should still be holding (temp at target but not long enough)
         assert ctrl._legionella_cycle_active is True
 

@@ -1893,9 +1893,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _seen_charger_ids.add(charger_id)
             charger_name = charger_cfg.get("name", f"EV Charger {idx + 1}")
 
-            # Resolve config: charger-specific keys, fall back to global config
-            def _cfg(key, default=None):
-                v = charger_cfg.get(key)
+            # Resolve config: charger-specific keys, fall back to global config.
+            # ``_this`` binds the loop variable at definition time — today every
+            # call happens inside the same iteration, but a closure over a loop
+            # variable reads whatever the loop last assigned, so deferring one
+            # of these calls (into a task, a callback, a comprehension consumed
+            # later) would silently resolve the LAST charger's config for every
+            # charger. Bound, that failure is impossible rather than merely
+            # currently-absent.
+            def _cfg(key, default=None, _this=charger_cfg):
+                v = _this.get(key)
                 if v is not None:
                     return v
                 v = full_config.get(key)
@@ -3305,12 +3312,12 @@ async def _async_register_services(
                 try:
                     if float(value) < 0:
                         raise ValueError
-                except (TypeError, ValueError):
+                except (TypeError, ValueError) as err:
                     raise ServiceValidationError(
                         translation_domain=DOMAIN,
                         translation_key="invalid_device_property",
                         translation_placeholders={"property": f"{prop}={value}"},
-                    )
+                    ) from err
             # (#705) comfort temperatures are numbers; the offset is also
             # non-negative (a negative offset would silently widen the band).
             # Without this a value like "twenty-six" would store, then
@@ -3321,12 +3328,12 @@ async def _async_register_services(
                     _fv = float(value)
                     if prop == "comfort_offset" and _fv < 0:
                         raise ValueError
-                except (TypeError, ValueError):
+                except (TypeError, ValueError) as err:
                     raise ServiceValidationError(
                         translation_domain=DOMAIN,
                         translation_key="invalid_device_property",
                         translation_placeholders={"property": f"{prop}={value}"},
-                    )
+                    ) from err
             await registry.async_update_device_goal(device_id, prop, value)
         else:
             raise ServiceValidationError(
@@ -3884,12 +3891,12 @@ async def _async_register_phase_services(
 
         try:
             deadline = datetime.fromisoformat(deadline_str)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as err:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="invalid_deadline_format",
                 translation_placeholders={"deadline": str(deadline_str)},
-            )
+            ) from err
 
         # (#653) Normalise to LOCAL-naive. The scheduler compares deadlines
         # against ``datetime.now()``, which is naive, and an HA template
@@ -4690,7 +4697,6 @@ async def _async_register_phase_services(
         devs = getattr(coordinator, "_ev_devices", {}) or {}
         adapters = getattr(coordinator, "_charger_adapters", {}) or {}
         recs = getattr(coordinator, "_charger_reconcilers", {}) or {}
-        live = (coordinator.data or {}) if coordinator else {}
 
         def _state(eid):
             if not eid:

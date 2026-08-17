@@ -193,7 +193,7 @@ def test_predictor_state_persistence_roundtrip(predictor):
     orig = predictor.predict_consumption_24h(dt)
     restored = new_predictor.predict_consumption_24h(dt)
     assert len(orig) == len(restored)
-    for a, b in zip(orig, restored):
+    for a, b in zip(orig, restored, strict=False):
         assert a == pytest.approx(b)
 
 

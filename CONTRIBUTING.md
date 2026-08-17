@@ -99,10 +99,38 @@ rsync -a --delete --exclude=.git --exclude=node_modules \
 cd /tmp/ha-config && PYTHONPATH=/tmp/ha-config \
   python3.12 -m pytest custom_components/solar_energy_management/tests/ -q
 
+# Lint — runs from the repo root, config in ruff.toml
+pip install ruff==0.16.3
+ruff check .
+
 # Deploy to test HA instance
 rsync -av --delete --exclude='__pycache__' --exclude='.git' \
   ./ your-ha:/config/custom_components/solar_energy_management/
 ```
+
+## Lint: a floor, not a strategy
+
+`ruff check .` is a CI check and must be clean. It selects `F` (pyflakes),
+`E9`, `B` (bugbear) and `ASYNC` — and nothing else. What it deliberately does
+**not** select, and why, is written at the top of `ruff.toml`: import order,
+`pyupgrade`, `flake8-datetimez` and blanket-except are all either style churn
+across a release or, in the case of `DTZ`, actively wrong for an integration
+that reasons in the user's local time on purpose. There is **no formatter**.
+
+The ruff version is pinned in `.github/workflows/lint.yml`. Bump it
+deliberately, in its own commit, with the tree clean afterwards — an unpinned
+linter reddens the board on a day nobody touched the code, and a gate that
+reddens by itself is a gate that gets muted.
+
+Ruff is the floor. Every bug class that has actually bitten SEM was caught by a
+guard that knew something ruff cannot know — HA's blocking-call list, the
+fleet-vs-per-charger read rule, that a lit `html` template must not contain a
+backtick. Those live in `tests/test_*_lint.py` / `tests/test_*_astguard.py`,
+run under the Tests job, and are documented in
+[`docs/BUG_CLASSES.md`](docs/BUG_CLASSES.md). When ruff and a domain guard
+disagree about one rule, the domain guard wins and ruff's rule gets ignored
+with a comment pointing at it — two lints answering one question differently
+is how both end up ignored.
 
 ## The four-layer test pyramid
 

@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧹 **A lint floor, and the cruft it swept out from under it** (developer-
+  facing; nothing you configured changes) — SEM had no linter at all, so cruft
+  accumulated invisibly: 314 unused imports, 70 assignments nobody read, three
+  `raise` statements inside `except` that dropped the original error from the
+  traceback, and two closures that captured a loop variable by reference.
+  `ruff check .` is now a fifth CI check, pinned, selecting only what earns its
+  place — pyflakes, bugbear, async-blocking — with a config that documents what
+  it refuses to select and why (import order and `pyupgrade` are churn across a
+  release; `flake8-datetimez` is actively *wrong* for an integration that
+  reasons in local time on purpose). No formatter. The floor found real things
+  on its first pass: a variable deleted three lines above its last live use, and
+  a test that asserted a repair sweep *returned* "2" without ever checking it
+  deleted anything. The domain guards in `tests/test_*_lint.py` remain the
+  primary defence — where they and ruff answer one question differently, the
+  guard that knows HA wins. (#786)
 - 🔍 **Diagnostics stopped answering the wrong question about your loads** — a
   load row carried one flag, `is_controllable`, whose name reads as *"may SEM
   touch this"* but which actually meant *"a switch was found for it, and you

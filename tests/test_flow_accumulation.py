@@ -175,8 +175,7 @@ class TestDayRollover:
         )
 
         with freeze_time("2025-11-01 16:20:00"):
-            energy_day1 = energy_calculator.calculate_energy(readings)
-            solar_day1 = energy_day1.daily_solar
+            energy_calculator.calculate_energy(readings)
 
         # Bridge the gap with intermediate steps to avoid gap protection
         with freeze_time("2025-11-01 16:21:30"):
@@ -185,7 +184,7 @@ class TestDayRollover:
         # After sunrise on Nov 2 — set _last_update close to target to bridge gap
         energy_calculator._last_update = None  # Force fresh start on new day
         with freeze_time("2025-11-02 08:00:00"):
-            energy_day2 = energy_calculator.calculate_energy(readings)
+            energy_calculator.calculate_energy(readings)
 
         # Old day's accumulators should be cleaned up
         # Check that no keys contain "2025-11-01"
@@ -254,12 +253,12 @@ class TestMonthlyAccumulation:
         )
 
         with freeze_time("2025-11-30 12:00:00"):
-            energy_nov = energy_calculator.calculate_energy(readings)
+            energy_calculator.calculate_energy(readings)
 
         # Force fresh start to bridge month boundary
         energy_calculator._last_update = None
         with freeze_time("2025-12-01 08:00:00"):
-            energy_dec = energy_calculator.calculate_energy(readings)
+            energy_calculator.calculate_energy(readings)
 
         # Check that November keys are cleaned up
         for key in energy_calculator._monthly_accumulators:
@@ -420,7 +419,7 @@ class TestPowerThresholds:
         )
 
         with freeze_time("2025-11-01 16:00:00"):
-            energy_1 = energy_calculator.calculate_energy(readings)
+            energy_calculator.calculate_energy(readings)
 
         with freeze_time("2025-11-01 16:01:00"):
             energy_2 = energy_calculator.calculate_energy(readings)

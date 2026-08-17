@@ -15,7 +15,16 @@ from __future__ import annotations
 import logging
 import time
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    # Names used only in annotations. Their real imports are function-local
+    # (circular-import avoidance) or live on an adapter package we do not want
+    # to pull in at module load; without this block the annotations referenced
+    # nothing at all (#786).
+    from .types import EVIntelligenceData
+    from .charger_types import ArbitrageSignals, FleetCycleState
+    from .battery_adapters.base import BatteryControlAdapter
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -8087,7 +8096,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
             # EV Intelligence notifications — per-charger (#106, #193)
             per_charger_intel = self._build_per_charger_intelligence()
-            is_night = self.time_manager.is_night_mode()
             chargers_cfg_by_id = {
                 c["id"]: c for c in (self.config.get("ev_chargers") or [])
                 if isinstance(c, dict) and "id" in c
@@ -8103,10 +8111,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # ``TypeError`` every cycle (DEBUG log spam observed on
                 # HA-TEST 2026-05-31 after the v1.6.14 deploy).
                 mins_to_full = intel.get("minutes_to_full") or 0
-                # est_soc kept for the "nearly full" notification gate
-                # logic that survived #440 (informational only — does not
-                # gate the charge command).
-                est_soc = intel.get("estimated_soc") or 0
 
                 # Per-charger draw — gate nearly-full on THIS charger's
                 # power, not the fleet flag. In a multi-charger fleet,
@@ -8122,19 +8126,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     (per_charger_power.get(cid) or 0) > 0
                     if per_charger_power
                     else bool(power.ev_charging)
-                )
-
-                # Per-charger night-allowed gate — modes ``off`` and
-                # ``solar_only`` are not eligible for night charging, so
-                # firing a "skipped night charge" notification on those
-                # is just noise. Default to allow-night when no cfg
-                # entry exists for this cid (legacy single-charger or
-                # config-list-empty cases). #351 M11.
-                cfg_for_cid = chargers_cfg_by_id.get(cid)
-                mode_allows_night = (
-                    self._mode_allows_night_charging(cfg_for_cid)
-                    if cfg_for_cid is not None
-                    else True
                 )
 
                 # Nearly full: taper detector shows < 5 minutes remaining.
@@ -8156,7 +8147,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # SEM resume. Latch lives on the per-charger detector
                 # (session-scoped, cleared on disconnect).
                 det_708 = self._ev_taper_detectors.get(cid)
-                cfg_708 = cfg_for_cid or {}
+                cfg_708 = chargers_cfg_by_id.get(cid) or {}
                 type_708 = (
                     cfg_708.get("ev_target_type") or cfg_708.get("ev_target_mode")
                     or self.config.get("ev_target_type")

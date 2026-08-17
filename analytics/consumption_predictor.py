@@ -258,7 +258,7 @@ class ConsumptionPredictor:
             return ""
 
         # Find the window with highest surplus (solar - consumption)
-        surplus = [s - c for s, c in zip(solar, consumption)]
+        surplus = [s - c for s, c in zip(solar, consumption, strict=False)]
         if max(surplus) <= 0:
             self._last_surplus_window_path = "no_surplus"
             return ""

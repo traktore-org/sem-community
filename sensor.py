@@ -2120,14 +2120,13 @@ async def async_setup_entry(
     _ed = getattr(_sr, "_energy_dashboard_config", None) if _sr is not None else None
     batt_list = list(getattr(_ed, "battery_power_list", []) or []) if _ed is not None else []
     if len(batt_list) > 1:
-        for idx, batt_source_entity in enumerate(batt_list):
+        for idx in range(len(batt_list)):
             bid = f"b{idx + 1}"
-            # Friendly name: the source entity stripped of common
-            # ``sensor.`` / power-suffix noise so the device page
-            # reads "Battery b1 — battery_1_lade_entladeleistung"
-            # rather than a wall of slugs. Card overrides this via
-            # ``friendly_name`` anyway.
-            source_label = batt_source_entity.replace("sensor.", "").rstrip("_")
+            # Names are positional ("Battery b1 Power"), NOT derived from the
+            # source entity. An earlier comment here described a
+            # "Battery b1 — battery_1_lade_entladeleistung" form and computed
+            # the label for it, but no description ever used the value; the
+            # battery card supplies the readable name via ``friendly_name``.
             per_battery_descriptions.extend([
                 SensorEntityDescription(
                     key=f"battery_{bid}_power",

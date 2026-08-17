@@ -118,7 +118,8 @@ class TestSensorFreshnessW3:
         r = _reader()
         for name, eid in (("solar", "s"), ("grid", "g"), ("grid_import", "gi"),
                           ("grid_export", "ge"), ("battery", "b")):
-            r.hass.states.get = lambda eid, _s=_state(1000, age_s=700): _s
+            frozen = _state(1000, age_s=700)
+            r.hass.states.get = lambda _entity_id, _s=frozen: _s
             r._read_sensor(f"sensor.{eid}", name)
             assert f"sensor.{eid}" in r._frozen_sensors, f"{name} not checked"
 

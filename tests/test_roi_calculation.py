@@ -230,7 +230,7 @@ class TestDynamicTariffROI:
         }
 
         # Simulate 7 days of accumulation
-        for day in range(7):
+        for _day in range(7):
             calc._accumulated_savings += 5.0  # 5 CHF/day
             calc._accumulated_export_revenue += 1.0
             calc._accumulated_self_consumed_kwh += 20.0

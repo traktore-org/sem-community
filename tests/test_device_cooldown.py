@@ -67,7 +67,6 @@ class TestCooldownBlocksRapidAdjust:
         dev._last_power_change_time = datetime.now() - timedelta(seconds=31)
 
         # This should proceed
-        old = dev._status.current_consumption_w
         result = await dev.adjust_power(3000)
         # Should have changed (different target current)
         assert result > 0

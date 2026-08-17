@@ -99,7 +99,7 @@ class TestDaySlots:
         slots = _slots()
         assert len(slots) == 10
         assert slots[0].start == _t(8) and slots[-1].end == _t(18)
-        for a, b in zip(slots, slots[1:]):
+        for a, b in zip(slots, slots[1:], strict=False):
             assert a.end == b.start
 
     def test_a_surplus_hour_is_a_free_capped_slot(self):

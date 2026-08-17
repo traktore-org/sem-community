@@ -215,7 +215,6 @@ class EVControlMixin:
             min_amps,
             max_amps,
         )
-        peak_rate_kw = max(0.1, peak_managed_amps * watts_per_amp / 1000.0)
 
         # Cheapest contiguous window covering the remaining need (block-wise) (#247).
         # (#638 one-gate C3) The private cheap-window selection is RETIRED.

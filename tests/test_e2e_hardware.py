@@ -163,7 +163,6 @@ class E2ETestBase:
             battery_value = -battery_w  # SEM: +charge → inverter: -charge
 
         power_unit = "W"
-        ev_unit = chg.power_unit
 
         states = {
             # Inverter sensors
@@ -400,7 +399,7 @@ class E2ETestBase:
             read_energy_dashboard_config,
         )
 
-        config_dir = self._build_energy_dashboard_file(tmp_path)
+        self._build_energy_dashboard_file(tmp_path)
 
         # Mock hass with config_dir pointing to our temp directory
         hass = MagicMock()

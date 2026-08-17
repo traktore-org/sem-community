@@ -79,8 +79,6 @@ class TestCoverageReachesTheCard:
         """The energy_plan payload rides with the live coverage map —
         flipping to reactive mid-night must change the card next cycle."""
         import inspect
-        src = inspect.getsource(SEMCoordinator._async_update_data) \
-            if hasattr(SEMCoordinator, "_async_update_data") else ""
         # The publish site stitches coverage in beside `actuation` — pin
         # at the source level (the exact publish path is exercised live).
         allsrc = inspect.getsource(SEMCoordinator)

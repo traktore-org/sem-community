@@ -24,9 +24,13 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from .types import EVTaperData
+
+if TYPE_CHECKING:
+    # Annotation-only (#786) — the module never touches hass at import time.
+    from homeassistant.core import HomeAssistant
 from .units import power_unit_scale
 
 _LOGGER = logging.getLogger(__name__)
@@ -1096,11 +1100,10 @@ class EVTaperDetector:
         if trend == "declining" and slope < 0 and current_power > FULL_POWER_THRESHOLD:
             minutes_to_full = min(MAX_ETA_MINUTES, current_power / abs(slope))
 
-        taper_detected = (
-            trend == "declining"
-            and taper_ratio < TAPER_RATIO_DETECTED
-        )
-
+        # NOTE: the "taper confirmed" verdict (declining AND ratio below
+        # TAPER_RATIO_DETECTED) is applied in ``update``, where it clears the
+        # ``_declining_phase`` latch. ``EVTaperData`` has no field to carry it,
+        # so the copy that used to sit here had no sink at all.
         return EVTaperData(
             trend=trend,
             taper_ratio_pct=round(taper_ratio, 1),

@@ -157,7 +157,6 @@ class TestPersistenceRoundTrip:
         """Single-string setup: snapshot stays bit-for-bit compatible
         with pre-v1.7.0 format."""
         fc = FlowCalculator()
-        flows = PowerFlows()
         # Integrate something so the fleet accumulator is non-empty.
         fc._flow_accumulators["solar_to_home"] = 5.0
         snap = fc.get_flow_accumulator_state()
@@ -284,7 +283,7 @@ class TestSensorReaderGate:
         # Mirror the gated population logic from sensor_reader without
         # running the full read pipeline.
         if len(sr._pv_strings) >= 2:
-            for slot, eid in sr._pv_strings.items():
+            for slot, _eid in sr._pv_strings.items():
                 readings.solar_power_per_string[slot] = 100.0
         assert readings.solar_power_per_string == {}
 
@@ -299,6 +298,6 @@ class TestSensorReaderGate:
         }
         readings = PowerReadings()
         if len(sr._pv_strings) >= 2:
-            for slot, eid in sr._pv_strings.items():
+            for slot, _eid in sr._pv_strings.items():
                 readings.solar_power_per_string[slot] = 100.0
         assert readings.solar_power_per_string == {"pv1": 100.0, "pv2": 100.0}

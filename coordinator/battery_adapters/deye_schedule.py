@@ -51,7 +51,7 @@ def validate_deye_boundaries(values: Iterable[str]) -> tuple[int, ...]:
     boundaries = tuple(_boundary_seconds(value) for value in raw)
     if len(set(boundaries)) != _PROGRAM_COUNT:
         raise DeyeScheduleError("Deye program boundaries must be unique")
-    if any(left >= right for left, right in zip(boundaries, boundaries[1:])):
+    if any(left >= right for left, right in zip(boundaries, boundaries[1:], strict=False)):
         raise DeyeScheduleError("Deye program boundaries must be strictly increasing")
     return boundaries
 

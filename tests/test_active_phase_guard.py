@@ -571,7 +571,7 @@ def test_coordinator_wires_one_cycle_evaluation_and_both_actuation_paths():
     actuation_lines = sorted(call.lineno for call in actuations)
     assert all(
         guard_line < actuation_line
-        for guard_line, actuation_line in zip(guard_lines, actuation_lines)
+        for guard_line, actuation_line in zip(guard_lines, actuation_lines, strict=False)
     )
 
 

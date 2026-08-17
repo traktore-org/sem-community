@@ -51,7 +51,12 @@ _EXEMPT = {
 def _percharger_cfg_keys() -> set[str]:
     """Keys read off the per-charger dict, from the source of truth."""
     src = _INIT.read_text()
-    start = src.index("def _cfg(key, default=None):")
+    # Anchored on the name and its two meaningful parameters, NOT on the whole
+    # signature: #786 bound the enclosing loop variable as a default argument
+    # (``_this=charger_cfg``) and an exact-string anchor turned that into two
+    # red tests. A keyword added to the helper is not the rename this guard
+    # exists to catch — ``def _cfg`` disappearing is.
+    start = src.index("def _cfg(key, default=None")
     # The per-charger registration block; generous window, the regex is anchored
     # on ``_cfg("...")`` which only exists inside it.
     region = src[start:start + 40000]
@@ -65,7 +70,7 @@ def _flow_fields_by_step() -> dict[str, set[str]]:
     bounds.append((len(src), "__eof__"))
     out: dict[str, set[str]] = {name: set() for _, name in bounds}
     for m in re.finditer(r'vol\.(?:Optional|Required)\(\s*"([^"]+)"', src):
-        for (s, name), (e, _) in zip(bounds, bounds[1:]):
+        for (s, name), (e, _) in zip(bounds, bounds[1:], strict=False):
             if s <= m.start() < e:
                 out[name].add(m.group(1))
                 break

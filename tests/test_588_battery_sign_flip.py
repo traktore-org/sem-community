@@ -106,8 +106,6 @@ class TestB1UserFlipFleet:
                 "sensor.batt_discharge": _make_state(5.0),
             }.get(eid)
 
-        # Manually set readings to verify flip
-        readings = PowerReadings(battery_power=500.0)
         # simulate fleet path: auto-detect says no negate (SEM convention)
         r._battery_sign_inverted[r._FLEET_BID] = False
         r._battery_sign_detected[r._FLEET_BID] = True
@@ -330,7 +328,7 @@ class TestB2WeightedVoter:
         # 2 SEM votes (charge growing, power positive)
         charge_base = 10.0
         discharge_base = 5.0
-        for i in range(2):
+        for _i in range(2):
             charge_base += 0.5
             r.hass.states.get = lambda eid, cb=charge_base, db=discharge_base: {
                 "sensor.batt_charge": _make_state(cb),
@@ -339,7 +337,7 @@ class TestB2WeightedVoter:
             r._detect_battery_sign_for(bid, 500.0, "sensor.batt_charge", "sensor.batt_discharge")
 
         # Then 3 negate votes (discharge growing, power positive)
-        for i in range(3):
+        for _i in range(3):
             discharge_base += 0.5
             r.hass.states.get = lambda eid, cb=charge_base, db=discharge_base: {
                 "sensor.batt_charge": _make_state(cb),

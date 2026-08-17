@@ -11,6 +11,7 @@ serves NORMAL / LIMIT_DISCHARGE (the reactive protection only).
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 from ..charger_types import BatteryIntent
 from ..power_control import async_write_power_setpoint

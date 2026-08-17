@@ -445,9 +445,11 @@ class LoadManagementCoordinator:
     @callback
     def _trigger_callbacks(self):
         """Trigger all update callbacks."""
-        for callback in self._update_callbacks:
+        # ``cb``, not ``callback`` — the loop name shadowed HA's ``@callback``
+        # decorator imported at module level for the rest of this function.
+        for cb in self._update_callbacks:
             try:
-                callback()
+                cb()
             except Exception as e:
                 _LOGGER.error("Error in load management callback: %s", e)
 

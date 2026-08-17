@@ -5,7 +5,7 @@ import logging
 import re
 from collections import deque
 from datetime import datetime, date, timedelta
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, List, Optional, Set
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util

@@ -170,7 +170,7 @@ class TestWallboxPauseSwitch:
             i for i, c in enumerate(calls)
             if c.args[:2] == ("switch", "turn_on")
         )
-        last_set_current_idx = (
+        (
             len(device._set_current.call_args_list) - 1
         )
         # set_current is called via a separate Mock (not the

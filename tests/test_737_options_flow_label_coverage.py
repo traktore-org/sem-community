@@ -134,7 +134,7 @@ def _enumerate_comprehension(comp: ast.AST) -> tuple[set[str], list[int]]:
                 continue
             names = [v for v, _ in var_values]
             for combo in itertools.product(*[vals for _, vals in var_values]):
-                key = _resolve_fstring(arg, dict(zip(names, combo)))
+                key = _resolve_fstring(arg, dict(zip(names, combo, strict=False)))
                 if key is None:
                     unresolved.append(call.lineno)
                     break

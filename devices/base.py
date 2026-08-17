@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 # #392: KEBA's failsafe watchdog (and similar device-side timers on other
 # chargers) requires periodic *writes* to refresh — reads alone don't

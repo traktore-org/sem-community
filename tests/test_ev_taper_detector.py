@@ -359,7 +359,6 @@ class TestSessionAnchor:
         # Bootstrap from session → ~80%
         _feed_constant(det, 7000, 16, 10)
         det.on_session_end(9.5)
-        soc_after_session = det._estimated_soc
 
         # Full taper → resets to 100%
         det.reset_session()
@@ -389,7 +388,7 @@ class TestSessionAnchor:
         det.on_session_end(9.5)
         assert det._soc_anchored is True
 
-        for day in range(7):
+        for _day in range(7):
             # Morning: drive to work
             det.reset_session()
             temp_factor = EVTaperDetector.temperature_correction_factor(0)  # Winter
@@ -467,7 +466,7 @@ class TestBatteryHealth:
         """Should calculate health after 3+ full-cycle charges."""
         det = EVTaperDetector(DEFAULT_CONFIG)
 
-        for i in range(4):
+        for _i in range(4):
             _feed_taper_profile(det)
             det.on_session_end(38.0)  # 38/40 = 95% health
             det.reset_session()
@@ -478,7 +477,7 @@ class TestBatteryHealth:
         """Health samples should be bounded to prevent unbounded growth."""
         det = EVTaperDetector(DEFAULT_CONFIG)
 
-        for i in range(25):
+        for _i in range(25):
             _feed_taper_profile(det)
             det.on_session_end(38.0)
             det.reset_session()
@@ -489,7 +488,7 @@ class TestBatteryHealth:
         """Should estimate health from partial charge with real SOC."""
         det = EVTaperDetector(DEFAULT_CONFIG)
 
-        for i in range(4):
+        for _i in range(4):
             # Simulate session: 40% → 80% with 15 kWh
             # capacity_estimate = 15 / (0.40) = 37.5 kWh → 37.5/40 = 93.75%
             _feed_constant(det, 7000, 16, 10)
@@ -632,7 +631,7 @@ class TestSOCDecay:
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)  # SOC = 100%
 
-        for day in range(3):
+        for _day in range(3):
             det.apply_daily_decay(8.0, 10.0)  # -20% each day
 
         # 100% - 3×20% = 40%
@@ -643,7 +642,7 @@ class TestSOCDecay:
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
 
-        for day in range(10):  # Way more than enough to drain
+        for _day in range(10):  # Way more than enough to drain
             det.apply_daily_decay(8.0, 10.0)
 
         assert det._estimated_soc == 0.0

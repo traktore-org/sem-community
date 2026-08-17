@@ -466,7 +466,6 @@ class TestWiredIntoTheCycle773:
     def test_published_keys_exist(self) -> None:
         """The pair the issue asks for, in the published dict: the live
         W residual and the day's kWh beside its honesty flag."""
-        e = EnergyTotals()
         fields = set(EnergyTotals.__dataclass_fields__)
         for f in (
             "true_baseload_power",

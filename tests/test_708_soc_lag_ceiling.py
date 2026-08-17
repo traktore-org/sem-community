@@ -145,7 +145,7 @@ class TestEstimateMath:
         det.get_virtual_soc(50.0)
         _feed_energy(det, 3.0)
         det.get_virtual_soc(53.0)  # re-anchor mid-session
-        end = _feed_energy(det, 2.0, start=datetime(2026, 8, 3, 23, 0, 0))
+        _feed_energy(det, 2.0, start=datetime(2026, 8, 3, 23, 0, 0))
         expected = 53.0 + 2.0 * CHARGE_EFFICIENCY / CAPACITY * 100.0
         assert det.energy_accounted_soc() == pytest.approx(expected, abs=0.15)
 

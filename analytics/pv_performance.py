@@ -232,7 +232,7 @@ class PVPerformanceAnalyzer:
             by_month.setdefault(record.month, []).append(record)
 
         degradation_rates = []
-        for month, records in by_month.items():
+        for _month, records in by_month.items():
             if len(records) < 2:
                 continue
             records.sort(key=lambda r: r.year)

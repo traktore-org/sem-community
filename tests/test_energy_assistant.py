@@ -42,7 +42,7 @@ class TestEnergyAssistantAnalyze:
     def test_ev_charging_low_solar_tip(self, mock_hass):
         """solar < 50% of EV -> generates tip."""
         ea = EnergyAssistant(mock_hass)
-        data = ea.analyze(
+        ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=3.0,  # 30% solar
             grid_to_ev_kwh=7.0,
@@ -56,7 +56,7 @@ class TestEnergyAssistantAnalyze:
     def test_ev_charging_good_forecast_tip(self, mock_hass):
         """forecast > 2x EV need -> generates tip."""
         ea = EnergyAssistant(mock_hass)
-        data = ea.analyze(
+        ea.analyze(
             daily_ev_kwh=5.0,
             solar_to_ev_kwh=1.0,
             grid_to_ev_kwh=4.0,
@@ -191,7 +191,7 @@ class TestTipRotation:
         """Multiple calls rotate through tips."""
         ea = EnergyAssistant(mock_hass)
         # First call generates tips
-        data1 = ea.analyze(
+        ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=2.0,
             grid_to_ev_kwh=8.0,
@@ -199,9 +199,8 @@ class TestTipRotation:
             daily_solar_kwh=10.0,
             daily_grid_export_kwh=3.0,
         )
-        tip1 = data1.current_tip
         # Second call should potentially rotate
-        data2 = ea.analyze(
+        ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=2.0,
             grid_to_ev_kwh=8.0,

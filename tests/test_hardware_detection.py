@@ -310,7 +310,7 @@ class TestDetectEvEntities:
     def test_detected_sorted_by_exists_and_priority(self, detector_keba):
         """Results are sorted: valid entities first, then by priority descending."""
         detected = detector_keba.detect_ev_entities()
-        for sensor_type, entries in detected.items():
+        for _sensor_type, entries in detected.items():
             if len(entries) > 1:
                 # Verify sorted: (exists=True, high priority) before (exists=False, low priority)
                 for i in range(len(entries) - 1):
@@ -359,7 +359,7 @@ class TestGetDetectedIntegrations:
     def test_get_detected_integrations_none(self, detector_empty):
         """All integrations False when no entities."""
         integrations = detector_empty.get_detected_ev_integrations()
-        for integration, detected in integrations.items():
+        for _integration, detected in integrations.items():
             assert detected is False
 
 
@@ -422,7 +422,7 @@ class TestGetSuggestedEvDefaults:
     def test_get_suggested_ev_defaults_empty_fallback(self, detector_empty):
         """Returns empty strings when no entities detected."""
         defaults = detector_empty.get_suggested_ev_defaults()
-        for key, value in defaults.items():
+        for _key, value in defaults.items():
             assert value == ""
 
 
@@ -432,7 +432,7 @@ class TestMergedPatterns:
     def test_merged_patterns_sorted_by_priority(self, detector_keba):
         """Merged patterns are sorted by priority descending."""
         merged = detector_keba._get_merged_patterns()
-        for sensor_type, patterns in merged.items():
+        for _sensor_type, patterns in merged.items():
             priorities = [p[2] for p in patterns]
             assert priorities == sorted(priorities, reverse=True)
 

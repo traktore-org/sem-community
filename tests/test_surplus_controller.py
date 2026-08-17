@@ -183,7 +183,7 @@ class TestUpdateActivation:
         sc.register_device(d2)
 
         # 900W available, minus 50W = 850W. After d1 takes 800, only 50 left for d2 (< 500)
-        result = await sc.update(900.0)
+        await sc.update(900.0)
 
         d1.activate.assert_called_once()
         d2.activate.assert_not_called()
@@ -386,7 +386,7 @@ class TestDeactivationAntiFlicker:
         # d1: old=200, adjust(150+200=350) returns 400, delta=200, remaining=150-200=-50
         # d2: old=300, adjust(-50+300=250) returns 500, delta=200, remaining=-50-200=-250
         # -250 < -100 → deactivation: d2 (LIFO) deactivated, recovers 300
-        result = await sc.update(200.0)
+        await sc.update(200.0)
 
         d2.deactivate.assert_called_once()
         assert d2.is_active is False
@@ -446,7 +446,7 @@ class TestDeltaTracking:
         # d2 needs 400 but remaining after d1 = 950 - 400 = 550... wait
         # Let's use tighter numbers: 700W available → distributable = 650
         # d1: delta = 400 → remaining = 650 - 400 = 250. d2 needs 400 → skip
-        result = await sc.update(700.0)
+        await sc.update(700.0)
 
         d2.activate.assert_not_called()
 

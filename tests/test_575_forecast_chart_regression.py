@@ -74,8 +74,6 @@ def test_forecast_card_uses_forecast_preset_not_power():
     chart with a misleading title and no forecast series.
     """
     path = os.path.join(_ROOT, "dashboard", "sem_dashboard_template.yaml")
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
 
     # Locate the card block titled "Forecast vs Actual" and read the preset that
     # immediately precedes it (same list item).

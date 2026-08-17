@@ -688,7 +688,6 @@ class TestPublishDiag625:
         assert self._diag()["diag_charger_control"] == "none"
         num = MagicMock(); num.current_entity_id = "number.c"
         assert self._diag(ev_devices={"a": num})["diag_charger_control"] == "number"
-        svc = MagicMock(spec=[]);
         d = self._diag(ev_devices={"a": MagicMock(current_entity_id=None)})
         assert d["diag_charger_control"] == "service"
 

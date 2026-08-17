@@ -37,9 +37,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from .plan_verdict import PlanVerdict
+
+if TYPE_CHECKING:
+    # Annotation-only — importing it for real would be circular (#786).
+    from .types import PowerReadings
 
 
 # ─────────────────────────────────────────────────────────────────

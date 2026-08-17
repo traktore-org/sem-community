@@ -1,0 +1,32 @@
+name: Lint
+
+# The floor, not the strategy (#786). Config + rationale live in ruff.toml;
+# the domain guards that caught every bug class we actually shipped live in
+# tests/test_*_lint.py and run under the Tests job.
+#
+# Same trigger list as Tests: `release/**` is a development line, and a lint
+# that only reports at the merge reports too late.
+on:
+  push:
+    branches: [develop, main, "release/**"]
+  pull_request:
+    branches: [develop, main, "release/**"]
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # PINNED on purpose. An unpinned ruff picks up new rules on its own
+      # release schedule and turns the board red on a day nobody touched the
+      # code — which is how a gate gets muted. Bump this deliberately.
+      - name: Install ruff
+        run: pip install ruff==0.16.3
+
+      - name: ruff check
+        run: ruff check . --output-format=github

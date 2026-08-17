@@ -424,7 +424,7 @@ class DashboardGenerator:
 
         coordinator = None
         if DOMAIN in self.hass.data:
-            for entry_id, coord in self.hass.data[DOMAIN].items():
+            for _entry_id, coord in self.hass.data[DOMAIN].items():
                 if hasattr(coord, "_load_manager"):
                     coordinator = coord
                     break
@@ -502,7 +502,7 @@ class DashboardGenerator:
 
         coordinator = None
         if DOMAIN in self.hass.data:
-            for entry_id, coord in self.hass.data[DOMAIN].items():
+            for _entry_id, coord in self.hass.data[DOMAIN].items():
                 if hasattr(coord, "_load_manager"):
                     coordinator = coord
                     break
@@ -617,7 +617,7 @@ class DashboardGenerator:
         # Get coordinator for energy dashboard config
         coordinator = None
         if DOMAIN in self.hass.data:
-            for entry_id, coord in self.hass.data[DOMAIN].items():
+            for _entry_id, coord in self.hass.data[DOMAIN].items():
                 if hasattr(coord, "_energy_dashboard_config"):
                     coordinator = coord
                     break

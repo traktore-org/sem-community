@@ -135,7 +135,7 @@ def test_monthly_reset(mock_dt, calculator):
     calculator._last_update = None
     now3 = _freeze_now(month=4, day=1, hour=0)
     mock_dt.now.return_value = now3
-    energy = calculator.calculate_energy(power)
+    calculator.calculate_energy(power)
 
     # Old month data should be gone after rollover
     old_monthly = calculator._get_monthly("solar", "2026_3")

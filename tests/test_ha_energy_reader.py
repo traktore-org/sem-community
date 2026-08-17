@@ -803,7 +803,7 @@ class TestValidateEnergyDashboardSensors:
         config = EnergyDashboardConfig()
         results = await validate_energy_dashboard_sensors(mock_hass, config)
         # All should be False since nothing is configured
-        for key, value in results.items():
+        for _key, value in results.items():
             assert value is False
 
 

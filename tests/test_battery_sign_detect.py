@@ -565,7 +565,7 @@ class TestPerBatterySignAutoDetect404:
         reader.set_energy_dashboard_config(ed)
         # Populate hass.states with the per-battery counters
         states_map = {}
-        for i, (c, d) in enumerate(zip(charge_vals, discharge_vals)):
+        for i, (c, d) in enumerate(zip(charge_vals, discharge_vals, strict=False)):
             states_map[f"sensor.b{i+1}_charge"] = _make_sensor_state(c, "kWh")
             states_map[f"sensor.b{i+1}_discharge"] = _make_sensor_state(d, "kWh")
         hass.states.get = lambda eid: states_map.get(eid)

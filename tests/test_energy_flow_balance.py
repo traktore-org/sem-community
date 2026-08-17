@@ -237,7 +237,7 @@ class TestFlowCalculatorIntegration:
         readings.ev_power = 4000
         readings.calculate_derived()
 
-        flows = flow_calculator.calculate_power_flows(readings)
+        flow_calculator.calculate_power_flows(readings)
 
         # Total supply = solar + grid_import + battery_discharge
         total_supply = (

@@ -101,7 +101,7 @@ def _run_ladder_to_giveup(st, adapter, t0, *, view=None, first=False):
         t = t0 + 60.0
     else:
         t = t0
-    for i in range(1, 5):                                 # climb to ceiling
+    for _i in range(1, 5):                                 # climb to ceiling
         t = t + (START_KICK_GRACE_S + 1)
         d = _filter(st, view, adapter, now=t)
         if "full-car backoff" in d.reason:
@@ -298,7 +298,7 @@ class TestFullCarBackoff:
         view = _view(power_w=120.0)  # plugged, not drawing
         # Drag the median under the floor — the budget collapsing for a few
         # cycles (a grid-meter dropout, a cloud) is all it takes.
-        for i in range(4):
+        for _i in range(4):
             t += 10.0
             _filter(st, view, adapter, now=t, decision=_idle())
         # ...and now a real CHARGE on the recovery cycle.
@@ -323,7 +323,7 @@ class TestFullCarBackoff:
             _, t = _run_ladder_to_giveup(st, adapter, t, first=(n == 0))
             t += 10.0
         view = _view(power_w=120.0)
-        for i in range(4):                      # median under the floor
+        for _i in range(4):                      # median under the floor
             t += 10.0
             _filter(st, view, adapter, now=t, decision=_idle())
         t += 10.0

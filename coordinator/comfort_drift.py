@@ -55,7 +55,7 @@ def learn_drift(samples: List[Tuple[datetime, float]]) -> Optional[DriftEstimate
     denom = sum((x - mx) ** 2 for x in xs)
     if denom <= 0:
         return None
-    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / denom
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False)) / denom
     return DriftEstimate(rate_c_per_h=slope)
 
 

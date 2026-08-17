@@ -43,7 +43,21 @@ exclude = [
 #        encodes HA's own guard list instead.
 select = ["F", "E9", "B", "ASYNC"]
 
+ignore = [
+    # ASYNC240 (os.path.* in a coroutine) is answered by
+    # tests/test_no_blocking_open_in_event_loop.py, which decided — with the
+    # reasoning written down — that `os.path.exists` stays allowed: HA's loop
+    # guard does not patch it, and a bare `stat` is a different order of cost
+    # from reading and parsing a file. Two lints must not disagree about one
+    # rule; the one that knows HA's actual guard list wins. Ruff keeps
+    # ASYNC230 (blocking `open`), which is the same rule that lint enforces.
+    "ASYNC240",
+]
+
 [lint.per-file-ignores]
 # Tests build deliberately odd shapes: fixtures shadow, imports get pulled in
 # to prove a module loads, and a bare `except` is often the thing under test.
-"tests/*" = ["B011", "B017", "F811"]
+# ASYNC: the rule is "don't stall HA's event loop". A mock dashboard service
+# in conftest is not HA's loop — the domain lint skips tests for the same
+# reason.
+"tests/*" = ["B011", "B017", "F811", "ASYNC"]

@@ -163,7 +163,7 @@ class TestFindCheapestHoursSubHourly:
 
         assert len(block) == 8
         # Contiguous 15-min steps
-        for a, b in zip(block, block[1:]):
+        for a, b in zip(block, block[1:], strict=False):
             assert (b.timestamp - a.timestamp) == timedelta(minutes=15)
         assert all(p.price == 0.05 for p in block)
 

@@ -536,21 +536,18 @@ class TestSchedulerTrigger:
     def test_triggers_at_correct_time(self, mock_hass, scheduler_config):
         scheduler_config.trigger_hour = 21
         scheduler_config.trigger_minute = 0
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is True
 
     def test_does_not_trigger_wrong_time(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         wrong_time = dt_util.now().replace(hour=15, minute=30, second=0)
         assert scheduler.should_trigger_evaluation(wrong_time) is False
 
     def test_triggers_only_once_per_day(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
@@ -666,7 +663,6 @@ class TestSchedulerConfig:
         assert config_str.trigger_hour == 21
         assert config_str.trigger_minute == 30
 
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, config)
         # Must not raise — and inside the window it must trigger, so
         # the call demonstrably reached the production logic.
@@ -731,7 +727,6 @@ class TestFeatureToggle:
 
     def test_disabled_evaluate_returns_idle(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -747,14 +742,12 @@ class TestFeatureToggle:
 
     def test_disabled_trigger_returns_false(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is False
 
     def test_enabled_property(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
         assert scheduler.enabled is True
 
@@ -773,7 +766,6 @@ class TestCycleCost:
     def test_cycle_cost_blocks_unprofitable_charge(self, mock_hass, scheduler_config):
         """High cycle cost makes arbitrage unprofitable."""
         scheduler_config.battery_cycle_cost = 0.10
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -790,7 +782,6 @@ class TestCycleCost:
     def test_low_cycle_cost_allows_charge(self, mock_hass, scheduler_config):
         """Low cycle cost still allows profitable charging."""
         scheduler_config.battery_cycle_cost = 0.02
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -806,7 +797,6 @@ class TestCycleCost:
     def test_zero_cycle_cost_same_as_before(self, mock_hass, scheduler_config):
         """Zero cycle cost = no degradation check (backward compat)."""
         scheduler_config.battery_cycle_cost = 0.0
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -829,7 +819,6 @@ class TestNegativeTariff:
 
     def test_negative_price_forces_full_charge(self, mock_hass, scheduler_config):
         """Negative price -> charge to max SOC regardless of forecast."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -847,7 +836,6 @@ class TestNegativeTariff:
 
     def test_negative_price_respects_already_full(self, mock_hass, scheduler_config):
         """Already at max SOC -> no charge even with negative price."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -864,7 +852,6 @@ class TestNegativeTariff:
     def test_negative_price_feature_disabled(self, mock_hass, scheduler_config):
         """Feature disabled -> no force charge on negative price."""
         scheduler_config.force_charge_on_negative_price = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -888,7 +875,6 @@ class TestForecastFallback:
 
     def test_no_forecast_charges_conservatively(self, mock_hass, scheduler_config):
         """No forecast -> deficit = full consumption."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -905,7 +891,6 @@ class TestForecastFallback:
 
     def test_stale_forecast_increases_pessimism(self, mock_hass, scheduler_config):
         """Stale forecast (>6h) uses doubled pessimism weight."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision_fresh = scheduler.evaluate(
@@ -935,7 +920,6 @@ class TestForecastFallback:
     def test_fresh_forecast_applies_pessimism_blend(self, mock_hass, scheduler_config):
         """More pessimism -> higher deficit."""
         scheduler_config.pessimism_weight = 0.0
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision_optimistic = scheduler.evaluate(
@@ -969,7 +953,6 @@ class TestReplanTriggers:
     """Test should_replan() conditions."""
 
     def test_soc_deviation_triggers_replan(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(
@@ -984,7 +967,6 @@ class TestReplanTriggers:
         assert scheduler.should_replan(current_soc=50.0, ev_connected=False) is True
 
     def test_ev_connect_triggers_replan(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(
@@ -999,13 +981,11 @@ class TestReplanTriggers:
         assert scheduler.should_replan(current_soc=40.0, ev_connected=True) is True
 
     def test_no_replan_when_idle(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
         assert scheduler.should_replan(current_soc=50.0, ev_connected=True) is False
 
     def test_ev_replan_disabled(self, mock_hass, scheduler_config):
         scheduler_config.replan_on_ev_change = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(

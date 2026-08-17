@@ -265,7 +265,7 @@ def market_step_s(prov, default_s: int = 3600) -> int:
         ts = [p.timestamp for p in ups[:8]
               if getattr(p, "timestamp", None) is not None]
         deltas = sorted({int((b - a).total_seconds())
-                         for a, b in zip(ts, ts[1:])
+                         for a, b in zip(ts, ts[1:], strict=False)
                          if (b - a).total_seconds() > 0})
         if deltas and 300 <= deltas[0] <= 3600:
             return deltas[0]

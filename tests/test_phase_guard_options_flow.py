@@ -10,8 +10,8 @@ from custom_components.solar_energy_management.config_flow import OptionsFlowHan
 
 
 def test_options_flow_exposes_dedicated_phase_guard_wizard_steps():
-    assert callable(getattr(OptionsFlowHandler, "async_step_settings_phase_guard_topology"))
-    assert callable(getattr(OptionsFlowHandler, "async_step_settings_phase_guard"))
+    assert callable(OptionsFlowHandler.async_step_settings_phase_guard_topology)
+    assert callable(OptionsFlowHandler.async_step_settings_phase_guard)
 
 
 @pytest.mark.asyncio

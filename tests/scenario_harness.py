@@ -555,7 +555,6 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
         # canonical_strategy on the context IS the canonical value string
         # already. Existing downstream code in this harness uses the
         # string directly, so the previous "map to enum" step is moot.
-        canonical_strat = canonical_strat_value
 
         ev_budget_obj = coord._cycle_ev_budget
         # _build_charging_context unconditionally computes and caches the
@@ -834,7 +833,7 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
                 raise AssertionError(
                     f"Cycle t={c.t_seconds}: failed to evaluate formula "
                     f"'{formula}' against readings {c.readings}: {e}"
-                )
+                ) from e
             allowed_a = max(0.0, (allowed_w - margin_w) / (voltage * phases))
             actual_a = float(c.result.get("calculated_current", 0))
             assert actual_a <= allowed_a + 0.5, (  # 0.5A floating tolerance

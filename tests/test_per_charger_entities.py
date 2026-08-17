@@ -299,7 +299,7 @@ class TestPerChargerSensors:
             src = f.read()
         for charger in TWO_CHARGERS:
             cid = charger["id"]
-            assert f'key=f"charger_{{cid}}_vehicle_soc"' in src or \
+            assert 'key=f"charger_{cid}_vehicle_soc"' in src or \
                    f'key=f"charger_{cid}_vehicle_soc"' in src or \
                    '"charger_{cid}_vehicle_soc"' in src or \
                    "vehicle_soc" in src

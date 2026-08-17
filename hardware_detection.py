@@ -500,7 +500,7 @@ class EVChargerDetector:
         merged = {}
 
         # Add integration-specific patterns first (highest priority)
-        for integration_name, integration_data in EV_INTEGRATION_PATTERNS.items():
+        for _integration_name, integration_data in EV_INTEGRATION_PATTERNS.items():
             for sensor_type, patterns in integration_data["patterns"].items():
                 if sensor_type not in merged:
                     merged[sensor_type] = []
@@ -631,7 +631,7 @@ class EVChargerDetector:
             detected_integrations[integration_name] = False
 
             for sensor_type, patterns in integration_data["patterns"].items():
-                for pattern, description, priority in patterns:
+                for pattern, _description, _priority in patterns:
                     matches = self._find_pattern_matches(pattern, all_entities)
                     if matches:
                         for entity_id in matches:
@@ -724,14 +724,18 @@ def discover_all_ev_chargers_from_registry(
     chargers: List[Dict[str, str]] = []
 
     for platform, discover_fn in _EV_CHARGER_PLATFORMS:
-        def _matches_platform(entry_platform: str) -> bool:
+        def _matches_platform(entry_platform: str, _this=platform) -> bool:
             # Some HACS/custom Zaptec builds expose a domain such as
             # ``zaptec_custom`` while keeping the same entity model. Restrict
             # the tolerant match to the Zaptec prefix; every other integration
             # remains exact to avoid broad accidental charger discovery.
-            if platform == "zaptec":
+            # ``_this`` binds the loop variable: an unbound closure would match
+            # against whichever platform the loop reached last, so the day this
+            # predicate is passed anywhere instead of called in place, every
+            # brand would be tested against the final one.
+            if _this == "zaptec":
                 return entry_platform == "zaptec" or entry_platform.startswith("zaptec_")
-            return entry_platform == platform
+            return entry_platform == _this
 
         entities = [
             e for e in entity_reg.entities.values()

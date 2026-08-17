@@ -275,7 +275,7 @@ class TestMalformedBlob:
         cs.restore_timers(snap, now_mono=5.0)  # must not raise
 
     def test_empty_snapshot_is_a_no_op(self) -> None:
-        snap = cs_old = ChargeStability()
+        cs_old = ChargeStability()
         snap_dict = cs_old.snapshot_timers(1000.0)
         # All sub-dicts are empty → restore must leave new instance clean
         cs_new = ChargeStability()

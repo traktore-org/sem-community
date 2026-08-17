@@ -95,7 +95,7 @@ def _slot_duration(points: List[Dict[str, Any]]) -> timedelta:
     curve; providers post one cadence, and reading the window slightly
     short beats reading it long.
     """
-    gaps = [b["t"] - a["t"] for a, b in zip(points, points[1:])
+    gaps = [b["t"] - a["t"] for a, b in zip(points, points[1:], strict=False)
             if b["t"] > a["t"]]
     return min(gaps) if gaps else _DEFAULT_SLOT
 
@@ -284,7 +284,7 @@ def compose_today_plan(
             parsed_blocks.append((bs, be))
         if parsed_blocks:
             parsed_blocks.sort()
-            for bs, be in parsed_blocks:
+            for bs, _be in parsed_blocks:
                 if now < bs < horizon:
                     rows.append(PlanRow(
                         when=bs, kind=KIND_EV_CHARGE_START,
