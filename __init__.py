@@ -2609,17 +2609,19 @@ async def _async_register_services(
             CANONICAL_TOP_LEVEL = {
                 "sem-localize.js",
             }
-            # (#738) the per-language tables the loader lazily injects —
-            # the mirror must carry them or the legacy /local channel 404s
-            # (the #617 vendor/ class). Computed, not hardcoded: a new
-            # language in translations.json rides along automatically.
-            CANONICAL_TOP_LEVEL |= {
-                f for f in os.listdir(card_src_dir)
-                if f.startswith("sem-localize.") and f.endswith(".js")
-            }
-
             def _install_assets() -> tuple[bool, list[str]]:
                 """Sync top-level dashboard assets to /config/www/. Runs in executor."""
+                # (#738) the per-language tables the loader lazily injects —
+                # the mirror must carry them or the legacy /local channel 404s
+                # (the #617 vendor/ class). Computed, not hardcoded: a new
+                # language in translations.json rides along automatically.
+                # Computed HERE rather than in the caller because os.listdir
+                # is one of the calls HA's loop guard patches, and the caller
+                # is a coroutine.
+                canonical = CANONICAL_TOP_LEVEL | {
+                    f for f in os.listdir(card_src_dir)
+                    if f.startswith("sem-localize.") and f.endswith(".js")
+                }
                 os.makedirs(www_target_dir, exist_ok=True)
                 svg_installed = False
                 if os.path.exists(svg_source):
@@ -2637,7 +2639,7 @@ async def _async_register_services(
                         # sem-cards.js (it shadows the dist bundle) or any
                         # other unrecognised top-level *.js that isn't part
                         # of the canonical set.
-                        if fname not in CANONICAL_TOP_LEVEL:
+                        if fname not in canonical:
                             stale_target = os.path.join(card_www_dir, fname)
                             if os.path.exists(stale_target):
                                 os.remove(stale_target)
@@ -2725,11 +2727,16 @@ async def _async_register_services(
             # closure here so the resolved card_www_dir + manifest version
             # are captured once per service call.
             manifest_path_l = os.path.join(component_dir, "manifest.json")
-            try:
-                with open(manifest_path_l) as f:
-                    _mver = json.load(f).get("version", "0")
-            except Exception:
-                _mver = "0"
+
+            def _read_manifest_version() -> str:
+                """Runs in an executor — ``open`` is loop-guarded by HA."""
+                try:
+                    with open(manifest_path_l) as f:
+                        return json.load(f).get("version", "0")
+                except Exception:
+                    return "0"
+
+            _mver = await hass.async_add_executor_job(_read_manifest_version)
 
             def _cache_bust_for(base_url: str) -> str:
                 return _content_hash_cache_bust(card_www_dir, base_url, _mver)
