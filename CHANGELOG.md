@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.6] — 17.08.2026
+
+- 🔧 **`manifest.json` key order follows Home Assistant's current rule**
+  (developer-facing) — hassfest tightened `domain`, `name`, *then* alphabetical
+  between two CI runs thirty-nine minutes apart, on a day nobody touched the
+  file. Key order only; every value is unchanged. Two things surfaced while
+  verifying it and are worth more than the fix: the Hassfest job carries
+  `continue-on-error` for ghcr rate limits, so the Validate workflow had been
+  reporting green while the check inside it failed — and the rest of that red
+  board was GitHub's own outage, not ours, which a re-run of the identical
+  commit proved. (#790)
 - 🧪 **The test suite now runs against the Home Assistant you actually have**
   (developer-facing) — for nineteen months every one of SEM's 7,400+ tests ran
   against Home Assistant 2025.1.4 while users ran 2026.8.x, and nothing said so:
