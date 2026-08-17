@@ -1,0 +1,49 @@
+# Lint floor for SEM (#786).
+#
+# This is a floor, not a strategy. Every bug class that has actually bitten
+# this repo was domain-specific, and the guard that caught it had to know
+# something ruff cannot know — HA's blocking-call list, our fleet-vs-charger
+# read rule, that a lit `html` template must not contain a backtick. Those
+# live in `tests/test_*_lint.py` / `test_*_astguard.py` and stay the primary
+# line of defence. Ruff is here to stop the next unused import.
+#
+# What is deliberately NOT selected, and why (measured over the tree before
+# choosing — see #786 for the full counts):
+#
+#   I001  684 findings. Import order is style; re-sorting every module buries
+#         `git blame` on files we still debug against history.
+#   UP    1,516 findings. Pre-PEP585/604 annotations are valid on our 3.12
+#         floor. Churn with no behaviour change, across a release.
+#   DTZ   361 findings. Actively WRONG for SEM: this integration reasons in
+#         the user's local time on purpose — deadlines, tariff windows, night
+#         plans. `dt_util.now()` is the correct call and ruff cannot tell it
+#         from a naive `datetime.now()`.
+#   BLE001 156 findings. An HA integration that raises out of a coordinator
+#         update takes its entities with it; most of these swallows are
+#         deliberate and annotated.
+#
+# And explicitly no formatter. `black` over 536 files would rewrite every
+# energy-path module we read history on.
+
+line-length = 100
+target-version = "py312"
+
+exclude = [
+    "dashboard/card/node_modules",
+    "dashboard/card/dist",
+]
+
+[lint]
+# F   pyflakes — unused imports/variables, undefined names. The real cruft.
+# E9  syntax / IO errors only (E1/E2/E5 whitespace+length are style).
+# B   flake8-bugbear — mutable defaults, late-binding closures, `assert False`.
+# ASYNC  blocking calls in async functions. Partial cover: it caught the
+#        blocking `open()` in #785 and missed the `os.listdir()` three lines
+#        away, which is why tests/test_no_blocking_open_in_event_loop.py
+#        encodes HA's own guard list instead.
+select = ["F", "E9", "B", "ASYNC"]
+
+[lint.per-file-ignores]
+# Tests build deliberately odd shapes: fixtures shadow, imports get pulled in
+# to prove a module loads, and a bare `except` is often the thing under test.
+"tests/*" = ["B011", "B017", "F811"]
