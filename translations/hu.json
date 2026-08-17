@@ -1359,6 +1359,9 @@
       "ev_min_current": {
         "name": "{charger} Min. áramerősség"
       },
+      "ev_max_current": {
+        "name": "{charger} Max. áramerősség"
+      },
       "vehicle_min_current": {
         "name": "{charger} Jármű min. áramerőssége"
       },

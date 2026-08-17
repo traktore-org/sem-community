@@ -71,7 +71,7 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 | `number.sem_charger_<id>_target_soc` / `_max` | *Minimum SoC* floor / *Up to* ceiling (% target); both **0–100 %** (#680) — floor 0 = no overnight charge |
 | *(picker)* `ev_start_stop_entity` | The `switch`/`button` SEM uses to open the contactor — set on the config card or the Add/Edit-charger dialog (#627). Without it, a `number.*`-only charger may be un-stoppable |
 | `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing) |
-| `number.sem_charger_<id>_minimum_current` | The floor SEM may offer (most cars need ≥ 6 A). There is **no** matching maximum field (#746) — see below |
+| `number.sem_charger_<id>_minimum_current` / `_maximum_current` | The current **range** SEM may offer — floor (most cars need ≥ 6 A) and ceiling (**6–80 A**, #746). Both on the Config tab's charger block; see below |
 | `sensor.sem_charging_strategy` | The live reason string — every decision explains itself here |
 
 ## How a decision becomes amps
@@ -84,17 +84,34 @@ a gentle 6 A offer until a fussy car latches) and the full-car backoff
 the minimum hardware commands to converge and then leaves the charger alone.
 The strategy sensor narrates every step.
 
-**Where the ceiling comes from.** Unlike the minimum, the maximum current is
-not something you set: SEM takes it from the charger itself (`max_current_a`,
-which for an entity-controlled box already folds in the control number's own
-maximum, #536) and clamps every command to it — so the box's rating is the
-limit whatever else is configured. The planner's arithmetic, which runs before
-any hardware is consulted, falls back to **32 A** when nothing else says
-otherwise. Until #789 that fallback was written out by hand at thirteen places
-and five of them said 16 A, which made the night-charge planner size the night
-at half the energy it can actually deliver on a 32 A charger — it started
-earlier and booked more cheap hours than it needed. The hardware was never at
-risk; the plan was just wrong about it.
+**Where the ceiling comes from.** Two things, and the lower one wins:
+
+1. **Max Amps** (`number.sem_charger_<id>_maximum_current`, 6–80 A) — what you
+   set. Use it to declare what the wallbox is actually rated for, or to throttle
+   it below that when it shares a supply.
+2. **The charger's own limit** (`max_current_a`, which for an entity-controlled
+   box already folds in the control number's own maximum, #536). The adapter
+   clamps every command to it, so the box's rating is the hard limit whatever
+   you set above.
+
+SEM decides against `min(hardware, Max Amps)` — a configured value can ask for
+*less* than the hardware allows, never for more, because deciding above the
+clamp is drift between what SEM plans and what it can command (#627).
+
+Before **#746** there was no Max Amps at all. The ceiling came from
+`max_charging_current`, a config key that no setup step and no entity ever
+wrote — the dashboard's *add charger* button minted it as a literal `32`. Every
+EVSE on every install was therefore capped at 32 A with nothing in the UI to
+explain it, which is two thirds of a 48 A box. Upgrading installs keep the value
+they had: the new slider seeds from the old key.
+
+**#789** was the other half of the same defect. The planner's arithmetic runs
+before any hardware is consulted and falls back to 32 A; that fallback used to
+be written out by hand at thirteen places and five of them said 16 A, so the
+night-charge planner sized the night at half the energy a 32 A charger delivers
+— it started earlier and booked more cheap hours than it needed. The hardware
+was never at risk; the plan was just wrong about it. Both halves now resolve
+through one function (`devices.base.resolve_max_current`) and one constant.
 
 ---
 

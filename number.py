@@ -26,7 +26,7 @@ from homeassistant.const import (
 
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import DOMAIN
+from .const import DEFAULT_MAX_CHARGING_CURRENT, DOMAIN
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -369,6 +369,31 @@ async def async_setup_entry(
                     native_min_value=6, native_max_value=16, native_step=1,
                     mode=NumberMode.SLIDER,
                 ), "ev_min_current", full_config.get("ev_min_current", 6)),
+                # (#746) The counterpart Min Amps never had. Until now the
+                # ceiling came from ``max_charging_current`` — a key no config
+                # step and no entity wrote, minted only by the dashboard's
+                # add-charger skeleton as a literal 32 — so every EVSE on every
+                # install was capped at 32 A with no way to raise it
+                # (@Azlinon's box is 48 A). This writes ``ev_max_current``, the
+                # key the decision layer already reads; the seed falls back
+                # through the legacy key so an upgrade moves nobody's ceiling.
+                # 80 A is the continuous rating of an EVSE on a 100 A feed —
+                # above the clamp the adapter applies anyway, so a higher
+                # slider would only invite a number no wallbox can honour.
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_maximum_current",
+                    name=f"{cname} Max Amps",
+                    native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+                    native_min_value=6, native_max_value=80, native_step=1,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:speedometer",
+                ), "ev_max_current",
+                    charger_cfg.get(
+                        "max_charging_current",
+                        full_config.get("ev_max_current",
+                                        full_config.get("max_charging_current",
+                                                        DEFAULT_MAX_CHARGING_CURRENT)),
+                    )),
                 # (#440 ADR 0010 #3) per-vehicle handshake-floor minimum.
                 # Effective floor = max(ev_min_current, vehicle_min_current).
                 # Default seeds to the charger's ev_min_current so the

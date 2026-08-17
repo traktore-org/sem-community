@@ -1359,6 +1359,9 @@
       "ev_min_current": {
         "name": "{charger} Amperes mín."
       },
+      "ev_max_current": {
+        "name": "{charger} Amperes máx."
+      },
       "vehicle_min_current": {
         "name": "{charger} Amperes mín. do veículo"
       },

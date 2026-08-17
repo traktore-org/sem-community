@@ -1359,6 +1359,9 @@
       "ev_min_current": {
         "name": "{charger}最小电流"
       },
+      "ev_max_current": {
+        "name": "{charger}最大电流"
+      },
       "vehicle_min_current": {
         "name": "{charger}车辆最小电流"
       },

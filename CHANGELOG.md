@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ⚡ **Chargers get a Max Amps setting — every EVSE was silently capped at
+  32 A** — SEM has shipped a per-charger *Min Amps* slider since #193 and never
+  a maximum. The ceiling came from `max_charging_current`, a config key that no
+  setup step and no entity ever wrote: the dashboard's *add charger* button
+  minted it as a hardcoded `32`, and nothing could change it afterwards. A 48 A
+  wallbox therefore charged at two thirds of its rating with nothing in the UI
+  to explain why. There is now a **Max Amps** slider (6–80 A) beside Min Amps on
+  the Config tab, writing `ev_max_current` — the key the decision layer already
+  read. Existing installs keep the ceiling they had: the slider seeds from the
+  old key, and the three places that build a charger's ceiling now resolve it
+  through one function instead of three literals, so raising the slider actually
+  raises the commanded current rather than being flattened back to 32 A by the
+  hardware clamp. (#746)
 - 📝 **The docs stopped teaching controls that were deleted four releases
   ago** — a release-prep audit found the `night_charging`,
   `smart_night_charging` and `tariff_optimized` switches still documented as

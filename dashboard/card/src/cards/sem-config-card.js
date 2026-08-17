@@ -738,12 +738,15 @@ class SEMConfigCard extends SEMLitBase {
                     ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
-                    ${''/* ONE current knob (#536): Min Amps. SEM auto-finds a
-                       fussy car's start current (day AND night) and settles
-                       back here — no Start Amps / Vehicle Min Amps knobs. */}
+                    ${''/* The charger's current RANGE (#536 floor, #746
+                       ceiling). SEM auto-finds a fussy car's start current
+                       (day AND night) and settles back to Min — no Start Amps
+                       / Vehicle Min Amps knobs. Max is what the wallbox is
+                       rated for (or the supply you want to throttle it to);
+                       before #746 it was an invisible 32 A on every install. */}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'min_amps', T, 'tile_help_min_amps')}
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
+                        ${this._renderStepper(`number.sem_charger_${cid}_maximum_current`, 'max_amps', T, 'tile_help_max_amps')}
                     </div>
                     ${/* (#576) The Surplus/Shed priority steppers were removed —
                           drag the charger in the Control-tab device-priority
@@ -761,8 +764,14 @@ class SEMConfigCard extends SEMLitBase {
                             ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, null)}
                             ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, null)}
                         </div>`}
+                    ${/* Capacity moved down here when Max Amps took its slot
+                          (#746) — it belongs with the other car properties
+                          anyway, and the current range now reads as a pair. */ ''}
                     <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_kwh_per_100km`, 'config_ev_kwh_per_100km', T, null)}
+                    </div>
+                    <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_phases`, 'config_ev_phases', T, null)}
                     </div>
                 </div>
@@ -1250,7 +1259,12 @@ class SEMConfigCard extends SEMLitBase {
             id,
             name: `${this._t('config_ev_new_charger')} ${existing.length + 1}`,
             ev_min_current: 6,
-            max_charging_current: 32,
+            // (#746) no ceiling literal here. This line was the ONLY writer of
+            // ``max_charging_current`` anywhere in SEM — a hardcoded 32 that
+            // then became every install's un-raisable EVSE cap. The ceiling is
+            // now ``ev_max_current``, seeded from DEFAULT_MAX_CHARGING_CURRENT
+            // by devices.base.resolve_max_current and raised by the Max Amps
+            // slider. Leaving it unset keeps one source of truth (class 46).
             ev_surplus_priority: existing.length + 3,
         };
         this._chargerBusy = true;

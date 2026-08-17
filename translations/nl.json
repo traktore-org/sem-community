@@ -1359,6 +1359,9 @@
       "ev_min_current": {
         "name": "{charger} Min. ampère"
       },
+      "ev_max_current": {
+        "name": "{charger} Max. ampère"
+      },
       "vehicle_min_current": {
         "name": "{charger} Voertuig min. ampère"
       },

@@ -8248,7 +8248,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     async def _retry_ev_device_setup(self) -> None:
         """Retry EV device setup if KEBA wasn't available at startup."""
         from ..hardware_detection import discover_ev_charger_from_registry
-        from ..devices.base import CurrentControlDevice
+        from ..devices.base import CurrentControlDevice, resolve_max_current
 
         ev_auto = discover_ev_charger_from_registry(self.hass)
         if not ev_auto or not ev_auto.get("ev_charger_service"):
@@ -8262,8 +8262,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             name="EV Charger",
             priority=self.config.get("ev_surplus_priority", 3),
             min_current=6.0,
-            max_current=float(self.config.get(
-                "max_charging_current", DEFAULT_MAX_CHARGING_CURRENT)),
+            # (#746) one resolver — see devices.base.resolve_max_current.
+            max_current=resolve_max_current(self.config.get),
             phases=int(self.config.get("ev_phases", 3)),
             voltage=230.0,
             power_entity_id=ev_auto.get("ev_charging_power_sensor"),
@@ -10423,6 +10423,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if isinstance(c, dict)
             }
 
+            from ..devices.base import resolve_max_current as _resolve_max_current
+
             def _cfg_charger(ccfg, key, default=None):
                 v = ccfg.get(key) if isinstance(ccfg, dict) else None
                 if v is not None:
@@ -10453,9 +10455,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         else seed_prio
                     )
                     dev.min_current = float(_cfg_charger(ccfg, "ev_min_current", 6))
-                    dev.max_current = float(
-                        _cfg_charger(ccfg, "max_charging_current",
-                                     DEFAULT_MAX_CHARGING_CURRENT)
+                    # (#746) the refresh-in-place twin of the construction
+                    # site — same resolver, so dragging the Max Amps slider
+                    # takes effect without a reload.
+                    dev.max_current = _resolve_max_current(
+                        lambda k, d=None, _c=ccfg: _cfg_charger(_c, k, d)
                     )
                     # Re-derive the surplus-activation gate (HIGH, review): the
                     # SurplusController activates this charger on

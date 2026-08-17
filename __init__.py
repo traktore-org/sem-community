@@ -1862,7 +1862,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     }]
 
         # Register each charger
-        from .devices.base import CurrentControlDevice
+        from .devices.base import CurrentControlDevice, resolve_max_current
         coordinator._ev_devices = {}
 
         # Charger-id sanity (#476): every per-charger write path matches on
@@ -1949,9 +1949,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 name=charger_name,
                 priority=ev_priority,
                 min_current=float(_cfg("ev_min_current", 6)),
-                max_current=float(
-                    _cfg("max_charging_current", DEFAULT_MAX_CHARGING_CURRENT)
-                ),
+                # (#746) one resolver, not a literal per site — see
+                # devices.base.resolve_max_current.
+                max_current=resolve_max_current(_cfg),
                 phases=int(_cfg("ev_phases", 3)),
                 voltage=230.0,
                 power_entity_id=ev_power_entity,

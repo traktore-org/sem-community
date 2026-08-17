@@ -1359,6 +1359,9 @@
       "ev_min_current": {
         "name": "{charger} Min. proud"
       },
+      "ev_max_current": {
+        "name": "{charger} Max. proud"
+      },
       "vehicle_min_current": {
         "name": "{charger} Min. proud vozidla"
       },

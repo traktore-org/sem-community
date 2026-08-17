@@ -83,13 +83,52 @@ QUOTA_STOP_MARGIN_KWH = 0.3
 # seconds included, so a delta bridging an unreadable stretch still books.
 _MAX_PLAUSIBLE_LOAD_W = 100_000.0
 
-from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
+from ..consts.core import (
+    KEBA_IDLE_GUARD_KWH,
+    DEFAULT_DEVICE_RATED_POWER,
+    DEFAULT_MAX_CHARGING_CURRENT,
+)
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def resolve_max_current(cfg_get) -> float:
+    """The one place a charger's configured ceiling is resolved (#746).
+
+    Three call sites build a :class:`CurrentControlDevice`'s ``max_current``:
+    setup, the late-discovery retry, and the refresh-in-place path. They used
+    to each read ``max_charging_current`` with their own literal default —
+    **bug class 46**, a value with one source of truth restated at the site
+    that uses it — which is how #789's thirteen defaults happened.
+
+    ``ev_max_current`` is the key the decision layer reads (``build_view``,
+    ``charge_stability``, ``ev_control``) and, since #746, the key the Max Amps
+    slider writes. ``max_charging_current`` is the pre-#746 key: no config-flow
+    step and no entity ever wrote it — the dashboard's *add charger* skeleton
+    minted it as a literal 32 — so it survives here purely so an upgrade cannot
+    move an existing install's ceiling.
+
+    :param cfg_get: a ``dict.get``-shaped accessor, so each caller keeps its
+        own charger→fleet fallback chain (``__init__._cfg``, ``_cfg_charger``,
+        ``self.config.get``) and only the resolution order lives here.
+    """
+    for key in ("ev_max_current", "max_charging_current"):
+        raw = cfg_get(key, None)
+        if raw is None:
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            continue
+        # A stored 0 (or a negative) is a charger that can never start, from a
+        # value no user typed. Fall through rather than ceiling it at zero.
+        if val > 0:
+            return val
+    return float(DEFAULT_MAX_CHARGING_CURRENT)
 
 
 class DeviceState(Enum):

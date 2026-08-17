@@ -1359,6 +1359,9 @@
       "ev_min_current": {
         "name": "{charger} Min Amps"
       },
+      "ev_max_current": {
+        "name": "{charger} Max Amps"
+      },
       "vehicle_min_current": {
         "name": "{charger} Vehicle Min Amps"
       },
