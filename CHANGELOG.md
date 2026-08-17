@@ -30,6 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previous version already wrote are never re-derived, they now retire
   themselves on the next refresh — leaving hand-registered devices and
   charger rows alone.
+- 🐛 **A multi-channel relay can no longer be bound to its neighbour's
+  channel** (#781, the control half) — the same digit-stripping name match
+  that paired one WLED power sensor with every sibling also ran on the
+  *control* side, where being wrong is worse: a misbound meter reports the
+  wrong watts, a misbound relay **switches the wrong circuit** — SEM shedding
+  the freezer believing it is the towel heater. On a Shelly Pro the digit IS
+  the channel, so `kanal_1` and `kanal_2` cleaned to the same name, and a
+  bare substring test fails one character later (`kanal_1` is inside
+  `kanal_10`). Control matching now requires the digits to survive: the exact
+  name, or the same name extended at a word boundary (`_relay` names the
+  channel, it doesn't renumber it). A looser candidate is refused outright —
+  "no control found", monitoring only, is the honest answer when the
+  alternative is actuating someone else's circuit.
 - 🐛 **A meter that reboots no longer books its whole lifetime as today's
   energy** (#782) — one heat pump reported 15,508.51 kWh *today* against a
   house total of 33.47. Its counter had reset to 0 and come back: SEM caught

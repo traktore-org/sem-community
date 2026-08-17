@@ -272,6 +272,17 @@ are always kept: an entity your registry doesn't know (a template
 switch, a YAML helper — no mark to read is not evidence against it), and
 anything you registered yourself with `register_surplus_device`.
 
+**A channel keeps its number.** On a multi-channel relay (a Shelly Pro,
+an ESPHome board) the digit in the name *is* the channel, so control
+matching never strips it and never accepts a bare substring:
+`kanal_1` is not `kanal_2`, and it is not `kanal_10` either. A switch is
+bound as a load's control only when it carries the exact same name, or
+that name extended at a word boundary (`…_relay` names the channel, it
+doesn't renumber it). When no such switch exists, SEM reports **no
+control found** and manages the load as monitoring-only — deliberately
+stricter than the power-sensor pairing, because a misbound meter merely
+shows the wrong watts while a misbound relay switches the wrong circuit.
+
 ### Catching the surplus in your own automations (`peak_only`)
 
 If you prefer to keep your own schedules (e.g. a 3×/day pump

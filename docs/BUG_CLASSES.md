@@ -1705,6 +1705,21 @@ authoritative.
 `_find_corresponding_power_sensor` now prefers an exact base-name match and keeps the fuzzy hit only
 as a fallback. Absence of a registry entry filters **nothing** (a template switch / YAML helper has
 no category to read — the #744 rule).
+**The amplifier's control half — and why its rule is STRICTER than the meter's.** Fixing the
+power-sensor direction left the same lossy match on the three *control* paths, where each loop
+returned the **first** loose hit: `_find_control_by_name`'s partial match and the Shelly/ESPHome
+branches of `_find_control_by_integration`. Both loose rules discard exactly the character that
+names the channel — `_names_match` strips every digit (`shelly_kanal_1` ≡ `shelly_kanal_2`), and a
+bare substring test fails one character later (`shelly_kanal_1` is inside `shelly_kanal_10`). The
+harm is not symmetric with the meter's: a misbound sensor reports the wrong watts, a misbound
+control **actuates the wrong circuit** — SEM shedding the freezer believing it is the towel heater.
+So `_control_name_matches` requires the digits intact — the same base name, or the same name
+extended at an `_` boundary (`_relay` names the channel, it does not renumber it) — and ranks exact
+above boundary instead of taking the first hit. A looser candidate is refused **outright**, not
+accepted as second best: "no control found", i.e. monitoring only, is the honest answer, the same
+reasoning as `_find_control_in_device`'s strict filter. General rule: **the acceptable
+false-positive rate of a name match is set by what happens when it is wrong** — read paths may
+guess, actuation paths may not.
 **The retirement half — a discovery filter is inert on an install that already ran.** Two facts
 compose: `LoadManagement._discover_devices` early-returns once `_unified_registry_active`, so
 pattern discovery never runs again on a live install; and `_sync_to_load_manager`'s #436 prune

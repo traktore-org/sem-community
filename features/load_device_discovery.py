@@ -104,6 +104,37 @@ class LoadDeviceDiscovery:
         name = str(getattr(category, "value", category)).lower()
         return name in _CONFIG_SURFACE_CATEGORIES
 
+    def _control_name_matches(self, base_name: str, candidate: str) -> bool:
+        """(#781) Does this candidate control THIS load's channel?
+
+        The control side may not use ``_names_match``. That helper's last
+        resort strips every digit — and on a multi-channel device the digit
+        IS the channel, so ``shelly_kanal_1`` and ``shelly_kanal_2`` clean to
+        the same string. A bare substring test is wrong the same way, one
+        character later: ``shelly_kanal_1`` is inside ``shelly_kanal_10``.
+
+        The asymmetry with the power-sensor side is deliberate. A misbound
+        meter reports the wrong watts; a misbound *control* actuates the
+        wrong circuit — SEM shedding the freezer believing it is the towel
+        heater. So a match must survive with its digits intact: the same
+        name, or the same name extended at an ``_`` boundary (``_relay``
+        names the channel, it does not renumber it). Anything looser is not
+        a weaker answer, it is a wrong one, and "no control found" —
+        monitoring only — is the honest result.
+        """
+        if not base_name or not candidate:
+            return False
+        if base_name == candidate:
+            return True
+        for long, short in ((candidate, base_name), (base_name, candidate)):
+            if len(long) <= len(short):
+                continue
+            if long.startswith(short) and long[len(short)] == "_":
+                return True
+            if long.endswith(short) and long[-len(short) - 1] == "_":
+                return True
+        return False
+
     def get_all_entities(self) -> List[str]:
         """Get all available entity IDs."""
         return list(self.hass.states.async_entity_ids())
@@ -523,19 +554,26 @@ class LoadDeviceDiscovery:
                         "entity": switch,
                     }
 
-        # Try partial match for switches containing the base name
+        # (#781) Then a switch naming the SAME channel — exact base name
+        # first, a boundary extension only as the fallback. See
+        # :meth:`_control_name_matches` for why a looser hit is refused
+        # outright rather than accepted as second best.
+        boundary: Optional[str] = None
         for entity in all_entities:
-            if (
-                entity.startswith("switch.")
-                and base_name in entity
-                and not self.is_config_surface(entity)
-            ):
-                state = self.hass.states.get(entity)
-                if state and state.state not in ("unknown", "unavailable"):
-                    return {
-                        "type": "switch",
-                        "entity": entity,
-                    }
+            if not entity.startswith("switch.") or self.is_config_surface(entity):
+                continue
+            candidate = self._extract_base_name(entity)
+            if not self._control_name_matches(base_name, candidate):
+                continue
+            state = self.hass.states.get(entity)
+            if not state or state.state in ("unknown", "unavailable"):
+                continue
+            if candidate == base_name:
+                return {"type": "switch", "entity": entity}
+            if boundary is None:
+                boundary = entity
+        if boundary is not None:
+            return {"type": "switch", "entity": boundary}
 
         # Try number entities for current control
         current_patterns = [
@@ -660,23 +698,30 @@ class LoadDeviceDiscovery:
             all_entities = self.get_all_entities()
 
             # Shelly typically has switch entities — but also settings ones
-            # (auto-on/auto-off timers, LED mode). (#781) Skip those.
+            # (auto-on/auto-off timers, LED mode). (#781) Skip those. And a
+            # Shelly Pro is the multi-channel case _control_name_matches
+            # exists for: ``_names_match`` used to strip the digits and hand
+            # channel 1 its neighbour's relay.
+            boundary: Optional[str] = None
             for entity in all_entities:
                 if (
-                    entity.startswith("switch.")
-                    and "shelly" in entity.lower()
-                    and not self.is_config_surface(entity)
+                    not entity.startswith("switch.")
+                    or "shelly" not in entity.lower()
+                    or self.is_config_surface(entity)
                 ):
-                    # Try to match by checking if base name relates to this switch
-                    if base_name in entity.lower() or self._names_match(
-                        base_name, self._extract_base_name(entity)
-                    ):
-                        state = self.hass.states.get(entity)
-                        if state and state.state not in ("unavailable", "unknown"):
-                            return {
-                                "type": "switch",
-                                "entity": entity,
-                            }
+                    continue
+                candidate = self._extract_base_name(entity)
+                if not self._control_name_matches(base_name, candidate):
+                    continue
+                state = self.hass.states.get(entity)
+                if not state or state.state in ("unavailable", "unknown"):
+                    continue
+                if candidate == base_name:
+                    return {"type": "switch", "entity": entity}
+                if boundary is None:
+                    boundary = entity
+            if boundary is not None:
+                return {"type": "switch", "entity": boundary}
 
         # ESPHome devices
         if "esphome" in sensor_lower:
@@ -684,16 +729,24 @@ class LoadDeviceDiscovery:
             all_entities = self.get_all_entities()
 
             # (#781) Every ESPHome node publishes a ``restart`` switch, and
-            # many publish more config toggles. They are not the load.
+            # many publish more config toggles. They are not the load. Nor is
+            # ``pump_10`` a match for ``pump_1`` — see _control_name_matches.
+            boundary: Optional[str] = None
             for entity in all_entities:
-                if entity.startswith("switch.") and not self.is_config_surface(entity):
-                    if base_name in entity.lower():
-                        state = self.hass.states.get(entity)
-                        if state and state.state not in ("unavailable", "unknown"):
-                            return {
-                                "type": "switch",
-                                "entity": entity,
-                            }
+                if not entity.startswith("switch.") or self.is_config_surface(entity):
+                    continue
+                candidate = self._extract_base_name(entity)
+                if not self._control_name_matches(base_name, candidate):
+                    continue
+                state = self.hass.states.get(entity)
+                if not state or state.state in ("unavailable", "unknown"):
+                    continue
+                if candidate == base_name:
+                    return {"type": "switch", "entity": entity}
+                if boundary is None:
+                    boundary = entity
+            if boundary is not None:
+                return {"type": "switch", "entity": boundary}
 
         return None
 

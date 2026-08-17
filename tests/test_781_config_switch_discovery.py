@@ -324,3 +324,126 @@ class TestPersistedConfigRowsRetire:
         reg, lm = _registry_with_rows(monkeypatch, PERSISTED, PERSISTED_ENTRIES)
         assert reg._sync_to_load_manager() is True
         assert "load_device_wled_treppe_umkehren" not in lm._devices
+
+
+class TestTheControlBindsToItsOwnChannel:
+    """#781, the control half — a wrong bind here ACTUATES the wrong circuit.
+
+    The power-sensor half already prefers an exact base-name match. The
+    control paths did not: each loop returned the FIRST loose hit. Two loose
+    rules feed them, and on a multi-channel device both are wrong in the same
+    way — they discard exactly the character that names the channel.
+
+    ``_names_match``'s last resort strips every digit, so ``shelly_kanal_1``
+    and ``shelly_kanal_2`` clean to the same string; a bare substring test
+    makes ``shelly_kanal_1`` match ``shelly_kanal_10``. Binding channel 1's
+    energy to channel 2's relay means SEM sheds the freezer believing it is
+    the towel heater.
+
+    So on the control side digits are load-bearing: an exact base name wins,
+    a substring is accepted only at an ``_`` boundary, and a match that
+    survives only by dropping digits is not a match at all. "No control
+    found" is the honest answer — the same reasoning as
+    ``_find_control_in_device``'s strict filter.
+    """
+
+    # Two relays and two meters on one Shelly Pro, plus a third channel whose
+    # number merely starts with the first channel's digits.
+    MULTI = {
+        "switch.shelly_kanal_2": "on",
+        "switch.shelly_kanal_10": "on",
+        "switch.shelly_kanal_1": "on",
+        "sensor.shelly_kanal_1_energy": "1.0",
+    }
+    MULTI_ENTRIES = [
+        _Entry("switch.shelly_kanal_2", "shelly"),
+        _Entry("switch.shelly_kanal_10", "shelly"),
+        _Entry("switch.shelly_kanal_1", "shelly"),
+        _Entry("sensor.shelly_kanal_1_energy", "shelly"),
+    ]
+
+    def test_the_name_path_takes_its_own_relay_not_a_neighbour(
+            self, monkeypatch):
+        """``switch.shelly_kanal_2`` is listed first and contains no part of
+        channel 1's name; ``switch.shelly_kanal_10`` merely starts with it."""
+        disc = _discovery(monkeypatch, self.MULTI, self.MULTI_ENTRIES)
+        got = disc._find_control_by_name("shelly_kanal_1")
+        assert got is not None
+        assert got["entity"] == "switch.shelly_kanal_1"
+
+    def test_a_neighbour_is_not_a_fallback_when_the_relay_is_absent(
+            self, monkeypatch):
+        """Channel 1 has a meter but no relay of its own. Channel 2's relay
+        is not a lesser answer — it is a wrong one."""
+        states = {k: v for k, v in self.MULTI.items()
+                  if k != "switch.shelly_kanal_1"}
+        entries = [e for e in self.MULTI_ENTRIES
+                   if e.entity_id != "switch.shelly_kanal_1"]
+        disc = _discovery(monkeypatch, states, entries)
+        assert disc._find_control_by_name("shelly_kanal_1") is None
+
+    def test_ten_is_not_one(self, monkeypatch):
+        """The substring test that made ``kanal_1`` match ``kanal_10``."""
+        states = {"switch.shelly_kanal_10": "on",
+                  "sensor.shelly_kanal_1_energy": "1.0"}
+        entries = [_Entry("switch.shelly_kanal_10", "shelly"),
+                   _Entry("sensor.shelly_kanal_1_energy", "shelly")]
+        disc = _discovery(monkeypatch, states, entries)
+        assert disc._find_control_by_name("shelly_kanal_1") is None
+
+    def test_a_suffixed_relay_is_still_the_same_channel(self, monkeypatch):
+        """A boundary match is still a match — ``_relay`` names the same
+        channel, it does not renumber it."""
+        states = {"switch.shelly_kanal_1_relay": "on",
+                  "sensor.shelly_kanal_1_energy": "1.0"}
+        entries = [_Entry("switch.shelly_kanal_1_relay", "shelly"),
+                   _Entry("sensor.shelly_kanal_1_energy", "shelly")]
+        disc = _discovery(monkeypatch, states, entries)
+        got = disc._find_control_by_name("shelly_kanal_1")
+        assert got is not None
+        assert got["entity"] == "switch.shelly_kanal_1_relay"
+
+    def test_the_shelly_brand_path_stops_stripping_digits(self, monkeypatch):
+        """The live shape: ``_names_match`` cleans both channels to
+        ``shellykanal`` and channel 2's relay is reached first."""
+        disc = _discovery(monkeypatch, self.MULTI, self.MULTI_ENTRIES)
+        got = disc._find_control_by_integration("sensor.shelly_kanal_1_energy")
+        assert got is not None
+        assert got["entity"] == "switch.shelly_kanal_1"
+
+    def test_the_shelly_brand_path_refuses_a_neighbour_outright(
+            self, monkeypatch):
+        """No relay for this channel — the digit-stripped sibling must not
+        stand in for it."""
+        states = {"switch.shelly_kanal_2": "on",
+                  "sensor.shelly_kanal_1_energy": "1.0"}
+        entries = [_Entry("switch.shelly_kanal_2", "shelly"),
+                   _Entry("sensor.shelly_kanal_1_energy", "shelly")]
+        disc = _discovery(monkeypatch, states, entries)
+        assert disc._find_control_by_integration(
+            "sensor.shelly_kanal_1_energy") is None
+
+    def test_the_esphome_branch_takes_its_own_pump(self, monkeypatch):
+        """``esphome_pump_1`` must not adopt ``esphome_pump_10``'s switch."""
+        states = {"switch.esphome_pump_10": "on",
+                  "switch.esphome_pump_1": "on",
+                  "sensor.esphome_pump_1_energy": "1.0"}
+        entries = [_Entry("switch.esphome_pump_10", "esphome"),
+                   _Entry("switch.esphome_pump_1", "esphome"),
+                   _Entry("sensor.esphome_pump_1_energy", "esphome")]
+        disc = _discovery(monkeypatch, states, entries)
+        got = disc._find_control_by_integration("sensor.esphome_pump_1_energy")
+        assert got is not None
+        assert got["entity"] == "switch.esphome_pump_1"
+
+    def test_an_unrelated_name_still_matches_at_a_boundary(self, monkeypatch):
+        """The rule must not break ordinary naming: a base name that is a
+        boundary-suffix of the switch's name is the same device."""
+        states = {"switch.wohnzimmer_steckdose": "on",
+                  "sensor.steckdose_energy": "1.0"}
+        entries = [_Entry("switch.wohnzimmer_steckdose", "plug"),
+                   _Entry("sensor.steckdose_energy", "plug")]
+        disc = _discovery(monkeypatch, states, entries)
+        got = disc._find_control_by_name("steckdose")
+        assert got is not None
+        assert got["entity"] == "switch.wohnzimmer_steckdose"
