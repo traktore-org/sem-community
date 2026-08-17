@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧪 **The test suite now runs against the Home Assistant you actually have**
+  (developer-facing) — for nineteen months every one of SEM's 7,400+ tests ran
+  against Home Assistant 2025.1.4 while users ran 2026.8.x, and nothing said so:
+  the CI matrix listed two Python versions, both installed the same
+  `pytest-homeassistant-custom-component` pin, and that pin — not the matrix —
+  chose the HA. Green meant "works on 2025.1", which is not a claim anyone
+  needed. The matrix is now an HA ladder: 3.12 → HA 2025.1.4 (the supported
+  floor, still blocking), 3.13 → HA 2026.2.3, 3.14 → HA 2026.8.2, the version
+  HA-PROD runs. The two upper rungs are non-blocking to start — nineteen months
+  of deprecations will not land clean, and that triage should not happen as a
+  green-chase on top of a release. A guard pins the shape so the blind spot
+  cannot silently reopen. The declared floor in `hacs.json` does not move.
+  (#787)
 - 🧹 **A lint floor, and the cruft it swept out from under it** (developer-
   facing; nothing you configured changes) — SEM had no linter at all, so cruft
   accumulated invisibly: 314 unused imports, 70 assignments nobody read, three

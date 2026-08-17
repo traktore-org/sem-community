@@ -14,9 +14,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The matrix is an HA matrix wearing a Python label (#787). Each rung
+    # installs a different pytest-homeassistant-custom-component pin — see
+    # tests/requirements_test.txt — so this list reads:
+    #   3.12 -> HA 2025.1.4  (the hacs.json floor; blocking)
+    #   3.13 -> HA 2026.2.3
+    #   3.14 -> HA 2026.8.2  (what HA-PROD runs)
+    # Nineteen months of API drift went unverified because both legs used to
+    # install the same HA and nothing in the file said which one.
+    #
+    # The two new rungs are non-blocking for now, on purpose: they are being
+    # added on top of a release, the drift they surface needs unhurried triage,
+    # and a red board would get worked around rather than read. Flip
+    # continue-on-error off rung by rung as each one comes clean — that flip is
+    # the actual close-out of #787.
+    continue-on-error: ${{ matrix.python-version != '3.12' }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
