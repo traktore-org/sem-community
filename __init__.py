@@ -2717,25 +2717,56 @@ async def _async_register_services(
                 )
 
             # Cache-busting: per-file content hash + manifest version (#301).
-            # See _content_hash_cache_bust at module level. Inlined into a
-            # closure here so the resolved card_www_dir + manifest version
-            # are captured once per service call.
+            # See _content_hash_cache_bust at module level.
+            #
+            # (#785) Every hash is read in ONE executor hop, before either
+            # loop below asks for one. Calling a helper runs its body right
+            # here on the event loop no matter which module the helper lives
+            # in — HA's guard named __init__.py line 64 (the `open` inside
+            # _content_hash_cache_bust) while this coroutine looked clean,
+            # because the read was two calls away. Only handing work to an
+            # executor moves it off the loop.
             manifest_path_l = os.path.join(component_dir, "manifest.json")
 
-            def _read_manifest_version() -> str:
+            installed_bases = {
+                f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
+                for fname in installed_cards
+            }
+            # The Lit bundle lives under dist/ so it never appears in the
+            # root-level listdir above; whitelist it explicitly or the orphan
+            # cleanup below would deregister it on every generate_dashboard call.
+            installed_bases.add(
+                f"/local/custom_components/{DOMAIN}/dashboard/card/dist/sem-cards.js"
+            )
+            existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
+            # Both loops below bust exactly these: the files we install, plus
+            # the SEM resources already registered that survive the orphan
+            # sweep. Same filter as the sweep itself.
+            bust_urls = set(installed_bases) | {
+                base
+                for base in existing_bases
+                if f"/custom_components/{DOMAIN}/" in base and base.endswith(".js")
+            }
+
+            def _read_asset_versions() -> tuple[str, dict[str, str]]:
                 """Runs in an executor — ``open`` is loop-guarded by HA."""
                 try:
                     with open(manifest_path_l) as f:
-                        return json.load(f).get("version", "0")
+                        version = json.load(f).get("version", "0")
                 except Exception:
-                    return "0"
+                    version = "0"
+                return version, {
+                    url: _content_hash_cache_bust(card_www_dir, url, version)
+                    for url in bust_urls
+                }
 
-            _mver = await hass.async_add_executor_job(_read_manifest_version)
+            _mver, _busts = await hass.async_add_executor_job(_read_asset_versions)
 
             def _cache_bust_for(base_url: str) -> str:
-                return _content_hash_cache_bust(card_www_dir, base_url, _mver)
+                # Bare version if a URL appeared after the hashes were read —
+                # same fallback _content_hash_cache_bust uses for a bad read.
+                return _busts.get(base_url, _mver)
 
-            existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
             added_resources = []
             updated_resources = 0
             for fname in installed_cards:
@@ -2749,17 +2780,8 @@ async def _async_register_services(
                     })
                     added_resources.append(base_url)
 
-            # Update ?v= on existing SEM resources and remove orphaned ones
-            installed_bases = {
-                f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
-                for fname in installed_cards
-            }
-            # The Lit bundle lives under dist/ so it never appears in the
-            # root-level listdir above; whitelist it explicitly or the orphan
-            # cleanup below would deregister it on every generate_dashboard call.
-            installed_bases.add(
-                f"/local/custom_components/{DOMAIN}/dashboard/card/dist/sem-cards.js"
-            )
+            # Update ?v= on existing SEM resources and remove orphaned ones.
+            # installed_bases is built above, with the cache-bust set.
             cleaned = []
             kept_items = []
             for item in resources_data["items"]:

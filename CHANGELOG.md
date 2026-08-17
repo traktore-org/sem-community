@@ -56,11 +56,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory directly on the event loop. HA guards both calls and logs
   "Detected blocking call … by custom integration solar_energy_management";
   on a Pi with an SD card or a network-mounted `/config`, every other
-  integration on the box waits out the syscall. Both moved to the executor —
-  the pattern the same handler already used three times over. An AST lint
-  (`tests/test_no_blocking_open_in_event_loop.py`) now walks every shipped
-  module against HA's real guard list, so the next one is caught in CI rather
-  than in someone's log. (#785)
+  integration on the box waits out the syscall. A third one hid behind two
+  call hops: the per-file cache-bust hash, opened once per registered card,
+  from a helper the service reached through a nested function. All three now
+  run in the executor — the pattern the same handler already used three times
+  over — and the cache-bust hashes are read in a single hop before they are
+  needed. An AST lint (`tests/test_no_blocking_open_in_event_loop.py`) walks
+  every shipped module against HA's real guard list, following calls out of
+  the coroutine rather than only what is written inside one, so the next one
+  is caught in CI rather than in someone's log. (#785)
 - 🐛 **The energy diagram draws a balance that adds up again** — #699 gave the
   cards an atomic per-cycle snapshot so the arrows can't pair a stale solar
   reading with a fresh EV one. The diagram card's half of that fix was written
