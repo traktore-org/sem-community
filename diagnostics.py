@@ -12,8 +12,47 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+from .features.device_axes import has_control_handle, may_actuate, user_hands_off
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _load_manager_diagnostics(coordinator: Any) -> dict[str, Any]:
+    """The load-manager block, one row per appliance, both axes named (#780).
+
+    The pre-#780 row printed ``is_controllable`` alone. In #779 that line said
+    ``true`` for a device the reporter had set to Mode: Off while SEM was
+    switching it off — capability true, permission off, both correct, and
+    indistinguishable from the bug we were chasing. It cost real diagnosis time
+    on both sides. Now each row answers *can we?*, *may we?* and *would we?*
+    side by side, so "why didn't SEM shed X" and "why did SEM start X" are each
+    answerable from one line.
+    """
+    load_mgr = getattr(coordinator, "_load_manager", None)
+    if not load_mgr:
+        return {}
+    devices = load_mgr.get_load_management_data().get("devices", {})
+    return {
+        "enabled": load_mgr.is_enabled(),
+        "device_count": len(devices),
+        "devices": {
+            did: {
+                "type": info.get("device_type"),
+                # capability — is there anything to switch?
+                "has_control_handle": has_control_handle(info),
+                # permission — may we, and under which policy?
+                "control_mode": info.get("control_mode"),
+                "user_hands_off": user_hands_off(info),
+                # the verdict both axes produce
+                "may_actuate": may_actuate(info),
+                "is_critical": info.get("is_critical"),
+                "priority": info.get("priority"),
+                "is_on": info.get("is_on"),
+                "current_power": info.get("current_power", 0),
+            }
+            for did, info in devices.items()
+        },
+    }
 
 # Recent-log surface (v1.6.11). When users report a bug via "Copy
 # diagnostics", the dump now also includes the last few SEM-related
@@ -186,26 +225,7 @@ async def async_get_config_entry_diagnostics(
         ev_stability["error"] = "collection failed"
 
     # Load manager info
-    load_mgr = getattr(coordinator, "_load_manager", None)
-    load_info = {}
-    if load_mgr:
-        lm_data = load_mgr.get_load_management_data()
-        devices = lm_data.get("devices", {})
-        load_info = {
-            "enabled": load_mgr.is_enabled(),
-            "device_count": len(devices),
-            "devices": {
-                did: {
-                    "type": info.get("device_type"),
-                    "is_controllable": info.get("is_controllable"),
-                    "is_critical": info.get("is_critical"),
-                    "priority": info.get("priority"),
-                    "is_on": info.get("is_on"),
-                    "current_power": info.get("current_power", 0),
-                }
-                for did, info in devices.items()
-            },
-        }
+    load_info = _load_manager_diagnostics(coordinator)
 
     # Energy dashboard config
     ed_config = getattr(coordinator, "_energy_dashboard_config", None)

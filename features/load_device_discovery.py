@@ -213,7 +213,10 @@ class LoadDeviceDiscovery:
                             "is_available": self._is_device_available(switch_entity, power_entity),
                             "priority": 5,  # Default medium priority
                             "is_critical": False,  # Default not critical
-                            "is_controllable": True,  # Default controllable
+                            # (#780) we found the switch — that IS the handle.
+                            "has_control_handle": True,
+                            "user_hands_off": False,
+                            "is_controllable": True,  # LEGACY — derived
                         }
 
                         _LOGGER.info(
@@ -277,7 +280,7 @@ class LoadDeviceDiscovery:
             - power_entity: Power sensor for monitoring
             - energy_entity: Energy sensor from Energy Dashboard
             - control: Dict with control type, entity/service, and discovery method
-            - is_controllable: True if control method was found
+            - has_control_handle: True if a control method was found (#780)
         """
         _LOGGER.info("Discovering devices from Energy Dashboard individual devices...")
 
@@ -351,7 +354,10 @@ class LoadDeviceDiscovery:
                 "is_available": True,
                 "priority": 8 if is_ev else 5,  # EV chargers higher priority (shed first)
                 "is_critical": False,
-                "is_controllable": control is not None,
+                # (#780) capability, stated by the only thing that knows it.
+                "has_control_handle": control is not None,
+                "user_hands_off": False,
+                "is_controllable": control is not None,  # LEGACY — derived
                 "is_ev": is_ev,
             }
 

@@ -305,6 +305,30 @@ read-only by design — SEM can't suppress it), but the cards will load.
 
 ---
 
+## "Why did SEM touch that device?" — reading a load row in diagnostics
+
+Every load in the diagnostics download (**Settings → Devices & Services → Solar
+Energy Management → ⋮ → Download diagnostics**) carries two *independent*
+answers, and mixing them up is the single most common misreading:
+
+| Field | Question it answers | Comes from |
+|---|---|---|
+| `has_control_handle` | **Can** SEM control it? A switch / number entity / service call was discovered for this appliance. | Discovery. Nothing you set changes it. |
+| `control_mode` | **May** SEM control it, and how? `off` / `peak_only` / `surplus` / `manual`. | The mode dropdown on the Load Priority card. |
+| `user_hands_off` | **May** SEM control it? `true` = you toggled "never touch this load". | The controllable toggle on the Load Priority card. |
+| `may_actuate` | The verdict: **would** SEM act on it right now? | All three above. |
+
+So `has_control_handle: true` on a device you set to **Mode: Off** is correct
+and expected — it says a switch exists, not that SEM is allowed to use it.
+Read `may_actuate` for "would SEM touch this"; if that says `false` and SEM
+still acted, that's a bug worth reporting (#780).
+
+Before v2.0 these were a single field named `is_controllable`, which read like
+permission but meant capability-and-a-bit-of-permission. It is still present,
+derived, so older tooling keeps working.
+
+---
+
 ## Costs or savings showing incorrect values
 
 **Cause:** SEM uses configured tariff rates for cost calculations.

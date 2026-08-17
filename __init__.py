@@ -3221,7 +3221,7 @@ async def _async_register_services(
         prop = call.data.get("property")
         value = call.data.get("value")
 
-        if prop in ("critical", "controllable"):
+        if prop in ("critical", "controllable", "hands_off"):
             # (#650) Persist via the REGISTRY. Writing only into the
             # LoadManagement dict — as this did pre-fix — lost the flag on the
             # next `_sync_to_load_manager`, which replaces that entry wholesale
@@ -3230,10 +3230,14 @@ async def _async_register_services(
             # The LoadManagement write stays: it takes effect this cycle and it
             # is the ONLY store for devices the registry doesn't build
             # (per-charger `load_device_*` entries, service registrations).
+            #
+            # (#780) ``controllable`` / ``hands_off`` are the SAME toggle under
+            # two names, and ``value`` keeps the card's polarity throughout:
+            # True = "SEM may touch this load".
             if prop == "critical":
                 await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
             else:
-                await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+                await coordinator._load_manager.async_set_hands_off(device_id, not bool(value))
             reg = getattr(coordinator, "_device_registry", None)
             if reg is not None:
                 await reg.async_set_device_flag(device_id, prop, bool(value))

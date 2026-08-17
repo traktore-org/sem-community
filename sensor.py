@@ -35,6 +35,11 @@ from homeassistant.helpers import label_registry as lr
 from .const import DOMAIN, STATUS_MESSAGES, ChargingState, SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
+from .features.device_axes import (
+    has_control_handle as _has_control_handle,
+    may_actuate as _may_actuate,
+    user_hands_off as _user_hands_off,
+)
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -2786,7 +2791,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         "name": device_info.get("friendly_name", device_id),
                         "priority": device_info.get("priority", 5),
                         "critical": device_info.get("is_critical", False),
-                        "controllable": device_info.get("is_controllable", True),
+                        # (#780) both axes; ``controllable`` stays for one
+                        # release under its old (mixed) meaning.
+                        "has_control_handle": _has_control_handle(device_info),
+                        "control_mode": device_info.get("control_mode"),
+                        "controllable": _may_actuate(device_info),
                         "power": device_info.get("power_rating", 0),
                         "available": device_info.get("is_available", False),
                     })
@@ -2806,7 +2815,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                             device_id: {
                                 "name": info.get("friendly_name", device_id),
                                 "priority": info.get("priority", 5),
-                                "is_controllable": info.get("is_controllable", True),
+                                # (#780) capability and permission, separately
+                                "has_control_handle": _has_control_handle(info),
+                                "user_hands_off": _user_hands_off(info),
+                                "control_mode": info.get("control_mode"),
+                                "is_controllable": _may_actuate(info),
                                 "is_critical": info.get("is_critical", False),
                                 "power_rating": info.get("power_rating", 0),
                                 "power_entity": info.get("power_entity"),

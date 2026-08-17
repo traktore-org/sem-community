@@ -33,6 +33,7 @@ from ..const import (
     DEFAULT_POWER_FACTOR,
     LoadManagementState,
 )
+from .device_axes import may_actuate
 from .load_device_discovery import LoadDeviceDiscovery
 
 _LOGGER = logging.getLogger(__name__)
@@ -262,8 +263,10 @@ class LoadManagementCoordinator:
                     _LOGGER.info("Added new device: %s (%s + %s) [source: %s]", device_id, switch_info, power_info, source)
                 else:
                     # Update availability and power rating, preserve user settings
-                    # NOTE: is_controllable, is_critical, and priority are user-editable —
-                    # never overwrite them from discovery when the user has set them.
+                    # NOTE: the user-editable axes (hands-off, critical,
+                    # priority) are never overwritten from discovery. Capability
+                    # (has_control_handle) IS discovery's to state — but it only
+                    # arrives with a fresh row, so nothing to re-derive here.
                     existing = self._devices[device_id]
                     update = {
                         "is_available": device_info.get("is_available", True),
@@ -400,7 +403,11 @@ class LoadManagementCoordinator:
                 "is_available": True,
                 "priority": priority,
                 "is_critical": is_critical,
-                "is_controllable": True,
+                # (#780) a registered charger always has a control handle;
+                # whether SEM may use it is control_mode's question.
+                "has_control_handle": True,
+                "user_hands_off": False,
+                "is_controllable": True,  # LEGACY-WRITE (#780) — derived
                 "control_type": "current",  # Special flag: use current control instead of switch
                 "charger_id": charger_id,  # #436: lets callers / card map back to ev_chargers[i].id
                 # (#748) the charger's stop switch / status sensor. Stored so
@@ -572,12 +579,22 @@ class LoadManagementCoordinator:
             await self._save_device_configuration()
             _LOGGER.debug("Updated %s critical status to %s", device_id, is_critical)
 
-    async def update_device_controllable_status(self, device_id: str, is_controllable: bool):
-        """Update device controllable status."""
+    async def async_set_hands_off(self, device_id: str, hands_off: bool):
+        """The user's "never touch this load" toggle (#650) — PERMISSION (#780).
+
+        It writes the permission axis and leaves the discovered capability
+        alone. Pre-#780 it overwrote ``is_controllable``, so the row forgot a
+        switch had ever been found for the appliance and anything asking "can
+        this even be controlled?" got the user's preference back instead. The
+        mixed key is still kept in step, derived, for readers on the old name.
+        """
         if device_id in self._devices:
-            self._devices[device_id]["is_controllable"] = is_controllable
+            row = self._devices[device_id]
+            row["user_hands_off"] = bool(hands_off)
+            row["is_controllable"] = (  # LEGACY-WRITE (#780) — derived
+                may_actuate({**row, "control_mode": None}))
             await self._save_device_configuration()
-            _LOGGER.debug("Updated %s controllable status to %s", device_id, is_controllable)
+            _LOGGER.debug("Updated %s hands-off to %s", device_id, hands_off)
 
     def _update_peak_tracking(self, grid_import_w: float) -> bool:
         """Update 15-minute rolling average peak and monthly maximum.
@@ -891,11 +908,12 @@ class LoadManagementCoordinator:
         """Emergency load shedding - turn off all non-critical loads immediately."""
         devices_to_shed = [
             device_id for device_id, device_info in self._devices.items()
-            if (device_info.get("control_mode") != "off" and
+            # (#780) both axes in one question: a control handle exists AND
+            # the user's mode / hands-off toggle permit us to use it.
+            if (may_actuate(device_info) and
                 # Devices another engine peak-manages are never actuated from
                 # here (#461-peak EV, #649 surplus) — see the helper.
                 not self._peak_managed_elsewhere(device_info) and
-                device_info.get("is_controllable", True) and
                 device_info.get("is_available", False) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
@@ -996,16 +1014,16 @@ class LoadManagementCoordinator:
         available_devices = []
 
         for device_id, device_info in self._devices.items():
-            # Skip devices in "off" mode — SEM never touches these (#49)
-            if device_info.get("control_mode") == "off":
+            # (#780) Capability AND permission — "off" mode (#49) and the
+            # user's hands-off opt-out (#650) both live in may_actuate now.
+            if not may_actuate(device_info):
                 continue
             # Devices another engine peak-manages (#461-peak EV, #649
             # surplus-mode loads) are never shed from here — see
             # _peak_managed_elsewhere for the full rationale.
             if self._peak_managed_elsewhere(device_info):
                 continue
-            if (device_info.get("is_controllable", True) and
-                not device_info.get("is_critical", False) and
+            if (not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
                 device_info.get("is_available", False) and
                 self._can_shed_device(device_id, device_info)):
@@ -1346,10 +1364,14 @@ class LoadManagementCoordinator:
         # much can we shed?" must match what shedding will actually target (a
         # 22 kW EV draw, or a surplus pump the surplus controller owns, is NOT
         # reducible from here).
+        # (#780) ...and the mode: a load the user set to Off is not sheddable,
+        # so counting it here over-reported "how much can we shed?" in exactly
+        # the way the paragraph above says it must not. may_actuate asks both
+        # axes, which is what _get_devices_for_shedding walks.
         controllable_devices = sum(
             1 for d in self._devices.values()
             if not self._peak_managed_elsewhere(d)
-            and d.get("is_controllable", True)
+            and may_actuate(d)
             and d.get("is_available", False)
             and self._is_device_currently_on(d)
         )
@@ -1358,7 +1380,7 @@ class LoadManagementCoordinator:
             self._device_discovery.get_device_current_state(device_info)["current_power"] / 1000
             for device_id, device_info in self._devices.items()
             if (not self._peak_managed_elsewhere(device_info) and
-                device_info.get("is_controllable", True) and
+                may_actuate(device_info) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
                 self._is_device_currently_on(device_info))

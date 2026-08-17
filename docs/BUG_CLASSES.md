@@ -1892,3 +1892,42 @@ argument form and would have passed while three of the five 16s were still in th
 any logic — if they disagree, that is the bug, whatever the issue says it is about. And when a key
 has no write path, its default is not a fallback, it is the value.
 Refs #789 #788 #716 #746 #685 #678.
+
+### 47. One word names two axes, so every reader picks the axis it expected — GUARDED
+**Symptom:** a flag reads as an answer to a question it does not answer. Nothing misbehaves; the
+cost is paid in diagnosis, by whoever reads the flag next — including us. It surfaces as a report
+that quotes the flag back at you as evidence for a bug that isn't there, and as fixes aimed at the
+wrong subsystem.
+**Root shape:** two independent properties of the same row get folded into one boolean because at
+the moment of writing they were always read together. The name can then only be honest about one of
+them, and the other becomes invisible — but still decisive. Every later reader resolves the
+ambiguity in favour of whichever axis their own question was about. The tell is a comment that has
+to explain why the flag is *not* symmetric (`True` doesn't mean the opposite of `False`), which is
+what a mixed axis looks like from inside.
+**Live catch (#780):** `is_controllable` on a load row meant "a control handle was discovered
+(**capability**) AND the user hasn't opted this load out (**permission**)", under a name that reads
+as pure permission — while the actual permission the shed loop enforced was a *different* field,
+`control_mode`. In #779 the reporter's diagnostics printed `is_controllable: true` for a device he
+had set to **Mode: Off** while SEM was switching it off. Capability true, permission off, both
+correct — and indistinguishable from the bug we were chasing. It cost real diagnosis time on both
+sides, and the reporter drew the same wrong conclusion from it. #650 is the earlier scar: it had to
+write a paragraph explaining why `controllable_override=True` is not the symmetric case of `False`.
+The mixing also hid a real over-report: the "how much can we shed?" counters asked the mixed flag
+and never the mode, so loads the user had set to Off were counted as sheddable capacity.
+**Where else it lives:** any boolean whose name is an adjective about a device rather than an
+answer to one question — `is_available` (reachable? or enabled?), `is_active` (running? or
+permitted to run?), `enabled` on a controller (configured? or currently allowed?). Also every place
+a user preference is AND-ed into a discovery fact "so callers don't have to".
+**Closure:** split the axes into one accessor per question in a module that says what each one
+means (`features/device_axes.py`: `has_control_handle` / `user_hands_off` / `may_actuate`), derive
+the mixed key from them for one release so no outward reader loses its answer, and make the
+diagnostics row print *both* axes plus the verdict — so the line that misled #779 answers its own
+question. Write the axes at the point that knows them: discovery states capability, the user's
+toggle states permission, and neither overwrites the other.
+**Guard:** `tests/test_780_capability_vs_permission.py` — a source lint that the shed loop asks
+`device_axes` and never the mixed key again, plus a parametrized equivalence test that a
+legacy-only row reaches exactly the verdict the old expression produced (the migration must not
+move a decision), plus a pin that the diagnostics row carries capability, mode, opt-out and verdict.
+**Sweep question:** for any boolean on a device row, ask "which single question does this answer?"
+If the honest answer needs an "and", it is two fields.
+Refs #780 #779 #650.

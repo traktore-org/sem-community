@@ -91,16 +91,35 @@ class UnifiedDevice:
         return f"energy_dashboard_{name}"
 
     @property
-    def is_controllable(self) -> bool:
-        """Device is controllable if it has a control config.
+    def has_control_handle(self) -> bool:
+        """CAPABILITY (#780): a way to control this appliance was found.
 
-        (#650) A stored ``controllable_override`` of ``False`` wins — that's the
-        user saying "never touch this load". See the field's docstring for why
-        ``True`` is not the symmetric case.
+        Pure discovery fact — the user's "hands off" opt-out doesn't reach in
+        here. Before #780 it did, so a load the user had told SEM never to
+        touch reported as if no control had ever been discovered for it, and
+        any consumer asking "can this even be controlled?" got the user's
+        preference back instead. See ``features/device_axes.py``.
         """
-        if self.controllable_override is False:
-            return False
         return self.control is not None
+
+    @property
+    def user_hands_off(self) -> bool:
+        """PERMISSION (#650/#780): the user's explicit "never touch this load".
+
+        ``True`` is not the symmetric case and therefore not an opt-out either
+        — it clears the override back to the derived value rather than
+        inventing controllability. See the field's docstring.
+        """
+        return self.controllable_override is False
+
+    @property
+    def is_controllable(self) -> bool:
+        """DEPRECATED (#780) — the two axes mixed, under a name that reads as
+        only one of them. Kept for one release so outward readers that predate
+        the split keep answering; ask ``has_control_handle`` /
+        ``user_hands_off`` instead.
+        """
+        return self.has_control_handle and not self.user_hands_off
 
     @property
     def control_entity(self) -> Optional[str]:
@@ -114,6 +133,9 @@ class UnifiedDevice:
         return {
             "name": self.name,
             "priority": self.priority,
+            # (#780) both axes, then the mixed legacy key derived from them.
+            "has_control_handle": self.has_control_handle,
+            "user_hands_off": self.user_hands_off,
             "is_controllable": self.is_controllable,
             "is_critical": self.is_critical,
             "power_entity": self.power_sensor,
@@ -929,6 +951,11 @@ class UnifiedDeviceRegistry:
                 "is_available": True,
                 "priority": device.priority,
                 "is_critical": device.is_critical,
+                # (#780) the registry derives both axes; LoadManagement reads
+                # them rather than keeping its own idea of either. The mixed
+                # key is still written, derived, for readers on the old name.
+                "has_control_handle": device.has_control_handle,
+                "user_hands_off": device.user_hands_off,
                 "is_controllable": device.is_controllable,
                 "is_ev": device.is_ev,
                 "control_mode": self._control_mode_overrides.get(device.device_id, "peak_only"),
@@ -1306,6 +1333,10 @@ class UnifiedDeviceRegistry:
             result[did] = {
                 "name": device.name,
                 "priority": device.priority,
+                # (#780) capability and the user's opt-out, separately — the
+                # card's toggle drives the second one, never the first.
+                "has_control_handle": device.has_control_handle,
+                "user_hands_off": device.user_hands_off,
                 "is_controllable": device.is_controllable,
                 "is_critical": device.is_critical,
                 # (#559) rated_power, not the raw live sensor: the live
@@ -1347,6 +1378,9 @@ class UnifiedDeviceRegistry:
             result[did] = {
                 "name": spec.get("name", did),
                 "priority": spec.get("priority", 5),
+                # (#780) an explicit registration IS the control handle.
+                "has_control_handle": True,
+                "user_hands_off": False,
                 "is_controllable": True,
                 "is_critical": False,
                 # (#744) the same accessor the ED rows use: the live device's
@@ -1469,6 +1503,10 @@ class UnifiedDeviceRegistry:
         return {
             "name": get_text(self.hass, "home_battery", "Home battery"),
             "priority": self.battery_surplus_priority(),
+            # (#780) the battery has no on/off handle on this list — it
+            # participates by POSITION, not by being switched.
+            "has_control_handle": False,
+            "user_hands_off": False,
             "is_controllable": False,
             "is_critical": False,
             "power_rating": round(charge_w),
@@ -1512,6 +1550,9 @@ class UnifiedDeviceRegistry:
             "name": getattr(dev, "name", did),
             "priority": self.priority_for(
                 did, seed=int(getattr(dev, "priority", 5) or 5)),
+            # (#780) a live surplus device is the handle.
+            "has_control_handle": True,
+            "user_hands_off": False,
             "is_controllable": True,
             "is_critical": False,
             "power_rating": round(float(getattr(dev, "rated_power", 0) or 0)),
@@ -1741,6 +1782,9 @@ class UnifiedDeviceRegistry:
             "name": charger.get("name", cid),
             "priority": self.priority_for(
                 cid, seed=int(charger.get("priority_seed", 3))),
+            # (#780) a configured charger always has a control handle.
+            "has_control_handle": True,
+            "user_hands_off": False,
             "is_controllable": True,
             "is_critical": False,
             # Rating = the charger's MIN power (min_A × phases × voltage) — the
@@ -1901,7 +1945,15 @@ class UnifiedDeviceRegistry:
             if info.get("is_critical") is True and did not in self._critical_overrides:
                 self._critical_overrides[did] = True
                 crit += 1
-            if info.get("is_controllable") is False and did not in self._controllable_overrides:
+            # (#780) either spelling of the user's opt-out: the migrated
+            # permission key, or the pre-split mixed flag whose False could
+            # only have come from this same toggle on an ``energy_dashboard_``
+            # row (the registry always derives those rows WITH a handle).
+            hands_off = (
+                info.get("user_hands_off") is True
+                or info.get("is_controllable") is False  # LEGACY-READ (#780)
+            )
+            if hands_off and did not in self._controllable_overrides:
                 self._controllable_overrides[did] = False
                 ctrl += 1
         if crit or ctrl:
@@ -1925,12 +1977,15 @@ class UnifiedDeviceRegistry:
 
         Args:
             device_id: e.g. ``energy_dashboard_pond_pump``
-            flag: ``"critical"`` or ``"controllable"``
+            flag: ``"critical"``, or the hands-off toggle under either name —
+                ``"hands_off"`` (#780, where ``value`` is "SEM may touch it",
+                same polarity as the card has always sent) or the legacy
+                ``"controllable"``.
             value: the toggle's new state.
         """
         if flag == "critical":
             self._critical_overrides[device_id] = bool(value)
-        elif flag == "controllable":
+        elif flag in ("hands_off", "controllable"):
             if value:
                 # Re-enabling means "go back to what the control config says" —
                 # an override of True can't create controllability that isn't

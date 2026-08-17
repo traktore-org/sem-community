@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔍 **Diagnostics stopped answering the wrong question about your loads** — a
+  load row carried one flag, `is_controllable`, whose name reads as *"may SEM
+  touch this"* but which actually meant *"a switch was found for it, and you
+  haven't opted it out"*. The permission SEM really enforces lives in a
+  different field (`control_mode`). In #779 that cost a full round of diagnosis:
+  the reporter's diagnostics said `is_controllable: true` for a device he had
+  set to **Mode: Off**, which was correct and looked exactly like the bug we
+  were chasing. Capability and permission are now separate fields with separate
+  names, and each load row in diagnostics prints both plus the verdict
+  (`may_actuate`) — so *"why didn't SEM shed X?"* and *"why did SEM start X?"*
+  are answerable from one line. Nothing you configured changes meaning; the old
+  field is still emitted, derived. One real over-report fell out of the split:
+  the "how much can we shed?" counters used to include loads set to **Off**,
+  which shedding would never have touched. (#780)
 - ⚡ **Chargers get a Max Amps setting — every EVSE was silently capped at
   32 A** — SEM has shipped a per-charger *Min Amps* slider since #193 and never
   a maximum. The ceiling came from `max_charging_current`, a config key that no

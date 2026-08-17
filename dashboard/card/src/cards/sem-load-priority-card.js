@@ -387,7 +387,16 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     isOn: info.is_on || false,
                     isShed: info.is_shed || false,
                     shedReason: info.shed_reason || null,
-                    isControllable: info.is_controllable !== false,
+                    // (#780) two axes, two fields. The toggle on this row is
+                    // the user's "SEM may touch this load" permission; the
+                    // handle is a discovery fact the toggle must not erase.
+                    // Older payloads carry only the mixed key.
+                    hasControlHandle: info.has_control_handle !== undefined
+                        ? info.has_control_handle !== false
+                        : info.is_controllable !== false,
+                    isControllable: info.user_hands_off !== undefined
+                        ? info.user_hands_off !== true
+                        : info.is_controllable !== false,
                     isCritical: info.is_critical || false,
                     deviceType: info.device_type || 'unknown',
                     isAvailable: info.is_available || false,
