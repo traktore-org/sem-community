@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.5] — 17.08.2026
+
 - 🐛 **A device's settings are no longer managed as if they were loads**
   (#781) — 24 of one user's 50 Load-Management rows were WLED *settings*:
   "reverse", "freeze", "night light", "sync send". Each landed controllable
