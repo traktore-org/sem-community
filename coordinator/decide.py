@@ -37,6 +37,7 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Dict, Optional, Type
 
+from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT
 from .charger_types import (
     ChargerDecision,
     ChargerIntent,
@@ -512,8 +513,8 @@ class SolarOnlyMode(ModeStrategy):
                 ),
             )
 
-        max_amps = int(cfg.get("ev_max_current", 32)) \
-            if isinstance(cfg, dict) else 32
+        max_amps = int(cfg.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT)) \
+            if isinstance(cfg, dict) else DEFAULT_MAX_CHARGING_CURRENT
         amps = max(min_amps, min(max_amps, amps_from_watts(surplus_w, phases, voltage)))
         return ChargerDecision(
             charger_id=cid, mode="solar_only",
@@ -581,7 +582,7 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
 
     cfg = view.config if isinstance(view.config, dict) else {}
     min_amps = effective_min_amps(cfg, 6)
-    max_amps = int(cfg.get("ev_max_current", 32))
+    max_amps = int(cfg.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT))
 
     # Deadline override (#246) — the planner pre-computed the
     # required current and put it on the view. If the deadline
@@ -691,7 +692,7 @@ class MinPlusSolarMode(ModeStrategy):
         budget_w = battery_assist_budget_w(view)
         cfg = view.config if isinstance(view.config, dict) else {}
         min_amps = effective_min_amps(cfg, 6)
-        max_amps = int(cfg.get("ev_max_current", 32))
+        max_amps = int(cfg.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT))
         phases = int(cfg.get("ev_phases", 3))
         voltage = int(cfg.get("ev_voltage", 230))
         surplus_amps = amps_from_watts(budget_w, phases, voltage)

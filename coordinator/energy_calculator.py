@@ -1935,7 +1935,11 @@ class EnergyCalculator:
         cfg = self.config
         chargers = cfg.get("ev_chargers") or []
         n = max(1, len(chargers))
-        amps = float(cfg.get("ev_max_current", 32) or 32)
+        from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT
+        amps = float(
+            cfg.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT)
+            or DEFAULT_MAX_CHARGING_CURRENT
+        )
         phases = float(cfg.get("ev_phases", 3) or 3)
         volts = float(cfg.get("ev_voltage", 230) or 230)
         return n * amps * phases * volts * 24 / 1000

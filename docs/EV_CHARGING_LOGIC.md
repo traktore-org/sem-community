@@ -71,7 +71,7 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 | `number.sem_charger_<id>_target_soc` / `_max` | *Minimum SoC* floor / *Up to* ceiling (% target); both **0–100 %** (#680) — floor 0 = no overnight charge |
 | *(picker)* `ev_start_stop_entity` | The `switch`/`button` SEM uses to open the contactor — set on the config card or the Add/Edit-charger dialog (#627). Without it, a `number.*`-only charger may be un-stoppable |
 | `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing) |
-| `number.sem_charger_<id>_minimum_current` / max | Current bounds (most cars need ≥ 6 A) |
+| `number.sem_charger_<id>_minimum_current` | The floor SEM may offer (most cars need ≥ 6 A). There is **no** matching maximum field (#746) — see below |
 | `sensor.sem_charging_strategy` | The live reason string — every decision explains itself here |
 
 ## How a decision becomes amps
@@ -83,6 +83,18 @@ a gentle 6 A offer until a fussy car latches) and the full-car backoff
 (#610: after 3 declined ladders, 20 min quiet) → the **reconciler** issues
 the minimum hardware commands to converge and then leaves the charger alone.
 The strategy sensor narrates every step.
+
+**Where the ceiling comes from.** Unlike the minimum, the maximum current is
+not something you set: SEM takes it from the charger itself (`max_current_a`,
+which for an entity-controlled box already folds in the control number's own
+maximum, #536) and clamps every command to it — so the box's rating is the
+limit whatever else is configured. The planner's arithmetic, which runs before
+any hardware is consulted, falls back to **32 A** when nothing else says
+otherwise. Until #789 that fallback was written out by hand at thirteen places
+and five of them said 16 A, which made the night-charge planner size the night
+at half the energy it can actually deliver on a 32 A charger — it started
+earlier and booked more cheap hours than it needed. The hardware was never at
+risk; the plan was just wrong about it.
 
 ---
 

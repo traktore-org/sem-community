@@ -28,6 +28,7 @@ from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_MAX_CHARGING_CURRENT,
     ED_RESOLVE_MAX_ATTEMPTS,
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
@@ -3268,7 +3269,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         deadline_active=plan.deadline_active,
                                         watts_per_amp=_wpa,
                                         min_amps=int(charger_cfg.get("ev_min_current") or 6),
-                                        max_amps=int(charger_cfg.get("ev_max_current") or 16),
+                                        max_amps=int(charger_cfg.get("ev_max_current")
+                                                       or DEFAULT_MAX_CHARGING_CURRENT),
                                     )
                                     if _wait:
                                         plan.should_wait_for_cheap = True
@@ -7306,7 +7308,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 labels[f"ev:{cid}"] = str(cfg.get("name") or "").strip() or None
                 demands.append(Demand(
                     id=f"ev:{cid}", kind="ev", energy_kwh=float(kwh),
-                    max_power_w=float(cfg.get("ev_max_current") or 16) * wpa,
+                    max_power_w=float(cfg.get("ev_max_current")
+                                      or DEFAULT_MAX_CHARGING_CURRENT) * wpa,
                     min_power_w=float(cfg.get("ev_min_current") or 6) * wpa,
                     deadline=min(deadline, night_end) if deadline else night_end,
                     # The one list counts 1 = HIGHEST (get_devices_sorted)
@@ -8259,7 +8262,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             name="EV Charger",
             priority=self.config.get("ev_surplus_priority", 3),
             min_current=6.0,
-            max_current=float(self.config.get("max_charging_current", 32)),
+            max_current=float(self.config.get(
+                "max_charging_current", DEFAULT_MAX_CHARGING_CURRENT)),
             phases=int(self.config.get("ev_phases", 3)),
             voltage=230.0,
             power_entity_id=ev_auto.get("ev_charging_power_sensor"),
@@ -8870,7 +8874,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     deadline_active=night_plan.deadline_active,
                     watts_per_amp=_wpa,
                     min_amps=int(_primary_cfg.get("ev_min_current") or 6),
-                    max_amps=int(_primary_cfg.get("ev_max_current") or 16),
+                    max_amps=int(_primary_cfg.get("ev_max_current")
+                                   or DEFAULT_MAX_CHARGING_CURRENT),
                 )
                 if _wait:
                     night_plan.should_wait_for_cheap = True
@@ -9007,7 +9012,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # as a net_w floor — see the strategy branch.
             min_power_floor_w = self.config.get("ev_min_current", 6) * _phase_v
         elif canonical_strategy == EVBudgetStrategy.NOW:
-            override_max_w = self.config.get("ev_max_current", 16) * _phase_v
+            override_max_w = self.config.get(
+                "ev_max_current", DEFAULT_MAX_CHARGING_CURRENT) * _phase_v
 
         ev_budget_obj = self._flow_calculator.calculate_canonical_ev_budget(
             power,
@@ -10448,7 +10454,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     dev.min_current = float(_cfg_charger(ccfg, "ev_min_current", 6))
                     dev.max_current = float(
-                        _cfg_charger(ccfg, "max_charging_current", 32)
+                        _cfg_charger(ccfg, "max_charging_current",
+                                     DEFAULT_MAX_CHARGING_CURRENT)
                     )
                     # Re-derive the surplus-activation gate (HIGH, review): the
                     # SurplusController activates this charger on

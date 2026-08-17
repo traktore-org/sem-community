@@ -108,6 +108,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   row now reports the stored kind, with the old literal kept only as the
   fallback for registrations persisted before the kind was stored. (#788,
   found in #685)
+- 🐛 **The night is planned and sized from the same charger** — nothing
+  writes `ev_max_current`: there is no field for it anywhere in the config
+  flow (#746), so every read of it is a read of its default. The defaults
+  disagreed — six sites said 32 A and five said 16 A — and `ev_control.py`
+  disagreed with itself forty lines apart, planning the night-charge ceiling
+  at 32 A and then sizing how much energy the night can deliver at 16 A. On a
+  32 A charger the night looked half as deliverable as it is, so SEM believed
+  it had to start earlier and book more cheap hours than the night needed. No
+  over-current ever reached hardware — the adapters clamp every command to the
+  charger's own rating — which is why this sat unnoticed: the damage was to
+  the arithmetic. All thirteen sites now import `DEFAULT_MAX_CHARGING_CURRENT`
+  (32 A, in `consts/core.py` since the first release, with two importers), and
+  an AST lint fails CI on the next bare number. (#789, found in #746)
+- 🔍 **Bug-class ledger gains 46** (`docs/BUG_CLASSES.md`) — a value with one
+  source of truth restated as a literal at the site that uses it, in its two
+  shapes: the duplicated default that drifts (#789) and the payload branch
+  that hardcodes what its sibling derives (#788). The lesson recorded with it
+  is #716's: fixing one call site does not fix a duplicated default, so the
+  guard is an AST lint over the package rather than an assertion about two
+  functions. (#789, #788)
+
 # [2.0.0-beta.5] — 17.08.2026
 
 - 🐛 **A device's settings are no longer managed as if they were loads**

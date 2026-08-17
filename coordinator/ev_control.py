@@ -22,7 +22,9 @@ from ..const import (
     ChargingState,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_EV_TARGET_TIME,
+    DEFAULT_MAX_CHARGING_CURRENT,
     DEFAULT_PEAK_LIMIT_UNLIMITED,
+    DEFAULT_PHASES,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_VOLTAGE_PER_PHASE,
 )
@@ -153,7 +155,7 @@ class EVControlMixin:
         # else here (#716). Reading ``ev_max_current`` off the fleet plans a
         # 16 A box as if it were the 32 A one; the device's own rating still
         # gets the last word below, because config can out-claim the box.
-        max_amps = int(_pc("ev_max_current", 32))
+        max_amps = int(_pc("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT))
         ev = getattr(self, "_ev_device", None)
         if ev is not None:
             max_amps = int(getattr(ev, "max_current", max_amps))
@@ -266,12 +268,25 @@ class EVControlMixin:
             deadline_min = int(dh) * 60 + int(dm)
             hours = ((deadline_min - start_min) % (24 * 60)) / 60.0
             hours = min(hours, window_h)
+            # (#789) The same three constants the ceiling above is planned
+            # from. Nothing writes ``ev_max_current`` — there is no config
+            # field for it (#746) — so this fallback IS the normal path, and
+            # it used to read 16 while ``_compute_night_plan`` forty lines up
+            # read 32. On a 32 A charger the night looked half as deliverable
+            # as it is, so SEM started earlier and booked more cheap slots
+            # than the night needed. Same shape as #716, which fixed the
+            # hardcoded 230 in the plan and left its twin here.
             max_a = float(
                 cfg.get("ev_max_current")
-                or self.config.get("ev_max_current", 16)
+                or self.config.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT)
             )
-            phases = int(cfg.get("ev_phases") or self.config.get("ev_phases", 3))
-            voltage = float(cfg.get("ev_voltage") or self.config.get("ev_voltage", 230))
+            phases = int(
+                cfg.get("ev_phases") or self.config.get("ev_phases", DEFAULT_PHASES)
+            )
+            voltage = float(
+                cfg.get("ev_voltage")
+                or self.config.get("ev_voltage", DEFAULT_VOLTAGE_PER_PHASE)
+            )
             return hours * max_a * phases * voltage / 1000.0
         except (ValueError, TypeError, AttributeError):
             return float("inf")

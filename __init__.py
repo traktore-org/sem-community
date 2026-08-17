@@ -32,7 +32,12 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, MIN_PEAK_LIMIT_KW, MAX_PEAK_LIMIT_KW
+from .const import (
+    DEFAULT_MAX_CHARGING_CURRENT,
+    DOMAIN,
+    MIN_PEAK_LIMIT_KW,
+    MAX_PEAK_LIMIT_KW,
+)
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
@@ -1944,7 +1949,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 name=charger_name,
                 priority=ev_priority,
                 min_current=float(_cfg("ev_min_current", 6)),
-                max_current=float(_cfg("max_charging_current", 32)),
+                max_current=float(
+                    _cfg("max_charging_current", DEFAULT_MAX_CHARGING_CURRENT)
+                ),
                 phases=int(_cfg("ev_phases", 3)),
                 voltage=230.0,
                 power_entity_id=ev_power_entity,

@@ -52,6 +52,7 @@ import time
 from dataclasses import replace
 from typing import Dict, List, Optional, TYPE_CHECKING
 
+from ..const import DEFAULT_MAX_CHARGING_CURRENT
 from .charger_types import ChargerDecision, ChargerIntent, ChargerView
 from .decide import effective_min_amps
 
@@ -419,8 +420,15 @@ class ChargeStability:
             effective_min_amps(cfg, 6),
             int(getattr(adapter, "min_current_a", 6) or 6),
         )
-        max_amps = int(cfg.get("ev_max_current", 0) or 0) or int(
-            getattr(adapter, "max_current_a", 32) or 32,
+        # (#789) The old ``or 0`` here was never a default — it was the
+        # sentinel for "config is silent, ask the hardware", which is what
+        # the adapter branch is for. Spelled as a number it read like a
+        # third opinion on the ceiling; spelled as a conditional the intent
+        # is the code, and the only default left is the constant.
+        _cfg_max = cfg.get("ev_max_current")
+        max_amps = int(_cfg_max) if _cfg_max else int(
+            getattr(adapter, "max_current_a", DEFAULT_MAX_CHARGING_CURRENT)
+            or DEFAULT_MAX_CHARGING_CURRENT,
         )
 
         # Raw target this cycle: the decided amps for CHARGE, 0 for

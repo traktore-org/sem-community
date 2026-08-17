@@ -1848,3 +1848,47 @@ async method; plus the negative, that the executor pattern is not flagged.
 **Sweep question:** for every rule expressed as "not inside X", ask what the runtime's X actually is.
 If X is a *state* (on the loop, holding a lock, inside a transaction), the guard must follow calls.
 Refs #785 #783.
+
+### 46. A value with one source of truth is restated as a literal at the site that uses it — GUARDED
+**Symptom:** the same quantity reads differently depending on which function you ask, and the
+constant that was supposed to settle it sits in `consts/` with almost no importers. Nothing raises:
+each site is individually plausible, and the disagreement only shows as arithmetic that does not
+reconcile — a plan that books more hours than it needs, a card that draws the wrong glyph.
+**Root shape:** a value has an owner (a constant, a stored spec, a normaliser) and a call site
+restates it instead of reading it. Restating is cheap and locally correct, so it spreads; the copies
+then age independently. The tell is that fixing "the bug" at one site leaves the tree still wrong,
+because the defect was never at a site — it is the *count* of sites. Two shapes seen so far:
+**(a) the duplicated default** — `cfg.get(k, 32)` written thirteen times, six of them 32 and five
+16; **(b) the discarded field** — a payload branch that hardcodes what its sibling branch derives.
+**Live catch (#789):** `ev_max_current` has no config-flow field — nothing writes it (`build_view.py`
+says so, verified live) — so *every* read is a read of its default, and the defaults disagreed.
+`ev_control.py` disagreed with itself forty lines apart: `_compute_night_plan` planned the ceiling at
+32 A while `_night_deliverable_kwh` sized the night's capacity at 16 A. On a 32 A charger the night
+looked half as deliverable as it is, so SEM started earlier and booked more cheap slots than it
+needed. `DEFAULT_MAX_CHARGING_CURRENT = 32` had been in `consts/core.py` since the initial release
+commit with two importers. No over-current reached hardware — adapters clamp at `max_current_a` —
+which is why it survived: the class hides *because* a downstream guarantee absorbs it.
+**Live catch (#788), shape (b):** the service-registration branch of `get_devices_for_sensor` wrote
+`"device_type": "service_device"` as a literal, discarding the kind the caller passed and
+`async_register_service_device` had already normalised into the stored spec. The sibling branch for
+directly-registered devices (`_surplus_device_row`) reads the real type. The card's icon map knows
+`climate` and `heat_pump` but not `service_device`, so a correctly registered, correctly controlled
+second heat pump rendered as a generic plug — and read to its owner as "it was not added" (#685).
+**Closure:** import the owner and delete the literal, at **every** site in one pass — and where a
+literal is not a default at all, say so in the code rather than in a comment: `charge_stability`'s
+`or 0` was a sentinel meaning "config is silent, ask the adapter", and became a conditional so the
+only number left is the constant. #716 is the cautionary precedent: it fixed a hardcoded 230 V in
+`_compute_night_plan` and left the identical literal in `_night_deliverable_kwh` forty lines below,
+so the same issue had to be reopened as this one.
+**Where else it lives:** every `consts/core.py` default with fewer importers than the key has
+readers. `ev_phases` (3) and `ev_voltage` (230) are each restated ~15 times — they happen to agree
+today, which is luck, not structure. Also every `_row`/`_payload` builder with more than one branch.
+**Guard:** `tests/test_789_max_current_default.py` — an AST lint over the package for a max-current
+key pinned to a bare number, in **both** syntactic shapes (trailing `.get(k, N)` argument and
+`.get(k) or N`), plus a positive probe that the lint can fail on each shape and a negative that the
+fixed form satisfies it. The two-shape point is load-bearing: the first draft understood only the
+argument form and would have passed while three of the five 16s were still in the tree.
+**Sweep question:** for a config key, grep the *readers* and compare their defaults before reading
+any logic — if they disagree, that is the bug, whatever the issue says it is about. And when a key
+has no write path, its default is not a fallback, it is the value.
+Refs #789 #788 #716 #746 #685 #678.
