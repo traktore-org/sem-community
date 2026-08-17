@@ -1366,7 +1366,20 @@ class UnifiedDeviceRegistry:
                 "is_available": True,
                 "is_on": is_on,
                 "current_power": current_power,
-                "device_type": "service_device",
+                # (#788) the kind the CALLER passed, which
+                # ``async_register_service_device`` normalised into the stored
+                # spec — not a literal. The literal threw it away, and the
+                # card's icon map knows ``climate``/``heat_pump`` but not
+                # ``service_device``, so every service-registered device fell
+                # through to the generic plug: a working second heat pump
+                # rendered as an anonymous socket and read as "not added"
+                # (#685). The sibling row for DIRECTLY registered surplus
+                # devices, ``_surplus_device_row``, always read the real type;
+                # these two were written to mirror each other and drifted.
+                # The old literal stays as the fallback so a registration
+                # persisted before the kind was stored keeps a usable value
+                # instead of becoming None.
+                "device_type": spec.get("device_type") or "service_device",
                 "has_manual_mapping": False,
                 "control": {"type": "switch", "entity": spec.get("entity_id")},
                 "control_mode": spec.get("control_mode", "surplus"),

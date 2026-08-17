@@ -227,6 +227,13 @@ Pick `hvac_mode: heat` (or `heat_cool`) to drive a heat pump the same way in
 winter. Leave `target_temperature` empty to keep the unit's own setpoint and
 only switch the mode.
 
+`device_type` also decides how the unit is drawn in the device list — a
+thermostat glyph for `climate`, a heat-pump glyph for `heat_pump`, a plug for
+a plain `switch`. Before #788 every service-registered device was labelled
+`service_device` on its way to the card and drew the generic plug regardless,
+which made a correctly registered second heat pump look like it had not been
+added at all.
+
 ### The mode ladder — who is in charge
 
 Every device row on the Control tab has **one mode picker** — a 3-step

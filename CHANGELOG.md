@@ -95,7 +95,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the #589-retired context swap, the PR #358 strategy machine, the #440
   `EVIntelligenceData` skip fields and a `budget_w` that moved to
   `ChargerDecision` in #651. (#783)
-
+- 🐛 **A second heat pump is drawn as a heat pump, not as an anonymous plug**
+  — more than one climate unit has been supported since the one-device-list
+  work: `register_surplus_device` with `device_type: climate` persists the
+  kind, the device is rehydrated, prioritised and controlled correctly. What
+  was wrong is the row the sensor hands the frontend: the service-registration
+  branch wrote `"device_type": "service_device"` as a literal, throwing away
+  the kind the caller passed. The card's icon map knows `climate` and
+  `heat_pump` but not `service_device`, so every service-registered device
+  fell through to the generic socket — and a working second heat pump that
+  renders as a plug reads, reasonably, as "my heat pump was not added". The
+  row now reports the stored kind, with the old literal kept only as the
+  fallback for registrations persisted before the kind was stored. (#788,
+  found in #685)
 # [2.0.0-beta.5] — 17.08.2026
 
 - 🐛 **A device's settings are no longer managed as if they were loads**

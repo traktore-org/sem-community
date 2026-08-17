@@ -206,7 +206,10 @@ heat pump or AC) as a surplus device. Every unit then gets, independently:
 - its own power sensor. Units with split metering (compressor on one
   circuit, air handler on another) sum their sensors with a
   [template sensor](https://www.home-assistant.io/integrations/template/)
-  first and use that as the device's power entity.
+  first and use that as the device's power entity,
+- its own thermostat icon in the device list. (Up to #788 every
+  service-registered device drew the generic plug, which made a second unit
+  that *was* registered and running look like it had never been added.)
 
 The SG-Ready section and climate devices can coexist: one SG-Ready unit
 plus any number of climate-managed units.
