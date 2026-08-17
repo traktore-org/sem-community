@@ -2586,12 +2586,16 @@ async def _async_register_services(
             from homeassistant.helpers.storage import Store
             import shutil
 
-            # Step 1: Install SVG system diagram + card JS files to /config/www/
+            # Step 1: Install card JS files to /config/www/
             # All filesystem ops run in an executor to avoid blocking the event loop.
+            #
+            # (#784) A sem-system-diagram.svg used to be copied here too. It
+            # was dead weight from the original import — no card, template or
+            # doc ever referenced it in the repo's whole history, and the
+            # diagram cards draw inline SVG. Already-installed copies under
+            # /config/www/sem/ are left alone; _cleanup_stale_www only sweeps
+            # sem-*.js from the www root, so nobody's custom card breaks.
             component_dir = os.path.dirname(__file__)
-            svg_source = os.path.join(component_dir, "dashboard", "www", "sem-system-diagram.svg")
-            www_target_dir = os.path.join(hass.config.config_dir, "www", "sem")
-            svg_target = os.path.join(www_target_dir, "sem-system-diagram.svg")
             card_src_dir = os.path.join(component_dir, "dashboard", "card")
             card_www_dir = os.path.join(
                 hass.config.config_dir, "www",
@@ -2609,7 +2613,7 @@ async def _async_register_services(
             CANONICAL_TOP_LEVEL = {
                 "sem-localize.js",
             }
-            def _install_assets() -> tuple[bool, list[str]]:
+            def _install_assets() -> list[str]:
                 """Sync top-level dashboard assets to /config/www/. Runs in executor."""
                 # (#738) the per-language tables the loader lazily injects —
                 # the mirror must carry them or the legacy /local channel 404s
@@ -2622,12 +2626,6 @@ async def _async_register_services(
                     f for f in os.listdir(card_src_dir)
                     if f.startswith("sem-localize.") and f.endswith(".js")
                 }
-                os.makedirs(www_target_dir, exist_ok=True)
-                svg_installed = False
-                if os.path.exists(svg_source):
-                    shutil.copy2(svg_source, svg_target)
-                    svg_installed = True
-
                 os.makedirs(card_www_dir, exist_ok=True)
                 cards: list[str] = []
                 shadow_removed: list[str] = []
@@ -2662,13 +2660,9 @@ async def _async_register_services(
                         "Removed %d shadow card file(s) from %s: %s",
                         len(shadow_removed), card_www_dir, shadow_removed,
                     )
-                return svg_installed, cards
+                return cards
 
-            svg_installed, installed_cards = await hass.async_add_executor_job(_install_assets)
-            if svg_installed:
-                _LOGGER.info("Installed SVG diagram to %s", svg_target)
-            else:
-                _LOGGER.warning("SVG diagram not found at %s", svg_source)
+            installed_cards = await hass.async_add_executor_job(_install_assets)
             if installed_cards:
                 _LOGGER.info("Installed %d card(s) to %s: %s", len(installed_cards), card_www_dir, installed_cards)
 

@@ -47,7 +47,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the vanilla copy had not rendered for anyone in a long time. It is deleted,
   along with the `sem-shared.js` / `sem-reactive-base.js` base layer it was
   the last consumer of; all three URLs are cleaned up from existing installs
-  on the next restart. (#784)
+  on the next restart. An 11 KB `sem-system-diagram.svg` that shipped and got
+  copied into `/config/www/sem/` on every dashboard generation went with it —
+  nothing in the repo's history ever referenced it, not even the card that was
+  just deleted. Copies already on disk are left where they are. (#784)
+- 🐛 **Generating the dashboard no longer stalls Home Assistant** — the
+  `generate_dashboard` service read `manifest.json` and listed the card
+  directory directly on the event loop. HA guards both calls and logs
+  "Detected blocking call … by custom integration solar_energy_management";
+  on a Pi with an SD card or a network-mounted `/config`, every other
+  integration on the box waits out the syscall. Both moved to the executor —
+  the pattern the same handler already used three times over. An AST lint
+  (`tests/test_no_blocking_open_in_event_loop.py`) now walks every shipped
+  module against HA's real guard list, so the next one is caught in CI rather
+  than in someone's log. (#785)
 - 🐛 **The energy diagram draws a balance that adds up again** — #699 gave the
   cards an atomic per-cycle snapshot so the arrows can't pair a stale solar
   reading with a fresh EV one. The diagram card's half of that fix was written
