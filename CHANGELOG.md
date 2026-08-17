@@ -75,6 +75,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stays in front of the battery reads, which the snapshot deliberately does
   not hold, and a test now pins both halves so neither fix can silently
   displace the other. (#784, #699)
+- 🔍 **Two new entries in the bug-class ledger** (`docs/BUG_CLASSES.md`) —
+  **44**, two implementations answering to one name under a first-wins
+  registry, where load order picks the winner and the loser can collect
+  maintenance for months without a symptom; and **45**, a guard whose boundary
+  is lexical while the runtime's is reachability — the reason a green lint sat
+  next to a live log naming the line it had just cleared. Each ships with the
+  sweep question and the guard that fails CI. (#784, #785)
 - 📝 **Assorted doc corrections** — minimum HA version (2024.1.0 → the
   2025.1.0 that `hacs.json` actually requires), `min_solar_power` default
   (500 W → 1000 W), translation-system size (1166/1116 keys → the real 1341 ×

@@ -1785,3 +1785,66 @@ honest deltas — ordinary, and one spanning a 30-minute blind gap — are untou
 **Sweep question:** for every guard that recognises "this reading is not a delta", ask what the
 guard *keeps*. If it only re-bases, the next reading is the same event wearing a plausible sign.
 Refs #782 #774 #768 #755.
+
+### 44. Two implementations answer to one name; load order picks the winner — GUARDED
+**Symptom:** a fix is written, reviewed, tested and shipped, and the behaviour on screen never
+changes. The test is green because it pins the file that was edited. The user is looking at a
+different file that answers to the same name.
+**Root shape:** a first-wins registry (`customElements.define`, `semDefineCard`, a service
+registration, a dispatch table keyed by string) reached from **two** shipped artefacts. Neither
+errors: the loser's registration call hits the "already defined" guard and returns quietly. Which
+one wins is decided by evaluation order, which for Lovelace resources is not ours to control — and
+because it is *stable in practice*, the losing copy can go on collecting maintenance for months
+without a single symptom. The bug is not the duplication itself; it is that duplication under a
+first-wins registry converts an ordinary edit into a coin flip nobody sees land.
+**Live catch (#784, 2.0 doc/release audit):** `sem-system-diagram-card` was defined by a 983-line
+vanilla standalone *and* the 1814-line Lit version in `dist/sem-cards.js`, both registered as
+Lovelace resources. The bundle always won — it defines at module evaluation, the standalone deferred
+its whole body behind a `semReady` queue — so the vanilla copy had not rendered for anyone in a long
+time. #699's atomic `power_snapshot` reads had been written into it, and only into it, together with
+a test file pinning that copy: a shipped, reviewed, "guarded" fix that never reached a screen.
+**Closure:** delete the loser, do not gate it. One tag, one implementation, and the retired URLs go
+into `_legacy_bases` so an install that already registered them drops them instead of carrying a 404
+forever. Then port whatever was stranded in the dead copy — and check what it *conflicts* with in
+the survivor (#699's snapshot deliberately refuses to hold `battery_soc`; the Lit card carries the
+#455/#488 60 s flicker hold the vanilla one never had, so the battery term is gated on SOC liveness
+rather than taken outright).
+**Where else it lives:** any name resolved by a first-wins registry — card tags, HA service names,
+`semDefineCard` aliases, the brand→adapter tables, a strategy keyed by string. Ask: can two files in
+this repo claim this key, and if they do, does anything *say so*?
+**Guard:** `tests/test_card_registry_metadata.py::test_no_tag_is_defined_by_more_than_one_file` (one
+tag, one file) and `::test_retired_top_level_resources_are_cleaned_up_on_upgrade` (a deleted file
+must also lose its resource).
+**Sweep question:** when a fix "doesn't take", stop debugging the fix and ask what else answers to
+that name. A green test proves the edited file behaves; it does not prove the edited file runs.
+Refs #784 #699 #455 #488 #219.
+
+### 45. A guard whose boundary is lexical while the runtime's is reachability — GUARDED
+**Symptom:** the lint is green, CI is green, and production logs the exact violation the lint exists
+to prevent — naming a line the lint has read and cleared.
+**Root shape:** the runtime rule is about *what executes where*. The guard was written about *what is
+written where*. Calling a function runs its body at the call site, so "on the event loop" propagates
+through calls without limit; the guard stopped at the enclosing `async def`. The gap is not an
+oversight in the rule — it is the wrong boundary, and it widens exactly where the code is best
+factored, because every helper extraction moves a call one hop further from the coroutine that
+reaches it.
+**Live catch (#785, campaign rig, 2.0):** after two blocking calls in `generate_dashboard` were
+moved to the executor and the lint went green, HA still logged `Detected blocking call to open …
+inside the event loop … at __init__.py, line 64` on every generation — the per-file cache-bust hash,
+in a module-level helper the coroutine reached through a nested `def`. Two hops, both on the loop.
+**Closure:** seed the guard on the coroutines and close over **direct calls** (`f()` and
+`self.f()`), not on lexical nesting. The distinction that matters: a plain `def` is exempt when it
+is *passed as a value* (`async_add_executor_job(_read)` — the fix we recommend) and on the loop when
+it is *called by name*. Against the whole component that finds the one real call and nothing else —
+a guard that floods gets muted, and a muted guard catches nothing.
+**Where else it lives:** every AST guard in `tests/` that scores a call by where it is written —
+`test_ev_control_fleet_reads.py` (fleet reads), `test_589_percharger_astguard.py`, the
+`find_cheapest_hours` ratchet. Each is sound for a call written in the annotated function and blind
+to the same call one helper away. Ask of each: is the property it guards *lexical*, or does it
+propagate through calls?
+**Guard:** `tests/test_no_blocking_open_in_event_loop.py` — three self-checks that the lint can fail:
+a bare `open()` in a coroutine, a helper reached through a nested `def`, and `self._helper()` from an
+async method; plus the negative, that the executor pattern is not flagged.
+**Sweep question:** for every rule expressed as "not inside X", ask what the runtime's X actually is.
+If X is a *state* (on the loop, holding a lock, inside a transaction), the guard must follow calls.
+Refs #785 #783.
