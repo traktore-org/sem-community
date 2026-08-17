@@ -355,8 +355,10 @@ class SEMWeatherCard extends SEMLitBase {
 }
 
 semDefineCard('sem-weather-card', SEMWeatherCard, {
-    type: 'custom:sem-weather-card',
+    type: 'sem-weather-card',
     name: 'SEM Weather',
     description: 'Lumina-styled clock + weather card with forecast',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-weather-card',
     preview: false,
 });

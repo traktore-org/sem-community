@@ -455,8 +455,10 @@ class SEMCostsDetailCard extends SEMLitBase {
 }
 
 semDefineCard('sem-costs-detail-card', SEMCostsDetailCard, {
-    type: 'custom:sem-costs-detail-card',
+    type: 'sem-costs-detail-card',
     name: 'SEM Costs Detail Card',
     description: 'Financial details — EV economics, investment, demand charge, and tariff rates',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-costs-detail-card',
     preview: false,
 });

@@ -13,6 +13,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📝 **The docs stopped teaching controls that were deleted four releases
+  ago** — a release-prep audit found the `night_charging`,
+  `smart_night_charging` and `tariff_optimized` switches still documented as
+  live user controls across README, USER_GUIDE, TROUBLESHOOTING, SETUP_GUIDE
+  and EV_CHARGING_LOGIC. #277 Phase C removed all of them in v1.6.3 and folded
+  their intent into one `select.sem_charger_<id>_charge_mode`, but the prose
+  never followed. The worst of it inverted the actual behaviour: USER_GUIDE
+  told users night charging was "opt-in (off by default)" and to enable it via
+  a switch that does not exist — when the shipped default is `Min + Solar`,
+  which charges overnight by design. Every instance is now written against the
+  mode selector, with an explicit per-mode table, and the `Solar only` +
+  "At least" floor contract (#634/#679) spelled out where it decides the
+  outcome. (#783)
+- 📝 **Every dashboard card now carries a description and a help link** — the
+  31 bundled cards split 15 correct / 14 with a doubled `custom:` prefix in
+  their `type` (HA prepends it, so the picker built `custom:custom:sem-…` and
+  could not instantiate them) and 2 with no `type` at all — one of which was
+  `sem-energy-plan-card`, the headline card of 2.0. None of the 31 carried a
+  `documentationURL`, so no card had a route from "I am looking at this" to
+  "here is what it does". `docs/DASHBOARD_GUIDE.md` gains a full card
+  reference — one section per card, named, placed and described — and each
+  card's editor help link now lands on its own section. Pinned by
+  `tests/test_card_registry_metadata.py`, which derives the anchor from the
+  tag and verifies both ends, so the next card cannot ship without one. (#783)
+- 🐛 **The system diagram's picker entry no longer depends on resource load
+  order** — `sem-system-diagram-card` registers from two files (the Lit bundle
+  and its standalone resource) and `semDefineCard` is first-wins, so whichever
+  the browser evaluated first supplied the only `window.customCards` entry.
+  The two disagreed. They are now identical and a test keeps them that way.
+  The deeper split — the two files are two *different* implementations, 983
+  lines against 1814 — is filed as #784, not fixed here. (#784)
+- 📝 **Assorted doc corrections** — minimum HA version (2024.1.0 → the
+  2025.1.0 that `hacs.json` actually requires), `min_solar_power` default
+  (500 W → 1000 W), translation-system size (1166/1116 keys → the real 1341 ×
+  16 languages), the config-flow step count (3 → the 2 that remain after the
+  #442 slim install), per-battery control entities (`number.sem_battery_<id>_mode`
+  → `select.…`; a `_force_discharge_power` entity that never existed → the
+  fleet-wide `number.sem_battery_max_discharge_power`), "Allow arbitrage"
+  listed as a battery mode it is deliberately not (#533), a TROUBLESHOOTING
+  log line no longer emitted anywhere (the charger reconciler owns that path
+  since #392), and stale ARCHITECTURE/MULTI_CHARGER sections still teaching
+  the #589-retired context swap, the PR #358 strategy machine, the #440
+  `EVIntelligenceData` skip fields and a `budget_w` that moved to
+  `ChargerDecision` in #651. (#783)
+
 # [2.0.0-beta.5] — 17.08.2026
 
 - 🐛 **A device's settings are no longer managed as if they were loads**

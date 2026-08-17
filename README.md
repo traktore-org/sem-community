@@ -49,7 +49,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Push notifications** — battery full, daily summary, forecast alerts, EV charging events (with Android channels and action buttons)
 - **Brand icons** — native HA 2026.3+ brand support (no submission to home-assistant/brands needed)
 - **EV Intelligence** — detects BMS charge tapering, estimates SOC without car API, learns daily consumption per weekday, temperature-corrected predictions, smart night charge skip
-- **Smart Night Charging** — automatically skips or reduces night charges when SOC is sufficient, with solar forecast credit, daily SOC decay, and 3-skip safety net
+- **Smart night charging** — in the `Min + Solar` and `Solar + cheapest hours` modes, automatically skips or reduces night charges when SOC is sufficient, with solar forecast credit, daily SOC decay, and 3-skip safety net
 - **EV battery health** — tracks capacity degradation from partial charge sessions over months
 - **Hardware compatibility test suite** — 150+ automated tests covering all supported hardware — every inverter + charger combination verified in CI
 
@@ -107,7 +107,7 @@ Beta releases are tested on real hardware before publishing but may contain roug
 
 Before setting up SEM, make sure you have:
 
-- **Home Assistant 2024.1.0** or newer
+- **Home Assistant 2025.1.0** or newer
 - **Energy Dashboard configured** — SEM reads your solar and grid sensors from the HA Energy Dashboard (Settings > Energy). You need at least:
   - A solar production sensor (W)
   - A grid consumption sensor (W)
@@ -202,11 +202,11 @@ The per-charger `Charge mode` selector replaces the four-toggle soup with five n
 
 ### Solar only
 
-Pure surplus, never grid. Equivalent to the legacy `self_consumption` + `night_charging=OFF`. Pick this if you only ever want to charge from sun.
+Pure surplus. With the **"At least" floor at 0** — the default — it never touches the grid, day or night. Set a floor **on this charger** and SEM tops that shortfall up overnight by the Charge-by time, which is how you keep the solar-first mode and still guarantee a minimum (#634/#679). Pick this if you only ever want to charge from sun.
 
 ### Solar + cheapest hours
 
-Surplus by day, grid only in the cheapest contiguous tariff window at night (Min still guaranteed by the deadline). Hidden if no dynamic tariff is configured. Equivalent to `auto` + `tariff_optimized=ON`.
+Surplus by day, grid only in the cheapest contiguous tariff window at night (Min still guaranteed by the deadline). Hidden if no dynamic tariff is configured. This is the only mode that consults the tariff.
 
 ### Min + Solar (default)
 

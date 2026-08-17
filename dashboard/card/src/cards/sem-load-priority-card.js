@@ -1490,5 +1490,7 @@ semDefineCard('sem-load-priority-card', SEMLoadPriorityCard, {
     type: 'sem-load-priority-card',
     name: 'SEM Load Priority Card',
     description: 'Drag and drop interface for managing load shedding priorities',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-load-priority-card',
     preview: true,
 });

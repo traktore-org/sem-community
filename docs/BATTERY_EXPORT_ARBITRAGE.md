@@ -195,9 +195,10 @@ LUNA2000s) each battery is controlled independently from the **Battery card**:
 |---|---|
 | **Auto** | Today's behaviour — scheduler / arbitrage / protection decide. |
 | **Self-consumption only** | Charge + power the house, but **never** sell to grid. |
-| **Allow arbitrage** | Sell to grid when profitable, even with the global toggle off. |
 | **Force charge** | Charge to full now. |
 | **Force discharge** | Sell to grid now, down to the **Reserve SOC**. |
+
+> **Note:** a per-battery `Allow arbitrage` opt-in mode is planned but currently held back (#533). For now, which batteries participate follows the global toggle: in `Auto` mode a battery follows the global setting; `Self-consumption only` always suppresses it.
 
 Each battery also has its own **Reserve SOC** floor (never discharged below it),
 and — for multi-battery installs — its own **forcible-discharge entity picker**

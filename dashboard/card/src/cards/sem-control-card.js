@@ -718,8 +718,10 @@ class SEMControlCard extends SEMLitBase {
 }
 
 semDefineCard('sem-control-card', SEMControlCard, {
-    type: 'custom:sem-control-card',
+    type: 'sem-control-card',
     name: 'SEM Control Card',
-    description: 'Consolidated control panel for Solar Energy Management',
+    description: 'Live controls — peak management, load shedding, heat pump SG-Ready, observer mode',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-control-card',
     preview: false,
 });

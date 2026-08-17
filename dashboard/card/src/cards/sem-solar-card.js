@@ -517,4 +517,6 @@ semDefineCard('sem-solar-card', SEMSolarCard, {
     type: 'sem-solar-card',
     name: 'SEM Solar',
     description: 'Consolidated solar production card with flows, forecast, and performance metrics',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-solar-card',
 });

@@ -287,8 +287,10 @@ class SEMBatteryZonesCard extends SEMLitBase {
 }
 
 semDefineCard('sem-battery-zones-card', SEMBatteryZonesCard, {
-    type: 'custom:sem-battery-zones-card',
+    type: 'sem-battery-zones-card',
     name: 'SEM Battery Zones Card',
-    description: 'SOC zone configuration for Solar Energy Management',
+    description: 'The three battery SOC thresholds — priority, buffer and auto-start',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-battery-zones-card',
     preview: false,
 });

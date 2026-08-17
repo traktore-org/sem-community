@@ -627,4 +627,6 @@ semDefineCard('sem-schedule-card', SEMScheduleCard, {
     type: 'sem-schedule-card',
     name: 'SEM Schedule',
     description: '24-hour timeline showing tariff, night window, surplus window, and EV charging periods',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-schedule-card',
 });

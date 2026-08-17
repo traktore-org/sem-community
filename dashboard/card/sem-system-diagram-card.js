@@ -974,10 +974,17 @@ class SEMSystemDiagramCard extends SEMBaseCard {
     }
 }
 
+// The picker entry MUST stay byte-identical to the bundled copy in
+// src/cards/sem-system-diagram-card.js. Both files register this same tag,
+// and semDefineCard is first-wins — so whichever Lovelace resource the
+// browser evaluates first supplies the single window.customCards entry.
+// Pinned by tests/test_card_registry_metadata.py.
 semDefineCard('sem-system-diagram-card', SEMSystemDiagramCard, {
     type: 'sem-system-diagram-card',
     name: 'SEM System Diagram',
-    description: 'Responsive power flow visualization with circular nodes and shimmer animations',
+    description: 'Power flow visualization with inline SVG illustrations for each energy component',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-system-diagram-card',
 });
 
 });

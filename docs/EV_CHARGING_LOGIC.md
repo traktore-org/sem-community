@@ -117,7 +117,7 @@ Active in **Solar only** and **Min + Solar** (gated by the Solar Gate + Buffer S
 
 The cheapest-hours behaviour (built into the **Solar + cheapest hours** mode, and available to *Min + Solar* via the per-charger *Cheapest hours* option) changes behaviour in **three** places — not just at night:
 
-| Time | Charging Mode | What tariff_optimized does |
+| Time | Charging Mode | What the cheapest-hours behaviour does |
 |---|---|---|
 | Night | tariff-aware modes | Waits for the [energy plan's](ENERGY_PLANNER.md) charge block — the cheapest hours that also fit under your peak limit and priority order (subject to Min reachability) |
 | Daytime | Min + Solar | **Drops the Min grid guarantee on EXPENSIVE / VERY_EXPENSIVE hours.** Falls back to surplus-only; resumes on price drop or sufficient solar |

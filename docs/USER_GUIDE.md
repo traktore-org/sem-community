@@ -183,8 +183,12 @@ untouched when you turn it off.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `observer_mode` | false | Read-only mode — no hardware control |
-| `smart_night_charging` | false | Intelligently skip or reduce night charges based on EV SOC, solar forecast, temperature, and learned driving patterns |
 | `daily_home_consumption_estimate` | 18 kWh | Fallback for first 7 days of month |
+
+Smart night charging is no longer a switch. Since v1.6.3 it is implied by the
+Charge mode: the `Solar + cheapest hours` and `Min + Solar` modes run the full
+EV-intelligence check (EV SOC, solar forecast, temperature, learned driving
+patterns) before committing to an overnight charge.
 
 ---
 
@@ -300,7 +304,7 @@ Charges **exclusively from solar surplus** during the day. The EV waits for surp
 | 17:00 | Weak (500 W) | Insufficient | Paused |
 | 22:00 | Night | 0 W | Not charging (night disabled) |
 
-**Daily target is NOT guaranteed.** If solar tomorrow is weak, the car may not reach the Min target. Use **`switch.sem_charger_<id>_night_charging`** to top up with grid overnight if needed.
+**Daily target is NOT guaranteed.** If solar tomorrow is weak, the car may not reach the Min target. To top up from the grid overnight, either set an **"At least" floor** on this charger (which turns the shortfall into an overnight guarantee even in Solar Only — #634/#679), or switch the charger to **Min + Solar**.
 
 ### Min + Solar (`min_plus_solar`) — Default
 
@@ -311,7 +315,7 @@ Charges from the grid plus any solar surplus on top. The EV always starts, even 
 | 08:00 | 0 W solar, 4.1 kW grid | Charging at 6 A (grid-only) |
 | 12:00 | 3 kW solar surplus | Charging at 8 A (4.1 kW grid + 3 kW solar) |
 | 17:00 | 0.5 kW solar | Charging at ~5 A (4 kW grid + 0.5 kW solar) |
-| 22:00 (night) | Grid only | Continues if `switch.sem_charger_<id>_night_charging` is on |
+| 22:00 (night) | Grid only | Continues — this mode charges overnight by design |
 
 **Daily target is guaranteed.** The Min floor ensures the car charges toward the minimum target at all times, topped up by grid if needed.
 
@@ -321,7 +325,7 @@ Charges from the grid plus any solar surplus on top. The EV always starts, even 
 
 **Night:** if tariff mode is "Dynamic", defers charging to the cheapest contiguous price window instead of charging immediately. The Min floor is always guaranteed: if waiting for cheap hours would miss the deadline or there's no price data, SEM charges anyway.
 
-Best for: you have a dynamic tariff (Tibber, Octopus, Amber) and want to optimize cost. Requires `switch.sem_charger_<id>_tariff_optimized` to be **ON**.
+Best for: you have a dynamic tariff (Tibber, Octopus, Amber) and want to optimize cost. Picking this mode *is* the opt-in — it is the only mode that consults the tariff, and it is hidden from the selector when no dynamic tariff is configured.
 
 ### Always Max (`always_max`)
 
@@ -386,8 +390,10 @@ When you have multiple batteries (e.g. Huawei + Growatt, or split Huawei units),
 | **Off** | SEM ignores this battery | Manual control or testing |
 
 **Per-battery control entities:**
-- `number.sem_battery_<id>_mode` — set the mode (auto/self_consumption/force_charge/force_discharge/off)
-- `number.sem_battery_<id>_force_discharge_power` — control discharge rate in Force Discharge mode
+- `select.sem_battery_<id>_mode` — set the mode (auto / self_consumption / force_charge / force_discharge / off)
+- `number.sem_battery_<id>_reserve_soc` — the SOC this battery will not discharge below
+
+The discharge *rate* is not per-battery: **`number.sem_battery_max_discharge_power`** (default 5000 W) caps it for the whole fleet.
 
 **Zero-config Huawei:** If you have a Huawei inverter, SEM auto-detects the discharge limit entity and uses it to enforce force-discharge at no extra config.
 
@@ -455,9 +461,27 @@ Do not confuse Solar Gate with **Min solar power** (the config floor below which
 
 > **See also:** [docs/EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md) — full decision matrix covering night charging, the optional **Charge by HH:MM** deadline, and the optional **Cheapest hours (tariff)** mode, with worked examples for the edge cases (e.g. cheap window shorter than time-to-Min).
 
-> **Night charging is opt-in (off by default).** SEM is a *solar* energy manager, so out of the box it charges your car on solar surplus only and never pulls from the grid overnight unasked. To enable grid-assisted night charging, turn on **`switch.sem_night_charging`** (and, for a multi-charger setup, the per-charger `…_night_charging` switch for each charger you want to top up). Upgrading users keep whatever state they already had — only fresh installs and newly-added chargers start off. *(#256)*
+> **Night charging is governed by the Charge mode, not by a switch.** The
+> `switch.sem_night_charging` and per-charger `…_night_charging` toggles were
+> removed in v1.6.3 (#277) — one selector now carries the whole intent. Set it
+> per charger with **`select.sem_charger_<id>_charge_mode`**, on the EV tab.
 
-Once enabled, night charging starts automatically when night mode activates (after sunset + 10 minutes, or 20:30, whichever comes first).
+| Charge mode | Charges overnight from grid? |
+|---|---|
+| `Min + Solar` **(default)** | Yes — this is the out-of-the-box behaviour |
+| `Solar + cheapest hours` | Yes, deferred into the cheapest price window |
+| `Always (max)` | Yes, immediately and at full current |
+| `Solar only` | **No** — unless you set an "At least" floor on *this* charger (#679) |
+| `Off` | No — the charger is not managed at all |
+
+A fresh install defaults to **Min + Solar**, so a new charger *will* top up
+overnight. If you want the solar-purist behaviour — never pull from the grid
+unasked — pick **Solar only** and leave its "At least" floor at 0. The floor is
+what carries the intent: a global default is not an opt-in, so only a floor set
+on the charger itself puts a `Solar only` charger into the night lane.
+
+Night charging starts when night mode activates (after sunset + 10 minutes, or
+20:30, whichever comes first).
 
 ### How it works
 
@@ -470,9 +494,12 @@ Once enabled, night charging starts automatically when night mode activates (aft
 
 The daily EV target uses **sunrise-based reset** — the counter resets at sunrise, not midnight. This means a night charging session from 22:00 to 06:00 stays in a single daily bucket.
 
-### Smart Night Charging (optional)
+### Smart night charging
 
-When `switch.sem_smart_night_charging` is ON, SEM uses the full EV Intelligence system to decide whether to charge overnight:
+In the **`Solar + cheapest hours`** and **`Min + Solar`** modes, SEM runs the
+full EV Intelligence system before committing to an overnight charge. (This was
+the `switch.sem_smart_night_charging` toggle until v1.6.3; it is now implied by
+the mode.)
 
 - **SOC-based skip** — if the estimated EV SOC covers tomorrow's predicted consumption (with 30% safety margin), SEM skips the night charge entirely
 - **Solar forecast credit** — 30% of tomorrow's forecast is credited, reducing required SOC further
@@ -623,9 +650,11 @@ gentle and peak-managed exactly as before. Only an explicit earlier deadline for
 (`button.sem_charger_<id>_set_default_target`) that copies that charger's current Min/Max and
 charge-by time into the global defaults, so newly-added chargers inherit them.
 
-**Tariff-optimized charging.** *(#247)* Turn on **`switch.sem_charger_<id>_tariff_optimized`**
-(opt-in, default off; tap the *Tariff-optimized* toggle on the EV card) to make charging
-price-aware — it needs a [dynamic tariff](#tariff-integration):
+**Tariff-optimized charging.** *(#247)* Set this charger's Charge mode to
+**`Solar + cheapest hours`** (`select.sem_charger_<id>_charge_mode`, on the EV card) to make
+charging price-aware. It is the only mode that consults the tariff, and it needs a
+[dynamic tariff](#tariff-integration) — without one the option is hidden from the selector.
+(Until v1.6.3 this was the separate `…_tariff_optimized` switch.)
 
 - **At night**, SEM defers charging to the cheapest contiguous price window instead of starting
   immediately. The state shows **`Tariff mode - Waiting for cheap price`**, and the EV card
@@ -639,7 +668,7 @@ price-aware — it needs a [dynamic tariff](#tariff-integration):
 
 ## EV Intelligence
 
-SEM learns your EV's charging behavior and driving patterns to make smart decisions about when and how much to charge. Enable via `switch.sem_smart_night_charging`.
+SEM learns your EV's charging behavior and driving patterns to make smart decisions about when and how much to charge. It runs automatically in the **`Min + Solar`** and **`Solar + cheapest hours`** Charge modes — there is no separate switch to enable.
 
 ### Taper Detection
 

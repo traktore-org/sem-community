@@ -854,4 +854,6 @@ semDefineCard('sem-battery-card', SEMBatteryCard, {
     type: 'sem-battery-card',
     name: 'SEM Battery',
     description: 'Lumina-styled battery hero card with SOC arc ring and key metrics',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-battery-card',
 });

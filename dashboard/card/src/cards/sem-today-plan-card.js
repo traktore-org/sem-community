@@ -210,6 +210,9 @@ class SEMTodayPlanCard extends SEMLitBase {
 }
 
 semDefineCard('sem-today-plan-card', SEMTodayPlanCard, {
+    type: 'sem-today-plan-card',
     name: "SEM Today's Plan",
     description: 'Forward-looking schedule combining tariff, solar, and EV',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-today-plan-card',
 });

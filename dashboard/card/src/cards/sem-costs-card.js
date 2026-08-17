@@ -277,4 +277,6 @@ semDefineCard('sem-costs-card', SEMCostsCard, {
     type: 'sem-costs-card',
     name: 'SEM Costs',
     description: 'Consolidated financial card with daily/monthly/yearly costs, savings, ROI, and environmental impact',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-costs-card',
 });

@@ -1104,8 +1104,11 @@ class SEMEnergyPlanCard extends SEMLitBase {
 }
 
 semDefineCard('sem-energy-plan-card', SEMEnergyPlanCard, {
+    type: 'sem-energy-plan-card',
     name: 'SEM Energy Plan',
     description: 'The joint plan for the energy day — when each demand runs and where the battery hands over',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-energy-plan-card',
 });
 // Back-compat alias: dashboards generated before the rename still say
 // custom:sem-overnight-plan-card — serve them the same card until the

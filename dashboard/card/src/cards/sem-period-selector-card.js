@@ -174,8 +174,10 @@ class SEMPeriodSelectorCard extends SEMLitBase {
 }
 
 semDefineCard('sem-period-selector-card', SEMPeriodSelectorCard, {
-    type: 'custom:sem-period-selector-card',
+    type: 'sem-period-selector-card',
     name: 'SEM Period Selector',
     description: 'Glassmorphism period picker for SEM chart cards',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-period-selector-card',
     preview: false,
 });

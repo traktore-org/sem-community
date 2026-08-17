@@ -1535,4 +1535,6 @@ semDefineCard('sem-ev-status-card', SEMEVStatusCard, {
     type: 'sem-ev-status-card',
     name: 'SEM EV Status',
     description: 'Lumina-styled EV charging hero card with per-charger intelligence and settings',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-ev-status-card',
 });

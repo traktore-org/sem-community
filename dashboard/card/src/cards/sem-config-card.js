@@ -2888,8 +2888,10 @@ class SEMConfigCard extends SEMLitBase {
 }
 
 semDefineCard('sem-config-card', SEMConfigCard, {
-    type: 'custom:sem-config-card',
+    type: 'sem-config-card',
     name: 'SEM Configuration Card',
     description: 'In-dashboard SEM configuration surface (replaces the Settings → SEM → Configure flow for most users)',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-config-card',
     preview: false,
 });

@@ -37,7 +37,7 @@ For developer and architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### Home Assistant version
 
-SEM requires **Home Assistant 2024.1.0 or newer**. Check your version at
+SEM requires **Home Assistant 2025.1.0 or newer**. Check your version at
 **Settings > System > About**.
 
 ### HACS
@@ -93,7 +93,7 @@ night charging and battery charge scheduling.
 
 ### Checklist
 
-- [ ] HA 2024.1.0 or newer
+- [ ] HA 2025.1.0 or newer
 - [ ] HACS installed
 - [ ] Energy Dashboard configured (solar + grid sensors at minimum)
 - [ ] Battery sensors visible in HA (optional)
@@ -354,10 +354,13 @@ generated yet. It is organized into these pages:
 | EV solar max SOC (%) — **Max** | 100% | Solar SOC ceiling. Defaults to 100% (charge to full from sun); set to e.g. 80% to cap solar charging for battery longevity while still guaranteeing the Min via grid. |
 | EV battery capacity (kWh) | 40 kWh | Your EV's battery size (10–120 kWh). Used to convert SOC percentage to kWh remaining. Per-charger configurable. Also used for SOC→kWh calculation when a vehicle SOC sensor is configured. |
 | Solar Gate (v1.7.3) | 1200 W | Battery assist threshold — battery only helps EV when real solar surplus ≥ this value (0–5000 W). Set to 0 W to allow battery support everywhere, including night. Prevents overnight battery drain. |
-| Min solar power to start EV charging (W) | 500 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
+| Min solar power to start EV charging (W) | 1000 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
 | Max grid import for Min+PV mode (W) | 1380 W | In Min+PV mode the EV runs at minimum current and uses grid to fill the gap. This cap limits how much grid power is used. Lower it to keep Min+PV fully solar; raise it if you want the charger to run continuously even when solar is weak. |
-| Night charging | **Off** | **Opt-in** (#256). When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily-target floor. Off by default so a fresh install charges on **solar surplus only** — turn it on if you want grid-assisted overnight charging. Existing installs keep their previous setting on upgrade. |
-| Smart night charging | Off | When on, SEM evaluates whether tonight's grid charge is actually needed. If tomorrow's solar forecast is strong and the battery is reasonably full, SEM reduces or skips the overnight charge. Enable after SEM has been running for a week and you have a calibrated forecast integration. |
+
+Night charging and smart night charging are **not settings here** — since v1.6.3
+(#277) both are carried by the per-charger **Charge mode**
+(`select.sem_charger_<id>_charge_mode`, on the EV tab). See
+[Setting an EV charge target](#setting-an-ev-charge-target) below.
 
 ### Battery SOC Zone settings
 
@@ -742,9 +745,11 @@ EV charger card — one place, per charger, no config-flow round-trips:
   reached. Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
   the former *Limit surplus* switch.)
 - **Charge mode** (`select.sem_charger_<id>_charge_mode`, v1.6.3): the per-charger
-  intent that carries the night-charging + tariff-window decision. Picking
-  *Min + Solar* (the default) or *Solar + cheapest hours* implicitly enables
-  the night-window top-up to the Min target; picking *Solar only* skips it.
+  intent that carries the night-charging + tariff-window decision. *Min + Solar*
+  (the default), *Solar + cheapest hours* and *Always (max)* top the Min target up
+  overnight; *Solar only* skips it **unless** you set an "At least" floor on this
+  charger, which turns the shortfall into an overnight guarantee (#634/#679);
+  *Off* leaves the charger unmanaged.
 
 These controls compose freely (Target type × Solar-max × Charge mode). The legacy
 `switch.sem_charger_<id>_night_charging`, `..._smart_night_charging`,
@@ -1172,7 +1177,7 @@ To change the server language (affects static labels for all users):
    with the new language
 
 The source of truth for all translations is `dashboard/translations.json`
-(1166 keys across 16 languages). If you want to contribute a translation
+(1341 keys across 16 languages). If you want to contribute a translation
 correction or add a new language, see
 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 

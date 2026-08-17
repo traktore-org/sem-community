@@ -628,8 +628,10 @@ class SEMSystemCard extends SEMLitBase {
 }
 
 semDefineCard('sem-system-card', SEMSystemCard, {
-    type: 'custom:sem-system-card',
+    type: 'sem-system-card',
     name: 'SEM System Card',
-    description: 'Consolidated system panel for Solar Energy Management',
+    description: 'Integration health — version, detected hardware, grid mode, sensor availability',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-system-card',
     preview: false,
 });

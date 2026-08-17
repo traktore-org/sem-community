@@ -24,8 +24,8 @@
    - 1-phase chargers: ~1380 W (6 A × 230 V)
    - 3-phase chargers: ~4140 W (6 A × 3 × 230 V)
 
-   The `min_solar_power` setting (default 500 W in the Optimization Settings step) is the surplus *floor* below which SEM won't even attempt to start the charger — keep it well **below** the hardware minimum so SEM has headroom to ramp up before the cliff.
-5. For night charging: it is **opt-in (off by default)** — turn on `switch.sem_night_charging` (and the per-charger `…_night_charging` switch in a multi-charger setup), and make sure it's within the night window
+   The `min_solar_power` setting (default 1000 W in the Optimization Settings step) is the surplus *floor* below which SEM won't even attempt to start the charger — keep it well **below** the hardware minimum so SEM has headroom to ramp up before the cliff.
+5. For night charging: check this charger's `select.sem_charger_<id>_charge_mode`. `Min + Solar` (the default), `Solar + cheapest hours` and `Always (max)` charge overnight; `Solar only` does not unless you set an "At least" floor on that charger. Also make sure it's within the night window.
 
 ---
 
@@ -46,17 +46,18 @@ setpoint independently of SEM. Because SEM never started an owned
 session, its `_session_active` flag was False and the disable path
 silently skipped.
 
-**Fix (v1.6.5+):** Upgrade to v1.6.5 or later. SEM now re-asserts the
-per-brand disable service (e.g. `keba.disable`) every coordinator cycle
-(~10 s) whenever Charge mode is **Off** and the charger is actually
-drawing power (> 500 W). Idempotent and KEBA-firmware-safe. Logs will
-show a one-time WARNING per self-resume episode:
+**Fix (v1.6.5+):** Upgrade to v1.6.5 or later. Since v1.7.3-beta.50 (#392)
+the **charger reconciler** owns this: every coordinator cycle it compares the
+desired state against what the box is actually doing, and re-issues the
+per-brand disable (e.g. `keba.disable`) whenever Charge mode is **Off** and
+the charger has self-resumed. It is idempotent — the command only goes out
+while the observation still disagrees — and KEBA-firmware-safe. Logs show:
 
 ```
-Charger <name> self-resumed while mode=off (drawing 4140W). Calling
-stop_session() — will re-assert every cycle until ev_power drops
-below 500W. (#315)
+reconcile(ev_charger): DISABLE — <reason>
 ```
+
+at INFO level (`coordinator.charger_reconciler`) each time it re-asserts.
 
 **Workaround if you're on v1.6.4 or earlier:**
 
@@ -123,13 +124,11 @@ The Repair clears by itself as soon as the charger stops drawing.
 
 ## Car charged overnight when I only wanted solar surplus
 
-**Cause:** Grid-assisted **night charging** is enabled, with a charge target (a daily kWh target or a target SOC %) the car hadn't reached, so SEM topped it up from the grid overnight. On fresh installs this is now off by default, but it stays enabled on upgraded systems that already had it on, and a multi-charger setup tracks an enable switch *per charger*.
+**Cause:** The charger's **Charge mode** allows grid-assisted night charging, and it had a charge target (a daily kWh target or a target SOC %) the car hadn't reached — so SEM topped it up from the grid overnight. The default mode on a fresh install is **`Min + Solar`**, which charges overnight by design.
 
-**Fix:** To make a charger surplus-only, either:
-1. Turn **off** that charger's `…_night_charging` switch (or the global `switch.sem_night_charging` to disable night charging for all chargers), **or**
-2. Set that charger's **Night Target to 0** (kWh mode) / its **Target SOC to its current level** (SOC mode).
+**Fix:** To make a charger surplus-only, set its `select.sem_charger_<id>_charge_mode` to **`Solar only`** *and* leave its **"At least" floor at 0** (kWh mode) / its **Target SOC at its current level** (SOC mode).
 
-With the floor at zero and/or night charging off, the charger only draws solar surplus. *(#256)*
+Both halves matter: `Solar only` with a non-zero floor still tops that floor up from the grid by the Charge-by time — that floor is how you ask for an overnight guarantee without leaving the solar-first mode (#634/#679). With the floor at zero, the charger only ever draws solar surplus.
 
 ---
 

@@ -155,8 +155,9 @@ mechanism entirely.** Per-charger state now lives in exactly two places:
    `last_change_time`, `reenable_attempts`, `charge_refused`,
    `last_set_amps_ts`.
 2. **Cycle-scoped fields** — on the `PerChargerContext` object itself:
-   `budget_w`, `vehicle_soc`, `this_power_w`, `effective_state`,
-   `charger_name`.
+   `vehicle_soc`, `this_power_w`, `effective_state`, `charger_name`.
+   (`budget_w` was removed from `PerChargerContext` in #651; it now
+   lives on `ChargerDecision`, produced by `decide()`.)
 
 The coordinator's legacy attribute names (`self._ev_stalled_since`,
 `self._cycle_vehicle_soc`, `self._ev_device`, …) are **properties** that
@@ -169,8 +170,11 @@ pointer. There is no snapshot and no restore, so a forgotten write-back
 
 Retired outright as dead state during the retirement:
 `_ev_budget_history` (+ its `_per_charger` dict; consumer removed in
-#536) and `_current_charger_budget` (budget flows through
-`pcc.budget_w → build_charger_view`).
+#536) and `_current_charger_budget`. The per-charger solar budget
+(`budget_w`) was later moved off `PerChargerContext` entirely in #651
+and now lives on `ChargerDecision` (produced by `decide()`) via
+`decide.self_consumption_surplus_w` and accumulated in
+`fleet.solar_committed_w` across the priority loop.
 
 ---
 
@@ -223,14 +227,14 @@ the structural invariant.
 
 ### What landed under the abstraction
 
-`PerChargerContext` owns the **swap surface** for nine coordinator
-attributes (8 in `_saved` + `_cycle_vehicle_soc`). As of v1.6.14 the
-dataclass also carries the computed per-charger fields:
+`PerChargerContext` owns the **per-charger dispatch surface** (no swap
+remains as of #589). As of v1.6.14 the dataclass carries the computed
+per-charger fields (note: `budget_w` was removed from here in #651 — it
+now lives on `ChargerDecision` produced by `decide()`):
 
 | Field | Set by | Read by | Purpose |
 |---|---|---|---|
 | `cid`, `ev_dev`, `charger_cfg` | `for_charger` | loop body | identity |
-| `budget_w` | `for_charger` from `distribute_ev_budget` | `_ev_control` cascade | per-charger surplus slice |
 | `skipped_for_night` | `for_charger` from `_mode_allows_night_charging` | loop body | night gate |
 | `power` | `for_charger` (caller passes `power`) | `__enter__` | cycle-level `PowerReadings` for the precompute |
 | `this_power_w` | `__enter__` via `coord._this_charger_power(ev_dev, power)` | `_this_charger_power` cache shim | this charger's draw (W) |

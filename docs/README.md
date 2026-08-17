@@ -35,6 +35,7 @@ All SEM documentation lives in this directory. Start here.
 | [MULTI_CHARGER.md](MULTI_CHARGER.md) | Per-charger correctness: the retired swap surface, adapters, status classification |
 | [BUG_CLASSES.md](BUG_CLASSES.md) | The recurring-bug-class ledger and its guards |
 | [SEM_TRACE.md](SEM_TRACE.md) | The cycle-trace / perception observability layer |
+| [SIMULATION.md](SIMULATION.md) | Exercising plans and loads in observer mode, without actuating hardware |
 | [UI_PATTERNS.md](UI_PATTERNS.md) | Card design language (the EV card is the reference) |
 | [AUDIT_PLAYBOOK.md](AUDIT_PLAYBOOK.md) / [AUDIT_BACKLOG.md](AUDIT_BACKLOG.md) | Audit program process + backlog |
 | [adr/](adr/) | Architecture decision records |

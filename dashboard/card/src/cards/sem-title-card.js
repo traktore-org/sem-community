@@ -140,4 +140,6 @@ semDefineCard('sem-title-card', SEMTitleCard, {
     type: 'sem-title-card',
     name: 'SEM Title Card',
     description: 'Runtime-translated section header for SEM dashboard',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-title-card',
 });

@@ -46,9 +46,9 @@ EV charger setup is optional. SEM works as a monitoring and battery management s
 2. Click **+ Add Integration** and search for **Solar Energy Management**.
 3. Select it to open the setup wizard.
 
-The wizard has 3 steps.
+The wizard has 2 steps.
 
-### Step 2a: User (Observer Mode)
+### Step 2a: Confirm sensors (Observer Mode)
 
 SEM displays a summary of the sensors it found in your Energy Dashboard — solar power, grid power, and battery power. Review them to confirm they look correct.
 
@@ -56,21 +56,7 @@ If you want SEM to monitor only and not control any hardware, enable **Observer 
 
 Click **Submit**.
 
-### Step 2b: EV Charger (optional)
-
-If you have an EV charger, select its sensors here:
-
-| Field | What to select |
-|-------|----------------|
-| Connected sensor | Binary sensor that shows when the car is plugged in |
-| Charging sensor | Binary sensor that shows when charging is active |
-| Power sensor | Sensor showing current charging power in watts |
-
-Not sure which entities? Go to **Developer Tools > States** and type your charger brand name in the filter box.
-
-If you have no EV charger, leave the fields empty and click **Submit**.
-
-### Step 2c: Hardware
+### Step 2b: Hardware
 
 | Setting | Default | What it means |
 |---------|---------|---------------|
@@ -80,6 +66,8 @@ If you have no EV charger, leave the fields empty and click **Submit**.
 Click **Submit**. SEM starts at a 5 kW target peak limit; tune it later from
 the Control tab's slider (up to 80 kW, or **Uncapped**) — see
 [Load Management Settings](USER_GUIDE.md#load-management-settings).
+
+EV charger configuration is available after install via the **Configuration tab** or **Settings > Devices & Services > Solar Energy Management > Configure**.
 
 **What you should see:** A success message and the integration listed under **Devices & Services**.
 
