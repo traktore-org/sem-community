@@ -4,8 +4,7 @@ These tests verify that energy values accumulate correctly using the
 EnergyCalculator module's power integration approach.
 """
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from freezegun import freeze_time
 
 from custom_components.solar_energy_management.coordinator import (

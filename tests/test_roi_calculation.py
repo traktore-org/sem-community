@@ -4,18 +4,14 @@ Tests the hybrid ROI approach:
 - Past (pre-SEM): lifetime_kWh × 7-day avg rate
 - Future (with SEM): accumulated daily_savings at real rates
 """
-import pytest
-from collections import deque
 from datetime import date, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EnergyCalculator,
 )
 from custom_components.solar_energy_management.coordinator.types import (
-    PowerReadings,
     EnergyTotals,
-    CostData,
 )
 
 

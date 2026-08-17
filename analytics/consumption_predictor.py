@@ -12,7 +12,6 @@ Architecture:
 - Memory: ~1.5KB (168 floats × 2 models)
 """
 import logging
-from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 

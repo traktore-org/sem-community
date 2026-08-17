@@ -10,14 +10,10 @@ Covers:
 import pytest
 from datetime import datetime, timedelta
 from homeassistant.util import dt as dt_util
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 from custom_components.solar_energy_management.devices.hot_water_controller import (
     HotWaterController,
-    DEFAULT_LEGIONELLA_TARGET,
-    DEFAULT_LEGIONELLA_INTERVAL_HOURS,
-    DEFAULT_SOLAR_TARGET_TEMP,
-    LEGIONELLA_HOLD_MINUTES,
 )
 
 

@@ -11,7 +11,6 @@ tests pin the new boundary semantics + the multi-charger isolation property.
 """
 from __future__ import annotations
 
-from datetime import date
 
 import pytest
 from custom_components.solar_energy_management.utils.time_manager import TimeManager

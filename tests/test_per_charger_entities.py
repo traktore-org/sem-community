@@ -8,18 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.components.number import NumberEntityDescription
 from homeassistant.components.switch import SwitchEntityDescription
-from homeassistant.components.sensor import SensorEntityDescription
 from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.solar_energy_management.number import (
-    SEMNumberEntity,
     SEMPerChargerNumber,
-    NUMBER_TYPES,
 )
 from custom_components.solar_energy_management.switch import (
-    SEMSolarSwitch,
     SEMPerChargerSwitch,
-    SWITCH_TYPES,
 )
 
 
@@ -236,7 +231,7 @@ class TestPerChargerTargetTime:
     async def test_time_set_persists_hhmm_to_charger(self):
         from datetime import time as dt_time
         from custom_components.solar_energy_management.time import (
-            SEMPerChargerTime, _parse_hhmm,
+            SEMPerChargerTime,
         )
         from homeassistant.components.time import TimeEntityDescription
 
@@ -603,7 +598,7 @@ class TestPerChargerAggregation:
     async def test_per_charger_connected_binary_sensor(self):
         """Per-charger connected binary sensor should be created for each charger."""
         from custom_components.solar_energy_management.binary_sensor import (
-            async_setup_entry, BinarySensorEntityDescription,
+            async_setup_entry,
         )
         coord = _mock_coordinator(TWO_CHARGERS)
         entry = _mock_entry(TWO_CHARGERS)

@@ -15,9 +15,9 @@ from __future__ import annotations
 import logging
 import math
 from collections import deque
-from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.util import dt as dt_util

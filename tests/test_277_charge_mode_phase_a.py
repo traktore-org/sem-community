@@ -19,7 +19,7 @@ These tests pin the four moving pieces:
   4. ``_effective_charge_mode_for`` equivalence (stored vs derived)
 """
 import json
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

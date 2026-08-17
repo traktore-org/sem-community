@@ -26,7 +26,6 @@ import inspect
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator import repair_issues as _ri
 from custom_components.solar_energy_management.coordinator.coordinator import (

@@ -13,7 +13,7 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -91,7 +91,6 @@ from ..consts.core import (
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 

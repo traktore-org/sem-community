@@ -5,7 +5,6 @@ matching real-world data from HA-PROD (2026-04-24):
     6290W → 5580W → 4970W → 4340W → 3740W → 3120W → 2550W → 1960W → 0W
     Total taper ~17 minutes, steps ~600W each.
 """
-import time
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
@@ -13,8 +12,6 @@ from unittest.mock import MagicMock, patch
 from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
     EVTaperDetector,
     BUFFER_SIZE,
-    FULL_POWER_THRESHOLD,
-    SESSION_PEAK_MIN,
 )
 
 

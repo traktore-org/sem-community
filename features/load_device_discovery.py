@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 import fnmatch
 
 from homeassistant.core import HomeAssistant

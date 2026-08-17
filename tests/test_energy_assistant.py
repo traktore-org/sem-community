@@ -1,12 +1,10 @@
 """Tests for EnergyAssistant smart recommendations."""
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from datetime import date, datetime, time, timedelta
 
 from custom_components.solar_energy_management.analytics.energy_assistant import (
     EnergyAssistant,
     EnergyAssistantData,
-    EnergyTip,
 )
 
 

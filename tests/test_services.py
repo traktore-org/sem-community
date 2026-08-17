@@ -2,9 +2,7 @@
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, mock_open
-import os
 
-from custom_components.solar_energy_management.coordinator import SEMCoordinator
 
 
 @pytest.mark.unit
@@ -259,7 +257,6 @@ views:
     @pytest.mark.asyncio
     async def test_dashboard_config_file_paths(self, mock_coordinator):
         """Test dashboard config service file path resolution."""
-        import os
 
         level_files = {
             "2": "ems_level2_dashboard.yaml",  # Current implementation uses ems_ prefix

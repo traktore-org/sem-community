@@ -24,7 +24,6 @@ is no raw answer left in the cycle to disagree with, so the fix is
 structural rather than per-site.
 """
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest

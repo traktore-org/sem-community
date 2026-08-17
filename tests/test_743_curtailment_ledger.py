@@ -13,7 +13,6 @@ A day the probe CONFIRMED curtailment on (state ``harvest`` — production
 followed the probe, the signature was real) is a poisoned sample: the
 tracker skips it. A failed probe (plain clouds) still teaches."""
 
-from datetime import date
 
 import pytest
 

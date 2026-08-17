@@ -31,12 +31,10 @@ covers the *default selection*.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management.devices.base import (
-    ControllableDevice,
     DeviceControlMode,
     SwitchDevice,
 )

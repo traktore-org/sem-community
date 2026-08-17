@@ -21,12 +21,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers import entity_registry as er
 
 from ..ha_energy_reader import (
     read_energy_dashboard_config,
@@ -41,7 +40,6 @@ from ..devices.base import (
 )
 from ..hardware_detection import discover_ev_charger_from_registry
 from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
-from ..const import DEFAULT_DEVICE_RATED_POWER as _DEFAULT_RATED_POWER
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -10,8 +10,8 @@ Covers:
 - Edge cases (no forecast, already full, tiny deficit, EV peak conflict)
 """
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.util import dt as dt_util
 

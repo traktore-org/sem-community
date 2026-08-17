@@ -17,7 +17,6 @@ off until SEM explicitly starts a session (whose existing start
 sequence re-arms the charging failsafe first). The wallbox itself now
 enforces "off means off" between sessions.
 """
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

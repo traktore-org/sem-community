@@ -221,7 +221,6 @@ async def test_guard_sensor_discovery_by_name_when_no_device(keba, mock_hass, mo
     entities (PROD 2026-07-18), so device-registry sibling discovery is
     structurally blind. The name-derivation fallback must find
     <box>_energy_target from the configured <box>_charging_power anchor."""
-    import custom_components.solar_energy_management.devices.base as base_mod
     keba.power_entity_id = "sensor.keba_p30_charging_power"
     # entity registry returns an entry with device_id None
     class _Ent: device_id = None

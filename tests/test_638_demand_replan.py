@@ -17,7 +17,6 @@ comparable value. These tests pin the two properties that matter:
 """
 from types import SimpleNamespace
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,

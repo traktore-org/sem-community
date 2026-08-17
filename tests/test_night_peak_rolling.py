@@ -26,7 +26,6 @@ Tests pin four corners (the issue's test plan):
 """
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator import SEMCoordinator
 from custom_components.solar_energy_management.coordinator.types import PowerReadings

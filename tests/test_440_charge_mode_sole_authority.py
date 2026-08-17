@@ -28,7 +28,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
     EVTaperDetector,

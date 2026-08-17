@@ -16,7 +16,6 @@ import json
 import os
 from unittest.mock import MagicMock
 
-import yaml
 
 from custom_components.solar_energy_management.coordinator.types import SEMData
 from custom_components.solar_energy_management.coordinator.forecast_reader import (

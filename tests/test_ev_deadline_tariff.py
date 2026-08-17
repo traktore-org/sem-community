@@ -14,7 +14,6 @@ path. Their behaviour is covered at the pure layer by
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from homeassistant.util import dt as dt_util
 

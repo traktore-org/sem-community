@@ -10,16 +10,11 @@ Tests the multi-EV charger architecture:
 """
 import re
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime
+from unittest.mock import MagicMock, AsyncMock
 
 from custom_components.solar_energy_management.coordinator.types import (
     SessionData,
     SEMData,
-)
-from custom_components.solar_energy_management.coordinator.surplus_controller import (
-    SurplusController,
 )
 from custom_components.solar_energy_management.hardware_detection import (
     _discover_wallbox,

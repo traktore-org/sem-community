@@ -14,7 +14,6 @@
 import logging
 from unittest.mock import MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management.features.device_registry import (
     UnifiedDeviceRegistry,
@@ -132,7 +131,6 @@ class TestEdChargerRowIdentitySuppression:
                     did = registry_map.get(eid)
                     return _Ent(did) if did else None
 
-            import custom_components.solar_energy_management.features.device_registry as dr_mod
             import homeassistant.helpers.entity_registry as er
             monkeypatch.setattr(er, "async_get", lambda hass: _Reg())
         return reg

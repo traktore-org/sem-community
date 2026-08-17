@@ -22,7 +22,6 @@ mechanisms, both fixed here:
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorConfig,

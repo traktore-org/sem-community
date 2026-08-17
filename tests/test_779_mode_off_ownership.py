@@ -39,7 +39,6 @@ import ast
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     compute_load_intent,

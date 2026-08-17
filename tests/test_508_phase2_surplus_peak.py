@@ -22,7 +22,7 @@ from custom_components.solar_energy_management.coordinator.surplus_controller im
     SurplusController,
 )
 from custom_components.solar_energy_management.devices.base import (
-    DeviceControlMode, DeviceState,
+    DeviceControlMode,
 )
 from custom_components.solar_energy_management.const import LoadManagementState
 

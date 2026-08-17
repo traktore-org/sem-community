@@ -3,12 +3,10 @@
 Verifies that SEM correctly sums power from multiple inverters, batteries,
 and grid tariffs when the Energy Dashboard has multiple sources (#112).
 """
-import pytest
 from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
-    SensorConfig,
 )
 from custom_components.solar_energy_management.ha_energy_reader import (
     EnergyDashboardConfig,

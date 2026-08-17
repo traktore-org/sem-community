@@ -12,14 +12,13 @@ back one day.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.forecast_tracker import (
     ForecastTracker,
-    LIVE_RATIO_EMA_TAU_S,
 )
 
 TZ = timezone.utc

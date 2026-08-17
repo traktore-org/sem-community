@@ -28,8 +28,8 @@ consumer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import dataclass, asdict
+from datetime import datetime
 from typing import Any, Dict, List, NamedTuple, Optional
 
 # A sample gap longer than this means we stopped watching (restart, hang). The

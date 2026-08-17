@@ -24,18 +24,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.solar_energy_management.coordinator.actuate import actuate
-from custom_components.solar_energy_management.coordinator.actuate_battery import (
-    actuate_battery,
-)
 from custom_components.solar_energy_management.coordinator.charger_reconciler import (
     ChargerReconciler,
 )
 from custom_components.solar_energy_management.coordinator.charger_types import (
-    BatteryDecision,
     BatteryIntent,
     BatteryRuntime,
     BatteryView,
-    ChargerDecision,
     ChargerEnergy,
     ChargerIntent,
     ChargerPower,
@@ -525,7 +520,6 @@ class TestNightTargetReachedVsDecide:
 
         # With resolved=0.05, decide_v2 sees target_kwh=0.05 → IDLE
         # (matches state machine's NIGHT_TARGET_REACHED).
-        from dataclasses import replace
         view = _ev_view(
             mode="min_plus_solar", solar_w=0, soc=80,
             is_night=True, target_kwh=resolved,

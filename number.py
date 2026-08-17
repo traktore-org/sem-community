@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.number import (
     NumberEntity,
@@ -26,7 +25,7 @@ from homeassistant.const import (
 
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import DEFAULT_MAX_CHARGING_CURRENT, DOMAIN
+from .const import DEFAULT_MAX_CHARGING_CURRENT
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]

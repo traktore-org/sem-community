@@ -27,7 +27,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
     BatteryPower,
 )
 from custom_components.solar_energy_management.coordinator.types import (
-    PowerReadings, SEMData,
+    SEMData,
 )
 
 

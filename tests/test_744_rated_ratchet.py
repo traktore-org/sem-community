@@ -14,14 +14,12 @@ must never teach the model (the same class as #743's curtailed days
 and #753's warm-up disconnects: a guessed number is not a measurement).
 """
 
-import time as _time
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 from custom_components.solar_energy_management.devices.base import (
-    ControllableDevice, SwitchDevice,
+    SwitchDevice,
 )
 
 

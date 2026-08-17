@@ -1,9 +1,8 @@
 """Test EMS Solar Optimizer binary sensors."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntityDescription
-from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.solar_energy_management.binary_sensor import (
     SEMSolarBinarySensor,

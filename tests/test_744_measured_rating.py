@@ -38,12 +38,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.solar_energy_management.const import DOMAIN
+from custom_components.solar_energy_management.const import (
+    DOMAIN,
+    DEFAULT_DEVICE_RATED_POWER as _DEFAULT_RATED_POWER,
+)
 from custom_components.solar_energy_management.devices.base import (
     DeviceState, SwitchDevice, surplus_device_from_spec,
 )
 from custom_components.solar_energy_management.features.device_registry import (
-    UnifiedDeviceRegistry, _DEFAULT_RATED_POWER,
+    UnifiedDeviceRegistry,
 )
 
 requires_hass = pytest.mark.skipif(

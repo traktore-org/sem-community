@@ -1,7 +1,7 @@
 """Tests for NotificationManager from coordinator/notifications.py."""
 import time
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.solar_energy_management.coordinator.notifications import (
     NotificationManager,

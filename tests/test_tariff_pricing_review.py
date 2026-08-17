@@ -449,10 +449,6 @@ from unittest.mock import AsyncMock  # noqa: E402
 from custom_components.solar_energy_management.tariff.tariff_provider import (  # noqa: E402
     PricePoint,
 )
-from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (  # noqa: E402
-    BatteryChargeScheduler,
-    SchedulerConfig,
-)
 from homeassistant.util import dt as dt_util  # noqa: E402
 
 

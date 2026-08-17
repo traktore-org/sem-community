@@ -72,7 +72,7 @@ from .energy_reclaim import reclaimable_battery_w
 from .forecast_reader import ForecastReader
 from .forecast_tracker import ForecastTracker
 from .ev_control import EVControlMixin
-from ..tariff import StaticTariffProvider, DynamicTariffProvider, PriceLevel
+from ..tariff import StaticTariffProvider, DynamicTariffProvider
 from ..tariff.calendar_provider import CalendarTariffProvider
 from ..tariff.tariff_provider import _local_date as _tariff_local_date
 from ..analytics.pv_performance import PVPerformanceAnalyzer
@@ -110,7 +110,6 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
 
 
 # (#625 phase 3) moved to publish_diag; alias kept for existing imports.
-from .publish_diag import format_battery_sign_diag as _format_battery_sign_diag
 
 
 def plan_decision_core(plan) -> tuple:
@@ -5792,7 +5791,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         from .actuate_battery import actuate_battery
         from .battery_adapters import adapter_for, _integration_loaded
         from .charger_types import (
-            ArbitrageSignals, BatteryIntent, BatteryRuntime, BatteryView,
+            BatteryIntent, BatteryRuntime, BatteryView,
             FleetContext,
         )
         from .decide_battery import decide_battery, effective_battery_count

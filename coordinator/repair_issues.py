@@ -31,7 +31,7 @@ spamming", 2026-06-06) drove this work.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir

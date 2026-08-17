@@ -12,10 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.solar_energy_management.coordinator.charger_reconciler import (
-    ActionKind,
     ChargerReconciler,
-    DesiredState,
-    ObservedState,
 )
 from custom_components.solar_energy_management.coordinator.charger_types import (
     ChargerDecision,

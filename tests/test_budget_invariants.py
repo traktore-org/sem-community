@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import math
 
-import pytest
 from hypothesis import given, settings, strategies as st
 
 from custom_components.solar_energy_management.coordinator.flow_calculator import (

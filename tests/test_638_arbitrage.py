@@ -15,7 +15,6 @@ instrument on the .175 rig.
 """
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.arbitrage import (
     arbitrage_advice,

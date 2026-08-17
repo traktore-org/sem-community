@@ -1,7 +1,7 @@
 """Tests for SEMStorage from coordinator/storage.py."""
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.solar_energy_management.coordinator.storage import (
     SEMStorage,

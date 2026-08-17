@@ -22,7 +22,7 @@ from .charger_types import (
 from .plan_verdict import NO_OPINION, PlanVerdict
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from .types import PowerReadings
+    pass
 
 
 def build_charger_view(

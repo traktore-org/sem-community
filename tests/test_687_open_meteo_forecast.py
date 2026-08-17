@@ -19,7 +19,6 @@ from custom_components.solar_energy_management.coordinator.forecast_reader impor
     ForecastReader,
     OPEN_METEO_SOLAR_PLATFORM,
     FORECAST_SOLAR_PLATFORM,
-    SOLCAST_PLATFORM,
     SOLCAST_ENTITIES,
 )
 

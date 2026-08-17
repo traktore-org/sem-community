@@ -2,8 +2,6 @@
 import re
 import pathlib
 
-import pytest
-from unittest.mock import MagicMock
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 

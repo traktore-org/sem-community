@@ -28,7 +28,6 @@ collection path reads it — the user owns their target, and a learner that
 quietly rewrites it is not a feature anybody asked for.
 """
 
-from datetime import datetime, timezone
 
 import pytest
 

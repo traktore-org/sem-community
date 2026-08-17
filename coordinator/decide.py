@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import replace
-from typing import Dict, Optional, Type
+from typing import Dict, Optional
 
 from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT
 from .charger_types import (

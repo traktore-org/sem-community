@@ -292,7 +292,6 @@ class TestSensorReaderGate:
         from custom_components.solar_energy_management.coordinator.sensor_reader import (
             SensorReader,
         )
-        from unittest.mock import MagicMock
         sr = SensorReader.__new__(SensorReader)
         sr._pv_strings = {
             "pv1": "sensor.inverter_pv1_power",

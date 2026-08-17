@@ -4,7 +4,6 @@ autodetect of a companion power sensor."""
 
 from unittest.mock import MagicMock
 
-import custom_components.solar_energy_management.devices.base as base_mod
 from custom_components.solar_energy_management.devices.base import (
     SwitchDevice,
     surplus_device_from_spec,

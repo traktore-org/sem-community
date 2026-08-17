@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE

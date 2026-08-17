@@ -3,7 +3,6 @@
 These tests target the planned _calculate_peak_aware_night_current() method
 which is not yet implemented. Skip the entire module until the feature lands.
 """
-import sys
 import pytest
 
 pytest.importorskip(
@@ -19,12 +18,10 @@ if not hasattr(SEMCoordinator, "_calculate_peak_aware_night_current"):
         allow_module_level=True,
     )
 
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock
 from freezegun import freeze_time
 from custom_components.solar_energy_management.const import (
     ChargingState,
-    DEFAULT_TARGET_PEAK_LIMIT,
-    DEFAULT_MIN_CHARGING_CURRENT,
     DEFAULT_MAX_CHARGING_CURRENT,
 )
 

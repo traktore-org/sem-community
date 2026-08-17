@@ -18,12 +18,10 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 from ..const import (
     ChargingState,
     DEFAULT_BATTERY_PRIORITY_SOC,
-    DEFAULT_DAILY_EV_TARGET,
 )
 from ..utils.time_manager import TimeManager
 

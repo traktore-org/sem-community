@@ -34,7 +34,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.solar_energy_management.coordinator.charger_types import (
-    BatteryIntent,
     BatteryPower,
 )
 from custom_components.solar_energy_management.coordinator.types import (

@@ -347,7 +347,7 @@ class TestAuthorityBeginsAtTheStamp:
         (clock skew, replayed stash) must not be gated by a plan from its
         own future."""
         from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
-            plan_gate, UNCOVERED,
+            plan_gate,
         )
         now = datetime.fromisoformat("2026-08-05T21:30:00+02:00")
         assert not plan_gate(self._plan(), "load:heizband", now).covered

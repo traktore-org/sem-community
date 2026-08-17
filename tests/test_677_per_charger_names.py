@@ -31,7 +31,6 @@ import json
 import re
 from pathlib import Path
 
-import pytest
 
 _ROOT = Path(__file__).resolve().parents[1]
 _TRANSLATIONS = sorted((_ROOT / "translations").glob("*.json"))

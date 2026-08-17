@@ -9,7 +9,6 @@ import yaml
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
-from homeassistant.components import lovelace
 
 _LOGGER = logging.getLogger(__name__)
 

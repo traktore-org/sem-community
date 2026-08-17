@@ -35,7 +35,6 @@ from custom_components.solar_energy_management.coordinator.flow_calculator impor
     FlowCalculator,
 )
 from custom_components.solar_energy_management.coordinator.types import (
-    ChargerFlows,
     PowerReadings,
 )
 

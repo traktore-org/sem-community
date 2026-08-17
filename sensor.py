@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
     RestoreSensor,
-    SensorEntity,
     SensorEntityDescription,
     SensorDeviceClass,
     SensorStateClass,
@@ -32,7 +31,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 
-from .const import DOMAIN, STATUS_MESSAGES, ChargingState, SENSOR_LABEL_MAPPING
+from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
 from .features.device_axes import (

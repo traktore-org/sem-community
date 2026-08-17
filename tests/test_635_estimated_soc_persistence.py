@@ -1,5 +1,4 @@
 """#635 — estimated SOC survives restarts: the save/restore asymmetry fix."""
-from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management.coordinator.storage import SEMStorage
 

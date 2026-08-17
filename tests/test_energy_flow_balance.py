@@ -1,8 +1,7 @@
 """Test energy flow balance and sensor reading logic."""
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from freezegun import freeze_time
-from datetime import datetime, date
 
 from custom_components.solar_energy_management.coordinator import (
     SensorReader,

@@ -48,7 +48,6 @@ from custom_components.solar_energy_management.consts.ev_charge_modes import (
     MODE_NIGHT_ALLOWED,
     MODE_USES_SMART_NIGHT,
     MODE_USES_TARIFF,
-    effective_charge_mode_for,
 )
 from custom_components.solar_energy_management.coordinator import SEMCoordinator
 from custom_components.solar_energy_management.coordinator.charging_control import (

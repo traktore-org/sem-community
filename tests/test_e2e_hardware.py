@@ -13,13 +13,10 @@ integration's source code.
 """
 import pytest
 import json
-import os
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
-from homeassistant.util import dt as dt_util
 
 
 # ════════════════════════════════════════════
@@ -423,7 +420,6 @@ class E2ETestBase:
     def test_first_coordinator_cycle(self):
         """Step 6: First coordinator cycle completes without exception."""
         from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
-        from custom_components.solar_energy_management.coordinator.types import PowerReadings
 
         hass = MagicMock()
         inv = self.inverter

@@ -1,6 +1,4 @@
 """Tests for autarky and self-consumption calculations."""
-import pytest
-from unittest.mock import Mock, patch
 
 
 class TestAutarkyCalculations:

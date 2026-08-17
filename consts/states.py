@@ -1,5 +1,5 @@
 """State machine definitions for SEM Solar Energy Management."""
-from typing import Final, Dict, Optional
+from typing import Final, Optional
 
 from homeassistant.core import HomeAssistant
 

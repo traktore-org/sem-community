@@ -15,8 +15,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.solar_energy_management.const import (
+    DEFAULT_DEVICE_RATED_POWER as _DEFAULT_RATED_POWER,
+)
 from custom_components.solar_energy_management.features.device_registry import (
-    UnifiedDeviceRegistry, _DEFAULT_RATED_POWER,
+    UnifiedDeviceRegistry,
 )
 
 

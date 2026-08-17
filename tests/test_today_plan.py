@@ -1,7 +1,6 @@
 """Unit tests for the today's plan composer (#282 + #298)."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.today_plan import (
     compose_today_plan,
@@ -12,8 +11,6 @@ from custom_components.solar_energy_management.coordinator.today_plan import (
     KIND_EV_MIN_REACHED,
     KIND_EV_TARGET_REACHED,
     KIND_EV_DEADLINE,
-    KIND_NIGHT_OPEN,
-    KIND_SOLAR_PEAK,
     KIND_BATTERY_FULL,
     KIND_BATTERY_EMPTY,
 )

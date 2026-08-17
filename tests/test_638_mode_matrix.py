@@ -24,7 +24,6 @@ import pytest
 from custom_components.solar_energy_management.coordinator.decide import (
     AlwaysMaxMode,
     SolarPlusCheapMode,
-    _MIN_PLUS_SOLAR,
 )
 from custom_components.solar_energy_management.coordinator.decide_battery import (
     decide_battery,

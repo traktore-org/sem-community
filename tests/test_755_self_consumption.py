@@ -23,7 +23,7 @@ power, so the morning comparison is like-for-like over the same window —
 not a plan horizon measured against a calendar-day sensor.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -37,7 +37,6 @@ from custom_components.solar_energy_management.coordinator.energy_planner import
     pack_night,
 )
 from custom_components.solar_energy_management.coordinator.self_consumption import (
-    SelfConsumption,
     predict_self_consumption,
 )
 

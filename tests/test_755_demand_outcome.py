@@ -20,13 +20,12 @@ Two properties this file pins hardest:
   required to honour it.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.demand_outcome import (
     DemandOutcomeRecorder,
-    DemandRecord,
 )
 
 

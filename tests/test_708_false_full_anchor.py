@@ -41,11 +41,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
     EVTaperDetector,
-    FULL_POWER_THRESHOLD,
 )
 
 

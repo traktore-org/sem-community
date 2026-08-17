@@ -7,8 +7,6 @@ age — every report of this shape needed someone reading the source to
 guess what should have happened. And "SOC anchored at 100%" asserts
 something SEM cannot know; the observation is: the charge completed."""
 
-from datetime import datetime, timezone
-from types import SimpleNamespace
 
 import pytest
 

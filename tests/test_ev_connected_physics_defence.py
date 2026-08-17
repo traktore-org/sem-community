@@ -21,8 +21,7 @@ signal the codebase documents to distrust.
 These tests pin the corners of the truth table to lock the defence
 against regression.
 """
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,

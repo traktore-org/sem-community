@@ -4,7 +4,6 @@ from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.solar_energy_management.devices.base import (
-    ControllableDevice,
     CurrentControlDevice,
     SetpointDevice,
     SwitchDevice,

@@ -12,7 +12,6 @@ from datetime import datetime
 
 from custom_components.solar_energy_management.analytics.consumption_predictor import (
     ConsumptionPredictor,
-    MIN_TRAINING_DAYS,
 )
 
 

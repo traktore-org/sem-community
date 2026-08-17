@@ -26,7 +26,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
 
 
 EV_CONTROL_PY = (

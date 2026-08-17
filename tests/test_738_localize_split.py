@@ -12,7 +12,6 @@ the late language upgrade free.
 import json
 import os
 
-import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CARD_DIR = os.path.join(HERE, "..", "dashboard", "card")

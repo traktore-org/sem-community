@@ -33,7 +33,6 @@ import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
-    DEFAULT_MAX_CHARGING_CURRENT,
     DOMAIN,
     MIN_PEAK_LIMIT_KW,
     MAX_PEAK_LIMIT_KW,

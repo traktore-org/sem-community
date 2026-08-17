@@ -1,6 +1,6 @@
 """Tests for analytics/consumption_predictor.py."""
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from custom_components.solar_energy_management.analytics.consumption_predictor import (
     HourlyProfile,

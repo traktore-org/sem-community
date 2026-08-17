@@ -6,18 +6,15 @@ Tests the three-layer fix for daily_ev_energy stuck at 0:
 - Layer 3: Hardware reconciliation with KEBA daily energy counter
 """
 import pytest
-from unittest.mock import Mock, MagicMock
-from datetime import date
+from unittest.mock import Mock
 
 from freezegun import freeze_time
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
-    SensorConfig,
 )
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EnergyCalculator,
-    RECONCILIATION_THRESHOLD,
 )
 from custom_components.solar_energy_management.coordinator.types import PowerReadings
 from custom_components.solar_energy_management.ha_energy_reader import EnergyDashboardConfig

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 from custom_components.solar_energy_management.coordinator.demand_outcome import (
     battery_draw,

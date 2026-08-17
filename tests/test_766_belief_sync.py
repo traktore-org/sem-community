@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock
 
-import pytest
 
 from custom_components.solar_energy_management.devices.base import (
     DeviceControlMode, DeviceState, SwitchDevice,

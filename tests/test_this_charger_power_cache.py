@@ -21,7 +21,6 @@ These tests pin:
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.ev_control import (
     EVControlMixin,

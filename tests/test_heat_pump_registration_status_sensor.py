@@ -16,7 +16,6 @@ What we lock:
 """
 from types import SimpleNamespace
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,

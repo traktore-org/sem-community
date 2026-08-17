@@ -6,7 +6,6 @@ drain (Tier 2). Continuous priority allocation bounded by two hard ceilings
 (peak limit, reserve SoC). NO device deadlines. Everything is INERT unless a
 device opts in — these tests pin both the new behaviour AND the inertness.
 """
-from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -103,7 +102,6 @@ class TestGoalBoolPersistence:
     def test_apply_goals_restores_false_flag(self):
         """The full path: a stored '"False"' string must land as False on the
         device, not silently flip to True after a restart."""
-        from unittest.mock import MagicMock
         from custom_components.solar_energy_management.features.device_registry import (
             UnifiedDeviceRegistry,
         )
@@ -359,7 +357,6 @@ class TestTier2Overnight:
         # simulate: already forced on by Tier-2 last cycle
         d._status.state = DeviceState.ACTIVE
         d._batt_overnight_forced = True
-        from datetime import date as _date
         from homeassistant.util import dt as dt_util
         # freeze "today" so the day-rollover branch doesn't fire
         d._batt_overnight_forced_date = dt_util.now().date()
@@ -591,7 +588,7 @@ class TestBatteryTierContext625:
 
     def test_defaults_from_consts(self):
         from custom_components.solar_energy_management.consts.core import (
-            DEFAULT_BATTERY_BUFFER_SOC, DEFAULT_BATTERY_ASSIST_MIN_SURPLUS)
+            DEFAULT_BATTERY_BUFFER_SOC)
         c = self._ctx(cfg={}, soc=None, surplus=0)
         assert c.buffer_soc == float(DEFAULT_BATTERY_BUFFER_SOC)
         assert c.reserve_soc == 30.0
@@ -714,9 +711,11 @@ class TestPublishDiag625:
         assert diagnostics["diag_phase_guard_safe"] is False
         assert "diag_inverter_l1_current_a" not in diagnostics
 
-    def test_formatter_alias_still_importable(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _format_battery_sign_diag)
+    def test_formatter_importable_from_its_own_module(self):
+        # (#786) was `..coordinator.coordinator`, which only re-exported it
+        # for this test — the alias had no production reader.
+        from custom_components.solar_energy_management.coordinator.publish_diag import (
+            format_battery_sign_diag as _format_battery_sign_diag)
         assert _format_battery_sign_diag({}, {}) == "learning"
         assert _format_battery_sign_diag({"b1": True}, {"b1": True}) == "negated"
 

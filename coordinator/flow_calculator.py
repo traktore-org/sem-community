@@ -21,7 +21,6 @@ from .types import (
     ChargerEnergyFlows,
     ChargerFlows,
     EnergyFlows,
-    EnergyTotals,
     PowerFlows,
     PowerReadings,
     StringEnergy,

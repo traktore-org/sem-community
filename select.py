@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -14,7 +13,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from custom_components.solar_energy_management.coordinator.energy_planner import (
-    Allocation, Demand, EnergyPlan,
+    Demand,
 )
 # (#758) The flat-slot night is a fixture, not a shipping entry point — see
 # synthetic_night.py for exactly which four things it pretends about a night.

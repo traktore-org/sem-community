@@ -13,14 +13,12 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import timedelta
 from typing import Any, Optional
 
 from homeassistant.util import dt as dt_util
 
 from ..const import (
     ChargingState,
-    DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_EV_TARGET_TIME,
     DEFAULT_MAX_CHARGING_CURRENT,
     DEFAULT_PEAK_LIMIT_UNLIMITED,

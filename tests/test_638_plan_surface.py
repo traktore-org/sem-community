@@ -15,7 +15,6 @@ service. This module pins the contract that makes it visible:
 """
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest

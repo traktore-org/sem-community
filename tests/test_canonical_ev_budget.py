@@ -25,7 +25,6 @@ import pytest
 
 from custom_components.solar_energy_management.coordinator.flow_calculator import (
     FlowCalculator,
-    EVBudget,
     EVBudgetStrategy,
 )
 from custom_components.solar_energy_management.coordinator.types import PowerReadings

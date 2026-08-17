@@ -6,7 +6,6 @@ from datetime import datetime
 from custom_components.solar_energy_management.coordinator.forecast_tracker import (
     ForecastTracker,
     DailyForecastRecord,
-    MIN_FORECAST_KWH,
 )
 
 

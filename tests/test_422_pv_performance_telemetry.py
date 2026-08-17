@@ -15,7 +15,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management.analytics.pv_performance import (
-    MonthlyPerformance,
     PVPerformanceAnalyzer,
 )
 

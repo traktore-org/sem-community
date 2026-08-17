@@ -5,15 +5,13 @@ issue number and explain what failure mode the test prevents from returning.
 """
 from __future__ import annotations
 
-import math
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EnergyCalculator,
-    MIN_POWER_THRESHOLD,
 )
 from custom_components.solar_energy_management.coordinator.flow_calculator import (
     FlowCalculator,
@@ -23,13 +21,9 @@ from custom_components.solar_energy_management.coordinator.forecast_tracker impo
     SUNRISE_HOUR,
     SUNSET_HOUR,
 )
-from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
-    EVTaperDetector,
-)
 from custom_components.solar_energy_management.coordinator.types import (
     PowerReadings,
     EnergyTotals,
-    CostData,
 )
 
 
@@ -511,7 +505,6 @@ class TestForecastSunriseSunsetFromSunEntity:
 
         # Patch DEFAULT_TIME_ZONE so astimezone(tz) is a no-op in UTC
         import custom_components.solar_energy_management.coordinator.forecast_tracker as ft_mod
-        import zoneinfo
         original_tz = ft_mod.dt_util.DEFAULT_TIME_ZONE
 
         return tracker
@@ -528,7 +521,6 @@ class TestForecastSunriseSunsetFromSunEntity:
         sun_state.attributes = {"next_rising": rise_iso, "next_setting": set_iso}
         hass.states.get.return_value = sun_state
 
-        import zoneinfo
         with patch(
             "custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util"
         ) as mock_dt:

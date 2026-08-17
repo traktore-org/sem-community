@@ -12,7 +12,7 @@ The hourly solar curve is synthesized from the scalar day total with the
 sine-shape model ``forecast_tracker`` already trusts (low mornings, noon
 peak) — the forecast integrations publish day totals, not curves.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 

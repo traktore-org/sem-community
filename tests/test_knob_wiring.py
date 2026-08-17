@@ -106,7 +106,6 @@ class TestSwitchSelectKnobsHaveReaders:
         select/switch key appears in the source, add it to the map (with its
         config key) so the reader contract covers it."""
         import re
-        from pathlib import Path
         src = (
             (_REPO_ROOT / "select.py").read_text()
             + (_REPO_ROOT / "switch.py").read_text()

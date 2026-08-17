@@ -12,11 +12,9 @@ Covers the BLOCKER/HIGH findings from the ruflo-core review:
 """
 from __future__ import annotations
 
-from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.util import dt as dt_util
 
 from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
     ChargeCommand,

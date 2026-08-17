@@ -4,10 +4,9 @@ Tests the full setup flow, coordinator lifecycle, and cross-component
 interactions that unit tests don't cover.
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from datetime import date
 
-from homeassistant.config_entries import ConfigEntry
 
 from custom_components.solar_energy_management.const import DOMAIN
 from custom_components.solar_energy_management.switch import (
@@ -19,7 +18,6 @@ from custom_components.solar_energy_management.sensor import (
     async_setup_entry as sensor_setup,
 )
 from custom_components.solar_energy_management.number import (
-    SEMNumberEntity,
     NUMBER_TYPES,
     async_setup_entry as number_setup,
 )

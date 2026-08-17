@@ -4,12 +4,11 @@ Pure logic — no HomeAssistant. Covers deadline scaling (short forces higher
 current, impossible warns, min/max clamp) and tariff gating (charge when cheap,
 wait when waiting still meets Min, charge anyway when Min would be missed).
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.ev_tariff_planner import (
-    NightChargePlan,
     plan_night_charge,
     resolve_deadline,
 )

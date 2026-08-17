@@ -26,7 +26,6 @@ These pin both halves in isolation (no full-hass reload needed).
 """
 from __future__ import annotations
 
-from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 

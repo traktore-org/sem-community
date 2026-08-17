@@ -1,6 +1,6 @@
 """Tests for SurplusController surplus power distribution."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime
 
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
@@ -8,7 +8,7 @@ from custom_components.solar_energy_management.coordinator.surplus_controller im
     SurplusAllocationData,
     DEFAULT_REGULATION_OFFSET,
 )
-from custom_components.solar_energy_management.devices.base import DeviceControlMode, DeviceState
+from custom_components.solar_energy_management.devices.base import DeviceControlMode
 
 
 def _make_device(

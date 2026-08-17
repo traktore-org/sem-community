@@ -14,18 +14,14 @@ Each test reproduces a real-world scenario from HA-PROD data.
 """
 import time
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
+from unittest.mock import MagicMock, AsyncMock
 from datetime import datetime, timedelta
 
 from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
     EVTaperDetector,
-    SESSION_PEAK_MIN,
 )
 from custom_components.solar_energy_management.coordinator.ev_control import (
     EVControlMixin,
-)
-from custom_components.solar_energy_management.coordinator.surplus_controller import (
-    SurplusController,
 )
 from custom_components.solar_energy_management.coordinator.types import (
     SessionData,

@@ -10,7 +10,6 @@ accumulator inside ``calculate_energy``.
 v1.7.0 fixes both by piping flow-attributed values from
 ``FlowCalculator`` into the metric calculators.
 """
-from unittest.mock import patch
 
 import pytest
 

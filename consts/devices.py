@@ -1,5 +1,5 @@
 """Device discovery patterns and load management constants for SEM."""
-from typing import Final, Dict
+from typing import Final
 
 # Device discovery patterns for load management
 LOAD_MANAGEMENT_DEVICE_PATTERNS: Final = {

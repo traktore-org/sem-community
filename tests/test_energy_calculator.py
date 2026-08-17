@@ -5,7 +5,6 @@ from datetime import datetime, date, timedelta
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EnergyCalculator,
-    MIN_POWER_THRESHOLD,
 )
 from custom_components.solar_energy_management.coordinator.types import (
     PowerReadings,
@@ -259,7 +258,7 @@ def test_calculate_costs(mock_dt, calculator):
 @patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
 def test_dynamic_tariff_cost_accumulation(mock_dt, calculator):
     """Costs accumulate at rate active during each interval, not recalculated (#218)."""
-    from datetime import date, timedelta
+    from datetime import timedelta
     now = datetime(2026, 5, 19, 12, 0, 0)
     mock_dt.now.return_value = now
     mock_dt.utcnow.return_value = now

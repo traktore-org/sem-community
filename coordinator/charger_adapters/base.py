@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from ..charger_types import ChargerIntent, ChargerPower
+    from ..charger_types import ChargerPower
 
 
 class ChargerAdapter(ABC):
