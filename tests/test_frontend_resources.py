@@ -97,15 +97,17 @@ class TestYAMLMode:
         # The warning message must:
         #   1. Mention YAML-mode so the user knows what's happening.
         #   2. Contain a `url: ...sem-cards.js...` line so they can paste.
-        #   3. Contain the standalone diagram-card URL.
-        #   4. Contain sem-localize.js (#453 — YAML-mode users lose
+        #   3. Contain sem-localize.js (#453 — YAML-mode users lose
         #      translations without it after dual-channel removal).
-        #   5. Mention configuration.yaml so they know where it goes.
+        #   4. Mention configuration.yaml so they know where it goes.
+        # It must NOT still name the standalone diagram card: that file was
+        # retired in #784 and pasting its URL would give YAML-mode users a
+        # resource pointing at a 404.
         joined = "\n".join(rec.message for rec in caplog.records)
         assert "YAML-mode" in joined or "YAML mode" in joined, joined
         assert "sem-cards.js" in joined, joined
-        assert "sem-system-diagram-card.js" in joined, joined
         assert "sem-localize.js" in joined, joined
+        assert "sem-system-diagram-card.js" not in joined, joined
         assert "configuration.yaml" in joined, joined
 
     @pytest.mark.asyncio
@@ -129,19 +131,20 @@ class TestYAMLMode:
 
 class TestStorageMode:
     @pytest.mark.asyncio
-    async def test_storage_mode_registers_all_three_resources(self):
-        """Bundle + diagram card + sem-localize.js all land as Lovelace
-        resources in storage-mode. The third (localize) is #453 — was on
-        ``add_extra_js_url`` only, then dual-channel, now single Lovelace
-        resource."""
+    async def test_storage_mode_registers_the_bundle_and_localize(self):
+        """Bundle + sem-localize.js land as Lovelace resources in storage
+        mode. Localize is #453 — was on ``add_extra_js_url`` only, then
+        dual-channel, now a single Lovelace resource. The diagram card was a
+        third resource until #784 retired the standalone copy; it now rides
+        in the bundle like every other card."""
         r = _storage_mode_resources(initial_items=[])
         hass = _hass_with_resources(r)
         await _async_register_frontend_resources(hass)
-        assert r.async_create_item.call_count >= 3
+        assert r.async_create_item.call_count >= 2
         urls = [call.args[0]["url"] for call in r.async_create_item.call_args_list]
         assert any("sem-cards.js" in u for u in urls), urls
-        assert any("sem-system-diagram-card.js" in u for u in urls), urls
         assert any("sem-localize.js" in u for u in urls), urls
+        assert not any("card/sem-system-diagram-card.js" in u for u in urls), urls
 
 
 # ──────────────────────────────────────────────────────────────────────

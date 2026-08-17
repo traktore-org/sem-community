@@ -180,7 +180,7 @@ card resources cannot be registered automatically. Add the following to
 configuration.yaml under `lovelace.resources` and restart:
   - url: /local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js
     type: module
-  - url: /local/custom_components/solar_energy_management/dashboard/card/sem-system-diagram-card.js
+  - url: /local/custom_components/solar_energy_management/dashboard/card/sem-localize.js
     type: module
 ```
 
@@ -209,7 +209,7 @@ lovelace:
   resources:
     - url: /local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js
       type: module
-    - url: /local/custom_components/solar_energy_management/dashboard/card/sem-system-diagram-card.js
+    - url: /local/custom_components/solar_energy_management/dashboard/card/sem-localize.js
       type: module
     # plus the HACS cards SEM needs:
     - url: /hacsfiles/lovelace-card-mod/card-mod.js

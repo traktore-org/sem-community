@@ -28,7 +28,12 @@ from custom_components.solar_energy_management.coordinator.coordinator import (
 )
 
 _ROOT = Path(__file__).resolve().parents[1]
-_DIAGRAM = _ROOT / "dashboard" / "card" / "sem-system-diagram-card.js"
+_CARDS = _ROOT / "dashboard" / "card" / "src" / "cards"
+# (#784) The diagram card's snapshot reads used to live in the standalone
+# vanilla file at dashboard/card/sem-system-diagram-card.js. That copy never
+# rendered — the bundled Lit version won the semDefineCard race — so this pin
+# was guarding a file the user never saw. It now points at the shipped card.
+_DIAGRAM = _CARDS / "sem-system-diagram-card.js"
 _FLOW = _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-flow-card.js"
 
 _SNAP_KEYS = {
@@ -232,17 +237,46 @@ class TestCardsReadTheSnapshot:
     as a connected system) prefer the snapshot for every balance value in
     prefix mode, with the per-entity fallback intact."""
 
-    @pytest.mark.parametrize("path", [_DIAGRAM, _FLOW], ids=["diagram", "flow"])
-    def test_snapshot_helper_and_usage(self, path):
+    # Each card reads a plain entity through its own accessor: the flow card
+    # has _getState, the diagram card has _val. The fallback must survive in
+    # whichever one the card uses.
+    #
+    # The diagram card does NOT take SOC from the snapshot. _build_power_snapshot
+    # overlays SOC fresh and deliberately refuses to hold it ("a 5-minute-stale
+    # SOC would be worse than an honest one"), while the diagram card carries a
+    # 60 s last-known-good hold for the Huawei modbus flicker (#455/#488) that
+    # the flow card does not have. The finer instrument wins there. It still
+    # reads snap.battery_soc — as the liveness test gating the battery term.
+    _BALANCE = ("snap.solar_w", "snap.battery_w", "snap.grid_import_w",
+                "snap.grid_export_w", "snap.ev_w", "snap.home_w",
+                "snap.battery_soc")
+
+    @pytest.mark.parametrize(
+        "path,read",
+        [(_DIAGRAM, "_val"), (_FLOW, "_getState")],
+        ids=["diagram", "flow"],
+    )
+    def test_snapshot_helper_and_usage(self, path, read):
         src = path.read_text(encoding="utf-8")
         assert "_powerSnapshot()" in src
         assert "power_snapshot" in src
-        for token in ("snap.solar_w", "snap.battery_w", "snap.grid_import_w",
-                      "snap.grid_export_w", "snap.ev_w", "snap.home_w",
-                      "snap.battery_soc"):
+        for token in self._BALANCE:
             assert token in src, f"{path.name} missing {token}"
-        for token in ("_getState('solar_power')", "_getState('ev_power')"):
+        for key in ("solar_power", "ev_power"):
+            token = f"{read}('{key}')"
             assert token in src, f"{path.name} lost the fallback {token}"
+
+    def test_diagram_keeps_the_modbus_flicker_hold(self):
+        """#699 must not have cost the diagram card its #455/#488 hold.
+
+        The snapshot has no last-known-good for the battery: SOC is overlaid
+        fresh and null when the source is down. If the card ever took the
+        battery straight off the snapshot it would draw a flickering Huawei
+        pack as 0 % / idle, which is what the hold exists to prevent.
+        """
+        src = _DIAGRAM.read_text(encoding="utf-8")
+        assert "_readWithHold('battery_power'" in src
+        assert "_readWithHold('battery_soc'" in src
 
     def test_bundle_carries_the_flow_card_change(self):
         bundle = (_ROOT / "dashboard" / "card" / "dist" / "sem-cards.js"

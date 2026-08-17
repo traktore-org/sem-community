@@ -2608,9 +2608,6 @@ async def _async_register_services(
             # being removed in code).
             CANONICAL_TOP_LEVEL = {
                 "sem-localize.js",
-                "sem-reactive-base.js",
-                "sem-shared.js",
-                "sem-system-diagram-card.js",
             }
             # (#738) the per-language tables the loader lazily injects —
             # the mirror must carry them or the legacy /local channel 404s
@@ -3447,7 +3444,6 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 # token onto every injected sem-localize.<lang>.js URL.
                 "localize": _token("..", "translations.json"),
                 "bundle": _token("dist", "sem-cards.js"),
-                "diagram": _token("sem-system-diagram-card.js"),
             }
 
         asset_v = await hass.async_add_executor_job(_asset_versions)
@@ -3476,7 +3472,14 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
             f"{static_path}/card/sem-load-priority-card.js",
-            # sem-system-diagram-card.js is NOT in the Lit bundle — keep it registered
+            # (#784) The standalone vanilla diagram card and the SEMBaseCard /
+            # semReady layer it was the last consumer of. Both the standalone
+            # and the bundle defined sem-system-diagram-card, and semDefineCard
+            # is first-wins, so which implementation the user saw came down to
+            # resource load order. 2.0 keeps only the bundled Lit version — the
+            # one the dashboard actually renders. Listed here so upgrading
+            # installs drop the now-404 resource instead of keeping it forever.
+            f"{static_path}/card/sem-system-diagram-card.js",
             f"{static_path}/card/sem-period-selector-card.js",
             f"{static_path}/card/sem-chart-card.js",
             f"{static_path}/card/sem-solar-summary-card.js",
@@ -3522,10 +3525,8 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     "registered automatically. Add the following to "
                     "configuration.yaml under `lovelace.resources` and restart:\n"
                     "  - url: %s\n    type: module\n"
-                    "  - url: %s\n    type: module\n"
                     "  - url: %s\n    type: module",
                     cards_bundle_url,
-                    f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
                     localize_url,
                 )
                 # Skip the rest of the registration block — none of the
@@ -3556,18 +3557,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 )
                 _LOGGER.info("Updated SEM Lit bundle: %s → %s", bundle_item["url"], cards_bundle_url)
 
-            # Register standalone diagram card (vanilla JS, not in Lit bundle)
-            diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
-            diagram_url = f"{diagram_base}?v={asset_v['diagram']}"
-            diagram_item = existing_by_base.get(diagram_base)
-            if diagram_item is None:
-                await resources.async_create_item({"res_type": "module", "url": diagram_url})
-                _LOGGER.info("Registered SEM diagram card: %s", diagram_url)
-            elif diagram_item["url"] != diagram_url:
-                await resources.async_update_item(
-                    diagram_item["id"], {"res_type": "module", "url": diagram_url}
-                )
-                _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
+            # (#784) The diagram card used to be registered here as a second,
+            # standalone resource. It now ships inside the bundle like every
+            # other card; the retired URL is cleaned up via _legacy_bases.
 
             # Register sem-localize.js as a Lovelace resource (single
             # delivery channel; see #453). Cards constructed before

@@ -173,10 +173,39 @@ class SEMSystemDiagramCard extends SEMLitBase {
         return map[suffix] || null;
     }
 
+    // (#699) The coordinator's ATOMIC balance snapshot — every value taken
+    // from ONE cycle and carried as an attribute on the home sensor.
+    //
+    // Why it exists: the diagram draws the balance as a connected system, so
+    // it is the one view where reading each term off its own entity is
+    // visibly wrong. HA state updates land per-entity, and the hardware feeds
+    // them at wildly different cadences (Huawei modbus ~17-30 s, KEBA ~2 s),
+    // so a render can pair a stale solar reading with a fresh EV reading. The
+    // arrows then don't add up — energy appears from nowhere or vanishes into
+    // it — for as long as the slower sensor lags.
+    //
+    // Prefix mode only: entities mode reads user-supplied sensors that carry
+    // no snapshot. Returns null when the backend predates #699, and every
+    // caller falls back to its per-entity read.
+    _powerSnapshot() {
+        if (this._mode !== 'prefix' || !this._hass) return null;
+        const st = this._hass.states[this._prefix + 'home_consumption_power'];
+        const snap = st && st.attributes && st.attributes.power_snapshot;
+        return (snap && typeof snap === 'object') ? snap : null;
+    }
+
+    _snapNum(v) {
+        const f = parseFloat(v);
+        return isNaN(f) ? 0 : f;
+    }
+
     // ── #455 flow-value helpers — entities-mode semantics mirror
     //    sem-flow-card (split battery, combined grid, reverse/invert
-    //    flags). Prefix mode passes through unchanged. ──
+    //    flags). Prefix mode passes through unchanged, preferring the
+    //    #699 snapshot when the backend publishes one. ──
     _flowSolar() {
+        const snap = this._powerSnapshot();
+        if (snap) return this._snapNum(snap.solar_w);
         const s = this._val('solar_power');
         return this._entities?.solar?.reverse ? -s : s;
     }
@@ -185,6 +214,15 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const e = this._entities;
         if (e?.battery?.charge || e?.battery?.discharge) {
             return this._val('battery_charge_power') - this._val('battery_discharge_power');
+        }
+        // Only trust the snapshot's battery term while the battery source is
+        // actually reporting. ``battery_soc`` is null exactly when it isn't
+        // (_build_power_snapshot overlays SOC fresh and refuses to hold it),
+        // and during a Huawei modbus flicker a raw battery_w of 0 would draw
+        // the pack as idle. The hold in the render path owns that case.
+        const snap = this._powerSnapshot();
+        if (snap && snap.battery_soc !== null && snap.battery_soc !== undefined) {
+            return this._snapNum(snap.battery_w);
         }
         const raw = this._val('battery_power');
         return e?.battery?.reverse ? -raw : raw;
@@ -200,6 +238,13 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 gridExport: Math.max(0, rev ? gp : -gp),
             };
         }
+        const snap = this._powerSnapshot();
+        if (snap) {
+            return {
+                gridImport: this._snapNum(snap.grid_import_w),
+                gridExport: this._snapNum(snap.grid_export_w),
+            };
+        }
         return {
             gridImport: this._val('grid_import_power'),
             gridExport: this._val('grid_export_power'),
@@ -207,11 +252,20 @@ class SEMSystemDiagramCard extends SEMLitBase {
     }
 
     _flowEv() {
+        const snap = this._powerSnapshot();
+        if (snap) return this._snapNum(snap.ev_w);
         const v = this._val('ev_power');
         return this._entities?.ev?.invert ? -v : v;
     }
 
     _flowHome(solar, gridImport, gridExport, battCharge, battDischarge, ev) {
+        // (#699) The snapshot's home_w is the coordinator's own held value
+        // from the same cycle as every other term above — take it first, so
+        // the drawn balance closes exactly.
+        const snap = this._powerSnapshot();
+        if (snap && snap.home_w !== null && snap.home_w !== undefined) {
+            return Math.max(0, this._snapNum(snap.home_w));
+        }
         // Prefer the PUBLISHED home sensor over a client-side residual.
         // The coordinator already bridges the input-update skew — the
         // Huawei inverter refreshes on a ~17-30 s modbus cadence while

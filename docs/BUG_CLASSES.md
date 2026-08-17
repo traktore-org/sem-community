@@ -138,8 +138,8 @@ dots used `<animateMotion><mpath href="#id"/></animateMotion>`, but WebKit only 
 XLink-namespaced `xlink:href` on `<mpath>`, so the plain `href` never bound and the dot had no path
 (#591). Lenient engines accept the plain `href`, so it passes every desktop/Android check — the gap
 is invisible until an iOS user reports it. **Where it lives:** all animated SVG in the dashboard
-cards — `dashboard/card/sem-system-diagram-card.js` (vanilla), `dashboard/card/src/cards/*.js`
-(sem-flow-card, sem-system-diagram-card), built into `dist/sem-cards.js`. **Closure:** drop the
+cards — `dashboard/card/src/cards/*.js` (sem-flow-card, sem-system-diagram-card), built into
+`dist/sem-cards.js`. **Closure:** drop the
 `<mpath>` indirection — inline the motion path as `<animateMotion path="M…">` (the SVG 1.1 form
 supported on every engine incl. old WebKit); path data is already at each site. **Guard:** the
 mpath ban + inline-path presence test (`test/mpath-webkit-guard.test.js`, in CI's `card-test` job)
@@ -978,8 +978,14 @@ MEMBER of the set (the held home entity was the first fix for this class) protec
 and its downstream consumers but ships the inconsistency to every view that composes the set.
 **Where it lives:** `coordinator/coordinator.py::_build_power_snapshot` (the closure),
 `_smooth_home_consumption` (the intentional incoherence source), `sensor.py`
-(`power_snapshot` attr on home, unrecorded), `sem-system-diagram-card.js` + `sem-flow-card.js`
-(snapshot-first readers).
+(`power_snapshot` attr on home, unrecorded), `src/cards/sem-system-diagram-card.js` +
+`src/cards/sem-flow-card.js` (snapshot-first readers).
+**Second-order instance (#784):** the diagram card's snapshot reads were written into the
+*standalone vanilla* copy of the card, which never rendered — the bundled Lit version won the
+`semDefineCard` first-wins race. The fix was live in the repo and dead in the browser for the
+whole time both copies existed. Fixing the copy you can find is not the same as fixing the copy
+that runs; when a tag has two definitions, the pin has to name the one the resource loader
+reaches first.
 **Closure:** ONE atomic per-cycle snapshot of the whole set, and — the part that makes it more
 than plumbing — *the snapshot is the last self-consistent set*: when the cycle is
 known-incoherent (`_home_hold_active`, or the residual exceeds tolerance — residual is ~0 by

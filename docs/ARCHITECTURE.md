@@ -1044,7 +1044,7 @@ A household may have the system set to German, but one user's profile set to Eng
 1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1341 keys × 16 languages as a JS object
 2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`
 3. Fires `sem-localize-ready` CustomEvent when loaded
-4. SEM cards extend `SEMBaseCard` (in `sem-shared.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
+4. SEM cards extend `SEMLitBase` (in `src/base/sem-lit-base.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
 5. Cards re-render when the user's language changes (detected in `_checkLocaleChange()`)
 
 **Placeholder pattern:** When Python sensor values contain translatable words (e.g. "tomorrow" in surplus window), the coordinator outputs `{tomorrow}` as a placeholder. Cards replace it with `this._t('tomorrow')` before display. This bridges the server→client translation gap without duplicating translation logic in Python.

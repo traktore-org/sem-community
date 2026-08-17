@@ -34,10 +34,11 @@ CARD_SRC = REPO / "dashboard" / "card" / "src" / "cards"
 CARD_ROOT = REPO / "dashboard" / "card"
 GUIDE = REPO / "docs" / "DASHBOARD_GUIDE.md"
 
-# Top-level files that are the base layer / generated locale data, not
-# cards. sem-system-diagram-card.js IS a card and is deliberately scanned:
-# it ships standalone (its own Lovelace resource) *as well as* inside the
-# bundle, and semDefineCard is first-wins, so both copies must agree.
+# Top-level files that would be the base layer rather than cards. #784
+# retired the last of them along with the standalone diagram card, so the
+# top level now holds only generated locale data — but the scan stays, so a
+# card dropped back up there is caught instead of quietly skipping the
+# anchor contract.
 NOT_A_CARD = {"sem-shared.js", "sem-reactive-base.js"}
 
 DOC_BASE = (
@@ -243,37 +244,62 @@ def test_alias_tags_are_real_aliases_not_forgotten_cards():
         )
 
 
-def test_cards_registered_twice_carry_the_same_picker_entry():
-    """semDefineCard is first-wins, so load order must not change the entry.
+def test_no_tag_is_defined_by_more_than_one_file():
+    """One tag, one implementation. ``semDefineCard`` is first-wins.
 
-    ``sem-system-diagram-card`` ships both inside ``dist/sem-cards.js`` and
-    as its own standalone Lovelace resource. Whichever loads first defines
-    the element AND pushes the only ``window.customCards`` entry — the
-    second call returns at the ``customElements.get(tag)`` guard. If the two
-    copies disagree, the user's help link exists or doesn't depending on
-    resource order, which is not something we control.
+    Until #784 ``sem-system-diagram-card`` was defined twice — a 983-line
+    vanilla standalone and the 1814-line Lit version in the bundle — and
+    both were registered as Lovelace resources. Whichever the browser
+    evaluated first defined the element and pushed the only
+    ``window.customCards`` entry; the second call returned at the
+    ``customElements.get(tag)`` guard. Which card the user saw was decided
+    by resource load order, which we do not control. 2.0 keeps only the
+    version the dashboard actually renders: the bundled Lit one.
     """
-    by_tag: dict[str, list[tuple[Path, str | None]]] = {}
-    for path, tag, info in _registrations():
-        by_tag.setdefault(tag, []).append((path, info))
+    by_tag: dict[str, list[Path]] = {}
+    for path, tag, _ in _registrations():
+        by_tag.setdefault(tag, []).append(path)
 
-    offenders = []
-    for tag, entries in by_tag.items():
-        if len(entries) < 2:
-            continue
-        fields = {
-            path: tuple(
-                _field(info or "", k)
-                for k in ("type", "name", "description", "documentationURL")
-            )
-            for path, info in entries
-        }
-        if len(set(fields.values())) > 1:
-            detail = "\n    ".join(f"{p.name}: {v}" for p, v in fields.items())
-            offenders.append(f"{tag}:\n    {detail}")
+    offenders = [
+        f"{tag}: " + ", ".join(str(p.relative_to(REPO)) for p in paths)
+        for tag, paths in sorted(by_tag.items())
+        if len(paths) > 1
+    ]
     assert not offenders, (
-        "These tags register from more than one file with DIFFERENT picker "
-        "entries. semDefineCard is first-wins, so the user gets whichever "
-        "resource HA loads first — keep the copies identical:\n  "
-        + "\n  ".join(offenders)
+        "These tags are defined by more than one file. semDefineCard is "
+        "first-wins, so the user gets whichever resource HA loads first — "
+        "keep exactly one implementation per tag:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_retired_top_level_resources_are_cleaned_up_on_upgrade():
+    """A deleted card file must also lose its Lovelace resource.
+
+    ``_async_register_frontend_resources`` deletes any resource whose base
+    URL is in ``_legacy_bases``. An install that ran an earlier version
+    still has the standalone diagram card (and the vanilla base layer it
+    needed) registered; if we drop the files without listing them there,
+    those installs keep a resource pointing at a 404 forever.
+    """
+    init_src = (REPO / "__init__.py").read_text(encoding="utf-8")
+    block = re.search(r"_legacy_bases = \[(.*?)\n        \]", init_src, re.S)
+    assert block, "could not find the _legacy_bases list in __init__.py"
+    listed = set(re.findall(r"/card/([\w.-]+\.js)", block.group(1)))
+
+    retired = {
+        "sem-system-diagram-card.js",
+        "sem-shared.js",
+        "sem-reactive-base.js",
+    }
+    missing = sorted(retired - listed)
+    assert not missing, (
+        "These files no longer ship, but _legacy_bases does not list them, so "
+        "upgrading installs keep a Lovelace resource pointing at a 404: "
+        + ", ".join(missing)
+    )
+
+    for name in retired:
+        assert not (CARD_ROOT / name).exists(), (
+            f"{name} is listed as retired but still exists — either delete it "
+            "or take it back out of the retired set"
+        )

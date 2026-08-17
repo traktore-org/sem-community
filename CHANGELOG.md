@@ -37,13 +37,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   card's editor help link now lands on its own section. Pinned by
   `tests/test_card_registry_metadata.py`, which derives the anchor from the
   tag and verifies both ends, so the next card cannot ship without one. (#783)
-- 🐛 **The system diagram's picker entry no longer depends on resource load
-  order** — `sem-system-diagram-card` registers from two files (the Lit bundle
-  and its standalone resource) and `semDefineCard` is first-wins, so whichever
-  the browser evaluated first supplied the only `window.customCards` entry.
-  The two disagreed. They are now identical and a test keeps them that way.
-  The deeper split — the two files are two *different* implementations, 983
-  lines against 1814 — is filed as #784, not fixed here. (#784)
+- 🗑️ **The old system diagram card is gone; 2.0 keeps only the one the
+  dashboard renders** — `sem-system-diagram-card` was defined by two files
+  holding two *different* implementations: a 983-line vanilla standalone and
+  the 1814-line Lit version in the bundle. Both were registered as Lovelace
+  resources, and `semDefineCard` is first-wins, so which card you got came
+  down to resource load order. The bundle always won in practice — it defines
+  at module evaluation while the standalone waited on a `semReady` queue — so
+  the vanilla copy had not rendered for anyone in a long time. It is deleted,
+  along with the `sem-shared.js` / `sem-reactive-base.js` base layer it was
+  the last consumer of; all three URLs are cleaned up from existing installs
+  on the next restart. (#784)
+- 🐛 **The energy diagram draws a balance that adds up again** — #699 gave the
+  cards an atomic per-cycle snapshot so the arrows can't pair a stale solar
+  reading with a fresh EV one. The diagram card's half of that fix was written
+  into the standalone copy — the one that never rendered — so on screen the
+  diagram had been reading each term off its own entity the whole time, and
+  during a source-cadence skew the flows visibly failed to close. Ported to
+  the card that actually ships. The Huawei modbus flicker hold (#455/#488)
+  stays in front of the battery reads, which the snapshot deliberately does
+  not hold, and a test now pins both halves so neither fix can silently
+  displace the other. (#784, #699)
 - 📝 **Assorted doc corrections** — minimum HA version (2024.1.0 → the
   2025.1.0 that `hacs.json` actually requires), `min_solar_power` default
   (500 W → 1000 W), translation-system size (1166/1116 keys → the real 1341 ×
