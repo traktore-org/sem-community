@@ -1,4 +1,6 @@
 {
+  "domain": "solar_energy_management",
+  "name": "Solar Energy Management",
   "after_dependencies": [
     "recorder"
   ],
@@ -12,14 +14,12 @@
     "lovelace"
   ],
   "documentation": "https://github.com/traktore-org/sem-community",
-  "domain": "solar_energy_management",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/traktore-org/sem-community/issues",
   "loggers": [
     "custom_components.solar_energy_management"
   ],
-  "name": "Solar Energy Management",
   "quality_scale": "platinum",
   "requirements": [],
   "version": "2.0.0-beta.5"
