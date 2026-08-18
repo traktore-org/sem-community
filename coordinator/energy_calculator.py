@@ -2112,8 +2112,11 @@ class EnergyCalculator:
           grid import, at every hour, by definition. The gate is a property of
           the solar counter, not of reconciliation.
 
-        Cost accumulators move with the delta at the CURRENT rate — the same
-        approximation solar savings already carry, and documented as such.
+        Cost accumulators move with the delta at today's REALIZED average
+        rate — ``daily_cost / daily_energy`` for the same category — because
+        the drift accumulated across the day, not at the moment it was
+        noticed (#795, #416's class). A day with no accumulation yet has no
+        realized average and falls back to the instantaneous rate passed in.
         """
         if not self._meter_counter_enabled or not self._hass:
             return
@@ -2213,6 +2216,19 @@ class EnergyCalculator:
             accumulators[key] = max(0.0, accumulators.get(key, 0.0) + delta)
 
         if cost_key and rate:
+            # (#795) The drift happened across the day; price it at the
+            # day's realized average — the mean of what the live path
+            # actually booked — not the tariff of this instant. ``integrated``
+            # still holds the pre-adoption energy, so the pair matches the
+            # pre-correction cost. This also keeps #770's contract at the
+            # battery site: the day's realized savings rate IS how the live
+            # path valued the day, averaged. Downward corrections give back
+            # what was booked, not what a removal costs right now.
+            daily_cost = self._daily_cost_accumulators.get(
+                f"{cost_key}_{today}", 0.0
+            )
+            if integrated > 0.05 and daily_cost > 0:
+                rate = daily_cost / integrated
             cost_delta = delta * rate
             for accumulators, key in (
                 (self._daily_cost_accumulators, f"{cost_key}_{today}"),

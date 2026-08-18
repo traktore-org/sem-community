@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 💰 **Reconciliation drift is priced at the day it happened** — when a
+  hardware counter proves the integrator missed (or over-counted) energy,
+  the correction used to be priced at the tariff of the moment the counter
+  was READ; the drift itself accumulated across the day. On a dynamic tariff
+  that priced 0.15-CHF kWh at a 0.32 spike (#416's write-time class). The
+  delta is now booked at today's realized average — `daily cost ÷ daily
+  energy` for the same category, the mean of exactly what the live path
+  booked — with the instantaneous rate kept only when nothing has
+  accumulated yet. Static tariffs are unchanged, and downward corrections
+  give back what was actually booked. (#795)
+
 - 🚗 **EV charging cost stops pretending the battery is free** — the session
   accounting split the car's energy three ways (solar / grid / battery) and
   then priced only the direct-grid slice: energy that reached the car via the
