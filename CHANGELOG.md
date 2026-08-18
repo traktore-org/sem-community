@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > prose-paragraph style they were written in.
 
 # [Unreleased]
+
+# [2.0.0-beta.7] — 18.08.2026
+
 - 📈 **ROI stops presenting a guessed install date as a measurement** —
   when install-date autodetection has not succeeded, payback and annual
   savings silently assumed "installed January 1 of this year". The figures
